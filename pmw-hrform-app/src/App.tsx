@@ -1,0 +1,511 @@
+import { useState, useEffect } from "react";
+import { Routes, Route } from "react-router-dom";
+import {
+  useMsal,
+  useIsAuthenticated,
+} from "@azure/msal-react";
+import { ThemeProvider, CssBaseline, Box, Dialog } from "@mui/material";
+import theme from "./theme";
+import { loginRequest } from "./auth/msalConfig";
+import { createSpClient } from "./utils/sharepointClient";
+import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
+import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
+import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig } from "./types";
+
+// Auth screens
+import ChoiceScreen from "./components/auth/ChoiceScreen";
+import GuestLanding from "./components/auth/GuestLanding";
+import WrongTenantScreen from "./components/auth/WrongTenantScreen";
+import LoadingScreen from "./components/auth/LoadingScreen";
+import ErrorScreen from "./components/auth/ErrorScreen";
+
+// Dashboard components
+import Header from "./components/dashboard/Header";
+import StatsRow from "./components/dashboard/StatsRow";
+import ListSummaryCards from "./components/dashboard/ListSummaryCards";
+import Toolbar from "./components/dashboard/Toolbar";
+import ListHeader from "./components/dashboard/ListHeader";
+import SubmissionRow from "./components/dashboard/SubmissionRow";
+import DetailModal from "./components/dashboard/DetailModal";
+import EmptyState from "./components/dashboard/EmptyState";
+import ConfigWarningBanner from "./components/dashboard/ConfigWarningBanner";
+
+// Form builder pages
+import FormBuilder from "./components/builder/FormBuilder";
+import { DynamicFormPage } from "./pages/DynamicFormPage";
+
+const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
+
+function normalizeStatus(status: string | null): string {
+  if (!status) return "pending";
+  const normalized = status.toLowerCase().replace(/[\s_-]/g, "");
+  if (normalized === "fullyapproved") return "fullyapproved";
+  if (normalized === "approved") return "approved";
+  if (normalized.includes("reject")) return "rejected";
+  if (normalized.includes("progress") || normalized.includes("review")) return "inprogress";
+  return "pending";
+}
+
+function mapSubmission(raw: Record<string, unknown>, listTitle: string, listMetaMap: Record<string, ListMetaEntry>): Submission {
+  const id = String(raw.Id || "");
+  const title = String(raw.Title || "Untitled");
+  const formId = String(raw.FormId || "");
+  const formVersion = String(raw.FormVersion || "1");
+  const formStatus = raw.FormStatus ? String(raw.FormStatus) : null;
+  const submittedByEmail = String(
+    raw._authorEmail ||
+      (raw.Author as Record<string, unknown> | undefined)?.Email ||
+      raw.submittedByEmail ||
+      ""
+  );
+  const submittedAt = raw.SubmittedAt ? String(raw.SubmittedAt) : null;
+
+  // Count totalLayers from config or infer from L1/L2/L3 fields
+  let totalLayers = 1;
+  if (raw.L2_Email) totalLayers = 2;
+  if (raw.L3_Email) totalLayers = 3;
+
+  // Build approval layers
+  const layers: (ApprovalLayer | null)[] = [];
+  for (let i = 1; i <= 3; i++) {
+    const statusVal = raw[`L${i}_Status`] ? String(raw[`L${i}_Status`]) : null;
+    const emailVal = raw[`L${i}_Email`] ? String(raw[`L${i}_Email`]) : null;
+    const signedAtVal = raw[`L${i}_SignedAt`] ? String(raw[`L${i}_SignedAt`]) : null;
+    const rejectionVal = raw[`L${i}_Rejection`] ? String(raw[`L${i}_Rejection`]) : null;
+    const signatureVal = raw[`L${i}_Signature`] ? String(raw[`L${i}_Signature`]) : null;
+
+    if (statusVal || emailVal) {
+      layers.push({
+        status: statusVal || "pending",
+        outcome:
+          statusVal === "approved" ? "approved" : statusVal === "rejected" ? "rejected" : undefined,
+        email: emailVal,
+        signedAt: signedAtVal,
+        rejectionReason: rejectionVal,
+        signature: signatureVal,
+      });
+    }
+  }
+
+  // Filter out internal fields for submissionData display
+  const submissionData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (
+      key.startsWith("odata.") ||
+      /^L[1-3]_/.test(key) ||
+      key === "FormStatus" ||
+      key === "FormId" ||
+      key === "FormVersion" ||
+      key === "Title" ||
+      key === "Id" ||
+      key === "_authorEmail" ||
+      key === "SubmittedAt" ||
+      key === "AuthorId"
+    ) {
+      continue;
+    }
+    submissionData[key] = value;
+  }
+
+  return {
+    id,
+    submissionId: id,
+    listTitle,
+    formId,
+    formVersion,
+    title,
+    submittedByEmail,
+    submittedAt,
+    formStatus,
+    totalLayers,
+    layers: layers.filter(Boolean) as ApprovalLayer[],
+    meta: listMetaMap[listTitle] ?? generateMeta(listTitle),
+    submissionData,
+  };
+}
+
+export default function App() {
+  const { instance, accounts, inProgress } = useMsal();
+  const isAuthenticated = useIsAuthenticated();
+
+  const [pageState, setPageState] = useState<PageState>("checking");
+  const [errorMsg, setErrorMsg] = useState("");
+  const userEmail = accounts[0]?.username || "";
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Dashboard data
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [visibleLists, setVisibleLists] = useState<DiscoveredList[]>([]);
+  const [loadedConfig, setLoadedConfig] = useState<LoadedConfig | null>(null);
+  const [missingConfigs, setMissingConfigs] = useState<string[]>([]);
+  const [detailItem, setDetailItem] = useState<Submission | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [loadStatus, setLoadStatus] = useState("Initializing...");
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [listFilter, setListFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [submitterFilter, setSubmitterFilter] = useState("");
+
+  // Form builder state
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [editingFormId, setEditingFormId] = useState<string | undefined>(undefined);
+
+  // Auth state machine
+  useEffect(() => {
+    if (inProgress !== "none") return;
+
+    if (isAuthenticated) {
+      setPageState("loading");
+      return;
+    }
+
+    const decision = getStoredAuthDecision();
+    if (decision === "guest") {
+      setPageState("guest");
+    } else if (decision === "msal") {
+      instance.loginRedirect(loginRequest).catch(() => {
+        setPageState("choice");
+        clearStoredAuthDecision();
+      });
+    } else {
+      setPageState("choice");
+    }
+  }, [isAuthenticated, inProgress, accounts, instance]);
+
+  // Post-auth: validate tenant, check admin, fetch data
+  useEffect(() => {
+    if (pageState !== "loading" || !isAuthenticated) return;
+
+    const email = accounts[0]?.username || "";
+    const tenantId = accounts[0]?.tenantId || "";
+
+    if (ALLOWED_TENANT_ID && tenantId !== ALLOWED_TENANT_ID) {
+      setPageState("wrong_tenant");
+      return;
+    }
+
+    setLoading(true);
+    setLoadProgress(0);
+    setLoadStatus("Initializing...");
+    const spClient = createSpClient(instance, accounts);
+
+    async function fetchData() {
+      try {
+        // Step 1: Check admin status
+        setLoadStatus("Checking permissions...");
+        setLoadProgress(10);
+        const adminResult = await spClient.isGroupMember(SP_STATIC.adminGroup);
+        setIsAdmin(adminResult);
+        setLoadProgress(20);
+
+        // Step 2: Discover lists
+        setLoadStatus("Discovering lists...");
+        const allLists = await spClient.discoverLists();
+        setLoadProgress(35);
+
+        // Step 3: Load config from Master Form
+        setLoadStatus("Loading configuration...");
+        const config = await loadConfig(spClient);
+        setLoadedConfig(config);
+        setLoadProgress(50);
+
+        // Step 4: Filter visible lists
+        const visible = filterVisibleLists(allLists, adminResult, config.allowedTitles);
+        setVisibleLists(visible);
+
+        const listMetaMap: Record<string, ListMetaEntry> = { ...config.listMetaMap };
+        for (const list of visible) {
+          if (!listMetaMap[list.title]) {
+            listMetaMap[list.title] = generateMeta(list.title);
+          }
+        }
+
+        // Step 5: Fetch submissions
+        const totalLists = visible.length;
+        setLoadStatus(
+          totalLists > 0
+            ? `Fetching submissions from ${totalLists} list${totalLists !== 1 ? "s" : ""}...`
+            : "No lists to fetch from."
+        );
+
+        const allSubmissions: Submission[] = [];
+        for (let i = 0; i < visible.length; i++) {
+          const list = visible[i];
+          setLoadStatus(`Fetching submissions from "${list.title}" (${i + 1}/${totalLists})...`);
+          setLoadProgress(50 + Math.round(((i + 1) / totalLists) * 45));
+
+          try {
+            const items = await spClient.queryList(list.title, {
+              select: "*",
+              orderby: "Created desc",
+              top: adminResult ? 5000 : 1000,
+            });
+            for (const item of items) {
+              allSubmissions.push(mapSubmission(item, list.title, listMetaMap));
+            }
+          } catch {
+            // Skip lists that fail to query
+          }
+        }
+
+        // Step 6: Finalize
+        setLoadStatus("Finalizing...");
+        setLoadProgress(98);
+
+        const visibleTitles = new Set(visible.map((l) => l.title));
+        let finalSubmissions = allSubmissions.filter((s) => visibleTitles.has(s.listTitle));
+        if (!adminResult) {
+          finalSubmissions = finalSubmissions.filter((s) => s.submittedByEmail === email);
+        }
+
+        setSubmissions(finalSubmissions);
+        setMissingConfigs(getMissingConfigs(visible, config.layerConfig));
+        setLoadProgress(100);
+        setLoadStatus("Ready.");
+        setPageState("ready");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error occurred";
+        setErrorMsg(message);
+        setPageState("error");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [pageState, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLogin = () => {
+    instance.loginRedirect(loginRequest);
+  };
+
+  const handleGuest = () => {
+    setStoredAuthDecision("guest");
+    setPageState("guest");
+  };
+
+  const handleSwitchAccount = () => {
+    instance.logoutPopup().catch(() => {
+      instance.logoutRedirect();
+    });
+    clearStoredAuthDecision();
+    setTimeout(() => {
+      instance.loginRedirect(loginRequest);
+    }, 100);
+  };
+
+  const handleSignOut = () => {
+    instance.logoutRedirect();
+    clearStoredAuthDecision();
+  };
+
+  const handleForgetChoice = () => {
+    clearStoredAuthDecision();
+    setPageState("choice");
+  };
+
+  // Filter + sort logic
+  const filteredSubmissions = submissions.filter((item) => {
+    if (search) {
+      const searchLower = search.toLowerCase();
+      if (
+        !item.title.toLowerCase().includes(searchLower) &&
+        !item.formId.toLowerCase().includes(searchLower) &&
+        !item.submissionId.toLowerCase().includes(searchLower)
+      ) {
+        return false;
+      }
+    }
+    if (listFilter && item.listTitle !== listFilter) return false;
+    if (statusFilter !== "all" && normalizeStatus(item.formStatus) !== statusFilter.toLowerCase()) return false;
+    if (submitterFilter && !item.submittedByEmail.toLowerCase().includes(submitterFilter.toLowerCase()))
+      return false;
+    return true;
+  });
+
+  const sortedSubmissions = [...filteredSubmissions].sort((a, b) => {
+    switch (sortBy) {
+      case "oldest":
+        return (a.submittedAt || "").localeCompare(b.submittedAt || "");
+      case "status":
+        return normalizeStatus(a.formStatus).localeCompare(normalizeStatus(b.formStatus));
+      case "list":
+        return a.listTitle.localeCompare(b.listTitle);
+      default: // newest
+        return (b.submittedAt || "").localeCompare(a.submittedAt || "");
+    }
+  });
+
+  const listMetaMap = { ...loadedConfig?.listMetaMap };
+  for (const list of visibleLists) {
+    if (!listMetaMap[list.title]) {
+      listMetaMap[list.title] = generateMeta(list.title);
+    }
+  }
+
+  const hasFilters = !!(search || listFilter || statusFilter !== "all" || submitterFilter);
+
+  // ---- Render ----
+
+  if (pageState === "checking" || (pageState === "loading" && loading)) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <LoadingScreen userEmail={userEmail || undefined} progress={loadProgress} status={loadStatus} />
+      </ThemeProvider>
+    );
+  }
+
+  if (pageState === "choice") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ChoiceScreen onLogin={handleLogin} onGuest={handleGuest} />
+      </ThemeProvider>
+    );
+  }
+
+  if (pageState === "guest") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <GuestLanding onLogin={handleLogin} onForgetChoice={handleForgetChoice} />
+      </ThemeProvider>
+    );
+  }
+
+  if (pageState === "wrong_tenant") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <WrongTenantScreen userEmail={userEmail} onLogout={handleSignOut} onSwitch={handleSwitchAccount} />
+      </ThemeProvider>
+    );
+  }
+
+  if (pageState === "error") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ErrorScreen errorMsg={errorMsg} onRetry={() => setPageState("loading")} onSignOut={handleSignOut} />
+      </ThemeProvider>
+    );
+  }
+
+  // ---- Dashboard (ready state) ----
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Routes>
+        <Route
+          path="/form/:formId"
+          element={
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
+              <DynamicFormPage />
+            </Box>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
+              <Header
+                userEmail={userEmail}
+                isAdmin={isAdmin}
+                onLogout={handleSignOut}
+                onSwitch={handleSwitchAccount}
+                onOpenBuilder={() => { setEditingFormId(undefined); setBuilderOpen(true); }}
+              />
+
+              <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 3 }}>
+                {missingConfigs.length > 0 && (
+                  <Box sx={{ mb: 3 }}>
+                    <ConfigWarningBanner missingLists={missingConfigs} />
+                  </Box>
+                )}
+
+                <Box sx={{ mb: 3 }}>
+                  <StatsRow submissions={submissions} />
+                </Box>
+
+                {visibleLists.length > 0 && (
+                  <Box sx={{ mb: 3 }}>
+                    <ListSummaryCards
+                      submissions={submissions}
+                      visibleLists={visibleLists}
+                      listMetaMap={listMetaMap}
+                      isAdmin={isAdmin}
+                      onEditForm={(formId) => { setEditingFormId(formId); setBuilderOpen(true); }}
+                    />
+                  </Box>
+                )}
+
+                <Box sx={{ mb: 3 }}>
+                  <Toolbar
+                    search={search}
+                    setSearch={setSearch}
+                    listFilter={listFilter}
+                    setListFilter={setListFilter}
+                    statusFilter={statusFilter}
+                    setStatusFilter={setStatusFilter}
+                    sortBy={sortBy}
+                    setSortBy={setSortBy}
+                    submitterFilter={submitterFilter}
+                    setSubmitterFilter={setSubmitterFilter}
+                    isAdmin={isAdmin}
+                    visibleLists={visibleLists}
+                    total={submissions.length}
+                    filtered={sortedSubmissions.length}
+                  />
+                </Box>
+
+                {sortedSubmissions.length > 0 ? (
+                  <>
+                    <ListHeader isAdmin={isAdmin} />
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                      {sortedSubmissions.map((item) => (
+                        <SubmissionRow
+                          key={`${item.listTitle}-${item.id}`}
+                          item={item}
+                          onView={setDetailItem}
+                          isAdmin={isAdmin}
+                          listMetaMap={listMetaMap}
+                        />
+                      ))}
+                    </Box>
+                  </>
+                ) : (
+                  <EmptyState hasFilters={hasFilters} />
+                )}
+              </Box>
+
+              <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
+
+              {/* Form Builder Modal */}
+              <Dialog
+                open={builderOpen}
+                onClose={() => { setBuilderOpen(false); setEditingFormId(undefined); }}
+                fullScreen
+                slotProps={{
+                  paper: {
+                    sx: { backgroundColor: "#f8f9fa" },
+                  },
+                }}
+              >
+                <FormBuilder
+                  formId={editingFormId}
+                  isAdmin={isAdmin}
+                  onClose={() => { setBuilderOpen(false); setEditingFormId(undefined); }}
+                />
+              </Dialog>
+            </Box>
+          }
+        />
+      </Routes>
+    </ThemeProvider>
+  );
+}
