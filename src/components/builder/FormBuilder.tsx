@@ -14,7 +14,7 @@ import { flattenQuestions } from "../../utils/FormBuilderEngine";
 //import logo from "../../assets/logo.png";
 import { C } from "./constants";
 import "./FormBuilder.css";
-import { provisionResponseList, upsertFormConfig, saveFormVersion, upsertApprovers, logEvent, slugify } from "../../utils/formBuilderSP";
+// import { slugify } from "../../utils/formBuilderSP";
 
 //import logo from "../../assets/logo.png";
 
@@ -506,8 +506,10 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
 }) {
   const err = errors.filter(e => e.id === field._id);
   const td = QUESTION_TYPES.find(t => t.type === field.type) || QUESTION_TYPES[0];
-  const spColKind = getSpColumnKind(field.type);
-  const spColLabel = spColKind ? (spColKind.FieldTypeKind === 2 ? "Text" : spColKind.FieldTypeKind === 9 ? "Number" : spColKind.FieldTypeKind === 4 ? "Date" : spColKind.FieldTypeKind === 6 ? "Multi-choice" : spColKind.FieldTypeKind === 7 ? "Choice" : spColKind.FieldTypeKind === 8 ? "Boolean" : spColKind.FieldTypeKind === 20 ? "User" : spColKind.label) : null;
+  const spColKind = getSpColumnKind(field);
+  const spColLabel = spColKind
+    ? ({ 2: "Text", 3: "Multi-line", 4: "Date", 6: "Choice", 8: "Boolean", 9: "Number", 15: "MultiChoice" }[spColKind.FieldTypeKind] ?? spColKind.label)
+    : null;
   const shortcuts = selected ? "Del to remove, Ctrl+D to duplicate" : "";
   return <div draggable onDragStart={e => onDragStart(e, index)} onDragOver={e => onDragOver(e, index)} onDrop={e => onDrop(e, index)}
     className={`fb-field-card ${selected ? 'selected' : ''} ${err.length ? 'error' : ''}`} onClick={() => onSelect(field._id)}
@@ -529,7 +531,7 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
           {field.visibleIf && <Pill color={C.green} bg={C.greenPale}>Conditional</Pill>}
           {field.enableIf && <Pill color={C.purpleLight} bg={C.purplePale}>Dyn.enable</Pill>}
           {spColLabel && <Pill color={C.textSecond} bg={C.offWhite}>{spColLabel}</Pill>}
-          {field.type === "dynamicmatrix" && <Pill color={C.amber} bg={C.amberPale}>→ Rich Text</Pill>}
+          {(field.type === "dynamicmatrix" || field.type === "tableinput") && <Pill color={C.amber} bg={C.amberPale}>→ Rich Text</Pill>}
         </div>
         <div className="fb-field-meta">
           <span className="fb-field-name">{field.name}</span>
@@ -621,11 +623,160 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
   </PropRow>;
 }
 
-function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, surveySettings }: {
+function MatrixColumnsEditor({ columns, token, onChange }: {
+  columns: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[];
+  token?: string;
+  onChange: (cols: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[]) => void;
+}) {
+  const addCol = () => {
+    const idx = columns.length + 1;
+    onChange([...columns, { name: `col${idx}`, title: `Column ${idx}`, cellType: "text" }]);
+  };
+  const updateCol = (i: number, patch: Partial<typeof columns[0]>) => {
+    const next = columns.map((c, idx) => idx === i ? { ...c, ...patch } : c);
+    onChange(next);
+  };
+  const removeCol = (i: number) => onChange(columns.filter((_, idx) => idx !== i));
+
+  return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Matrix Columns</span>
+      <div style={{ flex: 1 }} />
+      <button onClick={addCol} style={{ fontSize: 11, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "'DM Sans'" }}>＋ Add column</button>
+    </div>
+    {columns.length === 0 && <div style={{ fontSize: 11, color: C.textMuted, padding: 8, background: C.offWhite, borderRadius: 6 }}>No columns defined. Add at least one.</div>}
+    {columns.map((col, i) => {
+      const hasChoices = col.cellType === "dropdown" || col.cellType === "checkbox";
+      return <div key={i} style={{ padding: 10, background: C.offWhite, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.purple, width: 18 }}>{i + 1}</span>
+          <div style={{ flex: 1, display: "flex", gap: 6 }}>
+            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/\s+/g, "_") })} placeholder="Name" style={{ flex: 1, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "'DM Sans'" }} />
+            <input value={col.title} onChange={e => updateCol(i, { title: e.target.value })} placeholder="Title" style={{ flex: 1.5, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "'DM Sans'" }} />
+          </div>
+          <button onClick={() => removeCol(i)} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 10, color: C.textMuted, whiteSpace: "nowrap" }}>Cell type:</span>
+          <Select value={col.cellType || "text"} onChange={v => updateCol(i, { cellType: v, choices: undefined, choicesSource: undefined, multiSelect: undefined })} options={[
+            { value: "text", label: "Text" },
+            { value: "dropdown", label: "Dropdown" },
+            { value: "date", label: "Date" },
+            { value: "number", label: "Number" },
+            { value: "checkbox", label: "Checkbox" },
+            { value: "boolean", label: "Boolean" },
+          ]} />
+          {col.cellType === "dropdown" && <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: C.textMuted }}>
+            <input type="checkbox" checked={!!col.multiSelect} onChange={e => updateCol(i, { multiSelect: e.target.checked })} /> Multi-select
+          </label>}
+        </div>
+        {hasChoices && <>
+          <SpChoicesSourceEditor
+            source={col.choicesSource}
+            token={token}
+            onChange={src => updateCol(i, { choicesSource: src || undefined, choices: src?.list ? [] : (col.choices || []) })}
+          />
+          {!col.choicesSource?.list && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+            {(col.choices || []).map((ch, ci) => <span key={ci} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>
+              {ch}
+              <button onClick={() => updateCol(i, { choices: (col.choices || []).filter((_, idx) => idx !== ci) })} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕</button>
+            </span>)}
+            <input
+              placeholder="Add choice…"
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  const val = (e.target as HTMLInputElement).value.trim();
+                  if (val) { updateCol(i, { choices: [...(col.choices || []), val] }); (e.target as HTMLInputElement).value = ""; }
+                }
+              }}
+              style={{ fontSize: 11, padding: "3px 8px", border: `1px dashed ${C.border}`, borderRadius: 12, width: 90, fontFamily: "'DM Sans'" }}
+            />
+          </div>}
+        </>}
+      </div>;
+    })}
+  </div>;
+}
+
+function SpChoicesSourceEditor({ source, token, onChange }: {
+  source?: { list?: string; column?: string; multiSelect?: boolean };
+  token?: string;
+  onChange: (src: { list?: string; column?: string; multiSelect?: boolean } | undefined) => void;
+}) {
+  const [mode, setMode] = useState<"manual" | "sp">(source?.list ? "sp" : "manual");
+  const [lists, setLists] = useState<{ title: string; id: string }[]>([]);
+  const [columns, setColumns] = useState<{ title: string; typeKind: number; choices: string[] }[]>([]);
+  const [loadingLists, setLoadingLists] = useState(false);
+  const [loadingCols, setLoadingCols] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { setMode(source?.list ? "sp" : "manual"); }, [source?.list]);
+
+  useEffect(() => {
+    if (mode !== "sp" || !token) return;
+    setLoadingLists(true);
+    setError("");
+    import("../../utils/formBuilderSP").then(({ getSharePointLists }) => {
+      getSharePointLists(token).then(setLists).catch((e: Error) => setError(e.message)).finally(() => setLoadingLists(false));
+    });
+  }, [mode, token]);
+
+  useEffect(() => {
+    if (mode !== "sp" || !token || !source?.list) { setColumns([]); return; }
+    setLoadingCols(true);
+    setError("");
+    import("../../utils/formBuilderSP").then(({ getChoiceColumnsForList }) => {
+      getChoiceColumnsForList(source.list!, token).then(setColumns).catch((e: Error) => setError(e.message)).finally(() => setLoadingCols(false));
+    });
+  }, [mode, token, source?.list]);
+
+  const selectedCol = columns.find(c => c.title === source?.column);
+
+  return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Data Source</span>
+      <div style={{ flex: 1 }} />
+    </div>
+    <div style={{ display: "flex", gap: 8 }}>
+      <button onClick={() => { setMode("manual"); onChange(undefined); }}
+        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "manual" ? C.purple : C.border}`, background: mode === "manual" ? C.purplePale : C.white, color: mode === "manual" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans'" }}>
+        Manual
+      </button>
+      <button onClick={() => setMode("sp")}
+        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "sp" ? C.purple : C.border}`, background: mode === "sp" ? C.purplePale : C.white, color: mode === "sp" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans'" }}>
+        SharePoint List
+      </button>
+    </div>
+    {mode === "sp" && <>
+      {!token && <div style={{ fontSize: 11, color: C.amber, padding: 8, background: C.amberPale, borderRadius: 6 }}>Sign in to load SharePoint lists.</div>}
+      {!!token && <>
+        <PropRow label="List">
+          <Select value={source?.list || ""} onChange={v => onChange({ list: v || undefined, column: undefined })} options={[
+            { value: "", label: loadingLists ? "Loading…" : "Select a list" },
+            ...lists.map(l => ({ value: l.title, label: l.title }))
+          ]} />
+        </PropRow>
+        {source?.list && <PropRow label="Column">
+          <Select value={source?.column || ""} onChange={v => onChange({ ...source, column: v || undefined })} options={[
+            { value: "", label: loadingCols ? "Loading…" : "Select a choice column" },
+            ...columns.map(c => ({ value: c.title, label: `${c.title} (${c.typeKind === 15 ? "Multi" : "Single"})` }))
+          ]} />
+        </PropRow>}
+        {selectedCol && selectedCol.choices.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: 8, background: C.offWhite, borderRadius: 6 }}>
+          {selectedCol.choices.map(ch => <span key={ch} style={{ fontSize: 10, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>{ch}</span>)}
+        </div>}
+        {error && <div style={{ fontSize: 11, color: C.red }}>{error}</div>}
+      </>}
+    </>}
+  </div>;
+}
+
+function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, surveySettings, token }: {
   field: FormBuilderField | null; allFields: FormBuilderField[];
   onChange: (patch: Partial<FormBuilderField>) => void;
   onSurveySettingsChange?: (s: Record<string, unknown>) => void;
   surveySettings?: Record<string, unknown>;
+  token?: string;
 }) {
   const [tab, setTab] = useState("general");
 
@@ -672,7 +823,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
   if (!field) return <div style={{ padding: 20, textAlign: "center", color: C.textMuted, fontSize: 12 }}>Select a field to edit its properties</div>;
 
   const td = QUESTION_TYPES.find(t => t.type === field.type) || QUESTION_TYPES[0];
-  const hasChoices = ["dropdown", "radiogroup", "checkbox"].includes(field.type);
+  const hasChoices = ["dropdown", "radiogroup", "checkbox", "buttongroup"].includes(field.type);
   const tabs = [
     { id: "general", label: "General" },
     { id: "options", label: "Options" },
@@ -711,29 +862,21 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
           <Toggle checked={field.titleLocation === "hidden"} onChange={v => onChange({ titleLocation: v ? "hidden" : "default" })} label="Hide title" />
         </div>
       </div>}
-      {tab === "options" && <div>
+      {tab === "options" && <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {hasChoices && <>
-          <PropRow label="Choices"><ChoicesEditor choices={field.choices || []} onChange={c => onChange({ choices: c })} /></PropRow>
-          <PropRow label="Sync from SharePoint">
-            <button
-              onClick={() => {
-                setShowSyncDialog(true);
-                // Fetch available lists
-                if (token) {
-                  setSyncLoading(true);
-                  spGet(token, `${SP_SITE_URL}/_api/web/lists?$select=Title&$filter=BaseTemplate eq 100&$top=50`)
-                    .then(data => {
-                      setSyncLists((data as { value?: { Title: string }[] }).value?.map(l => l.Title) || []);
-                      setSyncLoading(false);
-                    })
-                    .catch(() => setSyncLoading(false));
-                }
-              }}
-              style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${C.purpleMid}`, background: "transparent", color: C.purple, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-            >
-              🔄 Sync from SharePoint
-            </button>
-          </PropRow>
+          <SpChoicesSourceEditor
+            source={field.spChoicesSource}
+            token={token}
+            onChange={src => onChange({ spChoicesSource: src, choices: src?.list ? [] : (field.choices || []) })}
+          />
+          {!field.spChoicesSource?.list && <PropRow label="Choices"><ChoicesEditor choices={field.choices || []} onChange={c => onChange({ choices: c })} /></PropRow>}
+        </>}
+        {(field.type === "dynamicmatrix" || field.type === "tableinput") && <>
+          <MatrixColumnsEditor
+            columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[]}
+            token={token}
+            onChange={cols => onChange({ columns: cols, tableConfigColumns: cols })}
+          />
         </>}
         <PropRow label="Columns (side by side)"><Select value={String(field.colCount ?? 1)} onChange={v => onChange({ colCount: parseInt(v) })} options={[0, 1, 2, 3, 4].map(n => ({ value: String(n), label: n === 0 ? "Auto" : `${n} column${n > 1 ? "s" : ""}` }))} /></PropRow>
       </div>}
@@ -770,6 +913,9 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
   const model = useMemo(() => {
     try {
       const m = new Model(json);
+      if (json.labelPosition) {
+        m.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
+      }
       return m;
     } catch (e) { console.error("Preview model error:", e); return null; }
   }, [json]);
@@ -803,7 +949,25 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
           </tbody>
         </table>
       </div>}
-      <div className="fb-preview-wrap" style={{ padding: "20px 24px", maxHeight: "70vh", overflowY: "auto" }}><Survey model={model} /></div>
+      <div className="fb-preview-wrap" style={{
+        padding: "20px 24px", maxHeight: "70vh", overflowY: "auto",
+        backgroundColor: json.backgroundColor || "#FFFFFF",
+        // SurveyJS v2 CSS custom properties for theming
+        ["--sjs-primary-backcolor" as string]: json.primaryColor || "#5B21B6",
+        ["--sjs-primary-backcolor-light" as string]: json.primaryColor ? `${json.primaryColor}33` : "#7C3AED33",
+        ["--sjs-primary-backcolor-dark" as string]: json.primaryColor || "#3B0764",
+        ["--sjs-general-backcolor" as string]: json.backgroundColor || "#FFFFFF",
+        ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
+        ["--sjs-general-forecolor" as string]: json.textColor || "#1E1B4B",
+        ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1E1B4B",
+        ["--sjs-font-family" as string]: json.fontFamily ? `'${json.fontFamily}',sans-serif` : "'DM Sans',sans-serif",
+        ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
+        ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
+        ["--sjs-questionpanel-cornerRadius" as string]: json.borderRadius || "8px",
+        ["--sjs-editorpanel-cornerRadius" as string]: json.borderRadius || "8px",
+        ["--sjs-error-backcolor" as string]: json.errorColor ? `${json.errorColor}1A` : "#FEE2E2",
+        ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
+      } as React.CSSProperties}><Survey model={model} /></div>
       <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>Preview only — submissions are not saved</div>
     </div>
   </div>;
@@ -821,9 +985,10 @@ interface FormBuilderProps {
   formId?: string;
   isAdmin?: boolean;
   onClose?: () => void;
+  readOnly?: boolean;
 }
 
-export default function FormBuilder({ initialJson, onChange, onPublish, height = "calc(100vh - 56px)", token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose }: FormBuilderProps) {
+export default function FormBuilder({ initialJson, onChange, onPublish, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false }: FormBuilderProps) {
   const [fields, setFields] = useState<FormBuilderField[]>(() => {
     if (!initialJson) return [];
     try { return flattenQuestions(initialJson); } catch { return []; }
@@ -889,24 +1054,8 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
   const [activeLocale, setActiveLocale] = useState<"en" | "ms" | "zh" | "ta">("ms");
 
   // ── Form Metadata State ─────────────────────────────────────
-  const [formTitle, setFormTitle] = useState<string>(String(meta?.formTitle || ""));
-  const [formSlug, setFormSlug] = useState<string>(String(meta?.slug || ""));
-  const [formVersion, setFormVersion] = useState<string>(String(meta?.currentVersion || "1.0"));
-  const [approvalLayers, setApprovalLayers] = useState<{ email: string; name: string }[]>(meta?.approvalLayers as { email: string; name: string }[] || []);
-  const [conditionField] = useState<string>(String(meta?.conditionField || ""));
-  const [approvalRules] = useState<unknown>(meta?.approvalRules || null);
-  const [publishing, setPublishing] = useState(false);
-  const [publishLogs, setPublishLogs] = useState<{ m: string; t: string }[]>([]);
-  const [showPublishDialog, setShowPublishDialog] = useState(false);
-  const [versionBump, setVersionBump] = useState<"major" | "minor">("minor");
+  const [_formTitle, _setFormTitle] = useState<string>(String(meta?.formTitle || ""));
 
-  // SharePoint column sync state
-  const [showSyncDialog, setShowSyncDialog] = useState(false);
-  const [syncLists, setSyncLists] = useState<string[]>([]);
-  const [selectedSyncList, setSelectedSyncList] = useState("");
-  const [syncColumns, setSyncColumns] = useState<string[]>([]);
-  const [selectedSyncColumn, setSelectedSyncColumn] = useState("");
-  const [syncLoading, setSyncLoading] = useState(false);
 
   // Initialize surveySettings from initialJson or defaults
   useEffect(() => {
@@ -921,9 +1070,13 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
         textUpdateMode: initialJson.textUpdateMode || "onTyping",
         showProgressBar: !!initialJson.showProgressBar,
         showPageTitles: !!initialJson.showPageTitles,
-        primaryColor: "#5B21B6",
-        backgroundColor: "#FFFFFF",
-        textColor: "#1E1B4B",
+        primaryColor: initialJson.primaryColor || "#5B21B6",
+        backgroundColor: initialJson.backgroundColor || "#FFFFFF",
+        textColor: initialJson.textColor || "#1E1B4B",
+        errorColor: initialJson.errorColor || "#DC2626",
+        fontFamily: initialJson.fontFamily || "DM Sans",
+        borderRadius: initialJson.borderRadius || "8px",
+        labelPosition: initialJson.labelPosition || "top",
       });
     } else {
       setSurveySettings({
@@ -939,6 +1092,10 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
         primaryColor: "#5B21B6",
         backgroundColor: "#FFFFFF",
         textColor: "#1E1B4B",
+        errorColor: "#DC2626",
+        fontFamily: "DM Sans",
+        borderRadius: "8px",
+        labelPosition: "top",
       });
     }
   }, [initialJson]);
@@ -1050,88 +1207,8 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
   const handlePublishClick = useCallback(() => {
     const errs = validateFields(fields); setErrors(errs);
     if (errs.length > 0) { alert(`Please fix ${errs.length} error(s):\n\n${errs.map(e => `• ${e.msg}`).join("\n")}`); return; }
-    setShowPublishDialog(true);
-  }, [fields]);
-
-  const handlePublishConfirm = useCallback(async () => {
-    if (!formTitle || !token) return;
-    setPublishing(true);
-    setPublishLogs([]);
-    const addLog = (m: string, t: string = "info") => setPublishLogs(prev => [...prev, { m, t }]);
-
-    try {
-      addLog(`Starting publish for "${formTitle}"...`, "info");
-
-      // 1. Calculate new version
-      const newVersion = versionBump === "major"
-        ? `${parseInt(formVersion.split(".")[0] || "1") + 1}.0`
-        : `${formVersion.split(".")[0] || "1"}.${parseInt(formVersion.split(".")[1] || "0") + 1}`;
-      addLog(`Version: ${formVersion} → ${newVersion} (${versionBump} bump)`, "ok");
-
-      // 2. Build survey JSON
-      const json = buildSurveyJson(fields, surveySettings);
-      addLog("Building SurveyJS JSON...", "info");
-
-      // 3. Provision response list
-      addLog("Provisioning response list...", "info");
-      await provisionResponseList(token, formTitle, json, addLog);
-
-      // 4. Save form config (Master Form)
-      addLog("Saving form config...", "info");
-      const formId = formSlug || slugify(formTitle);
-      await upsertFormConfig(token, formTitle, {
-        formId,
-        numLayers: approvalLayers.length,
-        slug: formId,
-        version: newVersion,
-        isPublished: true,
-        isPublic: true,
-        conditionField,
-        approvalRules: approvalRules,
-      });
-      addLog("✓ Form config saved", "ok");
-
-      // 5. Save form version (Web Form Versions)
-      addLog("Saving form version...", "info");
-      const versionData = {
-        FormTitle: formTitle,
-        FormSlug: formId,
-        FormVersion: newVersion,
-        SurveyJSON: JSON.stringify(json),
-        PublishedBy: "Form Builder",
-        meta: { ...meta, formTitle, currentVersion: newVersion, approvalLayers, conditionField },
-      };
-      await saveFormVersion(versionData, token);
-      addLog("✓ Form version saved", "ok");
-
-      // 6. Save approvers
-      if (approvalLayers.length > 0) {
-        addLog(`Saving ${approvalLayers.length} approval layer(s)...`, "info");
-        await upsertApprovers(token, formTitle, approvalLayers);
-        addLog("✓ Approvers saved", "ok");
-      }
-
-      // 7. Log event
-      await logEvent(token, {
-        formTitle,
-        eventType: "PUBLISH",
-        changedBy: "Form Builder",
-        summary: `Published ${formTitle} v${newVersion}`,
-        before: { version: formVersion },
-        after: { version: newVersion, fields: fields.length },
-      });
-
-      addLog(`✓ Published ${formTitle} v${newVersion}!`, "ok");
-      setFormVersion(newVersion);
-      setShowPublishDialog(false);
-
-      if (onPublish) onPublish(json);
-    } catch (e) {
-      addLog(`✗ Publish failed: ${(e as Error).message}`, "err");
-    } finally {
-      setPublishing(false);
-    }
-  }, [formTitle, formSlug, formVersion, versionBump, fields, surveySettings, token, approvalLayers, conditionField, approvalRules, meta, onPublish]);
+    onPublish?.(buildSurveyJson(fields, surveySettings));
+  }, [fields, surveySettings, onPublish]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1232,7 +1309,7 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
           <div className="fb-panel-header">
             <div className="fb-panel-header-text">Properties</div>
           </div>
-          <PropertyPanel field={selectedField} allFields={fields} onChange={patch => selectedField && handleChange(selectedField._id, patch)} surveySettings={surveySettings} onSurveySettingsChange={setSurveySettings} />
+          <PropertyPanel field={selectedField} allFields={fields} onChange={patch => selectedField && handleChange(selectedField._id, patch)} surveySettings={surveySettings} onSurveySettingsChange={setSurveySettings} token={_token} />
         </div>
       </div>
       <JsonPreview json={surveyJson} collapsed={jsonCollapsed} onToggle={() => setJsonCollapsed(c => !c)} />
@@ -1781,140 +1858,6 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
             </div>
           </div>
       </div>
-        )}
-        {/* ── PUBLISH DIALOG ───────────────────────────────────── */}
-        {showPublishDialog && (
-          <div onClick={() => setShowPublishDialog(false)} style={{ position: "fixed", inset: 0, zIndex: 3200, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 16, width: 640, maxHeight: "90vh", boxShadow: "0 20px 60px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>🚀 Publish Form</div>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>Create or update the SharePoint list and make form available</div>
-                </div>
-                <button onClick={() => setShowPublishDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
-              </div>
-              <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-                {/* Form Title */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Form Title</div>
-                  <input
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder="Enter form title..."
-                    style={{ width: "100%", padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, color: C.textPrimary }}
-                  />
-                </div>
-                {/* Slug */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>URL Slug</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontSize: 11, color: C.textMuted }}>{import.meta.env.VITE_SP_SITE_URL || "..."}/form/</span>
-                    <input
-                      value={formSlug}
-                      onChange={(e) => setFormSlug(e.target.value)}
-                      placeholder="form-slug"
-                      style={{ flex: 1, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, color: C.textPrimary }}
-                    />
-                  </div>
-                </div>
-                {/* Version */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Version</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: C.purple }}>{formVersion}</span>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => setVersionBump("minor")}
-                        style={{
-                          padding: "6px 14px", borderRadius: 8, border: `1px solid ${versionBump === "minor" ? C.purple : C.border}`,
-                          background: versionBump === "minor" ? C.purplePale : "transparent", color: versionBump === "minor" ? C.purple : C.textMuted,
-                          fontSize: 12, fontWeight: 600, cursor: "pointer"
-                        }}
-                      >Minor Bump ({formVersion.replace(/\d+$/, (m) => String(Number(m) + 1))})</button>
-                      <button
-                        onClick={() => setVersionBump("major")}
-                        style={{
-                          padding: "6px 14px", borderRadius: 8, border: `1px solid ${versionBump === "major" ? C.purple : C.border}`,
-                          background: versionBump === "major" ? C.purplePale : "transparent", color: versionBump === "major" ? C.purple : C.textMuted,
-                          fontSize: 12, fontWeight: 600, cursor: "pointer"
-                        }}
-                      >Major Bump</button>
-                    </div>
-                  </div>
-                </div>
-                {/* Approval Layers */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Approval Layers</div>
-                  <div style={{ background: C.offWhite, borderRadius: 8, padding: 12 }}>
-                    {approvalLayers.map((layer, idx) => (
-                      <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: C.purple, minWidth: 60 }}>Layer {idx + 1}</span>
-                        <input
-                          value={layer.name}
-                          onChange={(e) => {
-                            const updated = [...approvalLayers];
-                            updated[idx] = { ...updated[idx], name: e.target.value };
-                            setApprovalLayers(updated);
-                          }}
-                          placeholder="Approver name"
-                          style={{ flex: 1, padding: "6px 10px", border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 12 }}
-                        />
-                        <input
-                          value={layer.email}
-                          onChange={(e) => {
-                            const updated = [...approvalLayers];
-                            updated[idx] = { ...updated[idx], email: e.target.value };
-                            setApprovalLayers(updated);
-                          }}
-                          placeholder="email@company.com"
-                          style={{ flex: 1, padding: "6px 10px", border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 12 }}
-                        />
-                        <button onClick={() => setApprovalLayers(approvalLayers.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 14 }}>✕</button>
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => setApprovalLayers([...approvalLayers, { email: "", name: "" }])}
-                      style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: "transparent", color: C.purple, fontSize: 12, fontWeight: 600, cursor: "pointer", width: "100%" }}
-                    >+ Add Approval Layer</button>
-                    {approvalLayers.length === 0 && (
-                      <div style={{ fontSize: 11, color: C.textMuted, textAlign: "center", padding: 8 }}>
-                        No approval layers = form submits directly (no approval workflow)
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {/* Publish Logs */}
-                {publishLogs.length > 0 && (
-                  <div style={{ background: C.offWhite, borderRadius: 8, padding: 12, marginBottom: 16, maxHeight: 200, overflowY: "auto" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Provisioning Log</div>
-                    {publishLogs.map((log, idx) => (
-                      <div key={idx} style={{ fontSize: 11, color: log.t === "err" ? C.red : log.t === "ok" ? C.green : C.textMuted, marginBottom: 2 }}>
-                        {log.t === "ok" ? "✓" : log.t === "err" ? "✗" : "⚠"} {log.m}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <button
-                  onClick={() => setShowPublishDialog(false)}
-                  style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontSize: 12, cursor: "pointer" }}
-                >Cancel</button>
-                <button
-                  onClick={handlePublishConfirm}
-                  disabled={publishing || !formTitle}
-                  style={{
-                    padding: "8px 20px", borderRadius: 8, border: "none",
-                    background: publishing ? C.border : `linear-gradient(135deg, ${C.purple}, ${C.purpleLight})`,
-                    color: "#fff", fontSize: 13, fontWeight: 600, cursor: publishing ? "not-allowed" : "pointer",
-                    opacity: (!formTitle || publishing) ? 0.6 : 1,
-                  }}
-                >
-                  {publishing ? "Publishing..." : "🚀 Publish Form"}
-                </button>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </DndProvider>;

@@ -36,9 +36,19 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 
 ## Routing (react-router-dom v7)
 - `"/form/:formId"` → `DynamicFormPage` (public/private form rendering)
+- `"/admin/builder"` → `AdminFormBuilder` (full form builder with sidebar, library, publish)
+- `"/admin/builder/:formTitle"` → `AdminFormBuilder` (loads specific form for editing)
+- `"/admin/approvals"` → `ApprovalDashboard` (approval workflow)
+- `"/admin/responses/:formTitle"` → `ResponseViewer` (submission responses)
 - `"*"` → Dashboard with `Header`, `StatsRow`, `ListSummaryCards`, `Toolbar`, `SubmissionRow`
-- Form builder opens as modal (`builderOpen` state in `App.tsx`), not a route
-- Header "Form Builder" button wired via `onOpenBuilder` prop → sets `builderOpen=true`
+- Header "Form Builder" button navigates to `/admin/builder` (not a modal)
+- The old `<Dialog>` FormBuilder in the `*` route is dead code — nothing sets `builderOpen=true` anymore
+
+## API Routes (Vercel-style serverless)
+- `api/form-config.ts` — Public form config fetcher (used by unauthenticated users)
+- `api/submit-form.ts` — Public form submission handler (guest submissions)
+- `api/_utils/sharepoint.ts` — Server-side SP REST helpers (MS Graph token via client credentials)
+- **Import paths**: API routes import from `./_utils/sharepoint.ts` (NOT `../_utils/sharepoint.js`)
 
 ## SharePoint Integration
 - **odata format**: `odata=nometadata` — responses use `data.value` not `data.d.results`
@@ -50,6 +60,28 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - Submissions queried per visible list with `$orderby: Created desc`
 - Digest cached with 30min expiry, `X-HTTP-Method` headers for writes
 
+## SP Column Type Mapping
+| SurveyJS Type | SP FieldTypeKind | SharePoint Type |
+|---|---|---|
+| `text`, `email`, `url`, `tel`, `password`, `masked`, `autocomplete`, `taginput`, `time`, `colorpicker`, `nric`, `otp`, `hierarchy` | 2 | Text |
+| `comment`, `richtext`, `addressblock`, `jsoneditor`, `locationpicker` | 3 | Note (Multi-line) |
+| `date`, `datetime` | 4 | DateTime |
+| `dropdown`, `radiogroup`, `buttongroup` (single) | 6 | **Choice** |
+| `checkbox`, `buttongroup` (multi) | 15 | **MultiChoice** |
+| `boolean`, `toggleswitch`, `consent` | 8 | Boolean/YesNo |
+| `number`, `currency`, `slider`, `starrating`, `nps`, `duration`, `formula`, `unitconverter`, `counter`, `scorecard`, `rating` | 9 | Number |
+| `dynamicmatrix`, `tableinput` | — | `_Html` (RichText) + `_Json` (Note) |
+| `ranking`, `budgetallocator`, `rangeslider`, `daterange` | 3 | Note (stores JSON) |
+| Layout/display types, `file`, `imageupload`, `signaturepad`, `audiorecorder` | null | No column |
+
+### SharePoint Choice Source (`spChoicesSource`)
+- Choice fields (`dropdown`, `radiogroup`, `checkbox`, `buttongroup`) can pull values from existing SP list columns
+- `FormBuilderField.spChoicesSource = { list, column, multiSelect }` stores the reference
+- Builder UI has "Manual" / "SharePoint List" toggle in Options tab
+- At runtime (`DynamicFormPage.tsx`), choices are fetched live and injected into the SurveyJS model
+- At publish time, `provisionResponseList()` fetches latest SP choices and creates the SP column with those values
+- Matrix columns (`dynamicmatrix`) also support `choicesSource` per column for dropdown cell types
+
 ## System Lists Filtering
 - Both user and admin contexts see system lists filtered in `filterVisibleLists()`
 - `SYSTEM_BASE_TEMPLATES` set: 109, 111, 112, 113, 114, 116, 119, 130, 140, 212, 300, 850
@@ -57,22 +89,26 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - `DiscoveredList` type includes: `hidden`, `baseTemplate`, `baseType`, `isCatalog`, `isSiteAssetsLibrary`, `isApplicationList`, `isSystemList`, `noCrawl`
 
 ## Form Builder System (admin-only)
-- **Entry**: Header "Form Builder" button (visible only when `isAdmin=true`)
+- **Entry**: Header "Form Builder" button (visible only when `isAdmin=true`) → navigates to `/admin/builder`
+- **Pages**:
+  - `src/pages/AdminFormBuilder.tsx` — Full builder page (sidebar, library, publish, version history, audit log, approvers)
+  - `src/pages/DynamicFormPage.tsx` — End-user form rendering
 - **Components** (`src/components/builder/`):
-  - `FormBuilder.tsx` — Main UI (custom drag-drop builder via react-dnd, renders with `survey-react-ui`)
+  - `FormBuilder.tsx` — Custom drag-drop canvas (react-dnd, survey-react-ui renderer)
   - `FormLibrary.tsx` — Sidebar form list
   - `VersionHistory.tsx` — Version history panel
   - `AuditLog.tsx` — Audit log with diff view
   - `ApproverRow.tsx` — Approver input with user search
   - `ProvisionOverlay.tsx` — Publish status overlay
-  - `constants.ts` — `C` color object (not MUI)
+  - `ApprovalDashboard.tsx` — Approval workflow page (route: `/admin/approvals`)
+  - `ResponseViewer.tsx` — Submission response viewer (route: `/admin/responses/:formTitle`)
+  - `constants.ts` — `C` color object (inline styles, NOT MUI)
   - `index.ts` — Barrel exports
 - **Utilities**:
   - `src/utils/formBuilderSP.ts` — SharePoint REST (raw token, NOT createSpClient)
   - `src/utils/FormBuilderEngine.ts` — Pure logic (validate, versioning)
   - `src/utils/DynamicMatrix.tsx` — Custom SurveyJS widget
   - `src/utils/matrixToHtml.ts` — Matrix ↔ HTML/JSON conversion
-- `src/pages/DynamicFormPage.tsx` — End-user form rendering
 - **SharePoint lists**: `Master Form`, `Web Form Versions`, `Form Builder Log`, `Approvers`
 - **Approval layers**: 1–3 configurable, saved as `L1_Approvers`, `L2_Approvers`, etc.
 - **Versioning**: `Web Form Versions` list, auto-incrementing
@@ -133,6 +169,13 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - `src/utils/formBuilderSP.ts` — **Standalone** SP REST for form builder (uses raw `token: string`, NOT `createSpClient`)
 - `src/utils/FormBuilderEngine.ts` — Pure data logic for form building (validate, versioning, approval layers)
 
+## Anti-Patterns (This Project)
+- **NO `useMemo`/`useCallback`** — React 19 makes these unnecessary; remove when touching code
+- **NO `console.log/warn/error` in production** — replace with proper logging or remove when touching code
+- **NO `dangerouslySetInnerHTML` without audit** — `DetailModal.tsx` uses it; verify XSS safety if user input reaches it
+- **NO dead code** — remove unused `.backup`, `.txt`, dead pages when found
+- **NO `@ts-ignore` / `@ts-expect-error`** — never suppress type errors
+
 ## Conventions
 - **PowerShell**: use `workdir` parameter with `bash` tool; PowerShell does NOT support `&&` or native `grep`/`ls` commands
 - **File paths**: use full Windows paths or forward slashes (C:/Users/user/pmw-hrform/src/...)
@@ -141,7 +184,13 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - **React 19**: no `forwardRef` needed, no manual memoization (`useMemo`/`useCallback`)
 - **MUI v9.0.0**: uses `Grid` (not `Grid2`); `slotProps` replaces `PaperProps` on Dialog
 - **All component files**: use `import type` for type-only imports (`verbatimModuleSyntax`)
-- **SurveyJS Creator**: import from `survey-creator-react` (not `survey-react-ui`); widgets registered via `CustomWidgetCollection.Instance.addCustomWidget()`
 - **`.env.local`** at app root contains Azure AD credentials (`VITE_AZURE_*`) and SP URL (`VITE_SP_SITE_URL`). **Never commit or expose these values.**
+  - `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_AZURE_AUTHORITY`, `VITE_SP_SITE_URL`
+  - `VITE_AZURE_TENANT_ID` is used for tenant validation in auth flow
 - **`"use client"` directive**: some files use this (Next.js convention) — this is a Vite app, not Next.js. Safe to ignore.
 - **Verifying changes**: Run `npm run build` before claiming work is done. `npm run lint` has many pre-existing warnings—check only your changed files with `lsp_diagnostics`.
+
+## Notes
+- **No CI/CD** — zero GitHub Actions, Docker, or deployment configs
+- **No tests** — zero unit, integration, or E2E tests; no vitest/jest/playwright in dependencies
+- **No path aliases** — all imports use relative paths (`../../utils/...`); vite.config.ts has no `resolve.alias`

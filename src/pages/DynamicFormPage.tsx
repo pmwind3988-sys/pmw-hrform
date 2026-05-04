@@ -2,7 +2,6 @@
  * DynamicFormPage.tsx - Public form renderer
  * Route: /form/:formId
  */
-// @ts-nocheck - Pre-existing type errors from incomplete implementations
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
@@ -13,7 +12,7 @@ import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes"
 import "survey-core/survey-core.min.css";
 
 import { registerDynamicMatrix, registerQuestionData } from "../utils/DynamicMatrix";
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices } from "../utils/formBuilderSP";
 import { loginRequest } from "../auth/msalConfig";
 
 registerDynamicMatrix();
@@ -111,14 +110,14 @@ export default function DynamicFormPage() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
-  const [dark, setDark] = useState(() => { try { return localStorage.getItem("dfp_dark") === "1"; } catch { return false; } });
-  const _toggleDark = useCallback(() => { setDark(d => { const n = !d; try { localStorage.setItem("dfp_dark", n ? "1" : "0"); } catch {} return n; }); }, []);
+  const [dark, _setDark] = useState(() => { try { return localStorage.getItem("dfp_dark") === "1"; } catch { return false; } });
   const t = dark ? DARK : LIGHT;
 
   useEffect(() => { document.body.style.background = t.bg; document.body.style.color = t.textPrimary; return () => { document.body.style.background = ""; document.body.style.color = ""; }; }, [t]);
 
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<{ formConfig: Record<string, unknown>; surveyJson: Record<string, unknown>; meta: Record<string, unknown> } | null>(null);
+  const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
@@ -135,37 +134,138 @@ export default function DynamicFormPage() {
 
   useEffect(() => {
     if (!formId) { setError("No form slug provided."); setLoading(false); return; }
+    // Wait for MSAL to finish any redirect handling before loading
+    if (inProgress !== InteractionStatus.None) return;
+
     const load = async () => {
       try {
         const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
         let token = tokenRef.current;
-        if (!token && inProgress === InteractionStatus.None && isAuthenticated) {
-          try { const r = await instance.acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] }); token = r.accessToken; tokenRef.current = token; } catch {} }
+
+        // Try to acquire token if authenticated
+        if (!token && isAuthenticated && accounts[0]) {
+          try {
+            const r = await instance.acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
+            token = r.accessToken;
+            tokenRef.current = token;
+          } catch (silentErr) {
+            console.error("[DFP] acquireTokenSilent failed:", silentErr);
+          }
+        }
+
         if (token) {
-          let versionData;
+          // Authenticated path — load directly from SharePoint
+          let versionData: unknown;
           if (pinVersion) {
             const cfgRaw = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } }).then(r => r.json()).then(d => d.value?.[0]);
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
             const ver = await getFormVersion(token, cfgRaw.Title, pinVersion);
             if (!ver) throw new Error(`Version ${pinVersion} not found.`);
             versionData = { ...cfgRaw, versionData: ver };
-          } else { versionData = await getLatestFormBySlug(token, formId); if (!versionData) throw new Error(`Form "${formId}" not found.`); }
-          setFormData({ formConfig: versionData, surveyJson: versionData.versionData?.surveyJson || versionData.versionData, meta: versionData.versionData?.meta || {} });
-        } else {
+          } else {
+            versionData = await getLatestFormBySlug(token, formId);
+            if (!versionData) throw new Error(`Form "${formId}" not found.`);
+          }
+          const vd = versionData as Record<string, unknown>;
+          setFormData({ formConfig: vd, surveyJson: (vd.versionData as Record<string, unknown>)?.surveyJson as Record<string, unknown> || (vd.versionData as Record<string, unknown>), meta: ((vd.versionData as Record<string, unknown>)?.meta as Record<string, unknown>) || {} });
+        } else if (!isAuthenticated) {
+          // Unauthenticated path — try public API fallback
           const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`);
-          if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Form not found (${res.status})`); }
-          const data = await res.json(); setFormData({ formConfig: data.formConfig, surveyJson: data.surveyJson, meta: data.meta || {} });
+          const contentType = res.headers.get("content-type") || "";
+          if (!res.ok || contentType.includes("text/html")) {
+            // API endpoint missing (dev server returns HTML) or returned an error
+            throw new Error("Sign in required to access this form.");
+          }
+          let data: { formConfig: Record<string, unknown>; surveyJson: Record<string, unknown>; meta?: Record<string, unknown> };
+          try {
+            data = await res.json() as typeof data;
+          } catch {
+            throw new Error("Sign in required to access this form.");
+          }
+          setFormData({ formConfig: data.formConfig, surveyJson: data.surveyJson, meta: data.meta || {} });
+        } else {
+          // Authenticated but could not acquire token
+          throw new Error("Unable to get authentication token. Please sign in again.");
         }
-      } catch (e) { setError(e.message); } finally { setLoading(false); }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
     };
+
     load();
   }, [formId, pinVersion, isAuthenticated, inProgress, instance, accounts]);
 
+  // Enrich survey JSON with SharePoint-sourced choices
+  useEffect(() => {
+    const baseJson = formData?.surveyJson;
+    if (!baseJson) { setEnrichedSurveyJson(null); return; }
+
+    const tokenRaw = tokenRef.current;
+    if (!tokenRaw) { setEnrichedSurveyJson(baseJson); return; }
+    const token = tokenRaw; // narrowed to string
+
+    const clone = JSON.parse(JSON.stringify(baseJson)) as Record<string, unknown>;
+
+    async function enrich(): Promise<void> {
+      const pages = (clone.pages || []) as { elements?: Record<string, unknown>[] }[];
+      const pending: Promise<void>[] = [];
+
+      function walk(elements: Record<string, unknown>[]) {
+        for (const el of elements) {
+          if (el.type === "panel" && Array.isArray(el.elements)) {
+            walk(el.elements as Record<string, unknown>[]);
+            continue;
+          }
+
+          // Main field spChoicesSource
+          const src = el.spChoicesSource as { list?: string; column?: string } | undefined;
+          if (src?.list && src?.column) {
+            pending.push(
+              getSharePointChoices(src.list, src.column, token)
+                .then((choices) => {
+                  if (choices.length > 0) el.choices = choices;
+                })
+                .catch(() => {})
+            );
+          }
+
+          // Matrix column choicesSource
+          if (el.type === "dynamicmatrix" && Array.isArray(el.columns)) {
+            const cols = el.columns as Record<string, unknown>[];
+            for (const col of cols) {
+              const colSrc = col.choicesSource as { list?: string; column?: string } | undefined;
+              if (colSrc?.list && colSrc?.column) {
+                pending.push(
+                  getSharePointChoices(colSrc.list, colSrc.column, token)
+                    .then((choices) => {
+                      if (choices.length > 0) col.choices = choices;
+                    })
+                    .catch(() => {})
+                );
+              }
+            }
+          }
+        }
+      }
+
+      for (const page of pages) {
+        if (Array.isArray(page.elements)) walk(page.elements);
+      }
+
+      await Promise.all(pending);
+      setEnrichedSurveyJson(clone);
+    }
+
+    enrich().catch(() => setEnrichedSurveyJson(baseJson));
+  }, [formData]);
+
   const survey = useMemo(() => {
-    const json = formData?.surveyJson;
+    const json = enrichedSurveyJson;
     if (!json) return null;
     try { registerQuestionData(json); const m = new Model(json); m.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); m.showCompletedPage = false; return m; } catch (e) { console.error("[DFP] Model error:", e); return null; }
-  }, [formData, resetKey]);
+  }, [enrichedSurveyJson, resetKey]);
 
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
 
@@ -177,7 +277,7 @@ export default function DynamicFormPage() {
     if (!cfg) { setSubmitStatus("error"); return; }
     try {
       let activeLayers: { email: string; name: string; role: string }[] = [];
-      let resolvedLayerCount = cfg.NumberOfApprovalLayer ?? 0;
+      let resolvedLayerCount = (cfg.NumberOfApprovalLayer as number | undefined) ?? 0;
       const token = tokenRef.current;
       let approvalRules = null;
       try { approvalRules = cfg.ApprovalRules ? JSON.parse(cfg.ApprovalRules as string) : null; } catch {}
@@ -186,8 +286,8 @@ export default function DynamicFormPage() {
         const matched = approvalRules.rules.find((r: Record<string, unknown>) => (r.when as string).toLowerCase() === condVal);
         if (matched) { activeLayers = matched.layers; resolvedLayerCount = matched.layers.length; }
       } else if (token) {
-        const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] }));
-        activeLayers = (apData.value ?? []).map((a: Record<string, string>) => ({ email: a.ApproverEmail, name: a.ApproverName, role: "" }));
+        const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] })) as { value: Record<string, string>[] };
+        activeLayers = (apData.value ?? []).map((a) => ({ email: a.ApproverEmail, name: a.ApproverName, role: "" }));
         resolvedLayerCount = activeLayers.length;
       }
       const body: Record<string, unknown> = {};
@@ -217,13 +317,13 @@ export default function DynamicFormPage() {
             layer: 1,
             totalLayers: resolvedLayerCount,
             action: "submit",
-          }).catch(e => console.warn("[DFP] approval notification skipped:", e.message));
+          }).catch((e: unknown) => console.warn("[DFP] approval notification skipped:", e instanceof Error ? e.message : String(e)));
         }
       } else {
         submittedByEmail = "GUEST";
         body.SubmittedBy = submittedByEmail;
         const res = await fetch("/api/submit-form", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listTitle: cfg.Title, body }) });
-        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Submit failed: ${res.status}`); }
+        if (!res.ok) { const err = await res.json().catch(() => ({})) as { error?: string }; throw new Error(err.error || `Submit failed: ${res.status}`); }
       }
       setSubmitStatus("success");
     } catch (e) { console.error("[DFP] submit error:", e); setSubmitStatus("error"); }
@@ -236,14 +336,20 @@ export default function DynamicFormPage() {
     return () => { survey.onCompleting.remove(onCompleting); survey.onComplete.remove(onComplete); };
   }, [survey, onCompleting, onComplete]);
 
-  const handleSignIn = useCallback(() => { instance.loginRedirect({ ...loginRequest, redirectStartPage: window.location.href }); }, [instance]);
+  const handleSignIn = useCallback(() => {
+    try {
+      sessionStorage.setItem("pmw_post_login_redirect", window.location.pathname + window.location.search);
+    } catch {
+      // May fail if storage is inaccessible
+    }
+    instance.loginRedirect({ ...loginRequest, redirectStartPage: window.location.href });
+  }, [instance]);
   const handleSignOut = useCallback(() => { instance.logoutRedirect({ postLogoutRedirectUri: window.location.href }); }, [instance]);
   const handleReset = useCallback(() => { setSubmitStatus(null); lastDataRef.current = null; setResetKey(k => k + 1); }, []);
 
   const isPublicForm = formData?.formConfig?.IsPublic !== false;
-  const _showBannerHeader = formData?.meta?.showBanner !== false;
-  const formTitle = formData?.formConfig?.Title || formData?.surveyJson?.title || "Form";
-  const formVersion = formData?.formConfig?.CurrentVersion || "1.0";
+  const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
+  const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
 
   if (loading || (formData && !formData.surveyJson && !error)) return (
     <div style={{ minHeight: "100vh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>

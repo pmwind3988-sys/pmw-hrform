@@ -7,6 +7,7 @@ interface FormLibraryProps {
   forms: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string }[];
   onEdit: (f: { Title: string }) => void;
   onNew: () => void;
+  onDelete: (f: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string }) => void;
   current: string;
 }
 
@@ -23,7 +24,7 @@ const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: Reac
   }}>{children}</span>
 );
 
-export default function FormLibrary({ forms, onEdit, onNew, current }: FormLibraryProps) {
+export default function FormLibrary({ forms, onEdit, onNew, onDelete, current }: FormLibraryProps) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{
@@ -69,6 +70,7 @@ export default function FormLibrary({ forms, onEdit, onNew, current }: FormLibra
               marginBottom: 5,
               cursor: "pointer",
               transition: "all .13s",
+              position: "relative",
             }}
             onMouseEnter={e => {
               if (f.Title !== current) e.currentTarget.style.background = C.offWhite;
@@ -77,7 +79,43 @@ export default function FormLibrary({ forms, onEdit, onNew, current }: FormLibra
               if (f.Title !== current) e.currentTarget.style.background = C.white;
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 600, color: f.Title === current ? C.purple : C.textPrimary, marginBottom: 2 }}>
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onDelete(f);
+              }}
+              title="Delete form"
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+                width: 22,
+                height: 22,
+                border: "none",
+                borderRadius: 5,
+                background: "transparent",
+                color: C.textMuted,
+                fontSize: 12,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'DM Sans'",
+                transition: "all .13s",
+              }}
+              onMouseEnter={e => {
+                e.stopPropagation();
+                e.currentTarget.style.background = C.redPale;
+                e.currentTarget.style.color = C.red;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = C.textMuted;
+              }}
+            >
+              ✕
+            </button>
+            <div style={{ fontSize: 12, fontWeight: 600, color: f.Title === current ? C.purple : C.textPrimary, marginBottom: 2, paddingRight: 22 }}>
               {f.Title}
             </div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>

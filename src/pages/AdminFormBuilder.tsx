@@ -2,21 +2,22 @@
  * AdminFormBuilder.tsx — Full admin form builder with sidebar
  * Integrates with custom FormBuilder component
  */
-// @ts-nocheck - Extensive pre-existing type errors in incomplete code
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import FormBuilder from "../components/builder/FormBuilder";
-import { FormLibrary } from "../components/builder/FormLibrary";
-import { VersionHistory } from "../components/builder/VersionHistory";
-import { AuditLog } from "../components/builder/AuditLog";
-import { ApproverRow } from "../components/builder/ApproverRow";
-import { ProvisionOverlay } from "../components/builder/ProvisionOverlay";
+import FormLibrary from "../components/builder/FormLibrary";
+import VersionHistory from "../components/builder/VersionHistory";
+import AuditLog from "../components/builder/AuditLog";
+import ApproverRow from "../components/builder/ApproverRow";
+import ProvisionOverlay from "../components/builder/ProvisionOverlay";
 import { C } from "../components/builder/constants";
 import { flattenQuestions, getSpColumnKind } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
+import type { SurveyJson } from "../types";
 import {
   slugify,
   checkSlugConflict,
@@ -37,6 +38,8 @@ import {
   addColumn,
   listExists,
   createSpList,
+  deleteForm,
+  getSharePointChoices,
 } from "../utils/formBuilderSP";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -73,6 +76,71 @@ const Spinner = ({ size = 18 }: { size?: number }) => (
   }} />
 );
 
+// ── Inline helper components ──────────────────────────────────────────────────
+const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: ReactNode; color?: string; bg?: string }) => (
+  <span style={{ fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "2px 9px", textTransform: "uppercase", letterSpacing: ".04em" }}>{children}</span>
+);
+
+function TextInput({ value, onChange, placeholder, error, disabled, ...rest }: { value: string; onChange: (v: string) => void; placeholder?: string; error?: string; disabled?: boolean; [k: string]: unknown }) {
+  const [f, setF] = useState(false);
+  return (
+    <>
+      <input
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        style={{
+          ...inp,
+          borderColor: error ? C.red : f ? C.purple : C.border,
+          boxShadow: f ? `0 0 0 3px ${error ? C.redPale : C.purplePale}` : "none",
+          transition: "all .15s",
+          opacity: disabled ? 0.6 : 1,
+          cursor: disabled ? "not-allowed" : "text",
+        }}
+        onFocus={() => setF(true)}
+        onBlur={() => setF(false)}
+        {...rest}
+      />
+      {error && <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>{error}</div>}
+    </>
+  );
+}
+
+function FB({ label, hint, children, required }: { label: string; hint?: string; children: ReactNode; required?: boolean }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: C.textPrimary, marginBottom: 4 }}>
+        {label}{required && <span style={{ color: C.red, marginLeft: 3 }}>*</span>}
+      </label>
+      {hint && <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {children}
+    </div>
+  );
+}
+
+function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+      <div
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 36, height: 20, borderRadius: 10, flexShrink: 0,
+          background: checked ? C.purple : C.border, position: "relative",
+          transition: "background 0.2s", cursor: "pointer",
+        }}
+      >
+        <div style={{
+          position: "absolute", top: 3, left: checked ? 19 : 3,
+          width: 14, height: 14, borderRadius: "50%", background: C.white,
+          transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+        }} />
+      </div>
+      {label && <span style={{ fontSize: 12, color: C.textSecond }}>{label}</span>}
+    </label>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AdminFormBuilder() {
   const navigate = useNavigate();
@@ -105,13 +173,13 @@ export default function AdminFormBuilder() {
   const [numLayers, setNumLayers] = useState(0);
   const [layers, setLayers] = useState<{ email: string; name: string }[]>(Array.from({ length: 5 }, () => ({ email: "", name: "" })));
   const updateLayer = (i: number, k: string, v: string) => setLayers(ls => ls.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
-  const [surveyJson, setSurveyJson] = useState<Record<string, unknown> | null>(null);
-  const [initialJson, setInitialJson] = useState<Record<string, unknown> | null>(null);
-  const prevSurveyRef = useRef<Record<string, unknown> | null>(null);
+  const [surveyJson, setSurveyJson] = useState<SurveyJson | null>(null);
+  const [initialJson, setInitialJson] = useState<SurveyJson | null>(null);
+  const prevSurveyRef = useRef<SurveyJson | null>(null);
   const [sidebarTab, setSidebarTab] = useState("meta");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [versionHistory, setVersionHistory] = useState<{ FormVersion: string; PublishedBy?: string; PublishedAt?: string }[]>([]);
-  const [viewingOld, setViewingOld] = useState<{ version: string; json: Record<string, unknown> } | null>(null);
+  const [viewingOld, setViewingOld] = useState<{ version: string; json: SurveyJson } | null>(null);
   const [newVersionMode, setNewVersionMode] = useState<"minor" | "major">("minor");
   const [auditLog, setAuditLog] = useState<{ EventType: string; EventSummary?: string; BeforeJSON?: string; AfterJSON?: string; EventAt?: string }[]>([]);
   const [logLoading, setLogLoading] = useState(false);
@@ -120,6 +188,8 @@ export default function AdminFormBuilder() {
   const [provOk, setProvOk] = useState(false);
   const [provErr, setProvErr] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ Id?: string; Title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [approvalRules, setApprovalRules] = useState<{ conditionField: string; rules: { when: string; layers: { email: string; name: string; role: string }[] }[] } | null>(null);
 
   const pLog = useCallback((m: string, t: string = "info") => setProvLogs(l => [...l, { m, t }]), []);
@@ -195,7 +265,7 @@ export default function AdminFormBuilder() {
     }, 800);
   }, []);
 
-  const loadForEdit = useCallback(async (cfg: { Title: string } | string) => {
+  const loadForEdit = useCallback(async (cfg: Record<string, unknown> | string) => {
     const token = tokenRef.current;
     if (!token) return;
     const c = typeof cfg === "object" ? cfg : await getFormConfig(token, cfg);
@@ -203,41 +273,41 @@ export default function AdminFormBuilder() {
       showToast(`Form not found.`, "err");
       return;
     }
-    const data = await getFormVersion(token, c.Title, c.CurrentVersion);
+    const data = await getFormVersion(token, c.Title as string, c.CurrentVersion as string);
     if (!data) {
       showToast(`Version data not found.`, "err");
       return;
     }
-    const loaded = data.surveyJson || data;
+    const loaded = (data.surveyJson || data) as SurveyJson;
     setInitialJson(loaded);
     prevSurveyRef.current = loaded;
     setViewingOld(null);
     setMeta({
-      formTitle: c.Title,
-      formId: c.FormID || "",
-      formVersion: c.CurrentVersion || "1.0",
-      slug: c.Slug || slugify(c.Title),
-      isoStandards: data.meta?.isoStandards || "ISO 9001 · ISO 14001 · ISO 45001",
-      companies: data.meta?.companies || "PMW INDUSTRIES SDN BHD\nPMW CONCRETE INDUSTRIES SDN BHD\nPMW LIGHTING INDUSTRIES SDN BHD\nPMW WINABUMI SDN BHD",
+      formTitle: c.Title as string,
+      formId: (c.FormID as string) || "",
+      formVersion: (c.CurrentVersion as string) || "1.0",
+      slug: (c.Slug as string) || slugify(c.Title as string),
+      isoStandards: (data.meta as Record<string, unknown>)?.isoStandards as string || "ISO 9001 · ISO 14001 · ISO 45001",
+      companies: (data.meta as Record<string, unknown>)?.companies as string || "PMW INDUSTRIES SDN BHD\nPMW CONCRETE INDUSTRIES SDN BHD\nPMW LIGHTING INDUSTRIES SDN BHD\nPMW WINABUMI SDN BHD",
     });
-    setShowBanner(data.meta?.showBanner !== false);
-    setOriginalVersion(c.CurrentVersion);
-    setNumLayers(c.NumberOfApprovalLayer || 0);
+    setShowBanner((data.meta as Record<string, unknown>)?.showBanner !== false);
+    setOriginalVersion(c.CurrentVersion as string);
+    setNumLayers((c.NumberOfApprovalLayer as number) || 0);
     setSlugLocked(true);
     setIsEditing(true);
     setIsPublic(c.IsPublic !== false);
     if (c.ApprovalRules) {
       try {
-        setApprovalRules(JSON.parse(c.ApprovalRules));
+        setApprovalRules(JSON.parse(c.ApprovalRules as string));
       } catch {
         setApprovalRules(null);
       }
     } else {
       setApprovalRules(null);
     }
-    getFormVersionHistory(token, c.Title).then(setVersionHistory);
+    getFormVersionHistory(token, c.Title as string).then(setVersionHistory);
     setLogLoading(true);
-    getFormLog(token, c.Title).then(l => {
+    getFormLog(token, c.Title as string).then(l => {
       setAuditLog(l);
       setLogLoading(false);
     });
@@ -273,6 +343,36 @@ export default function AdminFormBuilder() {
     navigate("/admin/builder");
   };
 
+  const handleDelete = (f: { Id?: string; Title: string }) => {
+    setDeleteConfirm({ Id: f.Id, Title: f.Title });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm || !tokenRef.current) return;
+    setDeleting(true);
+    try {
+      const result = await deleteForm(
+        tokenRef.current,
+        deleteConfirm.Title,
+        deleteConfirm.Id || "",
+      );
+      showToast(
+        `Deleted "${deleteConfirm.Title}" — ${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed.`,
+        "ok"
+      );
+      // If the deleted form was the currently edited form, reset to new
+      if (meta.formTitle === deleteConfirm.Title) {
+        handleNew();
+      }
+      refreshLib();
+    } catch (e) {
+      showToast(`Delete failed: ${(e as Error).message}`, "err");
+    } finally {
+      setDeleting(false);
+      setDeleteConfirm(null);
+    }
+  };
+
   const handleViewVersion = async (ver: string) => {
     try {
       const data = await getFormVersion(tokenRef.current!, meta.formTitle, ver);
@@ -280,7 +380,7 @@ export default function AdminFormBuilder() {
         showToast(`v${ver} not found.`, "err");
         return;
       }
-      setViewingOld({ version: ver, json: data.surveyJson || data });
+      setViewingOld({ version: ver, json: (data.surveyJson || data) as SurveyJson });
       setSidebarTab("version");
     } catch (e) {
       showToast(`Failed: ${(e as Error).message}`, "err");
@@ -296,7 +396,7 @@ export default function AdminFormBuilder() {
     });
   }, [sidebarTab, isEditing, meta.formTitle]);
 
-  const handlePublish = useCallback(async (jsonArg?: Record<string, unknown>) => {
+  const handlePublish = useCallback(async (jsonArg?: SurveyJson) => {
     if (!meta.formTitle.trim()) {
       showToast("Form title required.", "err");
       setSidebarTab("meta");
@@ -311,7 +411,7 @@ export default function AdminFormBuilder() {
       showToast(`Slug conflict: ${slugError}`, "err");
       return;
     }
-    const usedJson = jsonArg || surveyJson;
+    const usedJson = jsonArg || surveyJson as SurveyJson;
     if (!usedJson) {
       showToast("No fields yet.", "err");
       return;
@@ -330,7 +430,7 @@ export default function AdminFormBuilder() {
     setProvErr(false);
     setProvisioning(true);
     try {
-      const diffs = diffSurveyJson(prevSurveyRef.current, usedJson);
+      const diffs = diffSurveyJson(prevSurveyRef.current, usedJson) as { type: string; summary: string; before: unknown; after: unknown }[];
       const conflict = await checkSlugConflict(token, meta.slug, isEditing ? title : null);
       if (conflict) throw new Error(`Slug "${meta.slug}" used by "${conflict}".`);
       if (isEditing && originalVersion && !isVersionGreater(version, originalVersion)) throw new Error(`v${version} must be > v${originalVersion}.`);
@@ -345,22 +445,39 @@ export default function AdminFormBuilder() {
       pLog(`Provisioning columns…`);
       const questions = flattenQuestions(usedJson);
       for (const q of questions) {
-        const sp = getSpColumnKind(q.type);
-        if (q.type === "dynamicmatrix") {
+        const sp = getSpColumnKind(q);
+        if (q.type === "dynamicmatrix" || q.type === "tableinput") {
           await addColumn(token, title, `${q.name}_Response`, 3, true, true);
           pLog(`     ✓ ${q.name}_Response (Enhanced Rich Text)`);
           await addColumn(token, title, `${q.name}_Json`, 3, true, false);
           pLog(`     ✓ ${q.name}_Json (JSON backup)`);
         } else if (sp) {
-          await addColumn(token, title, q.name, sp.FieldTypeKind, sp.FieldTypeKind === 3, false);
+          // Extract choices for Choice (6) and MultiChoice (15) columns
+          let choiceValues: string[] | undefined;
+          if (sp.FieldTypeKind === 6 || sp.FieldTypeKind === 15) {
+            const src = (q as { spChoicesSource?: { list?: string; column?: string } }).spChoicesSource;
+            if (src?.list && src?.column) {
+              try {
+                choiceValues = await getSharePointChoices(src.list, src.column, token);
+                pLog(`     ↳ Fetched ${choiceValues.length} choices from "${src.list}.${src.column}"`);
+              } catch { choiceValues = []; }
+            }
+            if (!choiceValues || choiceValues.length === 0) {
+              const rawChoices = (q as { choices?: (string | { value: string; text: string })[] }).choices;
+              if (Array.isArray(rawChoices) && rawChoices.length > 0) {
+                choiceValues = rawChoices.map((c) => (typeof c === 'string' ? c : c.value || c.text || '')).filter(Boolean);
+              }
+            }
+          }
+          await addColumn(token, title, q.name, sp.FieldTypeKind, sp.FieldTypeKind === 3, false, choiceValues);
           pLog(`     ✓ ${q.name} (${sp.label})`);
         }
       }
-      for (const [n, k] of [["SubmittedAt", 4], ["FormVersion", 2], ["FormID", 2], ["SubmittedBy", 2]]) {
+      for (const [n, k] of [["SubmittedAt", 4], ["FormVersion", 2], ["FormID", 2], ["SubmittedBy", 2]] as [string, number][]) {
         await addColumn(token, title, n, k);
       }
       for (let n = 1; n <= numLayers; n++) {
-        for (const [col, k] of [["Status", 2], ["Email", 2], ["SignedAt", 4], ["Rejection", 3], ["Signature", 3]]) {
+        for (const [col, k] of [["Status", 2], ["Email", 2], ["SignedAt", 4], ["Rejection", 3], ["Signature", 3]] as [string, number][]) {
           await addColumn(token, title, `L${n}_${col}`, k, k === 3);
         }
       }
@@ -401,7 +518,7 @@ export default function AdminFormBuilder() {
           formTitle: title,
           eventType: "FORM_CREATED",
           changedBy: userEmail,
-          summary: `Created. Route: /forms/${meta.slug}`,
+          summary: `Created. Route: /form/${meta.slug}`,
           before: null,
           after: { slug: meta.slug, version },
         });
@@ -433,7 +550,7 @@ export default function AdminFormBuilder() {
           after: { version, slug: meta.slug },
         });
       }
-      pLog(`✓ "${title}" v${version} live at /forms/${meta.slug}`, "ok");
+        pLog(`✓ "${title}" v${version} live at /form/${meta.slug}`, "ok");
       setProvOk(true);
       prevSurveyRef.current = usedJson;
       setOriginalVersion(version);
@@ -536,7 +653,7 @@ export default function AdminFormBuilder() {
           {isEditing && <Tag>v{meta.formVersion}</Tag>}
           {meta.slug && (
             <a
-              href={`/forms/${meta.slug}`}
+                  href={`/form/${meta.slug}`}
               target="_blank"
               rel="noreferrer"
               style={{
@@ -549,7 +666,7 @@ export default function AdminFormBuilder() {
                 border: `1px solid ${C.purpleMid}`,
               }}
             >
-              /forms/{meta.slug} ↗
+                    /form/{meta.slug} ↗
             </a>
           )}
         </div>
@@ -587,7 +704,7 @@ export default function AdminFormBuilder() {
             ⚙ Settings
           </button>
           <button
-            onClick={() => handlePublish(surveyJson as Record<string, unknown>)}
+            onClick={() => handlePublish(surveyJson as SurveyJson)}
             style={{
               height: 28,
               padding: "0 16px",
@@ -622,7 +739,7 @@ export default function AdminFormBuilder() {
       <div style={{ flex: 1, display: "flex", overflow: "hidden", height: "calc(100vh - 52px)" }}>
         {libraryOpen && (
           <div style={{ width: 215, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.white, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <FormLibrary forms={allForms} onEdit={loadForEdit} onNew={handleNew} current={meta.formTitle} />
+            <FormLibrary forms={allForms} onEdit={loadForEdit} onNew={handleNew} onDelete={handleDelete} current={meta.formTitle} />
           </div>
         )}
 
@@ -715,7 +832,7 @@ export default function AdminFormBuilder() {
                       <TextInput value={meta.formVersion} onChange={v => setM("formVersion", v)} placeholder="1.0" />
                     )}
                   </FB>
-                  <FB label="Route slug" hint="URL: /forms/{slug}. Locked after first publish.">
+                  <FB label="Route slug" hint="URL: /form/{slug}. Locked after first publish.">
                     <div style={{ position: "relative" }}>
                       <TextInput
                         value={meta.slug}
@@ -826,7 +943,7 @@ export default function AdminFormBuilder() {
                         <TextInput
                           value={approvalRules.conditionField}
                           onChange={v =>
-                            setApprovalRules(r => ({ ...r, conditionField: v }))
+                            setApprovalRules(r => ({ ...r!, conditionField: v }))
                           }
                           placeholder="subject"
                         />
@@ -857,21 +974,13 @@ export default function AdminFormBuilder() {
                             <TextInput
                               value={rule.when}
                               onChange={v =>
-                                setApprovalRules(r => ({
-                                  ...r,
-                                  rules: r.rules.map((ru, idx) =>
-                                    idx === ri ? { ...ru, when: v } : ru
-                                  ),
-                                }))
+                                setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx === ri ? { ...ru, when: v } : ru) }))
                               }
                               placeholder="managerial"
                             />
                             <button
                               onClick={() =>
-                                setApprovalRules(r => ({
-                                  ...r,
-                                  rules: r.rules.filter((_, idx) => idx !== ri),
-                                }))
+                                setApprovalRules(r => ({ ...r!, rules: r!.rules.filter((_, idx) => idx !== ri) }))
                               }
                               style={{
                                 width: 24,
@@ -919,21 +1028,7 @@ export default function AdminFormBuilder() {
                               <input
                                 value={layer.email}
                                 onChange={e =>
-                                  setApprovalRules(r => ({
-                                    ...r,
-                                    rules: r.rules.map((ru, idx) =>
-                                      idx !== ri
-                                        ? ru
-                                        : {
-                                          ...ru,
-                                          layers: ru.layers.map((la, lidx) =>
-                                            lidx === li
-                                              ? { ...la, email: e.target.value }
-                                              : la
-                                          ),
-                                        },
-                                    ),
-                                  }))
+                                  setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx !== ri ? ru : { ...ru, layers: ru.layers.map((la, lidx) => lidx === li ? { ...la, email: e.target.value } : la) }) }))
                                 }
                                 placeholder="email@company.com"
                                 style={{ ...inp, flex: 2, height: 28, fontSize: 11 }}
@@ -941,38 +1036,14 @@ export default function AdminFormBuilder() {
                               <input
                                 value={layer.name}
                                 onChange={e =>
-                                  setApprovalRules(r => ({
-                                    ...r,
-                                    rules: r.rules.map((ru, idx) =>
-                                      idx !== ri
-                                        ? ru
-                                        : {
-                                          ...ru,
-                                          layers: ru.layers.map((la, lidx) =>
-                                            lidx === li
-                                              ? { ...la, name: e.target.value }
-                                              : la
-                                          ),
-                                        },
-                                    ),
-                                  }))
+                                  setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx !== ri ? ru : { ...ru, layers: ru.layers.map((la, lidx) => lidx === li ? { ...la, name: e.target.value } : la) }) }))
                                 }
                                 placeholder="Name"
                                 style={{ ...inp, flex: 1.5, height: 28, fontSize: 11 }}
                               />
                               <button
                                 onClick={() =>
-                                  setApprovalRules(r => ({
-                                    ...r,
-                                    rules: r.rules.map((ru, idx) =>
-                                      idx !== ri
-                                        ? ru
-                                        : {
-                                          ...ru,
-                                          layers: ru.layers.filter((_, lidx) => lidx !== li),
-                                        },
-                                    ),
-                                  }))
+                                  setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx !== ri ? ru : { ...ru, layers: ru.layers.filter((_, lidx) => lidx !== li) }) }))
                                 }
                                 style={{
                                   width: 22,
@@ -992,17 +1063,7 @@ export default function AdminFormBuilder() {
                           ))}
                           <button
                             onClick={() =>
-                              setApprovalRules(r => ({
-                                ...r,
-                                rules: r.rules.map((ru, idx) =>
-                                  idx === ri
-                                    ? {
-                                      ...ru,
-                                      layers: [...ru.layers, { email: "", name: "", role: "" }],
-                                    }
-                                    : ru
-                                ),
-                              }))
+                              setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx === ri ? { ...ru, layers: [...ru.layers, { email: "", name: "", role: "" }] } : ru) }))
                             }
                             style={{
                               fontSize: 11,
@@ -1022,10 +1083,7 @@ export default function AdminFormBuilder() {
                       ))}
                       <button
                         onClick={() =>
-                          setApprovalRules(r => ({
-                            ...r,
-                            rules: [...r.rules, { when: "", layers: [{ email: "", name: "", role: "" }] }],
-                          }))
+                          setApprovalRules(r => ({ ...r!, rules: [...r!.rules, { when: "", layers: [{ email: "", name: "", role: "" }] }] }))
                         }
                         style={{
                           width: "100%",
@@ -1147,14 +1205,14 @@ export default function AdminFormBuilder() {
                       ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing ⚠</em>],
                       ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing ⚠</em>],
                       ["Version", isEditing ? `${originalVersion} → ${proposedVersion}` : meta.formVersion],
-                      ["Route", meta.slug ? `/forms/${meta.slug}` : <em style={{ color: C.amber }}>No slug</em>],
+                      ["Route", meta.slug ? `/form/${meta.slug}` : <em style={{ color: C.amber }}>No slug</em>],
                       ["Layers", numLayers || "None"],
                       ["Banner", showBanner ? "✅ Visible" : "🚫 Hidden"],
                       ["Access", isPublic ? "🌐 Public" : "🔒 Private"],
                     ].map(([k, v]) => (
                       <div key={k as string} style={{ display: "flex", gap: 10, fontSize: 12 }}>
                         <span style={{ color: C.textMuted, minWidth: 70 }}>{k as string}:</span>
-                        <span style={{ color: C.textPrimary, fontWeight: 500 }}>{v as React.ReactNode}</span>
+                        <span style={{ color: C.textPrimary, fontWeight: 500 }}>{v as ReactNode}</span>
                       </div>
                     ))}
                   </div>
@@ -1164,7 +1222,7 @@ export default function AdminFormBuilder() {
                     </div>
                   )}
                   <button
-                    onClick={() => handlePublish(surveyJson as Record<string, unknown>)}
+                    onClick={() => handlePublish(surveyJson as SurveyJson)}
                     disabled={!meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
                     style={{
                       width: "100%",
@@ -1187,6 +1245,82 @@ export default function AdminFormBuilder() {
           </div>
         )}
       </div>
+
+      {deleteConfirm && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 10001,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(30,27,75,0.45)",
+          animation: "fadeUp .15s ease",
+        }}>
+          <div style={{
+            background: C.white,
+            borderRadius: 16,
+            padding: "24px 28px",
+            maxWidth: 400,
+            width: "90%",
+            boxShadow: C.shadowMd,
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: C.textPrimary, marginBottom: 6 }}>
+              Delete &ldquo;{deleteConfirm.Title}&rdquo;?
+            </div>
+            <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
+              This will permanently remove this form and all related data — versions, audit logs, and approver records.
+              <br /><br />
+              <span style={{ color: C.amber }}>Submission data in the form&rsquo;s list will NOT be deleted.</span>
+            </div>
+            <div style={{ display: "flex", gap: 9, justifyContent: "center" }}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+                style={{
+                  height: 36,
+                  padding: "0 20px",
+                  borderRadius: 9,
+                  border: `1px solid ${C.border}`,
+                  background: C.white,
+                  color: C.textSecond,
+                  fontSize: 13,
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  fontFamily: "'DM Sans'",
+                  opacity: deleting ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                style={{
+                  height: 36,
+                  padding: "0 20px",
+                  borderRadius: 9,
+                  border: "none",
+                  background: `linear-gradient(135deg,${C.red},#B91C1C)`,
+                  color: C.white,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  fontFamily: "'DM Sans'",
+                  opacity: deleting ? 0.6 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {deleting && <Spinner size={14} />}
+                {deleting ? "Deleting…" : "Delete Forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {provisioning && (
         <ProvisionOverlay

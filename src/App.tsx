@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import {
   useMsal,
   useIsAuthenticated,
@@ -35,6 +35,7 @@ import FormBuilder from "./components/builder/FormBuilder";
 import DynamicFormPage from "./pages/DynamicFormPage";
 import ApprovalDashboard from "./components/builder/ApprovalDashboard";
 import ResponseViewer from "./components/builder/ResponseViewer";
+import AdminFormBuilder from "./pages/AdminFormBuilder";
 
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 
@@ -154,6 +155,7 @@ export default function App() {
 
   // Form builder state
   const [builderOpen, setBuilderOpen] = useState(false);
+  const navigate = useNavigate();
   const [editingFormId, setEditingFormId] = useState<string | undefined>(undefined);
 
   // Auth state machine
@@ -277,6 +279,21 @@ if (decision === "guest") {
     fetchData();
   }, [pageState, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Navigate to preserved route after successful login
+  useEffect(() => {
+    if (pageState === "ready" && isAuthenticated) {
+      try {
+        const redirectPath = sessionStorage.getItem("pmw_post_login_redirect");
+        if (redirectPath) {
+          sessionStorage.removeItem("pmw_post_login_redirect");
+          navigate(redirectPath);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [pageState, isAuthenticated, navigate]);
+
   const handleLogin = () => {
     console.log("handleLogin called, inProgress:", inProgress, "accounts:", instance.getAllAccounts());
     
@@ -287,7 +304,14 @@ if (decision === "guest") {
     }
     
     setStoredAuthDecision("msal");
-    
+
+    // Preserve current route for post-login redirect
+    try {
+      sessionStorage.setItem("pmw_post_login_redirect", window.location.pathname + window.location.search);
+    } catch {
+      // May fail if storage is inaccessible
+    }
+
     // Clear MSAL sessionStorage cache to remove stale interaction state
     // This is the key fix for interaction_in_progress error
     try {
@@ -378,7 +402,11 @@ if (decision === "guest") {
     );
   }
 
-  if (pageState === "choice") {
+  const currentPath = window.location.pathname;
+  const isFormRoute = currentPath.startsWith("/form/");
+  const showAuthGate = !isAuthenticated && !isFormRoute;
+
+  if (showAuthGate && pageState === "choice") {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -387,7 +415,7 @@ if (decision === "guest") {
     );
   }
 
-  if (pageState === "guest") {
+  if (showAuthGate && pageState === "guest") {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -396,7 +424,7 @@ if (decision === "guest") {
     );
   }
 
-  if (pageState === "wrong_tenant") {
+  if (showAuthGate && pageState === "wrong_tenant") {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -405,7 +433,7 @@ if (decision === "guest") {
     );
   }
 
-  if (pageState === "error") {
+  if (showAuthGate && pageState === "error") {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -444,6 +472,22 @@ if (decision === "guest") {
           }
         />
         <Route
+          path="/admin/builder"
+          element={
+            <Box sx={{ minHeight: "100vh" }}>
+              <AdminFormBuilder />
+            </Box>
+          }
+        />
+        <Route
+          path="/admin/builder/:formTitle"
+          element={
+            <Box sx={{ minHeight: "100vh" }}>
+              <AdminFormBuilder />
+            </Box>
+          }
+        />
+        <Route
           path="*"
           element={
             <Box sx={{ minHeight: "100vh", backgroundColor: "#FAFBFC" }}>
@@ -452,7 +496,7 @@ if (decision === "guest") {
                 isAdmin={isAdmin}
                 onLogout={handleSignOut}
                 onSwitch={handleSwitchAccount}
-                onOpenBuilder={() => { setEditingFormId(undefined); setBuilderOpen(true); }}
+                onOpenBuilder={() => navigate("/admin/builder")}
               />
 
               <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 3 }}>
@@ -473,7 +517,7 @@ if (decision === "guest") {
                       visibleLists={visibleLists}
                       listMetaMap={listMetaMap}
                       isAdmin={isAdmin}
-                      onEditForm={(formId) => { setEditingFormId(formId); setBuilderOpen(true); }}
+                      onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
                     />
                   </Box>
                 )}

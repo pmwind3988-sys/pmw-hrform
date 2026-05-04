@@ -300,10 +300,11 @@ export interface FormBuilderField {
   mustScrollToBottom?: boolean;
   dynamicmatrix?: boolean;
   matrixColumns?: string[];
+  columns?: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[];
   rowHeaders?: string[];
   addRowText?: string;
   // Table Input
-  tableConfigColumns?: { name: string; title: string; type: string; required?: boolean }[];
+  tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; required?: boolean }[];
   // Ranking
   rankItems?: string[];
   minItems?: number;
@@ -426,6 +427,10 @@ export interface SurveyJson {
   primaryColor?: string;
   backgroundColor?: string;
   textColor?: string;
+  errorColor?: string;
+  fontFamily?: string;
+  borderRadius?: string;
+  labelPosition?: string;
   pages: { name: string; elements: Record<string, unknown>[] }[];
 }
 

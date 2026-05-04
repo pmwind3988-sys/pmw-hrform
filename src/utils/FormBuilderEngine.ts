@@ -375,7 +375,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     icon: "⭐",
     group: "Advanced",
     description: "Star rating input",
-    spColumnKind: null,
+    spColumnKind: 9,
     defaultProps: {
       rateMin: 1,
       rateMax: 5,
@@ -445,7 +445,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     icon: "📍",
     group: "Advanced",
     description: "Map click or geolocation",
-    spColumnKind: 2,
+    spColumnKind: 3,
     defaultProps: { defaultCenter: "3.1390,101.6869", defaultZoom: 12, mapProvider: "OSM", showCurrentLocation: true },
   },
   {
@@ -698,6 +698,13 @@ export function buildSurveyJson(
     "textUpdateMode",
     "showProgressBar",
     "showPageTitles",
+    "primaryColor",
+    "backgroundColor",
+    "textColor",
+    "errorColor",
+    "fontFamily",
+    "borderRadius",
+    "labelPosition",
   ] as const;
 
   for (const key of settingKeys) {
@@ -837,16 +844,55 @@ export interface SpColumnInfo {
   label: string;
 }
 
-export function getSpColumnKind(fieldType: string): SpColumnInfo | null {
-  // dynamicmatrix is provisioned separately as _Html + _Json
-  if (fieldType === 'dynamicmatrix') return null;
+export function getSpColumnKind(
+  field: Pick<FormBuilderField, 'type' | 'inputType' | 'maxSelect' | 'choices'>
+): SpColumnInfo | null {
+  // dynamicmatrix and tableinput are provisioned separately as _Html + _Json
+  if (field.type === 'dynamicmatrix' || field.type === 'tableinput') return null;
 
-  const def = QUESTION_TYPES.find((t) => t.type === fieldType);
+  // Choice fields: map to SharePoint Choice (6) or MultiChoice (15)
+  if (field.type === 'dropdown' || field.type === 'radiogroup') {
+    return { FieldTypeKind: 6, label: 'Choice' };
+  }
+  if (field.type === 'checkbox') {
+    return { FieldTypeKind: 15, label: 'MultiChoice' };
+  }
+  if (field.type === 'buttongroup') {
+    // Single-select (maxSelect === 1 or undefined) → Choice; multi-select → MultiChoice
+    const isMulti = typeof field.maxSelect === 'number' && field.maxSelect > 1;
+    return { FieldTypeKind: isMulti ? 15 : 6, label: isMulti ? 'MultiChoice' : 'Choice' };
+  }
+
+  // Complex types that produce arrays/objects → store as JSON in multi-line text
+  if (field.type === 'ranking' || field.type === 'budgetallocator' || field.type === 'rangeslider') {
+    return { FieldTypeKind: 3, label: 'Multi-line' };
+  }
+
+  // Date range stores two values → multi-line text (JSON)
+  if (field.type === 'daterange') {
+    return { FieldTypeKind: 3, label: 'Multi-line' };
+  }
+
+  const def = QUESTION_TYPES.find(
+    (t) =>
+      t.type === field.type &&
+      (t.defaultProps?.inputType === field.inputType ||
+        !t.defaultProps?.inputType ||
+        !field.inputType)
+  );
   if (!def) return { FieldTypeKind: 2, label: 'Text' };
-  
+
   const kind = def.spColumnKind;
   if (kind === null) return null;
-  
-  const labels: Record<number, string> = { 2: 'Text', 3: 'Multi-line', 4: 'DateTime', 8: 'Yes/No', 9: 'Number' };
+
+  const labels: Record<number, string> = {
+    2: 'Text',
+    3: 'Multi-line',
+    4: 'DateTime',
+    6: 'Choice',
+    8: 'Yes/No',
+    9: 'Number',
+    15: 'MultiChoice',
+  };
   return { FieldTypeKind: kind, label: labels[kind] || 'Text' };
 }
