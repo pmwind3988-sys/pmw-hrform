@@ -1,27 +1,26 @@
 # AGENTS.md — pmw-hrform
 
 ## Structure
-- Single app package at `pmw-hrform-app/`. All source, config, and commands run from that directory.
-- Entry point: `pmw-hrform-app/src/main.tsx` → `BrowserRouter` → `AuthProvider` → `App.tsx`
-- Theme: `pmw-hrform-app/src/theme/index.ts` (MUI custom theme, white palette with #0078D4 primary / #6264A7 secondary)
-- Assets: `pmw-hrform-app/public/` (favicon, icons.svg), `pmw-hrform-app/src/assets/` (hero.png)
+- **Single app at root** (NOT `pmw-hrform-app/`). All commands run from root.
+- Entry: `src/main.tsx` → `BrowserRouter` → `AuthProvider` → `App.tsx`
+- Theme: `src/theme/index.ts` (MUI custom, #0078D4 primary / #6264A7 secondary)
+- Assets: `public/` (favicon, icons.svg), `src/assets/` (hero.png)
 
-## Commands (run from `pmw-hrform-app/`)
+## Commands (run from root)
+```bash
+npm run dev       # Vite dev server (port 3000)
+npm run build    # tsc -b && vite build
+npm run lint     # ESLint flat config
+npm run preview  # Preview production build
 ```
-npm run dev       # Vite dev server with HMR (port 3000)
-npm run build     # tsc -b && vite build (TypeScript must pass before build)
-npm run lint      # ESLint flat config
-npm run preview   # Preview production build
-```
-No test framework is configured.
 
 ## Stack
-- React 19 + TypeScript 6 (ES2023 target, bundler moduleResolution, `verbatimModuleSyntax`)
+- React 19 + TypeScript ~6.0.2 (ES2022 target, bundler moduleResolution, `verbatimModuleSyntax`)
 - Vite 8 with `@vitejs/plugin-react` (Oxc-based, React Compiler NOT enabled)
 - MUI v9 (`@mui/material`, `@mui/icons-material`) — `Grid` (not Grid2) in v9.0.0
 - `@azure/msal-react` + `@azure/msal-browser` — Azure AD authentication
 - **react-router-dom v7** — Routing now active: `BrowserRouter` in `main.tsx`, `<Routes>` in `App.tsx`
-- **SurveyJS v2.5** — `survey-core`, `survey-react-ui`, `survey-creator-react` for form builder
+- **SurveyJS v2.5** — `survey-core`, `survey-react-ui`; **Custom form builder** (NOT SurveyJS Creator)
 - ESLint: flat config with `tseslint.configs.recommended` (not type-checked), `react-hooks`, `react-refresh`
 
 ## Auth State Machine (in `App.tsx`)
@@ -59,18 +58,25 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 
 ## Form Builder System (admin-only)
 - **Entry**: Header "Form Builder" button (visible only when `isAdmin=true`)
-- **Files**:
-  - `src/components/builder/FormBuilder.tsx` — Main UI (SurveyJS Creator via `survey-creator-react`)
-  - `src/components/builder/constants.ts` — `C` color object for inline styles (not MUI)
-  - `src/utils/formBuilderSP.ts` — SharePoint REST (standalone, raw token pattern)
-  - `src/utils/FormBuilderEngine.ts` — Pure logic: validate, version calc, approval layers
-  - `src/utils/DynamicMatrix.tsx` — Custom SurveyJS widget (dynamic table input)
-  - `src/utils/matrixToHtml.ts` — Matrix data ↔ HTML/JSON conversion for SharePoint
-  - `src/pages/DynamicFormPage.tsx` — End-user form rendering (public/private auth gating)
-- **SharePoint lists used**: `Master Form`, `Web Form Versions`, `Form Builder Log`, `Approvers`
-- **Approval layers**: 1–3 configurable layers, saved as `L1_Approvers`, `L2_Approvers`, etc.
-- **Form versioning**: `Web Form Versions` list, auto-incrementing version numbers
-- **Inline styles**: Builder UI uses `C` color object pattern (not MUI) — matches reference code
+- **Components** (`src/components/builder/`):
+  - `FormBuilder.tsx` — Main UI (custom drag-drop builder via react-dnd, renders with `survey-react-ui`)
+  - `FormLibrary.tsx` — Sidebar form list
+  - `VersionHistory.tsx` — Version history panel
+  - `AuditLog.tsx` — Audit log with diff view
+  - `ApproverRow.tsx` — Approver input with user search
+  - `ProvisionOverlay.tsx` — Publish status overlay
+  - `constants.ts` — `C` color object (not MUI)
+  - `index.ts` — Barrel exports
+- **Utilities**:
+  - `src/utils/formBuilderSP.ts` — SharePoint REST (raw token, NOT createSpClient)
+  - `src/utils/FormBuilderEngine.ts` — Pure logic (validate, versioning)
+  - `src/utils/DynamicMatrix.tsx` — Custom SurveyJS widget
+  - `src/utils/matrixToHtml.ts` — Matrix ↔ HTML/JSON conversion
+- `src/pages/DynamicFormPage.tsx` — End-user form rendering
+- **SharePoint lists**: `Master Form`, `Web Form Versions`, `Form Builder Log`, `Approvers`
+- **Approval layers**: 1–3 configurable, saved as `L1_Approvers`, `L2_Approvers`, etc.
+- **Versioning**: `Web Form Versions` list, auto-incrementing
+- **Styling**: Inline styles via `C` color object (not MUI components)
 
 ## Dashboard Components (`src/components/dashboard/`)
 - `Header.tsx` — Sticky top bar with user menu, role badge, admin tools, **Form Builder button**
@@ -129,12 +135,13 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 
 ## Conventions
 - **PowerShell**: use `workdir` parameter with `bash` tool; PowerShell does NOT support `&&` or native `grep`/`ls` commands
-- **File paths**: use full Windows paths like `C:\Users\user\pmw-hrform\pmw-hrform-app\src\...` or the `read` tool's native format with forward slashes
+- **File paths**: use full Windows paths or forward slashes (C:/Users/user/pmw-hrform/src/...)
 - **TypeScript**: tsconfig uses project references (`tsconfig.json` → `tsconfig.app.json` + `tsconfig.node.json`). Run `tsc -b` for type-checking.
-- **ESLint**: NOT type-checked. To add type-aware linting, see `README.md` for the recommended config.
+- **ESLint**: NOT type-checked. Many pre-existing errors exist—focus on new errors you introduce.
 - **React 19**: no `forwardRef` needed, no manual memoization (`useMemo`/`useCallback`)
 - **MUI v9.0.0**: uses `Grid` (not `Grid2`); `slotProps` replaces `PaperProps` on Dialog
 - **All component files**: use `import type` for type-only imports (`verbatimModuleSyntax`)
 - **SurveyJS Creator**: import from `survey-creator-react` (not `survey-react-ui`); widgets registered via `CustomWidgetCollection.Instance.addCustomWidget()`
 - **`.env.local`** at app root contains Azure AD credentials (`VITE_AZURE_*`) and SP URL (`VITE_SP_SITE_URL`). **Never commit or expose these values.**
 - **`"use client"` directive**: some files use this (Next.js convention) — this is a Vite app, not Next.js. Safe to ignore.
+- **Verifying changes**: Run `npm run build` before claiming work is done. `npm run lint` has many pre-existing warnings—check only your changed files with `lsp_diagnostics`.
