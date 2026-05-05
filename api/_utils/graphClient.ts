@@ -21,8 +21,15 @@ function parseSiteUrl(url: string): { hostname: string; path: string } {
 // --- Token ---
 
 export async function getGraphToken(): Promise<string> {
-  if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET) {
-    throw new Error("Missing required environment variables for Graph API");
+  const missing: string[] = [];
+  if (!TENANT_ID) missing.push("VITE_AZURE_TENANT_ID (or AZURE_TENANT_ID)");
+  if (!CLIENT_ID) missing.push("SYSTEM_CLIENT_ID (or VITE_AZURE_CLIENT_ID)");
+  if (!CLIENT_SECRET) missing.push("SYSTEM_CLIENT_SECRET (or VITE_AZURE_CLIENT_SECRET)");
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables for Graph API: ${missing.join(", ")}. ` +
+      `If you recently updated .env.local, restart the dev server (vercel dev) to pick up changes.`
+    );
   }
 
   const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;

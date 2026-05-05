@@ -52,6 +52,44 @@ import TableChartIcon from "@mui/icons-material/TableChart";
 import ImageIcon from "@mui/icons-material/Image";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import GestureIcon from "@mui/icons-material/Gesture";
+import InsertPageBreakIcon from "@mui/icons-material/InsertPageBreak";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import LoopIcon from "@mui/icons-material/Loop";
+import ViewColumnIcon from "@mui/icons-material/ViewColumn";
+import HeightIcon from "@mui/icons-material/Height";
+import HorizontalRuleIcon from "@mui/icons-material/HorizontalRule";
+import LockIcon from "@mui/icons-material/Lock";
+import EmailIcon from "@mui/icons-material/Email";
+import LinkIcon from "@mui/icons-material/Link";
+import PhoneIcon from "@mui/icons-material/Phone";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import TimelapseIcon from "@mui/icons-material/Timelapse";
+import SmartButtonIcon from "@mui/icons-material/SmartButton";
+import LinearScaleIcon from "@mui/icons-material/LinearScale";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import CalculateIcon from "@mui/icons-material/Calculate";
+import PlusOneIcon from "@mui/icons-material/PlusOne";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import StarRateIcon from "@mui/icons-material/StarRate";
+import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import HomeIcon from "@mui/icons-material/Home";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import BadgeIcon from "@mui/icons-material/Badge";
+import DialpadIcon from "@mui/icons-material/Dialpad";
+import ArticleIcon from "@mui/icons-material/Article";
+import TableRowsIcon from "@mui/icons-material/TableRows";
+import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import LanguageIcon from "@mui/icons-material/Language";
+import VideocamIcon from "@mui/icons-material/Videocam";
+import WarningIcon from "@mui/icons-material/Warning";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
+import BarChartIcon from "@mui/icons-material/BarChart";
+import SpeedIcon from "@mui/icons-material/Speed";
 
 // ── Atoms ─────────────────────────────────────────────────────────────
 const Pill = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) =>
@@ -486,21 +524,68 @@ function LogicRulesEditor({ field, allFields, onChange }: {
   );
 }
 
-// Map SurveyJS types to MUI icons
+// Map SurveyJS types to MUI icons (all 57 field types, each unique)
 const TYPE_ICONS: Record<string, React.ReactNode> = {
+  // Layout
+  pagebreak: <InsertPageBreakIcon />,
+  panel: <DashboardIcon />,
+  repeater: <LoopIcon />,
+  columns: <ViewColumnIcon />,
+  spacer: <HeightIcon />,
+  divider: <HorizontalRuleIcon />,
+  // Basic
   text: <TextFieldsIcon />,
+  number: <NumbersIcon />,
+  email: <EmailIcon />,
+  url: <LinkIcon />,
+  tel: <PhoneIcon />,
   comment: <CommentIcon />,
+  date: <CalendarTodayIcon />,
+  datetime: <AccessTimeIcon />,
+  boolean: <CheckCircleIcon />,
+  // Text
+  password: <LockIcon />,
+  // Date/Time
+  daterange: <DateRangeIcon />,
+  duration: <TimelapseIcon />,
+  // Choice
   dropdown: <ArrowDropDownCircleIcon />,
   radiogroup: <RadioButtonCheckedIcon />,
   checkbox: <CheckBoxIcon />,
-  boolean: <ToggleOnIcon />,
-  number: <NumbersIcon />,
-  date: <CalendarTodayIcon />,
-  matrix: <TableChartIcon />,
-  image: <ImageIcon />,
+  // Selection
+  toggleswitch: <ToggleOnIcon />,
+  buttongroup: <SmartButtonIcon />,
+  slider: <LinearScaleIcon />,
+  // Numeric
+  currency: <AttachMoneyIcon />,
+  formula: <CalculateIcon />,
+  counter: <PlusOneIcon />,
+  // Advanced
+  rating: <StarRateIcon />,
   file: <AttachFileIcon />,
-  html: <CodeIcon />,
-  signature: <GestureIcon />,
+  imageupload: <AddPhotoAlternateIcon />,
+  signaturepad: <GestureIcon />,
+  addressblock: <HomeIcon />,
+  locationpicker: <LocationOnIcon />,
+  nric: <BadgeIcon />,
+  otp: <DialpadIcon />,
+  consent: <ArticleIcon />,
+  dynamicmatrix: <TableChartIcon />,
+  tableinput: <TableRowsIcon />,
+  ranking: <FormatListNumberedIcon />,
+  budgetallocator: <AccountBalanceWalletIcon />,
+  hierarchy: <AccountTreeIcon />,
+  jsoneditor: <DataObjectIcon />,
+  // Display
+  html: <LanguageIcon />,
+  image: <ImageIcon />,
+  videoembed: <VideocamIcon />,
+  alert: <WarningIcon />,
+  progress: <ShowChartIcon />,
+  countdown: <HourglassEmptyIcon />,
+  datatable: <StorageIcon />,
+  chartdisplay: <BarChartIcon />,
+  scorecard: <SpeedIcon />,
 };
 
 // ── Palette ───────────────────────────────────────────────────────────
@@ -528,13 +613,12 @@ function Palette({ onAdd }: { onAdd: (td: typeof QUESTION_TYPES[number]) => void
       {["All", ...TYPE_GROUPS].map(g => <button key={g} onClick={() => setActiveGroup(g)} className="fb-palette-group-btn" style={{ background: activeGroup === g ? C.purple : C.offWhite, color: activeGroup === g ? C.white : C.textMuted }}>{g}</button>)}
     </div>
     <div className="fb-palette-list">
-      {filtered.map((td, i) => <div key={td.type + i} draggable onDragStart={e => onDragStart(e, td)} onClick={() => onAdd(td)} className="fb-palette-item" style={{ animation: `slideIn 0.15s ease ${i * 0.02}s both` }}>
-        <span style={{ fontSize: 16, flexShrink: 0, width: 24, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {TYPE_ICONS[td.type] || <TextFieldsIcon style={{ fontSize: 16 }} />}
+      {filtered.map((td, i) => <div key={td.type + i} draggable onDragStart={e => onDragStart(e, td)} onClick={() => onAdd(td)} className="fb-palette-item" title={td.description} style={{ animation: `slideIn 0.15s ease ${i * 0.02}s both` }}>
+        <span className="fb-palette-item-icon">
+          {TYPE_ICONS[td.type]}
         </span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.textPrimary, marginBottom: 1 }}>{td.label}</div>
-          <div style={{ fontSize: 10, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{td.description}</div>
+        <div className="fb-palette-item-content">
+          <div className="fb-palette-item-title">{td.label}</div>
         </div>
         <DragIndicatorIcon style={{ marginLeft: "auto", flexShrink: 0, opacity: 0.4, fontSize: 16 }} />
       </div>)}
@@ -570,7 +654,7 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
       <div className="fb-field-main">
         <div className="fb-field-header">
           <span className="fb-field-title-icon" style={{ display: "flex", alignItems: "center" }}>
-            {TYPE_ICONS[field.type] || <TextFieldsIcon style={{ fontSize: 16 }} />}
+            {TYPE_ICONS[field.type]}
           </span>
           <span className="fb-field-title-text">{field.title || "(no label)"}</span>
           {field.isRequired && <Pill color={C.red} bg={C.redPale}>Required</Pill>}
@@ -672,6 +756,140 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
   return <PropRow label="Default value">
     <Input value={currentValue} onChange={handleChange} placeholder="Enter default value" />
   </PropRow>;
+}
+
+/** Renders type-specific configuration controls in the General tab */
+function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange: (patch: Partial<FormBuilderField>) => void }) {
+  const numericTypes = ["number", "slider", "counter", "currency"];
+  const dateTypes = ["date", "daterange"];
+  const commentTypes = ["comment", "jsoneditor", "addressblock", "locationpicker", "budgetallocator"];
+  const fileTypes = ["file", "imageupload"];
+  const htmlTypes = ["html", "alert", "progress", "countdown", "datatable", "chartdisplay", "videoembed"];
+  const booleanTypes = ["boolean", "toggleswitch", "consent"];
+  const matrixTypes = ["dynamicmatrix", "tableinput"];
+
+  return <>
+    {/* Numeric: min / max / step */}
+    {numericTypes.includes(field.type) && <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PropRow label="Min"><Input type="number" value={field.min ?? ""} onChange={v => onChange({ min: v === "" ? undefined : Number(v) })} placeholder="No min" /></PropRow>
+        <PropRow label="Max"><Input type="number" value={field.max ?? ""} onChange={v => onChange({ max: v === "" ? undefined : Number(v) })} placeholder="No max" /></PropRow>
+      </div>
+      <PropRow label="Step"><Input type="number" value={field.step ?? ""} onChange={v => onChange({ step: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
+    </>}
+
+    {/* Date: minDate / maxDate / disableWeekends */}
+    {dateTypes.includes(field.type) && <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PropRow label="Min date"><Input type="date" value={field.minDate || ""} onChange={v => onChange({ minDate: v || undefined })} /></PropRow>
+        <PropRow label="Max date"><Input type="date" value={field.maxDate || ""} onChange={v => onChange({ maxDate: v || undefined })} /></PropRow>
+      </div>
+      {field.type === "date" && <Toggle checked={!!field.disableWeekends} onChange={v => onChange({ disableWeekends: v })} label="Disable weekends" />}
+    </>}
+
+    {/* Comment-like: rows */}
+    {commentTypes.includes(field.type) && <>
+      <PropRow label="Rows"><Input type="number" value={field.rows || ""} onChange={v => onChange({ rows: v === "" ? undefined : Number(v) })} placeholder="4" /></PropRow>
+    </>}
+
+    {/* Rating: rateMin / rateMax / descriptions */}
+    {field.type === "rating" && <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PropRow label="Min rate"><Input type="number" value={field.rateMin ?? ""} onChange={v => onChange({ rateMin: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
+        <PropRow label="Max rate"><Input type="number" value={field.rateMax ?? ""} onChange={v => onChange({ rateMax: v === "" ? undefined : Number(v) })} placeholder="5" /></PropRow>
+      </div>
+      <PropRow label="Min label"><Input value={field.minRateDescription || ""} onChange={v => onChange({ minRateDescription: v || undefined })} placeholder="e.g. Poor" /></PropRow>
+      <PropRow label="Max label"><Input value={field.maxRateDescription || ""} onChange={v => onChange({ maxRateDescription: v || undefined })} placeholder="e.g. Excellent" /></PropRow>
+    </>}
+
+    {/* File / Image upload: acceptedTypes / maxSize / allowMultiple */}
+    {fileTypes.includes(field.type) && <>
+      <PropRow label="Accepted types"><Input value={field.acceptedTypes || ""} onChange={v => onChange({ acceptedTypes: v || undefined })} placeholder=".pdf,.doc,.png" /></PropRow>
+      <PropRow label="Max size (bytes)"><Input type="number" value={field.maxSize ?? ""} onChange={v => onChange({ maxSize: v === "" ? undefined : Number(v) })} placeholder="10485760" /></PropRow>
+      <Toggle checked={!!field.allowMultiple} onChange={v => onChange({ allowMultiple: v })} label="Allow multiple files" />
+    </>}
+
+    {/* HTML / Display: html content */}
+    {htmlTypes.includes(field.type) && <>
+      <PropRow label="HTML content" span>
+        <Textarea value={field.html || ""} onChange={v => onChange({ html: v })} rows={4} placeholder="<p>Your content</p>" />
+      </PropRow>
+    </>}
+
+    {/* Image: url / altText / caption */}
+    {field.type === "image" && <>
+      <PropRow label="Image URL" span><Input value={field.imageUrl || ""} onChange={v => onChange({ imageUrl: v })} placeholder="https://..." /></PropRow>
+      <PropRow label="Alt text"><Input value={field.altText || ""} onChange={v => onChange({ altText: v || undefined })} placeholder="Description" /></PropRow>
+      <PropRow label="Caption"><Input value={field.caption || ""} onChange={v => onChange({ caption: v || undefined })} placeholder="Optional caption" /></PropRow>
+    </>}
+
+    {/* Panel: title / description / collapsible */}
+    {field.type === "panel" && <>
+      <PropRow label="Panel title" span><Input value={field.title || ""} onChange={v => onChange({ title: v })} placeholder="Section title" /></PropRow>
+      <PropRow label="Description" span><Input value={field.description || ""} onChange={v => onChange({ description: v })} placeholder="Optional description" /></PropRow>
+      <Toggle checked={!!field.collapsible} onChange={v => onChange({ collapsible: v })} label="Collapsible" />
+    </>}
+
+    {/* Boolean / Toggle / Consent: labelTrue / labelFalse */}
+    {booleanTypes.includes(field.type) && <>
+      <PropRow label="True label"><Input value={field.labelTrue || ""} onChange={v => onChange({ labelTrue: v || undefined })} placeholder="Yes" /></PropRow>
+      <PropRow label="False label"><Input value={field.labelFalse || ""} onChange={v => onChange({ labelFalse: v || undefined })} placeholder="No" /></PropRow>
+    </>}
+
+    {/* Page break: pageTitle / pageDescription */}
+    {field.type === "pagebreak" && <>
+      <PropRow label="Page title" span><Input value={field.pageTitle || ""} onChange={v => onChange({ pageTitle: v || undefined })} placeholder="Page title" /></PropRow>
+      <PropRow label="Page description" span><Input value={field.pageDescription || ""} onChange={v => onChange({ pageDescription: v || undefined })} placeholder="Optional description" /></PropRow>
+    </>}
+
+    {/* Matrix / Table: minRows / maxRows / addRowText */}
+    {matrixTypes.includes(field.type) && <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PropRow label="Min rows"><Input type="number" value={field.minRows ?? ""} onChange={v => onChange({ minRows: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
+        <PropRow label="Max rows"><Input type="number" value={field.maxRows ?? ""} onChange={v => onChange({ maxRows: v === "" ? undefined : Number(v) })} placeholder="10" /></PropRow>
+      </div>
+      <PropRow label="Add row text"><Input value={field.addRowText || ""} onChange={v => onChange({ addRowText: v || undefined })} placeholder="Add Row" /></PropRow>
+    </>}
+
+    {/* Signature pad: width / height / penColor / backgroundColor */}
+    {field.type === "signaturepad" && <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PropRow label="Width"><Input type="number" value={field.signatureWidth ?? ""} onChange={v => onChange({ signatureWidth: v === "" ? undefined : Number(v) })} placeholder="400" /></PropRow>
+        <PropRow label="Height"><Input type="number" value={field.signatureHeight ?? ""} onChange={v => onChange({ signatureHeight: v === "" ? undefined : Number(v) })} placeholder="200" /></PropRow>
+      </div>
+      <PropRow label="Pen color"><Input value={field.penColor || ""} onChange={v => onChange({ penColor: v || undefined })} placeholder="#000000" /></PropRow>
+      <PropRow label="Background color"><Input value={field.backgroundColor || ""} onChange={v => onChange({ backgroundColor: v || undefined })} placeholder="#FFFFFF" /></PropRow>
+    </>}
+
+    {/* Spacer: height */}
+    {field.type === "spacer" && <>
+      <PropRow label="Height (px)"><Input type="number" value={field.height ?? ""} onChange={v => onChange({ height: v === "" ? undefined : Number(v) })} placeholder="16" /></PropRow>
+    </>}
+
+    {/* Divider: style / color / margin */}
+    {field.type === "divider" && <>
+      <PropRow label="Style"><Select value={field.dividerStyle || "solid"} onChange={v => onChange({ dividerStyle: v as "solid" | "dashed" | "dotted" })} options={[{ value: "solid", label: "Solid" }, { value: "dashed", label: "Dashed" }, { value: "dotted", label: "Dotted" }]} /></PropRow>
+      <PropRow label="Color"><Input value={field.dividerColor || ""} onChange={v => onChange({ dividerColor: v || undefined })} placeholder="#E5E3F0" /></PropRow>
+      <PropRow label="Margin"><Input value={field.dividerMargin || ""} onChange={v => onChange({ dividerMargin: v || undefined })} placeholder="16px 0" /></PropRow>
+    </>}
+
+    {/* Repeater: minRows / maxRows / button text */}
+    {field.type === "repeater" && <>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PropRow label="Min rows"><Input type="number" value={field.minRows ?? ""} onChange={v => onChange({ minRows: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
+        <PropRow label="Max rows"><Input type="number" value={field.maxRows ?? ""} onChange={v => onChange({ maxRows: v === "" ? undefined : Number(v) })} placeholder="10" /></PropRow>
+      </div>
+      <PropRow label="Add button text"><Input value={field.addButtonText || ""} onChange={v => onChange({ addButtonText: v || undefined })} placeholder="Add Row" /></PropRow>
+      <PropRow label="Remove button text"><Input value={field.removeButtonText || ""} onChange={v => onChange({ removeButtonText: v || undefined })} placeholder="Remove" /></PropRow>
+      <Toggle checked={!!field.showBlankRow} onChange={v => onChange({ showBlankRow: v })} label="Show blank row" />
+    </>}
+
+    {/* Columns: columnCount / gap */}
+    {field.type === "columns" && <>
+      <PropRow label="Column count"><Select value={String(field.columnCount || 2)} onChange={v => onChange({ columnCount: parseInt(v) })} options={[{ value: "2", label: "2 columns" }, { value: "3", label: "3 columns" }]} /></PropRow>
+      <PropRow label="Gap (px)"><Input type="number" value={field.gap ?? ""} onChange={v => onChange({ gap: v === "" ? undefined : Number(v) })} placeholder="16" /></PropRow>
+    </>}
+  </>;
 }
 
 function MatrixColumnsEditor({ columns, token, onChange }: {
@@ -886,7 +1104,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
     <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
         <span style={{ fontSize: 16, display: "flex", alignItems: "center" }}>
-          {TYPE_ICONS[field.type] || <TextFieldsIcon style={{ fontSize: 16 }} />}
+          {TYPE_ICONS[field.type]}
         </span>
         <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>{td.label}</span>
       </div>
@@ -908,6 +1126,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
         <PropRow label="Description / hint" span><Input value={field.description || ""} onChange={v => onChange({ description: v })} placeholder="Optional helper text" /></PropRow>
         {!["html", "dynamicmatrix", "file"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
         {field.type === "text" && <PropRow label="Input type"><Select value={field.inputType || "text"} onChange={v => onChange({ inputType: v })} options={[{ value: "text", label: "Text" }, { value: "email", label: "Email" }, { value: "number", label: "Number" }, { value: "date", label: "Date" }, { value: "datetime-local", label: "Date & Time" }, { value: "tel", label: "Phone" }, { value: "url", label: "URL" }, { value: "password", label: "Password" }]} /></PropRow>}
+        <FieldTypeProps field={field} onChange={onChange} />
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
           {field.type !== "html" && <Toggle checked={!!field.isRequired} onChange={v => onChange({ isRequired: v })} label="Required field" />}
           <Toggle checked={!field.startWithNewLine} onChange={v => onChange({ startWithNewLine: !v })} label="Inline (same row as previous)" />
@@ -1483,7 +1702,7 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
                 <button onClick={() => setDataSources([...dataSources, { name: `ds${dataSources.length + 1}`, url: "", labelKey: "label", valueKey: "value" }])} style={{ fontSize: 12, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 6, cursor: "pointer" }}>+ Add Data Source</button>
               </div>
               {dataSources.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13 }}>No data sources. Add one to connect dropdowns/autocompletes to REST APIs.</div>
+                <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13 }}>No data sources. Add one to connect dropdowns to REST APIs.</div>
               ) : dataSources.map((ds, idx) => (
                 <div key={idx} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>

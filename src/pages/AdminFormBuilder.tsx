@@ -18,6 +18,18 @@ import { flattenQuestions, getSpColumnKind } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
 import type { SurveyJson } from "../types";
+
+// MUI Icons
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import FolderIcon from "@mui/icons-material/Folder";
+import SettingsIcon from "@mui/icons-material/Settings";
+import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
+import DescriptionIcon from "@mui/icons-material/Description";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import HistoryIcon from "@mui/icons-material/History";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+
 import {
   slugify,
   checkSlugConflict,
@@ -574,12 +586,12 @@ export default function AdminFormBuilder() {
   }
 
   const sidebarTabs = [
-    { id: "meta", label: "Meta", icon: "📋" },
-    { id: "approval", label: "Approval", icon: "✅" },
-    { id: "condapproval", label: "Conditional", icon: "🔀" },
-    { id: "version", label: "Versions", icon: "🕒" },
-    { id: "log", label: "Log", icon: "📜" },
-    { id: "publish", label: "Publish", icon: "🚀" },
+    { id: "meta", label: "Meta", icon: <DescriptionIcon style={{ fontSize: 14 }} /> },
+    { id: "approval", label: "Approval", icon: <CheckCircleIcon style={{ fontSize: 14 }} /> },
+    { id: "condapproval", label: "Conditional", icon: <SwapHorizIcon style={{ fontSize: 14 }} /> },
+    { id: "version", label: "Versions", icon: <HistoryIcon style={{ fontSize: 14 }} /> },
+    { id: "log", label: "Log", icon: <ReceiptLongIcon style={{ fontSize: 14 }} /> },
+    { id: "publish", label: "Publish", icon: <RocketLaunchIcon style={{ fontSize: 14 }} /> },
   ];
 
   const formBuilderKey = viewingOld
@@ -630,18 +642,21 @@ export default function AdminFormBuilder() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 5,
-              background: "none",
+              gap: 4,
+              height: 30,
               border: `1px solid ${C.border}`,
               borderRadius: 7,
-              padding: "4px 11px",
-              cursor: "pointer",
-              fontSize: 12,
+              background: C.white,
               color: C.textSecond,
+              fontSize: 12,
+              cursor: "pointer",
+              padding: "0 12px",
               fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#F3F4F6"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = C.white; }}
           >
-            ← Dashboard
+            <ArrowBackIcon style={{ fontSize: 14 }} /> Dashboard
           </button>
           <div style={{ width: 1, height: 17, background: C.border }} />
           <span style={{ fontSize: 18, color: '#6264A7' }}>📋</span>
@@ -673,7 +688,10 @@ export default function AdminFormBuilder() {
           <button
             onClick={() => setLibraryOpen(o => !o)}
             style={{
-              height: 28,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              height: 30,
               padding: "0 12px",
               border: `1px solid ${C.border}`,
               borderRadius: 7,
@@ -683,13 +701,18 @@ export default function AdminFormBuilder() {
               cursor: "pointer",
               fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             }}
+            onMouseEnter={(e) => { if (!libraryOpen) { e.currentTarget.style.background = "#F9FAFB"; e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.color = C.purple; } }}
+            onMouseLeave={(e) => { if (!libraryOpen) { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSecond; } }}
           >
-            📂 Forms
+            <FolderIcon style={{ fontSize: 14 }} /> Forms
           </button>
           <button
             onClick={() => setSidebarOpen(o => !o)}
             style={{
-              height: 28,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              height: 30,
               padding: "0 12px",
               border: `1px solid ${C.border}`,
               borderRadius: 7,
@@ -699,13 +722,18 @@ export default function AdminFormBuilder() {
               cursor: "pointer",
               fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             }}
+            onMouseEnter={(e) => { if (!sidebarOpen) { e.currentTarget.style.background = "#F9FAFB"; e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.color = C.purple; } }}
+            onMouseLeave={(e) => { if (!sidebarOpen) { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSecond; } }}
           >
-            ⚙ Settings
+            <SettingsIcon style={{ fontSize: 14 }} /> Settings
           </button>
           <button
             onClick={() => handlePublish(surveyJson as SurveyJson)}
             style={{
-              height: 28,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              height: 30,
               padding: "0 16px",
               border: "none",
               borderRadius: 7,
@@ -717,8 +745,10 @@ export default function AdminFormBuilder() {
               fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
               boxShadow: "0 2px 8px rgba(91,33,182,.25)",
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 12px rgba(91,33,182,.35)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(91,33,182,.25)"; }}
           >
-            🚀 Publish
+            <RocketLaunchIcon style={{ fontSize: 14 }} /> Publish
           </button>
         </div>
       </header>
@@ -760,28 +790,30 @@ export default function AdminFormBuilder() {
 
         {sidebarOpen && (
           <div style={{ width: 300, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.white, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div style={{ display: "flex", overflowX: "auto", borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ display: "flex", overflowX: "auto", gap: 6, padding: "8px 10px", borderBottom: `1px solid ${C.border}`, scrollbarWidth: "none" }}>
               {sidebarTabs.map(t => (
                 <button
                   key={t.id}
                   onClick={() => setSidebarTab(t.id)}
                   style={{
                     flex: "0 0 auto",
-                    height: 35,
-                    border: "none",
-                    padding: "0 10px",
-                    background: sidebarTab === t.id ? C.purplePale : "none",
-                    color: sidebarTab === t.id ? C.purple : C.textMuted,
-                    fontSize: 11,
-                    fontWeight: sidebarTab === t.id ? 600 : 400,
-                    cursor: "pointer",
-                    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                    borderBottom: sidebarTab === t.id ? `2px solid ${C.purple}` : "2px solid transparent",
                     display: "flex",
                     alignItems: "center",
-                    gap: 4,
+                    gap: 6,
+                    height: 30,
+                    border: `1px solid ${sidebarTab === t.id ? C.purple : C.border}`,
+                    borderRadius: 7,
+                    background: sidebarTab === t.id ? C.purplePale : C.white,
+                    color: sidebarTab === t.id ? C.purple : C.textSecond,
+                    fontSize: 12,
+                    fontWeight: sidebarTab === t.id ? 600 : 400,
+                    cursor: "pointer",
+                    padding: "0 12px",
+                    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                     whiteSpace: "nowrap",
                   }}
+                  onMouseEnter={(e) => { if (sidebarTab !== t.id) { e.currentTarget.style.background = "#F9FAFB"; e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.color = C.purple; } }}
+                  onMouseLeave={(e) => { if (sidebarTab !== t.id) { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSecond; } }}
                 >
                   {t.icon} {t.label}
                 </button>

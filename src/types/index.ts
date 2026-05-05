@@ -596,7 +596,7 @@ export interface FieldLogic {
 
 // ── Part 5: Data, Integration & Submission Types ─────────────────────────────────
 
-/** REST API data source for dropdowns/autocompletes */
+/** REST API data source for dropdowns */
 export interface DataSourceConfig {
   name: string;                  // Unique identifier for the data source
   url: string;                    // REST API endpoint URL
