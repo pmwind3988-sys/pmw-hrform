@@ -1,4 +1,4 @@
-import { getAccessToken, spGet, SP_SITE_URL } from "./_utils/sharepoint.ts";
+import { getGraphToken, queryListItems } from "./_utils/graphClient.ts";
 
 // Minimal Vercel request/response types
 interface ApiRequest {
@@ -27,40 +27,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!slug) return res.status(400).json({ error: "Missing slug parameter" });
 
   try {
-    const token = await getAccessToken();
+    const token = await getGraphToken();
 
     // 1. Get form config from Master Form
-    const configUrl =
-      `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items` +
-      `?$filter=Slug eq '${encodeURIComponent(slug)}'` +
-      `&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules` +
-      `&$top=1`;
-
-    const configData = (await spGet(token, configUrl)) as {
-      value: Array<Record<string, unknown>>;
-    };
-    const formConfig = configData.value?.[0];
+    const masterItems = await queryListItems(token, "Master Form", { top: 500 });
+    const formConfig = masterItems.find((i) => i.fields.Slug === slug)?.fields;
 
     if (!formConfig) {
       return res.status(404).json({ error: `Form "${slug}" not found.` });
     }
-    if (!formConfig.IsPublished) {
+    if (formConfig.IsPublished !== true) {
       return res.status(403).json({ error: "Form is not published." });
     }
 
     // 2. Get version data from Web Form Versions
     const targetVersion = pinVersion || (formConfig.CurrentVersion as string) || "1.0";
-    const versionUrl =
-      `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items` +
-      `?$filter=FormTitle eq '${encodeURIComponent(formConfig.Title as string)}'` +
-      ` and FormVersion eq '${encodeURIComponent(targetVersion)}'` +
-      `&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy` +
-      `&$top=1`;
-
-    const versionData = (await spGet(token, versionUrl)) as {
-      value: Array<{ SurveyJSON?: string }>;
-    };
-    const row = versionData.value?.[0];
+    const versionItems = await queryListItems(token, "Web Form Versions", { top: 500 });
+    const row = versionItems.find(
+      (i) => i.fields.FormTitle === formConfig.Title && i.fields.FormVersion === targetVersion
+    )?.fields;
 
     if (!row && pinVersion) {
       return res.status(404).json({ error: `Version ${pinVersion} not found.` });
@@ -70,7 +55,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let meta: Record<string, unknown> = {};
     if (row?.SurveyJSON) {
       try {
-        const parsed = JSON.parse(row.SurveyJSON) as {
+        const parsed = JSON.parse(row.SurveyJSON as string) as {
           surveyJson?: unknown;
           meta?: Record<string, unknown>;
         };

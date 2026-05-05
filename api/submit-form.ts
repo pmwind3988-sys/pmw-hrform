@@ -1,4 +1,4 @@
-import { getAccessToken, spGet, spPost, SP_SITE_URL } from "./_utils/sharepoint.ts";
+import { getGraphToken, queryListItems, createListItem } from "./_utils/graphClient.ts";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -30,18 +30,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
-    const token = await getAccessToken();
+    const token = await getGraphToken();
 
     // Verify the form exists and is public
-    const configUrl =
-      `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items` +
-      `?$filter=Title eq '${encodeURIComponent(listTitle)}'` +
-      `&$select=Title,IsPublic&$top=1`;
-
-    const configData = (await spGet(token, configUrl)) as {
-      value: Array<Record<string, unknown>>;
-    };
-    const formConfig = configData.value?.[0];
+    const masterItems = await queryListItems(token, "Master Form", { top: 500 });
+    const formConfig = masterItems.find((i) => i.fields.Title === listTitle)?.fields;
 
     if (!formConfig) {
       return res.status(404).json({ error: "Form not found" });
@@ -50,13 +43,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Form is not public" });
     }
 
-    // Submit to SharePoint list
-    const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listTitle)}')/items`;
-    const result = (await spPost(token, url, formBody as Record<string, unknown>)) as {
-      Id?: number;
-    };
+    // Submit to SharePoint list via Graph
+    const result = await createListItem(token, listTitle, formBody as Record<string, unknown>);
 
-    return res.status(200).json({ success: true, id: result.Id });
+    return res.status(200).json({ success: true, id: result.id });
   } catch (err) {
     console.error("[API submit-form]", err);
     return res.status(500).json({

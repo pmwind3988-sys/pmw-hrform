@@ -3,6 +3,9 @@
  */
 import { useEffect, useRef } from "react";
 import { C } from "./constants";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
 interface ProvisionOverlayProps {
   logs: { m: string; t: string }[];
@@ -15,7 +18,7 @@ const Spinner = ({ size = 18 }: { size?: number }) => (
   <div style={{
     width: size,
     height: size,
-    border: `2px solid ${C.purpleMid}`,
+    border: `2px solid #D1D5DB`,
     borderTop: `2px solid ${C.purple}`,
     borderRadius: "50%",
     animation: "spin 0.9s linear infinite",
@@ -58,8 +61,8 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
           animation: "fadeUp .2s ease",
         }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(167,139,250,.2)" }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.purpleMid }}>
-              {success ? "✅ Done" : error ? "❌ Failed" : "⚙️ Publishing…"}
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.purpleMid, display: "flex", alignItems: "center", gap: 6 }}>
+              {success ? <><CheckIcon style={{ fontSize: 16 }} /> Done</> : error ? <><CloseIcon style={{ fontSize: 16 }} /> Failed</> : <><WarningAmberIcon style={{ fontSize: 16 }} /> Publishing…</>}
             </div>
           </div>
           <div style={{
@@ -75,8 +78,11 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
             {logs.map((l, i) => (
               <div key={i} style={{
                 color: l.t === "err" ? "#FCA5A5" : l.t === "ok" ? "#6EE7B7" : l.t === "warn" ? "#FCD34D" : "rgba(255,255,255,.7)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
               }}>
-                {l.t === "err" ? "✗ " : l.t === "ok" ? "✓ " : l.t === "warn" ? "⚠ " : "› "}
+                {l.t === "err" ? <CloseIcon style={{ fontSize: 12 }} /> : l.t === "ok" ? <CheckIcon style={{ fontSize: 12 }} /> : l.t === "warn" ? <WarningAmberIcon style={{ fontSize: 12 }} /> : <span>›</span>}
                 {l.m}
               </div>
             ))}
@@ -106,7 +112,7 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
                   fontSize: 13,
                   fontWeight: 500,
                   cursor: "pointer",
-                  fontFamily: "'DM Sans'",
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                 }}
               >
                 {success ? "Done →" : "Close"}

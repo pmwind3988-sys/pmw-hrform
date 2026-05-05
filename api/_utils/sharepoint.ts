@@ -10,13 +10,15 @@ export async function getAccessToken(): Promise<string> {
     throw new Error("Missing required environment variables for SharePoint access");
   }
 
-  const origin = new URL(SP_SITE_URL).origin;
-  const url = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/token`;
+  const url = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+
+  // SharePoint Online service principal ID — MUST use this for Sites.Selected
+  const spServicePrincipal = "00000003-0000-0ff1-ce00-000000000000";
 
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
-    resource: origin,
+    scope: `${spServicePrincipal}/.default`,
     grant_type: "client_credentials",
   });
 

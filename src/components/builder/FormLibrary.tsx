@@ -2,6 +2,8 @@
  * FormLibrary.tsx - Sidebar component showing list of forms
  */
 import { C } from "./constants";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 interface FormLibraryProps {
   forms: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string }[];
@@ -48,10 +50,13 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, current }:
             color: C.white,
             fontSize: 11,
             cursor: "pointer",
-            fontFamily: "'DM Sans'",
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
           }}
         >
-          ＋ New
+          <AddIcon style={{ fontSize: 14 }} /> New
         </button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "7px 9px" }}>
@@ -100,7 +105,7 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, current }:
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontFamily: "'DM Sans'",
+                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                 transition: "all .13s",
               }}
               onMouseEnter={e => {
@@ -113,7 +118,7 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, current }:
                 e.currentTarget.style.color = C.textMuted;
               }}
             >
-              ✕
+              <DeleteIcon style={{ fontSize: 14 }} />
             </button>
             <div style={{ fontSize: 12, fontWeight: 600, color: f.Title === current ? C.purple : C.textPrimary, marginBottom: 2, paddingRight: 22 }}>
               {f.Title}

@@ -3,6 +3,8 @@
  */
 import { useState } from "react";
 import { C } from "./constants";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 
 interface AuditLogProps {
   logs: { EventType: string; EventSummary?: string; BeforeJSON?: string; AfterJSON?: string; EventAt?: string }[];
@@ -59,7 +61,7 @@ export default function AuditLog({ logs }: AuditLogProps) {
               <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>
                 {l.EventAt ? new Date(l.EventAt).toLocaleString("en-MY", { dateStyle: "short", timeStyle: "short" }) : ""}
               </span>
-              {hasDiff && <span style={{ fontSize: 10, color: C.textMuted }}>{isE ? "▲" : "▼"}</span>}
+              {hasDiff && <span style={{ fontSize: 10, color: C.textMuted }}>{isE ? <ExpandLessIcon style={{ fontSize: 14 }} /> : <ExpandMoreIcon style={{ fontSize: 14 }} />}</span>}
             </div>
             {isE && hasDiff && (
               <div style={{

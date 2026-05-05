@@ -11,12 +11,47 @@ import "survey-core/survey-core.min.css";
 import type { SurveyJson, FormBuilderField } from "../../types/index";
 import { QUESTION_TYPES, TYPE_GROUPS, createQuestion, buildSurveyJson, validateFields, getSpColumnKind } from "../../utils/FormBuilderEngine";
 import { flattenQuestions } from "../../utils/FormBuilderEngine";
-//import logo from "../../assets/logo.png";
 import { C } from "./constants";
 import "./FormBuilder.css";
-// import { slugify } from "../../utils/formBuilderSP";
 
-//import logo from "../../assets/logo.png";
+// MUI Icons
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import SettingsIcon from "@mui/icons-material/Settings";
+import PreviewIcon from "@mui/icons-material/Preview";
+import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SearchIcon from "@mui/icons-material/Search";
+import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import UndoIcon from "@mui/icons-material/Undo";
+import RedoIcon from "@mui/icons-material/Redo";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import CodeIcon from "@mui/icons-material/Code";
+import DesktopWindowsIcon from "@mui/icons-material/DesktopWindows";
+import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import TranslateIcon from "@mui/icons-material/Translate";
+import PaletteIcon from "@mui/icons-material/Palette";
+import CommentIcon from "@mui/icons-material/Comment";
+import HubIcon from "@mui/icons-material/Hub";
+import StorageIcon from "@mui/icons-material/Storage";
+import ShieldIcon from "@mui/icons-material/Shield";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import TextFieldsIcon from "@mui/icons-material/TextFields";
+import ArrowDropDownCircleIcon from "@mui/icons-material/ArrowDropDownCircle";
+import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked";
+import CheckBoxIcon from "@mui/icons-material/CheckBox";
+import ToggleOnIcon from "@mui/icons-material/ToggleOn";
+import NumbersIcon from "@mui/icons-material/Numbers";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import ImageIcon from "@mui/icons-material/Image";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import GestureIcon from "@mui/icons-material/Gesture";
 
 // ── Atoms ─────────────────────────────────────────────────────────────
 const Pill = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) =>
@@ -30,7 +65,7 @@ function IconBtn({ icon, title, onClick, danger, disabled }: { icon: React.React
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
   return <label className="fb-toggle">
-    <div onClick={() => onChange(!checked)} className="fb-toggle-track" style={{ background: checked ? C.purple : C.border }}>
+    <div onClick={() => onChange(!checked)} className="fb-toggle-track" style={{ background: checked ? C.purple : "#D1D5DB" }}>
       <div className="fb-toggle-knob" style={{ left: checked ? 19 : 3, background: C.white }} />
     </div>
     {label && <span className="fb-toggle-label" style={{ color: C.textSecond }}>{label}</span>}
@@ -451,6 +486,23 @@ function LogicRulesEditor({ field, allFields, onChange }: {
   );
 }
 
+// Map SurveyJS types to MUI icons
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  text: <TextFieldsIcon />,
+  comment: <CommentIcon />,
+  dropdown: <ArrowDropDownCircleIcon />,
+  radiogroup: <RadioButtonCheckedIcon />,
+  checkbox: <CheckBoxIcon />,
+  boolean: <ToggleOnIcon />,
+  number: <NumbersIcon />,
+  date: <CalendarTodayIcon />,
+  matrix: <TableChartIcon />,
+  image: <ImageIcon />,
+  file: <AttachFileIcon />,
+  html: <CodeIcon />,
+  signature: <GestureIcon />,
+};
+
 // ── Palette ───────────────────────────────────────────────────────────
 function Palette({ onAdd }: { onAdd: (td: typeof QUESTION_TYPES[number]) => void }) {
   const [search, setSearch] = useState("");
@@ -468,10 +520,7 @@ function Palette({ onAdd }: { onAdd: (td: typeof QUESTION_TYPES[number]) => void
   return <div className="fb-palette">
     <div className="fb-palette-search">
       <div className="fb-palette-search-wrapper">
-        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" className="fb-palette-search-icon">
-          <circle cx="5.5" cy="5.5" r="4" stroke={C.textMuted} strokeWidth="1.3" />
-          <path d="M9 9l2.5 2.5" stroke={C.textMuted} strokeWidth="1.3" strokeLinecap="round" />
-        </svg>
+        <SearchIcon className="fb-palette-search-icon" style={{ color: C.textMuted, fontSize: 16 }} />
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search fields…" className="fb-palette-search-input" />
       </div>
     </div>
@@ -480,14 +529,14 @@ function Palette({ onAdd }: { onAdd: (td: typeof QUESTION_TYPES[number]) => void
     </div>
     <div className="fb-palette-list">
       {filtered.map((td, i) => <div key={td.type + i} draggable onDragStart={e => onDragStart(e, td)} onClick={() => onAdd(td)} className="fb-palette-item" style={{ animation: `slideIn 0.15s ease ${i * 0.02}s both` }}>
-        <span style={{ fontSize: 16, flexShrink: 0, width: 24, textAlign: "center" }}>{td.icon}</span>
+        <span style={{ fontSize: 16, flexShrink: 0, width: 24, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {TYPE_ICONS[td.type] || <TextFieldsIcon style={{ fontSize: 16 }} />}
+        </span>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: C.textPrimary, marginBottom: 1 }}>{td.label}</div>
           <div style={{ fontSize: 10, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{td.description}</div>
         </div>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginLeft: "auto", flexShrink: 0, opacity: 0.4 }}>
-          <path d="M4 2h4M4 6h4M4 10h4M2 2v0M2 6v0M2 10v0" stroke={C.textMuted} strokeWidth="1.4" strokeLinecap="round" />
-        </svg>
+        <DragIndicatorIcon style={{ marginLeft: "auto", flexShrink: 0, opacity: 0.4, fontSize: 16 }} />
       </div>)}
       {!filtered.length && <div style={{ textAlign: "center", padding: "24px 0", color: C.textMuted, fontSize: 12 }}>No field types match</div>}
     </div>
@@ -516,13 +565,13 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
     title={shortcuts}>
     <div className="fb-field-row">
       <div className="fb-field-drag-handle">
-        <svg width="12" height="16" viewBox="0 0 12 16" fill="none">
-          {[3, 8, 13].flatMap(y => [3, 9].map(x => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.5" fill="currentColor" />))}
-        </svg>
+        <DragIndicatorIcon style={{ fontSize: 18 }} />
       </div>
       <div className="fb-field-main">
         <div className="fb-field-header">
-          <span className="fb-field-title-icon">{td.icon}</span>
+          <span className="fb-field-title-icon" style={{ display: "flex", alignItems: "center" }}>
+            {TYPE_ICONS[field.type] || <TextFieldsIcon style={{ fontSize: 16 }} />}
+          </span>
           <span className="fb-field-title-text">{field.title || "(no label)"}</span>
           {field.isRequired && <Pill color={C.red} bg={C.redPale}>Required</Pill>}
           {field.readOnly && <Pill color={C.textMuted} bg={C.offWhite}>Read-only</Pill>}
@@ -538,13 +587,13 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
           <span className="fb-field-type">· {td.label}</span>
           {field.defaultValue !== undefined && <span className="fb-field-default">· default: {String(field.defaultValue).slice(0, 20)}</span>}
         </div>
-        {err.map((e, i) => <div key={i} className="fb-field-error"><span>⚠</span>{e.msg}</div>)}
+        {err.map((e, i) => <div key={i} className="fb-field-error"><WarningAmberIcon style={{ fontSize: 12 }} />{e.msg}</div>)}
       </div>
       <div className="fb-field-actions" onClick={e => e.stopPropagation()}>
-        <IconBtn icon="↑" title="Move up" onClick={() => onMoveUp()} disabled={isFirst} />
-        <IconBtn icon="↓" title="Move down" onClick={() => onMoveDown()} disabled={isLast} />
-        <IconBtn icon="⧉" title="Duplicate (Ctrl+D)" onClick={() => onDuplicate(field)} />
-        <IconBtn icon="✕" title="Remove (Del)" onClick={() => onRemove(field._id)} danger />
+        <IconBtn icon={<ArrowUpwardIcon style={{ fontSize: 14 }} />} title="Move up" onClick={() => onMoveUp()} disabled={isFirst} />
+        <IconBtn icon={<ArrowDownwardIcon style={{ fontSize: 14 }} />} title="Move down" onClick={() => onMoveDown()} disabled={isLast} />
+        <IconBtn icon={<ContentCopyIcon style={{ fontSize: 14 }} />} title="Duplicate (Ctrl+D)" onClick={() => onDuplicate(field)} />
+        <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title="Remove (Del)" onClick={() => onRemove(field._id)} danger />
       </div>
     </div>
   </div>;
@@ -576,7 +625,9 @@ function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder
     onDragEnd={onDragEnd} className="fb-canvas">
     {!fields.length
       ? <div className="fb-canvas-empty">
-        <div className="fb-canvas-empty-icon">📋</div>
+        <div className="fb-canvas-empty-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <TextFieldsIcon style={{ fontSize: 40, color: C.textMuted }} />
+        </div>
         <div className="fb-canvas-empty-title">Your form is empty</div>
         <div className="fb-canvas-empty-text">Click a field type in the left panel,<br />or drag one here to get started.</div>
       </div>
@@ -601,9 +652,9 @@ function ChoicesEditor({ choices, onChange }: { choices: (string | { value: stri
     {items.map((it, i) => <div key={i} className="fb-choice-row">
       <Input value={it.value} onChange={v => update(i, "value", v)} placeholder="value" className="fb-choice-input" />
       <Input value={it.text} onChange={v => update(i, "text", v)} placeholder="label" className="fb-choice-input" />
-      <IconBtn icon="✕" title="Remove" onClick={() => onChange(items.filter((_, idx) => idx !== i).map(x => x.value === x.text ? x.value : x))} danger />
+      <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title="Remove" onClick={() => onChange(items.filter((_, idx) => idx !== i).map(x => x.value === x.text ? x.value : x))} danger />
     </div>)}
-    <button onClick={add} className="fb-add-choice-btn">＋ Add option</button>
+    <button onClick={add} className="fb-add-choice-btn"><AddIcon style={{ fontSize: 14 }} /> Add option</button>
   </div>;
 }
 
@@ -642,7 +693,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Matrix Columns</span>
       <div style={{ flex: 1 }} />
-      <button onClick={addCol} style={{ fontSize: 11, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "'DM Sans'" }}>＋ Add column</button>
+      <button onClick={addCol} style={{ fontSize: 11, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>＋ Add column</button>
     </div>
     {columns.length === 0 && <div style={{ fontSize: 11, color: C.textMuted, padding: 8, background: C.offWhite, borderRadius: 6 }}>No columns defined. Add at least one.</div>}
     {columns.map((col, i) => {
@@ -651,8 +702,8 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: C.purple, width: 18 }}>{i + 1}</span>
           <div style={{ flex: 1, display: "flex", gap: 6 }}>
-            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/\s+/g, "_") })} placeholder="Name" style={{ flex: 1, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "'DM Sans'" }} />
-            <input value={col.title} onChange={e => updateCol(i, { title: e.target.value })} placeholder="Title" style={{ flex: 1.5, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "'DM Sans'" }} />
+            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/\s+/g, "_") })} placeholder="Name" style={{ flex: 1, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
+            <input value={col.title} onChange={e => updateCol(i, { title: e.target.value })} placeholder="Title" style={{ flex: 1.5, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
           </div>
           <button onClick={() => removeCol(i)} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕</button>
         </div>
@@ -689,7 +740,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
                   if (val) { updateCol(i, { choices: [...(col.choices || []), val] }); (e.target as HTMLInputElement).value = ""; }
                 }
               }}
-              style={{ fontSize: 11, padding: "3px 8px", border: `1px dashed ${C.border}`, borderRadius: 12, width: 90, fontFamily: "'DM Sans'" }}
+              style={{ fontSize: 11, padding: "3px 8px", border: `1px dashed ${C.border}`, borderRadius: 12, width: 90, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}
             />
           </div>}
         </>}
@@ -739,11 +790,11 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
     </div>
     <div style={{ display: "flex", gap: 8 }}>
       <button onClick={() => { setMode("manual"); onChange(undefined); }}
-        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "manual" ? C.purple : C.border}`, background: mode === "manual" ? C.purplePale : C.white, color: mode === "manual" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans'" }}>
+        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "manual" ? C.purple : C.border}`, background: mode === "manual" ? C.purplePale : C.white, color: mode === "manual" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>
         Manual
       </button>
       <button onClick={() => setMode("sp")}
-        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "sp" ? C.purple : C.border}`, background: mode === "sp" ? C.purplePale : C.white, color: mode === "sp" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans'" }}>
+        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "sp" ? C.purple : C.border}`, background: mode === "sp" ? C.purplePale : C.white, color: mode === "sp" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>
         SharePoint List
       </button>
     </div>
@@ -784,7 +835,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
   if (!field && surveySettings) return <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-        <span style={{ fontSize: 16 }}>⚙️</span>
+        <SettingsIcon style={{ fontSize: 16, color: C.purple }} />
         <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>Form Settings</span>
       </div>
       <div style={{ fontSize: 10, color: C.textMuted }}>SurveyJS form properties</div>
@@ -834,14 +885,16 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
   return <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-        <span style={{ fontSize: 16 }}>{td.icon}</span>
+        <span style={{ fontSize: 16, display: "flex", alignItems: "center" }}>
+          {TYPE_ICONS[field.type] || <TextFieldsIcon style={{ fontSize: 16 }} />}
+        </span>
         <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>{td.label}</span>
       </div>
       <div style={{ fontSize: 10, color: C.textMuted, fontFamily: "monospace" }}>{field.name}</div>
     </div>
     <div style={{ padding: "8px 14px", borderBottom: `1px solid ${C.border}` }}>
       <select value={tab} onChange={e => setTab(e.target.value)}
-        style={{ width: "100%", height: 32, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0 8px", fontSize: 12, fontFamily: "'DM Sans',sans-serif", color: C.textPrimary, background: C.white, cursor: "pointer" }}>
+        style={{ width: "100%", height: 32, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0 8px", fontSize: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", color: C.textPrimary, background: C.white, cursor: "pointer" }}>
         {tabs.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
       </select>
     </div>
@@ -891,17 +944,16 @@ function JsonPreview({ json, collapsed, onToggle }: { json: SurveyJson; collapse
   const [copied, setCopied] = useState(false);
   const text = JSON.stringify(json, null, 2);
   const copy = () => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
-  return <div style={{ borderTop: `1px solid ${C.border}`, background: C.purpleDark, height: collapsed ? 38 : 220, display: "flex", flexDirection: "column", overflow: "hidden", transition: "height 0.3s" }}>
+  return <div style={{ borderTop: `1px solid ${C.border}`, background: "#1F2937", height: collapsed ? 38 : 220, display: "flex", flexDirection: "column", overflow: "hidden", transition: "height 0.3s" }}>
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 38, flexShrink: 0, cursor: "pointer" }} onClick={onToggle}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: C.purpleMid, textTransform: "uppercase", letterSpacing: "0.06em" }}>SurveyJS JSON</span>
+        <CodeIcon style={{ fontSize: 14, color: "#9CA3AF" }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.06em" }}>SurveyJS JSON</span>
         <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{JSON.stringify(json).length} chars</span>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {!collapsed && <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 10, color: copied ? "#6EE7B7" : C.purpleMid, background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "'DM Sans'" }}>{copied ? "Copied!" : "Copy JSON"}</button>}
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transform: collapsed ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s" }}>
-          <path d="M3 5l4 4 4-4" stroke={C.purpleMid} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        {!collapsed && <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 10, color: copied ? "#6EE7B7" : "#9CA3AF", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>{copied ? "Copied!" : "Copy JSON"}</button>}
+        {collapsed ? <ExpandMoreIcon style={{ fontSize: 16, color: "#9CA3AF" }} /> : <ExpandLessIcon style={{ fontSize: 16, color: "#9CA3AF" }} />}
       </div>
     </div>
     {!collapsed && <pre style={{ flex: 1, overflowY: "auto", margin: 0, padding: "0 14px 14px", fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.75)", lineHeight: 1.7 }}>{text}</pre>}
@@ -926,19 +978,19 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
   const deviceWidth = device === "desktop" ? 760 : device === "tablet" ? 500 : 340;
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(30,27,75,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
-    <div style={{ background: C.white, borderRadius: 16, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
+    style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
+    <div style={{ background: C.white, borderRadius: 16, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
       <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Live Form Preview</div>
-          <div style={{ fontSize: 14, color: C.white, fontFamily: "'DM Serif Display',serif" }}>How users will see this form</div>
+          <div style={{ fontSize: 14, color: C.white, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>How users will see this form</div>
         </div>
-        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
       </div>
       {showBanner && <div style={{ borderBottom: `1px solid ${C.border}` }}>
         <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "16px 22px" }}>
           <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{isoStandards}</div>
-          <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 17, color: "#fff" }}>{formTitle}</div>
+          <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 17, color: "#fff" }}>{formTitle}</div>
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <tbody>
@@ -973,6 +1025,66 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
   </div>;
 }
 
+// ── Inline Split Preview ──────────────────────────────────────────────
+function InlinePreview({ json, showBanner, meta }: { json: SurveyJson; showBanner?: boolean; meta?: Record<string, unknown> }) {
+  const model = useMemo(() => {
+    try {
+      const m = new Model(json);
+      if (json.labelPosition) {
+        m.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
+      }
+      return m;
+    } catch (e) { console.error("Preview model error:", e); return null; }
+  }, [json]);
+
+  if (!model) return <div style={{ padding: 20, color: C.textMuted, fontSize: 12 }}>Preview unavailable — check form configuration</div>;
+  const formTitle = json?.title || "Form Preview";
+
+  return (
+    <div className="fb-preview-panel">
+      <div className="fb-preview-panel-header">
+        <div className="fb-panel-header-text">Live Preview</div>
+        <div style={{ fontSize: 10, color: C.textMuted }}>Updates as you edit</div>
+      </div>
+      <div className="fb-preview-panel-content fb-preview-wrap" style={{
+        backgroundColor: json.backgroundColor || "#FFFFFF",
+        ["--sjs-primary-backcolor" as string]: json.primaryColor || "#5B21B6",
+        ["--sjs-primary-backcolor-light" as string]: json.primaryColor ? `${json.primaryColor}33` : "#7C3AED33",
+        ["--sjs-primary-backcolor-dark" as string]: json.primaryColor || "#3B0764",
+        ["--sjs-general-backcolor" as string]: json.backgroundColor || "#FFFFFF",
+        ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
+        ["--sjs-general-forecolor" as string]: json.textColor || "#1E1B4B",
+        ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1E1B4B",
+        ["--sjs-font-family" as string]: json.fontFamily ? `'${json.fontFamily}',sans-serif` : "'DM Sans',sans-serif",
+        ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
+        ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
+        ["--sjs-questionpanel-cornerRadius" as string]: json.borderRadius || "8px",
+        ["--sjs-editorpanel-cornerRadius" as string]: json.borderRadius || "8px",
+        ["--sjs-error-backcolor" as string]: json.errorColor ? `${json.errorColor}1A` : "#FEE2E2",
+        ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
+      } as React.CSSProperties}>
+        {showBanner && (
+          <div style={{ marginBottom: 16, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.border}` }}>
+            <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "12px 16px" }}>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{(meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001"}</div>
+              <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 15, color: "#fff" }}>{formTitle}</div>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <tbody>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td style={{ width: 120, borderRight: `1px solid ${C.border}`, background: C.offWhite, padding: "8px 12px", fontWeight: 600, fontSize: 10, color: C.textSecond, textTransform: "uppercase", letterSpacing: ".04em", verticalAlign: "middle" }}><span style={{ fontSize: 16, color: '#6264A7' }}>📋</span></td>
+                  <td style={{ padding: "10px 12px", fontWeight: 700, fontSize: 12, color: C.textPrimary }}>PMW INTERNATIONAL BERHAD</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Survey model={model} />
+      </div>
+    </div>
+  );
+}
+
 // ── Root Component ──────────────────────────────────────────────────
 interface FormBuilderProps {
   initialJson?: SurveyJson | null;
@@ -997,6 +1109,7 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
   const [jsonCollapsed, setJsonCollapsed] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [showSplitPreview, setShowSplitPreview] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [commandPaletteSearch, setCommandPaletteSearch] = useState("");
   const [showDataSources, setShowDataSources] = useState(false);
@@ -1247,19 +1360,19 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
       {/* Toolbar */}
       <div className="fb-toolbar">
         <div className="fb-toolbar-left">
-          <button onClick={_onClose} title="Back to Dashboard" className="fb-back-btn">← Home</button>
+          <button onClick={_onClose} title="Back to Dashboard" className="fb-back-btn"><ArrowBackIcon style={{ fontSize: 14 }} /> Home</button>
           <Pill>{fields.length} field{fields.length !== 1 ? "s" : ""}</Pill>
           {undoCount > 0 && (
             <button onClick={handleUndo} className="fb-undo-btn" title={`Undo (${undoCount})`}>
-              ↩ Undo {undoCount > 1 && <span className="fb-count">{undoCount}</span>}
+              <UndoIcon style={{ fontSize: 14 }} /> Undo {undoCount > 1 && <span className="fb-count">{undoCount}</span>}
             </button>
           )}
           {redoCount > 0 && (
             <button onClick={handleRedo} className="fb-redo-btn" title={`Redo (${redoCount})`}>
-              ↪ Redo {redoCount > 1 && <span className="fb-count">{redoCount}</span>}
+              <RedoIcon style={{ fontSize: 14 }} /> Redo {redoCount > 1 && <span className="fb-count">{redoCount}</span>}
             </button>
           )}
-          {errors.length > 0 && <Pill color={C.red} bg={C.redPale}>⚠ {errors.length} error{errors.length !== 1 ? "s" : ""}</Pill>}
+          {errors.length > 0 && <Pill color={C.red} bg={C.redPale}><WarningAmberIcon style={{ fontSize: 12, marginRight: 4 }} /> {errors.length} error{errors.length !== 1 ? "s" : ""}</Pill>}
         </div>
         <div className="fb-toolbar-right">
           {showRestorePrompt && (
@@ -1272,22 +1385,25 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
           <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.offWhite, borderRadius: 6, padding: 2 }}>
             {(["desktop", "tablet", "mobile"] as const).map(d => (
               <button key={d} onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice(d); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }}
-                title={`Preview on ${d}`} style={{ padding: "4px 8px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 4, fontSize: 12, color: C.textMuted }}>{d === "desktop" ? "🖥" : d === "tablet" ? "平板" : "📱"}</button>
+                title={`Preview on ${d}`} style={{ padding: "4px 8px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 4, fontSize: 12, color: C.textMuted }}>
+                {d === "desktop" ? <DesktopWindowsIcon style={{ fontSize: 16 }} /> : d === "tablet" ? <PhoneIphoneIcon style={{ fontSize: 16 }} /> : <PhoneIphoneIcon style={{ fontSize: 16 }} />}
+              </button>
             ))}
           </div>
-          <button onClick={() => setShowI18n(!showI18n)} className={`fb-json-btn ${showI18n ? 'active' : ''}`} style={{ marginRight: 8 }}>🌐 i18n</button>
-          <button onClick={() => setShowFieldTemplates(!showFieldTemplates)} className={`fb-json-btn ${showFieldTemplates ? 'active' : ''}`} style={{ marginRight: 8 }}>📋 Templates</button>
-          <button onClick={() => setShowFieldComments(!showFieldComments)} className={`fb-json-btn ${showFieldComments ? 'active' : ''}`} style={{ marginRight: 8 }}>💬 Comments</button>
-          <button onClick={() => setShowThemeEditor(!showThemeEditor)} className={`fb-json-btn ${showThemeEditor ? 'active' : ''}`} style={{ marginRight: 8 }}>🎨 Theme</button>
-          <button onClick={() => setShowExportWizard(!showExportWizard)} className={`fb-json-btn ${showExportWizard ? 'active' : ''}`} style={{ marginRight: 8 }}>📤 Export</button>
-          <button onClick={() => setShowDataSources(!showDataSources)} className={`fb-json-btn ${showDataSources ? 'active' : ''}`} style={{ marginRight: 8 }}>🔌 Data</button>
-          <button onClick={() => setShowIntegrationPanel(!showIntegrationPanel)} className={`fb-json-btn ${showIntegrationPanel ? 'active' : ''}`} style={{ marginRight: 8 }}>🔗 Integration</button>
-          <button onClick={() => setShowProvisioningPreview(!showProvisioningPreview)} className={`fb-json-btn ${showProvisioningPreview ? 'active' : ''}`} style={{ marginRight: 8 }}>📋 Provision</button>
-          <button onClick={() => setShowSubmissionSettings(!showSubmissionSettings)} className={`fb-json-btn ${showSubmissionSettings ? 'active' : ''}`} style={{ marginRight: 8 }}>📊 Settings</button>
-          <button onClick={() => setShowFieldPermissions(!showFieldPermissions)} className={`fb-json-btn ${showFieldPermissions ? 'active' : ''}`} style={{ marginRight: 8 }}>🔐 Permissions</button>
-          <button onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice("desktop"); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }} className="fb-preview-btn">👁 Live Preview</button>
-          <button onClick={() => setJsonCollapsed(c => !c)} className={`fb-json-btn ${!jsonCollapsed ? 'active' : ''}`}>{"}"} JSON</button>
-          {onPublish && <button onClick={handlePublishClick} className="fb-publish-btn" style={{ background: `linear-gradient(135deg,${C.purple},${C.purpleLight})` }}>🚀 Publish</button>}
+          <button onClick={() => setShowI18n(!showI18n)} className={`fb-json-btn ${showI18n ? 'active' : ''}`} style={{ marginRight: 8 }}><TranslateIcon style={{ fontSize: 14, marginRight: 4 }} /> i18n</button>
+          <button onClick={() => setShowFieldTemplates(!showFieldTemplates)} className={`fb-json-btn ${showFieldTemplates ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Templates</button>
+          <button onClick={() => setShowFieldComments(!showFieldComments)} className={`fb-json-btn ${showFieldComments ? 'active' : ''}`} style={{ marginRight: 8 }}><CommentIcon style={{ fontSize: 14, marginRight: 4 }} /> Comments</button>
+          <button onClick={() => setShowThemeEditor(!showThemeEditor)} className={`fb-json-btn ${showThemeEditor ? 'active' : ''}`} style={{ marginRight: 8 }}><PaletteIcon style={{ fontSize: 14, marginRight: 4 }} /> Theme</button>
+          <button onClick={() => setShowExportWizard(!showExportWizard)} className={`fb-json-btn ${showExportWizard ? 'active' : ''}`} style={{ marginRight: 8 }}><FileDownloadIcon style={{ fontSize: 14, marginRight: 4 }} /> Export</button>
+          <button onClick={() => setShowDataSources(!showDataSources)} className={`fb-json-btn ${showDataSources ? 'active' : ''}`} style={{ marginRight: 8 }}><StorageIcon style={{ fontSize: 14, marginRight: 4 }} /> Data</button>
+          <button onClick={() => setShowIntegrationPanel(!showIntegrationPanel)} className={`fb-json-btn ${showIntegrationPanel ? 'active' : ''}`} style={{ marginRight: 8 }}><HubIcon style={{ fontSize: 14, marginRight: 4 }} /> Integration</button>
+          <button onClick={() => setShowProvisioningPreview(!showProvisioningPreview)} className={`fb-json-btn ${showProvisioningPreview ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Provision</button>
+          <button onClick={() => setShowSubmissionSettings(!showSubmissionSettings)} className={`fb-json-btn ${showSubmissionSettings ? 'active' : ''}`} style={{ marginRight: 8 }}><SettingsIcon style={{ fontSize: 14, marginRight: 4 }} /> Settings</button>
+          <button onClick={() => setShowFieldPermissions(!showFieldPermissions)} className={`fb-json-btn ${showFieldPermissions ? 'active' : ''}`} style={{ marginRight: 8 }}><ShieldIcon style={{ fontSize: 14, marginRight: 4 }} /> Permissions</button>
+          <button onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice("desktop"); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }} className="fb-preview-btn"><PreviewIcon style={{ fontSize: 14, marginRight: 4 }} /> Live Preview</button>
+          <button onClick={() => setShowSplitPreview(v => !v)} className={`fb-preview-btn ${showSplitPreview ? 'active' : ''}`}><PreviewIcon style={{ fontSize: 14, marginRight: 4 }} /> Split Preview</button>
+          <button onClick={() => setJsonCollapsed(c => !c)} className={`fb-json-btn ${!jsonCollapsed ? 'active' : ''}`}><CodeIcon style={{ fontSize: 14, marginRight: 4 }} /> JSON</button>
+          {onPublish && <button onClick={handlePublishClick} className="fb-publish-btn" style={{ background: `linear-gradient(135deg,${C.purple},${C.purpleLight})` }}><RocketLaunchIcon style={{ fontSize: 14, marginRight: 4 }} /> Publish</button>}
         </div>
       </div>
       {/* 3-panel layout */}
@@ -1303,7 +1419,12 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
             <div className="fb-panel-header-text">Form Canvas</div>
             <div className="fb-canvas-panel-hint">Drag to reorder</div>
           </div>
-          <Canvas fields={fields} selectedId={selectedId} onSelect={id => setSelectedId(id)} onRemove={handleRemove} onDuplicate={handleDuplicate} onReorder={handleReorder} onAddFromPalette={addField} errors={errors} />
+          <div className={`fb-canvas-body ${showSplitPreview ? 'split' : ''}`}>
+            <div className="fb-canvas" style={{ flex: 1, overflow: 'auto' }}>
+              <Canvas fields={fields} selectedId={selectedId} onSelect={id => setSelectedId(id)} onRemove={handleRemove} onDuplicate={handleDuplicate} onReorder={handleReorder} onAddFromPalette={addField} errors={errors} />
+            </div>
+            {showSplitPreview && <InlinePreview json={surveyJson} showBanner={showBanner} meta={meta} />}
+          </div>
         </div>
         <div className="fb-property-panel-side">
           <div className="fb-panel-header">
@@ -1321,7 +1442,7 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 480, maxWidth: "90vw", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke={C.textMuted} strokeWidth="1.5"/><path d="M10.5 10.5L14 14" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
-              <input autoFocus value={commandPaletteSearch} onChange={(e) => setCommandPaletteSearch(e.target.value)} placeholder="Search field types..." style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "'DM Sans'", color: C.textPrimary }} />
+              <input autoFocus value={commandPaletteSearch} onChange={(e) => setCommandPaletteSearch(e.target.value)} placeholder="Search field types..." style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", color: C.textPrimary }} />
               <span style={{ fontSize: 10, color: C.textMuted, background: C.offWhite, padding: "2px 6px", borderRadius: 4 }}>ESC to close</span>
             </div>
 <div style={{ maxHeight: 320, overflowY: "auto", padding: "8px 0" }}>

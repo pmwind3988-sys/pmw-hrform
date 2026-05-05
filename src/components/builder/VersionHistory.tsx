@@ -57,7 +57,7 @@ export default function VersionHistory({ history, current, onView }: VersionHist
               borderRadius: 6,
               padding: "3px 10px",
               cursor: "pointer",
-              fontFamily: "'DM Sans'",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             }}
           >
             {v.FormVersion === current ? "Active" : "View"}

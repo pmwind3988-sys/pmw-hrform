@@ -17,14 +17,14 @@ const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // Theme
 const C = {
-  purple: "#5B21B6",
-  purpleLight: "#7C3AED",
-  purplePale: "#EDE9FE",
-  purpleMid: "#DDD6FE",
-  bg: "#F8F7FF",
+  purple: "#0078D4",
+  purpleLight: "#106EBE",
+  purplePale: "#E6F2FB",
+  purpleMid: "#B4D5F0",
+  bg: "#F9FAFB",
   cardBg: "#FFFFFF",
-  border: "#E5E3F0",
-  textPrimary: "#1E1B4B",
+  border: "#E5E7EB",
+  textPrimary: "#111827",
   textSecond: "#6B7280",
   textMuted: "#9CA3AF",
   green: "#059669",

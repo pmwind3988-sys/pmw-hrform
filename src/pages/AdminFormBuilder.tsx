@@ -45,11 +45,10 @@ import {
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const G = `@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
-*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;background:${C.offWhite};color:${C.textPrimary}}
+const G = `*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:${C.offWhite};color:${C.textPrimary}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:${C.purpleMid};border-radius:10px}`;
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:10px}`;
 const inp = {
   width: "100%",
   height: 34,
@@ -57,7 +56,7 @@ const inp = {
   borderRadius: 8,
   padding: "0 11px",
   fontSize: 13,
-  fontFamily: "'DM Sans',sans-serif",
+  fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
   color: C.textPrimary,
   background: C.white,
   outline: "none",
@@ -68,7 +67,7 @@ const Spinner = ({ size = 18 }: { size?: number }) => (
   <div style={{
     width: size,
     height: size,
-    border: `2px solid ${C.purpleMid}`,
+    border: `2px solid #D1D5DB`,
     borderTop: `2px solid ${C.purple}`,
     borderRadius: "50%",
     animation: "spin 0.9s linear infinite",
@@ -126,7 +125,7 @@ function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange
         onClick={() => onChange(!checked)}
         style={{
           width: 36, height: 20, borderRadius: 10, flexShrink: 0,
-          background: checked ? C.purple : C.border, position: "relative",
+          background: checked ? C.purple : "#D1D5DB", position: "relative",
           transition: "background 0.2s", cursor: "pointer",
         }}
       >
@@ -639,14 +638,14 @@ export default function AdminFormBuilder() {
               cursor: "pointer",
               fontSize: 12,
               color: C.textSecond,
-              fontFamily: "'DM Sans'",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             }}
           >
             ← Dashboard
           </button>
           <div style={{ width: 1, height: 17, background: C.border }} />
           <span style={{ fontSize: 18, color: '#6264A7' }}>📋</span>
-          <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 16, color: C.textPrimary }}>
+          <span style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, color: C.textPrimary }}>
             {isEditing ? `Editing: ${meta.formTitle}` : "New Form"}
           </span>
           <Tag color={C.amber} bg={C.amberPale}>⚙ Admin</Tag>
@@ -682,7 +681,7 @@ export default function AdminFormBuilder() {
               color: libraryOpen ? C.purple : C.textSecond,
               fontSize: 12,
               cursor: "pointer",
-              fontFamily: "'DM Sans'",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             }}
           >
             📂 Forms
@@ -698,7 +697,7 @@ export default function AdminFormBuilder() {
               color: sidebarOpen ? C.purple : C.textSecond,
               fontSize: 12,
               cursor: "pointer",
-              fontFamily: "'DM Sans'",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             }}
           >
             ⚙ Settings
@@ -715,7 +714,7 @@ export default function AdminFormBuilder() {
               fontSize: 12,
               fontWeight: 600,
               cursor: "pointer",
-              fontFamily: "'DM Sans'",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
               boxShadow: "0 2px 8px rgba(91,33,182,.25)",
             }}
           >
@@ -729,7 +728,7 @@ export default function AdminFormBuilder() {
           <span>👁 Viewing archived <strong>v{viewingOld.version}</strong> — read only</span>
           <button
             onClick={() => setViewingOld(null)}
-            style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontFamily: "'DM Sans'" }}
+            style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}
           >
             ✕ Back to current
           </button>
@@ -776,7 +775,7 @@ export default function AdminFormBuilder() {
                     fontSize: 11,
                     fontWeight: sidebarTab === t.id ? 600 : 400,
                     cursor: "pointer",
-                    fontFamily: "'DM Sans'",
+                    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                     borderBottom: sidebarTab === t.id ? `2px solid ${C.purple}` : "2px solid transparent",
                     display: "flex",
                     alignItems: "center",
@@ -819,7 +818,7 @@ export default function AdminFormBuilder() {
                               color: newVersionMode === m ? C.purple : C.textSecond,
                               fontSize: 12,
                               cursor: "pointer",
-                              fontFamily: "'DM Sans'",
+                              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                               fontWeight: newVersionMode === m ? 600 : 400,
                             }}
                           >
@@ -897,7 +896,7 @@ export default function AdminFormBuilder() {
                             border: `1.5px solid ${isPublic === opt.v ? C.purple : C.border}`,
                             background: isPublic === opt.v ? C.purplePale : C.white,
                             color: isPublic === opt.v ? C.purple : C.textSecond,
-                            fontFamily: "'DM Sans'",
+                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                             transition: "all .13s",
                           }}
                         >
@@ -1073,7 +1072,7 @@ export default function AdminFormBuilder() {
                               borderRadius: 6,
                               padding: "3px 10px",
                               cursor: "pointer",
-                              fontFamily: "'DM Sans'",
+                              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                               marginTop: 4,
                             }}
                           >
@@ -1094,7 +1093,7 @@ export default function AdminFormBuilder() {
                           color: C.purple,
                           fontSize: 11,
                           cursor: "pointer",
-                          fontFamily: "'DM Sans'",
+                          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                           marginTop: 4,
                         }}
                       >
@@ -1124,7 +1123,7 @@ export default function AdminFormBuilder() {
                           color: numLayers === n ? C.purple : C.textSecond,
                           fontSize: 16,
                           fontWeight: 700,
-                          fontFamily: "'DM Sans'",
+                          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                           transition: "all .15s",
                         }}
                       >
@@ -1234,7 +1233,7 @@ export default function AdminFormBuilder() {
                       fontSize: 13,
                       fontWeight: 600,
                       cursor: !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
-                      fontFamily: "'DM Sans'",
+                      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                     }}
                   >
                     {viewingOld ? "⚠ Close version preview to publish" : "🚀 Publish to SharePoint"}
@@ -1288,7 +1287,7 @@ export default function AdminFormBuilder() {
                   color: C.textSecond,
                   fontSize: 13,
                   cursor: deleting ? "not-allowed" : "pointer",
-                  fontFamily: "'DM Sans'",
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                   opacity: deleting ? 0.6 : 1,
                 }}
               >
@@ -1307,7 +1306,7 @@ export default function AdminFormBuilder() {
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: deleting ? "not-allowed" : "pointer",
-                  fontFamily: "'DM Sans'",
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                   opacity: deleting ? 0.6 : 1,
                   display: "flex",
                   alignItems: "center",

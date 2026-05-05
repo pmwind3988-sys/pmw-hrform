@@ -31,6 +31,7 @@ checking → (isAuthenticated?) → loading → (tenant check) → ready / wrong
 ```
 States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` | `error`
 - Auth decision persisted in `localStorage` (`pmw_hr_auth_decision`)
+- Post-login redirect stored in `sessionStorage` (`pmw_post_login_redirect`), read after MSAL callback to restore the intended route
 - Admin detection via SharePoint group `_HR_ Forms Owners`
 - Tenant validation via `VITE_AZURE_TENANT_ID` env var
 
@@ -41,14 +42,16 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - `"/admin/approvals"` → `ApprovalDashboard` (approval workflow)
 - `"/admin/responses/:formTitle"` → `ResponseViewer` (submission responses)
 - `"*"` → Dashboard with `Header`, `StatsRow`, `ListSummaryCards`, `Toolbar`, `SubmissionRow`
+- `HomePage.tsx` — Landing page for unauthenticated users (MSAL sign-in / guest choice)
 - Header "Form Builder" button navigates to `/admin/builder` (not a modal)
 - The old `<Dialog>` FormBuilder in the `*` route is dead code — nothing sets `builderOpen=true` anymore
 
 ## API Routes (Vercel-style serverless)
 - `api/form-config.ts` — Public form config fetcher (used by unauthenticated users)
 - `api/submit-form.ts` — Public form submission handler (guest submissions)
-- `api/_utils/sharepoint.ts` — Server-side SP REST helpers (MS Graph token via client credentials)
-- **Import paths**: API routes import from `./_utils/sharepoint.ts` (NOT `../_utils/sharepoint.js`)
+- `api/_utils/graphClient.ts` — **Active** server-side client; uses Microsoft Graph API (`graph.microsoft.com/v1.0`) with client-credentials token (`https://graph.microsoft.com/.default`). Exports: `getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`
+- `api/_utils/sharepoint.ts` — **Dead code** — exists but is not imported by any API route
+- **Import paths**: API routes import from `./_utils/graphClient.ts`
 
 ## SharePoint Integration
 - **odata format**: `odata=nometadata` — responses use `data.value` not `data.d.results`
@@ -163,11 +166,12 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - `src/auth/AuthProvider.tsx` — `MsalProvider` wrapper
 - `src/auth/msalConfig.ts` — MSAL configuration with dynamic `AllSites.Manage` SP scope
 - `src/types/index.ts` — Shared types: `PageState`, `Submission`, `ApprovalLayer`, `ListMetaEntry`, `DiscoveredList`, `LoadedConfig`, `SharePointClient`, **`FormConfig`, `SurveyJson`, `FormVersionData`**
-- `src/utils/sharepointClient.ts` — SP REST client (CRUD, digest cache, `isGroupMember`, list discovery, `resolveUserEmails`)
+- `src/utils/sharepointClient.ts` — SP REST client (CRUD, digest cache, `isGroupMember`, list discovery, `resolveUserEmails`, `queryListByEmail`, `queryListByGuid`, `getSiteUsers`)
 - `src/utils/spConfig.ts` — Config loader (`loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`)
 - `src/utils/authDecision.ts` — `localStorage` auth persistence helpers (`pmw_hr_auth_decision`)
-- `src/utils/formBuilderSP.ts` — **Standalone** SP REST for form builder (uses raw `token: string`, NOT `createSpClient`)
+- `src/utils/formBuilderSP.ts` — **Standalone** SP REST for form builder (uses raw `token: string`, NOT `createSpClient`). Exports: `getFormConfig`, `saveFormConfig`, `getAllFormConfigs`, `saveFormVersion`, `getFormVersionHistory`, `getFormSubmissions`, `submitFormResponse`, `getSharePointChoices`, `provisionResponseList`, `bootstrapSystemLists`, `upsertApprovers`, `deleteForm`, `sendSpEmail`, `logEvent`
 - `src/utils/FormBuilderEngine.ts` — Pure data logic for form building (validate, versioning, approval layers)
+- `api/_utils/graphClient.ts` — Microsoft Graph API client for serverless functions (`getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`)
 
 ## Anti-Patterns (This Project)
 - **NO `useMemo`/`useCallback`** — React 19 makes these unnecessary; remove when touching code
@@ -187,7 +191,6 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - **`.env.local`** at app root contains Azure AD credentials (`VITE_AZURE_*`) and SP URL (`VITE_SP_SITE_URL`). **Never commit or expose these values.**
   - `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_AZURE_AUTHORITY`, `VITE_SP_SITE_URL`
   - `VITE_AZURE_TENANT_ID` is used for tenant validation in auth flow
-- **`"use client"` directive**: some files use this (Next.js convention) — this is a Vite app, not Next.js. Safe to ignore.
 - **Verifying changes**: Run `npm run build` before claiming work is done. `npm run lint` has many pre-existing warnings—check only your changed files with `lsp_diagnostics`.
 
 ## Notes

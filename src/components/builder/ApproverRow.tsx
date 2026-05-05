@@ -3,6 +3,7 @@
  */
 import { useState, useEffect, useMemo, useRef } from "react";
 import { C } from "./constants";
+import CheckIcon from "@mui/icons-material/Check";
 
 interface ApproverRowProps {
   index: number;
@@ -18,7 +19,7 @@ const inp = {
   borderRadius: 8,
   padding: "0 11px",
   fontSize: 13,
-  fontFamily: "'DM Sans',sans-serif",
+  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   color: C.textPrimary,
   background: C.white,
   outline: "none",
@@ -58,7 +59,7 @@ export default function ApproverRow({ index, layer, onChange, siteUsers }: Appro
         alignItems: "center",
         justifyContent: "center",
       }}>
-        {layer.email ? "✓" : `L${index + 1}`}
+        {layer.email ? <CheckIcon style={{ fontSize: 14 }} /> : `L${index + 1}`}
       </div>
       <div ref={ref} style={{ flex: 2, position: "relative" }}>
         <input

@@ -1,8 +1,5 @@
 /* FormBuilder.css - Extracted inline styles */
 
-/* Import fonts */
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
-
 /* Reset & base */
 * { box-sizing: border-box; }
 
@@ -26,7 +23,7 @@
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-thumb {
-  background: #DDD6FE;
+  background: #D1D5DB;
   border-radius: 10px;
 }
 
@@ -60,7 +57,7 @@
   font-size: 13px;
   transition: background 0.1s;
 }
-.fb-icon-btn:hover { background: #EDE9FE; }
+.fb-icon-btn:hover { background: #F3F4F6; }
 .fb-icon-btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
@@ -103,51 +100,51 @@
 .fb-input {
   width: 100%;
   height: 34px;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 7px;
   padding: 0 10px;
   font-size: 12px;
-  font-family: 'DM Sans', sans-serif;
-  color: #1E1B4B;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #111827;
   background: #ffffff;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .fb-input:focus {
-  border-color: #5B21B6;
-  box-shadow: 0 0 0 3px #EDE9FE;
+  border-color: #0078D4;
+  box-shadow: 0 0 0 3px #E6F2FB;
 }
 .fb-input::placeholder { color: #9CA3AF; }
 
 /* Textarea */
 .fb-textarea {
   width: 100%;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 7px;
   padding: 8px 10px;
   font-size: 12px;
-  font-family: 'DM Sans', sans-serif;
-  color: #1E1B4B;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #111827;
   background: #ffffff;
   outline: none;
   resize: vertical;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .fb-textarea:focus {
-  border-color: #5B21B6;
-  box-shadow: 0 0 0 3px #EDE9FE;
+  border-color: #0078D4;
+  box-shadow: 0 0 0 3px #E6F2FB;
 }
 
 /* Select */
 .fb-select {
   width: 100%;
   height: 34px;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 7px;
   padding: 0 10px;
   font-size: 12px;
-  font-family: 'DM Sans', sans-serif;
-  color: #1E1B4B;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #111827;
   background: #ffffff;
   outline: none;
   cursor: pointer;
@@ -193,26 +190,26 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 /* Current condition display */
 .fb-current-condition {
   font-size: 10px;
-  color: #5B21B6;
+  color: #0078D4;
   margin-top: 4px;
   font-family: monospace;
-  background: #EDE9FE;
+  background: #E6F2FB;
   padding: 6px 8px;
   border-radius: 4px;
 }
 
 /* Validation editor */
 .fb-validation-row {
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
   padding: 10px;
-  background: #F8F7FF;
+  background: #F9FAFB;
   position: relative;
 }
 .fb-validation-header {
@@ -251,14 +248,14 @@
 .fb-palette-search-input {
   width: 100%;
   height: 30px;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 7px;
   padding-left: 28px;
   padding-right: 10px;
   font-size: 11px;
-  font-family: 'DM Sans', sans-serif;
-  color: #1E1B4B;
-  background: #F8F7FF;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #111827;
+  background: #F9FAFB;
   outline: none;
 }
 .fb-palette-groups {
@@ -274,7 +271,7 @@
   font-size: 10px;
   font-weight: 600;
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   transition: all 0.15s;
 }
 .fb-palette-list {
@@ -291,18 +288,18 @@
   gap: 9px;
   padding: 8px 10px;
   border-radius: 9px;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   background: #ffffff;
   cursor: grab;
   user-select: none;
   transition: all 0.13s;
 }
 .fb-palette-item:hover {
-  border-color: #DDD6FE;
-  background: #EDE9FE;
+  border-color: #B4D5F0;
+  background: #E6F2FB;
   transform: translateX(2px);
 }
-.fb-palette-item:hover .fb-palette-item-icon { color: #5B21B6; }
+.fb-palette-item:hover .fb-palette-item-icon { color: #0078D4; }
 .fb-palette-item-icon {
   font-size: 16px;
   flex-shrink: 0;
@@ -315,7 +312,7 @@
 .fb-palette-item-title {
   font-size: 12px;
   font-weight: 600;
-  color: #1E1B4B;
+  color: #111827;
   margin-bottom: 1px;
 }
 .fb-palette-item-desc {
@@ -338,7 +335,7 @@
 }
 .fb-palette-footer {
   padding: 8px 12px;
-  border-top: 1px solid #E5E3F0;
+  border-top: 1px solid #E5E7EB;
   font-size: 10px;
   color: #9CA3AF;
   text-align: center;
@@ -346,7 +343,7 @@
 
 /* Field card */
 .fb-field-card {
-  border-radius: 11px;
+  border-radius: 10px;
   padding: 12px 14px;
   cursor: pointer;
   user-select: none;
@@ -355,14 +352,14 @@
   animation: fadeUp 0.18s ease;
 }
 .fb-field-card.selected {
-  background: #EDE9FE;
-  border: 1.5px solid #5B21B6;
-  box-shadow: 0 4px 24px rgba(91,33,182,0.12);
+  background: #E6F2FB;
+  border: 1.5px solid #0078D4;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
 .fb-field-card.default {
   background: #ffffff;
-  border: 1.5px solid #E5E3F0;
-  box-shadow: 0 1px 3px rgba(91,33,182,0.08), 0 4px 16px rgba(91,33,182,0.06);
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 .fb-field-card.error {
   border-color: #DC2626;
@@ -395,7 +392,7 @@
 .fb-field-title-text {
   font-size: 13px;
   font-weight: 600;
-  color: #1E1B4B;
+  color: #111827;
 }
 .fb-field-meta {
   display: flex;
@@ -444,10 +441,10 @@
   min-height: 300px;
   color: #9CA3AF;
   text-align: center;
-  border: 2px dashed #E5E3F0;
+  border: 2px dashed #E5E7EB;
   border-radius: 14px;
   padding: 32px;
-  background: #F8F7FF;
+  background: #F9FAFB;
 }
 .fb-canvas-empty-icon {
   font-size: 40px;
@@ -456,7 +453,7 @@
 .fb-canvas-empty-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1E1B4B;
+  color: #111827;
   margin-bottom: 6px;
 }
 .fb-canvas-empty-text {
@@ -465,7 +462,7 @@
 }
 .fb-canvas-drop-indicator {
   height: 3px;
-  background: #5B21B6;
+  background: #0078D4;
   border-radius: 3px;
   margin-bottom: 4px;
   animation: pulse 1s infinite;
@@ -490,13 +487,13 @@
 .fb-add-choice-btn {
   width: 100%;
   height: 28px;
-  border: 1px dashed #E5E3F0;
+  border: 1px dashed #E5E7EB;
   border-radius: 7px;
   background: none;
-  color: #5B21B6;
+  color: #0078D4;
   font-size: 11px;
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -512,8 +509,8 @@
 }
 .fb-property-header {
   padding: 12px 14px;
-  border-bottom: 1px solid #E5E3F0;
-  background: #EDE9FE;
+  border-bottom: 1px solid #E5E7EB;
+  background: #E6F2FB;
 }
 .fb-property-header-title {
   display: flex;
@@ -527,7 +524,7 @@
 .fb-property-header-title-text {
   font-size: 13px;
   font-weight: 700;
-  color: #5B21B6;
+  color: #0078D4;
 }
 .fb-property-header-subtitle {
   font-size: 10px;
@@ -536,17 +533,17 @@
 }
 .fb-property-tabs {
   padding: 8px 14px;
-  border-bottom: 1px solid #E5E3F0;
+  border-bottom: 1px solid #E5E7EB;
 }
 .fb-property-tabs-select {
   width: 100%;
   height: 32px;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 6px;
   padding: 0 8px;
   font-size: 12px;
-  font-family: 'DM Sans', sans-serif;
-  color: #1E1B4B;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #111827;
   background: #ffffff;
   cursor: pointer;
 }
@@ -567,7 +564,7 @@
   font-size: 12px;
 }
 .fb-property-divider {
-  border-top: 1px solid #E5E3F0;
+  border-top: 1px solid #E5E7EB;
   padding-top: 12px;
   margin-top: 4px;
 }
@@ -612,8 +609,8 @@
 
 /* JSON Preview */
 .fb-json-preview {
-  border-top: 1px solid #E5E3F0;
-  background: #3B0764;
+  border-top: 1px solid #E5E7EB;
+  background: #1F2937;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -638,7 +635,7 @@
 .fb-json-header-label {
   font-size: 10px;
   font-weight: 700;
-  color: #DDD6FE;
+  color: #9CA3AF;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -658,7 +655,7 @@
   border-radius: 6px;
   padding: 3px 10px;
   cursor: pointer;
-  font-family: 'DM Sans';
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 .fb-json-copy-btn.copied { color: #6EE7B7; }
 .fb-json-toggle-icon {
@@ -680,7 +677,7 @@
   position: fixed;
   inset: 0;
   z-index: 3000;
-  background: rgba(30,27,75,0.6);
+  background: rgba(17,24,39,0.6);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: flex-start;
@@ -693,8 +690,8 @@
   border-radius: 16px;
   width: 100%;
   max-width: 760px;
-  box-shadow: 0 20px 60px rgba(91,33,182,0.25);
-  border: 1px solid #E5E3F0;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  border: 1px solid #E5E7EB;
   animation: fadeUp 0.2s ease;
   overflow: hidden;
 }
@@ -718,7 +715,7 @@
   justify-content: center;
 }
 .fb-preview-banner {
-  border-bottom: 1px solid #E5E3F0;
+  border-bottom: 1px solid #E5E7EB;
 }
 .fb-preview-banner-header {
   padding: 16px 22px;
@@ -731,7 +728,7 @@
   margin-bottom: 3px;
 }
 .fb-preview-banner-title {
-  font-family: 'DM Serif Display', serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 17px;
   color: #fff;
 }
@@ -740,12 +737,12 @@
   border-collapse: collapse;
 }
 .fb-preview-banner-row {
-  border-bottom: 1px solid #E5E3F0;
+  border-bottom: 1px solid #E5E7EB;
 }
 .fb-preview-banner-cell-label {
   width: 140px;
-  border-right: 1px solid #E5E3F0;
-  background: #F8F7FF;
+  border-right: 1px solid #E5E7EB;
+  background: #F9FAFB;
   padding: 9px 14px;
   font-weight: 600;
   font-size: 10px;
@@ -758,7 +755,7 @@
   padding: 12px 16px;
   font-weight: 700;
   font-size: 13px;
-  color: #1E1B4B;
+  color: #111827;
 }
 .fb-preview-modal-content {
   padding: 20px 24px;
@@ -767,27 +764,27 @@
 }
 .fb-preview-modal-footer {
   padding: 10px 20px;
-  border-top: 1px solid #E5E3F0;
+  border-top: 1px solid #E5E7EB;
   font-size: 11px;
   color: #9CA3AF;
   text-align: center;
-  background: #F8F7FF;
+  background: #F9FAFB;
 }
 
 /* Root layout */
 .fb-root {
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   display: flex;
   flex-direction: column;
-  background: #F8F7FF;
+  background: #F9FAFB;
   overflow: hidden;
 }
 
 /* Toolbar */
 .fb-toolbar {
-  height: 46px;
+  height: 44px;
   background: #ffffff;
-  border-bottom: 1px solid #E5E3F0;
+  border-bottom: 1px solid #E5E7EB;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -810,63 +807,63 @@
   align-items: center;
   gap: 4px;
   height: 30px;
-  border: 1px solid #DDD6FE;
+  border: 1px solid #E5E7EB;
   border-radius: 7px;
   background: #ffffff;
-  color: #5B21B6;
+  color: #6B7280;
   font-size: 12px;
   cursor: pointer;
   padding: 0 12px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 .fb-back-btn:hover {
-  background: #EDE9FE;
+  background: #F3F4F6;
 }
 .fb-preview-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 30px;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 7px;
   background: #ffffff;
   color: #6B7280;
   font-size: 12px;
   cursor: pointer;
   padding: 0 12px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 .fb-preview-btn:hover {
-  background: #F8F7FF;
-  border-color: #5B21B6;
-  color: #5B21B6;
+  background: #F9FAFB;
+  border-color: #0078D4;
+  color: #0078D4;
 }
 .fb-preview-btn.active {
-  background: #EDE9FE;
-  border-color: #5B21B6;
-  color: #5B21B6;
+  background: #E6F2FB;
+  border-color: #0078D4;
+  color: #0078D4;
 }
 .fb-json-btn {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 30px;
-  border: 1px solid #E5E3F0;
+  border: 1px solid #E5E7EB;
   border-radius: 7px;
   background: #ffffff;
   color: #6B7280;
   font-size: 12px;
   cursor: pointer;
   padding: 0 12px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 .fb-json-btn:hover {
-  background: #F8F7FF;
+  background: #F9FAFB;
 }
 .fb-json-btn.active {
-  background: #EDE9FE;
-  border-color: #5B21B6;
-  color: #5B21B6;
+  background: #E6F2FB;
+  border-color: #0078D4;
+  color: #0078D4;
 }
 .fb-publish-btn {
   display: flex;
@@ -880,11 +877,11 @@
   font-weight: 600;
   cursor: pointer;
   padding: 0 16px;
-  font-family: 'DM Sans', sans-serif;
-  box-shadow: 0 2px 8px rgba(91,33,182,0.25);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  box-shadow: 0 2px 8px rgba(0,120,212,0.25);
 }
 .fb-publish-btn:hover {
-  box-shadow: 0 4px 12px rgba(91,33,182,0.35);
+  box-shadow: 0 4px 12px rgba(0,120,212,0.35);
 }
 
 /* 3-panel layout */
@@ -897,7 +894,7 @@
 
 /* Palette panel */
 .fb-palette-panel {
-  border-right: 1px solid #E5E3F0;
+  border-right: 1px solid #E5E7EB;
   background: #ffffff;
   overflow: hidden;
   display: flex;
@@ -905,7 +902,7 @@
 }
 .fb-panel-header {
   padding: 10px 12px 6px;
-  border-bottom: 1px solid #E5E3F0;
+  border-bottom: 1px solid #E5E7EB;
 }
 .fb-panel-header-text {
   font-size: 10px;
@@ -917,14 +914,14 @@
 
 /* Canvas panel */
 .fb-canvas-panel {
-  background: #F8F7FF;
+  background: #F9FAFB;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 .fb-canvas-panel-header {
   padding: 8px 14px 6px;
-  border-bottom: 1px solid #E5E3F0;
+  border-bottom: 1px solid #E5E7EB;
   background: #ffffff;
   display: flex;
   align-items: center;
@@ -934,10 +931,45 @@
   font-size: 10px;
   color: #9CA3AF;
 }
+.fb-canvas-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.fb-canvas-body.split {
+  flex-direction: row;
+}
+.fb-canvas-body.split > .fb-canvas {
+  flex: 1;
+  overflow: auto;
+}
+.fb-preview-panel {
+  flex: 1;
+  border-left: 1px solid #E5E7EB;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+.fb-preview-panel-header {
+  padding: 8px 14px 6px;
+  border-bottom: 1px solid #E5E7EB;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fb-preview-panel-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
 
 /* Property panel */
 .fb-property-panel-side {
-  border-left: 1px solid #E5E3F0;
+  border-left: 1px solid #E5E7EB;
   background: #ffffff;
   overflow: hidden;
   display: flex;
@@ -947,8 +979,8 @@
 /* Undo/Redo buttons */
 .fb-undo-btn,
 .fb-redo-btn {
-  background: #F8F7FF;
-  border: 1px solid #E5E3F0;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
   border-radius: 6px;
   padding: 4px 10px;
   font-size: 11px;
@@ -959,13 +991,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 .fb-undo-btn:hover,
 .fb-redo-btn:hover {
-  background: #EDE9FE;
-  color: #5B21B6;
-  border-color: #5B21B6;
+  background: #E6F2FB;
+  color: #0078D4;
+  border-color: #0078D4;
 }
 .fb-undo-btn:disabled,
 .fb-redo-btn:disabled {
@@ -974,12 +1006,12 @@
 }
 .fb-undo-btn:disabled:hover,
 .fb-redo-btn:disabled:hover {
-  background: #F8F7FF;
+  background: #F9FAFB;
   color: #6B7280;
-  border-color: #E5E3F0;
+  border-color: #E5E7EB;
 }
 .fb-count {
-  background: #5B21B6;
+  background: #0078D4;
   color: white;
   border-radius: 10px;
   padding: 1px 5px;
