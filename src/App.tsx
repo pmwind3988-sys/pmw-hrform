@@ -391,9 +391,13 @@ if (decision === "guest") {
 
   const hasFilters = !!(search || listFilter || statusFilter !== "all" || submitterFilter);
 
+  const currentPath = window.location.pathname;
+  const isFormRoute = currentPath.startsWith("/form/");
+  const isAdminRoute = currentPath.startsWith("/admin/");
+
   // ---- Render ----
 
-  if (pageState === "checking" || (pageState === "loading" && loading)) {
+  if (pageState === "checking" || (pageState === "loading" && loading && !isFormRoute && !isAdminRoute)) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -402,8 +406,6 @@ if (decision === "guest") {
     );
   }
 
-  const currentPath = window.location.pathname;
-  const isFormRoute = currentPath.startsWith("/form/");
   const showAuthGate = !isAuthenticated && !isFormRoute;
 
   if (showAuthGate && pageState === "choice") {
@@ -450,7 +452,7 @@ if (decision === "guest") {
         <Route
           path="/form/:formId"
           element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#FAFBFC" }}>
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
               <DynamicFormPage />
             </Box>
           }
@@ -458,7 +460,7 @@ if (decision === "guest") {
         <Route
           path="/admin/approvals"
           element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#FAFBFC" }}>
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
               <ApprovalDashboard />
             </Box>
           }
@@ -466,7 +468,7 @@ if (decision === "guest") {
         <Route
           path="/admin/responses/:formTitle"
           element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#FAFBFC" }}>
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
               <ResponseViewer />
             </Box>
           }
@@ -490,7 +492,7 @@ if (decision === "guest") {
         <Route
           path="*"
           element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#FAFBFC" }}>
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
               <Header
                 userEmail={userEmail}
                 isAdmin={isAdmin}
@@ -499,19 +501,19 @@ if (decision === "guest") {
                 onOpenBuilder={() => navigate("/admin/builder")}
               />
 
-              <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 3 }}>
+              <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 4 }}>
                 {missingConfigs.length > 0 && (
-                  <Box sx={{ mb: 3 }}>
+                  <Box sx={{ mb: 4 }}>
                     <ConfigWarningBanner missingLists={missingConfigs} />
                   </Box>
                 )}
 
-                <Box sx={{ mb: 3 }}>
+                <Box sx={{ mb: 4 }}>
                   <StatsRow submissions={submissions} />
                 </Box>
 
                 {visibleLists.length > 0 && (
-                  <Box sx={{ mb: 3 }}>
+                  <Box sx={{ mb: 4 }}>
                     <ListSummaryCards
                       submissions={submissions}
                       visibleLists={visibleLists}
@@ -522,7 +524,7 @@ if (decision === "guest") {
                   </Box>
                 )}
 
-                <Box sx={{ mb: 3 }}>
+                <Box sx={{ mb: 4 }}>
                   <Toolbar
                     search={search}
                     setSearch={setSearch}
@@ -570,7 +572,7 @@ if (decision === "guest") {
                 fullScreen
                 slotProps={{
                   paper: {
-                    sx: { backgroundColor: "#FAFBFC" },
+                    sx: { backgroundColor: "#F8F9FC" },
                   },
                 }}
               >

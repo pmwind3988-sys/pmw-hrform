@@ -94,13 +94,13 @@ export async function loadConfig(
 
   try {
     const configItems = await spClient.queryList("Master Form", {
-      select: "Title,FormId,FormVersion,TotalLayers",
+      select: ["Title", "FormID", "CurrentVersion", "NumberOfApprovalLayer"],
     });
 
     for (const item of configItems) {
       const title = String(item.Title || "");
-      const formId = String(item.FormId || "");
-      const totalLayers = Number(item.TotalLayers) || 1;
+      const formId = String(item.FormID || "");
+      const totalLayers = Number(item.NumberOfApprovalLayer) || 1;
 
       if (!title) continue;
 

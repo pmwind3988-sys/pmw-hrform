@@ -134,8 +134,6 @@ export default function DynamicFormPage() {
 
   useEffect(() => {
     if (!formId) { setError("No form slug provided."); setLoading(false); return; }
-    // Wait for MSAL to finish any redirect handling before loading
-    if (inProgress !== InteractionStatus.None) return;
 
     const load = async () => {
       try {
@@ -155,34 +153,61 @@ export default function DynamicFormPage() {
 
         if (token) {
           // Authenticated path — load directly from SharePoint
-          let versionData: unknown;
+          let cfgRaw: Record<string, unknown>;
+          let ver: { surveyJson: unknown; meta: unknown } | null;
           if (pinVersion) {
-            const cfgRaw = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } }).then(r => r.json()).then(d => d.value?.[0]);
+            const cfgRes = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
+            if (!cfgRes.ok) throw new Error(`Failed to load form config: ${cfgRes.status} ${cfgRes.statusText}`);
+            cfgRaw = (await cfgRes.json()).value?.[0];
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
-            const ver = await getFormVersion(token, cfgRaw.Title, pinVersion);
+            ver = await getFormVersion(token, cfgRaw.Title as string, pinVersion);
             if (!ver) throw new Error(`Version ${pinVersion} not found.`);
-            versionData = { ...cfgRaw, versionData: ver };
           } else {
-            versionData = await getLatestFormBySlug(token, formId);
-            if (!versionData) throw new Error(`Form "${formId}" not found.`);
+            const latest = await getLatestFormBySlug(token, formId);
+            if (!latest) throw new Error(`Form "${formId}" not found.`);
+            cfgRaw = latest.formConfig as unknown as Record<string, unknown>;
+            ver = { surveyJson: latest.surveyJson, meta: latest.meta };
           }
-          const vd = versionData as Record<string, unknown>;
-          setFormData({ formConfig: vd, surveyJson: (vd.versionData as Record<string, unknown>)?.surveyJson as Record<string, unknown> || (vd.versionData as Record<string, unknown>), meta: ((vd.versionData as Record<string, unknown>)?.meta as Record<string, unknown>) || {} });
+          setFormData({
+            formConfig: cfgRaw,
+            surveyJson: (ver?.surveyJson || null) as Record<string, unknown>,
+            meta: (ver?.meta || {}) as Record<string, unknown>,
+          });
         } else if (!isAuthenticated) {
           // Unauthenticated path — try public API fallback
           const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`);
           const contentType = res.headers.get("content-type") || "";
-          if (!res.ok || contentType.includes("text/html")) {
-            // API endpoint missing (dev server returns HTML) or returned an error
-            throw new Error("Sign in required to access this form.");
+          const responseText = await res.text();
+
+          if (contentType.includes("text/html") || responseText.trim().startsWith("<")) {
+            throw new Error("API endpoint not available (returned HTML). Are you running 'vercel dev'?");
           }
-          let data: { formConfig: Record<string, unknown>; surveyJson: Record<string, unknown>; meta?: Record<string, unknown> };
+
+          // Detect if Vite served the raw TypeScript source instead of executing the API
+          if (responseText.includes("export default async function") || responseText.includes('from "/api/_utils/')) {
+            throw new Error("API route is returning source code instead of executing. Make sure you're running 'vercel dev' (not 'npm run dev').");
+          }
+
+          let parsed: { error?: string; formConfig?: Record<string, unknown>; surveyJson?: Record<string, unknown>; meta?: Record<string, unknown> };
           try {
-            data = await res.json() as typeof data;
+            parsed = JSON.parse(responseText);
           } catch {
-            throw new Error("Sign in required to access this form.");
+            throw new Error(`Server returned non-JSON: ${responseText.substring(0, 200)}`);
           }
-          setFormData({ formConfig: data.formConfig, surveyJson: data.surveyJson, meta: data.meta || {} });
+
+          if (!res.ok) {
+            throw new Error(parsed.error || `Server error: ${res.status}`);
+          }
+
+          if (!parsed.formConfig) {
+            throw new Error("Invalid API response: missing formConfig.");
+          }
+
+          setFormData({
+            formConfig: parsed.formConfig,
+            surveyJson: (parsed.surveyJson || {}) as Record<string, unknown>,
+            meta: (parsed.meta || {}) as Record<string, unknown>,
+          });
         } else {
           // Authenticated but could not acquire token
           throw new Error("Unable to get authentication token. Please sign in again.");
@@ -195,7 +220,7 @@ export default function DynamicFormPage() {
     };
 
     load();
-  }, [formId, pinVersion, isAuthenticated, inProgress, instance, accounts]);
+  }, [formId, pinVersion, isAuthenticated, instance, accounts]);
 
   // Enrich survey JSON with SharePoint-sourced choices
   useEffect(() => {
@@ -286,7 +311,7 @@ export default function DynamicFormPage() {
         const matched = approvalRules.rules.find((r: Record<string, unknown>) => (r.when as string).toLowerCase() === condVal);
         if (matched) { activeLayers = matched.layers; resolvedLayerCount = matched.layers.length; }
       } else if (token) {
-        const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] })) as { value: Record<string, string>[] };
+          const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] })) as { value: Record<string, string>[] };
         activeLayers = (apData.value ?? []).map((a) => ({ email: a.ApproverEmail, name: a.ApproverName, role: "" }));
         resolvedLayerCount = activeLayers.length;
       }
@@ -307,7 +332,7 @@ export default function DynamicFormPage() {
       if (token) {
         submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
         body.SubmittedBy = submittedByEmail;
-        const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`, body) as { Id?: number };
+          const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`, body) as { Id?: number };
         // Trigger approval notification if there are layers
         if (resolvedLayerCount > 0 && result?.Id) {
           await triggerApprovalNotification(token, {

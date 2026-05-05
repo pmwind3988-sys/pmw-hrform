@@ -39,7 +39,7 @@ async function getDigest(token: string): Promise<string> {
 
 export async function getFormConfig(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -48,7 +48,7 @@ export async function saveFormConfig(
   token: string
 ): Promise<FormConfig> {
   const digest = await getDigest(token);
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -80,7 +80,7 @@ export async function saveFormVersion(
 ): Promise<void> {
   await ensureListExists(token, 'Web Form Versions');
   const jsonStr = JSON.stringify({ surveyJson: params.surveyJson, meta: params.meta, version: params.version, savedAt: new Date().toISOString(), changedBy: params.changedBy }, null, 2);
-  const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(params.listTitle)}' and FormVersion eq '${encodeURIComponent(params.version)}'&$select=Id&$top=1`).catch(() => ({ value: [] })) as { value?: { Id: number }[] };
+  const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(params.listTitle)}' and FormVersion eq '${encodeURIComponent(params.version)}'&$select=Id&$top=1`).catch(() => ({ value: [] })) as { value?: { Id: number }[] };
   const body = {
     Title: `${params.listTitle} v${params.version}`,
     FormTitle: params.listTitle,
@@ -91,9 +91,9 @@ export async function saveFormVersion(
     PublishedAt: new Date().toISOString(),
   };
   if (existing.value?.length && existing.value[0].Id) {
-    await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items(${existing.value[0].Id})`, body);
+    await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${existing.value[0].Id})`, body);
   } else {
-    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items`, body);
+    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items`, body);
   }
 }
 
@@ -102,7 +102,7 @@ export async function logFormAction(
   token: string
 ): Promise<FormLogEntry> {
   const digest = await getDigest(token);
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('Form%20Builder%20Log')/items`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -123,7 +123,7 @@ export async function logFormAction(
 
 export async function getFormSubmissions(formId: string, token: string): Promise<Submission[]> {
   const encodedFormId = formId.replace(/'/g, "''");
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('Submissions')/items?$filter=FormId eq '${encodedFormId}'&$orderby=Created desc`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Submissions')/items?$filter=FormId eq '${encodedFormId}'&$orderby=Created desc`;
   const response = await fetch(url, {
     headers: {
       'Accept': 'application/json;odata=nometadata',
@@ -145,7 +145,7 @@ export async function submitFormResponse(
   token: string
 ): Promise<Submission> {
   const digest = await getDigest(token);
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('Submissions')/items`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Submissions')/items`;
   const body = {
     FormId: formId,
     Response: JSON.stringify(responseData),
@@ -176,7 +176,7 @@ export async function getSharePointChoices(
 ): Promise<string[]> {
   const encodedListTitle = encodeURIComponent(listTitle);
   const encodedFieldName = encodeURIComponent(fieldName);
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodedListTitle}')/fields?$filter=Title eq '${encodedFieldName}'`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')/fields?$filter=Title eq '${encodedFieldName}'`;
   const response = await fetch(url, {
     headers: {
       'Accept': 'application/json;odata=nometadata',
@@ -219,7 +219,7 @@ export async function getSharePointLists(token: string): Promise<{ title: string
 
 export async function getChoiceColumnsForList(listTitle: string, token: string): Promise<{ title: string; typeKind: number; choices: string[] }[]> {
   const encodedListTitle = encodeURIComponent(listTitle);
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodedListTitle}')/fields?$select=Title,FieldTypeKind,Choices&$filter=FieldTypeKind eq 6 or FieldTypeKind eq 15`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')/fields?$select=Title,FieldTypeKind,Choices&$filter=FieldTypeKind eq 6 or FieldTypeKind eq 15`;
   const response = await fetch(url, {
     headers: {
       'Accept': 'application/json;odata=nometadata',
@@ -258,13 +258,13 @@ export async function checkSlugConflict(
 ): Promise<string | null> {
   const slugToCheck = slugify(slug);
   if (slugToCheck.length === 0) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(slugToCheck)}'&$select=Title,Slug&$top=5`).catch(() => ({ value: [] })) as { value?: { Title: string }[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(slugToCheck)}'&$select=Title,Slug&$top=5`).catch(() => ({ value: [] })) as { value?: { Title: string }[] };
   const others = (data.value || []).filter(r => r.Title !== excludeFormTitle);
   return others.length > 0 ? others[0].Title : null;
 }
 
 export async function getAllSlugs(token: string): Promise<{ Title: string; Slug: string; CurrentVersion: string }[]> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items?$select=Title,Slug,CurrentVersion&$top=500`).catch(() => ({ value: [] })) as { value?: { Title: string; Slug: string; CurrentVersion: string }[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Title,Slug,CurrentVersion&$top=500`).catch(() => ({ value: [] })) as { value?: { Title: string; Slug: string; CurrentVersion: string }[] };
   return data.value || [];
 }
 
@@ -280,12 +280,12 @@ export async function spUploadFile(token: string, lib: string, filename: string,
 
 export async function getFormLog(token: string, listTitle: string): Promise<FormLogEntry[]> {
   if (!await listExists(token, 'Form Builder Log')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Form%20Builder%20Log')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}'&$select=EventType,ChangedBy,EventSummary,BeforeJSON,AfterJSON,EventAt,Title&$orderby=EventAt desc&$top=200`).catch(() => ({ value: [] })) as { value?: FormLogEntry[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}'&$select=EventType,ChangedBy,EventSummary,BeforeJSON,AfterJSON,EventAt,Title&$orderby=EventAt desc&$top=200`).catch(() => ({ value: [] })) as { value?: FormLogEntry[] };
   return data.value || [];
 }
 
 export async function getFormVersion(token: string, listTitle: string, version: string): Promise<{ surveyJson: unknown; meta: unknown } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}' and FormVersion eq '${encodeURIComponent(version)}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`).catch(() => ({ value: [] })) as { value?: { SurveyJSON?: string }[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}' and FormVersion eq '${encodeURIComponent(version)}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`).catch(() => ({ value: [] })) as { value?: { SurveyJSON?: string }[] };
   const row = data.value?.[0];
   if (!row?.SurveyJSON) return null;
   try {
@@ -313,7 +313,7 @@ export async function addColumn(
 ): Promise<void> {
   // Check if already exists
   try {
-    await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listTitle)}')/fields/getbyinternalnameortitle('${encodeURIComponent(fieldName)}')?$select=InternalName`);
+    await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields/getbyinternalnameortitle('${encodeURIComponent(fieldName)}')?$select=InternalName`);
     return; // already exists
   } catch {
     // Continue to create
@@ -343,7 +343,7 @@ export async function addColumn(
     body.Choices = { results: choices };
   }
 
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listTitle)}')/fields`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -367,7 +367,7 @@ export async function deleteListColumnsWhere(
   token: string
 ): Promise<number> {
   const encodedListTitle = encodeURIComponent(listTitle);
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodedListTitle}')/Fields?$filter=${encodeURIComponent(filterExpr)}`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')/Fields?$filter=${encodeURIComponent(filterExpr)}`;
   const response = await fetch(url, {
     headers: {
       'Accept': 'application/json;odata=nometadata',
@@ -383,7 +383,7 @@ export async function deleteListColumnsWhere(
   for (const item of columns) {
     if (!item.Id) continue;
     const encodedId = encodeURIComponent(item.Id.toString());
-    const deleteUrl = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodedListTitle}')/Fields('${encodedId}')`;
+    const deleteUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')/Fields('${encodedId}')`;
     const digest = await getDigest(token);
     const deleteResponse = await fetch(deleteUrl, {
       method: 'DELETE',
@@ -422,7 +422,7 @@ export async function listExists(
   listTitle: string
 ): Promise<boolean> {
   const encodedListTitle = encodeURIComponent(listTitle);
-  const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodedListTitle}')`;
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')`;
   try {
     const response = await fetch(url, {
       headers: {
@@ -546,13 +546,13 @@ interface FormConfigData {
 
 export async function getAllFormConfigs(token: string): Promise<FormConfigData[]> {
   if (!await listExists(token, 'Master Form')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
   return data.value || [];
 }
 
 export async function getFormConfigByTitle(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -587,10 +587,10 @@ export async function upsertFormConfig(
   };
 
   if (existing?.Id) {
-    await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items(${existing.Id})`, body);
+    await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${existing.Id})`, body);
     return existing.Id;
   }
-  const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items`, body) as { Id?: string };
+  const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items`, body) as { Id?: string };
   if (!result.Id) throw new Error('upsertFormConfig: POST returned no Id');
   return result.Id;
 }
@@ -603,13 +603,13 @@ interface ApproverLayer {
 
 export async function upsertApprovers(token: string, listTitle: string, layers: ApproverLayer[]): Promise<void> {
   await ensureListExists(token, 'Approvers');
-  const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}'&$select=Id&$top=500`) as { value?: { Id: string }[] };
+  const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}'&$select=Id&$top=500`) as { value?: { Id: string }[] };
   for (const item of existing.value || []) {
-    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Approvers')/items(${item.Id})`);
+    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items(${item.Id})`);
   }
   for (let i = 0; i < layers.length; i++) {
     if (!layers[i]?.email) continue;
-    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Approvers')/items`, {
+    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items`, {
       Title: `${listTitle} - Layer ${i + 1}`,
       FormTitle: listTitle,
       LayerNumber: i + 1,
@@ -626,10 +626,10 @@ export async function upsertApprovers(token: string, listTitle: string, layers: 
  */
 export async function deleteFormVersions(token: string, formTitle: string): Promise<number> {
   if (!await listExists(token, 'Web Form Versions')) return 0;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
   let count = 0;
   for (const item of data.value || []) {
-    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items(${item.Id})`);
+    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${item.Id})`);
     count++;
   }
   return count;
@@ -640,10 +640,10 @@ export async function deleteFormVersions(token: string, formTitle: string): Prom
  */
 export async function deleteFormLogEntries(token: string, formTitle: string): Promise<number> {
   if (!await listExists(token, 'Form Builder Log')) return 0;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Form%20Builder%20Log')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
   let count = 0;
   for (const item of data.value || []) {
-    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Form%20Builder%20Log')/items(${item.Id})`);
+    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items(${item.Id})`);
     count++;
   }
   return count;
@@ -654,10 +654,10 @@ export async function deleteFormLogEntries(token: string, formTitle: string): Pr
  */
 export async function deleteFormApprovers(token: string, formTitle: string): Promise<number> {
   if (!await listExists(token, 'Approvers')) return 0;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
   let count = 0;
   for (const item of data.value || []) {
-    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Approvers')/items(${item.Id})`);
+    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items(${item.Id})`);
     count++;
   }
   return count;
@@ -667,7 +667,7 @@ export async function deleteFormApprovers(token: string, formTitle: string): Pro
  * Deletes the form config entry from the Master Form list.
  */
 export async function deleteFormConfig(token: string, formId: string): Promise<void> {
-  await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items(${formId})`);
+  await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${formId})`);
 }
 
 export interface DeleteFormResult {
@@ -705,7 +705,7 @@ interface FormVersionRecord {
 
 export async function getFormVersionHistory(token: string, listTitle: string): Promise<FormVersionRecord[]> {
   if (!await listExists(token, 'Web Form Versions')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}'&$select=FormVersion,PublishedAt,PublishedBy,Title&$orderby=PublishedAt desc&$top=100`) as { value?: FormVersionRecord[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}'&$select=FormVersion,PublishedAt,PublishedBy,Title&$orderby=PublishedAt desc&$top=100`) as { value?: FormVersionRecord[] };
   return data.value || [];
 }
 
@@ -722,7 +722,7 @@ export async function logEvent(
 ): Promise<void> {
   try {
     await ensureListExists(token, 'Form Builder Log');
-    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Form%20Builder%20Log')/items`, {
+    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items`, {
       Title: `${params.formTitle} — ${params.eventType}`,
       FormTitle: params.formTitle,
       EventType: params.eventType,
@@ -824,7 +824,7 @@ export async function getLatestFormBySlug(token: string, slug: string): Promise<
   surveyJson: unknown;
   meta: unknown;
 } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(slug)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(slug)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
   const form = data.value?.[0];
   if (!form) return null;
   if (!form.IsPublished) return null;
@@ -838,7 +838,7 @@ export async function getLatestFormBySlug(token: string, slug: string): Promise<
 }
 
 async function getFormVersionByTitle(token: string, listTitle: string, version: string): Promise<{ surveyJson: unknown; meta: unknown } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}' and FormVersion eq '${encodeURIComponent(version)}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`) as { value?: { SurveyJSON?: string }[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listTitle)}' and FormVersion eq '${encodeURIComponent(version)}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`) as { value?: { SurveyJSON?: string }[] };
   const row = data.value?.[0];
   if (!row?.SurveyJSON) return null;
   try {

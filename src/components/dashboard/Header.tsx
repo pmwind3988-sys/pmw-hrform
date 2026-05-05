@@ -9,6 +9,7 @@ import {
   Toolbar,
   Typography,
   useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   Settings as SettingsIcon,
@@ -35,6 +36,7 @@ export default function Header({
   onOpenBuilder,
 }: HeaderProps) {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -51,14 +53,15 @@ export default function Header({
       position="sticky"
       elevation={0}
       sx={{
-        backgroundColor: "rgba(255, 255, 255, 0.88)",
-        backdropFilter: "blur(16px)",
+        backgroundColor: "rgba(255, 255, 255, 0.92)",
+        backdropFilter: "blur(20px)",
         borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
         zIndex: theme.zIndex.drawer + 1,
+        minHeight: isMobile ? 56 : 64,
       }}
     >
-      <Toolbar sx={{ gap: 2 }}>
+      <Toolbar sx={{ gap: 2, minHeight: "inherit" }}>
         {/* Brand mark */}
         <Box
           sx={{
@@ -69,28 +72,33 @@ export default function Header({
         >
           <Box
             sx={{
-              width: 36,
-              height: 36,
-              borderRadius: "10px",
+              width: 40,
+              height: 40,
+              borderRadius: "12px",
               background: "linear-gradient(135deg, #0078D4 0%, #6264A7 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 2px 8px rgba(0, 120, 212, 0.25)",
+              boxShadow: "0 4px 12px rgba(0, 120, 212, 0.25), 0 2px 4px rgba(98, 100, 167, 0.15)",
+              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+              "&:hover": {
+                transform: "scale(1.05)",
+                boxShadow: "0 6px 16px rgba(0, 120, 212, 0.3), 0 3px 6px rgba(98, 100, 167, 0.2)",
+              },
             }}
           >
-            <DashboardIcon sx={{ fontSize: 20, color: "#fff" }} />
+            <DashboardIcon sx={{ fontSize: 22, color: "#fff" }} />
           </Box>
-          <Stack direction="column" spacing={0.1}>
+          <Stack direction="column" spacing={0}>
             <Typography
               variant="h5"
               component="h1"
               sx={{
-                fontWeight: 600,
-                color: "#1A1A2E",
+                fontWeight: 700,
+                color: "#111827",
                 letterSpacing: "-0.02em",
                 lineHeight: 1.2,
-                fontSize: "1.15rem",
+                fontSize: "1.25rem",
               }}
             >
               PMW HR
@@ -98,11 +106,12 @@ export default function Header({
             <Typography
               variant="caption"
               sx={{
-                color: "rgba(26, 26, 46, 0.45)",
+                color: "#6B7280",
                 textTransform: "uppercase",
                 letterSpacing: "0.1em",
-                fontSize: "0.6rem",
+                fontSize: "0.7rem",
                 fontWeight: 600,
+                lineHeight: 1,
               }}
             >
               Forms Portal
@@ -114,22 +123,28 @@ export default function Header({
 
         {isAdmin && onOpenBuilder && (
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={<SettingsIcon />}
             onClick={onOpenBuilder}
             sx={{
               mr: 1,
-              borderRadius: "10px",
+              borderRadius: "12px",
               textTransform: "none",
-              borderColor: "rgba(98, 100, 167, 0.35)",
-              color: "#6264A7",
-              fontWeight: 500,
+              backgroundColor: "#6264A7",
+              color: "#ffffff",
+              fontWeight: 600,
               fontSize: "0.85rem",
               py: 1,
-              px: 2,
+              px: 2.5,
+              boxShadow: "0 2px 8px rgba(98, 100, 167, 0.25)",
+              transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
               "&:hover": {
-                borderColor: "#6264A7",
-                backgroundColor: "rgba(98, 100, 167, 0.06)",
+                backgroundColor: "#4A4C80",
+                boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
+                transform: "translateY(-1px)",
+              },
+              "&:active": {
+                transform: "scale(0.98) translateY(0)",
               },
             }}
           >
@@ -148,10 +163,11 @@ export default function Header({
             borderRadius: "12px",
             backgroundColor: "rgba(0, 120, 212, 0.06)",
             border: "1px solid rgba(0, 120, 212, 0.1)",
-            transition: "all 0.2s ease",
+            transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
             "&:hover": {
               backgroundColor: "rgba(0, 120, 212, 0.12)",
               borderColor: "rgba(0, 120, 212, 0.2)",
+              transform: "translateY(-1px)",
             },
           }}
         >
@@ -192,7 +208,7 @@ export default function Header({
             <Typography
               variant="body2"
               sx={{
-                color: "#1A1A2E",
+                color: "#111827",
                 fontWeight: 500,
                 maxWidth: 200,
                 overflow: "hidden",
@@ -210,7 +226,7 @@ export default function Header({
             }}
             sx={{ py: 1.25, px: 2.5 }}
           >
-            <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "rgba(26, 26, 46, 0.5)" }} />
+            <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
             <Typography variant="body2">Switch account</Typography>
           </MenuItem>
           <MenuItem
@@ -220,7 +236,7 @@ export default function Header({
             }}
             sx={{ py: 1.25, px: 2.5 }}
           >
-            <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "rgba(220, 38, 38, 0.6)" }} />
+            <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
             <Typography variant="body2" sx={{ color: "#DC2626" }}>
               Sign out
             </Typography>

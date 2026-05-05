@@ -131,7 +131,7 @@ export default function ApprovalDashboard() {
         // Get survey JSON from versions
         const versionData = await spGet(
           token,
-          `${SP_SITE_URL}/_api/web/lists/getByTitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title)}' and FormVersion eq '${encodeURIComponent(item.FormVersion)}'&$select=SurveyJSON&$top=1`
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title)}' and FormVersion eq '${encodeURIComponent(item.FormVersion)}'&$select=SurveyJSON&$top=1`
         ) as { value?: { SurveyJSON?: string }[] };
 
         if (versionData.value?.[0]?.SurveyJSON) {

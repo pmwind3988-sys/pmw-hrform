@@ -9,13 +9,13 @@ import App from "./App";
 
 async function initializeMsal() {
   await msalInstance.initialize();
-  
+
   // Handle any redirect response from previous auth flow
-  await msalInstance.handleRedirectPromise();
-  
-  // Force clear any stale interaction by getting accounts
-  const accounts = msalInstance.getAllAccounts();
-  console.log("MSAL initialized, accounts:", accounts.length);
+  // Cap at 3s so a hung redirect never blocks app render
+  await Promise.race([
+    msalInstance.handleRedirectPromise(),
+    new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+  ]);
 }
 
 initializeMsal().then(() => {

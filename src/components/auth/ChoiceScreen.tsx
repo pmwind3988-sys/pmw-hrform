@@ -13,6 +13,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { Login as LoginIcon, Person as PersonIcon } from "@mui/icons-material";
+import { fadeInUp } from "../../theme";
 
 const MICROSOFT_LOGO =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiB4PSIwIiB5PSIwIiBmaWxsPSIjRjI1MDIyIi8+CjxyZWN0IHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgeD0iNDAiIHk9IjAiIGZpbGw9IiM3RkJBMDAiLz4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiB4PSIwIiB5PSI0MCIgZmlsbD0iIzAwQTRFRiIvPgo8cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHg9IjQwIiB5PSI0MCIgZmlsbD0iI0ZGQjkwMCIvPgo8L3N2Zz4K";
@@ -35,7 +36,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        background: "#FAFBFC",
+        background: "#F8F9FC",
         position: "relative",
         overflow: "hidden",
         padding: isMobile ? 2 : isTablet ? 3 : 4,
@@ -50,7 +51,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
           width: isMobile ? "350px" : "600px",
           height: isMobile ? "350px" : "600px",
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(0, 120, 212, 0.08) 0%, rgba(0, 120, 212, 0) 70%)",
+          background: "radial-gradient(circle, rgba(0, 120, 212, 0.05) 0%, rgba(0, 120, 212, 0) 70%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -63,7 +64,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
           width: isMobile ? "400px" : "700px",
           height: isMobile ? "400px" : "700px",
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(98, 100, 167, 0.06) 0%, rgba(98, 100, 167, 0) 70%)",
+          background: "radial-gradient(circle, rgba(98, 100, 167, 0.04) 0%, rgba(98, 100, 167, 0) 70%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -76,7 +77,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
           width: isMobile ? "250px" : "450px",
           height: isMobile ? "250px" : "450px",
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(98, 100, 167, 0.04) 0%, rgba(98, 100, 167, 0) 70%)",
+          background: "radial-gradient(circle, rgba(98, 100, 167, 0.03) 0%, rgba(98, 100, 167, 0) 70%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -97,10 +98,10 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
         preserveAspectRatio="xMidYMid slice"
         fill="none"
       >
-        <path d="M0 120 Q360 80 720 140 T1440 100" stroke="rgba(0, 120, 212, 0.05)" strokeWidth="1.5" />
-        <path d="M0 780 Q360 820 720 760 T1440 800" stroke="rgba(98, 100, 167, 0.05)" strokeWidth="1.5" />
-        <circle cx="1200" cy="150" r="100" stroke="rgba(0, 120, 212, 0.04)" strokeWidth="1" />
-        <circle cx="180" cy="720" r="70" stroke="rgba(98, 100, 167, 0.04)" strokeWidth="1" />
+        <path d="M0 120 Q360 80 720 140 T1440 100" stroke="rgba(0, 120, 212, 0.04)" strokeWidth="1.5" />
+        <path d="M0 780 Q360 820 720 760 T1440 800" stroke="rgba(98, 100, 167, 0.04)" strokeWidth="1.5" />
+        <circle cx="1200" cy="150" r="100" stroke="rgba(0, 120, 212, 0.03)" strokeWidth="1" />
+        <circle cx="180" cy="720" r="70" stroke="rgba(98, 100, 167, 0.03)" strokeWidth="1" />
       </svg>
 
       <Container maxWidth="sm" sx={{ position: "relative", zIndex: 1 }}>
@@ -110,21 +111,23 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
             maxWidth: isMobile ? "100%" : 480,
             mx: "auto",
             borderRadius: "24px",
-            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04)",
-            border: "1px solid rgba(0, 0, 0, 0.05)",
+            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
+            border: "1px solid rgba(0, 0, 0, 0.04)",
             backgroundColor: "rgba(255, 255, 255, 0.92)",
             backdropFilter: "blur(12px)",
-            transition: "all 0.3s ease",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             "&:hover": {
               boxShadow: "0 8px 40px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06)",
+              transform: "translateY(-2px)",
             },
+            animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
           }}
         >
           {/* Top accent bar */}
           <Box
             sx={{
               height: 4,
-              background: "linear-gradient(90deg, #0078D4 0%, #6264A7 50%, #0078D4 100%)",
+              background: "linear-gradient(90deg, #0078D4 0%, #6264A7 100%)",
               borderRadius: "24px 24px 0 0",
             }}
           />
@@ -169,15 +172,15 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
             </Box>
 
             <Typography
-              variant="h3"
+              variant="h2"
               component="h1"
               gutterBottom
               align="center"
               sx={{
-                fontWeight: 500,
-                color: "#1A1A2E",
-                letterSpacing: "-0.02em",
-                fontSize: isMobile ? "1.65rem" : "2rem",
+                fontWeight: 700,
+                color: "#111827",
+                letterSpacing: "-0.03em",
+                fontSize: isMobile ? "1.75rem" : "2.25rem",
               }}
             >
               PMW HR Forms
@@ -189,8 +192,8 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
               sx={{
                 mb: 4,
                 maxWidth: 380,
-                lineHeight: 1.7,
-                color: "rgba(26, 26, 46, 0.65)",
+                lineHeight: 1.6,
+                color: "#6B7280",
                 fontSize: "0.95rem",
               }}
             >
@@ -210,19 +213,19 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                 sx={{
                   backgroundColor: "#0078D4",
                   color: "#ffffff",
-                  borderRadius: "14px",
+                  borderRadius: "12px",
                   py: 1.75,
-                  fontSize: "0.95rem",
-                  fontWeight: 600,
-                  boxShadow: "0 4px 12px rgba(0, 120, 212, 0.3)",
-                  transition: "all 0.2s ease",
+                  fontSize: "1rem",
+                  fontWeight: 500,
+                  boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
                     backgroundColor: "#0068C4",
-                    boxShadow: "0 6px 20px rgba(0, 120, 212, 0.4)",
+                    boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
                     transform: "translateY(-1px)",
                   },
                   "&:active": {
-                    transform: "translateY(0)",
+                    transform: "scale(0.98) translateY(0)",
                   },
                 }}
               >
@@ -234,7 +237,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                   <Checkbox
                     size="small"
                     sx={{
-                      color: "rgba(26, 26, 46, 0.3)",
+                      color: "rgba(17, 24, 39, 0.3)",
                       "&.Mui-checked": {
                         color: "#0078D4",
                       },
@@ -242,7 +245,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                   />
                 }
                 label={
-                  <Typography variant="body2" sx={{ color: "rgba(26, 26, 46, 0.55)", fontSize: "0.85rem" }}>
+                  <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.85rem" }}>
                     Remember my choice on this device
                   </Typography>
                 }
@@ -250,7 +253,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
               />
 
               <Divider>
-                <Typography variant="body2" sx={{ color: "rgba(26, 26, 46, 0.35)", fontSize: "0.75rem" }}>
+                <Typography variant="body2" sx={{ color: "#9CA3AF", fontSize: "0.75rem" }}>
                   or
                 </Typography>
               </Divider>
@@ -262,14 +265,14 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                 startIcon={<PersonIcon />}
                 onClick={onGuest}
                 sx={{
-                  borderColor: "rgba(26, 26, 46, 0.15)",
-                  color: "rgba(26, 26, 46, 0.7)",
-                  borderRadius: "14px",
+                  borderColor: "rgba(17, 24, 39, 0.15)",
+                  color: "#6B7280",
+                  borderRadius: "12px",
                   py: 1.75,
-                  fontSize: "0.95rem",
+                  fontSize: "1rem",
                   fontWeight: 500,
                   borderWidth: "1.5px",
-                  transition: "all 0.2s ease",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
                     borderColor: "rgba(0, 120, 212, 0.5)",
                     backgroundColor: "rgba(0, 120, 212, 0.04)",
@@ -277,7 +280,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                     transform: "translateY(-1px)",
                   },
                   "&:active": {
-                    transform: "translateY(0)",
+                    transform: "scale(0.98) translateY(0)",
                   },
                 }}
               >
@@ -290,8 +293,8 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
               align="center"
               sx={{
                 mt: 4,
-                color: "rgba(26, 26, 46, 0.35)",
-                fontSize: "0.7rem",
+                color: "#9CA3AF",
+                fontSize: "0.75rem",
                 lineHeight: 1.6,
                 maxWidth: 380,
               }}

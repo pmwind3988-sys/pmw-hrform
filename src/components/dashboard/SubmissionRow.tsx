@@ -45,34 +45,53 @@ export default function SubmissionRow({
         onClick={() => onView(item)}
         sx={{
           backgroundColor: "#ffffff",
-          borderRadius: "12px",
-          border: "1px solid rgba(0,0,0,0.06)",
-          p: 2,
-          mb: 1.5,
+          borderRadius: "16px",
+          border: "1px solid rgba(0,0,0,0.04)",
+          p: 2.5,
+          mb: 2,
           cursor: "pointer",
-          transition: "all 0.2s ease",
+          transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)",
           "&:hover": {
-            borderColor: "rgba(98,100,167,0.3)",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            borderColor: "rgba(0, 120, 212, 0.2)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+            transform: "translateY(-1px)",
           },
         }}
       >
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: "#1a1a2e", mb: 0.5 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827", mb: 0.5 }}>
               {item.title}
             </Typography>
-            <Typography variant="caption" sx={{ fontFamily: "monospace", color: "rgba(0,0,0,0.4)" }}>
-              {item.formId} · ID: {item.submissionId}
-            </Typography>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontFamily: "monospace",
+                  backgroundColor: "rgba(98,100,167,0.08)",
+                  color: "#6264A7",
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: "6px",
+                  fontSize: "0.7rem",
+                  fontWeight: 600,
+                }}
+              >
+                {item.formId}
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#6B7280" }}>
+                ID: {item.submissionId}
+              </Typography>
+            </Box>
           </Box>
-          <ChevronRightIcon sx={{ color: "rgba(0,0,0,0.2)", fontSize: 20 }} />
+          <ChevronRightIcon sx={{ color: "#6B7280", fontSize: 20, transition: "transform 0.2s ease" }} />
         </Box>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+        <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
           <ListBadge title={item.listTitle} icon={meta.icon} color={meta.color} pale={meta.pale} />
           <StatusBadge status={item.formStatus} />
         </Box>
-        <Typography variant="caption" sx={{ color: "rgba(0,0,0,0.35)", mt: 1, display: "block" }}>
+        <Typography variant="caption" sx={{ color: "#6B7280", display: "block" }}>
           {submittedAt} · {item.submittedByEmail}
         </Typography>
       </Box>
@@ -86,24 +105,25 @@ export default function SubmissionRow({
         display: "grid",
         gridTemplateColumns: isAdmin ? "2fr 1.5fr 1fr 1fr 1fr 40px" : "2fr 1fr 1fr 1fr 40px",
         gap: 2,
-        px: 3,
+        px: 2.5,
         py: 2,
         backgroundColor: "#ffffff",
-        borderRadius: "0 0 12px 12px",
+        borderRadius: "0 0 16px 16px",
         borderBottom: "1px solid rgba(0,0,0,0.04)",
         alignItems: "center",
         cursor: "pointer",
-        transition: "all 0.2s ease",
+        transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+        borderLeft: "3px solid transparent",
         "&:hover": {
-          backgroundColor: "rgba(98,100,167,0.02)",
-          borderColor: "rgba(98,100,167,0.15)",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+          backgroundColor: "#F8F9FC",
+          borderLeft: "3px solid #0078D4",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
         },
       }}
     >
       {/* Submission */}
       <Box>
-        <Typography variant="body2" sx={{ fontWeight: 600, color: "#1a1a2e", mb: 0.25 }}>
+        <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827", mb: 0.5 }}>
           {item.title}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
@@ -115,13 +135,14 @@ export default function SubmissionRow({
               color: "#6264A7",
               px: 1,
               py: 0.25,
-              borderRadius: "4px",
-              fontSize: "0.65rem",
+              borderRadius: "6px",
+              fontSize: "0.7rem",
+              fontWeight: 600,
             }}
           >
             {item.formId}
           </Typography>
-          <Typography variant="caption" sx={{ color: "rgba(0,0,0,0.35)" }}>
+          <Typography variant="caption" sx={{ color: "#6B7280" }}>
             {submittedAt}
           </Typography>
         </Box>
@@ -132,7 +153,7 @@ export default function SubmissionRow({
         <Typography
           variant="body2"
           sx={{
-            color: "rgba(0,0,0,0.55)",
+            color: "#6B7280",
             maxWidth: 180,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -147,7 +168,7 @@ export default function SubmissionRow({
       <ListBadge title={item.listTitle} icon={meta.icon} color={meta.color} pale={meta.pale} />
 
       {/* Category */}
-      <Typography variant="body2" sx={{ color: "rgba(0,0,0,0.55)" }}>
+      <Typography variant="body2" sx={{ color: "#6B7280" }}>
         {meta.category}
       </Typography>
 
@@ -155,7 +176,16 @@ export default function SubmissionRow({
       <StatusBadge status={item.formStatus} />
 
       {/* Chevron */}
-      <ChevronRightIcon sx={{ color: "rgba(0,0,0,0.2)", fontSize: 20 }} />
+      <ChevronRightIcon
+        sx={{
+          color: "#6B7280",
+          fontSize: 20,
+          transition: "transform 0.2s ease",
+          ".MuiBox-root:hover &": {
+            transform: "translateX(4px)",
+          },
+        }}
+      />
     </Box>
   );
 }

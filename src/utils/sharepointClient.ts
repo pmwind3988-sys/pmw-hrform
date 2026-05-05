@@ -173,13 +173,15 @@ export function createSpClient(
   ): Promise<Record<string, unknown>[]> {
     const token = await acquireToken();
     const params = new URLSearchParams();
-    const selectCols = buildSelect([...(options?.select as string[] || []), "AuthorId"]);
+    const selectInput = options?.select;
+    const selectArr = Array.isArray(selectInput) ? selectInput : typeof selectInput === "string" ? [selectInput] : [];
+    const selectCols = buildSelect([...selectArr, "AuthorId"]);
     params.set("$select", selectCols);
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
     params.set("$top", String(options?.top ?? 500));
 
-    const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listName)}')/items?${params}`;
+    const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?${params}`;
     const response = await fetch(url, {
       headers: {
         Accept: "application/json;odata=nometadata",
@@ -216,7 +218,9 @@ export function createSpClient(
   ): Promise<Record<string, unknown>[]> {
     const token = await acquireToken();
     const params = new URLSearchParams();
-    const selectCols = buildSelect([...(options?.select as string[] || []), "AuthorId"]);
+    const selectInput = options?.select;
+    const selectArr = Array.isArray(selectInput) ? selectInput : typeof selectInput === "string" ? [selectInput] : [];
+    const selectCols = buildSelect([...selectArr, "AuthorId"]);
     params.set("$select", selectCols);
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
@@ -265,7 +269,7 @@ export function createSpClient(
     if (options?.orderby) params.set("$orderby", options.orderby as string);
     params.set("$top", String(options?.top ?? 500));
 
-    const url = `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listName)}')/items?${params}`;
+    const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?${params}`;
     const response = await fetch(url, {
       headers: {
         Accept: "application/json;odata=nometadata",
@@ -337,7 +341,7 @@ export function createSpClient(
 
     try {
       const response = await fetch(
-        `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(title)}')?$select=Id`,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(title)}')?$select=Id`,
         {
           headers: {
             Accept: "application/json;odata=nometadata",
@@ -405,7 +409,7 @@ export function createSpClient(
     }
 
     const response = await fetch(
-      `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listTitle)}')/fields`,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields`,
       {
         method: "POST",
         headers: {
@@ -445,7 +449,7 @@ export function createSpClient(
       };
 
       const response = await fetch(
-        `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listTitle)}')/items(${itemId})`,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${itemId})`,
         {
           method: "POST",
           headers: {
@@ -475,7 +479,7 @@ export function createSpClient(
       };
 
       const response = await fetch(
-        `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listTitle)}')/items`,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items`,
         {
           method: "POST",
           headers: {
@@ -515,7 +519,7 @@ export function createSpClient(
       try {
         const digest = await getDigest(token);
         const response = await fetch(
-          `${SP_SITE_URL}/_api/web/lists/getByTitle('${encodeURIComponent(listTitle)}')/items(${itemId})`,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${itemId})`,
           {
             method: "POST",
             headers: {

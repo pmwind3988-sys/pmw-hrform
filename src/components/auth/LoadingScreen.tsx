@@ -8,6 +8,7 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
+import { fadeInUp } from "../../theme";
 
 interface LoadingScreenProps {
   userEmail?: string;
@@ -28,7 +29,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        background: "#FAFBFC",
+        background: "#F8F9FC",
         position: "relative",
         overflow: "hidden",
         padding: isMobile ? 2 : 4,
@@ -43,7 +44,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
           width: isMobile ? "350px" : "600px",
           height: isMobile ? "350px" : "600px",
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(0, 120, 212, 0.08) 0%, rgba(0, 120, 212, 0) 70%)",
+          background: "radial-gradient(circle, rgba(0, 120, 212, 0.05) 0%, rgba(0, 120, 212, 0) 70%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -56,7 +57,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
           width: isMobile ? "400px" : "700px",
           height: isMobile ? "400px" : "700px",
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(98, 100, 167, 0.06) 0%, rgba(98, 100, 167, 0) 70%)",
+          background: "radial-gradient(circle, rgba(98, 100, 167, 0.04) 0%, rgba(98, 100, 167, 0) 70%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -69,7 +70,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
           width: isMobile ? "250px" : "450px",
           height: isMobile ? "250px" : "450px",
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(98, 100, 167, 0.04) 0%, rgba(98, 100, 167, 0) 70%)",
+          background: "radial-gradient(circle, rgba(98, 100, 167, 0.03) 0%, rgba(98, 100, 167, 0) 70%)",
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -90,14 +91,20 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
         preserveAspectRatio="xMidYMid slice"
         fill="none"
       >
-        <path d="M0 120 Q360 80 720 140 T1440 100" stroke="rgba(0, 120, 212, 0.05)" strokeWidth="1.5" />
-        <path d="M0 780 Q360 820 720 760 T1440 800" stroke="rgba(98, 100, 167, 0.05)" strokeWidth="1.5" />
-        <circle cx="1200" cy="150" r="100" stroke="rgba(0, 120, 212, 0.04)" strokeWidth="1" />
-        <circle cx="180" cy="720" r="70" stroke="rgba(98, 100, 167, 0.04)" strokeWidth="1" />
+        <path d="M0 120 Q360 80 720 140 T1440 100" stroke="rgba(0, 120, 212, 0.04)" strokeWidth="1.5" />
+        <path d="M0 780 Q360 820 720 760 T1440 800" stroke="rgba(98, 100, 167, 0.04)" strokeWidth="1.5" />
+        <circle cx="1200" cy="150" r="100" stroke="rgba(0, 120, 212, 0.03)" strokeWidth="1" />
+        <circle cx="180" cy="720" r="70" stroke="rgba(98, 100, 167, 0.03)" strokeWidth="1" />
       </svg>
 
       <Container maxWidth="sm" sx={{ position: "relative", zIndex: 1 }}>
-        <Stack spacing={3.5} sx={{ alignItems: "center" }}>
+        <Stack 
+          spacing={4} 
+          sx={{ 
+            alignItems: "center",
+            animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+          }}
+        >
           {/* Animated spinner with glow */}
           <Box sx={{ position: "relative" }}>
             <Box
@@ -106,14 +113,14 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                width: 100,
-                height: 100,
+                width: 120,
+                height: 120,
                 borderRadius: "50%",
                 background: "radial-gradient(circle, rgba(0, 120, 212, 0.15) 0%, rgba(0, 120, 212, 0) 70%)",
                 animation: "pulse 2s ease-in-out infinite",
                 "@keyframes pulse": {
-                  "0%, 100%": { transform: "translate(-50%, -50%) scale(1)", opacity: 0.6 },
-                  "50%": { transform: "translate(-50%, -50%) scale(1.2)", opacity: 0.3 },
+                  "0%, 100%": { transform: "translate(-50%, -50%) scale(1)", opacity: 0.3 },
+                  "50%": { transform: "translate(-50%, -50%) scale(1.1)", opacity: 0 },
                 },
               }}
             />
@@ -121,36 +128,36 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
               <CircularProgress
                 variant="determinate"
                 value={progress}
-                size={72}
+                size={80}
                 thickness={4}
                 sx={{ color: "#0078D4" }}
               />
             ) : (
-              <CircularProgress size={64} thickness={4} sx={{ color: "#0078D4" }} />
+              <CircularProgress size={72} thickness={4} sx={{ color: "#0078D4" }} />
             )}
           </Box>
 
           {/* Percentage for determinate state */}
           {hasProgress && progress < 100 && (
             <Typography
-              variant="h4"
+              variant="h2"
               sx={{
-                fontWeight: 500,
-                color: "#1A1A2E",
-                letterSpacing: "-0.02em",
-                fontSize: "1.5rem",
+                fontWeight: 700,
+                color: "#111827",
+                letterSpacing: "-0.03em",
+                fontSize: "2.25rem",
               }}
             >
               {progress}%
             </Typography>
           )}
 
-          <Stack spacing={1} sx={{ alignItems: "center" }}>
+          <Stack spacing={1.5} sx={{ alignItems: "center" }}>
             <Typography
               variant="h6"
               sx={{
-                fontWeight: 500,
-                color: "#1A1A2E",
+                fontWeight: 600,
+                color: "#111827",
                 letterSpacing: "-0.01em",
               }}
             >
@@ -159,13 +166,14 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
 
             {status && (
               <Typography
-                variant="body2"
+                variant="body1"
                 sx={{
-                  color: "rgba(26, 26, 46, 0.55)",
-                  fontFamily: "monospace",
+                  color: "#6B7280",
                   textAlign: "center",
                   minHeight: "1.5em",
                   maxWidth: 400,
+                  fontSize: "0.95rem",
+                  lineHeight: 1.6,
                 }}
               >
                 {status}
@@ -180,11 +188,11 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
               sx={{
                 width: "100%",
                 maxWidth: 360,
-                borderRadius: 6,
-                height: 6,
-                backgroundColor: "rgba(0, 120, 212, 0.12)",
+                borderRadius: 4,
+                height: 8,
+                backgroundColor: "rgba(0, 120, 212, 0.1)",
                 "& .MuiLinearProgress-bar": {
-                  borderRadius: 6,
+                  borderRadius: 4,
                   backgroundColor: "#0078D4",
                 },
               }}
@@ -193,11 +201,13 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
 
           {userEmail && (
             <Typography
-              variant="body2"
+              variant="caption"
               sx={{
-                color: "rgba(26, 26, 46, 0.45)",
-                fontFamily: "monospace",
-                fontSize: "0.8rem",
+                color: "#9CA3AF",
+                fontSize: "0.75rem",
+                lineHeight: 1.5,
+                letterSpacing: "0.01em",
+                fontWeight: 500,
               }}
             >
               Signed in as {userEmail}

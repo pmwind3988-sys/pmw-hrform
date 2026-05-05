@@ -1,9 +1,9 @@
 // Shared SharePoint client-credentials helpers for Vercel serverless functions
 
 const TENANT_ID = process.env.VITE_AZURE_TENANT_ID || process.env.AZURE_TENANT_ID || "";
-const CLIENT_ID = process.env.SYSTEM_CLIENT_ID || "";
-const CLIENT_SECRET = process.env.SYSTEM_CLIENT_SECRET || "";
-export const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+const CLIENT_ID = process.env.SYSTEM_CLIENT_ID || process.env.VITE_AZURE_CLIENT_ID || "";
+const CLIENT_SECRET = process.env.SYSTEM_CLIENT_SECRET || process.env.VITE_AZURE_CLIENT_SECRET || "";
+export const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
 export async function getAccessToken(): Promise<string> {
   if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET || !SP_SITE_URL) {
@@ -11,12 +11,12 @@ export async function getAccessToken(): Promise<string> {
   }
 
   const origin = new URL(SP_SITE_URL).origin;
-  const url = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+  const url = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/token`;
 
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
-    scope: `${origin}/.default`,
+    resource: origin,
     grant_type: "client_credentials",
   });
 

@@ -10,6 +10,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { Warning as WarningIcon, Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
+import { fadeInUp } from "../../theme";
 
 interface WrongTenantScreenProps {
   userEmail: string;
@@ -32,10 +33,11 @@ export default function WrongTenantScreen({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#ffffff",
+        background: "#F8F9FC",
         position: "relative",
         overflow: "hidden",
         py: 4,
+        padding: isMobile ? 2 : 4,
       }}
     >
       <Box
@@ -65,31 +67,79 @@ export default function WrongTenantScreen({
         }}
       />
 
+      {/* Subtle geometric accent lines */}
+      <svg
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+        viewBox="0 0 1440 900"
+        preserveAspectRatio="xMidYMid slice"
+        fill="none"
+      >
+        <path d="M0 120 Q360 80 720 140 T1440 100" stroke="rgba(220, 38, 38, 0.04)" strokeWidth="1.5" />
+        <path d="M0 780 Q360 820 720 760 T1440 800" stroke="rgba(98, 100, 167, 0.04)" strokeWidth="1.5" />
+        <circle cx="1200" cy="150" r="100" stroke="rgba(220, 38, 38, 0.03)" strokeWidth="1" />
+        <circle cx="180" cy="720" r="70" stroke="rgba(98, 100, 167, 0.03)" strokeWidth="1" />
+      </svg>
+
       <Container maxWidth="xs" sx={{ position: "relative", zIndex: 1 }}>
         <Card
           elevation={0}
           sx={{
-            borderRadius: 24,
+            borderRadius: "24px",
             border: "1px solid rgba(220,38,38,0.1)",
             boxShadow: "0 4px 24px rgba(220,38,38,0.06)",
+            backgroundColor: "rgba(255, 255, 255, 0.92)",
+            backdropFilter: "blur(12px)",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            "&:hover": {
+              boxShadow: "0 8px 40px rgba(220, 38, 38, 0.1), 0 2px 8px rgba(220, 38, 38, 0.06)",
+              transform: "translateY(-2px)",
+            },
+            animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
           }}
         >
-          <Box sx={{ height: 4, background: "linear-gradient(90deg, #dc2626, #f59e0b)" }} />
+          <Box sx={{ height: 4, background: "linear-gradient(90deg, #DC2626, #F59E0B)" }} />
 
-          <CardContent sx={{ p: 4 }}>
+          <CardContent sx={{ p: isMobile ? 3.5 : 5 }}>
             <Stack spacing={3} sx={{ alignItems: "center" }}>
-              <WarningIcon
-                sx={{ fontSize: 48, color: "rgba(220,38,38,0.6)" }}
-              />
+              {/* Warning icon with soft red background */}
+              <Box
+                sx={{
+                  position: "relative",
+                  "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: 120,
+                    height: 120,
+                    borderRadius: "50%",
+                    background: "radial-gradient(circle, rgba(220, 38, 38, 0.1) 0%, rgba(220, 38, 38, 0) 70%)",
+                    zIndex: -1,
+                  },
+                }}
+              >
+                <WarningIcon
+                  sx={{ fontSize: 72, color: "#DC2626" }}
+                />
+              </Box>
 
               <Typography
                 variant="h2"
                 sx={{
-                  fontWeight: 300,
-                  color: "#dc2626",
-                  letterSpacing: "-0.02em",
+                  fontWeight: 700,
+                  color: "#DC2626",
+                  letterSpacing: "-0.03em",
                   textAlign: "center",
-                  fontSize: isMobile ? "1.75rem" : "2rem",
+                  fontSize: isMobile ? "1.75rem" : "2.25rem",
                 }}
               >
                 Access Restricted
@@ -98,17 +148,17 @@ export default function WrongTenantScreen({
               <Typography
                 variant="body1"
                 sx={{
-                  color: "rgba(0,0,0,0.55)",
-                  lineHeight: 1.7,
+                  color: "#6B7280",
+                  lineHeight: 1.6,
                   textAlign: "center",
                 }}
               >
                 <Typography
                   component="span"
                   sx={{
-                    fontFamily: "monospace",
-                    color: "#1a1a2e",
-                    fontWeight: 500,
+                    fontFamily: "inherit",
+                    color: "#111827",
+                    fontWeight: 600,
                   }}
                 >
                   {userEmail}
@@ -125,11 +175,19 @@ export default function WrongTenantScreen({
                 sx={{
                   backgroundColor: "#0078D4",
                   borderRadius: "12px",
-                  py: 1.5,
-                  textTransform: "none",
+                  py: 1.75,
+                  fontSize: "1rem",
                   fontWeight: 500,
-                  boxShadow: "0 2px 8px rgba(0,120,212,0.25)",
-                  "&:hover": { backgroundColor: "#005A9E" },
+                  boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  "&:hover": {
+                    backgroundColor: "#0068C4",
+                    boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
+                    transform: "translateY(-1px)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.98) translateY(0)",
+                  },
                 }}
               >
                 Switch account
@@ -143,13 +201,20 @@ export default function WrongTenantScreen({
                 onClick={onLogout}
                 sx={{
                   borderRadius: "12px",
-                  py: 1.5,
-                  textTransform: "none",
-                  borderColor: "rgba(220,38,38,0.3)",
-                  color: "#dc2626",
+                  py: 1.75,
+                  fontSize: "1rem",
+                  fontWeight: 500,
+                  borderColor: "rgba(220, 38, 38, 0.3)",
+                  color: "#DC2626",
+                  borderWidth: "1.5px",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
-                    borderColor: "#dc2626",
-                    backgroundColor: "rgba(220,38,38,0.04)",
+                    borderColor: "#DC2626",
+                    backgroundColor: "rgba(220, 38, 38, 0.04)",
+                    transform: "translateY(-1px)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.98) translateY(0)",
                   },
                 }}
               >

@@ -16,7 +16,7 @@ const msalConfig: Configuration = {
     authority: `https://login.microsoftonline.com/${import.meta.env.VITE_AZURE_TENANT_ID}`,
     redirectUri: window.location.origin,
   },
-  cache: { cacheLocation: "sessionStorage" },
+  cache: { cacheLocation: "localStorage" },
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);

@@ -56,7 +56,7 @@ If you've already added the env vars in the Vercel dashboard:
 
 ```bash
 vercel env pull .env
-```
+
 
 ---
 

@@ -13,6 +13,7 @@ import {
   Typography,
   useMediaQuery,
   useTheme,
+  Chip,
 } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -125,22 +126,22 @@ function ApprovalCard({
   const isSigned = layer.status === "approved" || layer.status === "signed";
   const isRejected = layer.status === "rejected";
 
-  let borderColor = "#a855f7";
-  let bgColor = "rgba(168,85,247,0.04)";
-  let iconColor = "#a855f7";
+  let borderColor = "#6264A7";
+  let bgColor = "rgba(98,100,167,0.04)";
+  let iconColor = "#6264A7";
   let statusIcon = <AccessTimeIcon sx={{ fontSize: 20 }} />;
   let statusLabel = "Awaiting";
 
   if (isSigned) {
-    borderColor = "#16a34a";
+    borderColor = "#16A34A";
     bgColor = "rgba(22,163,74,0.04)";
-    iconColor = "#16a34a";
+    iconColor = "#16A34A";
     statusIcon = <CheckCircleIcon sx={{ fontSize: 20 }} />;
     statusLabel = "Signed";
   } else if (isRejected) {
-    borderColor = "#dc2626";
+    borderColor = "#DC2626";
     bgColor = "rgba(220,38,38,0.04)";
-    iconColor = "#dc2626";
+    iconColor = "#DC2626";
     statusIcon = <CancelIcon sx={{ fontSize: 20 }} />;
     statusLabel = "Rejected";
   }
@@ -149,17 +150,22 @@ function ApprovalCard({
     <Paper
       elevation={0}
       sx={{
-        border: `1px solid ${borderColor}20`,
+        border: `1px solid rgba(0,0,0,0.04)`,
         backgroundColor: bgColor,
         borderRadius: "12px",
-        p: 2,
+        p: 2.5,
+        borderLeft: `4px solid ${borderColor}`,
+        transition: "all 0.2s ease",
+        "&:hover": {
+          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+        },
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
         <Box
           sx={{
-            width: 32,
-            height: 32,
+            width: 36,
+            height: 36,
             borderRadius: "50%",
             backgroundColor: `${iconColor}15`,
             display: "flex",
@@ -170,25 +176,31 @@ function ApprovalCard({
         >
           {statusIcon}
         </Box>
-        <Typography variant="body2" sx={{ fontWeight: 600, color: "#1a1a2e" }}>
+        <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>
           Level {index + 1}
         </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: iconColor, fontWeight: 500, ml: "auto" }}
-        >
-          {statusLabel}
-        </Typography>
+        <Chip
+          label={statusLabel}
+          size="small"
+          sx={{
+            backgroundColor: `${iconColor}15`,
+            color: iconColor,
+            fontWeight: 600,
+            fontSize: "0.7rem",
+            height: 24,
+            ml: "auto",
+          }}
+        />
       </Box>
 
       {layer.email && (
-        <Typography variant="body2" sx={{ color: "rgba(0,0,0,0.55)", mb: 0.5 }}>
+        <Typography variant="body2" sx={{ color: "#6B7280", mb: 0.5 }}>
           {layer.email}
         </Typography>
       )}
 
       {layer.signedAt && (
-        <Typography variant="caption" sx={{ color: "rgba(0,0,0,0.35)" }}>
+        <Typography variant="caption" sx={{ color: "#6B7280" }}>
           {new Date(layer.signedAt).toLocaleString("en-GB", {
             day: "2-digit",
             month: "short",
@@ -202,7 +214,7 @@ function ApprovalCard({
       {layer.rejectionReason && (
         <Typography
           variant="body2"
-          sx={{ color: "#dc2626", mt: 1, fontStyle: "italic" }}
+          sx={{ color: "#DC2626", mt: 1, fontStyle: "italic" }}
         >
           Reason: {layer.rejectionReason}
         </Typography>
@@ -214,8 +226,8 @@ function ApprovalCard({
           src={layer.signature}
           alt="Signature"
           sx={{
-            maxHeight: 60,
-            mt: 1,
+            maxHeight: 100,
+            mt: 1.5,
             borderRadius: "8px",
             border: "1px solid rgba(0,0,0,0.06)",
           }}
@@ -244,8 +256,19 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
       slotProps={{
         paper: {
           sx: {
-            borderRadius: isMobile ? 0 : "20px",
+            borderRadius: isMobile ? 0 : "24px",
             overflow: "hidden",
+            animation: "fadeInUp 0.3s ease-out",
+            "@keyframes fadeInUp": {
+              "0%": {
+                opacity: 0,
+                transform: "translateY(20px)",
+              },
+              "100%": {
+                opacity: 1,
+                transform: "translateY(0)",
+              },
+            },
           },
         },
       }}
@@ -253,7 +276,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
       {/* Header */}
       <DialogTitle
         sx={{
-          background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+          background: "linear-gradient(135deg, #6264A7, #4A4C80)",
           color: "#ffffff",
           py: 3,
           px: 4,
@@ -263,7 +286,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
         }}
       >
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 300, letterSpacing: "-0.02em" }}>
+          <Typography variant="h4" sx={{ fontWeight: 600, letterSpacing: "-0.02em" }}>
             {item?.title}
           </Typography>
           <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.5 }}>
@@ -289,29 +312,33 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
             >
               <StatusBadge status={item.formStatus} />
               {item.submittedAt && (
-                <Typography variant="body2" sx={{ color: "rgba(0,0,0,0.55)" }}>
-                  Submitted:{" "}
-                  {new Date(item.submittedAt).toLocaleDateString("en-GB", {
+                <Chip
+                  label={`Submitted: ${new Date(item.submittedAt).toLocaleDateString("en-GB", {
                     day: "2-digit",
                     month: "short",
                     year: "numeric",
-                  })}
-                </Typography>
+                  })}`}
+                  size="small"
+                  sx={{
+                    backgroundColor: "#F8F9FC",
+                    color: "#6B7280",
+                    border: "1px solid rgba(0,0,0,0.06)",
+                    fontWeight: 500,
+                  }}
+                />
               )}
-              <Typography
-                variant="caption"
+              <Chip
+                label={`SP ID: ${item.id}`}
+                size="small"
                 sx={{
-                  fontFamily: "monospace",
                   backgroundColor: "rgba(98,100,167,0.08)",
                   color: "#6264A7",
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: "6px",
+                  border: "1px solid rgba(98,100,167,0.15)",
+                  fontWeight: 500,
+                  fontFamily: "monospace",
                 }}
-              >
-                SP ID: {item.id}
-              </Typography>
-              <Typography variant="body2" sx={{ color: "rgba(0,0,0,0.45)", ml: "auto" }}>
+              />
+              <Typography variant="body2" sx={{ color: "#6B7280", ml: "auto" }}>
                 {item.submittedByEmail}
               </Typography>
             </Box>
@@ -321,7 +348,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
             {/* Field grid */}
             {visibleFields.length > 0 && (
               <>
-                <Grid container spacing={2}>
+                <Grid container spacing={3}>
                   {visibleFields.map(([key, value]) => {
                     if (htmlFields.includes(key) && typeof value === "string") {
                       return (
@@ -331,12 +358,12 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                               variant="caption"
                               sx={{
                                 textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                color: "rgba(0,0,0,0.45)",
+                                letterSpacing: "0.08em",
+                                color: "#6B7280",
                                 fontWeight: 600,
-                                fontSize: "0.7rem",
+                                fontSize: "0.75rem",
                                 display: "block",
-                                mb: 0.5,
+                                mb: 1,
                               }}
                             >
                               {formatFieldName(key)}
@@ -344,21 +371,24 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                             <Box
                               sx={{
                                 backgroundColor: "#ffffff",
-                                border: "1px solid rgba(0,0,0,0.08)",
-                                borderRadius: "10px",
+                                border: "1px solid rgba(0,0,0,0.06)",
+                                borderRadius: "12px",
                                 p: 2,
                                 "& table": {
                                   width: "100%",
                                   borderCollapse: "collapse",
                                 },
                                 "& td, & th": {
-                                  border: "1px solid rgba(0,0,0,0.1)",
-                                  padding: "8px 12px",
+                                  border: "1px solid rgba(0,0,0,0.08)",
+                                  padding: "10px 14px",
                                   fontSize: "0.875rem",
                                 },
                                 "& th": {
-                                  backgroundColor: "rgba(0,0,0,0.02)",
+                                  backgroundColor: "#F8F9FC",
                                   fontWeight: 600,
+                                },
+                                "& tr:nth-of-type(even)": {
+                                  backgroundColor: "rgba(0,0,0,0.02)",
                                 },
                               }}
                               dangerouslySetInnerHTML={{ __html: value }}
@@ -375,29 +405,30 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                             variant="caption"
                             sx={{
                               textTransform: "uppercase",
-                              letterSpacing: "0.05em",
-                              color: "rgba(0,0,0,0.45)",
+                              letterSpacing: "0.08em",
+                              color: "#6B7280",
                               fontWeight: 600,
-                              fontSize: "0.7rem",
+                              fontSize: "0.75rem",
                               display: "block",
-                              mb: 0.5,
+                              mb: 1,
                             }}
                           >
                             {formatFieldName(key)}
                           </Typography>
-                          <Typography
-                            variant="body2"
+                          <Box
                             sx={{
                               backgroundColor: "#ffffff",
-                              border: "1px solid rgba(0,0,0,0.08)",
-                              borderRadius: "10px",
-                              p: 1.5,
-                              color: "#1a1a2e",
+                              border: "1px solid rgba(0,0,0,0.06)",
+                              borderRadius: "12px",
+                              p: 2,
+                              color: "#111827",
                               wordBreak: "break-word",
                             }}
                           >
-                            {formatFieldValue(value)}
-                          </Typography>
+                            <Typography variant="body2">
+                              {formatFieldValue(value)}
+                            </Typography>
+                          </Box>
                         </Box>
                       </Grid>
                     );
@@ -414,12 +445,12 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   variant="caption"
                   sx={{
                     textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    color: "rgba(0,0,0,0.45)",
+                    letterSpacing: "0.08em",
+                    color: "#6B7280",
                     fontWeight: 600,
-                    fontSize: "0.7rem",
+                    fontSize: "0.75rem",
                     display: "block",
-                    mb: 0.5,
+                    mb: 1,
                   }}
                 >
                   HOD Signature
@@ -429,8 +460,8 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   src={item.submissionData.HodSignature as string}
                   alt="HOD Signature"
                   sx={{
-                    maxHeight: 80,
-                    borderRadius: "10px",
+                    maxHeight: 100,
+                    borderRadius: "8px",
                     border: "1px solid rgba(0,0,0,0.06)",
                   }}
                 />
@@ -443,12 +474,12 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   variant="caption"
                   sx={{
                     textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    color: "rgba(0,0,0,0.45)",
+                    letterSpacing: "0.08em",
+                    color: "#6B7280",
                     fontWeight: 600,
-                    fontSize: "0.7rem",
+                    fontSize: "0.75rem",
                     display: "block",
-                    mb: 0.5,
+                    mb: 1,
                   }}
                 >
                   Applicant Signature
@@ -458,8 +489,8 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   src={item.submissionData.ApplicantSignature as string}
                   alt="Applicant Signature"
                   sx={{
-                    maxHeight: 80,
-                    borderRadius: "10px",
+                    maxHeight: 100,
+                    borderRadius: "8px",
                     border: "1px solid rgba(0,0,0,0.06)",
                   }}
                 />
@@ -470,16 +501,16 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
             {item.layers && item.layers.length > 0 && (
               <>
                 <Typography
-                  variant="subtitle2"
+                  variant="h6"
                   sx={{
                     fontWeight: 600,
-                    color: "#1a1a2e",
+                    color: "#111827",
                     letterSpacing: "-0.01em",
                   }}
                 >
                   Approval Chain
                 </Typography>
-                <Stack spacing={1.5}>
+                <Stack spacing={2}>
                   {item.layers.map(
                     (layer, i) =>
                       layer && <ApprovalCard key={i} layer={layer} index={i} />
@@ -492,13 +523,13 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
       </DialogContent>
 
       {/* Footer */}
-      <DialogActions sx={{ px: 4, py: 2 }}>
+      <DialogActions sx={{ px: 4, py: 2.5, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
             gap: 1,
-            color: "rgba(0,0,0,0.35)",
+            color: "#6B7280",
             fontSize: "0.8rem",
           }}
         >
@@ -510,8 +541,11 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
           variant="contained"
           sx={{
             backgroundColor: "#0078D4",
-            borderRadius: "10px",
+            borderRadius: "12px",
             textTransform: "none",
+            fontWeight: 600,
+            px: 3,
+            py: 1,
             "&:hover": { backgroundColor: "#005A9E" },
           }}
         >
