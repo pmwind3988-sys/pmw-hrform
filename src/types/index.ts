@@ -208,12 +208,6 @@ export interface FormBuilderField {
   displayAs?: "vertical" | "horizontal" | "buttongroup" | "cardgrid";
   selectAll?: boolean;
   maxSelections?: number;
-  // Toggle Switch
-  colorOn?: string;
-  size?: "sm" | "md" | "lg";
-  // Button Group
-  minSelect?: number;
-  maxSelect?: number;
   // Slider
   step?: number;
   showTooltip?: boolean;
@@ -291,10 +285,6 @@ export interface FormBuilderField {
   extractGender?: boolean;
   extractState?: boolean;
   showExtractedInfo?: boolean;
-  // OTP
-  digitCount?: number;
-  autoAdvance?: boolean;
-  maskMode?: boolean;
   // Consent
   termsContent?: string;
   mustScrollToBottom?: boolean;
@@ -337,12 +327,6 @@ export interface FormBuilderField {
   chartType?: "bar" | "line" | "pie" | "doughnut";
   chartDataSource?: string;
   chartColors?: string[];
-  // Progress Indicator
-  progressType?: "bar" | "steps";
-  currentStep?: number;
-  totalSteps?: number;
-  showPercentage?: boolean;
-  stepLabels?: string[];
   // Countdown
   endDateTime?: string;
   onExpireAction?: "disable" | "message" | "redirect";

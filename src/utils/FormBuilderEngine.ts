@@ -82,7 +82,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Basic",
     description: "Date picker input",
     spColumnKind: 4,
-    defaultProps: { inputType: "date", minDate: "", maxDate: "", disableWeekends: false },
+    defaultProps: { inputType: "date", defaultValue: new Date().toISOString().split("T")[0], minDate: "", maxDate: "", disableWeekends: false },
   },
   {
     type: "datetime",
@@ -91,7 +91,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Basic",
     description: "Date and time picker input",
     spColumnKind: 4,
-    defaultProps: { inputType: "datetime" },
+    defaultProps: { inputType: "datetime", minDate: "", maxDate: "", disableWeekends: false },
   },
   // ========== TEXT GROUP (text input variants) ==========
   {
@@ -200,24 +200,6 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
   },
   // ========== SELECTION GROUP (interactive selectors) ==========
   {
-    type: "toggleswitch",
-    label: "Toggle Switch",
-    icon: "🔃",
-    group: "Selection",
-    description: "On/Off toggle switch",
-    spColumnKind: 8,
-    defaultProps: { labelOn: "Yes", labelOff: "No", colorOn: "#5B21B6", size: "md" },
-  },
-  {
-    type: "buttongroup",
-    label: "Button Group",
-    icon: "🔲",
-    group: "Selection",
-    description: "Horizontal button row, single or multi select",
-    spColumnKind: 6,
-    defaultProps: { choices: ["Option 1", "Option 2"], minSelect: 1, maxSelect: 1 },
-  },
-  {
     type: "slider",
     label: "Slider",
     icon: "🎚️",
@@ -287,15 +269,6 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     description: "Malaysian IC with validation",
     spColumnKind: 2,
     defaultProps: { extractDOB: true, extractGender: true, extractState: true, showExtractedInfo: true },
-  },
-  {
-    type: "otp",
-    label: "OTP Input",
-    icon: "🔐",
-    group: "Advanced",
-    description: "4 or 6 digit OTP boxes",
-    spColumnKind: 2,
-    defaultProps: { digitCount: 6, autoAdvance: true, maskMode: false },
   },
   {
     type: "consent",
@@ -467,15 +440,6 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     defaultProps: { type: "info", icon: true, title: "", body: "", dismissible: false },
   },
   {
-    type: "progress",
-    label: "Progress Indicator",
-    icon: "📶",
-    group: "Display",
-    description: "Visual progress bar or step tracker",
-    spColumnKind: null,
-    defaultProps: { type: "bar", currentStep: 1, totalSteps: 5, showPercentage: true },
-  },
-  {
     type: "videoembed",
     label: "Video Embed",
     icon: "🎬",
@@ -586,7 +550,7 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
   const nativeTypes = [
     "text", "comment", "dropdown", "radiogroup", "checkbox",
     "boolean", "rating", "file", "html", "image",
-    "signaturepad", "dynamicmatrix", "panel", "pagebreak",
+    "signaturepad", "panel", "pagebreak",
     "ranking", "matrixdynamic",
   ];
   if (nativeTypes.includes(type)) return field;
@@ -623,8 +587,6 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
           ? `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:8px;"><iframe src="${field.videoUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe></div>${field.videoCaption ? `<p style="font-size:12px;color:#6B7280;margin-top:8px;">${field.videoCaption}</p>` : ""}`
           : "<p>Video embed</p>",
       };
-    case "progress":
-      return { ...field, type: "html", html: `<p>Progress: ${field.currentStep || 1} / ${field.totalSteps || 5}</p>` };
     case "countdown":
       return { ...field, type: "html", html: `<p>Countdown to ${field.endDateTime || "..."}</p>` };
     case "scorecard":
@@ -645,12 +607,8 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return { ...field, type: "paneldynamic" };
 
     // Selection variants
-    case "buttongroup":
-      return { ...field, type: (field.maxSelect ?? 1) > 1 ? "checkbox" : "radiogroup" };
-    case "toggleswitch":
-      return { ...field, type: "boolean", labelTrue: field.labelTrue, labelFalse: field.labelFalse };
     case "slider":
-      return { ...field, type: "text", inputType: "range" };
+      return { ...field, type: "text", inputType: "number" };
 
     // Numeric variants
     case "counter":
@@ -667,8 +625,6 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return { ...field, type: "boolean" };
     case "nric":
       return { ...field, type: "text" };
-    case "otp":
-      return { ...field, type: "text", maxLength: field.digitCount || 6 };
     case "jsoneditor":
       return { ...field, type: "comment" };
     case "hierarchy":
@@ -679,6 +635,7 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return { ...field, type: "comment" };
     case "budgetallocator":
       return { ...field, type: "comment" };
+    case "dynamicmatrix":
     case "tableinput":
       return { ...field, type: "matrixdynamic" };
 
@@ -692,15 +649,23 @@ export function buildSurveyJson(
   fields: FormBuilderField[],
   surveySettings: Record<string, unknown> = {}
 ): SurveyJson {
-  const elements = fields.map((f) => {
-    const mapped = mapFieldToSurveyJs(f);
-    const cleaned: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(mapped)) {
-      if (INTERNAL_FIELDS.includes(key)) continue;
-      if (val !== undefined) cleaned[key] = val;
-    }
-    return cleaned;
-  });
+  function buildElements(items: FormBuilderField[]): Record<string, unknown>[] {
+    return items.map((f) => {
+      const mapped = mapFieldToSurveyJs(f);
+      const cleaned: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(mapped)) {
+        if (INTERNAL_FIELDS.includes(key)) continue;
+        if (val !== undefined) cleaned[key] = val;
+      }
+      // Recursively emit nested elements for panels
+      if (f.type === "panel" && Array.isArray(f.elements) && f.elements.length > 0) {
+        cleaned.elements = buildElements(f.elements);
+      }
+      return cleaned;
+    });
+  }
+
+  const elements = buildElements(fields);
 
   const json: SurveyJson = {
     title: (surveySettings.title as string) ?? "New Form",
@@ -742,45 +707,52 @@ export function validateFields(
   const errors: { id: string; msg: string }[] = [];
   const nameCount: Record<string, number> = {};
 
-  for (const f of fields) {
-    if (!f.name?.trim()) {
-      errors.push({ id: f._id, msg: "Field name is required" });
-    }
-    if (!f.title?.trim()) {
-      errors.push({ id: f._id, msg: "Field title is required" });
-    }
-    if (f.name?.trim()) {
-      nameCount[f.name] = (nameCount[f.name] ?? 0) + 1;
+  function walk(items: FormBuilderField[]) {
+    for (const f of items) {
+      if (!f.name?.trim()) {
+        errors.push({ id: f._id, msg: "Field name is required" });
+      }
+      if (!f.title?.trim()) {
+        errors.push({ id: f._id, msg: "Field title is required" });
+      }
+      if (f.name?.trim()) {
+        nameCount[f.name] = (nameCount[f.name] ?? 0) + 1;
+      }
+
+      const choiceTypes = ["dropdown", "radiogroup", "checkbox"];
+      if (choiceTypes.includes(f.type)) {
+        const choices = f.choices ?? [];
+        if (choices.length < 2) {
+          errors.push({
+            id: f._id,
+            msg: "Choice fields must have at least 2 options",
+          });
+        }
+      }
+
+      if (f.type === "rating") {
+        const min = f.rateMin ?? 1;
+        const max = f.rateMax ?? 5;
+        if (min >= max) {
+          errors.push({
+            id: f._id,
+            msg: "Rating min must be less than max",
+          });
+        }
+      }
+
+      // Recursively validate panel children
+      if (f.type === "panel" && Array.isArray(f.elements)) {
+        walk(f.elements);
+      }
     }
   }
+
+  walk(fields);
 
   for (const f of fields) {
     if (f.name && nameCount[f.name] > 1) {
       errors.push({ id: f._id, msg: `Duplicate field name: ${f.name}` });
-    }
-  }
-
-  for (const f of fields) {
-    const choiceTypes = ["dropdown", "radiogroup", "checkbox"];
-    if (choiceTypes.includes(f.type)) {
-      const choices = f.choices ?? [];
-      if (choices.length < 2) {
-        errors.push({
-          id: f._id,
-          msg: "Choice fields must have at least 2 options",
-        });
-      }
-    }
-
-    if (f.type === "rating") {
-      const min = f.rateMin ?? 1;
-      const max = f.rateMax ?? 5;
-      if (min >= max) {
-        errors.push({
-          id: f._id,
-          msg: "Rating min must be less than max",
-        });
-      }
     }
   }
 
@@ -794,7 +766,13 @@ export function updateField(
   id: string,
   patch: Partial<FormBuilderField>
 ): FormBuilderField[] {
-  return fields.map((f) => (f._id === id ? { ...f, ...patch } : f));
+  return fields.map((f) => {
+    if (f._id === id) return { ...f, ...patch };
+    if (f.type === "panel" && Array.isArray(f.elements)) {
+      return { ...f, elements: updateField(f.elements, id, patch) };
+    }
+    return f;
+  });
 }
 
 export function removeField(
@@ -831,8 +809,198 @@ export function reorderFields(
   return result;
 }
 
-// ── Flatten Questions ──────────────────────────────────────────────────────────
+// ── Tree Helpers ───────────────────────────────────────────────────────────────
 
+/** Find a field by id anywhere in the tree (root or inside panels) */
+export function findFieldById(fields: FormBuilderField[], id: string): FormBuilderField | null {
+  for (const f of fields) {
+    if (f._id === id) return f;
+    if (f.type === "panel" && Array.isArray(f.elements)) {
+      const found = findFieldById(f.elements, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/** Find the parent array and index of a field by id */
+export function findFieldLocation(fields: FormBuilderField[], id: string): { parent: FormBuilderField[]; index: number } | null {
+  for (let i = 0; i < fields.length; i++) {
+    if (fields[i]._id === id) return { parent: fields, index: i };
+    if (fields[i].type === "panel" && Array.isArray(fields[i].elements)) {
+      const loc = findFieldLocation(fields[i].elements!, id);
+      if (loc) return loc;
+    }
+  }
+  return null;
+}
+
+/** Remove a field by id from anywhere in the tree */
+export function removeFieldRecursive(fields: FormBuilderField[], id: string): FormBuilderField[] {
+  const result: FormBuilderField[] = [];
+  for (const f of fields) {
+    if (f._id === id) continue;
+    if (f.type === "panel" && Array.isArray(f.elements)) {
+      result.push({ ...f, elements: removeFieldRecursive(f.elements, id) });
+    } else {
+      result.push(f);
+    }
+  }
+  return result;
+}
+
+/** Duplicate a field by id anywhere in the tree */
+export function duplicateFieldRecursive(fields: FormBuilderField[], id: string): FormBuilderField[] {
+  return fields.map((f) => {
+    if (f._id === id) {
+      const copy: FormBuilderField = {
+        ...f,
+        _id: generateFieldId(),
+        name: `${f.name}_copy`,
+        title: `${f.title} (Copy)`,
+      };
+      // If duplicating a panel, also duplicate its children
+      if (f.type === "panel" && Array.isArray(f.elements)) {
+        copy.elements = f.elements.map((child) => ({
+          ...child,
+          _id: generateFieldId(),
+          name: `${child.name}_copy`,
+          title: `${child.title} (Copy)`,
+        }));
+      }
+      return [f, copy];
+    }
+    if (f.type === "panel" && Array.isArray(f.elements)) {
+      return [{ ...f, elements: duplicateFieldRecursive(f.elements, id) }];
+    }
+    return [f];
+  }).flat();
+}
+
+/** Move a field into a panel's elements by id */
+export function moveFieldIntoPanel(
+  fields: FormBuilderField[],
+  fieldId: string,
+  panelId: string
+): FormBuilderField[] {
+  // Find the field first
+  const field = findFieldById(fields, fieldId);
+  if (!field) return fields;
+  // Remove from current location
+  let next = removeFieldRecursive(fields, fieldId);
+  // Add to target panel
+  next = next.map((f) => {
+    if (f._id === panelId && f.type === "panel") {
+      return {
+        ...f,
+        elements: [...(f.elements || []), field],
+      };
+    }
+    if (f.type === "panel" && Array.isArray(f.elements)) {
+      return { ...f, elements: moveFieldIntoPanel(f.elements, fieldId, panelId) };
+    }
+    return f;
+  });
+  return next;
+}
+
+/** Move a field out of its panel to the root level at a specific index */
+export function moveFieldToRoot(
+  fields: FormBuilderField[],
+  fieldId: string,
+  atIndex: number
+): FormBuilderField[] {
+  const field = findFieldById(fields, fieldId);
+  if (!field) return fields;
+  const next = removeFieldRecursive(fields, fieldId);
+  const result = [...next];
+  result.splice(atIndex, 0, field);
+  return result;
+}
+
+/** Reorder fields within their current container (root or panel) */
+export function reorderFieldsRecursive(
+  fields: FormBuilderField[],
+  fromId: string,
+  toId: string
+): FormBuilderField[] {
+  // Find the container that holds both fields
+  for (let i = 0; i < fields.length; i++) {
+    if (fields[i]._id === fromId || fields[i]._id === toId) {
+      // Both are in this root array
+      const fromIndex = fields.findIndex((f) => f._id === fromId);
+      const toIndex = fields.findIndex((f) => f._id === toId);
+      if (fromIndex === -1 || toIndex === -1) return fields;
+      return reorderFields(fields, fromIndex, toIndex);
+    }
+    if (fields[i].type === "panel" && Array.isArray(fields[i].elements)) {
+      const updated = reorderFieldsRecursive(fields[i].elements!, fromId, toId);
+      if (updated !== fields[i].elements) {
+        const result = [...fields];
+        result[i] = { ...fields[i], elements: updated };
+        return result;
+      }
+    }
+  }
+  return fields;
+}
+
+/** Add a field to a panel by panel id */
+export function addFieldToPanel(
+  fields: FormBuilderField[],
+  panelId: string,
+  field: FormBuilderField
+): FormBuilderField[] {
+  return fields.map((f) => {
+    if (f._id === panelId && f.type === "panel") {
+      return { ...f, elements: [...(f.elements || []), field] };
+    }
+    if (f.type === "panel" && Array.isArray(f.elements)) {
+      return { ...f, elements: addFieldToPanel(f.elements, panelId, field) };
+    }
+    return f;
+  });
+}
+
+/** Flatten a tree of FormBuilderField[] into a single array (for dropdowns, exports, etc.) */
+export function flattenFieldTree(fields: FormBuilderField[]): FormBuilderField[] {
+  const result: FormBuilderField[] = [];
+  for (const f of fields) {
+    result.push(f);
+    if (f.type === "panel" && Array.isArray(f.elements)) {
+      result.push(...flattenFieldTree(f.elements));
+    }
+  }
+  return result;
+}
+
+// ── Question Tree Builders ─────────────────────────────────────────────────────
+
+/** Load SurveyJS JSON into a tree of FormBuilderField (panels preserve their children) */
+export function buildQuestionTree(json: SurveyJson): FormBuilderField[] {
+  function walk(elements: Record<string, unknown>[]): FormBuilderField[] {
+    const result: FormBuilderField[] = [];
+    for (const el of elements) {
+      if (el.type === "panel" && Array.isArray(el.elements)) {
+        const panel = { ...el, elements: walk(el.elements as Record<string, unknown>[]) } as unknown as FormBuilderField;
+        result.push(panel);
+      } else {
+        result.push(el as unknown as FormBuilderField);
+      }
+    }
+    return result;
+  }
+
+  const all: FormBuilderField[] = [];
+  for (const page of json.pages ?? []) {
+    if (Array.isArray(page.elements)) {
+      all.push(...walk(page.elements));
+    }
+  }
+  return all;
+}
+
+/** Flatten SurveyJS JSON into a flat array of all leaf fields (for SP provisioning, exports) */
 export function flattenQuestions(json: SurveyJson): FormBuilderField[] {
   const result: FormBuilderField[] = [];
 
@@ -863,16 +1031,10 @@ export interface SpColumnInfo {
 }
 
 export function getSpColumnKind(
-  field: Pick<FormBuilderField, 'type' | 'inputType' | 'maxSelect' | 'choices'>
+  field: Pick<FormBuilderField, 'type' | 'inputType' | 'choices'>
 ): SpColumnInfo | null {
   // dynamicmatrix and tableinput are provisioned separately as _Html + _Json
-  if (field.type === 'dynamicmatrix' || field.type === 'tableinput') return null;
-
-  // buttongroup depends on maxSelect for its SP type
-  if (field.type === 'buttongroup') {
-    const isMulti = typeof field.maxSelect === 'number' && field.maxSelect > 1;
-    return { FieldTypeKind: isMulti ? 15 : 6, label: isMulti ? 'MultiChoice' : 'Choice' };
-  }
+  if (field.type === 'dynamicmatrix' || field.type === 'tableinput' || field.type === 'matrixdynamic') return null;
 
   // Complex types that produce arrays/objects → store as JSON in multi-line text
   if (field.type === 'ranking' || field.type === 'budgetallocator') {

@@ -9,8 +9,9 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Cancel as CancelIcon, Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
+import { Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
+import Logo from "../../components/Logo";
 
 interface ErrorScreenProps {
   errorMsg: string;
@@ -105,7 +106,7 @@ export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScree
 
           <CardContent sx={{ p: isMobile ? 3.5 : 5 }}>
             <Stack spacing={3} sx={{ alignItems: "center" }}>
-              {/* Cancel icon with soft red background */}
+              {/* Logo */}
               <Box
                 sx={{
                   position: "relative",
@@ -123,12 +124,7 @@ export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScree
                   },
                 }}
               >
-                <CancelIcon
-                  sx={{
-                    fontSize: 72,
-                    color: "#DC2626",
-                  }}
-                />
+                <Logo size={72} />
               </Box>
 
               <Typography

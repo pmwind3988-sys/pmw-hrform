@@ -11,11 +11,9 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { registerDynamicMatrix, registerQuestionData } from "../utils/DynamicMatrix";
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices } from "../utils/formBuilderSP";
 import { loginRequest } from "../auth/msalConfig";
-
-registerDynamicMatrix();
+import Logo from "../components/Logo";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -257,7 +255,7 @@ export default function DynamicFormPage() {
           }
 
           // Matrix column choicesSource
-          if (el.type === "dynamicmatrix" && Array.isArray(el.columns)) {
+          if ((el.type === "matrixdynamic" || el.type === "dynamicmatrix") && Array.isArray(el.columns)) {
             const cols = el.columns as Record<string, unknown>[];
             for (const col of cols) {
               const colSrc = col.choicesSource as { list?: string; column?: string } | undefined;
@@ -289,7 +287,7 @@ export default function DynamicFormPage() {
   const survey = useMemo(() => {
     const json = enrichedSurveyJson;
     if (!json) return null;
-    try { registerQuestionData(json); const m = new Model(json); m.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); m.showCompletedPage = false; return m; } catch (e) { console.error("[DFP] Model error:", e); return null; }
+    try { const m = new Model(json); m.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); m.showCompletedPage = false; return m; } catch (e) { console.error("[DFP] Model error:", e); return null; }
   }, [enrichedSurveyJson, resetKey]);
 
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
@@ -404,7 +402,7 @@ export default function DynamicFormPage() {
       <header style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, height: 54, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <a href="/" title="Back to Dashboard" style={{ display: "flex", alignItems: "center", gap: 4, height: 28, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 6, background: "none", color: t.textSecond, fontSize: 11, textDecoration: "none", cursor: "pointer", fontFamily: "'DM Sans'" }}>← Dashboard</a>
-          <span style={{ fontSize: 20, color: '#6264A7' }}>📋</span>
+          <Logo size={28} />
           <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 15, color: t.textPrimary }}>{formTitle}</span>
           {pinVersion && <span style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 20, padding: "2px 10px" }}>v{pinVersion}</span>}
           {!isPublicForm && <span style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 20, padding: "2px 10px" }}>Private</span>}

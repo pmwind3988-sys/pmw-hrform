@@ -457,7 +457,7 @@ export default function AdminFormBuilder() {
       const questions = flattenQuestions(usedJson);
       for (const q of questions) {
         const sp = getSpColumnKind(q);
-        if (q.type === "dynamicmatrix" || q.type === "tableinput") {
+        if (q.type === "matrixdynamic" || q.type === "tableinput") {
           await addColumn(token, title, `${q.name}_Response`, 3, true, true);
           pLog(`     ✓ ${q.name}_Response (Enhanced Rich Text)`);
           await addColumn(token, title, `${q.name}_Json`, 3, true, false);
@@ -638,7 +638,8 @@ export default function AdminFormBuilder() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
           <button
-            onClick={() => navigate("/")}
+            type="button"
+            onClick={() => navigate("/adminhomepage")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -779,7 +780,7 @@ export default function AdminFormBuilder() {
             onChange={json => {
               if (!viewingOld) setSurveyJson(json);
             }}
-            onPublish={viewingOld ? undefined : (viewingOld ? undefined : handlePublish)}
+
             height="100%"
             readOnly={!!viewingOld}
             token={tokenRef.current || undefined}

@@ -9,6 +9,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { fadeInUp } from "../../theme";
+import Logo from "../../components/Logo";
 
 interface LoadingScreenProps {
   userEmail?: string;
@@ -98,13 +99,15 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
       </svg>
 
       <Container maxWidth="sm" sx={{ position: "relative", zIndex: 1 }}>
-        <Stack 
-          spacing={4} 
-          sx={{ 
+        <Stack
+          spacing={4}
+          sx={{
             alignItems: "center",
             animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
           }}
         >
+          <Logo size={isMobile ? 56 : 72} />
+
           {/* Animated spinner with glow */}
           <Box sx={{ position: "relative" }}>
             <Box

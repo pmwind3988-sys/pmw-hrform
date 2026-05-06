@@ -4,7 +4,7 @@ import {
   useMsal,
   useIsAuthenticated,
 } from "@azure/msal-react";
-import { ThemeProvider, CssBaseline, Box, Dialog } from "@mui/material";
+import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
 import { createSpClient } from "./utils/sharepointClient";
@@ -19,23 +19,12 @@ import WrongTenantScreen from "./components/auth/WrongTenantScreen";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import ErrorScreen from "./components/auth/ErrorScreen";
 
-// Dashboard components
-import Header from "./components/dashboard/Header";
-import StatsRow from "./components/dashboard/StatsRow";
-import ListSummaryCards from "./components/dashboard/ListSummaryCards";
-import Toolbar from "./components/dashboard/Toolbar";
-import ListHeader from "./components/dashboard/ListHeader";
-import SubmissionRow from "./components/dashboard/SubmissionRow";
-import DetailModal from "./components/dashboard/DetailModal";
-import EmptyState from "./components/dashboard/EmptyState";
-import ConfigWarningBanner from "./components/dashboard/ConfigWarningBanner";
-
 // Form builder pages
-import FormBuilder from "./components/builder/FormBuilder";
 import DynamicFormPage from "./pages/DynamicFormPage";
 import ApprovalDashboard from "./components/builder/ApprovalDashboard";
 import ResponseViewer from "./components/builder/ResponseViewer";
 import AdminFormBuilder from "./pages/AdminFormBuilder";
+import AdminHomePage from "./pages/AdminHomePage";
 
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 
@@ -490,99 +479,73 @@ if (decision === "guest") {
           }
         />
         <Route
+          path="/adminhomepage"
+          element={
+            <AdminHomePage
+              userEmail={userEmail}
+              isAdmin={isAdmin}
+              submissions={submissions}
+              visibleLists={visibleLists}
+              listMetaMap={listMetaMap}
+              missingConfigs={missingConfigs}
+              hasFilters={hasFilters}
+              detailItem={detailItem}
+              setDetailItem={setDetailItem}
+              search={search}
+              setSearch={setSearch}
+              listFilter={listFilter}
+              setListFilter={setListFilter}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              submitterFilter={submitterFilter}
+              setSubmitterFilter={setSubmitterFilter}
+              sortedSubmissions={sortedSubmissions}
+              onSignOut={handleSignOut}
+              onSwitchAccount={handleSwitchAccount}
+              onOpenBuilder={() => navigate("/admin/builder")}
+              onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
+              builderOpen={builderOpen}
+              setBuilderOpen={setBuilderOpen}
+              editingFormId={editingFormId}
+              setEditingFormId={setEditingFormId}
+            />
+          }
+        />
+        <Route
           path="*"
           element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
-              <Header
-                userEmail={userEmail}
-                isAdmin={isAdmin}
-                onLogout={handleSignOut}
-                onSwitch={handleSwitchAccount}
-                onOpenBuilder={() => navigate("/admin/builder")}
-              />
-
-              <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 4 }}>
-                {missingConfigs.length > 0 && (
-                  <Box sx={{ mb: 4 }}>
-                    <ConfigWarningBanner missingLists={missingConfigs} />
-                  </Box>
-                )}
-
-                <Box sx={{ mb: 4 }}>
-                  <StatsRow submissions={submissions} />
-                </Box>
-
-                {visibleLists.length > 0 && (
-                  <Box sx={{ mb: 4 }}>
-                    <ListSummaryCards
-                      submissions={submissions}
-                      visibleLists={visibleLists}
-                      listMetaMap={listMetaMap}
-                      isAdmin={isAdmin}
-                      onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
-                    />
-                  </Box>
-                )}
-
-                <Box sx={{ mb: 4 }}>
-                  <Toolbar
-                    search={search}
-                    setSearch={setSearch}
-                    listFilter={listFilter}
-                    setListFilter={setListFilter}
-                    statusFilter={statusFilter}
-                    setStatusFilter={setStatusFilter}
-                    sortBy={sortBy}
-                    setSortBy={setSortBy}
-                    submitterFilter={submitterFilter}
-                    setSubmitterFilter={setSubmitterFilter}
-                    isAdmin={isAdmin}
-                    visibleLists={visibleLists}
-                    total={submissions.length}
-                    filtered={sortedSubmissions.length}
-                  />
-                </Box>
-
-                {sortedSubmissions.length > 0 ? (
-                  <>
-                    <ListHeader isAdmin={isAdmin} />
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                      {sortedSubmissions.map((item) => (
-                        <SubmissionRow
-                          key={`${item.listTitle}-${item.id}`}
-                          item={item}
-                          onView={setDetailItem}
-                          isAdmin={isAdmin}
-                          listMetaMap={listMetaMap}
-                        />
-                      ))}
-                    </Box>
-                  </>
-                ) : (
-                  <EmptyState hasFilters={hasFilters} />
-                )}
-              </Box>
-
-              <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
-
-              {/* Form Builder Modal */}
-              <Dialog
-                open={builderOpen}
-                onClose={() => { setBuilderOpen(false); setEditingFormId(undefined); }}
-                fullScreen
-                slotProps={{
-                  paper: {
-                    sx: { backgroundColor: "#F8F9FC" },
-                  },
-                }}
-              >
-                <FormBuilder
-                  formId={editingFormId}
-                  isAdmin={isAdmin}
-                  onClose={() => { setBuilderOpen(false); setEditingFormId(undefined); }}
-                />
-              </Dialog>
-            </Box>
+            <AdminHomePage
+              userEmail={userEmail}
+              isAdmin={isAdmin}
+              submissions={submissions}
+              visibleLists={visibleLists}
+              listMetaMap={listMetaMap}
+              missingConfigs={missingConfigs}
+              hasFilters={hasFilters}
+              detailItem={detailItem}
+              setDetailItem={setDetailItem}
+              search={search}
+              setSearch={setSearch}
+              listFilter={listFilter}
+              setListFilter={setListFilter}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              submitterFilter={submitterFilter}
+              setSubmitterFilter={setSubmitterFilter}
+              sortedSubmissions={sortedSubmissions}
+              onSignOut={handleSignOut}
+              onSwitchAccount={handleSwitchAccount}
+              onOpenBuilder={() => navigate("/admin/builder")}
+              onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
+              builderOpen={builderOpen}
+              setBuilderOpen={setBuilderOpen}
+              editingFormId={editingFormId}
+              setEditingFormId={setEditingFormId}
+            />
           }
         />
       </Routes>

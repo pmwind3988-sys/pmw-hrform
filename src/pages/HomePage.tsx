@@ -11,6 +11,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { Login as LoginIcon, Person as PersonIcon } from "@mui/icons-material";
+import Logo from "../components/Logo";
 
 interface HomePageProps {
   onSignIn: () => void;
@@ -151,16 +152,7 @@ export default function HomePage({ onSignIn, onGuest }: HomePageProps) {
               alignItems: "center",
             }}
           >
-            <Box
-              component="img"
-              src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiB4PSIwIiB5PSIwIiBmaWxsPSIjMDA3OEQ0Ii8+CjxyZWN0IHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgeD0iNDAiIHk9IjAiIGZpbGw9IiM0REFFMzgiLz4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiB4PSIwIiB5PSI0MCIgZmlsbD0iIzQ1RTRFMCIvPgo8cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHg9IjQwIiB5PSI0MCIgZmlsbD0iI0YyNTAyMiIvPgo8L3N2Zz4K"
-              alt="Logo"
-              sx={{
-                width: isMobile ? 56 : 72,
-                height: isMobile ? 56 : 72,
-                mb: 2.5,
-              }}
-            />
+            <Logo size={isMobile ? 56 : 72} sx={{ mb: 2.5 }} />
 
             <Typography
               variant={isMobile ? "h4" : "h3"}

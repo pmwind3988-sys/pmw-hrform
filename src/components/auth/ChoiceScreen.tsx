@@ -14,9 +14,7 @@ import {
 } from "@mui/material";
 import { Login as LoginIcon, Person as PersonIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
-
-const MICROSOFT_LOGO =
-  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiB4PSIwIiB5PSIwIiBmaWxsPSIjRjI1MDIyIi8+CjxyZWN0IHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgeD0iNDAiIHk9IjAiIGZpbGw9IiM3RkJBMDAiLz4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiB4PSIwIiB5PSI0MCIgZmlsbD0iIzAwQTRFRiIvPgo8cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHg9IjQwIiB5PSI0MCIgZmlsbD0iI0ZGQjkwMCIvPgo8L3N2Zz4K";
+import Logo from "../../components/Logo";
 
 interface ChoiceScreenProps {
   onLogin: () => void;
@@ -151,24 +149,15 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                   top: "50%",
                   left: "50%",
                   transform: "translate(-50%, -50%)",
-                  width: isMobile ? 72 : 88,
-                  height: isMobile ? 72 : 88,
+                  width: isMobile ? 88 : 104,
+                  height: isMobile ? 88 : 104,
                   borderRadius: "50%",
                   background: "radial-gradient(circle, rgba(0, 120, 212, 0.15) 0%, rgba(0, 120, 212, 0) 70%)",
                   zIndex: -1,
                 },
               }}
             >
-              <Box
-                component="img"
-                src={MICROSOFT_LOGO}
-                alt="Microsoft Logo"
-                sx={{
-                  width: isMobile ? 56 : 72,
-                  height: isMobile ? 56 : 72,
-                  borderRadius: "16px",
-                }}
-              />
+              <Logo size={isMobile ? 72 : 88} />
             </Box>
 
             <Typography

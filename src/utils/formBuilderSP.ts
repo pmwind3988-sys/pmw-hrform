@@ -891,7 +891,7 @@ export async function provisionResponseList(
   for (const q of questions) {
     if (!q.type) continue;
 
-    if (q.type === 'dynamicmatrix' || q.type === 'tableinput') {
+    if (q.type === 'matrixdynamic' || q.type === 'tableinput') {
       // Matrix/table types create two columns: _Html and _Json
       const fieldName = q.name;
       if (fieldName) {

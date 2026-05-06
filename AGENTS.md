@@ -5,13 +5,15 @@
 - Entry: `src/main.tsx` → `BrowserRouter` → `AuthProvider` → `App.tsx`
 - Theme: `src/theme/index.ts` (MUI custom, #0078D4 primary / #6264A7 secondary)
 - Assets: `public/` (favicon, icons.svg), `src/assets/` (hero.png)
+- **Sub-instructions**: `src/utils/AGENTS.md` and `src/components/builder/AGENTS.md` have additional hard-earned context.
 
 ## Commands (run from root)
 ```bash
-npm run dev       # Vite dev server (port 3000)
-npm run build    # tsc -b && vite build
-npm run lint     # ESLint flat config
-npm run preview  # Preview production build
+npm run dev        # Vite dev server (port 3000)
+npm run dev:api    # Vercel dev server (runs api/ routes locally)
+npm run build      # tsc -b && vite build
+npm run lint       # ESLint flat config
+npm run preview    # Preview production build
 ```
 
 ## Stack
@@ -37,14 +39,14 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 
 ## Routing (react-router-dom v7)
 - `"/form/:formId"` → `DynamicFormPage` (public/private form rendering)
-- `"/admin/builder"` → `AdminFormBuilder` (full form builder with sidebar, library, publish)
+- `"/admin/builder"` → `AdminFormBuilder` (full builder with sidebar, library, publish)
 - `"/admin/builder/:formTitle"` → `AdminFormBuilder` (loads specific form for editing)
 - `"/admin/approvals"` → `ApprovalDashboard` (approval workflow)
 - `"/admin/responses/:formTitle"` → `ResponseViewer` (submission responses)
 - `"*"` → Dashboard with `Header`, `StatsRow`, `ListSummaryCards`, `Toolbar`, `SubmissionRow`
 - `HomePage.tsx` — Landing page for unauthenticated users (MSAL sign-in / guest choice)
 - Header "Form Builder" button navigates to `/admin/builder` (not a modal)
-- The old `<Dialog>` FormBuilder in the `*` route is dead code — nothing sets `builderOpen=true` anymore
+- The old `<Dialog>` FormBuilder in the `*` route is dead code — `builderOpen` is never set to `true`
 
 ## API Routes (Vercel-style serverless)
 - `api/form-config.ts` — Public form config fetcher (used by unauthenticated users)
@@ -52,6 +54,7 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - `api/_utils/graphClient.ts` — **Active** server-side client; uses Microsoft Graph API (`graph.microsoft.com/v1.0`) with client-credentials token (`https://graph.microsoft.com/.default`). Exports: `getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`
 - `api/_utils/sharepoint.ts` — **Dead code** — exists but is not imported by any API route
 - **Import paths**: API routes import from `./_utils/graphClient.ts`
+- `vercel.json` configures SPA rewrite rules and CORS headers for `/api/*`
 
 ## SharePoint Integration
 - **odata format**: `odata=nometadata` — responses use `data.value` not `data.d.results`
@@ -78,58 +81,33 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 | Layout/display types, `file`, `imageupload`, `signaturepad`, `audiorecorder` | null | No column |
 
 ### SharePoint Choice Source (`spChoicesSource`)
-- Choice fields (`dropdown`, `radiogroup`, `checkbox`, `buttongroup`) can pull values from existing SP list columns
-- `FormBuilderField.spChoicesSource = { list, column, multiSelect }` stores the reference
+- Choice fields can pull values from existing SP list columns via `spChoicesSource = { list, column, multiSelect }`
 - Builder UI has "Manual" / "SharePoint List" toggle in Options tab
-- At runtime (`DynamicFormPage.tsx`), choices are fetched live and injected into the SurveyJS model
+- At runtime, choices are fetched live and injected into the SurveyJS model (`DynamicFormPage.tsx`)
 - At publish time, `provisionResponseList()` fetches latest SP choices and creates the SP column with those values
-- Matrix columns (`dynamicmatrix`) also support `choicesSource` per column for dropdown cell types
 
 ## System Lists Filtering
 - Both user and admin contexts see system lists filtered in `filterVisibleLists()`
 - `SYSTEM_BASE_TEMPLATES` set: 109, 111, 112, 113, 114, 116, 119, 130, 140, 212, 300, 850
 - Property-based exclusions: `isCatalog`, `isSiteAssetsLibrary`, `isApplicationList`, `isSystemList`, `noCrawl`
-- `DiscoveredList` type includes: `hidden`, `baseTemplate`, `baseType`, `isCatalog`, `isSiteAssetsLibrary`, `isApplicationList`, `isSystemList`, `noCrawl`
+- `DiscoveredList` type includes all these fields
 
 ## Form Builder System (admin-only)
 - **Entry**: Header "Form Builder" button (visible only when `isAdmin=true`) → navigates to `/admin/builder`
-- **Pages**:
-  - `src/pages/AdminFormBuilder.tsx` — Full builder page (sidebar, library, publish, version history, audit log, approvers)
-  - `src/pages/DynamicFormPage.tsx` — End-user form rendering
-- **Components** (`src/components/builder/`):
-  - `FormBuilder.tsx` — Custom drag-drop canvas (react-dnd, survey-react-ui renderer)
-  - `FormLibrary.tsx` — Sidebar form list
-  - `VersionHistory.tsx` — Version history panel
-  - `AuditLog.tsx` — Audit log with diff view
-  - `ApproverRow.tsx` — Approver input with user search
-  - `ProvisionOverlay.tsx` — Publish status overlay
-  - `ApprovalDashboard.tsx` — Approval workflow page (route: `/admin/approvals`)
-  - `ResponseViewer.tsx` — Submission response viewer (route: `/admin/responses/:formTitle`)
-  - `constants.ts` — `C` color object (inline styles, NOT MUI)
-  - `index.ts` — Barrel exports
-- **Utilities**:
-  - `src/utils/formBuilderSP.ts` — SharePoint REST (raw token, NOT createSpClient)
-  - `src/utils/FormBuilderEngine.ts` — Pure logic (validate, versioning)
-  - `src/utils/DynamicMatrix.tsx` — Custom SurveyJS widget
-  - `src/utils/matrixToHtml.ts` — Matrix ↔ HTML/JSON conversion
+- **Pages**: `AdminFormBuilder.tsx` (full builder), `DynamicFormPage.tsx` (end-user rendering)
+- **Components** (`src/components/builder/`): `FormBuilder.tsx` (react-dnd canvas), `FormLibrary.tsx` (sidebar), `VersionHistory.tsx`, `AuditLog.tsx`, `ApproverRow.tsx`, `ProvisionOverlay.tsx`
+- **Styling**: Inline styles via `C` color object (`constants.ts`), NOT MUI components
 - **SharePoint lists**: `Master Form`, `Web Form Versions`, `Form Builder Log`, `Approvers`
 - **Approval layers**: 1–3 configurable, saved as `L1_Approvers`, `L2_Approvers`, etc.
 - **Versioning**: `Web Form Versions` list, auto-incrementing
-- **Styling**: Inline styles via `C` color object (not MUI components)
 
-## Dashboard Components (`src/components/dashboard/`)
+## Dashboard
 - `Header.tsx` — Sticky top bar with user menu, role badge, admin tools, **Form Builder button**
-- `RoleBadge.tsx` — Admin/User chip indicator
-- `StatsRow.tsx` — 4-column stats (Total / Approved / Pending / Rejected)
-- `ListSummaryCards.tsx` — Grid of form list cards with submission counts, **`onEditForm` → opens FormBuilder**
+- `ListSummaryCards.tsx` — Grid of form list cards; `onEditForm` navigates to `/admin/builder/:formTitle`
 - `Toolbar.tsx` — Search + filter dropdowns (list, status, sort, submitter)
-- `ListHeader.tsx` — Column headers for desktop table view
-- `SubmissionRow.tsx` — Clickable submission rows (responsive grid/stacked)
 - `DetailModal.tsx` — Full detail dialog with fields, signatures, approval chain
-- `EmptyState.tsx` — No submissions placeholder
 - `ConfigWarningBanner.tsx` — Amber warning for unconfigured lists
-- `ListBadge.tsx` — Colored list pill
-- `StatusBadge.tsx` — Colored status pill with auto-normalization
+- `mapSubmission()` in `App.tsx` filters internal fields using `/^L[1-3]_/` regex (not broad `startsWith("L")`)
 
 ## Data Views (DetailModal)
 - `DetailModal.tsx` renders `submissionData` fields using `formatFieldValue()`:
@@ -138,7 +116,6 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
   - Lookup fields: `{ Value }` → displays value
   - Booleans: "Yes"/"No"
   - Arrays: comma-joined
-- `mapSubmission()` in `App.tsx` filters internal fields using `/^L[1-3]_/` regex (not broad `startsWith("L")`)
 - Fields like "Location", "LeaveType" etc. are preserved (not incorrectly filtered)
 
 ## Loading Screen
@@ -150,7 +127,6 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
   - 50-95%: Fetching submissions per list with `(n/total)` status
   - 98%: Finalizing
   - 100%: Ready
-- Shows determinate CircularProgress + LinearProgress bar + status subtitle
 
 ## Auth Components (`src/components/auth/`)
 - **Shared visual pattern**: White base, 2-3 radial gradient blobs, subtle SVG accent lines, `position: absolute` with `pointerEvents: none`, `zIndex: 0`

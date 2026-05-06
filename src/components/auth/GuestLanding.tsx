@@ -8,8 +8,9 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Login as LoginIcon, Description as DescriptionIcon } from "@mui/icons-material";
+import { Login as LoginIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
+import Logo from "../../components/Logo";
 
 interface GuestLandingProps {
   onLogin: () => void;
@@ -175,7 +176,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
               ← Back to choice
             </Button>
 
-            {/* Icon with colored background */}
+            {/* Logo with colored background */}
             <Box
               sx={{
                 position: "relative",
@@ -194,12 +195,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                 },
               }}
             >
-              <DescriptionIcon
-                sx={{
-                  fontSize: 72,
-                  color: "#0078D4",
-                }}
-              />
+              <Logo size={72} />
             </Box>
 
             <Typography

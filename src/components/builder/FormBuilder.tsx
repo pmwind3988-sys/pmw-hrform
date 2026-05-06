@@ -3,14 +3,12 @@
  * Uses react-dnd for drag-drop. Outputs SurveyJS-compatible JSON.
  */
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { Survey } from "survey-react-ui";
 import { Model } from "survey-core";
 import "survey-core/survey-core.min.css";
 import type { SurveyJson, FormBuilderField } from "../../types/index";
 import { QUESTION_TYPES, TYPE_GROUPS, createQuestion, buildSurveyJson, validateFields, getSpColumnKind } from "../../utils/FormBuilderEngine";
-import { flattenQuestions } from "../../utils/FormBuilderEngine";
+import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree } from "../../utils/FormBuilderEngine";
 import { C } from "./constants";
 import "./FormBuilder.css";
 
@@ -21,7 +19,7 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PreviewIcon from "@mui/icons-material/Preview";
-import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
+
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
@@ -45,7 +43,7 @@ import TextFieldsIcon from "@mui/icons-material/TextFields";
 import ArrowDropDownCircleIcon from "@mui/icons-material/ArrowDropDownCircle";
 import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked";
 import CheckBoxIcon from "@mui/icons-material/CheckBox";
-import ToggleOnIcon from "@mui/icons-material/ToggleOn";
+
 import NumbersIcon from "@mui/icons-material/Numbers";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import TableChartIcon from "@mui/icons-material/TableChart";
@@ -65,7 +63,7 @@ import PhoneIcon from "@mui/icons-material/Phone";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import DateRangeIcon from "@mui/icons-material/DateRange";
 import TimelapseIcon from "@mui/icons-material/Timelapse";
-import SmartButtonIcon from "@mui/icons-material/SmartButton";
+
 import LinearScaleIcon from "@mui/icons-material/LinearScale";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import CalculateIcon from "@mui/icons-material/Calculate";
@@ -76,7 +74,7 @@ import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import HomeIcon from "@mui/icons-material/Home";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import BadgeIcon from "@mui/icons-material/Badge";
-import DialpadIcon from "@mui/icons-material/Dialpad";
+
 import ArticleIcon from "@mui/icons-material/Article";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
@@ -86,10 +84,12 @@ import DataObjectIcon from "@mui/icons-material/DataObject";
 import LanguageIcon from "@mui/icons-material/Language";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import WarningIcon from "@mui/icons-material/Warning";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
+
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import SpeedIcon from "@mui/icons-material/Speed";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 // ── Atoms ─────────────────────────────────────────────────────────────
 const Pill = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) =>
@@ -553,8 +553,6 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   radiogroup: <RadioButtonCheckedIcon />,
   checkbox: <CheckBoxIcon />,
   // Selection
-  toggleswitch: <ToggleOnIcon />,
-  buttongroup: <SmartButtonIcon />,
   slider: <LinearScaleIcon />,
   // Numeric
   currency: <AttachMoneyIcon />,
@@ -568,7 +566,6 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   addressblock: <HomeIcon />,
   locationpicker: <LocationOnIcon />,
   nric: <BadgeIcon />,
-  otp: <DialpadIcon />,
   consent: <ArticleIcon />,
   dynamicmatrix: <TableChartIcon />,
   tableinput: <TableRowsIcon />,
@@ -581,7 +578,6 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   image: <ImageIcon />,
   videoembed: <VideocamIcon />,
   alert: <WarningIcon />,
-  progress: <ShowChartIcon />,
   countdown: <HourglassEmptyIcon />,
   datatable: <StorageIcon />,
   chartdisplay: <BarChartIcon />,
@@ -629,13 +625,16 @@ function Palette({ onAdd }: { onAdd: (td: typeof QUESTION_TYPES[number]) => void
 }
 
 // ── Canvas ────────────────────────────────────────────────────────────
-function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, onMoveUp, onMoveDown, isFirst, isLast, errors, onDragStart, onDragOver, onDrop, dragging: _dragging }: {
+function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, onMoveUp, onMoveDown, isFirst, isLast, errors, onDragStart, onDragOver, onDrop, dragging: _dragging, onDropOnPanel, depth = 0, selectedId }: {
   field: FormBuilderField; index: number; selected: boolean; onSelect: (id: string) => void;
   onRemove: (id: string) => void; onDuplicate: (field: FormBuilderField) => void;
   onMoveUp: () => void; onMoveDown: () => void; isFirst: boolean; isLast: boolean;
   errors: { id: string; msg: string }[]; onDragStart: (e: React.DragEvent, i: number) => void;
   onDragOver: (e: React.DragEvent, i: number) => void; onDrop: (e: React.DragEvent, i: number) => void;
   dragging: boolean;
+  onDropOnPanel?: (e: React.DragEvent, panelId: string) => void;
+  depth?: number;
+  selectedId?: string | null;
 }) {
   const err = errors.filter(e => e.id === field._id);
   const td = QUESTION_TYPES.find(t => t.type === field.type) || QUESTION_TYPES[0];
@@ -644,9 +643,25 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
     ? ({ 2: "Text", 3: "Multi-line", 4: "Date", 6: "Choice", 8: "Boolean", 9: "Number", 15: "MultiChoice" }[spColKind.FieldTypeKind] ?? spColKind.label)
     : null;
   const shortcuts = selected ? "Del to remove, Ctrl+D to duplicate" : "";
-  return <div draggable onDragStart={e => onDragStart(e, index)} onDragOver={e => onDragOver(e, index)} onDrop={e => onDrop(e, index)}
-    className={`fb-field-card ${selected ? 'selected' : ''} ${err.length ? 'error' : ''}`} onClick={() => onSelect(field._id)}
-    title={shortcuts}>
+  const isPanel = field.type === "panel";
+
+  return <div
+    draggable
+    onDragStart={e => onDragStart(e, index)}
+    onDragOver={e => onDragOver(e, index)}
+    onDrop={e => {
+      if (isPanel && onDropOnPanel) {
+        e.preventDefault();
+        e.stopPropagation();
+        onDropOnPanel(e, field._id);
+        return;
+      }
+      onDrop(e, index);
+    }}
+    className={`fb-field-card ${selected ? 'selected' : ''} ${err.length ? 'error' : ''} ${isPanel ? 'panel-card' : ''}`}
+    onClick={() => onSelect(field._id)}
+    title={shortcuts}
+    style={{ marginLeft: depth * 24 }}>
     <div className="fb-field-row">
       <div className="fb-field-drag-handle">
         <DragIndicatorIcon style={{ fontSize: 18 }} />
@@ -665,6 +680,7 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
           {field.enableIf && <Pill color={C.purpleLight} bg={C.purplePale}>Dyn.enable</Pill>}
           {spColLabel && <Pill color={C.textSecond} bg={C.offWhite}>{spColLabel}</Pill>}
           {(field.type === "dynamicmatrix" || field.type === "tableinput") && <Pill color={C.amber} bg={C.amberPale}>→ Rich Text</Pill>}
+          {isPanel && (field.elements?.length ? <Pill color={C.purple} bg={C.purplePale}>{field.elements.length} item{field.elements.length !== 1 ? 's' : ''}</Pill> : <Pill color={C.textMuted} bg={C.offWhite}>Empty</Pill>)}
         </div>
         <div className="fb-field-meta">
           <span className="fb-field-name">{field.name}</span>
@@ -680,23 +696,61 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
         <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title="Remove (Del)" onClick={() => onRemove(field._id)} danger />
       </div>
     </div>
+    {/* Render panel children */}
+    {isPanel && Array.isArray(field.elements) && field.elements.length > 0 && (
+      <div className="fb-panel-children">
+        {field.elements.map((child, childIdx) => (
+          <FieldCard
+            key={child._id}
+            field={child}
+            index={childIdx}
+            selected={selectedId === child._id}
+            onSelect={onSelect}
+            onRemove={onRemove}
+            onDuplicate={onDuplicate}
+            onMoveUp={() => {}}
+            onMoveDown={() => {}}
+            isFirst={childIdx === 0}
+            isLast={childIdx === field.elements!.length - 1}
+            errors={errors}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            dragging={false}
+            onDropOnPanel={onDropOnPanel}
+            depth={depth + 1}
+            selectedId={selectedId}
+          />
+        ))}
+      </div>
+    )}
   </div>;
 }
 
-function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder, onAddFromPalette, errors }: {
+function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder, onAddFromPalette, errors, onDropOnPanel }: {
   fields: FormBuilderField[]; selectedId: string | null; onSelect: (id: string | null) => void;
   onRemove: (id: string) => void; onDuplicate: (field: FormBuilderField) => void;
   onReorder: (from: number, to: number) => void; onAddFromPalette: (td: typeof QUESTION_TYPES[number], atIndex?: number) => void;
   errors: { id: string; msg: string }[];
+  onDropOnPanel?: (e: React.DragEvent, panelId: string) => void;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
-  const onDragStart = (e: React.DragEvent, i: number) => { dragIndexRef.current = i; setDraggingIndex(i); e.dataTransfer.effectAllowed = "move"; };
+  const onDragStart = (e: React.DragEvent, i: number) => {
+    dragIndexRef.current = i;
+    setDraggingIndex(i);
+    e.dataTransfer.effectAllowed = "move";
+    if (fields[i]) {
+      e.dataTransfer.setData("field_id", fields[i]._id);
+    }
+  };
   const onDragOver = (e: React.DragEvent, i: number) => { e.preventDefault(); setDragOverIndex(i); };
   const onDrop = (e: React.DragEvent, i: number) => {
-    e.preventDefault(); setDragOverIndex(null); setDraggingIndex(null);
+    e.preventDefault();
+    setDragOverIndex(null);
+    setDraggingIndex(null);
     const pd = e.dataTransfer.getData("palette_type");
     if (pd) { try { onAddFromPalette(JSON.parse(pd), i); } catch { } dragIndexRef.current = null; return; }
     if (dragIndexRef.current !== null && dragIndexRef.current !== i) onReorder(dragIndexRef.current, i);
@@ -704,9 +758,19 @@ function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder
   };
   const onDragEnd = () => { setDraggingIndex(null); setDragOverIndex(null); dragIndexRef.current = null; };
 
-  return <div onDragOver={e => e.preventDefault()}
-    onDrop={e => { const pd = e.dataTransfer.getData("palette_type"); if (pd && !fields.length) try { onAddFromPalette(JSON.parse(pd), 0); } catch { } }}
-    onDragEnd={onDragEnd} className="fb-canvas">
+  // Handles drops on empty canvas space (appends to end)
+  const onCanvasDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    setDraggingIndex(null);
+    const pd = e.dataTransfer.getData("palette_type");
+    if (pd) {
+      try { onAddFromPalette(JSON.parse(pd), fields.length); } catch { }
+    }
+    dragIndexRef.current = null;
+  };
+
+  return <div onDragOver={e => e.preventDefault()} onDrop={onCanvasDrop} onDragEnd={onDragEnd} className="fb-canvas">
     {!fields.length
       ? <div className="fb-canvas-empty">
         <div className="fb-canvas-empty-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -715,14 +779,29 @@ function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder
         <div className="fb-canvas-empty-title">Your form is empty</div>
         <div className="fb-canvas-empty-text">Click a field type in the left panel,<br />or drag one here to get started.</div>
       </div>
-      : fields.map((field, i) => <React.Fragment key={field._id}>
-        {dragOverIndex === i && draggingIndex !== i && <div className="fb-canvas-drop-indicator" />}
-        <FieldCard field={field} index={i} selected={selectedId === field._id}
-          onSelect={onSelect} onRemove={onRemove} onDuplicate={onDuplicate}
-          onMoveUp={() => onReorder(i, i - 1)} onMoveDown={() => onReorder(i, i + 1)}
-          isFirst={i === 0} isLast={i === fields.length - 1} errors={errors}
-          onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} dragging={draggingIndex === i} />
-      </React.Fragment>)}
+      : <>
+        {fields.map((field, i) => <React.Fragment key={field._id}>
+          {/* Stable DOM: indicator always rendered, toggled via display so React never inserts/removes nodes mid-drag */}
+          <div
+            key={`indicator-${field._id}`}
+            className="fb-canvas-drop-indicator"
+            style={{ display: dragOverIndex === i && draggingIndex !== i ? "block" : "none" }}
+          />
+          <FieldCard
+            key={`card-${field._id}`}
+            field={field} index={i} selected={selectedId === field._id}
+            onSelect={onSelect} onRemove={onRemove} onDuplicate={onDuplicate}
+            onMoveUp={() => onReorder(i, i - 1)} onMoveDown={() => onReorder(i, i + 1)}
+            isFirst={i === 0} isLast={i === fields.length - 1} errors={errors}
+            onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} dragging={draggingIndex === i}
+            onDropOnPanel={onDropOnPanel} selectedId={selectedId} />
+        </React.Fragment>)}
+        {/* Drop zone after last card — stable DOM */}
+        <div
+          className="fb-canvas-drop-indicator"
+          style={{ display: dragOverIndex === fields.length && draggingIndex !== fields.length ? "block" : "none" }}
+        />
+      </>}
   </div>;
 }
 
@@ -753,19 +832,20 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
     }
   };
   const currentValue = field.defaultValue !== undefined ? String(field.defaultValue) : "";
+  const inputType = field.type === "date" ? "date" : "text";
   return <PropRow label="Default value">
-    <Input value={currentValue} onChange={handleChange} placeholder="Enter default value" />
+    <Input type={inputType} value={currentValue} onChange={handleChange} placeholder="Enter default value" />
   </PropRow>;
 }
 
 /** Renders type-specific configuration controls in the General tab */
 function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange: (patch: Partial<FormBuilderField>) => void }) {
   const numericTypes = ["number", "slider", "counter", "currency"];
-  const dateTypes = ["date", "daterange"];
+  const dateTypes = ["date", "datetime", "daterange"];
   const commentTypes = ["comment", "jsoneditor", "addressblock", "locationpicker", "budgetallocator"];
   const fileTypes = ["file", "imageupload"];
-  const htmlTypes = ["html", "alert", "progress", "countdown", "datatable", "chartdisplay", "videoembed"];
-  const booleanTypes = ["boolean", "toggleswitch", "consent"];
+  const htmlTypes = ["html", "alert", "countdown", "datatable", "chartdisplay", "videoembed"];
+  const booleanTypes = ["boolean", "consent"];
   const matrixTypes = ["dynamicmatrix", "tableinput"];
 
   return <>
@@ -784,7 +864,7 @@ function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange
         <PropRow label="Min date"><Input type="date" value={field.minDate || ""} onChange={v => onChange({ minDate: v || undefined })} /></PropRow>
         <PropRow label="Max date"><Input type="date" value={field.maxDate || ""} onChange={v => onChange({ maxDate: v || undefined })} /></PropRow>
       </div>
-      {field.type === "date" && <Toggle checked={!!field.disableWeekends} onChange={v => onChange({ disableWeekends: v })} label="Disable weekends" />}
+      {(field.type === "date" || field.type === "datetime") && <Toggle checked={!!field.disableWeekends} onChange={v => onChange({ disableWeekends: v })} label="Disable weekends" />}
     </>}
 
     {/* Comment-like: rows */}
@@ -1050,7 +1130,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
   const [tab, setTab] = useState("general");
 
   // Survey-level settings panel
-  if (!field && surveySettings) return <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+  if (!field && surveySettings) return <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
     <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
         <SettingsIcon style={{ fontSize: 16, color: C.purple }} />
@@ -1058,7 +1138,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
       </div>
       <div style={{ fontSize: 10, color: C.textMuted }}>SurveyJS form properties</div>
     </div>
-    <div style={{ flex: 1, overflowY: "auto", padding: "14px" }}>
+    <div style={{ flex: 1, padding: "14px" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <PropRow label="Form title"><Input value={(surveySettings.title as string) || ""} onChange={v => onSurveySettingsChange?.({ ...surveySettings, title: v })} placeholder="Form title" /></PropRow>
         <PropRow label="Form description"><Textarea value={(surveySettings.description as string) || ""} onChange={v => onSurveySettingsChange?.({ ...surveySettings, description: v })} rows={2} placeholder="Optional description" /></PropRow>
@@ -1092,7 +1172,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
   if (!field) return <div style={{ padding: 20, textAlign: "center", color: C.textMuted, fontSize: 12 }}>Select a field to edit its properties</div>;
 
   const td = QUESTION_TYPES.find(t => t.type === field.type) || QUESTION_TYPES[0];
-  const hasChoices = ["dropdown", "radiogroup", "checkbox", "buttongroup"].includes(field.type);
+  const hasChoices = ["dropdown", "radiogroup", "checkbox"].includes(field.type);
   const tabs = [
     { id: "general", label: "General" },
     { id: "options", label: "Options" },
@@ -1100,7 +1180,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
     { id: "validation", label: "Validation" }
   ];
 
-  return <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+  return <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
     <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
         <span style={{ fontSize: 16, display: "flex", alignItems: "center" }}>
@@ -1116,7 +1196,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
         {tabs.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
       </select>
     </div>
-    <div style={{ flex: 1, overflowY: "auto", padding: "14px" }}>
+    <div style={{ flex: 1, padding: "14px" }}>
       {tab === "general" && <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
         <PropRow label="Field name (SP column)" span>
           <Input value={field.name} onChange={v => onChange({ name: v.replace(/\s+/g, "_") })} placeholder="camelCaseName" />
@@ -1181,16 +1261,38 @@ function JsonPreview({ json, collapsed, onToggle }: { json: SurveyJson; collapse
 
 // ── Live Preview Modal ────────────────────────────────────────────────
 function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" }: { json: SurveyJson; onClose: () => void; showBanner?: boolean; meta?: Record<string, unknown>; device?: "desktop" | "tablet" | "mobile" }) {
-  const model = useMemo(() => {
-    try {
-      const m = new Model(json);
-      if (json.labelPosition) {
-        m.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
-      }
-      return m;
-    } catch (e) { console.error("Preview model error:", e); return null; }
-  }, [json]);
+  const modelRef = useRef<Model | null>(null);
+  const jsonStrRef = useRef<string>("");
 
+  // Create model once on first render
+  if (!modelRef.current) {
+    try {
+      modelRef.current = new Model(json);
+      if (json.labelPosition) {
+        modelRef.current.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
+      }
+      jsonStrRef.current = JSON.stringify(json);
+    } catch (e) { console.error("Preview model error:", e); }
+  }
+
+  // Update model structure when JSON content changes, preserving user data
+  const jsonStr = JSON.stringify(json);
+  if (jsonStr !== jsonStrRef.current && modelRef.current) {
+    const currentData = { ...modelRef.current.data };
+    modelRef.current.fromJSON(json);
+    // Restore data for questions that still exist
+    for (const [key, val] of Object.entries(currentData)) {
+      if (modelRef.current.getQuestionByName(key)) {
+        modelRef.current.setValue(key, val);
+      }
+    }
+    if (json.labelPosition) {
+      modelRef.current.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
+    }
+    jsonStrRef.current = jsonStr;
+  }
+
+  const model = modelRef.current;
   if (!model) return null;
   const formTitle = json?.title || "Form Preview";
   const isoStandards = (meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
@@ -1244,71 +1346,10 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
   </div>;
 }
 
-// ── Inline Split Preview ──────────────────────────────────────────────
-function InlinePreview({ json, showBanner, meta }: { json: SurveyJson; showBanner?: boolean; meta?: Record<string, unknown> }) {
-  const model = useMemo(() => {
-    try {
-      const m = new Model(json);
-      if (json.labelPosition) {
-        m.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
-      }
-      return m;
-    } catch (e) { console.error("Preview model error:", e); return null; }
-  }, [json]);
-
-  if (!model) return <div style={{ padding: 20, color: C.textMuted, fontSize: 12 }}>Preview unavailable — check form configuration</div>;
-  const formTitle = json?.title || "Form Preview";
-
-  return (
-    <div className="fb-preview-panel">
-      <div className="fb-preview-panel-header">
-        <div className="fb-panel-header-text">Live Preview</div>
-        <div style={{ fontSize: 10, color: C.textMuted }}>Updates as you edit</div>
-      </div>
-      <div className="fb-preview-panel-content fb-preview-wrap" style={{
-        backgroundColor: json.backgroundColor || "#FFFFFF",
-        ["--sjs-primary-backcolor" as string]: json.primaryColor || "#5B21B6",
-        ["--sjs-primary-backcolor-light" as string]: json.primaryColor ? `${json.primaryColor}33` : "#7C3AED33",
-        ["--sjs-primary-backcolor-dark" as string]: json.primaryColor || "#3B0764",
-        ["--sjs-general-backcolor" as string]: json.backgroundColor || "#FFFFFF",
-        ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
-        ["--sjs-general-forecolor" as string]: json.textColor || "#1E1B4B",
-        ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1E1B4B",
-        ["--sjs-font-family" as string]: json.fontFamily ? `'${json.fontFamily}',sans-serif` : "'DM Sans',sans-serif",
-        ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
-        ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
-        ["--sjs-questionpanel-cornerRadius" as string]: json.borderRadius || "8px",
-        ["--sjs-editorpanel-cornerRadius" as string]: json.borderRadius || "8px",
-        ["--sjs-error-backcolor" as string]: json.errorColor ? `${json.errorColor}1A` : "#FEE2E2",
-        ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
-      } as React.CSSProperties}>
-        {showBanner && (
-          <div style={{ marginBottom: 16, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.border}` }}>
-            <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "12px 16px" }}>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{(meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001"}</div>
-              <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 15, color: "#fff" }}>{formTitle}</div>
-            </div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <tbody>
-                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ width: 120, borderRight: `1px solid ${C.border}`, background: C.offWhite, padding: "8px 12px", fontWeight: 600, fontSize: 10, color: C.textSecond, textTransform: "uppercase", letterSpacing: ".04em", verticalAlign: "middle" }}><span style={{ fontSize: 16, color: '#6264A7' }}>📋</span></td>
-                  <td style={{ padding: "10px 12px", fontWeight: 700, fontSize: 12, color: C.textPrimary }}>PMW INTERNATIONAL BERHAD</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-        <Survey model={model} />
-      </div>
-    </div>
-  );
-}
-
 // ── Root Component ──────────────────────────────────────────────────
 interface FormBuilderProps {
   initialJson?: SurveyJson | null;
   onChange?: (json: SurveyJson) => void;
-  onPublish?: (json: SurveyJson) => void;
   height?: string;
   token?: string;
   showBanner?: boolean;
@@ -1319,16 +1360,15 @@ interface FormBuilderProps {
   readOnly?: boolean;
 }
 
-export default function FormBuilder({ initialJson, onChange, onPublish, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false }: FormBuilderProps) {
+export default function FormBuilder({ initialJson, onChange, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false }: FormBuilderProps) {
   const [fields, setFields] = useState<FormBuilderField[]>(() => {
     if (!initialJson) return [];
-    try { return flattenQuestions(initialJson); } catch { return []; }
+    try { return buildQuestionTree(initialJson); } catch { return []; }
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [jsonCollapsed, setJsonCollapsed] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [showSplitPreview, setShowSplitPreview] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [commandPaletteSearch, setCommandPaletteSearch] = useState("");
   const [showDataSources, setShowDataSources] = useState(false);
@@ -1341,6 +1381,16 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
   const [errors, setErrors] = useState<{ id: string; msg: string }[]>([]);
   const [surveySettings, setSurveySettings] = useState<Record<string, unknown>>({});
+  
+  // Toolbar scroll state
+  const toolbarRightRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  
+  // Property panel scroll state
+  const propertyPanelRef = useRef<HTMLDivElement>(null);
+  const [canPropertyScrollLeft, setCanPropertyScrollLeft] = useState(false);
+  const [canPropertyScrollRight, setCanPropertyScrollRight] = useState(false);
   
   // ── Part 5: Integration & Submission State ─────────────────────────────────
   const [showIntegrationPanel, setShowIntegrationPanel] = useState(false);
@@ -1432,6 +1482,67 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
     }
   }, [initialJson]);
 
+  // Check scroll state for toolbar
+  const checkScrollState = () => {
+    const el = toolbarRightRef.current;
+    if (el) {
+      setCanScrollLeft(el.scrollLeft > 0);
+      setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+    }
+  };
+
+  // Scroll functions
+  const scrollLeft = () => {
+    const el = toolbarRightRef.current;
+    if (el) {
+      el.scrollBy({ left: -200, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = () => {
+    const el = toolbarRightRef.current;
+    if (el) {
+      el.scrollBy({ left: 200, behavior: 'smooth' });
+    }
+  };
+
+  // Property panel scroll functions
+  const checkPropertyScrollState = () => {
+    const el = propertyPanelRef.current;
+    if (el) {
+      setCanPropertyScrollLeft(el.scrollLeft > 0);
+      setCanPropertyScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+    }
+  };
+
+  const propertyScrollLeft = () => {
+    const el = propertyPanelRef.current;
+    if (el) {
+      el.scrollBy({ left: -200, behavior: 'smooth' });
+    }
+  };
+
+  const propertyScrollRight = () => {
+    const el = propertyPanelRef.current;
+    if (el) {
+      el.scrollBy({ left: 200, behavior: 'smooth' });
+    }
+  };
+
+  // Update scroll state on mount and window resize
+  useEffect(() => {
+    checkScrollState();
+    window.addEventListener('resize', checkScrollState);
+    return () => window.removeEventListener('resize', checkScrollState);
+  }, []);
+
+  // Property panel scroll state on mount and window resize
+  useEffect(() => {
+    checkPropertyScrollState();
+    window.addEventListener('resize', checkPropertyScrollState);
+    return () => window.removeEventListener('resize', checkPropertyScrollState);
+  }, []);
+
   // Undo/redo stacks
   const MAX_HISTORY = 50;
   const [undoStack, setUndoStack] = useState<FormBuilderField[][]>([]);
@@ -1474,73 +1585,102 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
     setShowRestorePrompt(false);
   };
 
+  // Stable ref to avoid stale closure issues during rapid typing
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+
   // Push current state to history before making changes
   const pushHistory = useCallback((newFields: FormBuilderField[]) => {
-    setUndoStack(prev => [...prev, fields].slice(-MAX_HISTORY));
+    setUndoStack(prev => [...prev, fieldsRef.current].slice(-MAX_HISTORY));
     setRedoStack([]);
     setFields(newFields);
-  }, [fields]);
+  }, []);
 
   // Undo handler
   const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
     const previousFields = undoStack[undoStack.length - 1];
-    setRedoStack(prev => [...prev, fields]);
+    setRedoStack(prev => [...prev, fieldsRef.current]);
     setUndoStack(prev => prev.slice(0, -1));
     setFields(previousFields);
-  }, [undoStack, fields]);
+  }, [undoStack]);
 
   // Redo handler
   const handleRedo = useCallback(() => {
     if (redoStack.length === 0) return;
     const nextFields = redoStack[redoStack.length - 1];
-    setUndoStack(prev => [...prev, fields]);
+    setUndoStack(prev => [...prev, fieldsRef.current]);
     setRedoStack(prev => prev.slice(0, -1));
     setFields(nextFields);
-  }, [redoStack, fields]);
+  }, [redoStack]);
 
-  const selectedField = fields.find(f => f._id === selectedId) || null;
+  const selectedField = findFieldById(fields, selectedId || "") || null;
+  // Stable ref for PropertyPanel fallback during state transitions
+  const selectedFieldRef = useRef(selectedField);
+  if (selectedField) selectedFieldRef.current = selectedField;
+
   const surveyJson = useMemo(() => buildSurveyJson(fields, surveySettings), [fields, surveySettings]);
   useEffect(() => { if (onChange) onChange(surveyJson); }, [surveyJson, onChange]);
 
   const addField = useCallback((td: typeof QUESTION_TYPES[number], atIndex?: number) => {
     const q = createQuestion(td);
-    const newFields = [...fields];
+    const newFields = [...fieldsRef.current];
     if (atIndex !== undefined && atIndex >= 0) newFields.splice(atIndex, 0, q); else newFields.push(q);
     pushHistory(newFields);
     setSelectedId(q._id);
-  }, [fields, pushHistory]);
+  }, [pushHistory]);
 
   const handleChange = useCallback((id: string, patch: Partial<FormBuilderField>) => {
-    const newFields = fields.map(f => f._id === id ? { ...f, ...patch } : f);
-    pushHistory(newFields);
-  }, [fields, pushHistory]);
+    pushHistory(updateField(fieldsRef.current, id, patch));
+  }, [pushHistory]);
   const handleRemove = useCallback((id: string) => { 
-    const newFields = fields.filter(f => f._id !== id);
-    pushHistory(newFields);
+    pushHistory(removeFieldRecursive(fieldsRef.current, id));
     setSelectedId(c => c === id ? null : c); 
-  }, [fields, pushHistory]);
+  }, [pushHistory]);
   const handleDuplicate = useCallback((field: FormBuilderField) => {
-    const newFields = [...fields];
-    const idx = newFields.findIndex(f => f._id === field._id);
-    if (idx === -1) return;
-    const copy: FormBuilderField = { ...field, _id: `field_${Date.now()}`, name: `${field.name}_copy`, title: `${field.title} (Copy)` };
-    newFields.splice(idx + 1, 0, copy);
+    const newFields = duplicateFieldRecursive(fieldsRef.current, field._id);
     pushHistory(newFields);
-    setSelectedId(copy._id);
-  }, [fields, pushHistory]);
+    // Find the duplicated copy and select it
+    const copy = findFieldById(newFields, field._id);
+    if (copy) {
+      const allIds: string[] = [];
+      const collectIds = (items: FormBuilderField[]) => {
+        for (const f of items) {
+          allIds.push(f._id);
+          if (f.type === "panel" && f.elements) collectIds(f.elements);
+        }
+      };
+      collectIds(newFields);
+      const origIdx = allIds.indexOf(field._id);
+      if (origIdx !== -1 && origIdx + 1 < allIds.length) {
+        setSelectedId(allIds[origIdx + 1]);
+      }
+    }
+  }, [pushHistory]);
   const handleReorder = useCallback((from: number, to: number) => {
-    const newFields = [...fields];
+    const newFields = [...fieldsRef.current];
     const [moved] = newFields.splice(from, 1);
     newFields.splice(to, 0, moved);
     pushHistory(newFields);
-  }, [fields, pushHistory]);
+  }, [pushHistory]);
 
-  const handlePublishClick = useCallback(() => {
-    const errs = validateFields(fields); setErrors(errs);
-    if (errs.length > 0) { alert(`Please fix ${errs.length} error(s):\n\n${errs.map(e => `• ${e.msg}`).join("\n")}`); return; }
-    onPublish?.(buildSurveyJson(fields, surveySettings));
-  }, [fields, surveySettings, onPublish]);
+  /** Move a field into a panel via drag-and-drop */
+  const handleDropOnPanel = useCallback((e: React.DragEvent, panelId: string) => {
+    e.preventDefault();
+    const pd = e.dataTransfer.getData("palette_type");
+    if (pd) {
+      // Adding a new field from palette into panel
+      const q = createQuestion(JSON.parse(pd));
+      pushHistory(addFieldToPanel(fieldsRef.current, panelId, q));
+      setSelectedId(q._id);
+      return;
+    }
+    // Moving an existing field into panel
+    const dragId = e.dataTransfer.getData("field_id");
+    if (dragId && dragId !== panelId) {
+      pushHistory(moveFieldIntoPanel(fieldsRef.current, dragId, panelId));
+    }
+  }, [pushHistory]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1568,13 +1708,13 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); handleRemove(selectedId); }
-      if (e.key === "d" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const f = fields.find(x => x._id === selectedId); if (f) handleDuplicate(f); }
+      if (e.key === "d" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const f = findFieldById(fields, selectedId); if (f) handleDuplicate(f); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [selectedId, handleRemove, handleDuplicate, fields, canUndo, handleUndo, canRedo, handleRedo]);
 
-  return <DndProvider backend={HTML5Backend}>
+  return <>
     <div className="fb-root" style={{ height }}>
       {/* Toolbar */}
       <div className="fb-toolbar">
@@ -1593,36 +1733,50 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
           )}
           {errors.length > 0 && <Pill color={C.red} bg={C.redPale}><WarningAmberIcon style={{ fontSize: 12, marginRight: 4 }} /> {errors.length} error{errors.length !== 1 ? "s" : ""}</Pill>}
         </div>
-        <div className="fb-toolbar-right">
-          {showRestorePrompt && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 12 }}>
-              <span style={{ fontSize: 11, color: C.amber }}>Draft saved</span>
-              <button onClick={restoreDraft} style={{ fontSize: 10, padding: "4px 8px", background: C.amber, color: C.white, border: "none", borderRadius: 4, cursor: "pointer" }}>Restore</button>
-              <button onClick={discardDraft} style={{ fontSize: 10, padding: "4px 8px", background: "transparent", color: C.textMuted, border: "none", cursor: "pointer" }}>Discard</button>
+        <div className="fb-toolbar-scroll-container">
+          <button 
+            className="fb-toolbar-scroll-btn fb-toolbar-scroll-left" 
+            onClick={scrollLeft}
+            style={{ visibility: canScrollLeft ? 'visible' : 'hidden' }}
+          >
+            <ChevronLeftIcon style={{ fontSize: 16 }} />
+          </button>
+          <div className="fb-toolbar-right" ref={toolbarRightRef} onScroll={checkScrollState}>
+            {showRestorePrompt && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 12 }}>
+                <span style={{ fontSize: 11, color: C.amber }}>Draft saved</span>
+                <button onClick={restoreDraft} style={{ fontSize: 10, padding: "4px 8px", background: C.amber, color: C.white, border: "none", borderRadius: 4, cursor: "pointer" }}>Restore</button>
+                <button onClick={discardDraft} style={{ fontSize: 10, padding: "4px 8px", background: "transparent", color: C.textMuted, border: "none", cursor: "pointer" }}>Discard</button>
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.offWhite, borderRadius: 6, padding: 2 }}>
+              {(["desktop", "tablet", "mobile"] as const).map(d => (
+                <button key={d} onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice(d); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }}
+                  title={`Preview on ${d}`} style={{ padding: "4px 8px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 4, fontSize: 12, color: C.textMuted }}>
+                  {d === "desktop" ? <DesktopWindowsIcon style={{ fontSize: 16 }} /> : d === "tablet" ? <PhoneIphoneIcon style={{ fontSize: 16 }} /> : <PhoneIphoneIcon style={{ fontSize: 16 }} />}
+                </button>
+              ))}
             </div>
-          )}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.offWhite, borderRadius: 6, padding: 2 }}>
-            {(["desktop", "tablet", "mobile"] as const).map(d => (
-              <button key={d} onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice(d); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }}
-                title={`Preview on ${d}`} style={{ padding: "4px 8px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 4, fontSize: 12, color: C.textMuted }}>
-                {d === "desktop" ? <DesktopWindowsIcon style={{ fontSize: 16 }} /> : d === "tablet" ? <PhoneIphoneIcon style={{ fontSize: 16 }} /> : <PhoneIphoneIcon style={{ fontSize: 16 }} />}
-              </button>
-            ))}
+            <button onClick={() => setShowI18n(!showI18n)} className={`fb-json-btn ${showI18n ? 'active' : ''}`} style={{ marginRight: 8 }}><TranslateIcon style={{ fontSize: 14, marginRight: 4 }} /> i18n</button>
+            <button onClick={() => setShowFieldTemplates(!showFieldTemplates)} className={`fb-json-btn ${showFieldTemplates ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Templates</button>
+            <button onClick={() => setShowFieldComments(!showFieldComments)} className={`fb-json-btn ${showFieldComments ? 'active' : ''}`} style={{ marginRight: 8 }}><CommentIcon style={{ fontSize: 14, marginRight: 4 }} /> Comments</button>
+            <button onClick={() => setShowThemeEditor(!showThemeEditor)} className={`fb-json-btn ${showThemeEditor ? 'active' : ''}`} style={{ marginRight: 8 }}><PaletteIcon style={{ fontSize: 14, marginRight: 4 }} /> Theme</button>
+            <button onClick={() => setShowExportWizard(!showExportWizard)} className={`fb-json-btn ${showExportWizard ? 'active' : ''}`} style={{ marginRight: 8 }}><FileDownloadIcon style={{ fontSize: 14, marginRight: 4 }} /> Export</button>
+            <button onClick={() => setShowDataSources(!showDataSources)} className={`fb-json-btn ${showDataSources ? 'active' : ''}`} style={{ marginRight: 8 }}><StorageIcon style={{ fontSize: 14, marginRight: 4 }} /> Data</button>
+            <button onClick={() => setShowIntegrationPanel(!showIntegrationPanel)} className={`fb-json-btn ${showIntegrationPanel ? 'active' : ''}`} style={{ marginRight: 8 }}><HubIcon style={{ fontSize: 14, marginRight: 4 }} /> Integration</button>
+            <button onClick={() => setShowProvisioningPreview(!showProvisioningPreview)} className={`fb-json-btn ${showProvisioningPreview ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Provision</button>
+            <button onClick={() => setShowSubmissionSettings(!showSubmissionSettings)} className={`fb-json-btn ${showSubmissionSettings ? 'active' : ''}`} style={{ marginRight: 8 }}><SettingsIcon style={{ fontSize: 14, marginRight: 4 }} /> Settings</button>
+            <button onClick={() => setShowFieldPermissions(!showFieldPermissions)} className={`fb-json-btn ${showFieldPermissions ? 'active' : ''}`} style={{ marginRight: 8 }}><ShieldIcon style={{ fontSize: 14, marginRight: 4 }} /> Permissions</button>
+            <button onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice("desktop"); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }} className="fb-preview-btn"><PreviewIcon style={{ fontSize: 14, marginRight: 4 }} /> Live Preview</button>
+            <button onClick={() => setJsonCollapsed(c => !c)} className={`fb-json-btn ${!jsonCollapsed ? 'active' : ''}`}><CodeIcon style={{ fontSize: 14, marginRight: 4 }} /> JSON</button>
           </div>
-          <button onClick={() => setShowI18n(!showI18n)} className={`fb-json-btn ${showI18n ? 'active' : ''}`} style={{ marginRight: 8 }}><TranslateIcon style={{ fontSize: 14, marginRight: 4 }} /> i18n</button>
-          <button onClick={() => setShowFieldTemplates(!showFieldTemplates)} className={`fb-json-btn ${showFieldTemplates ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Templates</button>
-          <button onClick={() => setShowFieldComments(!showFieldComments)} className={`fb-json-btn ${showFieldComments ? 'active' : ''}`} style={{ marginRight: 8 }}><CommentIcon style={{ fontSize: 14, marginRight: 4 }} /> Comments</button>
-          <button onClick={() => setShowThemeEditor(!showThemeEditor)} className={`fb-json-btn ${showThemeEditor ? 'active' : ''}`} style={{ marginRight: 8 }}><PaletteIcon style={{ fontSize: 14, marginRight: 4 }} /> Theme</button>
-          <button onClick={() => setShowExportWizard(!showExportWizard)} className={`fb-json-btn ${showExportWizard ? 'active' : ''}`} style={{ marginRight: 8 }}><FileDownloadIcon style={{ fontSize: 14, marginRight: 4 }} /> Export</button>
-          <button onClick={() => setShowDataSources(!showDataSources)} className={`fb-json-btn ${showDataSources ? 'active' : ''}`} style={{ marginRight: 8 }}><StorageIcon style={{ fontSize: 14, marginRight: 4 }} /> Data</button>
-          <button onClick={() => setShowIntegrationPanel(!showIntegrationPanel)} className={`fb-json-btn ${showIntegrationPanel ? 'active' : ''}`} style={{ marginRight: 8 }}><HubIcon style={{ fontSize: 14, marginRight: 4 }} /> Integration</button>
-          <button onClick={() => setShowProvisioningPreview(!showProvisioningPreview)} className={`fb-json-btn ${showProvisioningPreview ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Provision</button>
-          <button onClick={() => setShowSubmissionSettings(!showSubmissionSettings)} className={`fb-json-btn ${showSubmissionSettings ? 'active' : ''}`} style={{ marginRight: 8 }}><SettingsIcon style={{ fontSize: 14, marginRight: 4 }} /> Settings</button>
-          <button onClick={() => setShowFieldPermissions(!showFieldPermissions)} className={`fb-json-btn ${showFieldPermissions ? 'active' : ''}`} style={{ marginRight: 8 }}><ShieldIcon style={{ fontSize: 14, marginRight: 4 }} /> Permissions</button>
-          <button onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice("desktop"); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }} className="fb-preview-btn"><PreviewIcon style={{ fontSize: 14, marginRight: 4 }} /> Live Preview</button>
-          <button onClick={() => setShowSplitPreview(v => !v)} className={`fb-preview-btn ${showSplitPreview ? 'active' : ''}`}><PreviewIcon style={{ fontSize: 14, marginRight: 4 }} /> Split Preview</button>
-          <button onClick={() => setJsonCollapsed(c => !c)} className={`fb-json-btn ${!jsonCollapsed ? 'active' : ''}`}><CodeIcon style={{ fontSize: 14, marginRight: 4 }} /> JSON</button>
-          {onPublish && <button onClick={handlePublishClick} className="fb-publish-btn" style={{ background: `linear-gradient(135deg,${C.purple},${C.purpleLight})` }}><RocketLaunchIcon style={{ fontSize: 14, marginRight: 4 }} /> Publish</button>}
+          <button 
+            className="fb-toolbar-scroll-btn fb-toolbar-scroll-right" 
+            onClick={scrollRight}
+            style={{ visibility: canScrollRight ? 'visible' : 'hidden' }}
+          >
+            <ChevronRightIcon style={{ fontSize: 16 }} />
+          </button>
         </div>
       </div>
       {/* 3-panel layout */}
@@ -1638,18 +1792,28 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
             <div className="fb-panel-header-text">Form Canvas</div>
             <div className="fb-canvas-panel-hint">Drag to reorder</div>
           </div>
-          <div className={`fb-canvas-body ${showSplitPreview ? 'split' : ''}`}>
-            <div className="fb-canvas" style={{ flex: 1, overflow: 'auto' }}>
-              <Canvas fields={fields} selectedId={selectedId} onSelect={id => setSelectedId(id)} onRemove={handleRemove} onDuplicate={handleDuplicate} onReorder={handleReorder} onAddFromPalette={addField} errors={errors} />
-            </div>
-            {showSplitPreview && <InlinePreview json={surveyJson} showBanner={showBanner} meta={meta} />}
+          <div className="fb-canvas-body">
+            <Canvas fields={fields} selectedId={selectedId} onSelect={id => setSelectedId(id)} onRemove={handleRemove} onDuplicate={handleDuplicate} onReorder={handleReorder} onAddFromPalette={addField} errors={errors} onDropOnPanel={handleDropOnPanel} />
           </div>
         </div>
         <div className="fb-property-panel-side">
           <div className="fb-panel-header">
             <div className="fb-panel-header-text">Properties</div>
           </div>
-          <PropertyPanel field={selectedField} allFields={fields} onChange={patch => selectedField && handleChange(selectedField._id, patch)} surveySettings={surveySettings} onSurveySettingsChange={setSurveySettings} token={_token} />
+          <div className="fb-property-scroll-container">
+            <button className="fb-property-scroll-btn fb-property-scroll-left" onClick={propertyScrollLeft} style={{ visibility: canPropertyScrollLeft ? 'visible' : 'hidden' }}>
+              <ChevronLeftIcon style={{ fontSize: 16 }} />
+            </button>
+            <div className="fb-property-scroll-content" ref={propertyPanelRef} onScroll={checkPropertyScrollState}>
+              <PropertyPanel field={selectedField || selectedFieldRef.current} allFields={flattenFieldTree(fields)} onChange={patch => {
+                const id = selectedField?._id ?? selectedFieldRef.current?._id;
+                if (id) handleChange(id, patch);
+              }} surveySettings={surveySettings} onSurveySettingsChange={setSurveySettings} token={_token} />
+            </div>
+            <button className="fb-property-scroll-btn fb-property-scroll-right" onClick={propertyScrollRight} style={{ visibility: canPropertyScrollRight ? 'visible' : 'hidden' }}>
+              <ChevronRightIcon style={{ fontSize: 16 }} />
+            </button>
+          </div>
         </div>
       </div>
       <JsonPreview json={surveyJson} collapsed={jsonCollapsed} onToggle={() => setJsonCollapsed(c => !c)} />
@@ -2200,5 +2364,5 @@ export default function FormBuilder({ initialJson, onChange, onPublish, height =
       </div>
         )}
       </div>
-    </DndProvider>;
+    </>;
 }

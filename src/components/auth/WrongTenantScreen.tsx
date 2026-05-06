@@ -9,8 +9,9 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Warning as WarningIcon, Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
+import { Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
+import Logo from "../../components/Logo";
 
 interface WrongTenantScreenProps {
   userEmail: string;
@@ -109,7 +110,7 @@ export default function WrongTenantScreen({
 
           <CardContent sx={{ p: isMobile ? 3.5 : 5 }}>
             <Stack spacing={3} sx={{ alignItems: "center" }}>
-              {/* Warning icon with soft red background */}
+              {/* Logo */}
               <Box
                 sx={{
                   position: "relative",
@@ -127,9 +128,7 @@ export default function WrongTenantScreen({
                   },
                 }}
               >
-                <WarningIcon
-                  sx={{ fontSize: 72, color: "#DC2626" }}
-                />
+                <Logo size={72} />
               </Box>
 
               <Typography

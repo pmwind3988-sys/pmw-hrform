@@ -415,8 +415,8 @@ export function registerDynamicMatrix(): void {
   interface ReactQuestionFactoryFixed {
     registerQuestion(questionType: string, questionCreator: (props: { question: QuestionDynamicMatrixModel }) => React.JSX.Element): void;
   }
-  (ReactQuestionFactory.Instance as unknown as ReactQuestionFactoryFixed).registerQuestion("dynamicmatrix", (props) => {
-    const question = props.question;
+
+  function DynamicMatrixQuestion({ question }: { question: QuestionDynamicMatrixModel }) {
     const [cols, setCols] = useState<MatrixColumn[]>([]);
     const [minRows, setMinRows] = useState(1);
     const [maxRows, setMaxRows] = useState(20);
@@ -445,5 +445,9 @@ export function registerDynamicMatrix(): void {
         readOnly={question.isReadOnly}
       />
     );
+  }
+
+  (ReactQuestionFactory.Instance as unknown as ReactQuestionFactoryFixed).registerQuestion("dynamicmatrix", (props) => {
+    return <DynamicMatrixQuestion question={props.question} />;
   });
 }

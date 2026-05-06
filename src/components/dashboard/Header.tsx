@@ -15,10 +15,10 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
-  Dashboard as DashboardIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import RoleBadge from "./RoleBadge";
+import Logo from "../Logo";
 
 interface HeaderProps {
   userEmail: string;
@@ -70,25 +70,7 @@ export default function Header({
             gap: 1.5,
           }}
         >
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: "12px",
-              background: "linear-gradient(135deg, #0078D4 0%, #6264A7 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(0, 120, 212, 0.25), 0 2px 4px rgba(98, 100, 167, 0.15)",
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              "&:hover": {
-                transform: "scale(1.05)",
-                boxShadow: "0 6px 16px rgba(0, 120, 212, 0.3), 0 3px 6px rgba(98, 100, 167, 0.2)",
-              },
-            }}
-          >
-            <DashboardIcon sx={{ fontSize: 22, color: "#fff" }} />
-          </Box>
+          <Logo size={isMobile ? 32 : 40} />
           <Stack direction="column" spacing={0}>
             <Typography
               variant="h5"
