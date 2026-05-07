@@ -11,13 +11,13 @@ import FormBuilder from "../components/builder/FormBuilder";
 import FormLibrary from "../components/builder/FormLibrary";
 import VersionHistory from "../components/builder/VersionHistory";
 import AuditLog from "../components/builder/AuditLog";
-import ApproverRow from "../components/builder/ApproverRow";
 import ProvisionOverlay from "../components/builder/ProvisionOverlay";
+import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import { C } from "../components/builder/constants";
 import { flattenQuestions, getSpColumnKind } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
-import type { SurveyJson } from "../types";
+import type { SurveyJson, LayerConfig, LayerConfigItem } from "../types";
 
 // MUI Icons
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -25,12 +25,11 @@ import FolderIcon from "@mui/icons-material/Folder";
 import SettingsIcon from "@mui/icons-material/Settings";
 import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import DescriptionIcon from "@mui/icons-material/Description";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import HistoryIcon from "@mui/icons-material/History";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import LayersIcon from "@mui/icons-material/Layers";
 
 import {
   slugify,
@@ -186,7 +185,6 @@ export default function AdminFormBuilder() {
   const [slugManual, setSlugManual] = useState(false);
   const [numLayers, setNumLayers] = useState(0);
   const [layers, setLayers] = useState<{ email: string; name: string }[]>(Array.from({ length: 5 }, () => ({ email: "", name: "" })));
-  const updateLayer = (i: number, k: string, v: string) => setLayers(ls => ls.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
   const [surveyJson, setSurveyJson] = useState<SurveyJson | null>(null);
   const [initialJson, setInitialJson] = useState<SurveyJson | null>(null);
   const prevSurveyRef = useRef<SurveyJson | null>(null);
@@ -208,6 +206,7 @@ export default function AdminFormBuilder() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ Id?: string; Title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [approvalRules, setApprovalRules] = useState<{ conditionField: string; rules: { when: string; layers: { email: string; name: string; role: string }[] }[] } | null>(null);
+  const [layerConfig, setLayerConfig] = useState<LayerConfig | null>(null);
 
   const pLog = useCallback((m: string, t: string = "info") => setProvLogs(l => [...l, { m, t }]), []);
   const showToast = useCallback((msg: string, type: string = "info") => {
@@ -347,6 +346,19 @@ export default function AdminFormBuilder() {
     } else {
       setApprovalRules(null);
     }
+    // Load enhanced LayerConfig if present, otherwise derive from legacy fields
+    if (c.LayerConfig) {
+      try {
+        const parsed = JSON.parse(c.LayerConfig as string) as LayerConfig;
+        setLayerConfig(parsed);
+        // Derive numLayers from layerConfig for backward compat
+        setNumLayers(parsed.layers.length);
+      } catch {
+        setLayerConfig(null);
+      }
+    } else {
+      setLayerConfig(null);
+    }
     getFormVersionHistory(token, c.Title as string).then(setVersionHistory);
     setLogLoading(true);
     getFormLog(token, c.Title as string).then(l => {
@@ -382,6 +394,7 @@ export default function AdminFormBuilder() {
     });
     setNumLayers(0);
     setLayers(Array.from({ length: 5 }, () => ({ email: "", name: "" })));
+    setLayerConfig(null);
     setIsPublic(true);
     navigate("/admin/builder");
   };
@@ -467,7 +480,9 @@ export default function AdminFormBuilder() {
     const version = isEditing ? proposedVersion : meta.formVersion;
     const title = meta.formTitle.trim();
     const userEmail = accounts[0]?.username || "admin";
-    const activeLayers = layers.slice(0, numLayers);
+    // Derive effective numLayers from layerConfig if present
+    const effectiveNumLayers = layerConfig ? layerConfig.layers.length : numLayers;
+    const activeLayers = layers.slice(0, effectiveNumLayers);
     setProvLogs([]);
     setProvOk(false);
     setProvErr(false);
@@ -519,7 +534,7 @@ export default function AdminFormBuilder() {
       for (const [n, k] of [["SubmittedAt", 4], ["FormVersion", 2], ["FormID", 2], ["SubmittedBy", 2]] as [string, number][]) {
         await addColumn(token, title, n, k);
       }
-      for (let n = 1; n <= numLayers; n++) {
+      for (let n = 1; n <= effectiveNumLayers; n++) {
         for (const [col, k] of [["Status", 2], ["Email", 2], ["SignedAt", 4], ["Rejection", 3], ["Signature", 3]] as [string, number][]) {
           await addColumn(token, title, `L${n}_${col}`, k, k === 3);
         }
@@ -527,19 +542,33 @@ export default function AdminFormBuilder() {
       pLog(`Columns done`, "ok");
 
       pLog(`Updating Form Config…`);
+      // Build LayerConfig JSON from UI state if not already set
+      const layerConfigToSave = layerConfig || (effectiveNumLayers > 0 ? {
+        version: "1.0" as const,
+        layers: activeLayers.map((l, i): LayerConfigItem => ({
+          layerNumber: i + 1,
+          type: "approval" as const,
+          authMode: "365" as const,
+          assignee: { type: "user" as const, value: l.email },
+          title: `Layer ${i + 1}`,
+          confirmationType: "signature" as const,
+          allowRejectionReason: true,
+        })),
+      } : null);
       await upsertFormConfig(token, title, {
         formId: meta.formId.trim(),
-        numLayers,
+        numLayers: effectiveNumLayers,
         slug: meta.slug,
         version,
         isPublished: true,
         isPublic,
-        conditionField: approvalRules?.conditionField || "",
+        conditionField: approvalRules?.conditionField || layerConfig?.routing?.[0]?.conditionField || "",
         approvalRules: approvalRules || null,
+        layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
       });
       pLog(`Form Config saved`, "ok");
 
-      if (numLayers > 0) {
+      if (effectiveNumLayers > 0) {
         pLog(`Writing approvers…`);
         await upsertApprovers(token, title, activeLayers);
         pLog(`Approvers saved`, "ok");
@@ -606,7 +635,7 @@ export default function AdminFormBuilder() {
       pLog(`Error: ${(e as Error).message}`, "err");
       setProvErr(true);
     }
-  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, proposedVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, accounts, showToast]);
+  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, proposedVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast]);
 
   if (!authChecked) {
     return (
@@ -619,8 +648,7 @@ export default function AdminFormBuilder() {
 
   const sidebarTabs = [
     { id: "meta", label: "Meta", icon: <DescriptionIcon style={{ fontSize: 14 }} /> },
-    { id: "approval", label: "Approval", icon: <CheckCircleIcon style={{ fontSize: 14 }} /> },
-    { id: "condapproval", label: "Conditional", icon: <SwapHorizIcon style={{ fontSize: 14 }} /> },
+    { id: "layers", label: "Layers", icon: <LayersIcon style={{ fontSize: 14 }} /> },
     { id: "version", label: "Versions", icon: <HistoryIcon style={{ fontSize: 14 }} /> },
     { id: "log", label: "Log", icon: <ReceiptLongIcon style={{ fontSize: 14 }} /> },
     { id: "publish", label: "Publish", icon: <RocketLaunchIcon style={{ fontSize: 14 }} /> },
@@ -1023,244 +1051,14 @@ export default function AdminFormBuilder() {
                 </div>
               )}
 
-              {sidebarTab === "condapproval" && (
-                <div style={{ animation: "fadeUp .15s ease" }}>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
-                    Route approvals based on a hidden field value.
-                  </div>
-                  <FB label="Enable conditional routing">
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={!!approvalRules}
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setApprovalRules({
-                              conditionField: "",
-                              rules: [{ when: "", layers: [{ email: "", name: "", role: "" }] }],
-                            });
-                          } else {
-                            setApprovalRules(null);
-                          }
-                        }}
-                        style={{ width: 16, height: 16, accentColor: C.purple }}
-                      />
-                      <span style={{ fontSize: 12, color: C.textSecond }}>
-                        {approvalRules ? "Enabled" : "Disabled — using static approvers"}
-                      </span>
-                    </div>
-                  </FB>
-                  {approvalRules && (
-                    <>
-                      <FB label="Condition field name" hint="The hidden field name in your form">
-                        <TextInput
-                          value={approvalRules.conditionField}
-                          onChange={v =>
-                            setApprovalRules(r => ({ ...r!, conditionField: v }))
-                          }
-                          placeholder="subject"
-                        />
-                      </FB>
-                      <div style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: C.textMuted,
-                        textTransform: "uppercase",
-                        letterSpacing: ".05em",
-                        marginBottom: 8,
-                      }}>
-                        Rules ({approvalRules.rules.length})
-                      </div>
-                      {approvalRules.rules.map((rule, ri) => (
-                        <div
-                          key={ri}
-                          style={{
-                            background: C.offWhite,
-                            border: `1px solid ${C.border}`,
-                            borderRadius: 10,
-                            padding: "11px 12px",
-                            marginBottom: 10,
-                          }}
-                        >
-                          <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 10 }}>
-                            <div style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>When field =</div>
-                            <TextInput
-                              value={rule.when}
-                              onChange={v =>
-                                setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx === ri ? { ...ru, when: v } : ru) }))
-                              }
-                              placeholder="managerial"
-                            />
-                            <button
-                              onClick={() =>
-                                setApprovalRules(r => ({ ...r!, rules: r!.rules.filter((_, idx) => idx !== ri) }))
-                              }
-                              style={{
-                                width: 24,
-                                height: 24,
-                                border: "none",
-                                background: C.redPale,
-                                color: C.red,
-                                borderRadius: 6,
-                                cursor: "pointer",
-                                flexShrink: 0,
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <div style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            color: C.textMuted,
-                            textTransform: "uppercase",
-                            marginBottom: 6,
-                          }}>
-                            Layers ({rule.layers.length})
-                          </div>
-                          {rule.layers.map((layer, li) => (
-                            <div
-                              key={li}
-                              style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}
-                            >
-                              <div style={{
-                                width: 22,
-                                height: 22,
-                                borderRadius: 6,
-                                flexShrink: 0,
-                                background: `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
-                                color: C.white,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}>
-                                {li + 1}
-                              </div>
-                              <input
-                                value={layer.email}
-                                onChange={e =>
-                                  setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx !== ri ? ru : { ...ru, layers: ru.layers.map((la, lidx) => lidx === li ? { ...la, email: e.target.value } : la) }) }))
-                                }
-                                placeholder="email@company.com"
-                                style={{ ...inp, flex: 2, height: 28, fontSize: 11 }}
-                              />
-                              <input
-                                value={layer.name}
-                                onChange={e =>
-                                  setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx !== ri ? ru : { ...ru, layers: ru.layers.map((la, lidx) => lidx === li ? { ...la, name: e.target.value } : la) }) }))
-                                }
-                                placeholder="Name"
-                                style={{ ...inp, flex: 1.5, height: 28, fontSize: 11 }}
-                              />
-                              <button
-                                onClick={() =>
-                                  setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx !== ri ? ru : { ...ru, layers: ru.layers.filter((_, lidx) => lidx !== li) }) }))
-                                }
-                                style={{
-                                  width: 22,
-                                  height: 22,
-                                  border: "none",
-                                  background: C.redPale,
-                                  color: C.red,
-                                  borderRadius: 5,
-                                  cursor: "pointer",
-                                  flexShrink: 0,
-                                  fontSize: 11,
-                                }}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            onClick={() =>
-                              setApprovalRules(r => ({ ...r!, rules: r!.rules.map((ru, idx) => idx === ri ? { ...ru, layers: [...ru.layers, { email: "", name: "", role: "" }] } : ru) }))
-                            }
-                            style={{
-                              fontSize: 11,
-                              color: C.purple,
-                              background: "none",
-                              border: `1px dashed ${C.purpleMid}`,
-                              borderRadius: 6,
-                              padding: "3px 10px",
-                              cursor: "pointer",
-                              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                              marginTop: 4,
-                            }}
-                          >
-                            + Add layer
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() =>
-                          setApprovalRules(r => ({ ...r!, rules: [...r!.rules, { when: "", layers: [{ email: "", name: "", role: "" }] }] }))
-                        }
-                        style={{
-                          width: "100%",
-                          height: 30,
-                          border: `1px dashed ${C.border}`,
-                          borderRadius: 8,
-                          background: "none",
-                          color: C.purple,
-                          fontSize: 11,
-                          cursor: "pointer",
-                          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                          marginTop: 4,
-                        }}
-                      >
-                        + Add rule
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {sidebarTab === "approval" && (
-                <div style={{ animation: "fadeUp .15s ease" }}>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
-                    Select approval layers. 0 = no approval chain.
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 5, marginBottom: 16 }}>
-                    {[0, 1, 2, 3, 4, 5].map(n => (
-                      <button
-                        key={n}
-                        onClick={() => setNumLayers(n)}
-                        style={{
-                          padding: "9px 0",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                          border: `${numLayers === n ? 2 : 1}px solid ${numLayers === n ? C.purple : C.border}`,
-                          background: numLayers === n ? C.purplePale : C.white,
-                          color: numLayers === n ? C.purple : C.textSecond,
-                          fontSize: 16,
-                          fontWeight: 700,
-                          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                          transition: "all .15s",
-                        }}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                  {numLayers > 0 && (
-                    <>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
-                        Approver Emails
-                      </div>
-                      {Array.from({ length: numLayers }).map((_, i) => (
-                        <ApproverRow key={i} index={i} layer={layers[i]} onChange={updateLayer} siteUsers={siteUsers} />
-                      ))}
-                    </>
-                  )}
-                  {numLayers === 0 && (
-                    <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "9px 11px", fontSize: 11, color: C.amber }}>
-                      No approval — submissions go straight to Submitted.
-                    </div>
-                  )}
-                </div>
+              {sidebarTab === "layers" && (
+                <LayerConfigPanel
+                  value={layerConfig}
+                  onChange={setLayerConfig}
+                  siteUsers={siteUsers}
+                  formFieldNames={surveyJson ? flattenQuestions(surveyJson).map(q => q.name) : []}
+                  slug={meta.slug}
+                />
               )}
 
               {sidebarTab === "version" && (

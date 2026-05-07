@@ -1,4 +1,4 @@
-import { Box, Dialog } from "@mui/material";
+import { Box } from "@mui/material";
 import Header from "../components/dashboard/Header";
 import StatsRow from "../components/dashboard/StatsRow";
 import ListSummaryCards from "../components/dashboard/ListSummaryCards";
@@ -8,7 +8,6 @@ import SubmissionRow from "../components/dashboard/SubmissionRow";
 import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
-import FormBuilder from "../components/builder/FormBuilder";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../types";
 
 interface AdminDashboardProps {
@@ -36,10 +35,6 @@ interface AdminDashboardProps {
   onSwitchAccount: () => void;
   onOpenBuilder: () => void;
   onEditForm: (listTitle: string) => void;
-  builderOpen: boolean;
-  setBuilderOpen: (open: boolean) => void;
-  editingFormId: string | undefined;
-  setEditingFormId: (id: string | undefined) => void;
 }
 
 export default function AdminDashboard({
@@ -67,10 +62,6 @@ export default function AdminDashboard({
   onSwitchAccount,
   onOpenBuilder,
   onEditForm,
-  builderOpen,
-  setBuilderOpen,
-  editingFormId,
-  setEditingFormId,
 }: AdminDashboardProps) {
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
@@ -145,23 +136,6 @@ export default function AdminDashboard({
       </Box>
 
       <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
-
-      <Dialog
-        open={builderOpen}
-        onClose={() => { setBuilderOpen(false); setEditingFormId(undefined); }}
-        fullScreen
-        slotProps={{
-          paper: {
-            sx: { backgroundColor: "#F8F9FC" },
-          },
-        }}
-      >
-        <FormBuilder
-          formId={editingFormId}
-          isAdmin={isAdmin}
-          onClose={() => { setBuilderOpen(false); setEditingFormId(undefined); }}
-        />
-      </Dialog>
     </Box>
   );
 }

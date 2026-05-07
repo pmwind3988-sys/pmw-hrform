@@ -12,18 +12,19 @@
 npm run dev        # Vite dev server (port 3000)
 npm run dev:api    # Vercel dev server (runs api/ routes locally)
 npm run build      # tsc -b && vite build
-npm run lint       # ESLint flat config
+npm run lint       # ESLint flat config (many pre-existing errors — check changed files with lsp_diagnostics instead)
 npm run preview    # Preview production build
 ```
 
 ## Stack
 - React 19 + TypeScript ~6.0.2 (ES2022 target, bundler moduleResolution, `verbatimModuleSyntax`)
 - Vite 8 with `@vitejs/plugin-react` (Oxc-based, React Compiler NOT enabled)
-- MUI v9 (`@mui/material`, `@mui/icons-material`) — `Grid` (not Grid2) in v9.0.0
+- MUI v9 (`@mui/material`, `@mui/icons-material`) — `Grid` (not Grid2)
 - `@azure/msal-react` + `@azure/msal-browser` — Azure AD authentication
-- **react-router-dom v7** — Routing now active: `BrowserRouter` in `main.tsx`, `<Routes>` in `App.tsx`
+- **react-router-dom v7** — `BrowserRouter` in `main.tsx`, `<Routes>` in `App.tsx`
 - **SurveyJS v2.5** — `survey-core`, `survey-react-ui`; **Custom form builder** (NOT SurveyJS Creator)
 - ESLint: flat config with `tseslint.configs.recommended` (not type-checked), `react-hooks`, `react-refresh`
+- `react-dnd` v16 — drag-drop canvas in FormBuilder (HTML5 backend)
 
 ## Auth State Machine (in `App.tsx`)
 ```
@@ -33,158 +34,182 @@ checking → (isAuthenticated?) → loading → (tenant check) → ready / wrong
 ```
 States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` | `error`
 - Auth decision persisted in `localStorage` (`pmw_hr_auth_decision`)
-- Post-login redirect stored in `sessionStorage` (`pmw_post_login_redirect`), read after MSAL callback to restore the intended route
+- Post-login redirect stored in `sessionStorage` (`pmw_post_login_redirect`), read after MSAL callback
 - Admin detection via SharePoint group `_HR_ Forms Owners`
 - Tenant validation via `VITE_AZURE_TENANT_ID` env var
+- Auth screens (`ChoiceScreen`, `GuestLanding`, etc.) render directly in `App.tsx` before `<Routes>`
 
 ## Routing (react-router-dom v7)
-- `"/form/:formId"` → `DynamicFormPage` (public/private form rendering)
-- `"/admin/builder"` → `AdminFormBuilder` (full builder with sidebar, library, publish)
-- `"/admin/builder/:formTitle"` → `AdminFormBuilder` (loads specific form for editing)
-- `"/admin/approvals"` → `ApprovalDashboard` (approval workflow)
-- `"/admin/responses/:formTitle"` → `ResponseViewer` (submission responses)
-- `"/adminhomepage"` → `AdminHomePage` (explicit dashboard route)
-- `"*"` → `AdminHomePage` (catch-all: Header, StatsRow, ListSummaryCards, Toolbar, SubmissionRow)
-- Auth screens (`ChoiceScreen`, `GuestLanding`, `WrongTenantScreen`, etc.) are rendered directly in `App.tsx` before `<Routes>` — NOT via `HomePage.tsx`
-- `HomePage.tsx` is **dead code** — not imported by `App.tsx`; the real choice screen is `ChoiceScreen.tsx`
-- Header "Form Builder" button navigates to `/admin/builder` (not a modal)
-- The old `<Dialog>` FormBuilder in `AdminHomePage` is dead code — `builderOpen` is never set to `true`
+| Route | Component | Notes |
+|-------|-----------|-------|
+| `/form/:formId` | `DynamicFormPage` | Public/private form rendering |
+| `/admin/builder` | `AdminFormBuilder` | Full builder with sidebar, library, publish |
+| `/admin/builder/:formTitle` | `AdminFormBuilder` | Loads specific form for editing |
+| `/admin/approvals` | `ApprovalDashboard` | Approval workflow |
+| `/admin/responses/:formTitle` | `ResponseViewer` | Submission responses |
+| `/adminhomepage` | `AdminHomePage` | Explicit dashboard route |
+| `/eval/:token` | `EvaluationPage` | Public evaluation/approval via unique link |
+| `/eval/:formSlug/:responseId/:layerNumber` | `EvaluationPage` | 365-authenticated evaluation |
+| `*` | `AdminHomePage` | Catch-all dashboard |
 
-## API Routes (Vercel-style serverless)
-- `api/form-config.ts` — Public form config fetcher (used by unauthenticated users)
-- `api/submit-form.ts` — Public form submission handler (guest submissions)
-- `api/_utils/graphClient.ts` — **Active** server-side client; uses Microsoft Graph API (`graph.microsoft.com/v1.0`) with client-credentials token (`https://graph.microsoft.com/.default`). Exports: `getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`
-- `api/_utils/sharepoint.ts` — **Dead code** — exists but is not imported by any API route
-- **Import paths**: API routes import from `./_utils/graphClient.ts`
-- `vercel.json` configures SPA rewrite rules and CORS headers for `/api/*`
+- Header "Form Builder" button navigates to `/admin/builder` (not a modal)
+
+## API Routes (Vercel serverless)
+| Route | File | Method | Purpose |
+|-------|------|--------|---------|
+| `/api/form-config` | `api/form-config.ts` | GET | Public form config fetcher |
+| `/api/submit-form` | `api/submit-form.ts` | POST | Public form submission (guest) |
+| `/api/evaluate` | `api/evaluate.ts` | GET/POST | Public layer evaluation: GET = read filtered data, POST = submit approve/reject/confirm |
+
+- All API routes use `api/_utils/graphClient.ts` for Microsoft Graph API (client-credentials flow)
+- `api/_utils/sharepoint.ts` is **dead code** — not imported by any route
+- `vercel.json` configures SPA rewrite rules and CORS headers
+
+## Enhanced Layer System (built in Phases 0-7)
+Forms now support a unified **layer sequence** where each layer is either `approval` (approve/reject with signature or checkbox) or `evaluation` (fill custom fields, then confirm).
+
+### Layer types
+| Property | Approval Layer | Evaluation Layer |
+|----------|----------------|------------------|
+| Action | Approve / Reject | Confirm evaluation |
+| Confirmation | Signature pad OR checkbox | Button click |
+| Fields | Status columns only | Custom SurveyJS elements |
+| Auth modes | 365 sign-in OR public link | Same |
+
+### Storage
+- **LayerConfig**: JSON Note column on Master Form — replaces `NumberOfApprovalLayer` + `ApprovalRules` (backward compat preserved)
+- **EvaluationData**: JSON Note column on response lists — stores `Record<layerNumber, EvaluationDataEntry>`
+- **Status columns**: `L{n}_Status`, `L{n}_Email`, `L{n}_SignedAt`, `L{n}_Rejection`, `L{n}_Signature` per layer (dynamic, no L1-L3 hardcode)
+- **System columns**: `CurrentLayer` (Number), `FormStatus` (Text) on response lists
+
+### Key types (src/types/index.ts)
+- `LayerConfig`, `LayerConfigItem` (union of `ApprovalLayerConfig` | `EvaluationLayerConfig`)
+- `LayerStatus` — `pending | in_progress | confirmed | approved | rejected | skipped | cancelled`
+- `FormStatus` — `draft | submitted | in_review | completed | rejected | cancelled`
+- `EvaluationDataEntry` — stores per-layer evaluation result
+- `ApprovalLayerResult`, `EvaluationLayerResult` — typed runtime results
+- Status constants in `src/utils/statusConstants.ts`: `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`
+
+### Builder UI (admin)
+- **"Layers" tab** in AdminFormBuilder sidebar replaces old "Approval" + "Conditional" tabs
+- Components: `LayerConfigPanel`, `LayerCard`, `EvalElementPicker`, `PublicLinkDisplay`, `EvaluationSummary`
+- Publish flow serializes `LayerConfig` JSON + generates UUID tokens for public layers
+- Old `ApproverRow` still exists (used within LayerConfigPanel for static assignee input)
 
 ## SharePoint Integration
-- **odata format**: `odata=nometadata` — responses use `data.value` not `data.d.results`
-- **User resolution**: `resolveUserEmails()` in `sharepointClient.ts` maps `AuthorId` → email via `_api/web/getUserById()`
-- **`sharepointClient.ts`** exports `createSpClient(instance, accounts)` — passes MSAL instance
-- **`formBuilderSP.ts`** — STANDALONE file; uses raw `token: string` param, NOT `createSpClient`
-- Config loaded from `Master Form` list (FormId, TotalLayers mapping)
-- Lists discovered via `/_api/web/lists` (system lists filtered by BaseTemplate + properties)
-- Submissions queried per visible list with `$orderby: Created desc`
+- **OData**: `odata=nometadata` — responses use `data.value` not `data.d.results`
+- **User resolution**: `resolveUserEmails()` in `sharepointClient.ts` maps `AuthorId` → email
+- **`sharepointClient.ts`** — MSAL-aware factory (`createSpClient(instance, accounts)`) for dashboard
+- **`formBuilderSP.ts`** — Standalone file (~1470 lines); uses raw `token: string` param, NOT `createSpClient`
 - Digest cached with 30min expiry, `X-HTTP-Method` headers for writes
+- Config loaded from `Master Form` list
+- Lists discovered via `/_api/web/lists` (system lists filtered by BaseTemplate + properties)
+
+### Dual SP Client Pattern
+```
+Dashboard: App.tsx → createSpClient(msalInstance, accounts) → sharepointClient.ts
+Builder:    AdminFormBuilder.tsx → raw token → formBuilderSP.ts (independent digest cache)
+```
+Risk: two digest caches, two `SP_SITE_URL` reads, inconsistent error handling.
 
 ## SP Column Type Mapping
 | SurveyJS Type | SP FieldTypeKind | SharePoint Type |
 |---|---|---|
-| `text`, `email`, `url`, `tel`, `password`, `masked`, `autocomplete`, `taginput`, `time`, `colorpicker`, `nric`, `otp`, `hierarchy` | 2 | Text |
-| `comment`, `richtext`, `addressblock`, `jsoneditor`, `locationpicker` | 3 | Note (Multi-line) |
+| `text`, `email`, `url`, `tel`, `password`, masked, autocomplete, taginput, time, colorpicker, nric, otp, hierarchy | 2 | Text |
+| `comment`, `richtext`, `addressblock`, `jsoneditor`, `locationpicker` | 3 | Note |
 | `date`, `datetime` | 4 | DateTime |
-| `dropdown`, `radiogroup`, `buttongroup` (single) | 6 | **Choice** |
-| `checkbox`, `buttongroup` (multi) | 15 | **MultiChoice** |
-| `boolean`, `toggleswitch`, `consent` | 8 | Boolean/YesNo |
-| `number`, `currency`, `slider`, `starrating`, `nps`, `duration`, `formula`, `unitconverter`, `counter`, `scorecard`, `rating` | 9 | Number |
-| `dynamicmatrix`, `tableinput` | — | `_Html` (RichText) + `_Json` (Note) |
-| `ranking`, `budgetallocator`, `rangeslider`, `daterange` | 3 | Note (stores JSON) |
-| `signaturepad` | 11 | Image (URL/Hyperlink, DisplayFormat:2) |
-| Layout/display types, `file`, `imageupload`, `audiorecorder` | null | No column |
+| `dropdown`, `radiogroup`, `buttongroup` (single) | 6 | Choice |
+| `checkbox`, `buttongroup` (multi) | 15 | MultiChoice |
+| `boolean`, `toggleswitch`, `consent` | 8 | Boolean |
+| `number`, `currency`, `slider`, `starrating`, `nps`, `duration`, `formula`, unitconverter, counter, scorecard, rating | 9 | Number |
+| `dynamicmatrix`, `tableinput` | — | `_Html` + `_Json` columns |
+| `ranking`, `budgetallocator`, `rangeslider`, `daterange` | 3 | Note (JSON) |
+| `signaturepad` | 11 | Image (DisplayFormat:2) |
+| Layout/display, `file`, `imageupload`, `audiorecorder` | null | No column |
 
-### SharePoint Choice Source (`spChoicesSource`)
-- Choice fields can pull values from existing SP list columns via `spChoicesSource = { list, column, multiSelect }`
-- Builder UI has "Manual" / "SharePoint List" toggle in Options tab
-- At runtime, choices are fetched live and injected into the SurveyJS model (`DynamicFormPage.tsx`)
-- At publish time, `provisionResponseList()` fetches latest SP choices and creates the SP column with those values
+### spChoicesSource
+- Choice fields can pull from existing SP list columns
+- Fetched live at runtime (`DynamicFormPage.tsx`) and at publish time (`provisionResponseList()`)
 
 ## System Lists Filtering
-- Both user and admin contexts see system lists filtered in `filterVisibleLists()`
-- `SYSTEM_BASE_TEMPLATES` set: 109, 111, 112, 113, 114, 116, 119, 130, 140, 212, 300, 850
-- Property-based exclusions: `isCatalog`, `isSiteAssetsLibrary`, `isApplicationList`, `isSystemList`, `noCrawl`
-- `DiscoveredList` type includes all these fields
+- `filterVisibleLists()` in `spConfig.ts`
+- BaseTemplate exclusions: 109, 111, 112, 113, 114, 116, 119, 130, 140, 212, 300, 850
+- Property exclusions: `isCatalog`, `isSiteAssetsLibrary`, `isApplicationList`, `isSystemList`, `noCrawl`
+- Named exclusions: "Style Library", "Site Assets", "Approvers", "Master Form", etc.
 
 ## Form Builder System (admin-only)
-- **Entry**: Header "Form Builder" button (visible only when `isAdmin=true`) → navigates to `/admin/builder`
-- **Pages**: `AdminFormBuilder.tsx` (full builder), `DynamicFormPage.tsx` (end-user rendering)
-- **Components** (`src/components/builder/`): `FormBuilder.tsx` (react-dnd canvas), `FormLibrary.tsx` (sidebar), `VersionHistory.tsx`, `AuditLog.tsx`, `ApproverRow.tsx`, `ProvisionOverlay.tsx`
-- **Styling**: Inline styles via `C` color object (`constants.ts`), NOT MUI components
-- **SharePoint lists**: `Master Form`, `Web Form Versions`, `Form Builder Log`, `Approvers`
-- **Approval layers**: 1–3 configurable, saved as `L1_Approvers`, `L2_Approvers`, etc.
+- **Entry**: Header "Form Builder" button (admin only) → `/admin/builder`
+- **Components**: `FormBuilder.tsx` (react-dnd canvas), `FormLibrary.tsx` (sidebar), `VersionHistory.tsx`, `AuditLog.tsx`, `ProvisionOverlay.tsx`
+- **Layer components**: `LayerConfigPanel.tsx`, `LayerCard.tsx`, `EvalElementPicker.tsx`, `PublicLinkDisplay.tsx`, `EvaluationSummary.tsx`
+- **Styling**: Inline styles via `C` color object (`constants.ts`) — NOT MUI
+- **SP lists**: `Master Form`, `Web Form Versions`, `Form Builder Log`, `Approvers`
 - **Versioning**: `Web Form Versions` list, auto-incrementing
 
 ## Dashboard
-- `Header.tsx` — Sticky top bar with user menu, role badge, admin tools, **Form Builder button**
-- `ListSummaryCards.tsx` — Grid of form list cards; `onEditForm` navigates to `/admin/builder/:formTitle`
-- `Toolbar.tsx` — Search + filter dropdowns (list, status, sort, submitter)
-- `DetailModal.tsx` — Full detail dialog with fields, signatures, approval chain
-- `ConfigWarningBanner.tsx` — Amber warning for unconfigured lists
-- `mapSubmission()` in `App.tsx` filters internal fields using `/^L[1-3]_/` regex (not broad `startsWith("L")`)
+- `Header.tsx` — Sticky top bar with user menu, role badge, Form Builder button
+- `ListSummaryCards.tsx` — Grid of form list cards; navigates to `/admin/builder/:listTitle`
+- `Toolbar.tsx` — Search + filter dropdowns
+- `DetailModal.tsx` — Full dialog with fields, signatures, **Layer Progression** stepper, **EvaluationSummary** for eval layers, legacy ApprovalCard for approval layers
+- `StatusBadge.tsx` — Handles: `fullyapproved`, `approved`, `confirmed`, `rejected`, `inprogress`, `pending`, `cancelled`
+- `mapSubmission()` in `App.tsx` filters internal fields using `/^L[1-9]_/` regex (not L[1-3] — extended for dynamic layers)
 
-## Data Views (DetailModal)
-- `DetailModal.tsx` renders `submissionData` fields using `formatFieldValue()`:
-  - Dates: auto-detected and locale-formatted
-  - User objects: `{ Email, Title }` → displays email or title
-  - Lookup fields: `{ Value }` → displays value
-  - Booleans: "Yes"/"No"
-  - Arrays: comma-joined
-- Fields like "Location", "LeaveType" etc. are preserved (not incorrectly filtered)
-
-## Loading Screen
-- `LoadingScreen.tsx` accepts `progress` (0-100) and `status` (string) props
-- `App.tsx` `fetchData()` reports 6 steps with percentage:
-  - 10%: Checking permissions
-  - 20%: Discovering lists
-  - 35%: Loading configuration
-  - 50-95%: Fetching submissions per list with `(n/total)` status
-  - 98%: Finalizing
-  - 100%: Ready
-
-## Auth Components (`src/components/auth/`)
-- **Shared visual pattern**: White base, 2-3 radial gradient blobs, subtle SVG accent lines, `position: absolute` with `pointerEvents: none`, `zIndex: 0`
-- **Card pattern**: `elevation={0}` with custom border + shadow, top accent bar gradient, `borderRadius: 24`
-- **Button patterns**: Primary `contained` (#0078D4, borderRadius 12px), Secondary `outlined`
-- `ChoiceScreen.tsx` — MSAL login vs guest choice with Microsoft logo (base64 SVG)
-- `GuestLanding.tsx` — Guest-only landing page with sign-in prompt
-- `WrongTenantScreen.tsx` — Access denied for non-PMW tenants
-- `LoadingScreen.tsx` — Progress bar with % and status subtitle during data loading
-- `ErrorScreen.tsx` — Error state with retry and sign-out
+### Visibility
+- Non-admin users see: own submissions + submissions where they're a layer assignee
+- Public access: token-scoped filtered data from `GET /api/evaluate`
+- DetailModal shows all layers read-only; future layer data hidden for evaluator view
 
 ## Core Modules
 - `src/auth/AuthProvider.tsx` — `MsalProvider` wrapper
-- `src/auth/msalConfig.ts` — MSAL configuration with dynamic `AllSites.Manage` SP scope
-- `src/types/index.ts` — Shared types: `PageState`, `Submission`, `ApprovalLayer`, `ListMetaEntry`, `DiscoveredList`, `LoadedConfig`, `SharePointClient`, **`FormConfig`, `SurveyJson`, `FormVersionData`**
-- `src/utils/sharepointClient.ts` — SP REST client (CRUD, digest cache, `isGroupMember`, list discovery, `resolveUserEmails`, `queryListByEmail`, `queryListByGuid`, `getSiteUsers`)
-- `src/utils/spConfig.ts` — Config loader (`loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`)
-- `src/utils/authDecision.ts` — `localStorage` auth persistence helpers (`pmw_hr_auth_decision`)
-- `src/utils/formBuilderSP.ts` — **Standalone** SP REST for form builder (uses raw `token: string`, NOT `createSpClient`). Exports: `getFormConfig`, `saveFormConfig`, `getAllFormConfigs`, `saveFormVersion`, `getFormVersionHistory`, `getFormSubmissions`, `submitFormResponse`, `getSharePointChoices`, `provisionResponseList`, `bootstrapSystemLists`, `upsertApprovers`, `deleteForm`, `sendSpEmail`, `logEvent`
-- `src/utils/FormBuilderEngine.ts` — Pure data logic for form building (validate, versioning, approval layers)
-- `api/_utils/graphClient.ts` — Microsoft Graph API client for serverless functions (`getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`)
+- `src/auth/msalConfig.ts` — MSAL config with `AllSites.Manage` SP scope
+- `src/types/index.ts` — All shared types
+- `src/utils/sharepointClient.ts` — Dashboard SP REST client
+- `src/utils/formBuilderSP.ts` — Builder SP REST (standalone, 43 exported functions, ~1470 lines). Key exports: `getFormConfig`, `saveFormConfig`, `upsertFormConfig`, `getAllFormConfigs`, `provisionResponseList`, `bootstrapSystemLists`, `triggerApprovalNotification`, `uploadSignatureImage`, `submitEvaluationData`, `updateLayerStatus`, `getLayerResponseData`, `migrateExistingForms`
+- `src/utils/spConfig.ts` — Config loader, `legacyToLayerConfig()` migration helper
+- `src/utils/statusConstants.ts` — `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`
+- `src/utils/FormBuilderEngine.ts` — Pure logic: question types (57), validation, survey JSON builder
+- `api/_utils/graphClient.ts` — Graph API client. Exports: `getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`, `updateListItemFields`
+
+## Signature Upload Flow
+1. User signs in custom `SignaturePad.tsx` widget → base64 data URI
+2. On submit (`DynamicFormPage.tsx` `onComplete`), `data:image/` values detected
+3. `uploadSignatureImage()` converts base64 → binary, determines daily counter, uploads to "Signature Images" doc library
+4. File naming: `{action}-{formId}-{yymmdd}{xxx}.png`
+5. `ServerRelativeUrl` replaces base64 in submission body
+6. SP image column (kind 11, DisplayFormat:2) renders the URL
+
+## Migration
+- `migrateExistingForms(token)` in `formBuilderSP.ts` converts legacy forms:
+  - Reads Master Form items without `LayerConfig`
+  - Converts `NumberOfApprovalLayer` + `ApprovalRules` → `LayerConfig` JSON
+  - Backfills `FormStatus` and `CurrentLayer` on response lists from old `Status`/`CurrentApprovalLayer`
 
 ## Anti-Patterns (This Project)
 - **NO `useMemo`/`useCallback`** — React 19 makes these unnecessary; remove when touching code
-- **NO `console.log/warn/error` in production** — replace with proper logging or remove when touching code
-- **NO `dangerouslySetInnerHTML` without audit** — `DetailModal.tsx` uses it; verify XSS safety if user input reaches it
-- **NO dead code** — remove unused `.backup`, `.txt`, dead pages when found. `references/` directory at root is stale JS copies — don't import from it.
+- **NO `console.log/warn/error`** in production — replace with proper logging or remove
+- **NO `dangerouslySetInnerHTML` without audit** — `DetailModal.tsx` uses it
 - **NO `@ts-ignore` / `@ts-expect-error`** — never suppress type errors
+- **NO `any`** — many files use it; fix types when touching
+- **NO dead code** — remove `.backup`, `.txt`, dead pages when found
+- `FormBuilder.tsx` has `eslint-disable` and `any[]` usage
+- `AdminFormBuilder.tsx` and `DynamicFormPage.tsx` have `console.error`/`console.warn` calls
 
 ## Conventions
-- **PowerShell**: use `workdir` parameter with `bash` tool; PowerShell does NOT support `&&` or native `grep`/`ls` commands
-- **File paths**: use full Windows paths or forward slashes (C:/Users/user/pmw-hrform/src/...)
-- **TypeScript**: tsconfig uses project references (`tsconfig.json` → `tsconfig.app.json` + `tsconfig.node.json`). Run `tsc -b` for type-checking. `"erasableSyntaxOnly": true` — no runtime `enum`/`namespace`; use `const` objects or string unions.
-- **ESLint**: NOT type-checked. Many pre-existing errors exist—focus on new errors you introduce.
-- **React 19**: no `forwardRef` needed, no manual memoization (`useMemo`/`useCallback`)
-- **MUI v9.0.0**: uses `Grid` (not `Grid2`); `slotProps` replaces `PaperProps` on Dialog
-- **Prefer `import type`**: for type-only imports (`verbatimModuleSyntax`); many files still use plain `import` — fix when touching
-- **`.env.local`** at app root contains Azure AD credentials (`VITE_AZURE_*`) and SP URL (`VITE_SP_SITE_URL`). **Never commit or expose these values.**
-  - `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_AZURE_AUTHORITY`, `VITE_SP_SITE_URL`
-  - `VITE_AZURE_TENANT_ID` is used for tenant validation in auth flow
-  - See `.env.example` for the required variable names (no values).
-- **Verifying changes**: Run `npm run build` before claiming work is done. `npm run lint` has many pre-existing warnings—check only your changed files with `lsp_diagnostics`.
+- **PowerShell**: use `workdir` parameter with `bash` tool; no `&&` or native `grep`/`ls`
+- **File paths**: full Windows paths or forward slashes
+- **TypeScript**: project references (`tsconfig.json` → `tsconfig.app.json` + `tsconfig.node.json`). `"erasableSyntaxOnly": true` — no runtime `enum`/`namespace`; use `const` objects or string unions.
+- **ESLint**: NOT type-checked. Many pre-existing errors. Check changed files with `lsp_diagnostics`.
+- **React 19**: no `forwardRef`, no manual memoization
+- **MUI v9**: uses `Grid` (not `Grid2`); `slotProps` replaces `PaperProps` on Dialog
+- **Prefer `import type`**: for type-only imports (`verbatimModuleSyntax`)
+- **`.env.local`** at root: `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_AZURE_AUTHORITY`, `VITE_SP_SITE_URL`. **Never commit.**
+- **Verifying changes**: Run `npm run build` (`tsc -b && vite build`). `npm run lint` has many pre-existing warnings.
+- **No path aliases** — all imports relative (`../../utils/...`)
+- **No barrel exports** except `src/components/builder/index.ts`
+- **No tests** — zero unit/E2E tests; no vitest/jest/playwright
 
 ## Notes
-- **No CI/CD** — zero GitHub Actions, Docker, or deployment configs
-- **No tests** — zero unit, integration, or E2E tests; no vitest/jest/playwright in dependencies
-- **No path aliases** — all imports use relative paths (`../../utils/...`); vite.config.ts has no `resolve.alias`
-
-## Signature Upload Flow
-Signatures are uploaded as PNG files to a `Signature Images` SharePoint document library during form submission. The flow:
-1. User signs in the custom `SignaturePad.tsx` widget → base64 data URI stored in `question.value`
-2. On submit (`DynamicFormPage.tsx` `onComplete`), signature fields (values starting with `data:image/`) are detected
-3. `uploadSignatureImage()` in `formBuilderSP.ts` converts base64 → binary, determines daily counter, and calls `spUploadFile()` to upload to the library
-4. File naming: `{action}-{formId}-{yymmdd}{xxx}.png` (e.g., `submission-HR001-260507001.png`)
-5. The returned `ServerRelativeUrl` replaces the base64 value in the submission body
-6. SP image column (kind 11, `DisplayFormat: 2`) renders the URL as an image
-
-**Future actions** (`approval`, `reject`) will use the same `uploadSignatureImage()` with different action prefixes. The `action` parameter in `ApprovalLayer` and `triggerApprovalNotification` already supports these values.
+- **No CI/CD** — zero GitHub Actions, Docker, deployment configs
+- **Env vars**: API routes use `process.env.SYSTEM_CLIENT_*` (not `VITE_`); frontend uses `import.meta.env.VITE_*`
+- **`HomePage.tsx`** — deleted (was dead code, not imported)
+- **`references/`** — deleted (was stale JS copies)
+- **`AdminHomePage.tsx` dead Dialog** — removed (builderOpen never set to true)

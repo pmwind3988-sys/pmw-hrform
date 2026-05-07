@@ -11,7 +11,6 @@ import { FlatLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle } from "../../utils/formBuilderSP";
-
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // Theme
@@ -44,12 +43,16 @@ interface PendingItem {
   CurrentApprovalLayer: number;
   FormVersion: string;
   RawJSON: string;
+  CurrentLayer?: number;
+  FormStatus?: string;
+  L1_Status?: string;
 }
 
 interface FormConfig {
   Title: string;
   NumberOfApprovalLayer?: number;
   FormID?: string;
+  LayerConfig?: string;
 }
 
 export default function ApprovalDashboard() {
@@ -94,7 +97,7 @@ export default function ApprovalDashboard() {
           const listName = `${form.Title} Responses`;
           const items = await spGet(
             token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$filter=Status eq 'Pending Approval' or Status startswith 'Approved Layer'&$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,FormVersion,RawJSON&$orderby=SubmittedAt desc&$top=50`
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$filter=Status eq 'Pending Approval' or Status startswith 'Approved Layer' or FormStatus eq 'In Review' or FormStatus eq 'Submitted'&$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,FormVersion,RawJSON,CurrentLayer,FormStatus,L1_Status,L2_Status,L3_Status&$orderby=SubmittedAt desc&$top=50`
           ) as { value?: PendingItem[] };
 
           if (items.value) {

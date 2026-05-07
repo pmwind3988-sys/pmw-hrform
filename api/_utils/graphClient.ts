@@ -169,3 +169,25 @@ export async function createListItem(
 
   return data;
 }
+
+export async function updateListItemFields(
+  token: string,
+  listDisplayName: string,
+  itemId: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const res = await fetch(`${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Graph PATCH fields ${res.status}: ${text}`);
+  }
+}

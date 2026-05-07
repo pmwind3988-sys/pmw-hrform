@@ -1,4 +1,4 @@
-import type { FormConfig, FormLogEntry, Submission, SurveyJson } from '../types/index.ts';
+import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, EvaluationDataEntry, LayerConfigItem } from '../types/index.ts';
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
@@ -39,7 +39,7 @@ async function getDigest(token: string): Promise<string> {
 
 export async function getFormConfig(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -546,17 +546,18 @@ interface FormConfigData {
   IsPublic?: boolean;
   ConditionField?: string;
   ApprovalRules?: string;
+  LayerConfig?: string;
 }
 
 export async function getAllFormConfigs(token: string): Promise<FormConfigData[]> {
   if (!await listExists(token, 'Master Form')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
   return data.value || [];
 }
 
 export async function getFormConfigByTitle(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(listTitle)}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -569,6 +570,7 @@ interface UpsertFormConfigParams {
   isPublic?: boolean;
   conditionField?: string;
   approvalRules?: unknown;
+  layerConfig?: string;
 }
 
 export async function upsertFormConfig(
@@ -582,6 +584,7 @@ export async function upsertFormConfig(
     Title: listTitle,
     FormID: config.formId || '',
     NumberOfApprovalLayer: parseInt(String(config.numLayers), 10) || 0,
+    LayerConfig: config.layerConfig || '',
     Slug: config.slug || '',
     CurrentVersion: config.version || '1.0',
     IsPublished: config.isPublished ?? true,
@@ -773,6 +776,7 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: { n: string;
     { n: 'Slug', k: 2 }, { n: 'CurrentVersion', k: 2 },
     { n: 'IsPublished', k: 8 }, { n: 'IsPublic', k: 8 },
     { n: 'ConditionField', k: 2 }, { n: 'ApprovalRules', k: 3, ml: true },
+    { n: 'LayerConfig', k: 3, ml: true },
   ]},
   'Approvers': { t: 100, desc: 'Approver layers per form', cols: [
     { n: 'FormTitle', k: 2 }, { n: 'LayerNumber', k: 9 },
@@ -828,7 +832,7 @@ export async function getLatestFormBySlug(token: string, slug: string): Promise<
   surveyJson: unknown;
   meta: unknown;
 } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(slug)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(slug)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
   const form = data.value?.[0];
   if (!form) return null;
   if (!form.IsPublished) return null;
@@ -863,7 +867,8 @@ export async function provisionResponseList(
   token: string,
   formTitle: string,
   surveyJson: unknown,
-  onLog: (msg: string, type: string) => void = () => {}
+  onLog: (msg: string, type: string) => void = () => {},
+  numLayers?: number
 ): Promise<void> {
   const listName = `${formTitle} Responses`;
   onLog(`Checking response list "${listName}"…`, 'info');
@@ -883,6 +888,14 @@ export async function provisionResponseList(
   await addColumn(token, listName, 'CurrentApprovalLayer', 9); // Number
   await addColumn(token, listName, 'FormVersion', 2); // Text
   await addColumn(token, listName, 'RawJSON', 3, true); // Note — full survey.data JSON backup
+
+  // Enhanced layer system columns (added when layers are present)
+  if (numLayers && numLayers > 0) {
+    await addColumn(token, listName, 'EvaluationData', 3, true); // Note — JSON blob of all evaluation layer results
+    await addColumn(token, listName, 'CurrentLayer', 9); // Number — currently active layer
+    await addColumn(token, listName, 'FormStatus', 2); // Text — Submitted/In Review/Completed/Rejected/Cancelled
+  }
+
   onLog('  ✓ System columns', 'ok');
 
   // Per-field columns from survey JSON
@@ -1109,6 +1122,145 @@ export async function triggerApprovalNotification(
   }
 }
 
+/**
+ * Fetches a response item and parses the data needed for a specific layer's evaluation/approval view.
+ * Returns the response item fields, layer config, and previous layer results.
+ */
+export async function getLayerResponseData(
+  token: string,
+  formTitle: string,
+  responseItemId: number,
+  layerNumber: number
+): Promise<{
+  responseFields: Record<string, unknown>;
+  layerConfig: LayerConfigItem[];
+  currentLayer: LayerConfigItem | undefined;
+  previousResults: Record<string, unknown>[];
+  evaluationData: Record<string, unknown>;
+} | null> {
+  try {
+    // Fetch the response item
+    const item = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formTitle)}')/items(${responseItemId})`) as Record<string, unknown>;
+
+    // Fetch form config for layer info
+    const configData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(formTitle.replace(/ Responses$/, ""))}'&$select=LayerConfig&$top=1`) as { value?: Record<string, unknown>[] };
+    const rawLayerConfig = configData?.value?.[0]?.LayerConfig as string | undefined;
+    let layerConfig: LayerConfigItem[] = [];
+    if (rawLayerConfig) {
+      try {
+        const parsed = JSON.parse(rawLayerConfig);
+        layerConfig = parsed.layers || [];
+      } catch {}
+    }
+
+    const currentLayer = layerConfig.find((l: LayerConfigItem) => l.layerNumber === layerNumber);
+
+    // Parse evaluation data
+    let evaluationData: Record<string, unknown> = {};
+    const rawEvalData = item.EvaluationData as string | undefined;
+    if (rawEvalData) {
+      try { evaluationData = JSON.parse(rawEvalData); } catch {}
+    }
+
+    // Build previous layer results
+    const previousResults: Record<string, unknown>[] = [];
+    for (let n = 1; n < layerNumber; n++) {
+      const statusVal = item[`L${n}_Status`];
+      const emailVal = item[`L${n}_Email`];
+      const signedAtVal = item[`L${n}_SignedAt`];
+      previousResults.push({
+        layerNumber: n,
+        status: statusVal,
+        email: emailVal,
+        signedAt: signedAtVal,
+        evaluationData: evaluationData[n],
+      });
+    }
+
+    return {
+      responseFields: item,
+      layerConfig,
+      currentLayer,
+      previousResults,
+      evaluationData,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Appends evaluation results to the EvaluationData JSON column of a response item.
+ * The column stores Record<layerNumber, EvaluationDataEntry> as a JSON string.
+ */
+export async function submitEvaluationData(
+  token: string,
+  listTitle: string,
+  responseItemId: number,
+  layerNumber: number,
+  data: {
+    confirmerEmail: string;
+    confirmerName?: string;
+    fields: Record<string, unknown>;
+    notes?: string;
+    signatureUrl?: string | null;
+  }
+): Promise<void> {
+  // 1. Fetch current item
+  const item = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})?$select=Id,EvaluationData`);
+
+  // 2. Parse existing data
+  let allData: Record<number, EvaluationDataEntry> = {};
+  const rawEvalData = (item as Record<string, unknown>).EvaluationData as string | undefined;
+  if (rawEvalData && rawEvalData.trim()) {
+    try { allData = JSON.parse(rawEvalData) as Record<number, EvaluationDataEntry>; } catch {}
+  }
+
+  // 3. Set/update this layer's entry
+  allData[layerNumber] = {
+    status: "confirmed" as LayerStatus,
+    confirmerEmail: data.confirmerEmail,
+    confirmerName: data.confirmerName ?? null,
+    confirmedAt: new Date().toISOString(),
+    fields: data.fields,
+    notes: data.notes,
+    signatureUrl: data.signatureUrl ?? null,
+  };
+
+  // 4. Update the item
+  await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`, {
+    EvaluationData: JSON.stringify(allData),
+  });
+}
+
+/**
+ * Updates a specific approval layer's status columns on a response item.
+ * Patches L{n}_Status, L{n}_SignedAt, L{n}_Rejection, L{n}_Signature as needed.
+ */
+export async function updateLayerStatus(
+  token: string,
+  listTitle: string,
+  responseItemId: number,
+  layerNumber: number,
+  updates: {
+    status: string;
+    email?: string;
+    signedAt?: string;
+    rejection?: string;
+    signature?: string;
+  }
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    [`L${layerNumber}_Status`]: updates.status,
+  };
+  if (updates.signedAt !== undefined) body[`L${layerNumber}_SignedAt`] = updates.signedAt;
+  if (updates.rejection !== undefined) body[`L${layerNumber}_Rejection`] = updates.rejection;
+  if (updates.signature !== undefined) body[`L${layerNumber}_Signature`] = updates.signature;
+  if (updates.email !== undefined) body[`L${layerNumber}_Email`] = updates.email;
+
+  await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`, body);
+}
+
 // ── Signature Image Upload ─────────────────────────────────────────────
 // Signatures are uploaded as PNG files to a "Signature Images" document
 // library and linked via a URL/Hyperlink column in the response list.
@@ -1176,4 +1328,144 @@ export async function uploadSignatureImage(
   const sitePath = new URL(SP_SITE_URL).pathname;
   const result = await spUploadFile(token, SIGNATURE_LIBRARY, fileName, bytes) as { ServerRelativeUrl?: string };
   return result.ServerRelativeUrl ?? `${sitePath}/${SIGNATURE_LIBRARY}/${fileName}`;
+}
+
+/**
+ * Migrates existing forms from legacy format (NumberOfApprovalLayer + ApprovalRules)
+ * to the new LayerConfig JSON format.
+ *
+ * Also backfills FormStatus and CurrentLayer on response lists.
+ *
+ * Safe to call multiple times — idempotent for already-migrated forms.
+ */
+export async function migrateExistingForms(
+  token: string,
+  onLog?: (msg: string) => void
+): Promise<{ migrated: number; backfilled: number }> {
+  const log = onLog || ((_msg: string) => { /* silent */ });
+  let migrated = 0;
+  let backfilled = 0;
+
+  // Step 1: Migrate Master Form items
+  log("Reading Master Form items...");
+  const allConfigs = await getAllFormConfigs(token);
+
+  for (const cfg of allConfigs) {
+    // Skip if already has LayerConfig
+    if (cfg.LayerConfig && cfg.LayerConfig.trim()) {
+      log(`  ✓ ${cfg.Title}: already has LayerConfig`);
+      continue;
+    }
+
+    const numLayers = cfg.NumberOfApprovalLayer || 0;
+    if (numLayers === 0) {
+      log(`  → ${cfg.Title}: no layers, skipping`);
+      continue;
+    }
+
+    // Build LayerConfig from legacy format
+    let approvalRules: Record<string, unknown> | null = null;
+    if (cfg.ApprovalRules && cfg.ApprovalRules.trim()) {
+      try { approvalRules = JSON.parse(cfg.ApprovalRules); } catch { /* ignore parse errors */ }
+    }
+
+    const layers: Record<string, unknown>[] = [];
+    for (let n = 1; n <= numLayers; n++) {
+      const layer: Record<string, unknown> = {
+        layerNumber: n,
+        type: "approval",
+        authMode: "365",
+        assignee: {
+          type: "field-reference",
+          value: `L${n}_Email`,
+        },
+        confirmationType: "signature",
+        allowRejectionReason: true,
+        title: `Layer ${n}`,
+        notifyOnComplete: true,
+      };
+      layers.push(layer);
+    }
+
+    const layerConfig: Record<string, unknown> = {
+      version: "1.0",
+      layers,
+    };
+
+    // Add conditional routing if present
+    if (approvalRules?.conditionField && approvalRules?.rules) {
+      layerConfig.routing = [{
+        conditionField: approvalRules.conditionField as string,
+        rules: (approvalRules.rules as Record<string, unknown>[]).map((r) => ({
+          when: r.when as string,
+          skipLayers: [],
+        })),
+      }];
+    }
+
+    // Write back to Master Form
+    const existing = await getFormConfigByTitle(token, cfg.Title);
+    if (existing?.Id) {
+      await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${existing.Id})`, {
+        LayerConfig: JSON.stringify(layerConfig),
+      });
+      log(`  ✓ ${cfg.Title}: migrated (${numLayers} layers)`);
+      migrated++;
+    }
+  }
+
+  // Step 2: Backfill FormStatus and CurrentLayer on response lists
+  log("Backfilling response lists...");
+  for (const cfg of allConfigs) {
+    if (!cfg.Title) continue;
+    const listName = `${cfg.Title} Responses`;
+
+    try {
+      // Check if list exists
+      if (!(await listExists(token, listName))) {
+        continue;
+      }
+
+      // Ensure FormStatus and CurrentLayer columns exist
+      await addColumn(token, listName, "FormStatus", 2); // Text
+      await addColumn(token, listName, "CurrentLayer", 9); // Number
+
+      // Query items that don't have FormStatus set
+      const items = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Status,CurrentApprovalLayer,CurrentLayer,FormStatus&$top=500&$filter=FormStatus eq null`) as { value?: Record<string, unknown>[] };
+
+      for (const item of items.value || []) {
+        const oldStatus = String(item.Status || "");
+        const oldLayer = Number(item.CurrentApprovalLayer || 0);
+        const patches: Record<string, unknown> = {};
+
+        // Derive FormStatus from old Status
+        const st = oldStatus.toLowerCase();
+        if (st === "fully approved" || st === "approved") {
+          patches.FormStatus = "Completed";
+        } else if (st.includes("reject")) {
+          patches.FormStatus = "Rejected";
+        } else if (st === "pending approval" || st.startsWith("approved layer")) {
+          patches.FormStatus = "In Review";
+        } else {
+          patches.FormStatus = "Submitted";
+        }
+
+        // Set CurrentLayer from CurrentApprovalLayer if not set
+        if (oldLayer > 0 && !item.CurrentLayer) {
+          patches.CurrentLayer = oldLayer;
+        }
+
+        if (Object.keys(patches).length > 0) {
+          await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${item.Id})`, patches);
+          backfilled++;
+        }
+      }
+      log(`  ✓ ${listName}: ${items.value?.length || 0} items backfilled`);
+    } catch (e) {
+      log(`  ⚠ ${listName}: error — ${(e as Error).message}`);
+    }
+  }
+
+  log(`Migration complete: ${migrated} forms migrated, ${backfilled} items backfilled`);
+  return { migrated, backfilled };
 }

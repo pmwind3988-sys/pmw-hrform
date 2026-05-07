@@ -90,6 +90,24 @@ export default function SubmissionRow({
         <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
           <ListBadge title={item.listTitle} icon={meta.icon} color={meta.color} pale={meta.pale} />
           <StatusBadge status={item.formStatus} />
+          {item.totalLayers > 1 && item.currentLayer !== undefined && (
+            <Typography
+              variant="caption"
+              sx={{
+                fontFamily: "monospace",
+                backgroundColor: "rgba(98,100,167,0.08)",
+                color: "#6264A7",
+                px: 1,
+                py: 0.25,
+                borderRadius: "6px",
+                fontSize: "0.7rem",
+                fontWeight: 600,
+                ml: 1,
+              }}
+            >
+              {item.currentLayer > 0 ? `Layer ${item.currentLayer}/${item.totalLayers}` : `${item.totalLayers} layers`}
+            </Typography>
+          )}
         </Box>
         <Typography variant="caption" sx={{ color: "#6B7280", display: "block" }}>
           {submittedAt} · {item.submittedByEmail}
@@ -173,7 +191,28 @@ export default function SubmissionRow({
       </Typography>
 
       {/* Status */}
-      <StatusBadge status={item.formStatus} />
+      <Box>
+        <StatusBadge status={item.formStatus} />
+        {item.totalLayers > 1 && item.currentLayer !== undefined && (
+          <Typography
+            variant="caption"
+            sx={{
+              fontFamily: "monospace",
+              backgroundColor: "rgba(98,100,167,0.08)",
+              color: "#6264A7",
+              px: 1,
+              py: 0.25,
+              borderRadius: "6px",
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              display: "inline-block",
+              mt: 0.5,
+            }}
+          >
+            {item.currentLayer > 0 ? `Layer ${item.currentLayer}/${item.totalLayers}` : `${item.totalLayers} layers`}
+          </Typography>
+        )}
+      </Box>
 
       {/* Chevron */}
       <ChevronRightIcon

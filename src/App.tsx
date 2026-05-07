@@ -10,7 +10,8 @@ import { loginRequest } from "./auth/msalConfig";
 import { createSpClient } from "./utils/sharepointClient";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
-import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig } from "./types";
+import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry } from "./types";
+import { normalizeLayerStatus } from "./utils/statusConstants";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -25,6 +26,7 @@ import ApprovalDashboard from "./components/builder/ApprovalDashboard";
 import ResponseViewer from "./components/builder/ResponseViewer";
 import AdminFormBuilder from "./pages/AdminFormBuilder";
 import AdminHomePage from "./pages/AdminHomePage";
+import EvaluationPage from "./pages/EvaluationPage";
 
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 
@@ -38,7 +40,12 @@ function normalizeStatus(status: string | null): string {
   return "pending";
 }
 
-function mapSubmission(raw: Record<string, unknown>, listTitle: string, listMetaMap: Record<string, ListMetaEntry>): Submission {
+function mapSubmission(
+  raw: Record<string, unknown>,
+  listTitle: string,
+  listMetaMap: Record<string, ListMetaEntry>,
+  layerConfigs?: Record<string, LayerConfig | null>
+): Submission {
   const id = String(raw.Id || "");
   const title = String(raw.Title || "Untitled");
   const formId = String(raw.FormId || "");
@@ -51,41 +58,103 @@ function mapSubmission(raw: Record<string, unknown>, listTitle: string, listMeta
       ""
   );
   const submittedAt = raw.SubmittedAt ? String(raw.SubmittedAt) : null;
+  const currentLayer = raw.CurrentLayer ? Number(raw.CurrentLayer) : 0;
 
-  // Count totalLayers from config or infer from L1/L2/L3 fields
-  let totalLayers = 1;
-  if (raw.L2_Email) totalLayers = 2;
-  if (raw.L3_Email) totalLayers = 3;
+  const cfg = layerConfigs?.[listTitle] ?? null;
+  const layersConfig = cfg?.layers ?? [];
 
-  // Build approval layers
+  let totalLayers = layersConfig.length;
+  if (!totalLayers) {
+    totalLayers = 1;
+    if (raw.L2_Email) totalLayers = 2;
+    if (raw.L3_Email) totalLayers = 3;
+  }
+
   const layers: (ApprovalLayer | null)[] = [];
-  for (let i = 1; i <= 3; i++) {
-    const statusVal = raw[`L${i}_Status`] ? String(raw[`L${i}_Status`]) : null;
-    const emailVal = raw[`L${i}_Email`] ? String(raw[`L${i}_Email`]) : null;
-    const signedAtVal = raw[`L${i}_SignedAt`] ? String(raw[`L${i}_SignedAt`]) : null;
-    const rejectionVal = raw[`L${i}_Rejection`] ? String(raw[`L${i}_Rejection`]) : null;
-    const signatureVal = raw[`L${i}_Signature`] ? String(raw[`L${i}_Signature`]) : null;
+  const enhancedLayers: (ApprovalLayerResult | EvaluationLayerResult | null)[] = [];
 
-    if (statusVal || emailVal) {
+  if (layersConfig.length > 0) {
+    for (let i = 0; i < layersConfig.length; i++) {
+      const lc = layersConfig[i];
+      const n = lc.layerNumber;
+      const statusVal = raw[`L${n}_Status`] ? String(raw[`L${n}_Status`]) : null;
+      const emailVal = raw[`L${n}_Email`] ? String(raw[`L${n}_Email`]) : null;
+      const signedAtVal = raw[`L${n}_SignedAt`] ? String(raw[`L${n}_SignedAt`]) : null;
+      const rejectionVal = raw[`L${n}_Rejection`] ? String(raw[`L${n}_Rejection`]) : null;
+      const signatureVal = raw[`L${n}_Signature`] ? String(raw[`L${n}_Signature`]) : null;
+      const canonicalStatus = normalizeLayerStatus(statusVal);
+
       layers.push({
         status: statusVal || "pending",
-        outcome:
-          statusVal === "approved" ? "approved" : statusVal === "rejected" ? "rejected" : undefined,
+        outcome: canonicalStatus === "approved" ? "approved" : canonicalStatus === "rejected" ? "rejected" : undefined,
         email: emailVal,
         signedAt: signedAtVal,
         rejectionReason: rejectionVal,
         signature: signatureVal,
       });
+
+      if (lc.type === "evaluation") {
+        let evalData: EvaluationDataEntry | null = null;
+        const rawEvalData = raw.EvaluationData as string | undefined;
+        if (rawEvalData) {
+          try {
+            const allEvalData = JSON.parse(rawEvalData) as Record<number, EvaluationDataEntry>;
+            evalData = allEvalData[n] ?? null;
+          } catch {}
+        }
+        enhancedLayers.push({
+          layerNumber: n,
+          type: "evaluation",
+          status: canonicalStatus,
+          email: emailVal,
+          confirmedAt: evalData?.confirmedAt ?? null,
+          fields: evalData?.fields ?? {},
+          notes: evalData?.notes,
+        });
+      } else {
+        enhancedLayers.push({
+          layerNumber: n,
+          type: "approval",
+          status: canonicalStatus,
+          outcome: canonicalStatus === "approved" ? "approved" : canonicalStatus === "rejected" ? "rejected" : undefined,
+          email: emailVal,
+          signedAt: signedAtVal,
+          rejectionReason: rejectionVal,
+          signature: signatureVal,
+          confirmedVia: (lc as ApprovalLayerConfig).confirmationType ?? "signature",
+        });
+      }
+    }
+  } else {
+    // Legacy path — old L1-L3 loop
+    for (let i = 1; i <= 3; i++) {
+      const statusVal = raw[`L${i}_Status`] ? String(raw[`L${i}_Status`]) : null;
+      const emailVal = raw[`L${i}_Email`] ? String(raw[`L${i}_Email`]) : null;
+      const signedAtVal = raw[`L${i}_SignedAt`] ? String(raw[`L${i}_SignedAt`]) : null;
+      const rejectionVal = raw[`L${i}_Rejection`] ? String(raw[`L${i}_Rejection`]) : null;
+      const signatureVal = raw[`L${i}_Signature`] ? String(raw[`L${i}_Signature`]) : null;
+      if (statusVal || emailVal) {
+        layers.push({
+          status: statusVal || "pending",
+          outcome: statusVal === "approved" ? "approved" : statusVal === "rejected" ? "rejected" : undefined,
+          email: emailVal,
+          signedAt: signedAtVal,
+          rejectionReason: rejectionVal,
+          signature: signatureVal,
+        });
+      }
     }
   }
 
-  // Filter out internal fields for submissionData display
+  // Filter internal fields
   const submissionData: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
     if (
       key.startsWith("odata.") ||
-      /^L[1-3]_/.test(key) ||
+      /^L[1-9]_/.test(key) ||
       key === "FormStatus" ||
+      key === "CurrentLayer" ||
+      key === "EvaluationData" ||
       key === "FormId" ||
       key === "FormVersion" ||
       key === "Title" ||
@@ -113,6 +182,9 @@ function mapSubmission(raw: Record<string, unknown>, listTitle: string, listMeta
     layers: layers.filter(Boolean) as ApprovalLayer[],
     meta: listMetaMap[listTitle] ?? generateMeta(listTitle),
     submissionData,
+    currentLayer,
+    enhancedLayers: enhancedLayers.length > 0 ? enhancedLayers : undefined,
+    layerConfig: cfg,
   };
 }
 
@@ -142,10 +214,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState("newest");
   const [submitterFilter, setSubmitterFilter] = useState("");
 
-  // Form builder state
-  const [builderOpen, setBuilderOpen] = useState(false);
   const navigate = useNavigate();
-  const [editingFormId, setEditingFormId] = useState<string | undefined>(undefined);
 
   // Auth state machine
   useEffect(() => {
@@ -202,6 +271,18 @@ if (decision === "guest") {
         setLoadedConfig(config);
         setLoadProgress(50);
 
+        // Build map of list → set of emails that should see submissions (including layer assignees)
+        const assigneeVisibilityMap: Record<string, Set<string>> = {};
+        for (const [title, cfg] of Object.entries(config.layerConfigs || {})) {
+          if (!cfg?.layers) continue;
+          for (const layer of cfg.layers) {
+            if (layer.assignee.type === "user" && layer.assignee.value) {
+              if (!assigneeVisibilityMap[title]) assigneeVisibilityMap[title] = new Set();
+              assigneeVisibilityMap[title].add(layer.assignee.value.toLowerCase());
+            }
+          }
+        }
+
         // Step 4: Filter visible lists
         const visible = filterVisibleLists(allLists, adminResult, config.allowedTitles);
         setVisibleLists(visible);
@@ -234,7 +315,7 @@ if (decision === "guest") {
               top: adminResult ? 5000 : 1000,
             });
             for (const item of items) {
-              allSubmissions.push(mapSubmission(item, list.title, listMetaMap));
+              allSubmissions.push(mapSubmission(item, list.title, listMetaMap, config.layerConfigs));
             }
           } catch {
             // Skip lists that fail to query
@@ -247,8 +328,16 @@ if (decision === "guest") {
 
         const visibleTitles = new Set(visible.map((l) => l.title));
         let finalSubmissions = allSubmissions.filter((s) => visibleTitles.has(s.listTitle));
-        if (!adminResult) {
-          finalSubmissions = finalSubmissions.filter((s) => s.submittedByEmail === email);
+        if (!adminResult && email) {
+          const lowerEmail = email.toLowerCase();
+          finalSubmissions = finalSubmissions.filter((s) => {
+            // User's own submissions
+            if (s.submittedByEmail.toLowerCase() === lowerEmail) return true;
+            // Submissions where user is a layer assignee
+            const assignees = assigneeVisibilityMap[s.listTitle];
+            if (assignees?.has(lowerEmail)) return true;
+            return false;
+          });
         }
 
         setSubmissions(finalSubmissions);
@@ -507,11 +596,23 @@ if (decision === "guest") {
               onSwitchAccount={handleSwitchAccount}
               onOpenBuilder={() => navigate("/admin/builder")}
               onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
-              builderOpen={builderOpen}
-              setBuilderOpen={setBuilderOpen}
-              editingFormId={editingFormId}
-              setEditingFormId={setEditingFormId}
             />
+          }
+        />
+        <Route
+          path="/eval/:token"
+          element={
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+              <EvaluationPage />
+            </Box>
+          }
+        />
+        <Route
+          path="/eval/:formSlug/:responseId/:layerNumber"
+          element={
+            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+              <EvaluationPage />
+            </Box>
           }
         />
         <Route
@@ -542,10 +643,6 @@ if (decision === "guest") {
               onSwitchAccount={handleSwitchAccount}
               onOpenBuilder={() => navigate("/admin/builder")}
               onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
-              builderOpen={builderOpen}
-              setBuilderOpen={setBuilderOpen}
-              editingFormId={editingFormId}
-              setEditingFormId={setEditingFormId}
             />
           }
         />

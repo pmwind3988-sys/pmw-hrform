@@ -22,8 +22,9 @@ import {
   Cancel as CancelIcon,
   AccessTime as AccessTimeIcon,
 } from "@mui/icons-material";
-import type { Submission, ApprovalLayer } from "../../types";
+import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
 import StatusBadge from "./StatusBadge";
+import EvaluationSummary from "../builder/EvaluationSummary";
 
 const SKIP = new Set([
   "Id", "_authorEmail", "AuthorId", "EditorId", "FormVersion", "FormStatus",
@@ -36,6 +37,7 @@ const SKIP = new Set([
   "FileSystemObjectType", "ServerRedirectedEmbedUri", "ServerRedirectedEmbedUrl",
   "ContentTypeId", "OData__UIVersionString", "Attachments", "GUID",
   "OData__ColorTag", "ComplianceAssetId",
+  "CurrentLayer", "EvaluationData",
 ]);
 
 interface DetailModalProps {
@@ -114,6 +116,115 @@ function formatFieldValue(value: unknown): string {
   return str;
 }
 
+function LayerProgression({
+  totalLayers,
+  currentLayer,
+  enhancedLayers,
+}: {
+  totalLayers: number;
+  currentLayer?: number;
+  enhancedLayers?: (ApprovalLayerResult | EvaluationLayerResult | null)[];
+}) {
+  if (totalLayers <= 0) return null;
+
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography
+        variant="h6"
+        sx={{ fontWeight: 600, color: "#111827", letterSpacing: "-0.01em", mb: 2 }}
+      >
+        Layer Progression
+      </Typography>
+      <Stack spacing={1.5}>
+        {Array.from({ length: totalLayers }, (_, i) => {
+          const layerNum = i + 1;
+          const enhanced = enhancedLayers?.[i];
+          const isActive = currentLayer === layerNum;
+
+          let borderColor = "#E5E7EB";
+          let bgColor = "#F9FAFB";
+          let statusIcon = "○";
+          let statusLabel = "Waiting";
+          let iconColor = "#9CA3AF";
+
+          if (enhanced?.status === "approved" || enhanced?.status === "confirmed") {
+            borderColor = "#16A34A";
+            bgColor = "rgba(22,163,74,0.04)";
+            statusIcon = "✓";
+            statusLabel = enhanced.status === "confirmed" ? "Confirmed" : "Approved";
+            iconColor = "#16A34A";
+          } else if (enhanced?.status === "rejected") {
+            borderColor = "#DC2626";
+            bgColor = "rgba(220,38,38,0.04)";
+            statusIcon = "✕";
+            statusLabel = "Rejected";
+            iconColor = "#DC2626";
+          } else if (isActive) {
+            borderColor = "#6264A7";
+            bgColor = "rgba(98,100,167,0.04)";
+            statusIcon = "●";
+            statusLabel = enhanced?.type === "evaluation" ? "Pending Evaluation" : "Pending Approval";
+            iconColor = "#6264A7";
+          }
+
+          return (
+            <Paper
+              key={i}
+              elevation={0}
+              sx={{
+                border: `1px solid ${borderColor}`,
+                backgroundColor: bgColor,
+                borderRadius: "10px",
+                p: 2,
+                borderLeft: `3px solid ${borderColor}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  backgroundColor: `${iconColor}15`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: iconColor,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {statusIcon}
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827" }}>
+                  Layer {layerNum}
+                  {enhanced?.type === "evaluation" && (
+                    <Typography component="span" variant="caption" sx={{ color: "#6B7280", ml: 1 }}>
+                      (Evaluation)
+                    </Typography>
+                  )}
+                </Typography>
+                <Typography variant="caption" sx={{ color: iconColor, fontWeight: 500 }}>
+                  {statusLabel}
+                </Typography>
+              </Box>
+              {enhanced?.email && (
+                <Typography variant="caption" sx={{ color: "#6B7280", textAlign: "right" }}>
+                  {enhanced.email}
+                </Typography>
+              )}
+            </Paper>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+}
+
 function ApprovalCard({
   layer,
   index,
@@ -177,7 +288,7 @@ function ApprovalCard({
           {statusIcon}
         </Box>
         <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>
-          Level {index + 1}
+          Layer {index + 1}
         </Typography>
         <Chip
           label={statusLabel}
@@ -497,25 +608,72 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
               </Box>
             )}
 
-            {/* Approval chain */}
-            {item.layers && item.layers.length > 0 && (
+            {/* Layer Progression */}
+            {(item.totalLayers > 0) && (
               <>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 600,
-                    color: "#111827",
-                    letterSpacing: "-0.01em",
-                  }}
-                >
-                  Approval Chain
-                </Typography>
-                <Stack spacing={2}>
-                  {item.layers.map(
-                    (layer, i) =>
-                      layer && <ApprovalCard key={i} layer={layer} index={i} />
-                  )}
-                </Stack>
+                <LayerProgression
+                  totalLayers={item.totalLayers}
+                  currentLayer={item.currentLayer}
+                  enhancedLayers={item.enhancedLayers}
+                />
+                <Divider sx={{ my: 2 }} />
+
+                {/* Enhanced layer results */}
+                {item.enhancedLayers && item.enhancedLayers.length > 0 && (
+                  <>
+                    <Typography
+                      variant="h6"
+                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: "-0.01em", mb: 2 }}
+                    >
+                      Layer Results
+                    </Typography>
+                    <Stack spacing={2}>
+                      {item.enhancedLayers.map((layer, i) => {
+                        if (!layer) return null;
+                        if (layer.type === "evaluation") {
+                          return (
+                            <EvaluationSummary
+                              key={i}
+                              result={layer}
+                              layerTitle={`Layer ${layer.layerNumber}`}
+                            />
+                          );
+                        }
+                        return (
+                          <ApprovalCard
+                            key={i}
+                            layer={{
+                              status: layer.status,
+                              outcome: layer.outcome,
+                              email: layer.email,
+                              signedAt: layer.signedAt,
+                              rejectionReason: layer.rejectionReason,
+                              signature: layer.signature,
+                            }}
+                            index={layer.layerNumber - 1}
+                          />
+                        );
+                      })}
+                    </Stack>
+                  </>
+                )}
+
+                {/* Fallback for old-format layers */}
+                {(!item.enhancedLayers || item.enhancedLayers.length === 0) && item.layers && item.layers.length > 0 && (
+                  <>
+                    <Typography
+                      variant="h6"
+                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: "-0.01em" }}
+                    >
+                      Approval Chain
+                    </Typography>
+                    <Stack spacing={2}>
+                      {item.layers.map(
+                        (layer, i) => layer && <ApprovalCard key={i} layer={layer} index={i} />
+                      )}
+                    </Stack>
+                  </>
+                )}
               </>
             )}
           </Stack>

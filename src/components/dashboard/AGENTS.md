@@ -30,7 +30,9 @@ App.tsx (state: submissions, filters, listMetaMap)
 ## Conventions
 - **Responsive**: desktop table (`ListHeader` + `SubmissionRow` grid) vs mobile stacked cards
 - **Modal pattern**: `DetailModal` receives `submissionData` object; formats dates, users, lookups via `formatFieldValue()`
-- **Internal field filtering**: `mapSubmission()` in `App.tsx` uses `/^L[1-3]_/` regex — preserves "Location", "LeaveType" etc.
+- **Internal field filtering**: `mapSubmission()` in `App.tsx` uses `/^L[1-9]_/` regex (extended from old L[1-3] to support dynamic layers)
+- **Layer Progression**: `DetailModal` shows a timeline/stepper of all layers with status badges. Evaluation layers render via `EvaluationSummary`, approval layers via legacy `ApprovalCard`.
+- **StatusBadge**: Handles `fullyapproved`, `approved`, `confirmed`, `rejected`, `inprogress`, `pending`, `cancelled`
 
 ## Anti-Patterns
 - `DetailModal.tsx` uses `dangerouslySetInnerHTML` — audit XSS if user input reaches `value`

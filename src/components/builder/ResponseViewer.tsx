@@ -43,6 +43,8 @@ interface SubmissionItem {
   SubmittedAt: string;
   Status: string;
   CurrentApprovalLayer: number;
+  CurrentLayer?: number;
+  FormStatus?: string;
   FormVersion: string;
   RawJSON: string;
 }
@@ -92,7 +94,7 @@ export default function ResponseViewer() {
         const listName = `${formTitle} Responses`;
         const items = await spGet(
           token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,FormVersion,RawJSON&$orderby=SubmittedAt desc&$top=100`
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON&$orderby=SubmittedAt desc&$top=100`
         ) as { value?: SubmissionItem[] };
 
         setSubmissions(items.value || []);
@@ -129,13 +131,14 @@ export default function ResponseViewer() {
 
   // Export to CSV
   const handleExportCSV = () => {
-    const headers = ["ID", "Submitted By", "Submitted At", "Status", "Current Layer", "Version"];
+    const headers = ["ID", "Submitted By", "Submitted At", "Status", "Form Status", "Current Layer", "Version"];
     const rows = filteredSubmissions.map((s) => [
       s.Id,
       s.SubmittedBy,
       s.SubmittedAt,
       s.Status,
-      s.CurrentApprovalLayer,
+      s.FormStatus || "",
+      s.CurrentLayer ?? s.CurrentApprovalLayer,
       s.FormVersion,
     ]);
 
@@ -306,6 +309,11 @@ export default function ResponseViewer() {
                       <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
                         {item.SubmittedAt ? new Date(item.SubmittedAt).toLocaleString() : "N/A"}
                       </div>
+                      {(item.CurrentLayer ?? item.CurrentApprovalLayer) > 0 && (
+                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+                          Layer {item.CurrentLayer || item.CurrentApprovalLayer}
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -343,6 +351,9 @@ export default function ResponseViewer() {
                   </div>
                   <div style={{ marginTop: 8, fontSize: 12, color: C.textMuted }}>
                     Submitted by: <strong>{selectedSubmission.SubmittedBy}</strong> • Version: {selectedSubmission.FormVersion}
+                    {(selectedSubmission.CurrentLayer ?? selectedSubmission.CurrentApprovalLayer) > 0 && (
+                      <> • Layer: <strong>{selectedSubmission.CurrentLayer || selectedSubmission.CurrentApprovalLayer}</strong></>
+                    )}
                   </div>
                 </div>
 

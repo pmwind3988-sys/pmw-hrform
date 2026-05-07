@@ -12,6 +12,8 @@ import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes"
 import "survey-core/survey-core.min.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices, uploadSignatureImage } from "../utils/formBuilderSP";
+import type { LayerConfig } from "../types";
+import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { loginRequest } from "../auth/msalConfig";
 import Logo from "../components/Logo";
@@ -338,13 +340,12 @@ export default function DynamicFormPage() {
     const cfg = formData?.formConfig;
     if (!cfg) { setSubmitStatus("error"); return; }
     try {
-      let activeLayers: { email: string; name: string; role: string }[] = [];
-      let resolvedLayerCount = (cfg.NumberOfApprovalLayer as number | undefined) ?? 0;
+      let activeLayers: { email: string; name: string }[] = [];
+      let resolvedLayerCount = 0;
       const token = tokenRef.current;
       const formId = String(cfg.FormID || "");
 
-      // Upload signature images to "Signature Images" document library
-      // Replace base64 data URIs with uploaded file URLs for SP image columns
+      // Upload signature images (keep existing code)
       if (token) {
         for (const [k, v] of Object.entries(raw)) {
           if (typeof v === "string" && v.startsWith("data:image/")) {
@@ -353,23 +354,48 @@ export default function DynamicFormPage() {
               raw[k] = { Url: imageUrl, Description: "Signature" };
             } catch (e) {
               console.warn("[DFP] signature upload failed for", k, (e as Error).message);
-              // Keep the base64 value as fallback
             }
           }
         }
       }
 
-      let approvalRules = null;
-      try { approvalRules = cfg.ApprovalRules ? JSON.parse(cfg.ApprovalRules as string) : null; } catch {}
-      if (approvalRules?.conditionField && approvalRules?.rules?.length) {
-        const condVal = String(raw[approvalRules.conditionField] ?? "").toLowerCase();
-        const matched = approvalRules.rules.find((r: Record<string, unknown>) => (r.when as string).toLowerCase() === condVal);
-        if (matched) { activeLayers = matched.layers; resolvedLayerCount = matched.layers.length; }
-      } else if (token) {
-          const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] })) as { value: Record<string, string>[] };
-        activeLayers = (apData.value ?? []).map((a) => ({ email: a.ApproverEmail, name: a.ApproverName, role: "" }));
-        resolvedLayerCount = activeLayers.length;
+      // Step 2: Resolve layers — try LayerConfig first, fall back to old rules
+      let layerConfigParsed: LayerConfig | null = null;
+      const rawLayerConfig = cfg.LayerConfig as string | undefined;
+      if (rawLayerConfig && rawLayerConfig.trim()) {
+        try { layerConfigParsed = JSON.parse(rawLayerConfig); } catch {}
       }
+
+      if (layerConfigParsed?.layers?.length) {
+        resolvedLayerCount = layerConfigParsed.layers.length;
+        for (const layer of layerConfigParsed.layers) {
+          if (layer.assignee.type === "user") {
+            activeLayers.push({ email: layer.assignee.value, name: "" });
+          } else {
+            const fieldRef = layer.assignee.value.replace("${", "").replace("}", "");
+            const fieldVal = String(raw[fieldRef] ?? "");
+            activeLayers.push({ email: fieldVal, name: "" });
+          }
+        }
+      } else {
+        // Old approval rules / approvers list fallback (keep existing logic)
+        let approvalRules = null;
+        try { approvalRules = cfg.ApprovalRules ? JSON.parse(cfg.ApprovalRules as string) : null; } catch {}
+        if (approvalRules?.conditionField && approvalRules?.rules?.length) {
+          const condVal = String(raw[approvalRules.conditionField] ?? "").toLowerCase();
+          const matched = approvalRules.rules.find((r: Record<string, unknown>) => (r.when as string).toLowerCase() === condVal);
+          if (matched) {
+            activeLayers = matched.layers;
+            resolvedLayerCount = matched.layers.length;
+          }
+        } else if (token) {
+          const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] })) as { value: Record<string, string>[] };
+          activeLayers = (apData.value ?? []).map((a) => ({ email: a.ApproverEmail, name: a.ApproverName }));
+          resolvedLayerCount = activeLayers.length;
+        }
+      }
+
+      // Step 3: Build body (keep existing logic)
       const body: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(raw)) {
         if (v && typeof v === "object" && (v as Record<string, unknown>).html && (v as Record<string, unknown>).json) {
@@ -377,7 +403,6 @@ export default function DynamicFormPage() {
           body[`${k}_Json`] = typeof (v as Record<string, unknown>).json === "string" ? (v as Record<string, unknown>).json : JSON.stringify((v as Record<string, unknown>).json);
         } else if (Array.isArray(v)) { body[k] = JSON.stringify(v); }
         else if (v && typeof v === "object") {
-          // Pass SP complex field values through as objects (e.g. Url, Lookup)
           if ("Url" in (v as Record<string, unknown>)) {
             body[k] = v;
           } else {
@@ -389,22 +414,53 @@ export default function DynamicFormPage() {
       body.SubmittedAt = new Date().toISOString();
       body.FormVersion = cfg.CurrentVersion;
       body.FormID = cfg.FormID;
-      for (let n = 1; n <= resolvedLayerCount; n++) { body[`L${n}_Status`] = n === 1 ? "Pending" : "Waiting"; body[`L${n}_Email`] = activeLayers[n - 1]?.email ?? ""; }
+
+      // Step 4: Write layer status columns
+      if (layerConfigParsed?.layers?.length) {
+        // Enhanced path — use new constants
+        for (let n = 1; n <= resolvedLayerCount; n++) {
+          body[`L${n}_Status`] = SP_LAYER_STATUS.PENDING;
+          body[`L${n}_Email`] = activeLayers[n - 1]?.email ?? "";
+        }
+        body.FormStatus = SP_FORM_STATUS.SUBMITTED;
+        body.CurrentLayer = resolvedLayerCount > 0 ? 1 : 0;
+      } else {
+        // Legacy path — keep old behavior
+        for (let n = 1; n <= resolvedLayerCount; n++) {
+          body[`L${n}_Status`] = n === 1 ? "Pending" : "Waiting";
+          body[`L${n}_Email`] = activeLayers[n - 1]?.email ?? "";
+        }
+      }
+
+      // Step 5: Submit
       let submittedByEmail = "";
       if (token) {
         submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
         body.SubmittedBy = submittedByEmail;
-          const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`, body) as { Id?: number };
-        // Trigger approval notification if there are layers
+        const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`, body) as { Id?: number };
+
+        // Step 6: Trigger notification
         if (resolvedLayerCount > 0 && result?.Id) {
-          await triggerApprovalNotification(token, {
-            formTitle: cfg.Title as string,
-            submittedBy: submittedByEmail,
-            responseItemId: result.Id,
-            layer: 1,
-            totalLayers: resolvedLayerCount,
-            action: "submit",
-          }).catch((e: unknown) => console.warn("[DFP] approval notification skipped:", e instanceof Error ? e.message : String(e)));
+          if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && activeLayers[0]?.email) {
+            await triggerApprovalNotification(token, {
+              formTitle: cfg.Title as string,
+              submittedBy: submittedByEmail,
+              responseItemId: result.Id,
+              layer: 1,
+              totalLayers: resolvedLayerCount,
+              action: "submit",
+              nextApproverEmail: activeLayers[0].email,
+            }).catch((e: unknown) => console.warn("[DFP] evaluation notification skipped:", e instanceof Error ? e.message : String(e)));
+          } else if (resolvedLayerCount > 0) {
+            await triggerApprovalNotification(token, {
+              formTitle: cfg.Title as string,
+              submittedBy: submittedByEmail,
+              responseItemId: result.Id,
+              layer: 1,
+              totalLayers: resolvedLayerCount,
+              action: "submit",
+            }).catch((e: unknown) => console.warn("[DFP] approval notification skipped:", e instanceof Error ? e.message : String(e)));
+          }
         }
       } else {
         submittedByEmail = "GUEST";

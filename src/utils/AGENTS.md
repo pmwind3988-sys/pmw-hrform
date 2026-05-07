@@ -6,9 +6,10 @@
 | Task | File | Notes |
 |------|------|-------|
 | SP REST client (dashboard) | `sharepointClient.ts` | Factory `createSpClient(instance, accounts)` — CRUD, digest cache, `isGroupMember`, list discovery, `resolveUserEmails` |
-| SP REST client (builder) | `formBuilderSP.ts` | **Standalone** — raw `token: string` param, NOT `createSpClient`; ~1100 lines |
-| Config loader | `spConfig.ts` | `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs` |
-| Form logic | `FormBuilderEngine.ts` | Pure functions: question types, validation, survey JSON builder, versioning |
+| SP REST client (builder) | `formBuilderSP.ts` | **Standalone** — raw `token: string` param, NOT `createSpClient`; ~1470 lines, 43 exports |
+| Config loader | `spConfig.ts` | `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`, `legacyToLayerConfig()` migration helper |
+| Form logic | `FormBuilderEngine.ts` | Pure functions: 57 question types, validation, survey JSON builder, versioning |
+| Status constants | `statusConstants.ts` | `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`, `layerColumn()` helper |
 | Custom widget | `DynamicMatrix.tsx` | Custom SurveyJS widget for matrix questions |
 | Matrix conversion | `matrixToHtml.ts` | Matrix ↔ HTML/JSON conversion |
 | Auth persistence | `authDecision.ts` | `localStorage` helpers for `pmw_hr_auth_decision` |

@@ -28,6 +28,12 @@ export interface Submission {
   layers: (ApprovalLayer | null)[];
   meta: ListMetaEntry;
   submissionData: Record<string, unknown>;
+  /** Enhanced layer system: active layer number (0 = none/draft) */
+  currentLayer?: number;
+  /** Enhanced layer system: per-layer results with typed ApprovalLayerResult / EvaluationLayerResult */
+  enhancedLayers?: (ApprovalLayerResult | EvaluationLayerResult | null)[];
+  /** Enhanced layer system: raw layer config for this form (loaded from Master Form) */
+  layerConfig?: LayerConfig | null;
 }
 
 export interface ApprovalLayer {
@@ -37,6 +43,107 @@ export interface ApprovalLayer {
   signedAt: string | null;
   rejectionReason: string | null;
   signature: string | null;
+}
+
+// ── Enhanced Layer System Types (Phase 0+) ──────────────────────────────────
+
+export type LayerType = "approval" | "evaluation";
+export type AuthMode = "365" | "public";
+export type ConfirmationType = "signature" | "checkbox";
+
+export type LayerStatus =
+  | "pending"
+  | "in_progress"
+  | "confirmed"
+  | "approved"
+  | "rejected"
+  | "skipped"
+  | "cancelled";
+
+export type FormStatus =
+  | "draft"
+  | "submitted"
+  | "in_review"
+  | "completed"
+  | "rejected"
+  | "cancelled";
+
+export interface LayerAssignee {
+  type: "user" | "field-reference";
+  value: string;
+}
+
+export interface BaseLayer {
+  layerNumber: number;
+  type: LayerType;
+  authMode: AuthMode;
+  assignee: LayerAssignee;
+  title?: string;
+  description?: string;
+  publicToken?: string;
+  tokenExpiresAt?: string;
+  notifyOnComplete?: boolean;
+}
+
+export interface ApprovalLayerConfig extends BaseLayer {
+  type: "approval";
+  confirmationType: ConfirmationType;
+  allowRejectionReason: boolean;
+}
+
+export interface EvaluationLayerConfig extends BaseLayer {
+  type: "evaluation";
+  surveyElements: Record<string, unknown>[];
+  confirmationLabel?: string;
+}
+
+export type LayerConfigItem = ApprovalLayerConfig | EvaluationLayerConfig;
+
+export interface LayerConfig {
+  version: "1.0";
+  layers: LayerConfigItem[];
+  routing?: ConditionalRouting[];
+}
+
+export interface ConditionalRouting {
+  conditionField: string;
+  rules: {
+    when: string;
+    skipLayers?: number[];
+  }[];
+}
+
+/** Stored in EvaluationData Note column as Record<layerNumber, EvaluationDataEntry> */
+export interface EvaluationDataEntry {
+  status: LayerStatus;
+  confirmerEmail: string;
+  confirmerName: string | null;
+  confirmedAt: string | null;
+  fields: Record<string, unknown>;
+  notes?: string;
+  signatureUrl?: string | null;
+}
+
+export interface ApprovalLayerResult {
+  layerNumber: number;
+  type: "approval";
+  status: LayerStatus;
+  outcome: "approved" | "rejected" | undefined;
+  email: string | null;
+  signedAt: string | null;
+  rejectionReason: string | null;
+  signature: string | null;
+  confirmedVia: ConfirmationType;
+}
+
+export interface EvaluationLayerResult {
+  layerNumber: number;
+  type: "evaluation";
+  status: LayerStatus;
+  email: string | null;
+  confirmedAt: string | null;
+  fields: Record<string, unknown>;
+  notes?: string;
 }
 
 export interface ListMetaEntry {
@@ -66,6 +173,7 @@ export interface LoadedConfig {
   formIdMap: Record<string, string>;
   listMetaMap: Record<string, ListMetaEntry>;
   allowedTitles: Set<string>;
+  layerConfigs?: Record<string, LayerConfig | null>;
 }
 
 // Status config for badges
@@ -436,6 +544,8 @@ export interface FormConfig {
   IsPublic: boolean;
   ConditionField?: string;
   ApprovalRules?: string;
+  /** Enhanced layer system: JSON string of LayerConfig */
+  LayerConfig?: string | null;
 }
 
 export interface FormVersionData {

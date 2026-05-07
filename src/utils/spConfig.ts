@@ -1,4 +1,4 @@
-import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient } from "../types";
+import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient, LayerConfig } from "../types";
 
 const ADMIN_GROUP = "_HR_ Forms Owners";
 
@@ -91,10 +91,11 @@ export async function loadConfig(
   const formIdMap: Record<string, string> = {};
   const listMetaMap: Record<string, ListMetaEntry> = {};
   const allowedTitles = new Set<string>();
+  const layerConfigs: Record<string, LayerConfig | null> = {};
 
   try {
     const configItems = await spClient.queryList("Master Form", {
-      select: ["Title", "FormID", "CurrentVersion", "NumberOfApprovalLayer"],
+      select: ["Title", "FormID", "CurrentVersion", "NumberOfApprovalLayer", "ConditionField", "ApprovalRules", "LayerConfig"],
     });
 
     for (const item of configItems) {
@@ -108,6 +109,28 @@ export async function loadConfig(
       layerConfig[title] = totalLayers;
       formIdMap[title] = formId;
       listMetaMap[title] = generateMeta(title);
+
+      // Parse LayerConfig JSON if present
+      let parsedLayerConfig: LayerConfig | null = null;
+      const rawLayerConfig = item.LayerConfig;
+      if (rawLayerConfig && typeof rawLayerConfig === 'string' && rawLayerConfig.trim()) {
+        try {
+          parsedLayerConfig = JSON.parse(rawLayerConfig) as LayerConfig;
+        } catch {
+          // Invalid JSON — ignore, will fall back to legacy conversion
+        }
+      }
+
+      // If no valid LayerConfig, try legacy conversion from NumberOfApprovalLayer + ApprovalRules
+      if (!parsedLayerConfig && totalLayers > 0) {
+        parsedLayerConfig = legacyToLayerConfig(
+          totalLayers,
+          typeof item.ApprovalRules === 'string' ? item.ApprovalRules : null,
+          typeof item.ConditionField === 'string' ? item.ConditionField : null,
+        );
+      }
+
+      layerConfigs[title] = parsedLayerConfig;
     }
   } catch {
     // Master Form list may not exist yet
@@ -118,6 +141,7 @@ export async function loadConfig(
     formIdMap,
     listMetaMap,
     allowedTitles,
+    layerConfigs,
   };
 }
 
@@ -183,4 +207,58 @@ export function getMissingConfigs(
   return visibleLists
     .map((list) => list.title)
     .filter((title) => !(title in layerConfig));
+}
+
+// ── Legacy Migration Helper ─────────────────────────────────────────────────
+
+/**
+ * Converts legacy approval config (NumberOfApprovalLayer + ApprovalRules)
+ * to the new LayerConfig format.
+ *
+ * Each legacy approval layer becomes an approval layer with "365" auth
+ * and "signature" confirmation. The assignee uses "field-reference" type
+ * pointing to the old L{n}_Email column concept.
+ *
+ * If approvalRules exists, ConditionalRouting entries are created.
+ */
+export function legacyToLayerConfig(
+  numLayers: number,
+  approvalRulesStr?: string | null,
+  conditionField?: string | null,
+): LayerConfig {
+  const layers: LayerConfig["layers"] = [];
+
+  for (let i = 1; i <= numLayers; i++) {
+    layers.push({
+      layerNumber: i,
+      type: "approval",
+      authMode: "365",
+      assignee: { type: "field-reference", value: `L${i}_Email` },
+      confirmationType: "signature",
+      allowRejectionReason: true,
+      title: `Layer ${i}`,
+    });
+  }
+
+  const result: LayerConfig = {
+    version: "1.0",
+    layers,
+  };
+
+  // Parse conditional routing if ApprovalRules is present
+  if (approvalRulesStr && approvalRulesStr.trim()) {
+    try {
+      const rules = JSON.parse(approvalRulesStr);
+      if (Array.isArray(rules) && rules.length > 0 && conditionField) {
+        result.routing = rules.map((rule: { when?: string; skipLayers?: number[] }) => ({
+          conditionField: conditionField,
+          rules: [{ when: rule.when ?? "", skipLayers: rule.skipLayers ?? [] }],
+        }));
+      }
+    } catch {
+      // Invalid ApprovalRules JSON — skip routing
+    }
+  }
+
+  return result;
 }

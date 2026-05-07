@@ -3,18 +3,22 @@ import { Chip } from "@mui/material";
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   fullyapproved: { label: "Fully Approved", color: "#16a34a", bg: "#dcfce7", dot: "#22c55e" },
   approved: { label: "Approved", color: "#16a34a", bg: "#dcfce7", dot: "#22c55e" },
+  confirmed: { label: "Confirmed", color: "#059669", bg: "#d1fae5", dot: "#10b981" },
   rejected: { label: "Rejected", color: "#dc2626", bg: "#fee2e2", dot: "#ef4444" },
   inprogress: { label: "In Review", color: "#9333ea", bg: "#f3e8ff", dot: "#a855f7" },
   pending: { label: "Pending", color: "#d97706", bg: "#fef3c7", dot: "#f59e0b" },
+  cancelled: { label: "Cancelled", color: "#6b7280", bg: "#f3f4f6", dot: "#9ca3af" },
 } as const;
 
 function normalizeStatus(status: string | null): string {
   if (!status) return "pending";
   const normalized = status.toLowerCase().replace(/[\s_-]/g, "");
-  if (normalized === "fullyapproved") return "fullyapproved";
+  if (normalized === "fullyapproved" || normalized === "completed") return "fullyapproved";
   if (normalized === "approved") return "approved";
+  if (normalized === "confirmed") return "confirmed";
+  if (normalized === "cancelled") return "cancelled";
   if (normalized.includes("reject")) return "rejected";
-  if (normalized.includes("progress") || normalized.includes("review")) return "inprogress";
+  if (normalized.includes("progress") || normalized.includes("review") || normalized === "inreview") return "inprogress";
   return "pending";
 }
 
