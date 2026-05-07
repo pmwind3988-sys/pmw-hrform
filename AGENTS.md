@@ -9,8 +9,8 @@
 
 ## Commands (run from root)
 ```bash
-npm run dev        # Vite dev server (port 3000)
-npm run dev:api    # Vercel dev server (runs api/ routes locally)
+npm run dev        # Vite dev server (port 3000) — frontend only; /api/* will 404
+npm run dev:api    # vercel dev — runs BOTH Vite frontend + API routes locally
 npm run build      # tsc -b && vite build
 npm run lint       # ESLint flat config (many pre-existing errors — check changed files with lsp_diagnostics instead)
 npm run preview    # Preview production build
@@ -23,8 +23,10 @@ npm run preview    # Preview production build
 - `@azure/msal-react` + `@azure/msal-browser` — Azure AD authentication
 - **react-router-dom v7** — `BrowserRouter` in `main.tsx`, `<Routes>` in `App.tsx`
 - **SurveyJS v2.5** — `survey-core`, `survey-react-ui`; **Custom form builder** (NOT SurveyJS Creator)
-- ESLint: flat config with `tseslint.configs.recommended` (not type-checked), `react-hooks`, `react-refresh`
+- **@react-pdf/renderer** — server-side PDF generation for form submissions
 - `react-dnd` v16 — drag-drop canvas in FormBuilder (HTML5 backend)
+- `buffer` polyfill: `globalThis.Buffer = Buffer` set in `main.tsx` (required by some SP responses)
+- ESLint: flat config with `tseslint.configs.recommended` (not type-checked), `react-hooks`, `react-refresh`
 
 ## Auth State Machine (in `App.tsx`)
 ```
@@ -38,6 +40,11 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 - Admin detection via SharePoint group `_HR_ Forms Owners`
 - Tenant validation via `VITE_AZURE_TENANT_ID` env var
 - Auth screens (`ChoiceScreen`, `GuestLanding`, etc.) render directly in `App.tsx` before `<Routes>`
+
+### MSAL Entrypoint Quirks
+- `main.tsx`: `msalInstance.initialize()` runs before React render
+- `handleRedirectPromise()` is called with a **3s timeout** (`Promise.race`) so hung redirect never blocks
+- `handleLogin()` in `App.tsx` clears `sessionStorage` keys `msal.interaction.status` and `msal.login.error` before `loginRedirect()` — this is the fix for `interaction_in_progress` errors in incognito
 
 ## Routing (react-router-dom v7)
 | Route | Component | Notes |
@@ -53,6 +60,8 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 | `*` | `AdminHomePage` | Catch-all dashboard |
 
 - Header "Form Builder" button navigates to `/admin/builder` (not a modal)
+- **No code splitting** — all pages eagerly imported in `App.tsx`
+- `AdminHomePage` receives ~25 props via prop-drilling from `App.tsx`
 
 ## API Routes (Vercel serverless)
 | Route | File | Method | Purpose |
@@ -60,13 +69,15 @@ States: `checking` | `choice` | `guest` | `loading` | `ready` | `wrong_tenant` |
 | `/api/form-config` | `api/form-config.ts` | GET | Public form config fetcher |
 | `/api/submit-form` | `api/submit-form.ts` | POST | Public form submission (guest) |
 | `/api/evaluate` | `api/evaluate.ts` | GET/POST | Public layer evaluation: GET = read filtered data, POST = submit approve/reject/confirm |
+| `/api/send-email` | `api/send-email.ts` | POST | Graph API sendMail via system credentials |
 
 - All API routes use `api/_utils/graphClient.ts` for Microsoft Graph API (client-credentials flow)
 - `api/_utils/sharepoint.ts` is **dead code** — not imported by any route
 - `vercel.json` configures SPA rewrite rules and CORS headers
+- **Local API testing**: See `VERCEL_SETUP.md` for full guide (prerequisites: `vercel link`, `.env` with `SYSTEM_CLIENT_*` vars, admin consent)
 
-## Enhanced Layer System (built in Phases 0-7)
-Forms now support a unified **layer sequence** where each layer is either `approval` (approve/reject with signature or checkbox) or `evaluation` (fill custom fields, then confirm).
+## Enhanced Layer System
+Forms support a unified **layer sequence** where each layer is either `approval` (approve/reject with signature or checkbox) or `evaluation` (fill custom fields, then confirm).
 
 ### Layer types
 | Property | Approval Layer | Evaluation Layer |
@@ -100,7 +111,7 @@ Forms now support a unified **layer sequence** where each layer is either `appro
 - **OData**: `odata=nometadata` — responses use `data.value` not `data.d.results`
 - **User resolution**: `resolveUserEmails()` in `sharepointClient.ts` maps `AuthorId` → email
 - **`sharepointClient.ts`** — MSAL-aware factory (`createSpClient(instance, accounts)`) for dashboard
-- **`formBuilderSP.ts`** — Standalone file (~1470 lines); uses raw `token: string` param, NOT `createSpClient`
+- **`formBuilderSP.ts`** — Standalone file (~1579 lines); uses raw `token: string` param, NOT `createSpClient`
 - Digest cached with 30min expiry, `X-HTTP-Method` headers for writes
 - Config loaded from `Master Form` list
 - Lists discovered via `/_api/web/lists` (system lists filtered by BaseTemplate + properties)
@@ -139,7 +150,7 @@ Risk: two digest caches, two `SP_SITE_URL` reads, inconsistent error handling.
 
 ## Form Builder System (admin-only)
 - **Entry**: Header "Form Builder" button (admin only) → `/admin/builder`
-- **Components**: `FormBuilder.tsx` (react-dnd canvas), `FormLibrary.tsx` (sidebar), `VersionHistory.tsx`, `AuditLog.tsx`, `ProvisionOverlay.tsx`
+- **Components**: `FormBuilder.tsx` (react-dnd canvas, ~2414 lines), `FormLibrary.tsx` (sidebar), `VersionHistory.tsx`, `AuditLog.tsx`, `ProvisionOverlay.tsx`
 - **Layer components**: `LayerConfigPanel.tsx`, `LayerCard.tsx`, `EvalElementPicker.tsx`, `PublicLinkDisplay.tsx`, `EvaluationSummary.tsx`
 - **Styling**: Inline styles via `C` color object (`constants.ts`) — NOT MUI
 - **SP lists**: `Master Form`, `Web Form Versions`, `Form Builder Log`, `Approvers`
@@ -161,12 +172,16 @@ Risk: two digest caches, two `SP_SITE_URL` reads, inconsistent error handling.
 ## Core Modules
 - `src/auth/AuthProvider.tsx` — `MsalProvider` wrapper
 - `src/auth/msalConfig.ts` — MSAL config with `AllSites.Manage` SP scope
-- `src/types/index.ts` — All shared types
+- `src/types/index.ts` — All shared types (855 lines)
 - `src/utils/sharepointClient.ts` — Dashboard SP REST client
-- `src/utils/formBuilderSP.ts` — Builder SP REST (standalone, 43 exported functions, ~1470 lines). Key exports: `getFormConfig`, `saveFormConfig`, `upsertFormConfig`, `getAllFormConfigs`, `provisionResponseList`, `bootstrapSystemLists`, `triggerApprovalNotification`, `uploadSignatureImage`, `submitEvaluationData`, `updateLayerStatus`, `getLayerResponseData`, `migrateExistingForms`
+- `src/utils/formBuilderSP.ts` — Builder SP REST (standalone, ~1579 lines, 43 exported functions). Key exports: `getFormConfig`, `saveFormConfig`, `upsertFormConfig`, `getAllFormConfigs`, `provisionResponseList`, `bootstrapSystemLists`, `triggerApprovalNotification`, `uploadSignatureImage`, `submitEvaluationData`, `updateLayerStatus`, `getLayerResponseData`, `migrateExistingForms`, `uploadFormPdf`, `spPatch`, `addColumn`
 - `src/utils/spConfig.ts` — Config loader, `legacyToLayerConfig()` migration helper
 - `src/utils/statusConstants.ts` — `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`
 - `src/utils/FormBuilderEngine.ts` — Pure logic: question types (57), validation, survey JSON builder
+- `src/utils/SignaturePad.tsx` — Custom SurveyJS widget (modal-based click-to-sign, ~522 lines)
+- `src/utils/DynamicMatrix.tsx` — Custom SurveyJS widget for matrix questions (~453 lines)
+- `src/utils/FormPdfDocument.tsx` — Corporate-style PDF document layout (~344 lines)
+- `src/utils/generateFormPdf.ts` — PDF generation: extracts layer data, renders PDF, uploads to SP (~107 lines)
 - `api/_utils/graphClient.ts` — Graph API client. Exports: `getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`, `updateListItemFields`
 
 ## Signature Upload Flow
@@ -192,6 +207,9 @@ Risk: two digest caches, two `SP_SITE_URL` reads, inconsistent error handling.
 - **NO dead code** — remove `.backup`, `.txt`, dead pages when found
 - `FormBuilder.tsx` has `eslint-disable` and `any[]` usage
 - `AdminFormBuilder.tsx` and `DynamicFormPage.tsx` have `console.error`/`console.warn` calls
+- `formBuilderSP.ts` has `catch (e: any)` and `data.d.results` fallback — fix when touching
+- **Build status**: 158 pre-existing TypeScript errors (see `build_errors.txt`) — do NOT add new ones. Check with `lsp_diagnostics` + `npm run build`.
+- **MSAL interaction state**: Clearing `sessionStorage` keys (`msal.interaction.status`, `msal.login.error`) before login is intentional — don't remove
 
 ## Conventions
 - **PowerShell**: use `workdir` parameter with `bash` tool; no `&&` or native `grep`/`ls`
@@ -202,6 +220,7 @@ Risk: two digest caches, two `SP_SITE_URL` reads, inconsistent error handling.
 - **MUI v9**: uses `Grid` (not `Grid2`); `slotProps` replaces `PaperProps` on Dialog
 - **Prefer `import type`**: for type-only imports (`verbatimModuleSyntax`)
 - **`.env.local`** at root: `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_AZURE_AUTHORITY`, `VITE_SP_SITE_URL`. **Never commit.**
+- **API env vars**: Use `process.env.SYSTEM_CLIENT_ID`, `SYSTEM_CLIENT_SECRET` (not `VITE_` prefix). Frontend uses `import.meta.env.VITE_*`.
 - **Verifying changes**: Run `npm run build` (`tsc -b && vite build`). `npm run lint` has many pre-existing warnings.
 - **No path aliases** — all imports relative (`../../utils/...`)
 - **No barrel exports** except `src/components/builder/index.ts`
@@ -209,7 +228,8 @@ Risk: two digest caches, two `SP_SITE_URL` reads, inconsistent error handling.
 
 ## Notes
 - **No CI/CD** — zero GitHub Actions, Docker, deployment configs
-- **Env vars**: API routes use `process.env.SYSTEM_CLIENT_*` (not `VITE_`); frontend uses `import.meta.env.VITE_*`
+- **No `opencode.json`** config file exists
 - **`HomePage.tsx`** — deleted (was dead code, not imported)
 - **`references/`** — deleted (was stale JS copies)
 - **`AdminHomePage.tsx` dead Dialog** — removed (builderOpen never set to true)
+- **`build_errors.txt` / `build_status.txt`** — build artifact tracking at root; review but don't commit

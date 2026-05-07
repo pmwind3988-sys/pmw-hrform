@@ -1024,6 +1024,22 @@ export function getSpColumnKind(
     return { FieldTypeKind: 3, label: 'Multi-line' };
   }
 
+  // ── text type with inputType variants ─────────────────────────────────
+  // SurveyJS maps custom types like "number" → { type: "text", inputType: "number" }.
+  // The QUESTION_TYPES lookup below won't match "text"+inputType:"number" to the
+  // "number" entry because the `type` is different. Catch these here explicitly.
+  if (field.type === 'text' && field.inputType) {
+    switch (field.inputType) {
+      case 'number':
+      case 'range':
+        return { FieldTypeKind: 9, label: 'Number' };
+      case 'date':
+      case 'datetime-local':
+        return { FieldTypeKind: 4, label: 'DateTime' };
+      // password, email, url, tel → keep Text (type 2) default, fall through
+    }
+  }
+
   const def = QUESTION_TYPES.find(
     (t) =>
       t.type === field.type &&

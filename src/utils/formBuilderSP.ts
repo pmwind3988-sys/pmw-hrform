@@ -1012,33 +1012,20 @@ interface EmailParams {
 /**
  * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
  */
-export async function sendSpEmail(token: string, { to, subject, body }: EmailParams): Promise<void> {
-  const digest = await getDigest(token);
-  const url = `${SP_SITE_URL}/_api/SP.Utilities.Utility.SendEmail`;
+export async function sendSpEmail(_token: string, { to, subject, body }: EmailParams): Promise<void> {
+  // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
+  // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
+  const apiUrl = `${window.location.origin}/api/send-email`;
 
-  const recipients = Array.isArray(to) ? to : [to];
-
-  const response = await fetch(url, {
+  const response = await fetch(apiUrl, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json;odata=nometadata',
-      'Content-Type': 'application/json;odata=verbose',
-      'X-RequestDigest': digest,
-    },
-    body: JSON.stringify({
-      properties: {
-        __metadata: { type: 'SP.Utilities.EmailProperties' },
-        To: { results: recipients },
-        Subject: subject,
-        Body: body,
-      },
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, subject, body }),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`sendSpEmail failed ${response.status}: ${text}`);
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(`sendSpEmail failed ${response.status}: ${err.error || response.statusText}`);
   }
 }
 
@@ -1052,6 +1039,70 @@ interface ApprovalNotificationParams {
   totalLayers: number;
   action?: 'submit' | 'approve' | 'reject';
   nextApproverEmail?: string;
+  reviewLink?: string;
+  pdfUrl?: string;
+}
+
+// ── Styled email HTML template ────────────────────────────────────────────
+
+const SP_ORIGIN = (() => { try { return new URL(SP_SITE_URL).origin; } catch { return ''; } })();
+
+function makePdfLink(pdfUrl: string | undefined): string {
+  if (!pdfUrl) return '';
+  const absoluteUrl = pdfUrl.startsWith('http') ? pdfUrl : `${SP_ORIGIN}${pdfUrl}`;
+  return `<a href="${absoluteUrl}" style="display:inline-block;background:#0078D4;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;margin-top:4px">📄 View PDF Document</a>`;
+}
+
+function emailBody(params: {
+  title: string;
+  subtitle: string;
+  statusColor: string;
+  statusLabel: string;
+  statusBg: string;
+  details: string[];
+  link?: string;
+  linkLabel?: string;
+  pdfUrl?: string;
+}): string {
+  const detailsRows = params.details.map(d => `<tr><td style="padding:3px 0;font-size:13px;color:#6B7280;width:110px;vertical-align:top">${d.split(':')[0]}:</td><td style="padding:3px 0;font-size:13px;color:#1F2937;font-weight:500">${d.split(':').slice(1).join(':')}</td></tr>`).join('');
+  const linkHtml = params.link ? `<div style="margin-top:16px"><a href="${params.link}" style="display:inline-block;background:#0078D4;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">${params.linkLabel || 'Review'}</a></div>` : '';
+  const pdfHtml = params.pdfUrl ? `<div style="margin-top:12px">${makePdfLink(params.pdfUrl)}</div>` : '';
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F3F4F6"><tr><td align="center" style="padding:32px 16px">
+<table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+
+<!-- Header bar -->
+<tr><td style="background:#0078D4;padding:20px 28px">
+<table width="100%" cellpadding="0" cellspacing="0"><tr>
+<td><span style="color:#fff;font-size:20px;font-weight:700">PMW HR Form</span></td>
+</tr></table>
+</td></tr>
+
+<!-- Body -->
+<tr><td style="padding:28px 28px 24px">
+
+<!-- Status badge -->
+<table cellpadding="0" cellspacing="0" style="display:inline-block;background:${params.statusBg};border-radius:20px;padding:4px 14px;margin-bottom:14px"><tr><td style="font-size:12px;font-weight:700;color:${params.statusColor};text-transform:uppercase;letter-spacing:0.5px">${params.statusLabel}</td></tr></table>
+
+<h2 style="margin:0 0 4px;font-size:18px;color:#1F2937">${params.title}</h2>
+<p style="margin:0 0 16px;font-size:13px;color:#6B7280">${params.subtitle}</p>
+
+<!-- Details table -->
+<table width="100%" cellpadding="0" cellspacing="0">${detailsRows}</table>
+
+${linkHtml}
+${pdfHtml}
+
+</td></tr>
+
+<!-- Footer -->
+<tr><td style="padding:16px 28px;border-top:1px solid #E5E7EB;font-size:11px;color:#9CA3AF;text-align:center">
+This is an automated message from PMW HR Form. Please do not reply.
+</td></tr>
+
+</table></td></tr></table></body></html>`;
 }
 
 /**
@@ -1062,48 +1113,78 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, reviewLink, pdfUrl } = params;
 
   try {
     if (action === 'submit') {
-      // New submission - notify layer 1 approver
-      const approvers = await spGet(
-        token,
-        `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}' and LayerNumber eq ${layer}&$select=ApproverEmail,ApproverName&$top=1`
-      ) as { value?: { ApproverEmail?: string; ApproverName?: string }[] };
+      // New submission — try Approvers list first, fall back to nextApproverEmail
+      let targetEmail = '';
+      try {
+        const approvers = await spGet(
+          token,
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle)}' and LayerNumber eq ${layer}&$select=ApproverEmail,ApproverName&$top=1`
+        ) as { value?: { ApproverEmail?: string; ApproverName?: string }[] };
+        targetEmail = approvers.value?.[0]?.ApproverEmail || nextApproverEmail || '';
+      } catch {
+        targetEmail = nextApproverEmail || '';
+      }
 
-      const approver = approvers.value?.[0];
-      if (approver?.ApproverEmail) {
+      if (targetEmail) {
+        const link = reviewLink || `${window.location.origin}/admin/approvals?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
         await sendSpEmail(token, {
-          to: approver.ApproverEmail,
+          to: targetEmail,
           subject: `[Action Required] New ${formTitle} submission by ${submittedBy}`,
-          body: `<p>A new submission for <strong>${formTitle}</strong> requires your approval.</p>
-<p><strong>Submitted by:</strong> ${submittedBy}</p>
-<p><strong>Submission ID:</strong> ${responseItemId}</p>
-<p><strong>Approval Layer:</strong> ${layer} of ${totalLayers}</p>
-<p><a href="${SP_SITE_URL}/admin/approvals?form=${encodeURIComponent(formTitle)}&item=${responseItemId}">Review and Approve</a></p>`,
+          body: emailBody({
+            title: `New Submission: ${formTitle}`,
+            subtitle: `A new form submission requires your review and approval.`,
+            statusColor: '#1E40AF', statusLabel: 'ACTION REQUIRED', statusBg: '#DBEAFE',
+            details: [
+              `Form:${formTitle}`,
+              `Submitted by:${submittedBy}`,
+              `Submission ID:${responseItemId}`,
+              `Layer:${layer} of ${totalLayers}`,
+            ],
+            link, linkLabel: 'Review and Approve',
+          }),
         });
       }
     } else if (action === 'approve') {
+      const link = reviewLink || `${window.location.origin}/admin/approvals?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
       if (layer < totalLayers && nextApproverEmail) {
         // Notify next layer approver
         await sendSpEmail(token, {
           to: nextApproverEmail,
           subject: `[Action Required] ${formTitle} — pending your approval (Layer ${layer + 1})`,
-          body: `<p>A submission for <strong>${formTitle}</strong> has been approved at Layer ${layer}.</p>
-<p>It now requires your approval at Layer ${layer + 1}.</p>
-<p><strong>Submitted by:</strong> ${submittedBy}</p>
-<p><strong>Submission ID:</strong> ${responseItemId}</p>
-<p><a href="${SP_SITE_URL}/admin/approvals?form=${encodeURIComponent(formTitle)}&item=${responseItemId}">Review and Approve</a></p>`,
+          body: emailBody({
+            title: `Approval Needed: ${formTitle} (Layer ${layer + 1})`,
+            subtitle: `This submission has been approved at Layer ${layer} and now requires your review.`,
+            statusColor: '#92400E', statusLabel: 'PENDING YOUR APPROVAL', statusBg: '#FEF3C7',
+            details: [
+              `Form:${formTitle}`,
+              `Submitted by:${submittedBy}`,
+              `Submission ID:${responseItemId}`,
+              `Current Layer:${layer + 1} of ${totalLayers}`,
+            ],
+            link, linkLabel: 'Review and Approve',
+            pdfUrl,
+          }),
         });
       } else if (layer === totalLayers) {
         // Final approval - notify submitter
         await sendSpEmail(token, {
           to: submittedBy,
           subject: `[Approved] Your ${formTitle} submission has been approved`,
-          body: `<p>Your submission for <strong>${formTitle}</strong> has been fully approved.</p>
-<p><strong>Submission ID:</strong> ${responseItemId}</p>
-<p>All approval layers have completed. Thank you!</p>`,
+          body: emailBody({
+            title: `Submission Approved: ${formTitle}`,
+            subtitle: 'All approval layers have been completed successfully.',
+            statusColor: '#065F46', statusLabel: 'APPROVED', statusBg: '#D1FAE5',
+            details: [
+              `Form:${formTitle}`,
+              `Submission ID:${responseItemId}`,
+              `Total Layers:${totalLayers}`,
+            ],
+            pdfUrl,
+          }),
         });
       }
     } else if (action === 'reject') {
@@ -1111,9 +1192,16 @@ export async function triggerApprovalNotification(
       await sendSpEmail(token, {
         to: submittedBy,
         subject: `[Rejected] Your ${formTitle} submission was not approved`,
-        body: `<p>Your submission for <strong>${formTitle}</strong> was not approved.</p>
-<p><strong>Submission ID:</strong> ${responseItemId}</p>
-<p>Please contact your administrator for more details.</p>`,
+        body: emailBody({
+          title: `Submission Rejected: ${formTitle}`,
+          subtitle: 'Your form submission was not approved. Details below.',
+          statusColor: '#991B1B', statusLabel: 'REJECTED', statusBg: '#FEE2E2',
+          details: [
+            `Form:${formTitle}`,
+            `Submission ID:${responseItemId}`,
+          ],
+          pdfUrl,
+        }),
       });
     }
   } catch (e) {
@@ -1328,6 +1416,26 @@ export async function uploadSignatureImage(
   const sitePath = new URL(SP_SITE_URL).pathname;
   const result = await spUploadFile(token, SIGNATURE_LIBRARY, fileName, bytes) as { ServerRelativeUrl?: string };
   return result.ServerRelativeUrl ?? `${sitePath}/${SIGNATURE_LIBRARY}/${fileName}`;
+}
+
+/**
+ * Uploads a generated PDF to the Form PDFs document library and returns the server-relative URL.
+ */
+const PDF_LIBRARY = "Form PDFs";
+
+export async function ensureFormPdfsLibrary(token: string): Promise<void> {
+  if (!await listExists(token, PDF_LIBRARY)) {
+    await createSpList(token, PDF_LIBRARY, 101, "Generated form submission PDFs");
+  }
+}
+
+export async function uploadFormPdf(token: string, formTitle: string, responseId: number, pdfBlob: Blob): Promise<string> {
+  await ensureFormPdfsLibrary(token);
+  const fileName = `${formTitle.replace(/[^a-zA-Z0-9_-]/g, "_")}_${responseId}_${new Date().toISOString().split("T")[0]}.pdf`;
+  const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
+  const sitePath = new URL(SP_SITE_URL).pathname;
+  const result = await spUploadFile(token, PDF_LIBRARY, fileName, bytes) as { ServerRelativeUrl?: string };
+  return result.ServerRelativeUrl ?? `${sitePath}/${PDF_LIBRARY}/${fileName}`;
 }
 
 /**

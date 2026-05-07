@@ -7,13 +7,73 @@ import { useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 
-import { getLayerResponseData, updateLayerStatus, submitEvaluationData } from "../utils/formBuilderSP";
+import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS } from "../utils/statusConstants";
 import type { LayerConfigItem, EvaluationDataEntry } from "../types";
 import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
+import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
+import type { PdfFormData } from "../utils/FormPdfDocument";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+
+// ── PDF Helper ─────────────────────────────────────────────────────────────
+async function loadPdfAndGenerate(token: string, listTitle: string, responseItemId: number, formTitle: string, formStatus: string): Promise<void> {
+  try {
+    const cfg = await getFormConfigByTitle(token, formTitle);
+    if (!cfg) return;
+
+    const formVersion = (cfg as unknown as Record<string, unknown>).CurrentVersion as string || "1.0";
+
+    const versionData = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title)}' and FormVersion eq '${encodeURIComponent(formVersion)}'&$select=SurveyJSON&$top=1`
+    ) as { value?: { SurveyJSON?: string }[] };
+
+    const rawSurvey = versionData.value?.[0]?.SurveyJSON;
+    if (!rawSurvey) return;
+
+    const parsed = JSON.parse(rawSurvey);
+    const surveyContent = parsed.surveyJson || parsed;
+
+    const respItem = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`
+    ) as Record<string, unknown>;
+
+    const SYSTEM_FIELDS = new Set([
+      'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
+      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
+      'Author','Editor','Created','Modified','ContentType','PermMask',
+      'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
+      'L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature',
+      'L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature',
+    ]);
+
+    const data: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(respItem)) {
+      if (!SYSTEM_FIELDS.has(k) && v !== null && v !== undefined) {
+        data[k] = v;
+      }
+    }
+
+    await generateAndStorePdf(token, listTitle, responseItemId, {
+      surveyJson: surveyContent as PdfFormData["surveyJson"],
+      responseData: data,
+      layerResults: buildPdfLayerResults(respItem),
+      meta: {
+        submittedBy: (respItem.SubmittedBy as string) || "",
+        submittedAt: (respItem.SubmittedAt as string) || "",
+        formTitle,
+        formVersion,
+        formStatus,
+      },
+      logoUrl: "/logo-128.png",
+    });
+  } catch (e) {
+    console.warn("[loadPdfAndGenerate] failed:", e);
+  }
+}
 
 type AuthState = "checking" | "authorized" | "unauthorized" | "error";
 type ActionState = "idle" | "submitting" | "success" | "error";
@@ -176,7 +236,7 @@ export default function EvaluationPage() {
         if (!resolvedTitle) { setError("Form not found."); setLoading(false); return; }
         setFormTitle(resolvedTitle);
 
-        const data = await getLayerResponseData(token, `${resolvedTitle} Responses`, parseInt(responseId, 10), displayLayerNumber);
+        const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
         if (!data) { setError("Could not load evaluation data."); setLoading(false); return; }
         setResponseData(data.responseFields);
         setCurrentLayer(data.currentLayer || null);
@@ -194,7 +254,7 @@ export default function EvaluationPage() {
     if (!token || !userEmail) return;
     setActionState("submitting");
     try {
-      const listTitle = `${formTitle} Responses`;
+      const listTitle = formTitle; // list is named after form title
       const respId = parseInt(responseId || "0", 10);
       const now = new Date().toISOString();
 
@@ -206,7 +266,6 @@ export default function EvaluationPage() {
         });
         // Update FormStatus
         const formStatusUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
-        // We use spPatch via a direct fetch since updateLayerStatus only does L columns
         await fetch(formStatusUrl, {
           method: "PATCH",
           headers: {
@@ -218,6 +277,8 @@ export default function EvaluationPage() {
           },
           body: JSON.stringify({ FormStatus: "Rejected" }),
         });
+        // Generate PDF on rejection
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected").catch(e => console.warn("[EvalPage] PDF failed:", e));
       } else if (action === "confirm" && currentLayer?.type === "evaluation") {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
           confirmerEmail: userEmail,
@@ -230,12 +291,16 @@ export default function EvaluationPage() {
           signedAt: now,
           signature: signatureData || undefined,
         });
+        // Generate PDF on evaluation confirmed
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "confirmed").catch(e => console.warn("[EvalPage] PDF failed:", e));
       } else if (action === "approve") {
         await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
           status: SP_LAYER_STATUS.APPROVED,
           signedAt: now,
           signature: signatureData || undefined,
         });
+        // Generate PDF on approval
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "approved").catch(e => console.warn("[EvalPage] PDF failed:", e));
       }
 
       setActionState("success");

@@ -135,7 +135,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { token, layerNumber, formTitle, responseItemId, fields, action, signature } = req.body;
+  const { token, layerNumber, formTitle, responseItemId, fields, action, signature, rejection } = req.body;
 
   // Validate required fields
   if (!token || typeof token !== "string") {
@@ -226,6 +226,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     } else if (action === "reject") {
       updates[`L${layerNumber}_Status`] = "Rejected";
       updates[`L${layerNumber}_SignedAt`] = now;
+      if (rejection) updates[`L${layerNumber}_Rejection`] = rejection;
       updates.FormStatus = "Rejected";
     }
 

@@ -47,6 +47,7 @@ interface SubmissionItem {
   FormStatus?: string;
   FormVersion: string;
   RawJSON: string;
+  PdfUrl?: string;
 }
 
 interface FormConfig {
@@ -90,11 +91,11 @@ export default function ResponseViewer() {
         const cfg = await getFormConfigByTitle(token, formTitle);
         setFormConfig(cfg);
 
-        // Get submissions from response list
-        const listName = `${formTitle} Responses`;
+        // Get submissions from response list (named after form title, no " Responses" suffix)
+        const listName = formTitle;
         const items = await spGet(
           token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON&$orderby=SubmittedAt desc&$top=100`
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON,PdfUrl&$orderby=SubmittedAt desc&$top=100`
         ) as { value?: SubmissionItem[] };
 
         setSubmissions(items.value || []);
@@ -337,16 +338,36 @@ export default function ResponseViewer() {
                         {selectedSubmission.SubmittedAt ? new Date(selectedSubmission.SubmittedAt).toLocaleString() : "N/A"}
                       </div>
                     </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: "4px 12px",
-                        borderRadius: 12,
-                        ...getStatusColor(selectedSubmission.Status),
-                      }}
-                    >
-                      {selectedSubmission.Status}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {selectedSubmission.PdfUrl && (
+                        <a
+                          href={selectedSubmission.PdfUrl.startsWith("http") ? selectedSubmission.PdfUrl : `${SP_SITE_URL}${selectedSubmission.PdfUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: "4px 12px",
+                            borderRadius: 12,
+                            background: C.purplePale,
+                            color: C.purple,
+                            textDecoration: "none",
+                          }}
+                        >
+                          View PDF
+                        </a>
+                      )}
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: "4px 12px",
+                          borderRadius: 12,
+                          ...getStatusColor(selectedSubmission.Status),
+                        }}
+                      >
+                        {selectedSubmission.Status}
+                      </div>
                     </div>
                   </div>
                   <div style={{ marginTop: 8, fontSize: 12, color: C.textMuted }}>

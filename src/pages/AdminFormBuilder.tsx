@@ -531,13 +531,26 @@ export default function AdminFormBuilder() {
           pLog(`     ✓ ${q.name} (${sp.label})`);
         }
       }
+      // Always-present system columns (legacy + enhanced)
       for (const [n, k] of [["SubmittedAt", 4], ["FormVersion", 2], ["FormID", 2], ["SubmittedBy", 2]] as [string, number][]) {
         await addColumn(token, title, n, k);
       }
-      for (let n = 1; n <= effectiveNumLayers; n++) {
+      await addColumn(token, title, 'Status', 2); // Legacy status (compat with ApprovalDashboard)
+      await addColumn(token, title, 'CurrentApprovalLayer', 9); // Legacy layer counter
+      await addColumn(token, title, 'RawJSON', 3, true); // Full survey JSON backup
+      await addColumn(token, title, 'PdfUrl', 2); // Generated PDF link
+      // Per-layer columns (provision at least 3 layers for ApprovalDashboard compat)
+      const provisionLayerCount = Math.max(effectiveNumLayers, 3);
+      for (let n = 1; n <= provisionLayerCount; n++) {
         for (const [col, k] of [["Status", 2], ["Email", 2], ["SignedAt", 4], ["Rejection", 3], ["Signature", 3]] as [string, number][]) {
           await addColumn(token, title, `L${n}_${col}`, k, k === 3);
         }
+      }
+      // Enhanced layer system columns (added when layers are present)
+      if (effectiveNumLayers > 0) {
+        await addColumn(token, title, 'EvaluationData', 3, true);
+        await addColumn(token, title, 'CurrentLayer', 9);
+        await addColumn(token, title, 'FormStatus', 2);
       }
       pLog(`Columns done`, "ok");
 
@@ -570,7 +583,17 @@ export default function AdminFormBuilder() {
 
       if (effectiveNumLayers > 0) {
         pLog(`Writing approvers…`);
-        await upsertApprovers(token, title, activeLayers);
+        // When using the new LayerConfigPanel, layer assignee emails are stored
+        // in layerConfig.layers[].assignee.value (type: "user") or as field references.
+        // The old `activeLayers` (from `layers` state) is empty in that case,
+        // so we must extract from layerConfig instead.
+        const approversToWrite = layerConfig
+          ? layerConfig.layers.map((l) => ({
+              email: l.assignee.type === "user" ? l.assignee.value : "",
+              name: l.title ?? "",
+            }))
+          : activeLayers;
+        await upsertApprovers(token, title, approversToWrite);
         pLog(`Approvers saved`, "ok");
       }
 

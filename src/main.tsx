@@ -1,6 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { Buffer } from "buffer";
+if (typeof globalThis !== "undefined") {
+  (globalThis as Record<string, unknown>).Buffer = Buffer;
+}
 import { msalInstance } from "./auth/msalConfig";
 import AuthProvider from "./auth/AuthProvider";
 import "./index.css";

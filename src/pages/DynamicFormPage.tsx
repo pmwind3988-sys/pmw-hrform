@@ -11,12 +11,14 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices, uploadSignatureImage } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices, uploadSignatureImage, getFormConfigByTitle } from "../utils/formBuilderSP";
 import type { LayerConfig } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { loginRequest } from "../auth/msalConfig";
 import Logo from "../components/Logo";
+import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
+import type { PdfFormData } from "../utils/FormPdfDocument";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -409,6 +411,7 @@ export default function DynamicFormPage() {
             body[k] = JSON.stringify(v);
           }
         }
+        else if (typeof v === "number" || typeof v === "boolean") { body[k] = String(v); }
         else { body[k] = v; }
       }
       body.SubmittedAt = new Date().toISOString();
@@ -437,11 +440,34 @@ export default function DynamicFormPage() {
       if (token) {
         submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
         body.SubmittedBy = submittedByEmail;
-        const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`, body) as { Id?: number };
+        const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
+        let result: { Id?: number } | undefined;
+        try {
+          result = await spPost(token, listUrl, body) as { Id?: number };
+        } catch (submitErr) {
+          const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
+          // If the response list is missing enhanced layer columns (pre-provisioning),
+          // retry without FormStatus / CurrentLayer
+          if ((msg.includes('FormStatus') || msg.includes('CurrentLayer')) && body.FormStatus !== undefined) {
+            console.warn("[DFP] retrying without FormStatus/CurrentLayer (missing columns)");
+            delete body.FormStatus;
+            delete body.CurrentLayer;
+            result = await spPost(token, listUrl, body) as { Id?: number };
+          } else {
+            throw submitErr;
+          }
+        }
 
         // Step 6: Trigger notification
         if (resolvedLayerCount > 0 && result?.Id) {
-          if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && activeLayers[0]?.email) {
+          const layer1Email = activeLayers[0]?.email;
+          const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
+          const baseUrl = window.location.origin;
+
+          if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
+            const reviewLink = formSlug
+              ? `${baseUrl}/eval/${encodeURIComponent(formSlug)}/${result.Id}/1`
+              : undefined;
             await triggerApprovalNotification(token, {
               formTitle: cfg.Title as string,
               submittedBy: submittedByEmail,
@@ -449,8 +475,9 @@ export default function DynamicFormPage() {
               layer: 1,
               totalLayers: resolvedLayerCount,
               action: "submit",
-              nextApproverEmail: activeLayers[0].email,
-            }).catch((e: unknown) => console.warn("[DFP] evaluation notification skipped:", e instanceof Error ? e.message : String(e)));
+              nextApproverEmail: layer1Email,
+              reviewLink,
+            }).catch((e: unknown) => console.warn("[DFP] notification skipped:", e instanceof Error ? e.message : String(e)));
           } else if (resolvedLayerCount > 0) {
             await triggerApprovalNotification(token, {
               formTitle: cfg.Title as string,
@@ -459,8 +486,40 @@ export default function DynamicFormPage() {
               layer: 1,
               totalLayers: resolvedLayerCount,
               action: "submit",
-            }).catch((e: unknown) => console.warn("[DFP] approval notification skipped:", e instanceof Error ? e.message : String(e)));
+              ...(layer1Email ? { nextApproverEmail: layer1Email } : {}),
+            }).catch((e: unknown) => console.warn("[DFP] notification skipped:", e instanceof Error ? e.message : String(e)));
           }
+        }
+
+        // Step 7: Generate PDF for no-layers submission (immediate terminal state)
+        if (resolvedLayerCount === 0 && result?.Id && token) {
+          try {
+            const cfgData = await getFormConfigByTitle(token, cfg.Title as string);
+            const formVer = cfgData ? (cfgData as unknown as Record<string, unknown>).CurrentVersion as string || "1.0" : "1.0";
+            const verData = await spGet(
+              token,
+              `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}' and FormVersion eq '${encodeURIComponent(formVer)}'&$select=SurveyJSON&$top=1`
+            ) as { value?: { SurveyJSON?: string }[] };
+            const rawSurvey = verData.value?.[0]?.SurveyJSON;
+            if (rawSurvey) {
+              const parsed = JSON.parse(rawSurvey);
+              const surveyContent = parsed.surveyJson || parsed;
+              const respItem = await spGet(
+                token,
+                `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`
+              ) as Record<string, unknown>;
+              const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
+              const pdfData: Record<string, unknown> = {};
+              for (const [k, v] of Object.entries(respItem)) { if (!SYSTEM_FIELDS.has(k) && v !== null && v !== undefined) pdfData[k] = v; }
+              await generateAndStorePdf(token, cfg.Title as string, result.Id, {
+                surveyJson: surveyContent as PdfFormData["surveyJson"],
+                responseData: pdfData,
+                layerResults: buildPdfLayerResults(respItem),
+                meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
+                logoUrl: "/logo-128.png",
+              });
+            }
+          } catch (pdfErr) { console.warn("[DFP] PDF generation failed:", pdfErr); }
         }
       } else {
         submittedByEmail = "GUEST";
@@ -492,6 +551,8 @@ export default function DynamicFormPage() {
 
   const isPublicForm = formData?.formConfig?.IsPublic !== false;
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
+
+  useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
   const showBanner = (formData?.meta?.showBanner as boolean) !== false;
   const isoStandardsText = (formData?.meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";

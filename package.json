@@ -17,6 +17,8 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.0.0",
     "@mui/material": "^9.0.0",
+    "@react-pdf/renderer": "^4.5.1",
+    "buffer": "^6.0.3",
     "react": "^19.2.5",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
