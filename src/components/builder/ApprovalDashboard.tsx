@@ -14,6 +14,7 @@ import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getForm
 import { SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { generateAndStorePdf, buildPdfLayerResults } from "../../utils/generateFormPdf";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
+import type { LayerConfigItem } from "../../types";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // Theme
@@ -142,6 +143,19 @@ function getItemDisplayStatus(item: PendingItem): string {
   return s;
 }
 
+function formatDateTime(d: string | undefined | null): string {
+  if (!d) return "N/A";
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleString("en-MY", {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    }).replace(/\b(am|pm)\b/gi, m => m.toUpperCase());
+  } catch {
+    return d;
+  }
+}
+
 export default function ApprovalDashboard() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -157,13 +171,53 @@ export default function ApprovalDashboard() {
   const [responseData, setResponseData] = useState<Record<string, unknown> | null>(null);
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [previewModel, setPreviewModel] = useState<Model | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [titleFilter, setTitleFilter] = useState("");
+  const [submitterFilter, setSubmitterFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [formLayerTypes, setFormLayerTypes] = useState<Record<string, { hasApproval: boolean; hasEvaluation: boolean }>>({});
+  const [viewMode, setViewMode] = useState<"all" | "approvals" | "evaluations">("all");
 
   const filteredItems = useMemo(() => {
-    if (statusFilter === "all") return pendingItems;
-    return pendingItems.filter(i => getItemStatus(i) === statusFilter);
-  }, [pendingItems, statusFilter]);
+    let items = pendingItems;
+
+    if (statusFilter !== "all") {
+      items = items.filter(i => getItemStatus(i) === statusFilter);
+    }
+
+    if (titleFilter.trim()) {
+      const q = titleFilter.trim().toLowerCase();
+      items = items.filter(i => i.Title.toLowerCase().includes(q));
+    }
+
+    if (submitterFilter.trim()) {
+      const q = submitterFilter.trim().toLowerCase();
+      items = items.filter(i => i.SubmittedBy.toLowerCase().includes(q));
+    }
+
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      items = items.filter(i => i.SubmittedAt && new Date(i.SubmittedAt) >= from);
+    }
+
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999); // end of day
+      items = items.filter(i => i.SubmittedAt && new Date(i.SubmittedAt) <= to);
+    }
+
+    if (viewMode === "approvals") {
+      items = items.filter(i => formLayerTypes[i.Title]?.hasApproval);
+    } else if (viewMode === "evaluations") {
+      items = items.filter(i => formLayerTypes[i.Title]?.hasEvaluation);
+    }
+
+    return items;
+  }, [pendingItems, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo, viewMode, formLayerTypes]);
 
   // Get token
   useEffect(() => {
@@ -184,6 +238,28 @@ export default function ApprovalDashboard() {
     const loadData = async () => {
       try {
         const forms = await getAllFormConfigs(token);
+
+        // Build form layer type map from LayerConfig JSON
+        const types: Record<string, { hasApproval: boolean; hasEvaluation: boolean }> = {};
+        for (const form of forms ?? []) {
+          try {
+            const lc = form.LayerConfig ? JSON.parse(form.LayerConfig) : null;
+            const layers: LayerConfigItem[] = lc?.layers ?? [];
+            types[form.Title] = {
+              // Legacy forms (no LayerConfig, but NumberOfApprovalLayer > 0) are approval-only
+              hasApproval: layers.length === 0
+                ? (form.NumberOfApprovalLayer ?? 0) > 0
+                : layers.some(l => l.type === "approval"),
+              hasEvaluation: layers.some(l => l.type === "evaluation"),
+            };
+          } catch {
+            types[form.Title] = {
+              hasApproval: (form.NumberOfApprovalLayer ?? 0) > 0,
+              hasEvaluation: false,
+            };
+          }
+        }
+        setFormLayerTypes(types);
 
         const allItems: PendingItem[] = [];
         for (const form of forms ?? []) {
@@ -415,7 +491,7 @@ export default function ApprovalDashboard() {
   };
 
   // Handle reject
-  const handleReject = async () => {
+  const handleReject = async (reason: string) => {
     if (!token || !selectedItem || !formConfig) return;
 
     setActionLoading(true);
@@ -443,6 +519,7 @@ export default function ApprovalDashboard() {
           FormStatus: "Rejected",
           [`L${currentLayer}_Status`]: SP_LAYER_STATUS.REJECTED,
           [`L${currentLayer}_SignedAt`]: new Date().toISOString(),
+          [`L${currentLayer}_Rejection`]: reason,
         }
       );
 
@@ -565,6 +642,151 @@ export default function ApprovalDashboard() {
           })}
         </div>
 
+        {/* View Mode: Approvals vs Evaluations */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          {(["all", "approvals", "evaluations"] as const).map((mode) => {
+            const modeCount = mode === "all" ? pendingItems.length
+              : mode === "approvals"
+                ? pendingItems.filter(i => formLayerTypes[i.Title]?.hasApproval).length
+                : pendingItems.filter(i => formLayerTypes[i.Title]?.hasEvaluation).length;
+            return (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                style={{
+                  padding: "5px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                  fontSize: 12, fontWeight: 600,
+                  background: viewMode === mode ? C.purple : "#fff",
+                  color: viewMode === mode ? "#fff" : C.textSecond,
+                  boxShadow: viewMode === mode ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
+                }}
+              >
+                {mode === "all" ? "All" : mode.charAt(0).toUpperCase() + mode.slice(1)} ({modeCount})
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Filters */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            type="text"
+            placeholder="Filter by form title..."
+            value={titleFilter}
+            onChange={e => setTitleFilter(e.target.value)}
+            style={{
+              flex: "1 1 180px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+              fontSize: 13, color: C.textPrimary, outline: "none", minWidth: 0,
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Filter by submitter email..."
+            value={submitterFilter}
+            onChange={e => setSubmitterFilter(e.target.value)}
+            style={{
+              flex: "1 1 180px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+              fontSize: 13, color: C.textPrimary, outline: "none", minWidth: 0,
+            }}
+          />
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
+            <span style={{ fontSize: 12, color: C.textMuted }}>From</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              style={{
+                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                fontSize: 12, color: C.textPrimary, outline: "none",
+              }}
+            />
+            <span style={{ fontSize: 12, color: C.textMuted }}>To</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              style={{
+                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                fontSize: 12, color: C.textPrimary, outline: "none",
+              }}
+            />
+          </div>
+          {(titleFilter || submitterFilter || dateFrom || dateTo) && (
+            <button
+              onClick={() => { setTitleFilter(""); setSubmitterFilter(""); setDateFrom(""); setDateTo(""); }}
+              style={{
+                padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+                background: "transparent", color: C.textMuted, fontSize: 12, cursor: "pointer",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Reject Reason Dialog */}
+        {showRejectDialog && (
+          <div
+            style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+            onClick={() => setShowRejectDialog(false)}
+          >
+            <div
+              style={{
+                background: C.cardBg, borderRadius: 14, padding: 24, width: 420, maxWidth: "90vw",
+                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Reject Submission</div>
+              <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 16 }}>
+                Provide a reason for rejecting this submission.
+              </div>
+              <textarea
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+                placeholder="Enter rejection reason..."
+                rows={4}
+                autoFocus
+                style={{
+                  width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+                  fontSize: 13, color: C.textPrimary, resize: "vertical", outline: "none",
+                  fontFamily: "inherit", boxSizing: "border-box",
+                }}
+              />
+              <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => { setShowRejectDialog(false); setRejectionReason(""); }}
+                  style={{
+                    padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
+                    background: "#fff", color: C.textSecond, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleReject(rejectionReason);
+                    setShowRejectDialog(false);
+                    setRejectionReason("");
+                  }}
+                  disabled={!rejectionReason.trim() || actionLoading}
+                  style={{
+                    padding: "9px 18px", borderRadius: 8, border: "none",
+                    background: rejectionReason.trim() && !actionLoading ? C.red : C.border,
+                    color: rejectionReason.trim() && !actionLoading ? "#fff" : C.textMuted,
+                    fontSize: 13, fontWeight: 600, cursor: rejectionReason.trim() && !actionLoading ? "pointer" : "not-allowed",
+                  }}
+                >
+                  Confirm Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Items + Detail Grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
           {/* Items List */}
@@ -591,7 +813,7 @@ export default function ApprovalDashboard() {
                       <div>
                         <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4 }}>{item.Title}</div>
                         <div style={{ fontSize: 13, color: C.textSecond }}>
-                          By {item.SubmittedBy} • {item.SubmittedAt ? new Date(item.SubmittedAt).toLocaleDateString() : "N/A"}
+                          By {item.SubmittedBy} • {formatDateTime(item.SubmittedAt)}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -637,7 +859,7 @@ export default function ApprovalDashboard() {
                 <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ fontWeight: 600, color: C.textPrimary }}>{selectedItem.Title}</div>
                   <div style={{ fontSize: 13, color: C.textSecond, marginTop: 4 }}>
-                    Submitted by {selectedItem.SubmittedBy} • {selectedItem.SubmittedAt ? new Date(selectedItem.SubmittedAt).toLocaleString() : "N/A"}
+                    Submitted by {selectedItem.SubmittedBy} • {formatDateTime(selectedItem.SubmittedAt)}
                   </div>
                 </div>
 
@@ -660,7 +882,7 @@ export default function ApprovalDashboard() {
                           cursor: actionLoading ? "not-allowed" : "pointer", opacity: actionLoading ? 0.6 : 1 }}>
                         ✓ Approve
                       </button>
-                      <button onClick={handleReject} disabled={actionLoading}
+                      <button onClick={() => setShowRejectDialog(true)} disabled={actionLoading}
                         style={{ flex: 1, padding: "12px 16px", borderRadius: 8,
                           border: `1px solid ${C.red}`, background: "transparent", color: C.red, fontWeight: 600,
                           cursor: actionLoading ? "not-allowed" : "pointer", opacity: actionLoading ? 0.6 : 1 }}>

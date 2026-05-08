@@ -236,7 +236,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
         )}
 
         {/* ═══ FORM FIELDS ═══ */}
-        <View>
+        <View style={{ marginBottom: 24 }}>
           <Text style={S.sectionLabel}>FORM DATA</Text>
           {pages.length === 0 || pages.every(p => !p.elements?.length) ? (
             <Text style={S.noData}>No form fields available.</Text>
@@ -266,7 +266,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ LAYER APPROVAL TABLE ═══ */}
         {layerResults && layerResults.length > 0 && (
-          <View>
+          <View style={{ marginBottom: 24 }}>
             <Text style={S.sectionLabel}>APPROVAL / EVALUATION CHAIN</Text>
             <View style={[S.layerRow, S.layerHeader]}>
               <Text style={[S.layerHeaderText, S.colNum]}>#</Text>
@@ -284,7 +284,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ SIGNATURE BLOCKS (only shown when at least one layer has a signature) ═══ */}
         {layerResults && layerResults.filter(l => l.signature).length > 0 && (
-          <View>
+          <View style={{ marginBottom: 24 }}>
             <Text style={S.sectionLabel}>SIGNATURES</Text>
             {layerResults.filter(l => l.signature).map((layer, i) => {
               const badge = badgeStyle(layer.status);
@@ -306,7 +306,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ EVALUATION FIELDS (per layer) ═══ */}
         {layerResults && layerResults.filter(l => l.type === "evaluation" && l.evaluationFields && Object.keys(l.evaluationFields).length > 0).length > 0 && (
-          <View>
+          <View style={{ marginBottom: 24 }}>
             <Text style={S.sectionLabel}>EVALUATION DETAILS</Text>
             {layerResults.filter(l => l.type === "evaluation").map((layer, i) => {
               const fields = layer.evaluationFields;
