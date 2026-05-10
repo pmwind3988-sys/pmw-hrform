@@ -711,7 +711,7 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
     </div>
     {/* Render panel children */}
     {isPanel && Array.isArray(field.elements) && field.elements.length > 0 && (
-      <div className="fb-panel-children">
+      <div className="fb-panel-children" onClick={e => e.stopPropagation()}>
         {field.elements.map((child, childIdx) => (
           <FieldCard
             key={child._id}
@@ -986,9 +986,9 @@ function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange
 }
 
 function MatrixColumnsEditor({ columns, token, onChange }: {
-  columns: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[];
+  columns: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
   token?: string;
-  onChange: (cols: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[]) => void;
+  onChange: (cols: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
 }) {
   const addCol = () => {
     const idx = columns.length + 1;
@@ -1038,7 +1038,12 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             token={token}
             onChange={src => updateCol(i, { choicesSource: src || undefined, choices: src?.list ? [] : (col.choices || []) })}
           />
-          {!col.choicesSource?.list && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+          <SpFilteredListSourceEditor
+            source={col.filteredListSource}
+            token={token}
+            onChange={src => updateCol(i, { filteredListSource: src || undefined, choices: src?.list ? [] : (col.choices || []) })}
+          />
+          {!col.choicesSource?.list && !col.filteredListSource?.list && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
             {(col.choices || []).map((ch, ci) => <span key={ci} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>
               {ch}
               <button onClick={() => updateCol(i, { choices: (col.choices || []).filter((_, idx) => idx !== ci) })} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕</button>
@@ -1130,6 +1135,99 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
         {error && <div style={{ fontSize: 11, color: C.red }}>{error}</div>}
       </>}
     </>}
+  </div>;
+}
+
+function SpFilteredListSourceEditor({ source, token, onChange }: {
+  source?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean };
+  token?: string;
+  onChange: (src: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string } | undefined) => void;
+}) {
+  const [enabled, setEnabled] = useState(!!source?.list);
+  const [lists, setLists] = useState<{ title: string; id: string }[]>([]);
+  const [columns, setColumns] = useState<{ title: string; typeKind: number }[]>([]);
+  const [loadingLists, setLoadingLists] = useState(false);
+  const [loadingCols, setLoadingCols] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { setEnabled(!!source?.list); }, [source?.list]);
+
+  useEffect(() => {
+    if (!enabled || !token) return;
+    setLoadingLists(true);
+    setError("");
+    import("../../utils/formBuilderSP").then(({ getSharePointLists }) => {
+      getSharePointLists(token).then(setLists).catch((e: Error) => setError(e.message)).finally(() => setLoadingLists(false));
+    });
+  }, [enabled, token]);
+
+  useEffect(() => {
+    if (!enabled || !token || !source?.list) { setColumns([]); return; }
+    setLoadingCols(true);
+    setError("");
+    import("../../utils/formBuilderSP").then(({ getAllColumnsForList }) => {
+      getAllColumnsForList(source.list!, token).then(setColumns).catch((e: Error) => setError(e.message)).finally(() => setLoadingCols(false));
+    });
+  }, [enabled, token, source?.list]);
+
+  const toggle = () => {
+    if (enabled) {
+      onChange(undefined);
+      setEnabled(false);
+    } else {
+      setEnabled(true);
+      onChange({ list: "" });
+    }
+  };
+
+  return <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Filtered List Source</span>
+      <div style={{ flex: 1 }} />
+      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: C.textSecond, userSelect: "none" }}>
+        <input type="checkbox" checked={enabled} onChange={toggle} style={{ width: 14, height: 14, accentColor: C.purple }} />
+        Enabled
+      </label>
+    </div>
+
+    {enabled && <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <PropRow label="List">
+        <Select value={source?.list || ""} onChange={v => onChange({ ...source, list: v || undefined, valueColumn: undefined, filterColumn: undefined })} options={[
+          { value: "", label: loadingLists ? "Loading…" : "Select a list" },
+          ...lists.map(l => ({ value: l.title, label: l.title }))
+        ]} />
+      </PropRow>
+      {source?.list && <>
+        <PropRow label="Value Column">
+          <Select value={source?.valueColumn || ""} onChange={v => onChange({ ...source, valueColumn: v || undefined, filterColumn: undefined })} options={[
+            { value: "", label: loadingCols ? "Loading…" : "Select a column" },
+            ...columns.map(c => ({ value: c.title, label: c.title }))
+          ]} />
+        </PropRow>
+        <PropRow label="Label Column (optional)">
+          <Select value={source?.labelColumn || ""} onChange={v => onChange({ ...source, labelColumn: v || undefined })} options={[
+            { value: "", label: "Same as value" },
+            ...columns.map(c => ({ value: c.title, label: c.title }))
+          ]} />
+        </PropRow>
+      </>}
+      {source?.list && source?.valueColumn && <>
+        <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 2 }}>Filter (optional)</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 10, color: C.textMuted, whiteSpace: "nowrap" }}>Where</span>
+          <select value={source?.filterColumn || ""} onChange={e => onChange({ ...source, filterColumn: (e.target as HTMLSelectElement).value || undefined })}
+            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", padding: "0 4px" }}>
+            <option value="">— select column —</option>
+            {columns.map(c => <option key={c.title} value={c.title}>{c.title}</option>)}
+          </select>
+          <span style={{ fontSize: 10, color: C.textMuted }}>=</span>
+          <input value={source?.filterValue || ""} onChange={e => onChange({ ...source, filterValue: e.target.value })}
+            placeholder="value"
+            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", padding: "0 6px" }} />
+        </div>
+      </>}
+      {error && <div style={{ fontSize: 11, color: C.red }}>{error}</div>}
+    </div>}
   </div>;
 }
 
@@ -1238,11 +1336,16 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
             token={token}
             onChange={src => onChange({ spChoicesSource: src, choices: src?.list ? [] : (field.choices || []) })}
           />
-          {!field.spChoicesSource?.list && <PropRow label="Choices"><ChoicesEditor choices={field.choices || []} onChange={c => onChange({ choices: c })} /></PropRow>}
+          <SpFilteredListSourceEditor
+            source={field.spFilteredListSource}
+            token={token}
+            onChange={src => onChange({ spFilteredListSource: src, choices: src?.list ? [] : (field.choices || []) })}
+          />
+          {!field.spChoicesSource?.list && !field.spFilteredListSource?.list && <PropRow label="Choices"><ChoicesEditor choices={field.choices || []} onChange={c => onChange({ choices: c })} /></PropRow>}
         </>}
         {(field.type === "dynamicmatrix" || field.type === "tableinput") && <>
           <MatrixColumnsEditor
-            columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[]}
+            columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
             token={token}
             onChange={cols => onChange({ columns: cols, tableConfigColumns: cols })}
           />

@@ -15,6 +15,7 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
+  LockOutlined as LockIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import RoleBadge from "./RoleBadge";
@@ -26,6 +27,7 @@ interface HeaderProps {
   onLogout: () => void;
   onSwitch: () => void;
   onOpenBuilder?: () => void;
+  onOpenSessions?: () => void;
 }
 
 export default function Header({
@@ -34,6 +36,7 @@ export default function Header({
   onLogout,
   onSwitch,
   onOpenBuilder,
+  onOpenSessions,
 }: HeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -103,35 +106,69 @@ export default function Header({
 
         <Box sx={{ flexGrow: 1 }} />
 
-        {isAdmin && onOpenBuilder && (
-          <Button
-            variant="contained"
-            startIcon={<SettingsIcon />}
-            onClick={onOpenBuilder}
-            sx={{
-              mr: 1,
-              borderRadius: "12px",
-              textTransform: "none",
-              backgroundColor: "#6264A7",
-              color: "#ffffff",
-              fontWeight: 600,
-              fontSize: "0.85rem",
-              py: 1,
-              px: 2.5,
-              boxShadow: "0 2px 8px rgba(98, 100, 167, 0.25)",
-              transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-              "&:hover": {
-                backgroundColor: "#4A4C80",
-                boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
-                transform: "translateY(-1px)",
-              },
-              "&:active": {
-                transform: "scale(0.98) translateY(0)",
-              },
-            }}
-          >
-            Form Builder
-          </Button>
+        {isAdmin && (
+          <>
+            {onOpenBuilder && (
+              <Button
+                variant="contained"
+                startIcon={<SettingsIcon />}
+                onClick={onOpenBuilder}
+                sx={{
+                  mr: 1,
+                  borderRadius: "12px",
+                  textTransform: "none",
+                  backgroundColor: "#6264A7",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  py: 1,
+                  px: 2.5,
+                  boxShadow: "0 2px 8px rgba(98, 100, 167, 0.25)",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  "&:hover": {
+                    backgroundColor: "#4A4C80",
+                    boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
+                    transform: "translateY(-1px)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.98) translateY(0)",
+                  },
+                }}
+              >
+                Form Builder
+              </Button>
+            )}
+            {onOpenSessions && (
+              <Button
+                variant="outlined"
+                startIcon={<LockIcon />}
+                onClick={onOpenSessions}
+                sx={{
+                  mr: 1,
+                  borderRadius: "12px",
+                  textTransform: "none",
+                  color: "#6B7280",
+                  borderColor: "#D1D5DB",
+                  fontWeight: 500,
+                  fontSize: "0.85rem",
+                  py: 1,
+                  px: 2.5,
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  "&:hover": {
+                    borderColor: "#0078D4",
+                    color: "#0078D4",
+                    backgroundColor: "rgba(0, 120, 212, 0.04)",
+                    transform: "translateY(-1px)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.98) translateY(0)",
+                  },
+                }}
+              >
+                Sessions
+              </Button>
+            )}
+          </>
         )}
 
         <RoleBadge isAdmin={isAdmin} />

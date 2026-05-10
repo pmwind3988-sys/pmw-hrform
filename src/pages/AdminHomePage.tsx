@@ -1,4 +1,5 @@
 import { Box } from "@mui/material";
+import { useDashboard } from "../contexts/DashboardContext";
 import Header from "../components/dashboard/Header";
 import StatsRow from "../components/dashboard/StatsRow";
 import ListSummaryCards from "../components/dashboard/ListSummaryCards";
@@ -8,61 +9,35 @@ import SubmissionRow from "../components/dashboard/SubmissionRow";
 import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
-import type { Submission, DiscoveredList, ListMetaEntry } from "../types";
 
-interface AdminDashboardProps {
-  userEmail: string;
-  isAdmin: boolean;
-  submissions: Submission[];
-  visibleLists: DiscoveredList[];
-  listMetaMap: Record<string, ListMetaEntry>;
-  missingConfigs: string[];
-  hasFilters: boolean;
-  detailItem: Submission | null;
-  setDetailItem: (item: Submission | null) => void;
-  search: string;
-  setSearch: (s: string) => void;
-  listFilter: string;
-  setListFilter: (s: string) => void;
-  statusFilter: string;
-  setStatusFilter: (s: string) => void;
-  sortBy: string;
-  setSortBy: (s: string) => void;
-  submitterFilter: string;
-  setSubmitterFilter: (s: string) => void;
-  sortedSubmissions: Submission[];
-  onSignOut: () => void;
-  onSwitchAccount: () => void;
-  onOpenBuilder: () => void;
-  onEditForm: (listTitle: string) => void;
-}
-
-export default function AdminDashboard({
-  userEmail,
-  isAdmin,
-  submissions,
-  visibleLists,
-  listMetaMap,
-  missingConfigs,
-  hasFilters,
-  detailItem,
-  setDetailItem,
-  search,
-  setSearch,
-  listFilter,
-  setListFilter,
-  statusFilter,
-  setStatusFilter,
-  sortBy,
-  setSortBy,
-  submitterFilter,
-  setSubmitterFilter,
-  sortedSubmissions,
-  onSignOut,
-  onSwitchAccount,
-  onOpenBuilder,
-  onEditForm,
-}: AdminDashboardProps) {
+export default function AdminHomePage() {
+  const {
+    userEmail,
+    isAdmin,
+    submissions,
+    visibleLists,
+    listMetaMap,
+    missingConfigs,
+    hasFilters,
+    detailItem,
+    setDetailItem,
+    search,
+    setSearch,
+    listFilter,
+    setListFilter,
+    statusFilter,
+    setStatusFilter,
+    sortBy,
+    setSortBy,
+    submitterFilter,
+    setSubmitterFilter,
+    sortedSubmissions,
+    onSignOut,
+    onSwitchAccount,
+    onOpenBuilder,
+    onOpenSessions,
+    onEditForm,
+  } = useDashboard();
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
       <Header
@@ -70,8 +45,9 @@ export default function AdminDashboard({
         isAdmin={isAdmin}
         onLogout={onSignOut}
         onSwitch={onSwitchAccount}
-        onOpenBuilder={onOpenBuilder}
-      />
+          onOpenBuilder={onOpenBuilder}
+          onOpenSessions={onOpenSessions}
+        />
 
       <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 4 }}>
         {missingConfigs.length > 0 && (

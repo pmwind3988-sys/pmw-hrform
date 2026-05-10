@@ -164,7 +164,7 @@ const SYSTEM_BASE_TEMPLATES = new Set([
 
 export function filterVisibleLists(
   discoveredLists: DiscoveredList[],
-  isAdmin: boolean,
+  _isAdmin: boolean,
   allowedTitles: Set<string>
 ): DiscoveredList[] {
   return discoveredLists.filter((list) => {
@@ -190,12 +190,7 @@ export function filterVisibleLists(
       return false;
     }
 
-    // If admin, show all non-excluded lists
-    if (isAdmin) {
-      return true;
-    }
-
-    // Non-admin: only show allowed titles from Master Form
+    // Only show lists that have a matching entry in Master Form (form-builder created)
     return allowedTitles.has(title);
   });
 }

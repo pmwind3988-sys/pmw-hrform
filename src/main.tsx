@@ -5,6 +5,16 @@ import { Buffer } from "buffer";
 if (typeof globalThis !== "undefined") {
   (globalThis as Record<string, unknown>).Buffer = Buffer;
 }
+
+// ── Required env var validation ─────────────────────────────────────────
+const REQUIRED_VITE_VARS = ["VITE_AZURE_CLIENT_ID", "VITE_AZURE_TENANT_ID", "VITE_SP_SITE_URL"] as const;
+const missing = REQUIRED_VITE_VARS.filter((name) => !import.meta.env[name]);
+if (missing.length > 0) {
+  const msg = `❌ pmw-hrform: Missing required env vars: ${missing.join(", ")}. Check .env.local or .env file.`;
+  document.body.innerHTML = `<div style="padding:40px;font-family:sans-serif;color:#DC2626"><h2>Configuration Error</h2><p>${msg}</p></div>`;
+  throw new Error(msg);
+}
+
 import { msalInstance } from "./auth/msalConfig";
 import AuthProvider from "./auth/AuthProvider";
 import "./index.css";

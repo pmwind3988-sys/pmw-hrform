@@ -12,6 +12,8 @@ import { FlatLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
 import { spGet, getFormConfigByTitle } from "../../utils/formBuilderSP";
+import { createSpClient } from "../../utils/sharepointClient";
+import { SP_STATIC } from "../../utils/spConfig";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -62,6 +64,8 @@ export default function ResponseViewer() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminChecked, setAdminChecked] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [, setFormConfig] = useState<FormConfig | null>(null);
@@ -69,8 +73,26 @@ export default function ResponseViewer() {
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  // Admin access check (defense-in-depth)
+  useEffect(() => {
+    if (inProgress !== InteractionStatus.None) return;
+    if (!isAuthenticated) return;
+
+    createSpClient(instance, accounts)
+      .isGroupMember(SP_STATIC.adminGroup)
+      .then((admin) => {
+        setIsAdmin(admin);
+        setAdminChecked(true);
+      })
+      .catch(() => {
+        setIsAdmin(false);
+        setAdminChecked(true);
+      });
+  }, [isAuthenticated, inProgress, instance, accounts]);
+
   // Get token
   useEffect(() => {
+    if (!adminChecked || !isAdmin) return;
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) return;
 
@@ -79,10 +101,11 @@ export default function ResponseViewer() {
       .acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
       .then((r) => setToken(r.accessToken))
       .catch(() => setError("Failed to acquire token"));
-  }, [isAuthenticated, inProgress, instance, accounts]);
+  }, [adminChecked, isAdmin, isAuthenticated, inProgress, instance, accounts]);
 
   // Load submissions
   useEffect(() => {
+    if (!adminChecked || !isAdmin) return;
     if (!token || !formTitle) return;
 
     const loadData = async () => {
@@ -107,7 +130,7 @@ export default function ResponseViewer() {
     };
 
     loadData();
-  }, [token, formTitle]);
+  }, [adminChecked, isAdmin, token, formTitle]);
 
   // Load survey JSON for selected submission
   const loadSubmissionDetails = async (item: SubmissionItem) => {
@@ -206,6 +229,19 @@ export default function ResponseViewer() {
           <div style={{ fontSize: 32, marginBottom: 16 }}>🔒</div>
           <div style={{ fontSize: 18, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <div style={{ color: C.textSecond }}>You must be signed in to view submissions.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (adminChecked && !isAdmin) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 32, marginBottom: 16 }}>🚫</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
+          <div style={{ color: C.textSecond }}>You need HR Form Owner permissions to view this page.</div>
+          <div style={{ color: C.textMuted, marginTop: 8, fontSize: 13 }}>Please return to the dashboard.</div>
         </div>
       </div>
     );

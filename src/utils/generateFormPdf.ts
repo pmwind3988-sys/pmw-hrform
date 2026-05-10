@@ -96,12 +96,5 @@ export async function generateAndStorePdf(
     }
   }
 
-  // Open in new tab for viewing.
-  // pdfUrl from SharePoint is server-relative (e.g. /sites/PMWHRDocs/Form%20PDFs/file.pdf),
-  // so prepend only the ORIGIN (not SP_SITE_URL which already includes the site path).
-  const origin = new URL(SP_SITE_URL).origin;
-  const fullUrl = pdfUrl.startsWith("http") ? pdfUrl : `${origin}${pdfUrl}`;
-  window.open(fullUrl, "_blank");
-
   return pdfUrl;
 }

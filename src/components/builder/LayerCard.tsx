@@ -15,6 +15,7 @@ interface LayerCardProps {
   onMoveDown: () => void;
   onDelete: () => void;
   children: React.ReactNode;
+  actionsDisabled?: boolean;
 }
 
 const TYPE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
@@ -37,6 +38,7 @@ export default function LayerCard({
   onMoveDown,
   onDelete,
   children,
+  actionsDisabled,
 }: LayerCardProps) {
   const [hoverDel, setHoverDel] = useState(false);
   const badge = TYPE_BADGE[layer.type] || TYPE_BADGE.approval;
@@ -130,15 +132,15 @@ export default function LayerCard({
         <div style={{ display: "flex", gap: 3, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button
             onClick={onMoveUp}
-            disabled={index === 0}
+            disabled={index === 0 || actionsDisabled}
             style={{
               width: 22,
               height: 22,
               border: `1px solid ${C.border}`,
               borderRadius: 5,
               background: C.white,
-              color: index === 0 ? C.textMuted : C.textSecond,
-              cursor: index === 0 ? "default" : "pointer",
+              color: index === 0 || actionsDisabled ? C.textMuted : C.textSecond,
+              cursor: index === 0 || actionsDisabled ? "default" : "pointer",
               fontSize: 10,
               display: "flex",
               alignItems: "center",
@@ -149,15 +151,15 @@ export default function LayerCard({
           </button>
           <button
             onClick={onMoveDown}
-            disabled={index === total - 1}
+            disabled={index === total - 1 || actionsDisabled}
             style={{
               width: 22,
               height: 22,
               border: `1px solid ${C.border}`,
               borderRadius: 5,
               background: C.white,
-              color: index === total - 1 ? C.textMuted : C.textSecond,
-              cursor: index === total - 1 ? "default" : "pointer",
+              color: index === total - 1 || actionsDisabled ? C.textMuted : C.textSecond,
+              cursor: index === total - 1 || actionsDisabled ? "default" : "pointer",
               fontSize: 10,
               display: "flex",
               alignItems: "center",
@@ -168,16 +170,17 @@ export default function LayerCard({
           </button>
           <button
             onClick={onDelete}
-            onMouseEnter={() => setHoverDel(true)}
-            onMouseLeave={() => setHoverDel(false)}
+            disabled={actionsDisabled}
+            onMouseEnter={() => !actionsDisabled && setHoverDel(true)}
+            onMouseLeave={() => !actionsDisabled && setHoverDel(false)}
             style={{
               width: 22,
               height: 22,
               border: "none",
               borderRadius: 5,
-              background: hoverDel ? C.red : C.redPale,
-              color: hoverDel ? C.white : C.red,
-              cursor: "pointer",
+              background: actionsDisabled ? C.offWhite : (hoverDel ? C.red : C.redPale),
+              color: actionsDisabled ? C.textMuted : (hoverDel ? C.white : C.red),
+              cursor: actionsDisabled ? "default" : "pointer",
               fontSize: 10,
               display: "flex",
               alignItems: "center",

@@ -13,6 +13,7 @@ import type {
   EvaluationLayerConfig,
   AuthMode,
   ConfirmationType,
+  ManualBranch,
 } from "../../types";
 
 interface LayerConfigPanelProps {
@@ -67,8 +68,14 @@ export default function LayerConfigPanel({
   const searchRef = useRef<HTMLDivElement>(null);
   const [searchOpen, setSearchOpen] = useState<number | null>(null);
   const [searchQ, setSearchQ] = useState("");
+  const [branchEnabled, setBranchEnabled] = useState(!!value?.manualBranches);
+  const [branchExpanded, setBranchExpanded] = useState<Record<number, number>>({});
+  const [branchEvalPicker, setBranchEvalPicker] = useState<string | null>(null);
+  const [branchSearchAt, setBranchSearchAt] = useState<string | null>(null);
+  const [branchSearchQ, setBranchSearchQ] = useState("");
 
   const layers = value?.layers || [];
+  const branches = value?.manualBranches || [];
 
   // Close search dropdown on outside click
   useEffect(() => {
@@ -85,10 +92,11 @@ export default function LayerConfigPanel({
     const routing = condEnabled && condField
       ? [{ conditionField: condField, rules: condRules.map(r => ({ when: r.when, skipLayers: r.skipLayers })) }]
       : undefined;
-    onChange({ version: "1.0", layers: renumbered, routing });
+    onChange({ version: "1.0", layers: renumbered, routing, manualBranches: branches.length > 0 ? branches : undefined });
   };
 
   const addLayer = () => {
+    if (branchEnabled) return;
     const next = layers.length + 1;
     const newLayer: ApprovalLayerConfig = {
       layerNumber: next,
@@ -103,12 +111,14 @@ export default function LayerConfigPanel({
   };
 
   const removeLayer = (idx: number) => {
+    if (branchEnabled) return;
     updateLayers(layers.filter((_, i) => i !== idx));
     if (expandedIdx === idx) setExpandedIdx(null);
     else if (expandedIdx !== null && expandedIdx > idx) setExpandedIdx(expandedIdx - 1);
   };
 
   const moveLayer = (idx: number, dir: -1 | 1) => {
+    if (branchEnabled) return;
     const target = idx + dir;
     if (target < 0 || target >= layers.length) return;
     const arr = [...layers];
@@ -125,9 +135,79 @@ export default function LayerConfigPanel({
     }));
   };
 
+  // ── Branch CRUD ────────────────────────────────────────────────────────────
+  const updateBranches = (newBranches: ManualBranch[]) => {
+    const routing = condEnabled && condField
+      ? [{ conditionField: condField, rules: condRules.map(r => ({ when: r.when, skipLayers: r.skipLayers })) }]
+      : undefined;
+    onChange({ version: "1.0", layers, routing, manualBranches: newBranches.length > 0 ? newBranches : undefined });
+  };
+
+  const addBranch = () => updateBranches([...branches, { name: "", label: "", layers: [] }]);
+
+  const removeBranch = (bi: number) => {
+    updateBranches(branches.filter((_, i) => i !== bi));
+    setBranchExpanded(prev => { const n = { ...prev }; delete n[bi]; return n; });
+  };
+
+  const updateBranchField = (bi: number, field: "name" | "label", val: string) => {
+    updateBranches(branches.map((b, i) => i === bi ? { ...b, [field]: val } : b));
+  };
+
+  const addBranchLayer = (bi: number) => {
+    const branch = branches[bi];
+    const nextLayer: ApprovalLayerConfig = {
+      layerNumber: branch.layers.length + 1,
+      type: "approval",
+      authMode: "365",
+      assignee: { type: "user", value: "" },
+      confirmationType: "signature",
+      allowRejectionReason: true,
+    };
+    updateBranches(branches.map((b, i) => i !== bi ? b : { ...b, layers: [...b.layers, nextLayer] }));
+    setBranchExpanded(prev => ({ ...prev, [bi]: branch.layers.length }));
+  };
+
+  const removeBranchLayer = (bi: number, li: number) => {
+    updateBranches(branches.map((b, i) => i !== bi ? b : { ...b, layers: b.layers.filter((_, j) => j !== li) }));
+    setBranchExpanded(prev => {
+      const ce = prev[bi];
+      if (ce === undefined) return prev;
+      if (ce === li) { const n = { ...prev }; delete n[bi]; return n; }
+      if (ce > li) return { ...prev, [bi]: ce - 1 };
+      return prev;
+    });
+  };
+
+  const moveBranchLayer = (bi: number, li: number, dir: -1 | 1) => {
+    const branch = branches[bi];
+    const target = li + dir;
+    if (target < 0 || target >= branch.layers.length) return;
+    updateBranches(branches.map((b, i) => {
+      if (i !== bi) return b;
+      const arr = [...b.layers];
+      [arr[li], arr[target]] = [arr[target], arr[li]];
+      return { ...b, layers: arr };
+    }));
+    setBranchExpanded(prev => {
+      const ce = prev[bi];
+      if (ce === li) return { ...prev, [bi]: target };
+      if (ce === target) return { ...prev, [bi]: li };
+      return prev;
+    });
+  };
+
+  const patchBranchLayer = (bi: number, li: number, patch: Record<string, unknown>) => {
+    updateBranches(branches.map((b, i) => i !== bi ? b : { ...b, layers: b.layers.map((l, j) => j === li ? { ...l, ...patch } as LayerConfigItem : l) }));
+  };
+
   // Search suggestions for assignee
   const suggestions = searchQ
     ? siteUsers.filter(u => u.email.toLowerCase().includes(searchQ.toLowerCase()) || u.name.toLowerCase().includes(searchQ.toLowerCase())).slice(0, 5)
+    : siteUsers.slice(0, 5);
+
+  const branchSuggestions = branchSearchQ
+    ? siteUsers.filter(u => u.email.toLowerCase().includes(branchSearchQ.toLowerCase()) || u.name.toLowerCase().includes(branchSearchQ.toLowerCase())).slice(0, 5)
     : siteUsers.slice(0, 5);
 
   // ── Render per-layer settings ──────────────────────────────────────────────
@@ -398,6 +478,274 @@ export default function LayerConfigPanel({
     );
   };
 
+  // ── Render per-branch-layer settings ────────────────────────────────────────
+  const renderBranchLayerSettings = (layer: LayerConfigItem, bi: number, li: number) => {
+    const isApproval = layer.type === "approval";
+    const isEval = layer.type === "evaluation";
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 9 }}>
+        {/* Layer type toggle */}
+        <div>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+            Layer Type
+          </label>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={() => {
+              if (isApproval) return;
+              const converted: ApprovalLayerConfig = {
+                layerNumber: layer.layerNumber,
+                type: "approval",
+                authMode: layer.authMode,
+                assignee: layer.assignee,
+                title: layer.title,
+                description: layer.description,
+                publicToken: layer.publicToken,
+                tokenExpiresAt: layer.tokenExpiresAt,
+                notifyOnComplete: layer.notifyOnComplete,
+                confirmationType: "signature",
+                allowRejectionReason: true,
+              };
+              patchBranchLayer(bi, li, converted as unknown as Record<string, unknown>);
+            }} style={TOGGLE_BTN(isApproval)}>Approval</button>
+            <button onClick={() => {
+              if (isEval) return;
+              const converted: EvaluationLayerConfig = {
+                layerNumber: layer.layerNumber,
+                type: "evaluation",
+                authMode: layer.authMode,
+                assignee: layer.assignee,
+                title: layer.title,
+                description: layer.description,
+                publicToken: layer.publicToken,
+                tokenExpiresAt: layer.tokenExpiresAt,
+                notifyOnComplete: layer.notifyOnComplete,
+                surveyElements: [],
+              };
+              patchBranchLayer(bi, li, converted as unknown as Record<string, unknown>);
+            }} style={TOGGLE_BTN(isEval)}>Evaluation</button>
+          </div>
+        </div>
+
+        {/* Auth mode toggle */}
+        <div>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+            Auth Mode
+          </label>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={() => patchBranchLayer(bi, li, { authMode: "365" as AuthMode })} style={TOGGLE_BTN(layer.authMode === "365")}>
+              🔒 365 Sign-in
+            </button>
+            <button onClick={() => {
+              const patch: Partial<LayerConfigItem> & { publicToken?: string; tokenExpiresAt?: string } = { authMode: "public" as AuthMode };
+              if (!layer.publicToken) patch.publicToken = crypto.randomUUID();
+              if (!layer.tokenExpiresAt) {
+                const d = new Date();
+                d.setDate(d.getDate() + 30);
+                patch.tokenExpiresAt = d.toISOString();
+              }
+              patchBranchLayer(bi, li, patch);
+            }} style={TOGGLE_BTN(layer.authMode === "public")}>
+              🔗 Public Link
+            </button>
+          </div>
+        </div>
+
+        {/* Assignee */}
+        <div>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+            Assignee
+          </label>
+          <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+            <button
+              onClick={() => patchBranchLayer(bi, li, { assignee: { type: "user", value: layer.assignee.value } })}
+              style={TOGGLE_BTN(layer.assignee.type === "user")}
+            >
+              Static
+            </button>
+            <button
+              onClick={() => patchBranchLayer(bi, li, { assignee: { type: "field-reference", value: layer.assignee.value } })}
+              style={TOGGLE_BTN(layer.assignee.type === "field-reference")}
+            >
+              From Field
+            </button>
+          </div>
+
+          {layer.assignee.type === "user" ? (
+            <div ref={searchRef} style={{ position: "relative" }}>
+              <input
+                value={layer.assignee.value}
+                onChange={e => {
+                  patchBranchLayer(bi, li, { assignee: { type: "user", value: e.target.value } });
+                  setBranchSearchQ(e.target.value);
+                }}
+                onFocus={() => setBranchSearchAt(`${bi}-${li}`)}
+                placeholder="email@company.com"
+                style={inp}
+              />
+              {branchSearchAt === `${bi}-${li}` && branchSuggestions.length > 0 && (
+                <div style={{
+                  position: "absolute",
+                  top: "calc(100% + 3px)",
+                  left: 0,
+                  right: 0,
+                  zIndex: 200,
+                  background: C.white,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 9,
+                  boxShadow: C.shadowMd,
+                  overflow: "hidden",
+                }}>
+                  {branchSuggestions.map(u => (
+                    <div
+                      key={u.email}
+                      onClick={() => {
+                        patchBranchLayer(bi, li, { assignee: { type: "user", value: u.email } });
+                        setBranchSearchAt(null);
+                        setBranchSearchQ("");
+                      }}
+                      style={{ padding: "6px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 500 }}>{u.name}</div>
+                      <div style={{ fontSize: 9, color: C.textMuted }}>{u.email}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <select
+              value={layer.assignee.value}
+              onChange={e => patchBranchLayer(bi, li, { assignee: { type: "field-reference", value: e.target.value } })}
+              style={{ ...inp, height: 30 }}
+            >
+              <option value="">— Select field —</option>
+              {formFieldNames.map(fn => (
+                <option key={fn} value={fn}>{fn}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Approval-specific: confirmation type */}
+        {isApproval && (
+          <>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+                Confirmation Type
+              </label>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  onClick={() => patchBranchLayer(bi, li, { confirmationType: "signature" as ConfirmationType })}
+                  style={TOGGLE_BTN((layer as ApprovalLayerConfig).confirmationType === "signature")}
+                >
+                  ✍️ Signature
+                </button>
+                <button
+                  onClick={() => patchBranchLayer(bi, li, { confirmationType: "checkbox" as ConfirmationType })}
+                  style={TOGGLE_BTN((layer as ApprovalLayerConfig).confirmationType === "checkbox")}
+                >
+                  ☑️ Checkbox
+                </button>
+              </div>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textSecond }}>
+              <input
+                type="checkbox"
+                checked={(layer as ApprovalLayerConfig).allowRejectionReason}
+                onChange={e => patchBranchLayer(bi, li, { allowRejectionReason: e.target.checked })}
+                style={{ width: 14, height: 14, accentColor: C.purple }}
+              />
+              Show rejection reason
+            </label>
+          </>
+        )}
+
+        {/* Evaluation-specific: configure form */}
+        {isEval && (
+          <div>
+            {branchEvalPicker === `${bi}-${li}` ? (
+              <EvalElementPicker
+                elements={(layer as EvaluationLayerConfig).surveyElements || []}
+                onChange={els => patchBranchLayer(bi, li, { surveyElements: els })}
+              />
+            ) : (
+              <button
+                onClick={() => setBranchEvalPicker(`${bi}-${li}`)}
+                style={{
+                  width: "100%",
+                  height: 30,
+                  border: `1px dashed ${C.purpleMid}`,
+                  borderRadius: 7,
+                  background: "none",
+                  color: C.purple,
+                  fontSize: 11,
+                  cursor: "pointer",
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                }}
+              >
+                📋 Configure Evaluation Form ({((layer as EvaluationLayerConfig).surveyElements || []).length} fields)
+              </button>
+            )}
+            {branchEvalPicker === `${bi}-${li}` && (
+              <button
+                onClick={() => setBranchEvalPicker(null)}
+                style={{
+                  fontSize: 10,
+                  color: C.textMuted,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  marginTop: 4,
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                }}
+              >
+                Done
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Title & description */}
+        <div>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+            Layer Title
+          </label>
+          <input
+            value={layer.title || ""}
+            onChange={e => patchBranchLayer(bi, li, { title: e.target.value })}
+            placeholder={`Layer ${li + 1}`}
+            style={inp}
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+            Description
+          </label>
+          <input
+            value={layer.description || ""}
+            onChange={e => patchBranchLayer(bi, li, { description: e.target.value })}
+            placeholder="Optional description"
+            style={inp}
+          />
+        </div>
+
+        {/* Public link display */}
+        {layer.authMode === "public" && (
+          <PublicLinkDisplay
+            slug={slug}
+            publicToken={layer.publicToken || ""}
+            tokenExpiresAt={layer.tokenExpiresAt || ""}
+            onTokenChange={t => patchBranchLayer(bi, li, { publicToken: t })}
+            onExpiryChange={d => patchBranchLayer(bi, li, { tokenExpiresAt: d })}
+          />
+        )}
+      </div>
+    );
+  };
+
   // ── Conditional routing section ────────────────────────────────────────────
   const renderConditionalRouting = () => (
     <div style={{ marginTop: 14 }}>
@@ -423,7 +771,7 @@ export default function LayerConfigPanel({
             if (!e.target.checked) {
               // Persist the removal
               const routing = undefined;
-              onChange({ version: "1.0", layers, routing });
+              onChange({ version: "1.0", layers, routing, manualBranches: branches.length > 0 ? branches : undefined });
             }
           }}
           style={{ width: 16, height: 16, accentColor: C.purple }}
@@ -579,30 +927,106 @@ export default function LayerConfigPanel({
           onMoveUp={() => moveLayer(idx, -1)}
           onMoveDown={() => moveLayer(idx, 1)}
           onDelete={() => removeLayer(idx)}
+          actionsDisabled={branchEnabled}
         >
           {renderLayerSettings(layer, idx)}
         </LayerCard>
       ))}
 
-      {/* Add layer button */}
+      {/* Add layer button — disabled when manual branching is on */}
       <button
         onClick={addLayer}
         style={{
           width: "100%",
           height: 32,
-          border: `1px dashed ${C.purpleMid}`,
+          border: `1px dashed ${branchEnabled ? C.border : C.purpleMid}`,
           borderRadius: 8,
-          background: "none",
-          color: C.purple,
+          background: branchEnabled ? C.offWhite : "none",
+          color: branchEnabled ? C.textMuted : C.purple,
           fontSize: 11,
           fontWeight: 600,
-          cursor: "pointer",
+          cursor: branchEnabled ? "not-allowed" : "pointer",
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
           marginBottom: 14,
         }}
       >
         + Add Layer
       </button>
+
+      {/* Manual Branching */}
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.textPrimary, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+          Manual Branching
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <input type="checkbox" checked={branchEnabled}
+            onChange={e => {
+              setBranchEnabled(e.target.checked);
+              if (!e.target.checked) {
+                const routing = condEnabled && condField
+                  ? [{ conditionField: condField, rules: condRules.map(r => ({ when: r.when, skipLayers: r.skipLayers })) }]
+                  : undefined;
+                onChange({ version: "1.0", layers, routing });
+              } else if (!branches.length) {
+                const routing = condEnabled && condField
+                  ? [{ conditionField: condField, rules: condRules.map(r => ({ when: r.when, skipLayers: r.skipLayers })) }]
+                  : undefined;
+                onChange({ version: "1.0", layers, routing, manualBranches: [] });
+              }
+            }}
+            style={{ width: 16, height: 16, accentColor: C.purple }} />
+          <span style={{ fontSize: 11, color: C.textSecond }}>Enable manual branching</span>
+        </label>
+        {branchEnabled && (
+          <>
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 10 }}>
+              Branch layers override the main sequence. Define separate layer paths for different scenarios.
+            </div>
+            {branches.length === 0 && (
+              <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "9px 11px", fontSize: 11, color: C.amber, marginBottom: 10 }}>
+                No branches defined — add a branch to get started.
+              </div>
+            )}
+            {branches.map((branch, bi) => (
+              <div key={bi} style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 10, background: C.white, marginBottom: 10, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 11px", background: C.purplePale, borderBottom: `1px solid ${C.purpleMid}` }}>
+                  <span style={{ width: 24, height: 24, borderRadius: 6, background: `linear-gradient(135deg,${C.purple},#3B0764)`, color: C.white, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{bi + 1}</span>
+                  <div style={{ flex: 1, display: "flex", gap: 6 }}>
+                    <input value={branch.name} onChange={e => updateBranchField(bi, "name", e.target.value)} placeholder="Branch name (key)" style={{ ...inp, flex: 1, height: 26, fontSize: 11 }} />
+                    <input value={branch.label} onChange={e => updateBranchField(bi, "label", e.target.value)} placeholder="Display label" style={{ ...inp, flex: 1, height: 26, fontSize: 11 }} />
+                  </div>
+                  <button onClick={() => removeBranch(bi)} style={{ width: 22, height: 22, border: "none", borderRadius: 5, background: C.redPale, color: C.red, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
+                </div>
+                <div style={{ padding: "9px 11px" }}>
+                  {branch.layers.length === 0 && <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>No layers in this branch.</div>}
+                  {branch.layers.map((layer, li) => (
+                    <LayerCard key={li} layer={layer} index={li} total={branch.layers.length}
+                      expanded={branchExpanded[bi] === li}
+                      onToggleExpand={() => setBranchExpanded(prev => {
+                        const c = prev[bi];
+                        if (c === li) { const n = { ...prev }; delete n[bi]; return n; }
+                        return { ...prev, [bi]: li };
+                      })}
+                      onMoveUp={() => moveBranchLayer(bi, li, -1)}
+                      onMoveDown={() => moveBranchLayer(bi, li, 1)}
+                      onDelete={() => removeBranchLayer(bi, li)}>
+                      {renderBranchLayerSettings(layer, bi, li)}
+                    </LayerCard>
+                  ))}
+                  <button onClick={() => addBranchLayer(bi)}
+                    style={{ width: "100%", height: 28, border: `1px dashed ${C.purpleMid}`, borderRadius: 7, background: "none", color: C.purple, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>
+                    + Add Layer to Branch
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button onClick={addBranch}
+              style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: 8, background: "none", color: C.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", marginBottom: 14 }}>
+              + Add Branch
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Conditional routing */}
       {renderConditionalRouting()}

@@ -27,6 +27,7 @@ interface MatrixColumn {
   choices?: string[];
   multiSelect?: boolean;
   choicesSource?: { list?: string; column?: string };
+  filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean };
 }
 
 interface MatrixRow {

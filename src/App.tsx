@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import {
   useMsal,
   useIsAuthenticated,
@@ -19,6 +19,8 @@ import GuestLanding from "./components/auth/GuestLanding";
 import WrongTenantScreen from "./components/auth/WrongTenantScreen";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import ErrorScreen from "./components/auth/ErrorScreen";
+import AdminGuard from "./components/auth/AdminGuard";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Form builder pages
 import DynamicFormPage from "./pages/DynamicFormPage";
@@ -27,6 +29,13 @@ import ResponseViewer from "./components/builder/ResponseViewer";
 import AdminFormBuilder from "./pages/AdminFormBuilder";
 import AdminHomePage from "./pages/AdminHomePage";
 import EvaluationPage from "./pages/EvaluationPage";
+import AdminSessionsPage from "./pages/AdminSessionsPage";
+import { DashboardProvider } from "./contexts/DashboardContext";
+
+// Session management
+import { useSessionManager } from "./utils/sessionManager";
+import SessionTakeoverDialog from "./components/session/SessionTakeoverDialog";
+import SessionTakenOverScreen from "./components/session/SessionTakenOverScreen";
 
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 
@@ -197,6 +206,15 @@ export default function App() {
   const userEmail = accounts[0]?.username || "";
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Session management
+  const session = useSessionManager({
+    instance,
+    accounts,
+    isAuthenticated,
+    isAdmin,
+    isReady: pageState === "ready",
+  });
+
   // Dashboard data
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [visibleLists, setVisibleLists] = useState<DiscoveredList[]>([]);
@@ -364,13 +382,21 @@ if (decision === "guest") {
         const redirectPath = sessionStorage.getItem("pmw_post_login_redirect");
         if (redirectPath) {
           sessionStorage.removeItem("pmw_post_login_redirect");
-          navigate(redirectPath);
+          // Root or legacy adminhomepage → role-specific dashboard
+          if (redirectPath === "/" || redirectPath === "/adminhomepage") {
+            navigate(isAdmin ? "/admin/dashboard" : "/user/dashboard", { replace: true });
+          } else {
+            navigate(redirectPath);
+          }
+        } else {
+          // No stored redirect — go to role-appropriate dashboard
+          navigate(isAdmin ? "/admin/dashboard" : "/user/dashboard", { replace: true });
         }
       } catch {
         // Ignore storage errors
       }
     }
-  }, [pageState, isAuthenticated, navigate]);
+  }, [pageState, isAuthenticated, navigate, isAdmin]);
 
   const handleLogin = () => {
     console.log("handleLogin called, inProgress:", inProgress, "accounts:", instance.getAllAccounts());
@@ -408,7 +434,8 @@ if (decision === "guest") {
     setPageState("guest");
   };
 
-  const handleSwitchAccount = () => {
+  const handleSwitchAccount = useCallback(() => {
+    session.release();
     instance.logoutPopup().catch(() => {
       instance.logoutRedirect();
     });
@@ -416,12 +443,13 @@ if (decision === "guest") {
     setTimeout(() => {
       instance.loginRedirect(loginRequest);
     }, 100);
-  };
+  }, [session.release, instance]);
 
-  const handleSignOut = () => {
+  const handleSignOut = useCallback(() => {
+    session.release();
     instance.logoutRedirect();
     clearStoredAuthDecision();
-  };
+  }, [session.release, instance]);
 
   const handleForgetChoice = () => {
     clearStoredAuthDecision();
@@ -523,130 +551,180 @@ if (decision === "guest") {
     );
   }
 
+  // ---- Session taken over screen ----
+  if (session.sessionState === "takenOver" && !isFormRoute) {
+    return (
+      <SessionTakenOverScreen
+        onTakeover={session.takeover}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
   // ---- Dashboard (ready state) ----
+  const adminDashboardInner = (
+    <ErrorBoundary>
+      <DashboardProvider
+        userEmail={userEmail}
+        isAdmin={isAdmin}
+        submissions={submissions}
+        visibleLists={visibleLists}
+        listMetaMap={listMetaMap}
+        missingConfigs={missingConfigs}
+        hasFilters={hasFilters}
+        detailItem={detailItem}
+        setDetailItem={setDetailItem}
+        search={search}
+        setSearch={setSearch}
+        listFilter={listFilter}
+        setListFilter={setListFilter}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        submitterFilter={submitterFilter}
+        setSubmitterFilter={setSubmitterFilter}
+        sortedSubmissions={sortedSubmissions}
+        onSignOut={handleSignOut}
+        onSwitchAccount={handleSwitchAccount}
+        onOpenBuilder={() => navigate("/admin/builder")}
+        onOpenSessions={() => navigate("/admin/sessions")}
+        onEditForm={(listTitle: string) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
+      >
+        <AdminHomePage />
+      </DashboardProvider>
+    </ErrorBoundary>
+  );
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Routes>
-        <Route
-          path="/form/:formId"
-          element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
-              <DynamicFormPage />
-            </Box>
-          }
+      <ErrorBoundary>
+        <Routes>
+          <Route
+            path="/form/:formId"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <DynamicFormPage />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/admin/approvals"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                    <ApprovalDashboard />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/responses/:formTitle"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                    <ResponseViewer />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/builder"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh" }}>
+                    <AdminFormBuilder />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/builder/:formTitle"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh" }}>
+                    <AdminFormBuilder />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/dashboard"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                {adminDashboardInner}
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/sessions"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <AdminSessionsPage />
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/user/dashboard"
+            element={
+              <ErrorBoundary>
+                {adminDashboardInner}
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/eval/:token"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <EvaluationPage />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/eval/:formSlug/:responseId/:layerNumber"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <EvaluationPage />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              pageState === "ready" ? (
+                <Navigate to={isAdmin ? "/admin/dashboard" : "/user/dashboard"} replace />
+              ) : (
+                adminDashboardInner
+              )
+            }
+          />
+        </Routes>
+
+        {/* Session takeover dialog — rendered on top of everything */}
+        <SessionTakeoverDialog
+          open={session.sessionState === "conflict"}
+          conflictInfo={session.conflictInfo}
+          onTakeover={session.takeover}
+          onCancel={session.reset}
         />
-        <Route
-          path="/admin/approvals"
-          element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
-              <ApprovalDashboard />
-            </Box>
-          }
-        />
-        <Route
-          path="/admin/responses/:formTitle"
-          element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
-              <ResponseViewer />
-            </Box>
-          }
-        />
-        <Route
-          path="/admin/builder"
-          element={
-            <Box sx={{ minHeight: "100vh" }}>
-              <AdminFormBuilder />
-            </Box>
-          }
-        />
-        <Route
-          path="/admin/builder/:formTitle"
-          element={
-            <Box sx={{ minHeight: "100vh" }}>
-              <AdminFormBuilder />
-            </Box>
-          }
-        />
-        <Route
-          path="/adminhomepage"
-          element={
-            <AdminHomePage
-              userEmail={userEmail}
-              isAdmin={isAdmin}
-              submissions={submissions}
-              visibleLists={visibleLists}
-              listMetaMap={listMetaMap}
-              missingConfigs={missingConfigs}
-              hasFilters={hasFilters}
-              detailItem={detailItem}
-              setDetailItem={setDetailItem}
-              search={search}
-              setSearch={setSearch}
-              listFilter={listFilter}
-              setListFilter={setListFilter}
-              statusFilter={statusFilter}
-              setStatusFilter={setStatusFilter}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              submitterFilter={submitterFilter}
-              setSubmitterFilter={setSubmitterFilter}
-              sortedSubmissions={sortedSubmissions}
-              onSignOut={handleSignOut}
-              onSwitchAccount={handleSwitchAccount}
-              onOpenBuilder={() => navigate("/admin/builder")}
-              onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
-            />
-          }
-        />
-        <Route
-          path="/eval/:token"
-          element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
-              <EvaluationPage />
-            </Box>
-          }
-        />
-        <Route
-          path="/eval/:formSlug/:responseId/:layerNumber"
-          element={
-            <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
-              <EvaluationPage />
-            </Box>
-          }
-        />
-        <Route
-          path="*"
-          element={
-            <AdminHomePage
-              userEmail={userEmail}
-              isAdmin={isAdmin}
-              submissions={submissions}
-              visibleLists={visibleLists}
-              listMetaMap={listMetaMap}
-              missingConfigs={missingConfigs}
-              hasFilters={hasFilters}
-              detailItem={detailItem}
-              setDetailItem={setDetailItem}
-              search={search}
-              setSearch={setSearch}
-              listFilter={listFilter}
-              setListFilter={setListFilter}
-              statusFilter={statusFilter}
-              setStatusFilter={setStatusFilter}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              submitterFilter={submitterFilter}
-              setSubmitterFilter={setSubmitterFilter}
-              sortedSubmissions={sortedSubmissions}
-              onSignOut={handleSignOut}
-              onSwitchAccount={handleSwitchAccount}
-              onOpenBuilder={() => navigate("/admin/builder")}
-              onEditForm={(listTitle) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
-            />
-          }
-        />
-      </Routes>
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }

@@ -11,11 +11,12 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices, uploadSignatureImage, getFormConfigByTitle } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle } from "../utils/formBuilderSP";
 import type { LayerConfig } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { loginRequest } from "../auth/msalConfig";
+import { clearStoredAuthDecision } from "../utils/authDecision";
 import Logo from "../components/Logo";
 import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
 import type { PdfFormData } from "../utils/FormPdfDocument";
@@ -272,7 +273,19 @@ export default function DynamicFormPage() {
             );
           }
 
-          // Matrix column choicesSource
+          // Main field spFilteredListSource
+          const fls = el.spFilteredListSource as { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string } | undefined;
+          if (fls?.list && fls?.valueColumn) {
+            pending.push(
+              getFilteredListChoices(fls.list, fls.valueColumn, token, fls.filterColumn, fls.filterValue)
+                .then((choices) => {
+                  if (choices.length > 0) el.choices = choices;
+                })
+                .catch(() => {})
+            );
+          }
+
+          // Matrix column choicesSource / filteredListSource
           if ((el.type === "matrixdynamic" || el.type === "dynamicmatrix") && Array.isArray(el.columns)) {
             const cols = el.columns as Record<string, unknown>[];
             for (const col of cols) {
@@ -280,6 +293,16 @@ export default function DynamicFormPage() {
               if (colSrc?.list && colSrc?.column) {
                 pending.push(
                   getSharePointChoices(colSrc.list, colSrc.column, token)
+                    .then((choices) => {
+                      if (choices.length > 0) col.choices = choices;
+                    })
+                    .catch(() => {})
+                );
+              }
+              const colFls = col.filteredListSource as { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string } | undefined;
+              if (colFls?.list && colFls?.valueColumn) {
+                pending.push(
+                  getFilteredListChoices(colFls.list, colFls.valueColumn, token, colFls.filterColumn, colFls.filterValue)
                     .then((choices) => {
                       if (choices.length > 0) col.choices = choices;
                     })
@@ -546,7 +569,10 @@ export default function DynamicFormPage() {
     }
     instance.loginRedirect({ ...loginRequest, redirectStartPage: window.location.href });
   }, [instance]);
-  const handleSignOut = useCallback(() => { instance.logoutRedirect({ postLogoutRedirectUri: window.location.href }); }, [instance]);
+  const handleSignOut = useCallback(() => {
+    clearStoredAuthDecision();
+    instance.logoutRedirect({ postLogoutRedirectUri: window.location.href });
+  }, [instance]);
   const handleReset = useCallback(() => { setSubmitStatus(null); lastDataRef.current = null; setResetKey(k => k + 1); }, []);
 
   const isPublicForm = formData?.formConfig?.IsPublic !== false;

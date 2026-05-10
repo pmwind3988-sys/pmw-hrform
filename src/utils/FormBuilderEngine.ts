@@ -509,6 +509,7 @@ const INTERNAL_FIELDS = [
   "_enabIfVal",
   "_textCustomised",
   "spChoicesSource",
+  "spFilteredListSource",
   "variantKey",
 ];
 
@@ -694,9 +695,11 @@ export function validateFields(
 
       const choiceTypes = ["dropdown", "radiogroup", "checkbox"];
       if (choiceTypes.includes(f.type)) {
-        // Skip local choices check if pulling from SharePoint (both list and column must be set)
+        // Skip local choices check if pulling from SharePoint or filtered list
         const spSource = (f as unknown as Record<string, unknown>).spChoicesSource as { list?: string; column?: string } | undefined;
-        if (!spSource?.list || !spSource?.column) {
+        const flSource = (f as unknown as Record<string, unknown>).spFilteredListSource as { list?: string; valueColumn?: string } | undefined;
+        const hasExternalSource = (spSource?.list && spSource?.column) || (flSource?.list && flSource?.valueColumn);
+        if (!hasExternalSource) {
           const choices = f.choices ?? [];
           if (choices.length < 2) {
             errors.push({

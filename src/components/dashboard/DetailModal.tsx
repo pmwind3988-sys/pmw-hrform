@@ -25,6 +25,7 @@ import {
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
 import StatusBadge from "./StatusBadge";
 import EvaluationSummary from "../builder/EvaluationSummary";
+import DOMPurify from "dompurify";
 
 const SKIP = new Set([
   "Id", "_authorEmail", "AuthorId", "EditorId", "FormVersion", "FormStatus",
@@ -502,7 +503,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                                   backgroundColor: "rgba(0,0,0,0.02)",
                                 },
                               }}
-                              dangerouslySetInnerHTML={{ __html: value }}
+                              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
                             />
                           </Box>
                         </Grid>

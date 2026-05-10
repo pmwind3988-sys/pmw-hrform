@@ -76,10 +76,15 @@ export async function saveFormVersion(
     surveyJson: unknown;
     meta: unknown;
     changedBy: string;
+    layerConfig?: unknown;
   }
 ): Promise<void> {
   await ensureListExists(token, 'Web Form Versions');
-  const jsonStr = JSON.stringify({ surveyJson: params.surveyJson, meta: params.meta, version: params.version, savedAt: new Date().toISOString(), changedBy: params.changedBy }, null, 2);
+  const jsonStr = JSON.stringify({
+    surveyJson: params.surveyJson, meta: params.meta, version: params.version,
+    savedAt: new Date().toISOString(), changedBy: params.changedBy,
+    layerConfig: params.layerConfig,
+  }, null, 2);
   const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(params.listTitle)}' and FormVersion eq '${encodeURIComponent(params.version)}'&$select=Id&$top=1`).catch(() => ({ value: [] })) as { value?: { Id: number }[] };
   const body = {
     Title: `${params.listTitle} v${params.version}`,
@@ -239,6 +244,55 @@ export async function getChoiceColumnsForList(listTitle: string, token: string):
         : (rawChoices?.results || []);
       return { title: field.Title, typeKind: field.FieldTypeKind, choices: choiceArr };
     });
+}
+
+/**
+ * Fetch all columns from a SharePoint list (not just choice columns).
+ * Used for the filter column picker in Filtered List Source.
+ */
+export async function getAllColumnsForList(listTitle: string, token: string): Promise<{ title: string; typeKind: number }[]> {
+  const encoded = encodeURIComponent(listTitle);
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/fields?$select=Title,FieldTypeKind&$filter=Hidden eq false and ReadOnlyField eq false`;
+  try {
+    const data = await spGet(token, url) as { value?: { Title?: string; FieldTypeKind: number }[] };
+    return (data.value || [])
+      .filter(f => !!f.Title && f.Title !== "Content Type" && f.Title !== "Title")
+      .map(f => ({ title: f.Title!, typeKind: f.FieldTypeKind }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch distinct values from a list column, with optional OData filter.
+ * Used by the Filtered List choice source at runtime.
+ */
+export async function getFilteredListChoices(
+  listTitle: string,
+  valueColumn: string,
+  token: string,
+  filterColumn?: string,
+  filterValue?: string,
+): Promise<string[]> {
+  const encoded = encodeURIComponent(listTitle);
+  let url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${encodeURIComponent(valueColumn)}&$top=5000`;
+  if (filterColumn && filterValue) {
+    url += `&$filter=${encodeURIComponent(filterColumn)} eq '${encodeURIComponent(filterValue)}'`;
+  }
+  try {
+    const data = await spGet(token, url) as { value?: Record<string, unknown>[] };
+    const raw = data.value || [];
+    const values = new Set<string>();
+    for (const item of raw) {
+      const v = item[valueColumn];
+      if (v != null && v !== "") {
+        values.add(String(v));
+      }
+    }
+    return Array.from(values).sort();
+  } catch {
+    return [];
+  }
 }
 
 export function slugify(str: string): string {
@@ -682,6 +736,8 @@ export interface DeleteFormResult {
   versionsDeleted: number;
   logEntriesDeleted: number;
   approversDeleted: number;
+  responseListDeleted?: boolean;
+  responseItemsDeleted?: number;
 }
 
 /**
@@ -697,6 +753,28 @@ export async function deleteForm(token: string, formTitle: string, formId: strin
   ]);
   await deleteFormConfig(token, formId);
   return { configDeleted: true, versionsDeleted, logEntriesDeleted, approversDeleted };
+}
+
+/**
+ * Deletes the entire response list for a form (e.g. "Training Form Responses").
+ * Uses SharePoint REST API to delete the list itself, not just its items.
+ */
+export async function deleteResponseList(token: string, formTitle: string): Promise<boolean> {
+  const listName = `${formTitle} Responses`;
+  const exists = await listExists(token, listName);
+  if (!exists) return false;
+  await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')`);
+  return true;
+}
+
+/**
+ * Hard-delete: deletes the form AND its entire response list with all submissions.
+ * Use with extreme caution — data cannot be recovered.
+ */
+export async function hardDeleteForm(token: string, formTitle: string, formId: string): Promise<DeleteFormResult> {
+  const baseResult = await deleteForm(token, formTitle, formId);
+  const responseListDeleted = await deleteResponseList(token, formTitle);
+  return { ...baseResult, responseListDeleted };
 }
 
 // ── Form Versions (from reference) ────────────────────────────────────────
@@ -926,10 +1004,18 @@ export async function provisionResponseList(
       let choiceValues: string[] | undefined;
       if (kind.FieldTypeKind === 6 || kind.FieldTypeKind === 15) {
         const src = (q as { spChoicesSource?: { list?: string; column?: string } }).spChoicesSource;
+        const flSrc = (q as { spFilteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string } }).spFilteredListSource;
         if (src?.list && src?.column) {
           try {
             choiceValues = await getSharePointChoices(src.list, src.column, token);
             onLog(`  ↳ Fetched ${choiceValues.length} choices from "${src.list}.${src.column}"`, 'info');
+          } catch {
+            choiceValues = [];
+          }
+        } else if (flSrc?.list && flSrc?.valueColumn) {
+          try {
+            choiceValues = await getFilteredListChoices(flSrc.list, flSrc.valueColumn, token, flSrc.filterColumn, flSrc.filterValue);
+            onLog(`  ↳ Fetched ${choiceValues.length} choices from filtered list "${flSrc.list}.${flSrc.valueColumn}"`, 'info');
           } catch {
             choiceValues = [];
           }

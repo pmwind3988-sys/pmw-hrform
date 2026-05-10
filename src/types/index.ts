@@ -99,10 +99,17 @@ export interface EvaluationLayerConfig extends BaseLayer {
 
 export type LayerConfigItem = ApprovalLayerConfig | EvaluationLayerConfig;
 
+export interface ManualBranch {
+  name: string;
+  label: string;
+  layers: LayerConfigItem[];
+}
+
 export interface LayerConfig {
   version: "1.0";
   layers: LayerConfigItem[];
   routing?: ConditionalRouting[];
+  manualBranches?: ManualBranch[];
 }
 
 export interface ConditionalRouting {
@@ -399,11 +406,11 @@ export interface FormBuilderField {
   mustScrollToBottom?: boolean;
   dynamicmatrix?: boolean;
   matrixColumns?: string[];
-  columns?: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string } }[];
+  columns?: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
   rowHeaders?: string[];
   addRowText?: string;
   // Table Input
-  tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; required?: boolean }[];
+  tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean }; required?: boolean }[];
   // Ranking
   rankItems?: string[];
   minItems?: number;
@@ -425,6 +432,14 @@ export interface FormBuilderField {
     labelColumn?: string;
     multiSelect?: boolean;
     filter?: string;
+    choicesLoaded?: boolean;
+  };
+  spFilteredListSource?: {
+    list?: string;
+    valueColumn?: string;
+    labelColumn?: string;
+    filterColumn?: string;
+    filterValue?: string;
     choicesLoaded?: boolean;
   };
   // Data Table

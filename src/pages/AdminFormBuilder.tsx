@@ -52,6 +52,7 @@ import {
   listExists,
   createSpList,
   deleteForm,
+  hardDeleteForm,
   getSharePointChoices,
 } from "../utils/formBuilderSP";
 
@@ -191,6 +192,8 @@ export default function AdminFormBuilder() {
   const [sidebarTab, setSidebarTab] = useState("meta");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sidebarTabsRef = useRef<HTMLDivElement>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const resizingRef = useRef(false);
   const [canSidebarScrollLeft, setCanSidebarScrollLeft] = useState(false);
   const [canSidebarScrollRight, setCanSidebarScrollRight] = useState(false);
   const [versionHistory, setVersionHistory] = useState<{ FormVersion: string; PublishedBy?: string; PublishedAt?: string }[]>([]);
@@ -203,7 +206,9 @@ export default function AdminFormBuilder() {
   const [provOk, setProvOk] = useState(false);
   const [provErr, setProvErr] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ Id?: string; Title: string } | null>(null);
+  const [hardDeleteConfirm, setHardDeleteConfirm] = useState<{ Id?: string; Title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [approvalRules, setApprovalRules] = useState<{ conditionField: string; rules: { when: string; layers: { email: string; name: string; role: string }[] }[] } | null>(null);
   const [layerConfig, setLayerConfig] = useState<LayerConfig | null>(null);
@@ -213,6 +218,13 @@ export default function AdminFormBuilder() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  useEffect(() => {
+    if (accessDenied) {
+      showToast("Access denied — redirecting to dashboard. You need HR Form Owner permissions.", "err");
+      setAccessDenied(false);
+    }
+  }, [accessDenied, showToast]);
 
   const checkSidebarScrollState = () => {
     const el = sidebarTabsRef.current;
@@ -236,6 +248,28 @@ export default function AdminFormBuilder() {
     checkSidebarScrollState();
     window.addEventListener('resize', checkSidebarScrollState);
     return () => window.removeEventListener('resize', checkSidebarScrollState);
+  }, []);
+
+  // ── Sidebar resize via drag ────────────────────────────────────────────
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!resizingRef.current) return;
+      // side = right sidebar, so dragging from main content area
+      // width = distance from right edge of viewport to cursor
+      const newWidth = Math.max(220, Math.min(800, window.innerWidth - e.clientX));
+      setSidebarWidth(newWidth);
+    };
+    const onMouseUp = () => {
+      resizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
   }, []);
 
   const proposedVersion = useMemo(() => {
@@ -271,12 +305,13 @@ export default function AdminFormBuilder() {
   useEffect(() => {
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) {
-      navigate("/");
+      navigate("/user/dashboard");
       return;
     }
     createSpClient(instance, accounts).isGroupMember(SP_STATIC.adminGroup).then(async admin => {
       if (!admin) {
-        navigate("/");
+        setAccessDenied(true);
+        setTimeout(() => navigate("/user/dashboard"), 200);
         return;
       }
       setAuthChecked(true);
@@ -403,6 +438,10 @@ export default function AdminFormBuilder() {
     setDeleteConfirm({ Id: f.Id, Title: f.Title });
   };
 
+  const handleHardDelete = (f: { Id?: string; Title: string }) => {
+    setHardDeleteConfirm({ Id: f.Id, Title: f.Title });
+  };
+
   const handleDeleteConfirm = async () => {
     if (!deleteConfirm || !tokenRef.current) return;
     setDeleting(true);
@@ -416,7 +455,6 @@ export default function AdminFormBuilder() {
         `Deleted "${deleteConfirm.Title}" — ${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed.`,
         "ok"
       );
-      // If the deleted form was the currently edited form, reset to new
       if (meta.formTitle === deleteConfirm.Title) {
         handleNew();
       }
@@ -426,6 +464,36 @@ export default function AdminFormBuilder() {
     } finally {
       setDeleting(false);
       setDeleteConfirm(null);
+    }
+  };
+
+  const handleHardDeleteConfirm = async () => {
+    if (!hardDeleteConfirm || !tokenRef.current) return;
+    setDeleting(true);
+    try {
+      const result = await hardDeleteForm(
+        tokenRef.current,
+        hardDeleteConfirm.Title,
+        hardDeleteConfirm.Id || "",
+      );
+      const parts: string[] = [];
+      if (result.responseListDeleted) {
+        parts.push("response list deleted entirely");
+      }
+      parts.push(`${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed`);
+      showToast(
+        `Hard-deleted "${hardDeleteConfirm.Title}" — ${parts.join("; ")}.`,
+        "ok"
+      );
+      if (meta.formTitle === hardDeleteConfirm.Title) {
+        handleNew();
+      }
+      refreshLib();
+    } catch (e) {
+      showToast(`Hard delete failed: ${(e as Error).message}`, "err");
+    } finally {
+      setDeleting(false);
+      setHardDeleteConfirm(null);
     }
   };
 
@@ -605,6 +673,7 @@ export default function AdminFormBuilder() {
         surveyJson: usedJson,
         meta: { isoStandards: meta.isoStandards, companies: meta.companies, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
         changedBy: userEmail,
+        layerConfig: layerConfig,
       });
       pLog(`Version saved`, "ok");
 
@@ -852,7 +921,7 @@ export default function AdminFormBuilder() {
       <div style={{ flex: 1, display: "flex", overflow: "hidden", height: "calc(100vh - 52px)" }}>
         {libraryOpen && (
           <div style={{ width: 215, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.white, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <FormLibrary forms={allForms} onEdit={loadForEdit} onNew={handleNew} onDelete={handleDelete} current={meta.formTitle} />
+            <FormLibrary forms={allForms} onEdit={loadForEdit} onNew={handleNew} onDelete={handleDelete} onHardDelete={handleHardDelete} current={meta.formTitle} />
           </div>
         )}
 
@@ -873,7 +942,24 @@ export default function AdminFormBuilder() {
         </div>
 
         {sidebarOpen && (
-          <div style={{ width: 300, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.white, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ width: sidebarWidth, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.white, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+            {/* Drag handle for resizing */}
+            <div
+              onMouseDown={() => {
+                resizingRef.current = true;
+                document.body.style.cursor = "ew-resize";
+                document.body.style.userSelect = "none";
+              }}
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 4,
+                cursor: "ew-resize",
+                zIndex: 10,
+              }}
+            />
             <div style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
               <button
                 onClick={sidebarScrollLeft}
@@ -1250,6 +1336,100 @@ export default function AdminFormBuilder() {
               >
                 {deleting && <Spinner size={14} />}
                 {deleting ? "Deleting…" : "Delete Forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hardDeleteConfirm && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 10001,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(127,29,29,0.45)",
+          animation: "fadeUp .15s ease",
+        }}>
+          <div style={{
+            background: C.white,
+            borderRadius: 16,
+            padding: "24px 28px",
+            maxWidth: 420,
+            width: "90%",
+            boxShadow: C.shadowMd,
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>💀</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#991B1B", marginBottom: 6 }}>
+              Permanently delete ALL data for &ldquo;{hardDeleteConfirm.Title}&rdquo;?
+            </div>
+            <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.6, marginBottom: 6 }}>
+              This will completely destroy everything related to this form:
+            </div>
+            <div style={{
+              fontSize: 12,
+              color: "#991B1B",
+              lineHeight: 1.7,
+              marginBottom: 16,
+              textAlign: "left",
+              background: "#FEF2F2",
+              borderRadius: 8,
+              padding: "10px 14px",
+              border: "1px solid #FECACA",
+            }}>
+              <div>✦ Form configuration (Master Form)</div>
+              <div>✦ All version history (Web Form Versions)</div>
+              <div>✦ Audit log entries (Form Builder Log)</div>
+              <div>✦ Approver records (Approvers)</div>
+              <div style={{ fontWeight: 700 }}>✦ ALL submissions in &ldquo;{hardDeleteConfirm.Title} Responses&rdquo; list</div>
+            </div>
+            <div style={{ fontSize: 11, color: C.red, fontWeight: 600, marginBottom: 18 }}>
+              ⚠ This action is irreversible. All submission data will be permanently lost.
+            </div>
+            <div style={{ display: "flex", gap: 9, justifyContent: "center" }}>
+              <button
+                onClick={() => setHardDeleteConfirm(null)}
+                disabled={deleting}
+                style={{
+                  height: 36,
+                  padding: "0 20px",
+                  borderRadius: 9,
+                  border: `1px solid ${C.border}`,
+                  background: C.white,
+                  color: C.textSecond,
+                  fontSize: 13,
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  opacity: deleting ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleHardDeleteConfirm}
+                disabled={deleting}
+                style={{
+                  height: 36,
+                  padding: "0 24px",
+                  borderRadius: 9,
+                  border: "none",
+                  background: `linear-gradient(135deg,#DC2626,#991B1B)`,
+                  color: C.white,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  opacity: deleting ? 0.6 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {deleting && <Spinner size={14} />}
+                {deleting ? "Deleting…" : "Delete Everything"}
               </button>
             </div>
           </div>
