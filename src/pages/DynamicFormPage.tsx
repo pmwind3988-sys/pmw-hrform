@@ -206,15 +206,23 @@ export default function DynamicFormPage() {
             throw new Error("API route is returning source code instead of executing. Make sure you're running 'vercel dev' (not 'npm run dev').");
           }
 
+          // Check HTTP status before attempting JSON parse
+          if (!res.ok) {
+            let errorDetail: string;
+            try {
+              const errJson = JSON.parse(responseText);
+              errorDetail = errJson.error || `Server error: ${res.status}`;
+            } catch {
+              errorDetail = `Server returned status ${res.status}: ${responseText.substring(0, 200)}`;
+            }
+            throw new Error(errorDetail);
+          }
+
           let parsed: { error?: string; formConfig?: Record<string, unknown>; surveyJson?: Record<string, unknown>; meta?: Record<string, unknown> };
           try {
             parsed = JSON.parse(responseText);
           } catch {
             throw new Error(`Server returned non-JSON: ${responseText.substring(0, 200)}`);
-          }
-
-          if (!res.ok) {
-            throw new Error(parsed.error || `Server error: ${res.status}`);
           }
 
           if (!parsed.formConfig) {
