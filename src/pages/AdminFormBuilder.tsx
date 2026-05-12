@@ -332,6 +332,8 @@ export default function AdminFormBuilder() {
         console.error("[AFB] token:", e);
         showToast("Authentication error — please refresh.", "err");
       }
+    }).catch(e => {
+      console.warn("[AFB] init effect error:", e);
     });
   }, [isAuthenticated, inProgress, navigate, instance, accounts, showToast]);
 
@@ -342,71 +344,78 @@ export default function AdminFormBuilder() {
   }, []);
 
   const loadForEdit = useCallback(async (cfg: Record<string, unknown> | string) => {
-    const token = tokenRef.current;
-    if (!token) return;
-    const c = typeof cfg === "object" ? cfg : await getFormConfig(token, cfg);
-    if (!c) {
-      showToast(`Form not found.`, "err");
-      return;
-    }
-    const data = await getFormVersion(token, c.Title as string, c.CurrentVersion as string);
-    if (!data) {
-      showToast(`Version data not found.`, "err");
-      return;
-    }
-    const loaded = (data.surveyJson || data) as SurveyJson;
-    setInitialJson(loaded);
-    prevSurveyRef.current = loaded;
-    setViewingOld(null);
-    setMeta({
-      formTitle: c.Title as string,
-      formId: (c.FormID as string) || "",
-      formVersion: (c.CurrentVersion as string) || "1.0",
-      slug: (c.Slug as string) || slugify(c.Title as string),
-      isoStandards: (data.meta as Record<string, unknown>)?.isoStandards as string || "ISO 9001 · ISO 14001 · ISO 45001",
-      companies: (data.meta as Record<string, unknown>)?.companies as string || "PMW INDUSTRIES SDN BHD\nPMW CONCRETE INDUSTRIES SDN BHD\nPMW LIGHTING INDUSTRIES SDN BHD\nPMW WINABUMI SDN BHD",
-      logoUrl: ((data.meta as Record<string, unknown>)?.logoUrl as string) || "",
-    });
-    setShowBanner((data.meta as Record<string, unknown>)?.showBanner !== false);
-    setOriginalVersion(c.CurrentVersion as string);
-    setNumLayers((c.NumberOfApprovalLayer as number) || 0);
-    setSlugLocked(true);
-    setIsEditing(true);
-    setIsDraft(c.IsPublished === false);
-    setIsPublic(c.IsPublic !== false);
-    if (c.ApprovalRules) {
-      try {
-        setApprovalRules(JSON.parse(c.ApprovalRules as string));
-      } catch {
+    try {
+      const token = tokenRef.current;
+      if (!token) return;
+      const c = typeof cfg === "object" ? cfg : await getFormConfig(token, cfg);
+      if (!c) {
+        showToast(`Form not found.`, "err");
+        return;
+      }
+      const data = await getFormVersion(token, c.Title as string, c.CurrentVersion as string || "1.0");
+      if (!data) {
+        showToast(`Version data not found.`, "err");
+        return;
+      }
+      const loaded = (data.surveyJson || data) as SurveyJson;
+      setInitialJson(loaded);
+      prevSurveyRef.current = loaded;
+      setViewingOld(null);
+      setMeta({
+        formTitle: c.Title as string,
+        formId: (c.FormID as string) || "",
+        formVersion: (c.CurrentVersion as string) || "1.0",
+        slug: (c.Slug as string) || slugify(c.Title as string),
+        isoStandards: (data.meta as Record<string, unknown>)?.isoStandards as string || "ISO 9001 · ISO 14001 · ISO 45001",
+        companies: (data.meta as Record<string, unknown>)?.companies as string || "PMW INDUSTRIES SDN BHD\nPMW CONCRETE INDUSTRIES SDN BHD\nPMW LIGHTING INDUSTRIES SDN BHD\nPMW WINABUMI SDN BHD",
+        logoUrl: ((data.meta as Record<string, unknown>)?.logoUrl as string) || "",
+      });
+      setShowBanner((data.meta as Record<string, unknown>)?.showBanner !== false);
+      setOriginalVersion(c.CurrentVersion as string);
+      setNumLayers((c.NumberOfApprovalLayer as number) || 0);
+      setSlugLocked(true);
+      setIsEditing(true);
+      setIsDraft(c.IsPublished === false);
+      setIsPublic(c.IsPublic !== false);
+      if (c.ApprovalRules) {
+        try {
+          setApprovalRules(JSON.parse(c.ApprovalRules as string));
+        } catch {
+          setApprovalRules(null);
+        }
+      } else {
         setApprovalRules(null);
       }
-    } else {
-      setApprovalRules(null);
-    }
-    // Load enhanced LayerConfig if present, otherwise derive from legacy fields
-    if (c.LayerConfig) {
-      try {
-        const parsed = JSON.parse(c.LayerConfig as string) as LayerConfig;
-        setLayerConfig(parsed);
-        // Derive numLayers from layerConfig for backward compat
-        setNumLayers(parsed.layers.length);
-      } catch {
+      // Load enhanced LayerConfig if present, otherwise derive from legacy fields
+      if (c.LayerConfig) {
+        try {
+          const parsed = JSON.parse(c.LayerConfig as string) as LayerConfig;
+          setLayerConfig(parsed);
+          // Derive numLayers from layerConfig for backward compat
+          setNumLayers(parsed.layers.length);
+        } catch {
+          setLayerConfig(null);
+        }
+      } else {
         setLayerConfig(null);
       }
-    } else {
-      setLayerConfig(null);
+      getFormVersionHistory(token, c.Title as string).then(setVersionHistory).catch(() => {});
+      setLogLoading(true);
+      getFormLog(token, c.Title as string).then(l => {
+        setAuditLog(l);
+        setLogLoading(false);
+      }).catch(() => { setLogLoading(false); });
+    } catch (e) {
+      console.warn("[AFB] loadForEdit error:", e);
+      showToast(`Failed to load form: ${(e as Error).message}`, "err");
     }
-    getFormVersionHistory(token, c.Title as string).then(setVersionHistory);
-    setLogLoading(true);
-    getFormLog(token, c.Title as string).then(l => {
-      setAuditLog(l);
-      setLogLoading(false);
-    });
   }, [showToast]);
 
   useEffect(() => {
     if (!paramTitle || !authChecked || !tokenRef.current) return;
-    loadForEdit(decodeURIComponent(paramTitle));
+    loadForEdit(decodeURIComponent(paramTitle)).catch(e => {
+      console.warn("[AFB] URL param load error:", e);
+    });
   }, [paramTitle, authChecked, loadForEdit]);
 
   const handleNew = () => {
@@ -1140,7 +1149,7 @@ export default function AdminFormBuilder() {
                   <FB label="Form ID / Doc No." required>
                     <TextInput value={meta.formId} onChange={v => setM("formId", v)} placeholder="PMW-HR-001" />
                   </FB>
-                  <FB label="Version" hint={isEditing ? `Current: v${originalVersion} → New: v${proposedVersion}` : undefined}>
+                  <FB label="Version" hint={isEditing && !isDraft ? `Current: v${originalVersion} → New: v${proposedVersion}` : isEditing ? `v${meta.formVersion} (draft)` : undefined}>
                     {isEditing ? (
                       <div style={{ display: "flex", gap: 7 }}>
                         {(["minor", "major"] as const).map(m => (
@@ -1314,7 +1323,7 @@ export default function AdminFormBuilder() {
                     {[
                       ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing ⚠</em>],
                       ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing ⚠</em>],
-                      ["Version", isEditing ? `${originalVersion} → ${proposedVersion}` : meta.formVersion],
+                      ["Version", isEditing && !isDraft ? `${originalVersion} → ${proposedVersion}` : `v${meta.formVersion}${isDraft ? " (draft)" : ""}`],
                       ["Status", isDraft ? <span style={{ color: C.amber }}>📝 Draft</span> : isEditing ? <span style={{ color: C.green }}>✅ Published</span> : "—"],
                       ["Route", meta.slug ? `/form/${meta.slug}` : <em style={{ color: C.amber }}>No slug</em>],
                       ["Layers", numLayers || "None"],

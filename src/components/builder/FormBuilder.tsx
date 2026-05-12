@@ -858,6 +858,11 @@ function ChoicesEditor({ choices, onChange }: { choices: (string | { value: stri
 }
 
 function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onChange: (patch: Partial<FormBuilderField>) => void }) {
+  const isDateType = field.type === "date";
+  const isDateTimeType = field.type === "datetime";
+  const isDateOrDateTime = isDateType || isDateTimeType;
+  const useDynamicDefault = field.defaultValue === "__today__" || field.defaultValue === "__now__";
+
   const handleChange = (v: string) => {
     if (field.type === "number" || field.inputType === "number") {
       onChange({ defaultValue: v === "" ? undefined : Number(v) });
@@ -867,10 +872,39 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
       onChange({ defaultValue: v === "" ? undefined : v });
     }
   };
-  const currentValue = field.defaultValue !== undefined ? String(field.defaultValue) : "";
-  const inputType = field.type === "date" ? "date" : "text";
+  const currentValue = field.defaultValue !== undefined && !useDynamicDefault ? String(field.defaultValue) : "";
+  const inputType = isDateType ? "date" : isDateTimeType ? "datetime-local" : "text";
   return <PropRow label="Default value">
-    <Input type={inputType} value={currentValue} onChange={handleChange} placeholder="Enter default value" />
+    {isDateOrDateTime ? (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: C.textSecond, userSelect: "none" }}>
+          <input
+            type="checkbox"
+            checked={useDynamicDefault}
+            onChange={e => {
+              if (e.target.checked) {
+                onChange({ defaultValue: isDateType ? "__today__" : "__now__" });
+              } else {
+                onChange({ defaultValue: undefined });
+              }
+            }}
+            style={{ width: 15, height: 15, accentColor: C.purple, margin: 0 }} />
+          {isDateType ? "Default to today's date" : "Default to current time (now)"}
+        </label>
+        {!useDynamicDefault && (
+          <Input type={inputType} value={currentValue} onChange={handleChange} placeholder={isDateType ? "Pick a date" : "Pick date & time"} />
+        )}
+        {useDynamicDefault && (
+          <div style={{ fontSize: 10, color: C.textMuted, fontStyle: "italic" }}>
+            {isDateType
+              ? "Form will auto-fill with today's date when opened."
+              : "Form will auto-fill with the current date and time when opened."}
+          </div>
+        )}
+      </div>
+    ) : (
+      <Input type={inputType} value={currentValue} onChange={handleChange} placeholder="Enter default value" />
+    )}
   </PropRow>;
 }
 

@@ -95,7 +95,7 @@ export async function loadConfig(
 
   try {
     const configItems = await spClient.queryList("Master Form", {
-      select: ["Title", "FormID", "CurrentVersion", "NumberOfApprovalLayer", "ConditionField", "ApprovalRules", "LayerConfig"],
+      select: ["Title", "FormID", "CurrentVersion", "NumberOfApprovalLayer", "ConditionField", "ApprovalRules", "LayerConfig", "IsPublished"],
     });
 
     for (const item of configItems) {
@@ -104,6 +104,9 @@ export async function loadConfig(
       const totalLayers = Number(item.NumberOfApprovalLayer) || 1;
 
       if (!title) continue;
+
+      // Skip draft forms — only published forms appear in dashboards
+      if (item.IsPublished === false) continue;
 
       allowedTitles.add(title);
       layerConfig[title] = totalLayers;

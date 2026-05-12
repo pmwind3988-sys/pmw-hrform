@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import {
   useMsal,
   useIsAuthenticated,
@@ -193,6 +193,14 @@ function mapSubmission(
   };
 }
 
+/** Catch-all route fallback that redirects in an effect (not during render),
+ *  preventing race conditions with user-initiated navigations. */
+function CatchAllRedirect({ to }: { to: string }) {
+  const nav = useNavigate();
+  useEffect(() => { nav(to, { replace: true }); }, [nav, to]);
+  return null;
+}
+
 export default function App() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -220,10 +228,17 @@ export default function App() {
   const [submitterFilter, setSubmitterFilter] = useState("");
 
   const navigate = useNavigate();
+  const authInitializedRef = useRef(false);
 
-  // Auth state machine
+  // Auth state machine — runs only once after initial login
   useEffect(() => {
     if (inProgress !== "none") return;
+
+    // After the initial auth flow completes, ignore subsequent MSAL
+    // inProgress transitions (e.g. from silent token refreshes triggered
+    // by AdminFormBuilder's acquireTokenSilent) to prevent redirecting
+    // the user away from their current page.
+    if (authInitializedRef.current) return;
 
     if (isAuthenticated) {
       setPageState("loading");
@@ -349,6 +364,7 @@ if (decision === "guest") {
         setMissingConfigs(getMissingConfigs(visible, config.layerConfig));
         setLoadProgress(100);
         setLoadStatus("Ready.");
+        authInitializedRef.current = true;
         setPageState("ready");
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Unknown error occurred";
@@ -362,9 +378,11 @@ if (decision === "guest") {
     fetchData();
   }, [pageState, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Navigate to preserved route after successful login
+  // Navigate to preserved route after successful login — fires only once
+  const postAuthRedirectRef = useRef(false);
   useEffect(() => {
-    if (pageState === "ready" && isAuthenticated) {
+    if (pageState === "ready" && isAuthenticated && !postAuthRedirectRef.current) {
+      postAuthRedirectRef.current = true;
       try {
         const redirectPath = sessionStorage.getItem("pmw_post_login_redirect");
         if (redirectPath) {
@@ -673,7 +691,7 @@ if (decision === "guest") {
             path="*"
             element={
               pageState === "ready" ? (
-                <Navigate to={isAdmin ? "/admin/dashboard" : "/user/dashboard"} replace />
+                <CatchAllRedirect to={isAdmin ? "/admin/dashboard" : "/user/dashboard"} />
               ) : (
                 adminDashboardInner
               )

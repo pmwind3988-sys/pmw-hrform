@@ -55,7 +55,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Basic",
     description: "Date picker input",
     spColumnKind: 4,
-    defaultProps: { inputType: "date", defaultValue: new Date().toISOString().split("T")[0], minDate: "", maxDate: "", disableWeekends: false },
+    defaultProps: { inputType: "date", minDate: "", maxDate: "", disableWeekends: false },
   },
   {
     type: "datetime",
@@ -630,6 +630,14 @@ export function buildSurveyJson(
       for (const [key, val] of Object.entries(mapped)) {
         if (INTERNAL_FIELDS.includes(key)) continue;
         if (val !== undefined) cleaned[key] = val;
+      }
+      // Handle dynamic default markers for date/datetime
+      if (cleaned.defaultValue === "__today__") {
+        cleaned.defaultValueExpression = "today()";
+        delete cleaned.defaultValue;
+      } else if (cleaned.defaultValue === "__now__") {
+        cleaned.defaultValueExpression = "now()";
+        delete cleaned.defaultValue;
       }
       // Map internal `collapsed` boolean to SurveyJS `state` string
       if (f.type === "panel" && cleaned.collapsible) {
