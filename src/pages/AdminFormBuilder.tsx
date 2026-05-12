@@ -164,7 +164,7 @@ export default function AdminFormBuilder() {
   const [authChecked, setAuthChecked] = useState(false);
   const [siteUsers, setSiteUsers] = useState<{ email: string; name: string }[]>([]);
   const tokenRef = useRef<string | null>(null);
-  const [allForms, setAllForms] = useState<{ Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; NumberOfApprovalLayer?: number; IsPublic?: boolean; ApprovalRules?: string }[]>([]);
+  const [allForms, setAllForms] = useState<{ Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; NumberOfApprovalLayer?: number; IsPublic?: boolean; IsPublished?: boolean; ApprovalRules?: string }[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [originalVersion, setOriginalVersion] = useState<string | null>(null);
@@ -184,6 +184,7 @@ export default function AdminFormBuilder() {
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugLocked, setSlugLocked] = useState(false);
   const [slugManual, setSlugManual] = useState(false);
+  const [isDraft, setIsDraft] = useState(false);
   const [numLayers, setNumLayers] = useState(0);
   const [layers, setLayers] = useState<{ email: string; name: string }[]>(Array.from({ length: 5 }, () => ({ email: "", name: "" })));
   const [surveyJson, setSurveyJson] = useState<SurveyJson | null>(null);
@@ -371,6 +372,7 @@ export default function AdminFormBuilder() {
     setNumLayers((c.NumberOfApprovalLayer as number) || 0);
     setSlugLocked(true);
     setIsEditing(true);
+    setIsDraft(c.IsPublished === false);
     setIsPublic(c.IsPublic !== false);
     if (c.ApprovalRules) {
       try {
@@ -430,9 +432,67 @@ export default function AdminFormBuilder() {
     setNumLayers(0);
     setLayers(Array.from({ length: 5 }, () => ({ email: "", name: "" })));
     setLayerConfig(null);
+    setIsDraft(false);
     setIsPublic(true);
     navigate("/admin/builder");
   };
+
+  const handleSaveDraft = useCallback(async () => {
+    if (!meta.formTitle.trim()) {
+      showToast("Form title required.", "err");
+      setSidebarTab("meta");
+      return;
+    }
+    const token = tokenRef.current;
+    if (!token) { showToast("Auth unavailable.", "err"); return; }
+    const usedJson = surveyJson;
+    if (!usedJson) { showToast("No fields yet.", "err"); return; }
+    const version = "1.0";
+    const userEmail = accounts[0]?.username || "admin";
+    try {
+      const layerConfigToSave = layerConfig || (numLayers > 0 ? {
+        version: "1.0" as const,
+        layers: layers.slice(0, numLayers).map((l, i): import("../types").LayerConfigItem => ({
+          layerNumber: i + 1,
+          type: "approval" as const,
+          authMode: "365" as const,
+          assignee: { type: "user" as const, value: l.email },
+          title: `Layer ${i + 1}`,
+          confirmationType: "signature" as const,
+          allowRejectionReason: true,
+        })),
+      } : null);
+      await upsertFormConfig(token, meta.formTitle.trim(), {
+        formId: meta.formId.trim() || undefined,
+        numLayers: layerConfig ? layerConfig.layers.length : numLayers,
+        slug: meta.slug,
+        version,
+        isPublished: false,
+        isPublic,
+        conditionField: approvalRules?.conditionField || layerConfig?.routing?.[0]?.conditionField || "",
+        approvalRules: approvalRules || null,
+        layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
+      });
+      await saveFormVersion(token, {
+        listTitle: meta.formTitle.trim(),
+        slug: meta.slug,
+        version,
+        surveyJson: usedJson,
+        meta: { isoStandards: meta.isoStandards, companies: meta.companies, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
+        changedBy: userEmail,
+        layerConfig: layerConfig,
+      });
+      setIsDraft(true);
+      setIsEditing(true);
+      setOriginalVersion(version);
+      setSlugLocked(true);
+      setMeta(m => ({ ...m, formVersion: version }));
+      showToast(`Draft saved for "${meta.formTitle}".`, "ok");
+      refreshLib();
+    } catch (e) {
+      showToast(`Save draft failed: ${(e as Error).message}`, "err");
+    }
+  }, [meta, surveyJson, numLayers, layers, slugError, isPublic, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib]);
 
   const handleDelete = (f: { Id?: string; Title: string }) => {
     setDeleteConfirm({ Id: f.Id, Title: f.Title });
@@ -545,7 +605,7 @@ export default function AdminFormBuilder() {
       showToast("Auth unavailable.", "err");
       return;
     }
-    const version = isEditing ? proposedVersion : meta.formVersion;
+    const version = isEditing && !isDraft ? proposedVersion : meta.formVersion;
     const title = meta.formTitle.trim();
     const userEmail = accounts[0]?.username || "admin";
     // Derive effective numLayers from layerConfig if present
@@ -559,7 +619,7 @@ export default function AdminFormBuilder() {
       const diffs = diffSurveyJson(prevSurveyRef.current, usedJson) as { type: string; summary: string; before: unknown; after: unknown }[];
       const conflict = await checkSlugConflict(token, meta.slug, isEditing ? title : null);
       if (conflict) throw new Error(`Slug "${meta.slug}" used by "${conflict}".`);
-      if (isEditing && originalVersion && !isVersionGreater(version, originalVersion)) throw new Error(`v${version} must be > v${originalVersion}.`);
+      if (isEditing && originalVersion && !isDraft && !isVersionGreater(version, originalVersion)) throw new Error(`v${version} must be > v${originalVersion}.`);
 
       pLog(`Checking list "${title}"…`);
       if (!(await listExists(token, title))) {
@@ -720,6 +780,7 @@ export default function AdminFormBuilder() {
       setOriginalVersion(version);
       setMeta(m => ({ ...m, formVersion: version }));
       setIsEditing(true);
+      setIsDraft(false);
       setSlugLocked(true);
       refreshLib();
       getFormVersionHistory(token, title).then(setVersionHistory);
@@ -818,6 +879,7 @@ export default function AdminFormBuilder() {
           </span>
           <Tag color={C.amber} bg={C.amberPale}>⚙ Admin</Tag>
           {isEditing && <Tag>v{meta.formVersion}</Tag>}
+          {isDraft && <Tag color={C.amber} bg={C.amberPale}>Draft</Tag>}
           {meta.slug && (
             <a
                   href={`/form/${meta.slug}`}
@@ -880,8 +942,35 @@ export default function AdminFormBuilder() {
           >
             <SettingsIcon style={{ fontSize: 14 }} /> Settings
           </button>
+          {(!isEditing || isDraft) && (
+            <button
+              onClick={() => handleSaveDraft()}
+              disabled={!meta.formTitle.trim() || !!viewingOld}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                height: 30,
+                padding: "0 14px",
+                border: `1px solid ${C.border}`,
+                borderRadius: 7,
+                background: C.white,
+                color: C.textSecond,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: !meta.formTitle.trim() || viewingOld ? "not-allowed" : "pointer",
+                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                opacity: !meta.formTitle.trim() || viewingOld ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => { if (!viewingOld) e.currentTarget.style.background = C.offWhite; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = C.white; }}
+            >
+              💾 Save Draft
+            </button>
+          )}
           <button
             onClick={() => handlePublish(surveyJson as SurveyJson)}
+            disabled={!!viewingOld}
             style={{
               display: "flex",
               alignItems: "center",
@@ -890,16 +979,17 @@ export default function AdminFormBuilder() {
               padding: "0 16px",
               border: "none",
               borderRadius: 7,
-              background: `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
+              background: viewingOld ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
               color: C.white,
               fontSize: 12,
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: viewingOld ? "not-allowed" : "pointer",
               fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-              boxShadow: "0 2px 8px rgba(91,33,182,.25)",
+              boxShadow: viewingOld ? "none" : "0 2px 8px rgba(91,33,182,.25)",
+              opacity: viewingOld ? 0.5 : 1,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 12px rgba(91,33,182,.35)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(91,33,182,.25)"; }}
+            onMouseEnter={(e) => { if (!viewingOld) e.currentTarget.style.boxShadow = "0 4px 12px rgba(91,33,182,.35)"; }}
+            onMouseLeave={(e) => { if (!viewingOld) e.currentTarget.style.boxShadow = "0 2px 8px rgba(91,33,182,.25)"; }}
           >
             <RocketLaunchIcon style={{ fontSize: 14 }} /> Publish
           </button>
@@ -1225,6 +1315,7 @@ export default function AdminFormBuilder() {
                       ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing ⚠</em>],
                       ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing ⚠</em>],
                       ["Version", isEditing ? `${originalVersion} → ${proposedVersion}` : meta.formVersion],
+                      ["Status", isDraft ? <span style={{ color: C.amber }}>📝 Draft</span> : isEditing ? <span style={{ color: C.green }}>✅ Published</span> : "—"],
                       ["Route", meta.slug ? `/form/${meta.slug}` : <em style={{ color: C.amber }}>No slug</em>],
                       ["Layers", numLayers || "None"],
                       ["Banner", showBanner ? "✅ Visible" : "🚫 Hidden"],
@@ -1240,6 +1331,28 @@ export default function AdminFormBuilder() {
                     <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: C.red, marginBottom: 10 }}>
                       ⚠ {slugError}
                     </div>
+                  )}
+                  {(!isEditing || isDraft) && (
+                    <button
+                      onClick={() => handleSaveDraft()}
+                      disabled={!meta.formTitle.trim() || !!viewingOld}
+                      style={{
+                        width: "100%",
+                        padding: "10px 0",
+                        borderRadius: 9,
+                        border: `1px solid ${C.border}`,
+                        background: C.white,
+                        color: !meta.formTitle.trim() || viewingOld ? C.textMuted : C.textSecond,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: !meta.formTitle.trim() || viewingOld ? "not-allowed" : "pointer",
+                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                        marginBottom: 8,
+                        opacity: !meta.formTitle.trim() || viewingOld ? 0.5 : 1,
+                      }}
+                    >
+                      💾 Save Draft
+                    </button>
                   )}
                   <button
                     onClick={() => handlePublish(surveyJson as SurveyJson)}
@@ -1257,7 +1370,7 @@ export default function AdminFormBuilder() {
                       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                     }}
                   >
-                    {viewingOld ? "⚠ Close version preview to publish" : "🚀 Publish to SharePoint"}
+                    {viewingOld ? "⚠ Close version preview to publish" : isDraft ? "🚀 Publish (make live)" : "🚀 Publish to SharePoint"}
                   </button>
                 </div>
               )}

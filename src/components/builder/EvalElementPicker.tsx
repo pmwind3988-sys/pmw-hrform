@@ -235,12 +235,32 @@ function EvalElementPropertyPanel({
             <textarea value={(el.description as string) || ""} onChange={e => onChange(idx, "description", e.target.value)}
               placeholder="Optional helper text" style={textareaStyle} rows={2} />
           </PropRow>
-          {el.type !== "boolean" && el.type !== "signaturepad" && el.type !== "consent" && (
+          {el.type !== "boolean" && el.type !== "signaturepad" && el.type !== "consent" && el.type !== "formula" && (
             <PropRow label="Placeholder">
               <input value={(el.placeholder as string) || ""} onChange={e => onChange(idx, "placeholder", e.target.value)}
                 placeholder="Placeholder text" style={inp} />
             </PropRow>
           )}
+          
+          {el.type === "formula" && <>
+            <PropRow label="Expression / Formula">
+              <textarea value={(el.expression as string) || ""} onChange={e => onChange(idx, "expression", e.target.value)}
+                placeholder="e.g. {field1} + {field2}" rows={3}
+                style={{ ...inp, height: "auto", minHeight: 56, padding: "8px 9px", resize: "vertical", lineHeight: 1.5, fontFamily: "monospace" }} />
+              <div style={{ fontSize: 9, color: C.textMuted, marginTop: 3, lineHeight: 1.4 }}>
+                Use <code style={{ background: "#F3F4F6", padding: "1px 3px", borderRadius: 2, fontSize: 9 }}>{'{field_name}'}</code> syntax.
+                Supports +, -, *, / and parentheses.
+              </div>
+            </PropRow>
+            <PropRow label="Display format">
+              <select value={(el.displayFormat as string) || "number"} onChange={e => onChange(idx, "displayFormat", e.target.value)} style={inp}>
+                <option value="number">Number</option>
+                <option value="currency">Currency (RM)</option>
+                <option value="percent">Percentage</option>
+              </select>
+            </PropRow>
+          </>}
+
           {isComment && (
             <PropRow label="Visible rows">
               <input type="number" min={1} max={20} value={String((el.rows as number) ?? 4)} onChange={e => onChange(idx, "rows", parseInt(e.target.value) || 4)}

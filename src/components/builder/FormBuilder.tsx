@@ -871,6 +871,27 @@ function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange
       <PropRow label="Step"><Input type="number" value={field.step ?? ""} onChange={v => onChange({ step: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
     </>}
 
+    {/* Formula: expression editor + displayFormat + recalculate toggle */}
+    {field.type === "formula" && <>
+      <PropRow label="Expression / Formula" span>
+        <Textarea value={field.expression || ""} onChange={v => onChange({ expression: v })} rows={3} placeholder="e.g. {field1} + {field2}" />
+        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+          Use <code style={{ background: "#F3F4F6", padding: "1px 4px", borderRadius: 3, fontSize: 10 }}>{'{field_name}'}</code> syntax to reference other fields.
+          Supports <strong>+</strong>, <strong>-</strong>, <strong>*</strong>, <strong>/</strong>, parentheses, and SurveyJS expression functions.
+        </div>
+      </PropRow>
+      <PropRow label="Display format">
+        <Select value={field.displayFormat || "number"} onChange={v => onChange({ displayFormat: v })} options={[
+          { value: "number", label: "Number" },
+          { value: "currency", label: "Currency (RM)" },
+          { value: "percent", label: "Percentage" },
+        ]} />
+      </PropRow>
+      <div style={{ paddingTop: 4 }}>
+        <Toggle checked={field.recalculateOnChange !== false} onChange={v => onChange({ recalculateOnChange: v })} label="Auto-recalculate on change" />
+      </div>
+    </>}
+
     {/* Date: minDate / maxDate / disableWeekends */}
     {dateTypes.includes(field.type) && <>
       <div style={{ display: "flex", gap: 8 }}>
@@ -1318,7 +1339,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
         </PropRow>
         <PropRow label="Label" span><Input value={field.title} onChange={v => onChange({ title: v })} placeholder="Question label" /></PropRow>
         <PropRow label="Description / hint" span><Input value={field.description || ""} onChange={v => onChange({ description: v })} placeholder="Optional helper text" /></PropRow>
-        {!["html", "dynamicmatrix", "file"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
+        {!["html", "dynamicmatrix", "file", "formula"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
         {field.type === "text" && <PropRow label="Input type"><Select value={field.inputType || "text"} onChange={v => onChange({ inputType: v })} options={[{ value: "text", label: "Text" }, { value: "email", label: "Email" }, { value: "number", label: "Number" }, { value: "date", label: "Date" }, { value: "datetime-local", label: "Date & Time" }, { value: "tel", label: "Phone" }, { value: "url", label: "URL" }, { value: "password", label: "Password" }]} /></PropRow>}
         {field.type === "text" && (!field.inputType || field.inputType === "text") && <PropRow label="Autocapitalize"><Select value={field.autocapitalize || "none"} onChange={v => onChange({ autocapitalize: v as "none" | "sentences" | "words" | "characters" })} options={[{ value: "none", label: "None" }, { value: "sentences", label: "Sentences" }, { value: "words", label: "Words" }, { value: "characters", label: "Characters (ALL CAPS)" }]} /></PropRow>}
         <FieldTypeProps field={field} onChange={onChange} />

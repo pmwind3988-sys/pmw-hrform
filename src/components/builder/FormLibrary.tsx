@@ -7,11 +7,11 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 
 interface FormLibraryProps {
-  forms: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string }[];
+  forms: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean }[];
   onEdit: (f: { Title: string }) => void;
   onNew: () => void;
-  onDelete: (f: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string }) => void;
-  onHardDelete?: (f: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string }) => void;
+  onDelete: (f: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean }) => void;
+  onHardDelete?: (f: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean }) => void;
   current: string;
 }
 
@@ -78,6 +78,7 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
               cursor: "pointer",
               transition: "all .13s",
               position: "relative",
+              opacity: f.IsPublished === false && f.Title !== current ? 0.78 : 1,
             }}
             onMouseEnter={e => {
               if (f.Title !== current) e.currentTarget.style.background = C.offWhite;
@@ -166,9 +167,14 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
             <div style={{ fontSize: 12, fontWeight: 600, color: f.Title === current ? C.purple : C.textPrimary, marginBottom: 2, paddingRight: 22 }}>
               {f.Title}
             </div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: 10, color: C.textMuted, fontFamily: "monospace" }}>{f.FormID}</span>
               <Tag>v{f.CurrentVersion || "?"}</Tag>
+              {f.IsPublished === false ? (
+                <Tag color={C.amber} bg={C.amberPale}>Draft</Tag>
+              ) : (
+                <Tag color={C.green} bg={C.greenPale}>Published</Tag>
+              )}
               {f.Slug && <span style={{ fontSize: 10, color: C.textMuted }}>/forms/{f.Slug}</span>}
             </div>
           </div>
