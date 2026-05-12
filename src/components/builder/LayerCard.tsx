@@ -3,6 +3,12 @@
  */
 import { useState } from "react";
 import { C } from "./constants";
+import LockIcon from "@mui/icons-material/Lock";
+import LinkIcon from "@mui/icons-material/Link";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import CloseIcon from "@mui/icons-material/Close";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import type { LayerConfigItem } from "../../types";
 
 interface LayerCardProps {
@@ -23,9 +29,9 @@ const TYPE_BADGE: Record<string, { bg: string; color: string; label: string }> =
   evaluation: { bg: C.greenPale, color: C.green, label: "Evaluation" },
 };
 
-const AUTH_ICON: Record<string, { icon: string; label: string }> = {
-  "365": { icon: "🔒", label: "365 Sign-in" },
-  public: { icon: "🔗", label: "Public Link" },
+const AUTH_ICON: Record<string, { icon: React.ReactNode; label: string }> = {
+  "365": { icon: <LockIcon style={{ fontSize: 12 }} />, label: "365 Sign-in" },
+  public: { icon: <LinkIcon style={{ fontSize: 12 }} />, label: "Public Link" },
 };
 
 export default function LayerCard({
@@ -147,7 +153,7 @@ export default function LayerCard({
               justifyContent: "center",
             }}
           >
-            ↑
+            <ArrowUpwardIcon style={{ fontSize: 12 }} />
           </button>
           <button
             onClick={onMoveDown}
@@ -166,7 +172,7 @@ export default function LayerCard({
               justifyContent: "center",
             }}
           >
-            ↓
+            <ArrowDownwardIcon style={{ fontSize: 12 }} />
           </button>
           <button
             onClick={onDelete}
@@ -187,7 +193,7 @@ export default function LayerCard({
               justifyContent: "center",
             }}
           >
-            ✕
+            <CloseIcon style={{ fontSize: 10 }} />
           </button>
         </div>
 
@@ -200,7 +206,7 @@ export default function LayerCard({
             transition: "transform .15s",
           }}
         >
-          ▼
+          <ExpandMoreIcon style={{ fontSize: 14 }} />
         </div>
       </div>
 

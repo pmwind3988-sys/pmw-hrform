@@ -58,10 +58,11 @@ import HeightIcon from "@mui/icons-material/Height";
 import HorizontalRuleIcon from "@mui/icons-material/HorizontalRule";
 import LockIcon from "@mui/icons-material/Lock";
 import EmailIcon from "@mui/icons-material/Email";
+import BoltIcon from "@mui/icons-material/Bolt";
 import LinkIcon from "@mui/icons-material/Link";
 import PhoneIcon from "@mui/icons-material/Phone";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import DateRangeIcon from "@mui/icons-material/DateRange";
+
 import TimelapseIcon from "@mui/icons-material/Timelapse";
 
 import LinearScaleIcon from "@mui/icons-material/LinearScale";
@@ -72,18 +73,25 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import StarRateIcon from "@mui/icons-material/StarRate";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import HomeIcon from "@mui/icons-material/Home";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
+
 import BadgeIcon from "@mui/icons-material/Badge";
 
 import ArticleIcon from "@mui/icons-material/Article";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import DescriptionIcon from "@mui/icons-material/Description";
+import ChatIcon from "@mui/icons-material/Chat";
+import PersonIcon from "@mui/icons-material/Person";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import LanguageIcon from "@mui/icons-material/Language";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import WarningIcon from "@mui/icons-material/Warning";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import PowerIcon from "@mui/icons-material/Power";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
+import ChromeReaderModeIcon from "@mui/icons-material/ChromeReaderMode";
 
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import BarChartIcon from "@mui/icons-material/BarChart";
@@ -251,7 +259,7 @@ function ValidationEditor({ field, onChange }: { field: FormBuilderField; onChan
     {validators.map((v, idx) => <div key={idx} className="fb-validation-row">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <Pill>{VALIDATOR_TYPES.find(t => t.value === v.type)?.label || v.type}</Pill>
-        <button onClick={() => removeValidator(idx)} className="fb-icon-btn danger" title="Remove">✕</button>
+        <button onClick={() => removeValidator(idx)} className="fb-icon-btn danger" title="Remove"><CloseIcon style={{ fontSize: 14 }} /></button>
       </div>
       {v.type === "numeric" && <>
         <PropRow label="Min value"><Input type="number" value={v.minValue as number ?? ""} onChange={val => updateValidator(idx, { minValue: val === "" ? undefined : Number(val) })} placeholder="No min" /></PropRow>
@@ -310,7 +318,7 @@ function ConditionRow({ condition, allFields, onUpdate, onRemove, canRemove }: {
       {!["isEmpty", "isNotEmpty"].includes(condition.operator) && (
         <Input value={condition.value} onChange={v => onUpdate({ ...condition, value: v })} placeholder="Value" style={{ flex: 1, minWidth: 80 }} />
       )}
-      <IconBtn icon="✕" title="Remove condition" onClick={onRemove} disabled={!canRemove} danger />
+      <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title="Remove condition" onClick={onRemove} disabled={!canRemove} danger />
     </div>
   );
 }
@@ -376,7 +384,7 @@ function ValueMappingSection({ valueRule, allFields, onChange }: {
   return (
     <div style={{ marginBottom: 16, padding: 12, background: `${C.purple}08`, borderRadius: 8, border: `1px solid ${C.purple}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 14 }}>🔄</span>
+        <RefreshIcon style={{ fontSize: 14 }} />
         <span style={{ fontSize: 12, fontWeight: 700, color: C.purple, flex: 1 }}>Value Mapping</span>
         <Toggle checked={enabled} onChange={v => { setEnabled(v); if (!v) onChange(undefined); }} label={enabled ? "Active" : "Disabled"} />
       </div>
@@ -559,7 +567,6 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   // Text
   password: <LockIcon />,
   // Date/Time
-  daterange: <DateRangeIcon />,
   duration: <TimelapseIcon />,
   // Choice
   dropdown: <ArrowDropDownCircleIcon />,
@@ -576,14 +583,11 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   file: <AttachFileIcon />,
   imageupload: <AddPhotoAlternateIcon />,
   signaturepad: <GestureIcon />,
-  addressblock: <HomeIcon />,
-  locationpicker: <LocationOnIcon />,
   nric: <BadgeIcon />,
   consent: <ArticleIcon />,
   dynamicmatrix: <TableChartIcon />,
   tableinput: <TableRowsIcon />,
   ranking: <FormatListNumberedIcon />,
-  budgetallocator: <AccountBalanceWalletIcon />,
   hierarchy: <AccountTreeIcon />,
   jsoneditor: <DataObjectIcon />,
   // Display
@@ -911,8 +915,8 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
 /** Renders type-specific configuration controls in the General tab */
 function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange: (patch: Partial<FormBuilderField>) => void }) {
   const numericTypes = ["number", "slider", "counter", "currency"];
-  const dateTypes = ["date", "datetime", "daterange"];
-  const commentTypes = ["comment", "jsoneditor", "addressblock", "locationpicker", "budgetallocator"];
+  const dateTypes = ["date", "datetime"];
+  const commentTypes = ["comment", "jsoneditor"];
   const fileTypes = ["file", "imageupload"];
   const htmlTypes = ["html", "alert", "countdown", "datatable", "chartdisplay", "videoembed"];
   const booleanTypes = ["boolean", "consent"];
@@ -1095,7 +1099,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/\s+/g, "_") })} placeholder="Name" style={{ flex: 1, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
             <input value={col.title} onChange={e => updateCol(i, { title: e.target.value })} placeholder="Title" style={{ flex: 1.5, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
           </div>
-          <button onClick={() => removeCol(i)} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <button onClick={() => removeCol(i)} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}><CloseIcon style={{ fontSize: 11 }} /></button>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 10, color: C.textMuted, whiteSpace: "nowrap" }}>Cell type:</span>
@@ -1125,7 +1129,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
           {!col.choicesSource?.list && !col.filteredListSource?.list && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
             {(col.choices || []).map((ch, ci) => <span key={ci} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>
               {ch}
-              <button onClick={() => updateCol(i, { choices: (col.choices || []).filter((_, idx) => idx !== ci) })} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕</button>
+              <button onClick={() => updateCol(i, { choices: (col.choices || []).filter((_, idx) => idx !== ci) })} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", padding: 0 }}><CloseIcon style={{ fontSize: 9 }} /></button>
             </span>)}
             <input
               placeholder="Add choice…"
@@ -2080,7 +2084,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                     style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: i === 0 ? C.offWhite : "transparent" }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = C.offWhite; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = i === 0 ? C.offWhite : "transparent"; }}>
-                    <span style={{ fontSize: 18, width: 28, textAlign: "center" }}>{td.icon}</span>
+                    <span style={{ fontSize: 18, width: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>{TYPE_ICONS[td.type]}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>{td.label}</div>
                       <div style={{ fontSize: 11, color: C.textMuted }}>{td.description}</div>
@@ -2098,8 +2102,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowDataSources(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>🔌 Data Sources</div>
-              <button onClick={() => setShowDataSources(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><PowerIcon style={{ fontSize: 16, marginRight: 6 }} /> Data Sources</div>
+              <button onClick={() => setShowDataSources(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 16, maxHeight: 400, overflowY: "auto" }}>
               <div style={{ marginBottom: 16 }}>
@@ -2129,13 +2133,13 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowExportWizard(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>📤 Export Form</div>
-              <button onClick={() => setShowExportWizard(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><FileUploadIcon style={{ fontSize: 16, marginRight: 6 }} /> Export Form</div>
+              <button onClick={() => setShowExportWizard(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 20 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(surveyJson, null, 2)); alert("JSON copied to clipboard!"); }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>📋 SurveyJS JSON</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 16, marginRight: 6 }} /> SurveyJS JSON</div>
                   <div style={{ fontSize: 11, color: C.textMuted }}>Copy full SurveyJS JSON to clipboard</div>
                 </button>
                 <button onClick={() => {
@@ -2144,7 +2148,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `${surveySettings.title || "form"}_fields.csv`; a.click();
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>📊 Excel CSV</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><TableChartIcon style={{ fontSize: 14, marginRight: 4 }} /> Excel CSV</div>
                   <div style={{ fontSize: 11, color: C.textMuted }}>Export field names and types as CSV</div>
                 </button>
                 <button onClick={() => {
@@ -2153,7 +2157,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `${surveySettings.title || "form"}.html`; a.click();
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>📄 Blank HTML Form</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Blank HTML Form</div>
                   <div style={{ fontSize: 11, color: C.textMuted }}>Export printable blank form as HTML</div>
                 </button>
                 <button onClick={() => {
@@ -2190,8 +2194,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowI18n(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 600, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>🌐 Translations</div>
-              <button onClick={() => setShowI18n(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><TranslateIcon style={{ fontSize: 16, marginRight: 6 }} /> Translations</div>
+              <button onClick={() => setShowI18n(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 8, flexShrink: 0 }}>
               {([
@@ -2240,8 +2244,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowThemeEditor(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 480, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>🎨 Theme Editor</div>
-              <button onClick={() => setShowThemeEditor(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><PaletteIcon style={{ fontSize: 16, marginRight: 6 }} /> Theme Editor</div>
+              <button onClick={() => setShowThemeEditor(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 20, maxHeight: 400, overflowY: "auto" }}>
               <div style={{ marginBottom: 16 }}>
@@ -2275,14 +2279,14 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowFieldTemplates(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>📋 Field Templates</div>
-              <button onClick={() => setShowFieldTemplates(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 16, marginRight: 6 }} /> Field Templates</div>
+              <button onClick={() => setShowFieldTemplates(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 16, maxHeight: 400, overflowY: "auto" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {[{ name: "Full Address", icon: "🏠", fields: [{ type: "text", name: "address1", title: "Address Line 1" }, { type: "text", name: "city", title: "City" }, { type: "text", name: "postcode", title: "Postcode" }] }, { name: "Personal Info", icon: "👤", fields: [{ type: "text", name: "fullName", title: "Full Name" }, { type: "email", name: "email", title: "Email" }] }, { name: "Bank Details", icon: "🏦", fields: [{ type: "text", name: "bankName", title: "Bank Name" }, { type: "text", name: "accountNumber", title: "Account Number" }] }].map((tpl, idx) => (
-                  <div key={idx} onClick={() => { tpl.fields.forEach(f => { const q = createQuestion({ type: f.type, label: f.title, icon: tpl.icon, group: "Basic", description: f.title, spColumnKind: 2, defaultProps: {} }); q.name = f.name; pushHistory([...fields, q]); }); setShowFieldTemplates(false); }} style={{ padding: 14, background: C.offWhite, borderRadius: 8, cursor: "pointer" }}>
-                    <span style={{ fontSize: 20, marginRight: 10 }}>{tpl.icon}</span><span style={{ fontWeight: 600 }}>{tpl.name}</span>
+                {[ { name: "Full Address", icon: <HomeIcon style={{ fontSize: 20 }} />, fields: [{ type: "text", name: "address1", title: "Address Line 1" }, { type: "text", name: "city", title: "City" }, { type: "text", name: "postcode", title: "Postcode" }] }, { name: "Personal Info", icon: <PersonIcon style={{ fontSize: 20 }} />, fields: [{ type: "text", name: "fullName", title: "Full Name" }, { type: "email", name: "email", title: "Email" }] }, { name: "Bank Details", icon: <AccountBalanceIcon style={{ fontSize: 20 }} />, fields: [{ type: "text", name: "bankName", title: "Bank Name" }, { type: "text", name: "accountNumber", title: "Account Number" }] }].map((tpl, idx) => (
+                  <div key={idx} onClick={() => { tpl.fields.forEach(f => { const q = createQuestion({ type: f.type, label: f.title, icon: "", group: "Basic", description: f.title, spColumnKind: 2, defaultProps: {} }); q.name = f.name; pushHistory([...fields, q]); }); setShowFieldTemplates(false); }} style={{ padding: 14, background: C.offWhite, borderRadius: 8, cursor: "pointer" }}>
+                    <span style={{ marginRight: 10, display: "inline-flex", verticalAlign: "middle" }}>{tpl.icon}</span><span style={{ fontWeight: 600 }}>{tpl.name}</span>
                   </div>
                 ))}
               </div>
@@ -2295,8 +2299,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowFieldComments(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>💬 Field Comments</div>
-              <button onClick={() => setShowFieldComments(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><ChatIcon style={{ fontSize: 16, marginRight: 6 }} /> Field Comments</div>
+              <button onClick={() => setShowFieldComments(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 16 }}>
               {fields.map((f) => (
@@ -2314,8 +2318,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowIntegrationPanel(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 640, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>🔗 Integration Settings</div>
-              <button onClick={() => setShowIntegrationPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><LinkIcon style={{ fontSize: 16, marginRight: 6 }} /> Integration Settings</div>
+              <button onClick={() => setShowIntegrationPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
               {/* Tabs: Webhooks | Email | Power Automate | PDF */}
@@ -2324,10 +2328,10 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                     <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
                       {["webhooks", "email", "powerautomate", "pdf"].map(tab => (
                         <button key={tab} onClick={() => setActiveIntegrationTab(tab as "webhooks" | "email" | "powerautomate" | "pdf")} style={{ padding: "10px 16px", background: activeIntegrationTab === tab ? C.purplePale : "transparent", border: "none", borderBottom: activeIntegrationTab === tab ? `2px solid ${C.purple}` : "2px solid transparent", cursor: "pointer", fontSize: 12, fontWeight: 600, color: activeIntegrationTab === tab ? C.purple : C.textMuted }}>
-                          {tab === "webhooks" && "🔌 Webhooks"}
-                          {tab === "email" && "📧 Email Templates"}
-                          {tab === "powerautomate" && "⚡ Power Automate"}
-                          {tab === "pdf" && "📄 PDF Generation"}
+                          {tab === "webhooks" && <><PowerIcon style={{ fontSize: 14, marginRight: 4 }} /> Webhooks</>}
+                          {tab === "email" && <><EmailIcon style={{ fontSize: 14, marginRight: 4 }} /> Email Templates</>}
+                          {tab === "powerautomate" && <><BoltIcon style={{ fontSize: 14, marginRight: 4 }} /> Power Automate</>}
+                          {tab === "pdf" && <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> PDF Generation</>}
                         </button>
                       ))}
                     </div>
@@ -2393,7 +2397,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                       {activeIntegrationTab === "powerautomate" && (
                         <div>
                           <div style={{ padding: 16, background: C.offWhite, borderRadius: 8, marginBottom: 16 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>⚡ Power Automate HTTP Trigger</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}><BoltIcon style={{ fontSize: 14, marginRight: 4, verticalAlign: 'middle' }} /> Power Automate HTTP Trigger</div>
                             <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 12 }}>Generate a URL to trigger a Power Automate flow when forms are submitted.</div>
                             <input value={powerAutomateUrl} onChange={(e) => setPowerAutomateUrl(e.target.value)} placeholder="Paste your Power Automate HTTP trigger URL here" style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12, fontFamily: "monospace", marginBottom: 12 }} />
                             <button onClick={() => { const url = powerAutomateUrl; if (url) { navigator.clipboard.writeText(url); alert("URL copied!"); } else { alert("Enter a Power Automate trigger URL first."); } }} style={{ fontSize: 11, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 4, cursor: "pointer" }}>Copy URL</button>
@@ -2455,8 +2459,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowProvisioningPreview(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 700, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>📋 SharePoint Column Provisioning</div>
-              <button onClick={() => setShowProvisioningPreview(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 16, marginRight: 6 }} /> SharePoint Column Provisioning</div>
+              <button onClick={() => setShowProvisioningPreview(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
               <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>Preview the SharePoint columns that will be created or modified when you publish this form.</div>
@@ -2498,8 +2502,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowSubmissionSettings(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>📊 Submission Settings</div>
-              <button onClick={() => setShowSubmissionSettings(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><TableChartIcon style={{ fontSize: 16, marginRight: 6 }} /> Submission Settings</div>
+              <button onClick={() => setShowSubmissionSettings(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 16 }}>
               {/* Scoring */}
@@ -2572,8 +2576,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div onClick={() => setShowFieldPermissions(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 560, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>🔐 Field Permissions & Data Masking</div>
-              <button onClick={() => setShowFieldPermissions(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}>✕</button>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><LockIcon style={{ fontSize: 16, marginRight: 6 }} /> Field Permissions & Data Masking</div>
+              <button onClick={() => setShowFieldPermissions(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
               <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 16 }}>Configure who can view/edit each field and mark sensitive fields for data masking.</div>
@@ -2593,8 +2597,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 12 }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10 }}><input type="checkbox" checked={perm.isSensitive} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, isSensitive: e.target.checked }]; setFieldPermissions(newPerms); }} /> 🔒 Sensitive (mask in logs)</label>
-                      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10 }}><input type="checkbox" checked={perm.readOnlyAfterSubmit} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, readOnlyAfterSubmit: e.target.checked }]; setFieldPermissions(newPerms); }} /> 📖 Read-only after submit</label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10 }}><input type="checkbox" checked={perm.isSensitive} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, isSensitive: e.target.checked }]; setFieldPermissions(newPerms); }} /> <LockIcon style={{ fontSize: 12, verticalAlign: "middle", marginRight: 2 }} /> Sensitive (mask in logs)</label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10 }}><input type="checkbox" checked={perm.readOnlyAfterSubmit} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, readOnlyAfterSubmit: e.target.checked }]; setFieldPermissions(newPerms); }} /> <ChromeReaderModeIcon style={{ fontSize: 12, verticalAlign: "middle", marginRight: 2 }} /> Read-only after submit</label>
                     </div>
                   </div>
                 );

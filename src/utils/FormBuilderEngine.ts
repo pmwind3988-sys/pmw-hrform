@@ -134,15 +134,6 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     spColumnKind: 9,
     defaultProps: { maxHours: 24, stepMinutes: 15 },
   },
-  {
-    type: "daterange",
-    label: "Date Range",
-    icon: "📆",
-    group: "Date/Time",
-    description: "Select start and end date",
-    spColumnKind: 4,
-    defaultProps: { minDate: "", maxDate: "", maxRangeDuration: 30, showNightsCount: false, presets: ["Today", "This Week", "This Month"] },
-  },
   // ========== NUMERIC GROUP (number-related inputs) ==========
   {
     type: "counter",
@@ -253,24 +244,6 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     defaultProps: { termsContent: "", mustScrollToBottom: true },
   },
   {
-    type: "addressblock",
-    label: "Address Block",
-    icon: "🏠",
-    group: "Advanced",
-    description: "Multi-field address input",
-    spColumnKind: 3,
-    defaultProps: { showLine2: true, showCity: true, showState: true, showPostcode: true, showCountry: true, countryFilter: ["MY"] },
-  },
-  {
-    type: "locationpicker",
-    label: "Location Picker",
-    icon: "📍",
-    group: "Advanced",
-    description: "Map click or geolocation",
-    spColumnKind: 3,
-    defaultProps: { defaultCenter: "3.1390,101.6869", defaultZoom: 12, mapProvider: "OSM", showCurrentLocation: true },
-  },
-  {
     type: "dynamicmatrix",
     label: "Dynamic Matrix",
     icon: "📊",
@@ -310,15 +283,6 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     description: "Cascading dropdowns (Country → State → City)",
     spColumnKind: 2,
     defaultProps: { levels: ["Country", "State", "City"], dataSource: [] },
-  },
-  {
-    type: "budgetallocator",
-    label: "Budget Allocator",
-    icon: "💵",
-    group: "Advanced",
-    description: "Allocate budget across items with sliders",
-    spColumnKind: null,
-    defaultProps: { totalAmount: 1000, lineItems: ["Item 1", "Item 2"], enforceTotal: true },
   },
   {
     type: "jsoneditor",
@@ -583,6 +547,8 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return { ...field, type: "text", inputType: "number" };
 
     // Numeric variants
+    case "duration":
+      return { ...field, type: "text", inputType: "number" };
     case "counter":
       return { ...field, type: "text", inputType: "number" };
     case "currency":
@@ -601,12 +567,6 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return { ...field, type: "comment" };
     case "hierarchy":
       return { ...field, type: "dropdown" };
-    case "addressblock":
-      return { ...field, type: "comment" };
-    case "locationpicker":
-      return { ...field, type: "comment" };
-    case "budgetallocator":
-      return { ...field, type: "comment" };
     case "dynamicmatrix":
     case "tableinput":
       return { ...field, type: "matrixdynamic" };
@@ -1031,12 +991,7 @@ export function getSpColumnKind(
   if (field.type === 'dynamicmatrix' || field.type === 'tableinput' || field.type === 'matrixdynamic') return null;
 
   // Complex types that produce arrays/objects → store as JSON in multi-line text
-  if (field.type === 'ranking' || field.type === 'budgetallocator') {
-    return { FieldTypeKind: 3, label: 'Multi-line' };
-  }
-
-  // Date range stores two values → multi-line text (JSON)
-  if (field.type === 'daterange') {
+  if (field.type === 'ranking') {
     return { FieldTypeKind: 3, label: 'Multi-line' };
   }
 

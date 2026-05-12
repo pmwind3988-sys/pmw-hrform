@@ -503,11 +503,10 @@ if (decision === "guest") {
   const location = useLocation();
   const currentPath = location.pathname;
   const isFormRoute = currentPath.startsWith("/form/");
-  const isAdminRoute = currentPath.startsWith("/admin/");
 
   // ---- Render ----
 
-  if (pageState === "checking" || (pageState === "loading" && loading && !isFormRoute && !isAdminRoute)) {
+  if (pageState === "checking" || (pageState === "loading" && loading && !isFormRoute)) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />

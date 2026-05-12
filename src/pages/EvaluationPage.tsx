@@ -14,6 +14,8 @@ import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
 import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
 import type { PdfFormData } from "../utils/FormPdfDocument";
+import LockIcon from "@mui/icons-material/Lock";
+import WarningIcon from "@mui/icons-material/Warning";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -323,7 +325,7 @@ export default function EvaluationPage() {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div style={{ background: COLORS.cardBg, borderRadius: 22, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>🔒</div>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>You need to sign in with your Microsoft 365 account to access this evaluation.</p>
           <button onClick={() => instance.loginRedirect({ ...loginRequest })} style={btnPrimary}>Sign in with Microsoft 365</button>
@@ -336,7 +338,7 @@ export default function EvaluationPage() {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div style={{ background: COLORS.cardBg, borderRadius: 22, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>⚠️</div>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.red, marginBottom: 8 }}>Error</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13 }}>{error}</p>
         </div>

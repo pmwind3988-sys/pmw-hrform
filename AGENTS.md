@@ -16,9 +16,7 @@ npm run lint       # ESLint flat config (many pre-existing warnings — use lsp_
 npm run preview    # Preview production build
 ```
 - `npm run build` is the **only** reliable check. `lsp_diagnostics` catches TS errors too.
-- Pre-existing build: **~100+ TS errors** across `FormBuilder.tsx`, `AdminFormBuilder.tsx`, `FormBuilderEngine.ts`, `constants.ts` — see `build_errors.txt`. Do NOT add new errors.
-- `build_status.txt` is stale/unreliable — ignore it.
-- **Note**: `build_errors.txt` may be stale. The current build passes cleanly with `tsc -b`. If build is green, trust it over the error log.
+- `build_errors.txt` / `build_status.txt` are stale/unreliable — ignore them. Trust `npm run build` exit code.
 
 ## Stack
 - React 19 + TypeScript ~6.0.2 (ES2022 target, bundler moduleResolution, `verbatimModuleSyntax`, `erasableSyntaxOnly: true` — no runtime `enum`/`namespace`; use `const` objects or string unions)
@@ -183,9 +181,8 @@ See their pattern for any new custom SurveyJS widgets.
 - `formBuilderSP.ts` has `catch (e: any)` and `data.d.results` fallback (legacy format)
 - `ApprovalDashboard.tsx` and `AdminFormBuilder.tsx` have `console.warn`/`console.error`
 - `DetailModal.tsx` uses `dangerouslySetInnerHTML` — audit XSS if user input reaches `value`
-- **Build**: Pre-existing errors exist (~100+ across multiple files). Do NOT add new ones. Run `npm run build` after all changes.
+- **Build**: Run `npm run build` after all changes. Do NOT add new TS errors.
 - **MSAL interaction state**: Clearing `sessionStorage` keys before login is intentional — don't remove
-- **`FormBuilderEngine.ts`**: Has duplicate declarations of `QUESTION_TYPES` and most exported functions in `build_errors.txt`, but may have been fixed — verify build status before assuming.
 
 ## Conventions
 - **PowerShell**: use `workdir` parameter with `bash` tool; no `&&` or `;`
@@ -195,11 +192,10 @@ See their pattern for any new custom SurveyJS widgets.
 - **No path aliases** — all imports relative (`../../utils/...`)
 - **No barrel exports** except `src/components/builder/index.ts`
 - **79 unit tests** exist for `FormBuilderEngine.ts` — run via `npx vitest run`
-- **No CI/CD** — zero GitHub Actions, Docker, deployment configs (confirmed: no `.github/` directory)
+- **CI only builds** — `.github/workflows/ci.yml` runs `npm ci && npm run build`; no test execution in CI
 - **No `opencode.json`** config file
 - **ErrorBoundary**: `src/components/ErrorBoundary.tsx` wraps each route to prevent white-screen crashes
 - **DashboardContext**: `src/contexts/DashboardContext.tsx` provides dashboard state to AdminHomePage (replaces prop-drilling)
-- **GitHub CI**: `.github/workflows/ci.yml` runs `npm ci && npm run build` on PRs to master
 
 ## Testing
 

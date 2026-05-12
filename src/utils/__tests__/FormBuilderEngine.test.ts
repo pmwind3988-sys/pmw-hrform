@@ -309,14 +309,6 @@ describe('getSpColumnKind', () => {
     expect(getSpColumnKind({ type: 'ranking' })).toEqual({ FieldTypeKind: 3, label: 'Multi-line' });
   });
 
-  it('returns Multi-line (3) for budgetallocator', () => {
-    expect(getSpColumnKind({ type: 'budgetallocator' })).toEqual({ FieldTypeKind: 3, label: 'Multi-line' });
-  });
-
-  it('returns Multi-line (3) for daterange', () => {
-    expect(getSpColumnKind({ type: 'daterange' })).toEqual({ FieldTypeKind: 3, label: 'Multi-line' });
-  });
-
   it('returns Number (9) for text type with number inputType', () => {
     expect(getSpColumnKind({ type: 'text', inputType: 'number' })).toEqual({ FieldTypeKind: 9, label: 'Number' });
   });

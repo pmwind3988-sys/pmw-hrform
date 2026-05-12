@@ -25,15 +25,14 @@ import StarRateIcon from "@mui/icons-material/StarRate";
 import GestureIcon from "@mui/icons-material/Gesture";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
 import BadgeIcon from "@mui/icons-material/Badge";
 import ArticleIcon from "@mui/icons-material/Article";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import TableRowsIcon from "@mui/icons-material/TableRows";
 import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import DateRangeIcon from "@mui/icons-material/DateRange";
+import WarningIcon from "@mui/icons-material/Warning";
+
 import TimelapseIcon from "@mui/icons-material/Timelapse";
 import CalculateIcon from "@mui/icons-material/Calculate";
 import PlusOneIcon from "@mui/icons-material/PlusOne";
@@ -69,15 +68,12 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   signaturepad: <GestureIcon sx={{ fontSize: 16 }} />,
   file: <AttachFileIcon sx={{ fontSize: 16 }} />,
   imageupload: <AddPhotoAlternateIcon sx={{ fontSize: 16 }} />,
-  locationpicker: <LocationOnIcon sx={{ fontSize: 16 }} />,
   nric: <BadgeIcon sx={{ fontSize: 16 }} />,
   consent: <ArticleIcon sx={{ fontSize: 16 }} />,
   dynamicmatrix: <TableChartIcon sx={{ fontSize: 16 }} />,
   tableinput: <TableRowsIcon sx={{ fontSize: 16 }} />,
   ranking: <FormatListNumberedIcon sx={{ fontSize: 16 }} />,
-  budgetallocator: <AccountBalanceWalletIcon sx={{ fontSize: 16 }} />,
   hierarchy: <AccountTreeIcon sx={{ fontSize: 16 }} />,
-  daterange: <DateRangeIcon sx={{ fontSize: 16 }} />,
   duration: <TimelapseIcon sx={{ fontSize: 16 }} />,
   formula: <CalculateIcon sx={{ fontSize: 16 }} />,
   counter: <PlusOneIcon sx={{ fontSize: 16 }} />,
@@ -391,7 +387,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
           </div>
           {elements.length > 0 && !elements.some(el => el.isRequired) && (
             <div style={{ fontSize: 10, color: C.red, background: C.redPale, borderRadius: 6, padding: "6px 8px", marginBottom: 8, lineHeight: 1.4 }}>
-              ⚠ At least one field must be marked as <strong>Required</strong> before this evaluation layer can be used.
+              <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4 }} /> At least one field must be marked as <strong>Required</strong> before this evaluation layer can be used.
             </div>
           )}
           {elements.map((el, i) => (

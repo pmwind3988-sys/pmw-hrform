@@ -3,6 +3,10 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { C } from "./constants";
+import LockIcon from "@mui/icons-material/Lock";
+import LinkIcon from "@mui/icons-material/Link";
+import DescriptionIcon from "@mui/icons-material/Description";
+import CloseIcon from "@mui/icons-material/Close";
 import LayerCard from "./LayerCard";
 import EvalElementPicker from "./EvalElementPicker";
 import PublicLinkDisplay from "./PublicLinkDisplay";
@@ -266,7 +270,7 @@ export default function LayerConfigPanel({
           </label>
           <div style={{ display: "flex", gap: 4 }}>
             <button onClick={() => patchLayer(idx, { authMode: "365" as AuthMode })} style={TOGGLE_BTN(layer.authMode === "365")}>
-              🔒 365 Sign-in
+              <LockIcon style={{ fontSize: 12, marginRight: 4 }} /> 365 Sign-in
             </button>
             <button onClick={() => {
               const patch: Partial<LayerConfigItem> & { publicToken?: string; tokenExpiresAt?: string } = { authMode: "public" as AuthMode };
@@ -278,9 +282,14 @@ export default function LayerConfigPanel({
               }
               patchLayer(idx, patch);
             }} style={TOGGLE_BTN(layer.authMode === "public")}>
-              🔗 Public Link
+              <LinkIcon style={{ fontSize: 12, marginRight: 4 }} /> Public Link
             </button>
           </div>
+          {layer.authMode === "public" && (
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+              Anyone with the link can access this layer without signing in.
+            </div>
+          )}
         </div>
 
         {/* Assignee */}
@@ -418,7 +427,7 @@ export default function LayerConfigPanel({
                   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                 }}
               >
-                📋 Configure Evaluation Form ({((layer as EvaluationLayerConfig).surveyElements || []).length} fields)
+                <DescriptionIcon style={{ fontSize: 12, marginRight: 4 }} /> Configure Evaluation Form ({((layer as EvaluationLayerConfig).surveyElements || []).length} fields)
               </button>
             )}
             {evalPickerOpen === idx && (
@@ -534,7 +543,7 @@ export default function LayerConfigPanel({
           </label>
           <div style={{ display: "flex", gap: 4 }}>
             <button onClick={() => patchBranchLayer(bi, li, { authMode: "365" as AuthMode })} style={TOGGLE_BTN(layer.authMode === "365")}>
-              🔒 365 Sign-in
+              <LockIcon style={{ fontSize: 12, marginRight: 4 }} /> 365 Sign-in
             </button>
             <button onClick={() => {
               const patch: Partial<LayerConfigItem> & { publicToken?: string; tokenExpiresAt?: string } = { authMode: "public" as AuthMode };
@@ -546,9 +555,14 @@ export default function LayerConfigPanel({
               }
               patchBranchLayer(bi, li, patch);
             }} style={TOGGLE_BTN(layer.authMode === "public")}>
-              🔗 Public Link
+              <LinkIcon style={{ fontSize: 12, marginRight: 4 }} /> Public Link
             </button>
           </div>
+          {layer.authMode === "public" && (
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+              Anyone with the link can access this layer without signing in.
+            </div>
+          )}
         </div>
 
         {/* Assignee */}
@@ -686,7 +700,7 @@ export default function LayerConfigPanel({
                   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                 }}
               >
-                📋 Configure Evaluation Form ({((layer as EvaluationLayerConfig).surveyElements || []).length} fields)
+                <DescriptionIcon style={{ fontSize: 12, marginRight: 4 }} /> Configure Evaluation Form ({((layer as EvaluationLayerConfig).surveyElements || []).length} fields)
               </button>
             )}
             {branchEvalPicker === `${bi}-${li}` && (
@@ -835,7 +849,7 @@ export default function LayerConfigPanel({
                     flexShrink: 0,
                   }}
                 >
-                  ✕
+                  <CloseIcon style={{ fontSize: 14 }} />
                 </button>
               </div>
               <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>Skip layers:</div>
@@ -995,7 +1009,7 @@ export default function LayerConfigPanel({
                     <input value={branch.name} onChange={e => updateBranchField(bi, "name", e.target.value)} placeholder="Branch name (key)" style={{ ...inp, flex: 1, height: 26, fontSize: 11 }} />
                     <input value={branch.label} onChange={e => updateBranchField(bi, "label", e.target.value)} placeholder="Display label" style={{ ...inp, flex: 1, height: 26, fontSize: 11 }} />
                   </div>
-                  <button onClick={() => removeBranch(bi)} style={{ width: 22, height: 22, border: "none", borderRadius: 5, background: C.redPale, color: C.red, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
+                  <button onClick={() => removeBranch(bi)} style={{ width: 22, height: 22, border: "none", borderRadius: 5, background: C.redPale, color: C.red, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CloseIcon style={{ fontSize: 10 }} /></button>
                 </div>
                 <div style={{ padding: "9px 11px" }}>
                   {branch.layers.length === 0 && <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>No layers in this branch.</div>}

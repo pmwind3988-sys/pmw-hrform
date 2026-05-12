@@ -18,6 +18,11 @@ import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { generateAndStorePdf, buildPdfLayerResults } from "../../utils/generateFormPdf";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig } from "../../types";
+import BlockIcon from "@mui/icons-material/Block";
+import LockIcon from "@mui/icons-material/Lock";
+import DescriptionIcon from "@mui/icons-material/Description";
+import CloseIcon from "@mui/icons-material/Close";
+import CheckIcon from "@mui/icons-material/Check";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // Theme
@@ -1046,7 +1051,7 @@ export default function ApprovalDashboard() {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>🚫</div>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
           <div style={{ color: C.textSecond }}>You need HR Form Owner permissions to view this page.</div>
         </div>
@@ -1058,7 +1063,7 @@ export default function ApprovalDashboard() {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>🔒</div>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 18, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <div style={{ color: C.textSecond }}>You must be signed in to view approvals.</div>
         </div>
@@ -1472,7 +1477,7 @@ export default function ApprovalDashboard() {
                       style={{ flex: 1, padding: "12px 16px", borderRadius: 8, border: "none",
                         background: (!evalSurveyModel || evalValid) ? C.purple : C.border, color: "#fff", fontWeight: 600,
                         cursor: (actionLoading || (!!evalSurveyModel && !evalValid)) ? "not-allowed" : "pointer", opacity: (actionLoading || (!!evalSurveyModel && !evalValid)) ? 0.6 : 1 }}>
-                      {actionLoading ? "Submitting..." : evalSurveyModel && !evalValid ? "Fill required fields" : "📋 Submit Evaluation"}
+                      {actionLoading ? "Submitting..." : evalSurveyModel && !evalValid ? "Fill required fields" : <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Submit Evaluation</>}
                     </button>
                   ) : getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
                     <>
@@ -1486,7 +1491,7 @@ export default function ApprovalDashboard() {
                         style={{ flex: 1, padding: "12px 16px", borderRadius: 8,
                           border: `1px solid ${C.red}`, background: "transparent", color: C.red, fontWeight: 600,
                           cursor: actionLoading ? "not-allowed" : "pointer", opacity: actionLoading ? 0.6 : 1 }}>
-                        ✕ Reject
+                        <CloseIcon style={{ fontSize: 14, marginRight: 4 }} /> Reject
                       </button>
                     </>
                   ) : (
@@ -1512,14 +1517,16 @@ export default function ApprovalDashboard() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 80, height: 80, borderRadius: "50%", background: actionSuccess.type === "rejected" ? C.red : C.green, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <span style={{ fontSize: 36, color: "#fff", fontWeight: 700 }}>{actionSuccess.type === "rejected" ? "✕" : "✓"}</span>
+              <span style={{ fontSize: 36, color: "#fff", fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}>
+              {actionSuccess.type === "rejected" ? <CloseIcon style={{ fontSize: 36 }} /> : <CheckIcon style={{ fontSize: 36 }} />}
+            </span>
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: actionSuccess.type === "rejected" ? C.red : C.green }}>{actionSuccess.message}</div>
             <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8 }}>{actionSuccess.message}</div>
             {actionSuccess.pdfUrl && (
               <a href={actionSuccess.pdfUrl.startsWith("http") ? actionSuccess.pdfUrl : `${new URL(SP_SITE_URL).origin}${actionSuccess.pdfUrl}`}
                 target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-                📄 View PDF
+                <DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> View PDF
               </a>
             )}
             <div style={{ marginTop: 12 }}>

@@ -3,6 +3,8 @@
  */
 import { useState } from "react";
 import { C } from "./constants";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import WarningIcon from "@mui/icons-material/Warning";
 
 interface PublicLinkDisplayProps {
   slug: string;
@@ -152,7 +154,7 @@ export default function PublicLinkDisplay({
           transition: "all .15s",
         }}
       >
-        {confirmRegen ? "⚠ Confirm: regenerate token?" : "🔄 Regenerate token"}
+        {confirmRegen ? <><WarningIcon style={{ fontSize: 12, marginRight: 4 }} /> Confirm: regenerate token?</> : <><RefreshIcon style={{ fontSize: 12, marginRight: 4 }} /> Regenerate token</>}
       </button>
     </div>
   );

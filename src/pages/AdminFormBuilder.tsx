@@ -30,6 +30,14 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import LayersIcon from "@mui/icons-material/Layers";
+import SaveIcon from "@mui/icons-material/Save";
+import EditNoteIcon from "@mui/icons-material/EditNote";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import WarningIcon from "@mui/icons-material/Warning";
+import CloseIcon from "@mui/icons-material/Close";
+import PublicIcon from "@mui/icons-material/Public";
+import BlockIcon from "@mui/icons-material/Block";
+import LockIcon from "@mui/icons-material/Lock";
 
 import {
   slugify,
@@ -882,7 +890,7 @@ export default function AdminFormBuilder() {
             <ArrowBackIcon style={{ fontSize: 14 }} /> Dashboard
           </button>
           <div style={{ width: 1, height: 17, background: C.border }} />
-          <span style={{ fontSize: 18, color: '#6264A7' }}>📋</span>
+          <span style={{ fontSize: 18, color: '#6264A7', display: 'inline-flex' }}><DescriptionIcon style={{ fontSize: 18 }} /></span>
           <span style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, color: C.textPrimary }}>
             {isEditing ? `Editing: ${meta.formTitle}` : "New Form"}
           </span>
@@ -974,7 +982,7 @@ export default function AdminFormBuilder() {
               onMouseEnter={(e) => { if (!viewingOld) e.currentTarget.style.background = C.offWhite; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = C.white; }}
             >
-              💾 Save Draft
+              <SaveIcon style={{ fontSize: 14, marginRight: 4 }} /> Save Draft
             </button>
           )}
           <button
@@ -1012,7 +1020,7 @@ export default function AdminFormBuilder() {
             onClick={() => setViewingOld(null)}
             style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}
           >
-            ✕ Back to current
+            <CloseIcon style={{ fontSize: 14, marginRight: 4 }} /> Back to current
           </button>
         </div>
       )}
@@ -1232,8 +1240,8 @@ export default function AdminFormBuilder() {
                   <FB label="Form Access">
                     <div style={{ display: "flex", gap: 7 }}>
                       {[
-                        { v: true, label: "🌐 Public", hint: "Any M365 user" },
-                        { v: false, label: "🔒 Private", hint: "Explicit sign-in gate" },
+                        { v: true, label: <><PublicIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Public</>, hint: "Any M365 user" },
+                        { v: false, label: <><LockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Private</>, hint: "Explicit sign-in gate" },
                       ].map(opt => (
                         <button
                           key={String(opt.v)}
@@ -1321,14 +1329,14 @@ export default function AdminFormBuilder() {
                 <div style={{ animation: "fadeUp .15s ease" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 16 }}>
                     {[
-                      ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing ⚠</em>],
-                      ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing ⚠</em>],
+                      ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
+                      ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
                       ["Version", isEditing && !isDraft ? `${originalVersion} → ${proposedVersion}` : `v${meta.formVersion}${isDraft ? " (draft)" : ""}`],
-                      ["Status", isDraft ? <span style={{ color: C.amber }}>📝 Draft</span> : isEditing ? <span style={{ color: C.green }}>✅ Published</span> : "—"],
+                      ["Status", isDraft ? <span style={{ color: C.amber }}><EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Draft</span> : isEditing ? <span style={{ color: C.green }}><CheckCircleIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Published</span> : "—"],
                       ["Route", meta.slug ? `/form/${meta.slug}` : <em style={{ color: C.amber }}>No slug</em>],
                       ["Layers", numLayers || "None"],
-                      ["Banner", showBanner ? "✅ Visible" : "🚫 Hidden"],
-                      ["Access", isPublic ? "🌐 Public" : "🔒 Private"],
+                      ["Banner", showBanner ? <><CheckCircleIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Visible</> : <><BlockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Hidden</>],
+                      ["Access", isPublic ? <><PublicIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Public</> : <><LockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Private</>],
                     ].map(([k, v]) => (
                       <div key={k as string} style={{ display: "flex", gap: 10, fontSize: 12 }}>
                         <span style={{ color: C.textMuted, minWidth: 70 }}>{k as string}:</span>
@@ -1338,7 +1346,7 @@ export default function AdminFormBuilder() {
                   </div>
                   {slugError && (
                     <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: C.red, marginBottom: 10 }}>
-                      ⚠ {slugError}
+                      <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4 }} /> {slugError}
                     </div>
                   )}
                   {(!isEditing || isDraft) && (
@@ -1360,7 +1368,7 @@ export default function AdminFormBuilder() {
                         opacity: !meta.formTitle.trim() || viewingOld ? 0.5 : 1,
                       }}
                     >
-                      💾 Save Draft
+<SaveIcon style={{ fontSize: 14, marginRight: 4 }} /> Save Draft
                     </button>
                   )}
                   <button
@@ -1379,7 +1387,7 @@ export default function AdminFormBuilder() {
                       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                     }}
                   >
-                    {viewingOld ? "⚠ Close version preview to publish" : isDraft ? "🚀 Publish (make live)" : "🚀 Publish to SharePoint"}
+                    {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to publish</> : isDraft ? <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish (make live)</> : <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish to SharePoint</>}
                   </button>
                 </div>
               )}
@@ -1408,7 +1416,7 @@ export default function AdminFormBuilder() {
             boxShadow: C.shadowMd,
             textAlign: "center",
           }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+            <div style={{ fontSize: 32, marginBottom: 8, display: 'flex', justifyContent: 'center' }}><WarningIcon style={{ fontSize: 40 }} /></div>
             <div style={{ fontSize: 15, fontWeight: 600, color: C.textPrimary, marginBottom: 6 }}>
               Delete &ldquo;{deleteConfirm.Title}&rdquo;?
             </div>
@@ -1509,7 +1517,7 @@ export default function AdminFormBuilder() {
               <div style={{ fontWeight: 700 }}>✦ ALL submissions in &ldquo;{hardDeleteConfirm.Title} Responses&rdquo; list</div>
             </div>
             <div style={{ fontSize: 11, color: C.red, fontWeight: 600, marginBottom: 18 }}>
-              ⚠ This action is irreversible. All submission data will be permanently lost.
+              <WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> This action is irreversible. All submission data will be permanently lost.
             </div>
             <div style={{ display: "flex", gap: 9, justifyContent: "center" }}>
               <button

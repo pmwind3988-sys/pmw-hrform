@@ -11,6 +11,8 @@ import { Survey } from "survey-react-ui";
 import { FlatLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
+import LockIcon from "@mui/icons-material/Lock";
+import BlockIcon from "@mui/icons-material/Block";
 import { spGet, getFormConfigByTitle } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
 import { SP_STATIC } from "../../utils/spConfig";
@@ -226,7 +228,7 @@ export default function ResponseViewer() {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>🔒</div>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 18, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <div style={{ color: C.textSecond }}>You must be signed in to view submissions.</div>
         </div>
@@ -238,7 +240,7 @@ export default function ResponseViewer() {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16 }}>🚫</div>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
           <div style={{ color: C.textSecond }}>You need HR Form Owner permissions to view this page.</div>
           <div style={{ color: C.textMuted, marginTop: 8, fontSize: 13 }}>Please return to the dashboard.</div>
