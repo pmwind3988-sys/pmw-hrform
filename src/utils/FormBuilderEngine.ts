@@ -508,8 +508,6 @@ const INTERNAL_FIELDS = [
   "_enabIfOp",
   "_enabIfVal",
   "_textCustomised",
-  "spChoicesSource",
-  "spFilteredListSource",
   "variantKey",
 ];
 

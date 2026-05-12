@@ -194,13 +194,54 @@ See their pattern for any new custom SurveyJS widgets.
 - **React 19**: no `forwardRef`, no manual memoization
 - **No path aliases** — all imports relative (`../../utils/...`)
 - **No barrel exports** except `src/components/builder/index.ts`
-- **No tests** — zero unit/E2E tests
+- **79 unit tests** exist for `FormBuilderEngine.ts` — run via `npx vitest run`
 - **No CI/CD** — zero GitHub Actions, Docker, deployment configs (confirmed: no `.github/` directory)
 - **No `opencode.json`** config file
 - **ErrorBoundary**: `src/components/ErrorBoundary.tsx` wraps each route to prevent white-screen crashes
 - **DashboardContext**: `src/contexts/DashboardContext.tsx` provides dashboard state to AdminHomePage (replaces prop-drilling)
 - **GitHub CI**: `.github/workflows/ci.yml` runs `npm ci && npm run build` on PRs to master
-- **Testing**: Vitest configured at `vitest.config.ts`, tests in `src/**/__tests__/*.test.ts`
-- **`build_errors.txt` / `build_status.txt`** — build artifact tracking at root; review but don't commit. `build_status.txt` is stale.
-- **`.env.local`**: `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_SP_SITE_URL`. **Never commit.** `.env.example` at root documents the vars.
-- **API env vars**: Use `process.env.SYSTEM_CLIENT_ID`, `SYSTEM_CLIENT_SECRET` (not `VITE_` prefix)
+
+## Testing
+
+### Unit Tests (Vitest)
+- Config: `vitest.config.ts`
+- Location: `src/**/__tests__/*.test.ts`
+- Run: `npx vitest run` (79 tests, ~200ms)
+- Watch mode: `npx vitest`
+- All tests are **pure function tests** — no SharePoint, no network, no browser. They test `FormBuilderEngine.ts` logic only (validation, field tree manipulation, question type helpers, SP column type mapping).
+- **Round-trip tests** for `buildSurveyJson`/`buildQuestionTree` catch regressions where form builder field properties get lost during save/load serialization (e.g., `spChoicesSource` being stripped from `INTERNAL_FIELDS`).
+
+### Integration Testing Gap
+The app has **no integration tests** against real SharePoint. There are no E2E tests (Playwright, Cypress), no MSW mock handlers, and no test harness for the SharePoint REST layer.
+
+Environment is controlled entirely by env vars:
+| Var | Controls |
+|-----|----------|
+| `VITE_SP_SITE_URL` | SharePoint site all SP calls target |
+| `VITE_AZURE_CLIENT_ID` | Azure AD app for MSAL auth |
+| `VITE_AZURE_TENANT_ID` | Tenant for auth + API |
+| `SYSTEM_CLIENT_ID` / `SYSTEM_CLIENT_SECRET` | API server-side auth (Vercel) |
+
+### How to Test Changes
+
+**Pure-logic changes** (e.g., `FormBuilderEngine.ts`):
+1. Add/update a unit test in `src/utils/__tests__/FormBuilderEngine.test.ts`
+2. Run `npx vitest run` — passes in under 1s
+3. Run `npm run build` to confirm no TS errors
+
+**Changes touching SharePoint integration** (save/load/publish flows):
+1. Create a test SharePoint site collection on the same tenant
+2. Copy `.env.example` → `.env.test.local`, override `VITE_SP_SITE_URL` to the test site
+3. Create a test Azure AD app registration with `Sites.Manage` permission for the test site
+4. Run `npm run dev` pointing at the test env — full builder + dashboard + API against test data
+5. Best-effort manual smoke test: create form → add field with SP choices source → save draft → reload → verify setting persists → publish → submit → verify choice column data
+
+**API changes** (`api/` routes):
+1. Set up Vercel dev: `npm run dev:api` (requires `SYSTEM_CLIENT_ID`/`SYSTEM_CLIENT_SECRET` in `.env.local`)
+2. Or deploy to a Vercel preview branch with test env vars
+
+### Why No Test Environment Exists Today
+The frontend talks directly to SharePoint via MSAL-delegated auth (user's browser token). There's no backend proxy that could be swapped. A test environment requires:
+- A separate SharePoint site collection
+- A separate Azure AD app registration (or grant the existing one access to the test site)
+- Manual env var switching
