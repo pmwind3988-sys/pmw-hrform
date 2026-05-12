@@ -383,6 +383,8 @@ if (decision === "guest") {
   useEffect(() => {
     if (pageState === "ready" && isAuthenticated && !postAuthRedirectRef.current) {
       postAuthRedirectRef.current = true;
+      // Don't redirect away from form/eval pages
+      if (window.location.pathname.startsWith("/form/") || window.location.pathname.startsWith("/eval/")) return;
       try {
         const redirectPath = sessionStorage.getItem("pmw_post_login_redirect");
         if (redirectPath) {
