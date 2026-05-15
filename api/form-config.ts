@@ -1,4 +1,4 @@
-import { getGraphToken, queryListItems } from "./_utils/graphClient.ts";
+import { getGraphToken, queryListItems } from "./_utils/graphClient.js";
 
 // Minimal Vercel request/response types
 interface ApiRequest {

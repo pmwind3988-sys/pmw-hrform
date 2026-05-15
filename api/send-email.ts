@@ -1,5 +1,4 @@
-import { getGraphToken } from "./_utils/graphClient.ts";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getGraphToken } from "./_utils/graphClient.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;

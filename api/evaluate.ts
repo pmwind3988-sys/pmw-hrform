@@ -1,4 +1,4 @@
-import { getGraphToken, queryListItems, createListItem, updateListItemFields } from "./_utils/graphClient.ts";
+import { getGraphToken, queryListItems, createListItem, updateListItemFields } from "./_utils/graphClient.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
