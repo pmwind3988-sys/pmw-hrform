@@ -7,13 +7,15 @@ import { useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 
-import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet } from "../utils/formBuilderSP";
+import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, readMatrixChildItems } from "../utils/formBuilderSP";
+import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS } from "../utils/statusConstants";
 import type { LayerConfigItem, EvaluationDataEntry } from "../types";
 import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
 import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
 import type { PdfFormData } from "../utils/FormPdfDocument";
+import { rowsToHtml, getDynamicMatrixFields } from "../utils/DynamicMatrix";
 import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
 
@@ -145,6 +147,7 @@ export default function EvaluationPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [signatureData] = useState<string | null>(null);
   const [checkboxApproved, setCheckboxApproved] = useState(false);
+  const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
 
   const isPublic = !!routeToken;
   const displayLayerNumber = isPublic
@@ -243,6 +246,12 @@ export default function EvaluationPage() {
         setResponseData(data.responseFields);
         setCurrentLayer(data.currentLayer || null);
         setPreviousResults(data.previousResults);
+
+        // Load matrix child list data for dynamicmatrix fields
+        const itemFormVersion = data.responseFields.FormVersion as string | undefined;
+        if (itemFormVersion) {
+          loadMatrixChildData(token, resolvedTitle, parseInt(responseId, 10), itemFormVersion);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load data.");
       }
@@ -311,6 +320,71 @@ export default function EvaluationPage() {
       setActionState("error");
     }
   }, [token, userEmail, formTitle, responseId, displayLayerNumber, rejectionReason, evaluationFields, signatureData, currentLayer, accounts]);
+
+  /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
+  const loadMatrixChildData = async (
+    tkn: string,
+    resolvedTitle: string,
+    respId: number,
+    formVersion: string
+  ) => {
+    try {
+      // Load the version's SurveyJSON to detect dynamicmatrix fields
+      const versionData = await spGet(
+        tkn,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(resolvedTitle)}' and FormVersion eq '${encodeURIComponent(formVersion)}'&$select=SurveyJSON&$top=1`
+      ) as { value?: { SurveyJSON?: string }[] };
+
+      const rawSurvey = versionData.value?.[0]?.SurveyJSON;
+      if (!rawSurvey) return;
+
+      const parsed = JSON.parse(rawSurvey);
+      const surveyDef = parsed.surveyJson || parsed;
+      const matrixFields = getDynamicMatrixFields(surveyDef);
+
+      if (matrixFields.length === 0) return;
+
+      const tables: Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }> = {};
+      for (const mf of matrixFields) {
+        const safeName = mf.name.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
+        const childListName = `${resolvedTitle} Matrix ${safeName}`;
+
+        try {
+          const rows = await readMatrixChildItems(tkn, childListName, respId);
+          if (rows.length > 0) {
+            const cols = mf.columns as MatrixColumnDef[];
+            tables[mf.name] = {
+              columns: cols,
+              rows,
+              html: rowsToHtml(mf.columns, rows),
+            };
+          }
+        } catch {
+          // Child list not found — skip this field
+        }
+      }
+
+      setMatrixTables(tables);
+
+      // Enrich responseData with matrix data in SurveyJS-compatible format
+      if (Object.keys(tables).length > 0) {
+        setResponseData((prev) => {
+          if (!prev) return prev;
+          const enriched = { ...prev };
+          for (const [fieldName, entry] of Object.entries(tables)) {
+            enriched[fieldName] = {
+              rows: entry.rows,
+              html: entry.html,
+              json: JSON.stringify(entry.rows),
+            };
+          }
+          return enriched;
+        });
+      }
+    } catch {
+      // Silently fail — matrix data is non-critical
+    }
+  };
 
   // ── Render ──
   if (authState === "checking" || loading) {
@@ -423,6 +497,29 @@ export default function EvaluationPage() {
               <div>Submitted: {responseData.SubmittedAt ? new Date(String(responseData.SubmittedAt)).toLocaleDateString() : "—"}</div>
               <div>Version: {String(responseData.FormVersion || responseData.formVersion || "—")}</div>
             </div>
+
+            {/* Matrix Tables — from child lists */}
+            {Object.keys(matrixTables).length > 0 && (
+              <div style={{ marginTop: 16, borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.purple, marginBottom: 12 }}>
+                  Matrix Tables
+                </div>
+                {Object.entries(matrixTables).map(([fieldName, entry]) => (
+                  <div key={fieldName} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
+                      {entry.columns[0]?.title || fieldName}
+                    </div>
+                    <div
+                      style={{ overflow: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 8 }}
+                      dangerouslySetInnerHTML={{ __html: entry.html }}
+                    />
+                    <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 4 }}>
+                      {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

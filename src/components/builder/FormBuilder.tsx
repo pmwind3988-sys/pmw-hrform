@@ -7,7 +7,7 @@ import { Survey } from "survey-react-ui";
 import { Model, Serializer } from "survey-core";
 import "survey-core/survey-core.min.css";
 import type { SurveyJson, FormBuilderField } from "../../types/index";
-import { QUESTION_TYPES, TYPE_GROUPS, createQuestion, buildSurveyJson, validateFields, getSpColumnKind } from "../../utils/FormBuilderEngine";
+import { QUESTION_TYPES, TYPE_GROUPS, createQuestion, buildSurveyJson, validateFields, getSpColumnKind, safeEvalArithmetic } from "../../utils/FormBuilderEngine";
 import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree, reorderFieldsRecursive, moveFieldToRoot } from "../../utils/FormBuilderEngine";
 import { registerSignaturePad } from "../../utils/SignaturePad";
 import { C } from "./constants";
@@ -932,6 +932,40 @@ function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange
       <PropRow label="Step"><Input type="number" value={field.step ?? ""} onChange={v => onChange({ step: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
     </>}
 
+    {/* Currency: symbol + decimal places */}
+    {field.type === "currency" && <>
+      <PropRow label="Currency symbol">
+        <Input value={(field as unknown as Record<string, unknown>).currencySymbol as string || "RM"} onChange={v => onChange({ currencySymbol: v } as unknown as Partial<FormBuilderField>)} placeholder="RM" />
+      </PropRow>
+      <PropRow label="Decimal places">
+        <Select value={String((field as unknown as Record<string, unknown>).decimalPlaces ?? 2)} onChange={v => onChange({ decimalPlaces: parseInt(v) } as unknown as Partial<FormBuilderField>)} options={[
+          { value: "0", label: "0 (integer)" },
+          { value: "1", label: "1 decimal" },
+          { value: "2", label: "2 decimals" },
+          { value: "3", label: "3 decimals" },
+          { value: "4", label: "4 decimals" },
+        ]} />
+      </PropRow>
+    </>}
+
+    {/* Number: display format + prefix + suffix */}
+    {field.type === "number" && <>
+      <PropRow label="Display format">
+        <Select value={(field.displayFormat as string) || "0.00"} onChange={v => onChange({ displayFormat: v })} options={[
+          { value: "0", label: "0 (Integer)" },
+          { value: "0.0", label: "0.0 (1 decimal)" },
+          { value: "0.00", label: "0.00 (2 decimals)" },
+          { value: "0.000", label: "0.000 (3 decimals)" },
+        ]} />
+      </PropRow>
+      <PropRow label="Prefix">
+        <Input value={field.prefix || ""} onChange={v => onChange({ prefix: v || undefined })} placeholder="e.g. $" />
+      </PropRow>
+      <PropRow label="Suffix">
+        <Input value={field.suffix || ""} onChange={v => onChange({ suffix: v || undefined })} placeholder="e.g. kg" />
+      </PropRow>
+    </>}
+
     {/* Formula: expression editor + displayFormat + recalculate toggle */}
     {field.type === "formula" && <>
       <PropRow label="Expression / Formula" span>
@@ -941,6 +975,20 @@ function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange
           Supports <strong>+</strong>, <strong>-</strong>, <strong>*</strong>, <strong>/</strong>, parentheses, and SurveyJS expression functions.
         </div>
       </PropRow>
+      <div style={{ display: "flex", gap: 8 }}>
+        <PropRow label="Default value">
+          <Input type="number" value={Number(field.defaultValue ?? 0)} onChange={v => onChange({ defaultValue: v === "" ? 0 : Number(v) })} placeholder="0" />
+        </PropRow>
+        <PropRow label="Decimal places">
+          <Select value={String((field as unknown as Record<string, unknown>).decimalPlaces ?? 2)} onChange={v => onChange({ decimalPlaces: parseInt(v) } as unknown as Partial<FormBuilderField>)} options={[
+            { value: "0", label: "0 (integer)" },
+            { value: "1", label: "1 decimal" },
+            { value: "2", label: "2 decimals" },
+            { value: "3", label: "3 decimals" },
+            { value: "4", label: "4 decimals" },
+          ]} />
+        </PropRow>
+      </div>
       <PropRow label="Display format">
         <Select value={field.displayFormat || "number"} onChange={v => onChange({ displayFormat: v })} options={[
           { value: "number", label: "Number" },
@@ -1064,6 +1112,25 @@ function FieldTypeProps({ field, onChange }: { field: FormBuilderField; onChange
     {field.type === "columns" && <>
       <PropRow label="Column count"><Select value={String(field.columnCount || 2)} onChange={v => onChange({ columnCount: parseInt(v) })} options={[{ value: "2", label: "2 columns" }, { value: "3", label: "3 columns" }]} /></PropRow>
       <PropRow label="Gap (px)"><Input type="number" value={field.gap ?? ""} onChange={v => onChange({ gap: v === "" ? undefined : Number(v) })} placeholder="16" /></PropRow>
+    </>}
+
+    {/* Text: email variant */}
+    {field.type === "text" && field.inputType === "email" && <>
+      <Toggle checked={!!(field as unknown as Record<string, unknown>).allowMultipleEmails} onChange={v => onChange({ allowMultipleEmails: v } as unknown as Partial<FormBuilderField>)} label="Allow multiple emails" />
+    </>}
+
+    {/* Text: tel variant */}
+    {field.type === "text" && field.inputType === "tel" && <>
+      <PropRow label="Validation pattern">
+        <Input value={(field as unknown as Record<string, unknown>).validationPattern as string || ""} onChange={v => onChange({ validationPattern: v || undefined } as unknown as Partial<FormBuilderField>)} placeholder="e.g. ^\+?[0-9]{7,15}$" />
+      </PropRow>
+    </>}
+
+    {/* Text: password variant */}
+    {field.type === "text" && field.inputType === "password" && <>
+      <PropRow label="Pattern validation">
+        <Input value={(field as unknown as Record<string, unknown>).passwordPattern as string || ""} onChange={v => onChange({ passwordPattern: v || undefined } as unknown as Partial<FormBuilderField>)} placeholder="e.g. ^(?=.*[A-Z])(?=.*\d)" />
+      </PropRow>
     </>}
   </>;
 }
@@ -1396,12 +1463,12 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
     <div style={{ flex: 1, padding: "14px" }}>
       {tab === "general" && <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
         <PropRow label="Field name (SP column)" span>
-          <Input value={field.name} onChange={v => onChange({ name: v.replace(/\s+/g, "_") })} placeholder="camelCaseName" />
+          <Input value={field.name} onChange={v => onChange({ name: v.replace(/[^a-zA-Z0-9_]/g, "").replace(/\s+/g, "_") })} placeholder="camelCaseName" />
           <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>No spaces — becomes the SharePoint column name</div>
         </PropRow>
         <PropRow label="Label" span><Input value={field.title} onChange={v => onChange({ title: v })} placeholder="Question label" /></PropRow>
         <PropRow label="Description / hint" span><Input value={field.description || ""} onChange={v => onChange({ description: v })} placeholder="Optional helper text" /></PropRow>
-        {!["html", "dynamicmatrix", "file", "formula"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
+        {!["html", "dynamicmatrix", "file", "formula", "ranking"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
         {field.type === "text" && <PropRow label="Input type"><Select value={field.inputType || "text"} onChange={v => onChange({ inputType: v })} options={[{ value: "text", label: "Text" }, { value: "email", label: "Email" }, { value: "number", label: "Number" }, { value: "date", label: "Date" }, { value: "datetime-local", label: "Date & Time" }, { value: "tel", label: "Phone" }, { value: "url", label: "URL" }, { value: "password", label: "Password" }]} /></PropRow>}
         {field.type === "text" && (!field.inputType || field.inputType === "text") && <PropRow label="Autocapitalize"><Select value={field.autocapitalize || "none"} onChange={v => onChange({ autocapitalize: v as "none" | "sentences" | "words" | "characters" })} options={[{ value: "none", label: "None" }, { value: "sentences", label: "Sentences" }, { value: "words", label: "Words" }, { value: "characters", label: "Characters (ALL CAPS)" }]} /></PropRow>}
         <FieldTypeProps field={field} onChange={onChange} />
@@ -1487,6 +1554,47 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
       m.onValueChanged.add((_, options) => {
         dataRef.current[options.name] = options.value;
       });
+      // Manually evaluate formula fields (stored as readOnly text with _expression)
+      // Build expression map from the source JSON — SurveyJS does NOT preserve
+      // custom JSON properties (_expression) on the question object in v2.5
+      const exprMap = new Map<string, string>();
+      const walkJson = (els: Record<string, unknown>[]) => {
+        for (const el of els) {
+          // Check custom _expression first, then fall back to native expression property
+          // (native expression may exist on forms published before _expression was introduced)
+          const expr = (el._expression as string) || (el.expression as string);
+          if (expr) exprMap.set(el.name as string, expr);
+          if (el.elements) walkJson(el.elements as Record<string, unknown>[]);
+        }
+      };
+      for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
+        if (page.elements) walkJson(page.elements as Record<string, unknown>[]);
+      }
+      const recalcExpressions = () => {
+        for (const q of m.getAllQuestions()) {
+          const expr = exprMap.get(q.name);
+          if (!expr) continue;
+          let compiled = expr;
+          // Replace ALL occurrences of each field reference (split/join replaces globally)
+          const refs = [...new Set(expr.match(/\{([^}]+)\}/g) || [])];
+          for (const ref of refs) {
+            const name = ref.slice(1, -1);
+            const srcQ = m.getQuestionByName(name);
+            const val = srcQ ? (srcQ.value as number | undefined) : undefined;
+            compiled = compiled.split(ref).join(String(Number(val) || 0));
+          }
+          try {
+            const result = safeEvalArithmetic(compiled);
+            if (typeof result === "number" && isFinite(result)) {
+              if (q.value !== result) q.value = result;
+            }
+          } catch (e) {
+            console.warn(`[Builder] Formula eval failed for "${q.name}": expr="${expr}" compiled="${compiled}"`, e);
+          }
+        }
+      };
+      m.onValueChanged.add(recalcExpressions);
+      setTimeout(recalcExpressions, 0);
       // Autocapitalize hook
       m.onValueChanged.add((_, options) => {
         const q = m.getQuestionByName(options.name);
@@ -1613,7 +1721,27 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const [showFieldComments, setShowFieldComments] = useState(false);
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
   const [errors, setErrors] = useState<{ id: string; msg: string }[]>([]);
-  const [surveySettings, setSurveySettings] = useState<Record<string, unknown>>({});
+  const [surveySettings, setSurveySettings] = useState<Record<string, unknown>>(() => {
+    if (!initialJson) return {};
+    return {
+      title: initialJson.title || "",
+      description: initialJson.description || "",
+      titleLocation: initialJson.titleLocation || "default",
+      textTransform: initialJson.textTransform || "none",
+      showQuestionNumbers: initialJson.showQuestionNumbers || "on",
+      checkErrorsMode: initialJson.checkErrorsMode || "onValueChanged",
+      textUpdateMode: initialJson.textUpdateMode || "onTyping",
+      showProgressBar: !!initialJson.showProgressBar,
+      showPageTitles: !!initialJson.showPageTitles,
+      primaryColor: initialJson.primaryColor || "#5B21B6",
+      backgroundColor: initialJson.backgroundColor || "#FFFFFF",
+      textColor: initialJson.textColor || "#1E1B4B",
+      errorColor: initialJson.errorColor || "#DC2626",
+      fontFamily: initialJson.fontFamily || "DM Sans",
+      borderRadius: initialJson.borderRadius || "8px",
+      labelPosition: initialJson.labelPosition || "top",
+    };
+  });
   
   // Toolbar scroll state
   const toolbarRightRef = useRef<HTMLDivElement>(null);

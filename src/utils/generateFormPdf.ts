@@ -4,7 +4,8 @@
  */
 import { pdf } from "@react-pdf/renderer";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "./FormPdfDocument";
-import { uploadFormPdf, spPatch, addColumn } from "./formBuilderSP";
+import { uploadFormPdf, spPatch, addColumn, readMatrixChildItems } from "./formBuilderSP";
+import type { MatrixColumnDef } from "./formBuilderSP";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -59,6 +60,39 @@ export function buildPdfLayerResults(
   return results;
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/** Find all dynamicmatrix/tableinput fields with their column definitions in the survey JSON. */
+function findMatrixFields(surveyJson: PdfFormData["surveyJson"]): { name: string; columns: MatrixColumnDef[] }[] {
+  const result: { name: string; columns: MatrixColumnDef[] }[] = [];
+  const pages = surveyJson?.pages ?? [];
+  const walkElements = (els: Record<string, unknown>[]) => {
+    for (const el of els) {
+      const t = el.type as string | undefined;
+      if (t === "dynamicmatrix" || t === "matrixdynamic" || t === "tableinput") {
+        const name = el.name as string | undefined;
+        const cols = (el.columns as MatrixColumnDef[]) || [];
+        if (name && cols.length > 0) result.push({ name, columns: cols });
+      }
+      if (el.elements && Array.isArray(el.elements)) {
+        walkElements(el.elements as Record<string, unknown>[]);
+      }
+    }
+  };
+  for (const page of pages) {
+    if (page.elements) walkElements(page.elements);
+  }
+  return result;
+}
+
+/**
+ * Sanitize a field name for use in a SharePoint child list name.
+ * Mirrors the sanitization in ensureMatrixChildList.
+ */
+function sanitizeMatrixFieldName(fieldName: string): string {
+  return fieldName.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
+}
+
 // ── PDF generation + storage ───────────────────────────────────────────────
 
 export async function generateAndStorePdf(
@@ -67,6 +101,39 @@ export async function generateAndStorePdf(
   responseItemId: number,
   data: PdfFormData
 ): Promise<string> {
+  // ── Inject matrix child rows ──────────────────────────────────────────
+  // For dynamicmatrix/tableinput fields, read child list rows and attach
+  // them to responseData so the PDF document can render proper tables.
+  const matrixFields = findMatrixFields(data.surveyJson);
+  for (const mf of matrixFields) {
+    const rowIdsKey = `${mf.name}_RowIds`;
+    const rowIdsRaw = data.responseData[rowIdsKey];
+    if (!rowIdsRaw) continue;
+
+    // RowIds is stored as a JSON string of child item IDs
+    let hasRowIds = false;
+    if (typeof rowIdsRaw === "string") {
+      try {
+        const parsed = JSON.parse(rowIdsRaw) as unknown;
+        hasRowIds = Array.isArray(parsed) && parsed.length > 0;
+      } catch { /* not valid JSON — skip */ }
+    } else if (Array.isArray(rowIdsRaw)) {
+      hasRowIds = rowIdsRaw.length > 0;
+    }
+    if (!hasRowIds) continue;
+
+    try {
+      const safeName = sanitizeMatrixFieldName(mf.name);
+      const childListName = `${data.meta.formTitle} Matrix ${safeName}`;
+      const childRows = await readMatrixChildItems(token, childListName, responseItemId);
+      if (childRows.length > 0) {
+        data.responseData[`${mf.name}_childRows`] = { columns: mf.columns, rows: childRows };
+      }
+    } catch {
+      // Silently skip if child list read fails (list may not exist yet)
+    }
+  }
+
   const blob = await pdf(FormPdfDocument(data)).toBlob();
 
   // Upload to SharePoint Form PDFs library

@@ -72,7 +72,7 @@ async function getSiteId(token: string): Promise<string> {
   return data.id;
 }
 
-async function getListId(token: string, displayName: string): Promise<string> {
+export async function getListId(token: string, displayName: string): Promise<string> {
   if (cachedListIds[displayName]) return cachedListIds[displayName];
   const siteId = await getSiteId(token);
   const filter = `$filter=displayName eq '${encodeURIComponent(displayName)}'`;
@@ -170,6 +170,96 @@ export async function createListItem(
   return data;
 }
 
+// --- SharePoint field/choice helpers (for server-side survey JSON enrichment) ---
+
+/**
+ * Fetch choices from a Choice/MultiChoice column definition via Graph API.
+ */
+export async function getListColumnChoices(
+  token: string,
+  listDisplayName: string,
+  columnName: string
+): Promise<string[]> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  // Fetch ALL columns and find by displayName — $filter on displayName is unreliable
+  const data = (await graphGet(
+    token,
+    `/sites/${siteId}/lists/${listId}/columns`
+  )) as {
+    value: Array<{
+      name: string;
+      displayName: string;
+      choice?: { choices: string[] };
+      multiChoice?: { choices: string[] };
+    }>;
+  };
+  const col = data.value?.find((c) => c.displayName === columnName);
+  if (!col) return [];
+  return col.choice?.choices || col.multiChoice?.choices || [];
+}
+
+/**
+ * Resolve a column's internal name from its display name via Graph API.
+ */
+async function resolveColumnName(
+  token: string,
+  listDisplayName: string,
+  displayName: string
+): Promise<string> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  try {
+    // Fetch ALL columns and find by displayName — $filter on displayName is unreliable
+    const data = (await graphGet(
+      token,
+      `/sites/${siteId}/lists/${listId}/columns?$select=name,displayName`
+    )) as { value: Array<{ name: string; displayName: string }> };
+    const col = data.value?.find((c) => c.displayName === displayName);
+    return col?.name || displayName;
+  } catch {
+    return displayName; // fallback — use as-is
+  }
+}
+
+/**
+ * Fetch distinct values from a list column items via Graph API.
+ * Equivalent to the client-side `getFilteredListChoices`.
+ */
+export async function getListColumnValues(
+  token: string,
+  listDisplayName: string,
+  valueColumn: string,
+  filterColumn?: string,
+  filterValue?: string
+): Promise<string[]> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+
+  // Resolve display names → internal names for Graph API
+  const internalValueCol = await resolveColumnName(token, listDisplayName, valueColumn);
+  const internalFilterCol = filterColumn
+    ? await resolveColumnName(token, listDisplayName, filterColumn)
+    : undefined;
+
+  const expand = encodeURIComponent(`fields($select=${internalValueCol})`);
+  let filter = "";
+  if (internalFilterCol && filterValue) {
+    filter = `&$filter=fields/${encodeURIComponent(internalFilterCol)} eq '${encodeURIComponent(filterValue)}'`;
+  }
+  const data = (await graphGet(
+    token,
+    `/sites/${siteId}/lists/${listId}/items?$expand=${expand}&$top=5000${filter}`
+  )) as { value: Array<{ fields?: Record<string, unknown> }> };
+
+  const values = new Set<string>();
+  for (const item of data.value || []) {
+    const v = item.fields?.[internalValueCol];
+    if (v != null && v !== "") values.add(String(v));
+  }
+  return Array.from(values).sort();
+}
+
 export async function updateListItemFields(
   token: string,
   listDisplayName: string,
@@ -189,5 +279,74 @@ export async function updateListItemFields(
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Graph PATCH fields ${res.status}: ${text}`);
+  }
+}
+
+// ── Document Library & File Upload Helpers (server-side) ────────────────
+
+/**
+ * Creates a document library via Graph API.
+ * Returns the list id of the newly created library.
+ */
+export async function createDocLibrary(
+  token: string,
+  displayName: string,
+): Promise<string> {
+  const siteId = await getSiteId(token);
+  const data = (await graphPost(token, `/sites/${siteId}/lists`, {
+    displayName,
+    columns: [],
+    list: { template: "documentLibrary" },
+  })) as { id: string };
+  return data.id;
+}
+
+/**
+ * Uploads binary content to a SharePoint document library via Graph API drive endpoint.
+ * Returns the web URL of the uploaded file.
+ */
+export async function uploadFileToDrive(
+  token: string,
+  listDisplayName: string,
+  fileName: string,
+  content: Uint8Array,
+): Promise<string> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const encodedName = encodeURIComponent(fileName);
+
+  const res = await fetch(
+    `${GRAPH_BASE}/sites/${siteId}/lists/${listId}/drive/root:/${encodedName}:/content`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/octet-stream",
+      },
+      body: content,
+    },
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Graph PUT file ${res.status}: ${text}`);
+  }
+
+  const data = (await res.json()) as { webUrl?: string; "@microsoft.graph.downloadUrl"?: string };
+  return data.webUrl || data["@microsoft.graph.downloadUrl"] || "";
+}
+
+/**
+ * Checks whether a SharePoint list exists via Graph API.
+ */
+export async function listExistsGraph(
+  token: string,
+  displayName: string,
+): Promise<boolean> {
+  try {
+    await getListId(token, displayName);
+    return true;
+  } catch {
+    return false;
   }
 }

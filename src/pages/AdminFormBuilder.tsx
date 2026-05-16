@@ -655,6 +655,8 @@ export default function AdminFormBuilder() {
           await addColumn(token, title, `${q.name}_Json`, 3, true, false);
           pLog(`     ✓ ${q.name}_Json (JSON backup)`);
         } else if (sp) {
+          // Skip formula fields (read-only calculated, no column needed)
+          if ((q as unknown as Record<string, unknown>)._expression) continue;
           // Extract choices for Choice (6) and MultiChoice (15) columns
           let choiceValues: string[] | undefined;
           if (sp.FieldTypeKind === 6 || sp.FieldTypeKind === 15) {

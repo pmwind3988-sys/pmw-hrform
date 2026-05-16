@@ -20,7 +20,7 @@ const C = {
   greenPale: "#D1FAE5",
 } as const;
 
-interface MatrixColumn {
+export interface MatrixColumn {
   name: string;
   title: string;
   cellType?: string;
@@ -30,7 +30,7 @@ interface MatrixColumn {
   filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean };
 }
 
-interface MatrixRow {
+export interface MatrixRow {
   [key: string]: unknown;
 }
 
@@ -49,6 +49,46 @@ export function registerQuestionData(surveyJson: unknown): void {
 
 export function getQuestionData(name: string): unknown | null {
   return _questionDataRegistry.get(name) ?? null;
+}
+
+// ── Walk survey JSON to discover all dynamicmatrix fields with their column definitions ──
+export interface DynamicMatrixFieldMeta {
+  name: string;
+  columns: MatrixColumn[];
+  title?: string;
+}
+
+export function getDynamicMatrixFields(surveyJson: unknown): DynamicMatrixFieldMeta[] {
+  const result: DynamicMatrixFieldMeta[] = [];
+  try {
+    const def = surveyJson as Record<string, unknown>;
+    // Handle { surveyJson: {...}, layerConfig: ... } wrapper
+    const inner = (def.pages ? def : def.surveyJson) as Record<string, unknown> | undefined;
+    const pages = (inner as { pages?: unknown[] } | undefined)?.pages as { elements?: unknown[] }[] | undefined;
+    if (!pages) return result;
+
+    const walk = (elements: unknown[]) => {
+      for (const el of elements) {
+        const elem = el as Record<string, unknown>;
+        if ((elem.type === "dynamicmatrix" || elem.type === "matrixdynamic") && elem.name) {
+          const cols = (elem.columns as MatrixColumn[]) || [];
+          if (cols.length > 0) {
+            result.push({ name: String(elem.name), columns: cols, title: elem.title as string | undefined });
+          }
+        }
+        if (elem.elements) {
+          walk(elem.elements as unknown[]);
+        }
+      }
+    };
+
+    for (const page of pages) {
+      if (page.elements) walk(page.elements);
+    }
+  } catch {
+    // Return empty on parse issues
+  }
+  return result;
 }
 
 // ── Convert row data → HTML table string (for SP rich-text column) ──

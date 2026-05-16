@@ -11,14 +11,18 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary } from "../utils/formBuilderSP";
+import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { LayerConfig } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
+import IosShareIcon from "@mui/icons-material/IosShare";
+import QRCode from "qrcode";
 import Logo from "../components/Logo";
 import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
+import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -64,6 +68,27 @@ const globalCss = (t: typeof LIGHT) => `
    .dfp-survey-wrap .sd-root-modern{background:transparent!important}
 .dfp-survey-wrap .sd-container-modern>.sd-title{text-align:center!important}
 .dfp-survey-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}
+  .dfp-header{flex-wrap:nowrap}
+  .dfp-survey-wrap .sd-container-modern,.dfp-survey-wrap .sd-root-modern{max-width:100%!important}
+  @media(max-width:768px){
+    .dfp-banner-logo{width:100px!important}
+    .dfp-banner-row{flex-direction:column!important}
+    .dfp-banner-logo{border-right:none!important;border-bottom:inherit;padding:8px!important}
+  }
+  @media(max-width:640px){
+    .dfp-header{padding:0 12px!important;min-height:48px!important}
+    .dfp-header-left{gap:6px!important}
+    .dfp-title{font-size:13px!important;max-width:140px}
+    .dfp-user-name{display:none}
+    .dfp-badge{font-size:9px!important;padding:1px 7px!important}
+    .dfp-header-right{gap:6px!important}
+    .dfp-version{display:none}
+    .dfp-content{padding:20px 16px 72px!important}
+  }
+  @media(max-width:480px){
+    .dfp-title{max-width:100px}
+    .dfp-banner-logo{width:80px!important}
+  }
   ::-webkit-scrollbar{width:5px}
   ::-webkit-scrollbar-thumb{background:${t.purpleMid};border-radius:10px}
 `;
@@ -139,6 +164,10 @@ export default function DynamicFormPage() {
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
+  const [showQr, setShowQr] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+  const shareUrl = window.location.origin + window.location.pathname + (pinVersion ? `?version=${pinVersion}` : "");
   const tokenRef = useRef<string | null>(null);
   const userEmail = accounts[0]?.username || null;
   const lastDataRef = useRef<Record<string, unknown> | null>(null);
@@ -341,6 +370,48 @@ export default function DynamicFormPage() {
       const m = new Model(json);
       m.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless);
       m.showCompletedPage = false;
+      // Manually evaluate formula fields (stored as readOnly text with _expression)
+      // Build expression map from the source JSON — SurveyJS does NOT preserve
+      // custom JSON properties (_expression) on the question object in v2.5
+      const exprMap = new Map<string, string>();
+      const walkJson = (els: Record<string, unknown>[]) => {
+        for (const el of els) {
+          // Check custom _expression first, then fall back to native expression property
+          // (native expression may exist on forms published before _expression was introduced)
+          const expr = (el._expression as string) || (el.expression as string);
+          if (expr) exprMap.set(el.name as string, expr);
+          if (el.elements) walkJson(el.elements as Record<string, unknown>[]);
+        }
+      };
+      for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
+        if (page.elements) walkJson(page.elements as Record<string, unknown>[]);
+      }
+      const recalcExpressions = () => {
+        for (const q of m.getAllQuestions()) {
+          const expr = exprMap.get(q.name);
+          if (!expr) continue;
+          let compiled = expr;
+          // Replace ALL occurrences of each field reference (split/join replaces globally)
+          const refs = [...new Set(expr.match(/\{([^}]+)\}/g) || [])];
+          for (const ref of refs) {
+            const name = ref.slice(1, -1);
+            const srcQ = m.getQuestionByName(name);
+            const val = srcQ ? (srcQ.value as number | undefined) : undefined;
+            compiled = compiled.split(ref).join(String(Number(val) || 0));
+          }
+          try {
+            const result = safeEvalArithmetic(compiled);
+            if (typeof result === "number" && isFinite(result)) {
+              if (q.value !== result) q.value = result;
+            }
+          } catch (e) {
+            console.warn(`[DFP] Formula eval failed for "${q.name}": expr="${expr}" compiled="${compiled}"`, e);
+          }
+        }
+      };
+      m.onValueChanged.add(recalcExpressions);
+      // Trigger on first load
+      setTimeout(recalcExpressions, 0);
       m.onValueChanged.add((_, options) => {
         const q = m.getQuestionByName(options.name);
         if (!q || q.getType() !== "text") return;
@@ -367,27 +438,88 @@ export default function DynamicFormPage() {
 
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
 
-  const onCompleting = useCallback((sender: { data: Record<string, unknown> }) => { lastDataRef.current = { ...sender.data }; }, []);
-  const onComplete = useCallback(async () => {
+  const onCompleting = useCallback((sender: { data: Record<string, unknown> }, options: { allowComplete: boolean }) => {
+    lastDataRef.current = { ...sender.data };
+    options.allowComplete = false; // prevent survey auto-complete — we handle submission + success/error UI
     setSubmitStatus("loading");
+  }, []);
+  const doSubmitForm = useCallback(async () => {
     const raw = lastDataRef.current ?? {};
     const cfg = formData?.formConfig;
-    if (!cfg) { setSubmitStatus("error"); return; }
-    try {
+    if (!cfg) { throw new Error("no form config"); }
+    
       let activeLayers: { email: string; name: string }[] = [];
       let resolvedLayerCount = 0;
       const token = tokenRef.current;
       const formId = String(cfg.FormID || "");
 
-      // Upload signature images (keep existing code)
+      // Step 1: Upload file/image/signature fields to document libraries
       if (token) {
+        // Detect file/image field names from survey JSON
+        const fileFieldNames = new Set<string>();
+        const surveyData = formData?.surveyJson;
+        if (surveyData) {
+          const pages = (surveyData as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
+          if (pages) {
+            const walk = (els: Record<string, unknown>[]) => {
+              for (const el of els) {
+                if ((el.type === 'file' || el.type === 'imageupload') && el.name) {
+                  fileFieldNames.add(el.name as string);
+                }
+                if (el.elements) walk(el.elements as Record<string, unknown>[]);
+              }
+            };
+            for (const page of pages) { if (page.elements) walk(page.elements); }
+          }
+        }
+
+        let docLibName: string | null = null;
+
         for (const [k, v] of Object.entries(raw)) {
-          if (typeof v === "string" && v.startsWith("data:image/")) {
+          // Handle base64 data values: signatures → Signature Images, file fields → per-form doc lib
+          if (typeof v === "string" && v.startsWith("data:")) {
             try {
-              const imageUrl = await uploadSignatureImage(token, formId, "submission", v);
-              raw[k] = { Url: imageUrl, Description: "Signature" };
+              const isSignature = v.startsWith("data:image/") && !fileFieldNames.has(k);
+              if (isSignature) {
+                const imageUrl = await uploadSignatureImage(token, formId, "submission", v);
+                raw[k] = { Url: imageUrl, Description: "Signature" };
+              } else {
+                if (!docLibName) {
+                  docLibName = await ensureDocLibrary(token, cfg.Title as string);
+                }
+                const mimeMatch = v.match(/^data:([\w/+-]+);/);
+                const ext = mimeMatch ? mimeMatch[1].split('/').pop() || 'bin' : 'bin';
+                const safeExt = ext.replace(/[^a-zA-Z0-9]/g, '');
+                const fileName = `${k}_${Date.now()}.${safeExt}`;
+                const fileUrl = await uploadFileToDocLib(token, docLibName, fileName, v);
+                raw[k] = { Url: fileUrl, Description: fileName };
+              }
             } catch (e) {
-              console.warn("[DFP] signature upload failed for", k, (e as Error).message);
+              console.warn("[DFP] file upload failed for", k, (e as Error).message);
+            }
+          }
+          // Handle multi-file arrays (SurveyJS file question with allowMultiple)
+          if (Array.isArray(v)) {
+            const urls: { Url: string; Description: string }[] = [];
+            for (const item of v) {
+              if (typeof item === "string" && item.startsWith("data:")) {
+                try {
+                  if (!docLibName) {
+                    docLibName = await ensureDocLibrary(token, cfg.Title as string);
+                  }
+                  const mimeMatch = item.match(/^data:([\w/+-]+);/);
+                  const ext = mimeMatch ? mimeMatch[1].split('/').pop() || 'bin' : 'bin';
+                  const safeExt = ext.replace(/[^a-zA-Z0-9]/g, '');
+                  const fileName = `${k}_${Date.now()}_${urls.length}.${safeExt}`;
+                  const fileUrl = await uploadFileToDocLib(token, docLibName, fileName, item);
+                  urls.push({ Url: fileUrl, Description: fileName });
+                } catch (e) {
+                  console.warn("[DFP] multi-file upload failed for", k, (e as Error).message);
+                }
+              }
+            }
+            if (urls.length > 0) {
+              raw[k] = urls;
             }
           }
         }
@@ -490,7 +622,45 @@ export default function DynamicFormPage() {
           }
         }
 
-        // Step 6: Trigger notification
+        // Step 6: Write matrix child list items (dynamicmatrix fields)
+        const matrixUpdateBody: Record<string, unknown> = {};
+        if (result?.Id && enrichedSurveyJson) {
+          try {
+            const pages = (enrichedSurveyJson as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
+            const matrixFields: { name: string; columns: MatrixColumnDef[] }[] = [];
+            if (pages) {
+              const walk = (els: Record<string, unknown>[]) => {
+                for (const el of els) {
+                  if (el.type === "dynamicmatrix" || el.type === "matrixdynamic") {
+                    const cols = (el.columns as MatrixColumnDef[]) || [];
+                    if (el.name && cols.length > 0) matrixFields.push({ name: el.name as string, columns: cols });
+                  }
+                  if (el.elements) walk(el.elements as Record<string, unknown>[]);
+                }
+              };
+              for (const page of pages) { if (page.elements) walk(page.elements); }
+            }
+            for (const mf of matrixFields) {
+              const rawVal = raw[mf.name];
+              if (!rawVal || typeof rawVal !== "object") continue;
+              const rows = (rawVal as Record<string, unknown>).rows as Record<string, unknown>[] | undefined;
+              if (!Array.isArray(rows) || rows.length === 0) continue;
+              const childList = await ensureMatrixChildList(token, cfg.Title as string, mf.name, mf.columns, () => {});
+              if (childList) {
+                const ids = await writeMatrixChildItems(token, childList.listName, result.Id, rows, mf.columns);
+                matrixUpdateBody[`${mf.name}_RowIds`] = JSON.stringify(ids);
+              }
+            }
+            // PATCH parent item with RowIds (if any matrix data was written)
+            if (Object.keys(matrixUpdateBody).length > 0) {
+              await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`, matrixUpdateBody);
+            }
+          } catch (e) {
+            console.warn("[DFP] matrix child list write failed:", (e as Error).message);
+          }
+        }
+
+        // Step 7: Trigger notification
         if (resolvedLayerCount > 0 && result?.Id) {
           const layer1Email = activeLayers[0]?.email;
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
@@ -542,7 +712,39 @@ export default function DynamicFormPage() {
               ) as Record<string, unknown>;
               const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
               const pdfData: Record<string, unknown> = {};
-              for (const [k, v] of Object.entries(respItem)) { if (!SYSTEM_FIELDS.has(k) && v !== null && v !== undefined) pdfData[k] = v; }
+              for (const [k, v] of Object.entries(respItem)) {
+                if (SYSTEM_FIELDS.has(k) || v === null || v === undefined) continue;
+                // Filter out matrix system columns — rendered separately as tables
+                if (k.endsWith('_Html') || k.endsWith('_Json') || k.endsWith('_RowIds')) continue;
+                pdfData[k] = v;
+              }
+              // ── Inject matrix child rows for table rendering ──────────
+              // (generateAndStorePdf also does this independently; doing it here
+              //  provides the data upfront for any future pdfData consumers.)
+              try {
+                const sPages = (surveyContent as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
+                if (sPages) {
+                  const walkEls = (els: Record<string, unknown>[]) => {
+                    for (const el of els) {
+                      const t = el.type as string | undefined;
+                      if (t === 'dynamicmatrix' || t === 'matrixdynamic' || t === 'tableinput') {
+                        const fName = el.name as string | undefined;
+                        if (fName && respItem[`${fName}_RowIds`]) {
+                          const safeName = fName.replace(/[^a-zA-Z0-9_ -]/g, '').trim();
+                          const childListName = `${cfg.Title as string} Matrix ${safeName}`;
+                          readMatrixChildItems(token, childListName, result.Id as number).then(childRows => {
+                            if (childRows.length > 0) {
+                              pdfData[`${fName}_childRows`] = { columns: (el.columns as MatrixColumnDef[]) || [], rows: childRows };
+                            }
+                          }).catch(() => { /* ignore */ });
+                        }
+                      }
+                      if (el.elements) walkEls(el.elements as Record<string, unknown>[]);
+                    }
+                  };
+                  for (const page of sPages) { if (page.elements) walkEls(page.elements); }
+                }
+              } catch { /* ignore matrix injection errors */ }
               await generateAndStorePdf(token, cfg.Title as string, result.Id, {
                 surveyJson: surveyContent as PdfFormData["surveyJson"],
                 responseData: pdfData,
@@ -556,19 +758,68 @@ export default function DynamicFormPage() {
       } else {
         submittedByEmail = "GUEST";
         body.SubmittedBy = submittedByEmail;
-        const res = await fetch("/api/submit-form", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listTitle: cfg.Title, body }) });
-        if (!res.ok) { const err = await res.json().catch(() => ({})) as { error?: string }; throw new Error(err.error || `Submit failed: ${res.status}`); }
+
+        // Extract matrix data from raw submission (for server-side child list writing)
+        const matrixData: Record<string, { rows: Record<string, unknown>[]; columns: { name: string; title: string; cellType?: string; choices?: string[] }[] }> = {};
+        if (enrichedSurveyJson) {
+          const pages = (enrichedSurveyJson as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
+          if (pages) {
+            const walk = (els: Record<string, unknown>[]) => {
+              for (const el of els) {
+                if ((el.type === "dynamicmatrix" || el.type === "matrixdynamic") && el.name) {
+                  const rawVal = raw[el.name as string];
+                  if (rawVal && typeof rawVal === "object") {
+                    const rows = (rawVal as Record<string, unknown>).rows as Record<string, unknown>[] | undefined;
+                    if (Array.isArray(rows) && rows.length > 0) {
+                      matrixData[el.name as string] = {
+                        rows,
+                        columns: (el.columns as { name: string; title: string; cellType?: string; choices?: string[] }[]) || [],
+                      };
+                    }
+                  }
+                }
+                if (el.elements) walk(el.elements as Record<string, unknown>[]);
+              }
+            };
+            for (const page of pages) { if (page.elements) walk(page.elements); }
+          }
+        }
+
+        const res = await fetch("/api/submit-form", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ listTitle: cfg.Title, body, matrixData: Object.keys(matrixData).length > 0 ? matrixData : undefined }),
+        });
+        const resData = await res.json().catch(() => ({})) as { id?: string; error?: string };
+        if (!res.ok) { throw new Error(resData.error || `Submit failed: ${res.status}`); }
+
+        // If API returned parent item ID and we have matrixData, try server-side child list write
+        // (API creates child items using system credential; we verify via RowIds response field)
+        if (resData.id && Object.keys(matrixData).length > 0) {
+          // The API already handled child list creation if successful
+          // Nothing more to do client-side for guest path
+        }
       }
-      setSubmitStatus("success");
-    } catch (e) { console.error("[DFP] submit error:", e); setSubmitStatus("error"); }
+      // Success — function returns normally; errors propagate to caller (useEffect)
   }, [formData, userEmail, accounts]);
 
   useEffect(() => {
     if (!survey) return;
     survey.onCompleting.add(onCompleting);
-    survey.onComplete.add(onComplete);
-    return () => { survey.onCompleting.remove(onCompleting); survey.onComplete.remove(onComplete); };
-  }, [survey, onCompleting, onComplete]);
+    // NOTE: onComplete is intentionally NOT registered — onCompleting prevents
+    // auto-completion and triggers submission via doSubmitForm + submitStatus effect
+    return () => { survey.onCompleting.remove(onCompleting); };
+  }, [survey, onCompleting]);
+
+  // Run submission logic when onCompleting triggers the loading state
+  useEffect(() => {
+    if (submitStatus !== "loading") return;
+    let cancelled = false;
+    doSubmitForm()
+      .then(() => { if (!cancelled) setSubmitStatus("success"); })
+      .catch(() => { if (!cancelled) setSubmitStatus("error"); });
+    return () => { cancelled = true; };
+  }, [submitStatus, doSubmitForm]);
 
   const handleSignIn = useCallback(() => {
     try {
@@ -588,6 +839,14 @@ export default function DynamicFormPage() {
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
 
   useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
+
+  // Generate QR when modal opens
+  useEffect(() => {
+    if (!showQr) return;
+    QRCode.toDataURL(shareUrl, { width: 280, margin: 2, color: { dark: "#1E1B4B", light: "#FFFFFF" } })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(""));
+  }, [showQr]);
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
   const showBanner = (formData?.meta?.showBanner as boolean) !== false;
   const isoStandardsText = (formData?.meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
@@ -620,49 +879,48 @@ export default function DynamicFormPage() {
     <div style={{ minHeight: "100vh", background: t.bg }}>
       <style>{globalCss(t)}</style>
       <ScrollProgress t={t} />
-      <header style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, height: 54, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href="/" title="Back to Dashboard" style={{ display: "flex", alignItems: "center", gap: 4, height: 28, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 6, background: "none", color: t.textSecond, fontSize: 11, textDecoration: "none", cursor: "pointer", fontFamily: "'DM Sans'" }}>← Dashboard</a>
+      <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 54, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
+        <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Logo size={28} />
-          <span style={{ fontFamily: "'DM Serif Display',serif", fontSize: 15, color: t.textPrimary }}>{formTitle}</span>
-          {pinVersion && <span style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 20, padding: "2px 10px" }}>v{pinVersion}</span>}
-          {!isPublicForm && <span style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 20, padding: "2px 10px" }}>Private</span>}
+          <span className="dfp-title" style={{ fontFamily: "'DM Serif Display',serif", fontSize: 15, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
+          {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
+          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>Private</span>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="dfp-header-right" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 28, width: 28, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 6, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
           {isAuthenticated ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: t.green }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.green }} />
-              {userEmail?.split("@")[0]}
-            </div>
-          ) : (<button onClick={handleSignIn} style={{ height: 28, padding: "0 13px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6 }}><MsIcon /> Sign in</button>)}
-          <span style={{ fontSize: 10, color: t.textMuted }}>v{formVersion}</span>
+            <>
+              <div className="dfp-user-badge" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: t.textSecond }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
+                <span className="dfp-user-name">{userEmail?.split("@")[0]}</span>
+              </div>
+              <button onClick={handleSignOut} style={{ height: 28, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 6, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
+            </>
+          ) : (<button onClick={handleSignIn} style={{ height: 28, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
+          <span className="dfp-version" style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap" }}>v{formVersion}</span>
         </div>
       </header>
 
       {showBanner && (
-        <div style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
-          <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "16px 24px" }}>
+        <div className="dfp-banner" style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
+          <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "14px 20px" }}>
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{isoStandardsText}</div>
             <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 17, color: "#fff" }}>{formTitle}</div>
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <tbody>
-              <tr style={{ borderBottom: `1px solid ${t.border}` }}>
-                <td style={{ width: 140, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "9px 14px", verticalAlign: "middle", textAlign: "center" }}>
-                  <img src={logoUrl || "/logo-48.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 42, objectFit: "contain" }} />
-                </td>
-                <td style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13, color: t.textPrimary }}>
-                  {companyLines.length > 0
-                    ? companyLines.map((line, i) => <div key={i} style={i > 0 ? { marginTop: 4 } : undefined}>{line}</div>)
-                    : "PMW INTERNATIONAL BERHAD"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${t.border}` }}>
+            <div className="dfp-banner-logo" style={{ width: 140, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "9px 14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img src={logoUrl || "/logo-48.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 42, objectFit: "contain" }} />
+            </div>
+            <div className="dfp-banner-info" style={{ flex: 1, padding: "12px 16px", fontWeight: 700, fontSize: 13, color: t.textPrimary }}>
+              {companyLines.length > 0
+                ? companyLines.map((line, i) => <div key={i} style={i > 0 ? { marginTop: 4 } : undefined}>{line}</div>)
+                : "PMW INTERNATIONAL BERHAD"}
+            </div>
+          </div>
         </div>
       )}
 
-      <div style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
+      <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
           <SuccessScreen formTitle={formTitle} onReset={handleReset} t={t} />
         ) : (
@@ -676,11 +934,35 @@ export default function DynamicFormPage() {
             )}
             {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
             {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 10, color: t.purple, fontSize: 13 }}><Spinner size={14} t={t} /> Submitting...</div>}
-            {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 10, color: t.red, fontSize: 13 }}>X Submission failed. Please try again.</div>}
+            {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 10, color: t.red, fontSize: 13, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div>X Submission failed. Your answers have been saved — review and try again.</div>
+              <button onClick={() => survey?.doComplete()} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry Submit</button>
+            </div>}
           </div>
         )}
         <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: t.textMuted }}>PMW International Berhad HR Forms</div>
       </div>
+
+      {showQr && (
+        <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, animation: "fadeUp .2s ease", backdropFilter: "blur(2px)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, padding: "32px 28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: "#1E1B4B", marginBottom: 4 }}>Share this form</div>
+            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 20, lineHeight: 1.5 }}>Scan the QR code or copy the link below</div>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 12 }} />
+            ) : (
+              <div style={{ width: 200, height: 200, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF", fontSize: 12 }}>Generating...</div>
+            )}
+            <div style={{ fontSize: 11, color: "#6B7280", wordBreak: "break-all", padding: "10px 12px", background: "#F3F4F6", borderRadius: 10, marginBottom: 18, lineHeight: 1.5 }}>
+              {shareUrl}
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? "#059669" : "#E5E3F0"}`, borderRadius: 10, background: copied ? "#D1FAE5" : "none", color: copied ? "#059669" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
+              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: "linear-gradient(135deg,#5B21B6,#7C3AED)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

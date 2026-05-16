@@ -34,9 +34,11 @@ Builder path:
 
 ## SP Column Type Mapping
 `FormBuilderEngine.ts` `getSpColumnKind()` and `formBuilderSP.ts` `addColumn()` map SurveyJS types to SharePoint `FieldTypeKind`:
-- 2 = Text, 3 = Note, 4 = DateTime, 6 = Choice, 8 = Boolean, 9 = Number, 15 = MultiChoice
-- `dynamicmatrix`/`tableinput` create `_Html` (richText) + `_Json` columns
+- 2 = Text, 3 = Note, 4 = DateTime, 6 = Choice, 8 = Boolean, 9 = Number, 15 = MultiChoice, 11 = Image
+- `dynamicmatrix`/`tableinput` create `_Html` (richText) + `_Json` columns AND a child list `{FormTitle} Matrix {FieldName}` (primary storage). See `ensureMatrixChildList()`.
 - `spChoicesSource` fields fetch live choices from SP at publish time and pass them to `addColumn()`
+- Formula fields use `_expression` custom property on `type: "text", readOnly: true` — NOT SurveyJS native `expression`
+- `ranking` type stores ordered array as JSON string in Note column (kind=3)
 
 ## Anti-Patterns
 - `formBuilderSP.ts` has `catch (e: any)` and `eslint-disable` — fix types when touching

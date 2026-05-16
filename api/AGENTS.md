@@ -6,7 +6,7 @@
 | Task | File | Notes |
 |------|------|-------|
 | Public form config | `form-config.ts` | `GET /api/form-config?slug=X[&version=Y]`. Reads Master Form + Web Form Versions via Graph API. |
-| Public form submit | `submit-form.ts` | `POST /api/submit-form`. Verifies form is public, creates list item via Graph API. |
+| Public form submit | `submit-form.ts` | `POST /api/submit-form`. Verifies form is public, creates list item via Graph API. Accepts optional `matrixData` param for dynamicmatrix child list items. |
 | Public evaluation | `evaluate.ts` | `GET /api/evaluate?token=X&responseItemId=Y` returns filtered layer-visible data; `POST /api/evaluate` submits approve/reject/confirm actions via system credential. |
 | Graph client (active) | `_utils/graphClient.ts` | Client-credentials token for `graph.microsoft.com/v1.0`. Exports: `getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`, `updateListItemFields`. |
 | SP REST client (dead) | `_utils/sharepoint.ts` | Dead code — not imported by any API route. All routes use `graphClient.ts` instead. |

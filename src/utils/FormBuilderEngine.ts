@@ -28,7 +28,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Basic",
     description: "Numeric input field",
     spColumnKind: 9,
-    defaultProps: { inputType: "number", placeholder: "" },
+    defaultProps: { inputType: "number", placeholder: "", displayFormat: "0.00", prefix: "", suffix: "" },
   },
   {
     type: "boolean",
@@ -142,7 +142,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Numeric",
     description: "Plus/minus buttons with count",
     spColumnKind: 9,
-    defaultProps: { min: 0, max: 100, step: 1, initialValue: 0 },
+    defaultProps: { min: 0, max: 100, step: 1, initialValue: 0, defaultValue: 0 },
   },
   {
     type: "currency",
@@ -151,7 +151,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Numeric",
     description: "Monetary input with currency formatting",
     spColumnKind: 9,
-    defaultProps: { currency: "MYR", locale: "en-MY", min: 0, max: 0, step: 0.01 },
+    defaultProps: { currency: "MYR", locale: "en-MY", currencySymbol: "RM", decimalPlaces: 2, min: 0, max: 0, step: 0.01 },
   },
   {
     type: "formula",
@@ -160,7 +160,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Numeric",
     description: "Read-only computed value",
     spColumnKind: 9,
-    defaultProps: { expression: "", displayFormat: "number", recalculateOnChange: true },
+    defaultProps: { expression: "", defaultValue: 0, decimalPlaces: 2, displayFormat: "number", recalculateOnChange: true },
   },
   // ========== SELECTION GROUP (interactive selectors) ==========
   {
@@ -170,7 +170,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Selection",
     description: "Numeric range slider",
     spColumnKind: 9,
-    defaultProps: { min: 0, max: 100, step: 1, showTooltip: true, showMinMax: true, prefix: "", suffix: "" },
+    defaultProps: { min: 0, max: 100, step: 1, showTooltip: true, showMinMax: true, prefix: "", suffix: "", defaultValue: 0 },
   },
   // ========== ADVANCED GROUP (complex widgets) ==========
   {
@@ -193,7 +193,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     icon: "📎",
     group: "Advanced",
     description: "File upload field",
-    spColumnKind: null,
+    spColumnKind: 2,
     defaultProps: {
       acceptedTypes: ".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg",
       maxSize: 10485760,
@@ -207,7 +207,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     icon: "🖼️",
     group: "Advanced",
     description: "Image upload with crop preview",
-    spColumnKind: null,
+    spColumnKind: 2,
     defaultProps: { aspectRatio: "free", maxWidth: 1920, maxHeight: 1080, allowWebcam: true },
   },
   {
@@ -272,7 +272,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     icon: "🏆",
     group: "Advanced",
     description: "Drag to rank items",
-    spColumnKind: null,
+    spColumnKind: 3,
     defaultProps: { items: ["Item 1", "Item 2", "Item 3"], minItems: 1, maxItems: 10 },
   },
   {
@@ -493,8 +493,13 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
 
   switch (type) {
     // Text variants (SurveyJS uses type="text" + inputType)
-    case "number":
-      return { ...field, type: "text", inputType: "number" };
+    case "number": {
+      const base: Record<string, unknown> = { ...field, type: "text", inputType: "number" };
+      if (field.displayFormat) {
+        base.format = field.displayFormat;
+      }
+      return base as unknown as FormBuilderField;
+    }
     case "password":
       return { ...field, type: "text", inputType: "password" };
     case "email":
@@ -551,10 +556,22 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return { ...field, type: "text", inputType: "number" };
     case "counter":
       return { ...field, type: "text", inputType: "number" };
-    case "currency":
-      return { ...field, type: "text", inputType: "number" };
-    case "formula":
-      return { ...field, type: "expression", expression: field.expression || "0" };
+    case "currency": {
+      const cs = (field as unknown as Record<string, unknown>).currencySymbol as string || "RM";
+      const dp = (field as unknown as Record<string, unknown>).decimalPlaces as number ?? 2;
+      const fmt = dp > 0 ? `0.${"0".repeat(dp)}` : "0";
+      return { ...field, type: "text", inputType: "number", currency: cs, format: fmt };
+    }
+    case "formula": {
+      // Use readOnly text — SurveyJS expression engine conflicts with manual evaluation
+      const exprVal = field.expression || "0";
+      const dVal = field.defaultValue !== undefined ? field.defaultValue : 0;
+      const decPlaces = (field as unknown as Record<string, unknown>).decimalPlaces as number ?? 2;
+      const fmt = decPlaces > 0 ? `0.${"0".repeat(decPlaces)}` : "0";
+      // Omit `expression` from spread to prevent SurveyJS from evaluating it with
+      // its own expression engine (which conflicts with manual evaluation below).
+      return { ...field, expression: undefined, type: "text", readOnly: true, defaultValue: dVal, format: fmt, _expression: exprVal } as unknown as FormBuilderField;
+    }
 
     // Advanced variants
     case "imageupload":
@@ -938,7 +955,12 @@ export function buildQuestionTree(json: SurveyJson): FormBuilderField[] {
         const panel = { ...el, _id: (el._id as string) || generateFieldId(), elements: walk(el.elements as Record<string, unknown>[]) } as unknown as FormBuilderField;
         result.push(panel);
       } else {
-        const field = { ...el, _id: (el._id as string) || generateFieldId() } as unknown as FormBuilderField;
+        // Map formula fields saved as text+_expression back to "formula" for the builder
+        // Check _expression (new format) first, then native expression (old format)
+        const exprVal = (el as Record<string, unknown>)._expression || (el as Record<string, unknown>).expression || "";
+        const fieldSrc = el.type === "expression" || (el.type === "text" && exprVal)
+          ? { ...el, type: "formula", expression: exprVal } : el;
+        const field = { ...fieldSrc, _id: (fieldSrc._id as string) || generateFieldId() } as unknown as FormBuilderField;
         result.push(field);
       }
     }
@@ -1034,4 +1056,68 @@ export function getSpColumnKind(
     15: 'MultiChoice',
   };
   return { FieldTypeKind: kind, label: labels[kind] || 'Text' };
+}
+
+/**
+ * CSP-safe arithmetic expression evaluator.
+ * Replaces `new Function("return (...))"` which is blocked when
+ * Content-Security-Policy disables 'unsafe-eval'.
+ *
+ * Supports: +, -, *, /, parentheses, decimal numbers, unary minus.
+ * Grammar:
+ *   expression → term (('+' | '-') term)*
+ *   term      → factor (('*' | '/') factor)*
+ *   factor    → NUMBER | '(' expression ')' | '-' factor
+ */
+export function safeEvalArithmetic(input: string): number {
+  let pos = 0;
+  const s = input.replace(/\s+/g, "");
+
+  function peek(): string { return s[pos] ?? ""; }
+  function consume(): string { return s[pos++] ?? ""; }
+
+  function parseNumber(): number {
+    const start = pos;
+    while (/[0-9.]/.test(peek())) consume();
+    if (start === pos) throw new SyntaxError(`Expected number at position ${pos} in "${input}"`);
+    return Number(s.slice(start, pos));
+  }
+
+  function parseExpression(): number {
+    let left = parseTerm();
+    while (peek() === "+" || peek() === "-") {
+      const op = consume();
+      const right = parseTerm();
+      left = op === "+" ? left + right : left - right;
+    }
+    return left;
+  }
+
+  function parseTerm(): number {
+    let left = parseFactor();
+    while (peek() === "*" || peek() === "/") {
+      const op = consume();
+      const right = parseFactor();
+      left = op === "*" ? left * right : left / right;
+    }
+    return left;
+  }
+
+  function parseFactor(): number {
+    if (peek() === "-") {
+      consume(); // '-'
+      return -parseFactor();
+    }
+    if (peek() === "(") {
+      consume(); // '('
+      const val = parseExpression();
+      if (consume() !== ")") throw new SyntaxError(`Missing ')' at position ${pos} in "${input}"`);
+      return val;
+    }
+    return parseNumber();
+  }
+
+  const result = parseExpression();
+  if (pos < s.length) throw new SyntaxError(`Unexpected '${s[pos]}' at position ${pos} in "${input}"`);
+  return result;
 }

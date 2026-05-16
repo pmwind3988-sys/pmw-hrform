@@ -13,9 +13,11 @@ import "survey-core/survey-core.min.css";
 
 import LockIcon from "@mui/icons-material/Lock";
 import BlockIcon from "@mui/icons-material/Block";
-import { spGet, getFormConfigByTitle } from "../../utils/formBuilderSP";
+import { spGet, getFormConfigByTitle, readMatrixChildItems } from "../../utils/formBuilderSP";
+import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
 import { SP_STATIC } from "../../utils/spConfig";
+import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -39,6 +41,12 @@ const C = {
   amber: "#D97706",
   amberPale: "#FEF3C7",
 };
+
+interface MatrixTableEntry {
+  columns: MatrixColumnDef[];
+  rows: Record<string, unknown>[];
+  html: string;
+}
 
 interface SubmissionItem {
   Id: number;
@@ -74,6 +82,8 @@ export default function ResponseViewer() {
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionItem | null>(null);
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [matrixTables, setMatrixTables] = useState<Record<string, MatrixTableEntry>>({});
+  const [matrixLoading, setMatrixLoading] = useState(false);
 
   // Admin access check (defense-in-depth)
   useEffect(() => {
@@ -140,6 +150,7 @@ export default function ResponseViewer() {
 
     setSelectedSubmission(item);
     setSurveyJson(null);
+    setMatrixTables({});
 
     try {
       const versionData = await spGet(
@@ -148,7 +159,54 @@ export default function ResponseViewer() {
       ) as { value?: { SurveyJSON?: string }[] };
 
       if (versionData.value?.[0]?.SurveyJSON) {
-        setSurveyJson(JSON.parse(versionData.value[0].SurveyJSON));
+        const parsed = JSON.parse(versionData.value[0].SurveyJSON);
+        setSurveyJson(parsed);
+
+        // Detect dynamicmatrix fields and load child list data
+        const surveyDef = parsed.surveyJson || parsed;
+        const dynamicMatrixFields = getDynamicMatrixFields(surveyDef);
+
+        if (dynamicMatrixFields.length > 0 && formTitle) {
+          setMatrixLoading(true);
+          const tables: Record<string, MatrixTableEntry> = {};
+
+          for (const mf of dynamicMatrixFields) {
+            const safeName = mf.name.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
+            const childListName = `${formTitle} Matrix ${safeName}`;
+
+            try {
+              const rows = await readMatrixChildItems(token, childListName, item.Id);
+              if (rows.length > 0) {
+                tables[mf.name] = {
+                  columns: mf.columns as MatrixColumnDef[],
+                  rows,
+                  html: rowsToHtml(mf.columns, rows),
+                };
+              }
+            } catch {
+              // Child list not found or read failed — try _Html fallback from the response item
+              try {
+                const itemData = await spGet(
+                  token,
+                  `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formTitle)}')/items(${item.Id})?$select=${mf.name}_Html`
+                ) as Record<string, unknown>;
+                const htmlVal = itemData[`${mf.name}_Html`] as string | undefined;
+                if (htmlVal) {
+                  tables[mf.name] = {
+                    columns: mf.columns as MatrixColumnDef[],
+                    rows: [],
+                    html: htmlVal,
+                  };
+                }
+              } catch {
+                // Both child list and _Html fallback failed — skip this matrix
+              }
+            }
+          }
+
+          setMatrixTables(tables);
+          setMatrixLoading(false);
+        }
       }
     } catch (e) {
       console.error("[ResponseViewer] load details error:", e);
@@ -425,6 +483,52 @@ export default function ResponseViewer() {
                     <div style={{ color: C.textMuted }}>Loading form preview...</div>
                   )}
                 </div>
+
+                {/* Matrix Tables — from child lists, fallback to _Html */}
+                {Object.keys(matrixTables).length > 0 && (
+                  <div style={{ padding: "0 16px 16px" }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: C.textSecond,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        marginBottom: 12,
+                      }}
+                    >
+                      Matrix Tables
+                    </div>
+                    {Object.entries(matrixTables).map(([fieldName, entry]) => (
+                      <div key={fieldName} style={{ marginBottom: 18 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: C.purple,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {entry.columns[0]?.title ? entry.columns[0].title : fieldName}
+                        </div>
+                        <div
+                          style={{
+                            overflow: "auto",
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 8,
+                          }}
+                          dangerouslySetInnerHTML={{ __html: entry.html }}
+                        />
+                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+                          {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {matrixLoading && (
+                  <div style={{ padding: "0 16px 16px", color: C.textMuted, fontSize: 12 }}>Loading matrix data...</div>
+                )}
 
                 {selectedSubmission.RawJSON && (
                   <details style={{ padding: 16, borderTop: `1px solid ${C.border}`, background: C.bg }}>

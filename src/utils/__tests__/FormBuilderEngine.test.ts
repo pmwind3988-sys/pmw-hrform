@@ -334,9 +334,8 @@ describe('getSpColumnKind', () => {
     expect(getSpColumnKind({ type: 'unknown-type' })).toEqual({ FieldTypeKind: 2, label: 'Text' });
   });
 
-  it('returns null for types with spColumnKind: null in QUESTION_TYPES', () => {
-    // "file" has spColumnKind: null
-    expect(getSpColumnKind({ type: 'file' })).toBeNull();
+  it('returns Text (2) for file type (stores URL reference)', () => {
+    expect(getSpColumnKind({ type: 'file' })).toEqual({ FieldTypeKind: 2, label: 'Text' });
   });
 
   it('returns correct kind for dropdown (Choice 6)', () => {

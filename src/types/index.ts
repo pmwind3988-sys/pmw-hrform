@@ -236,6 +236,7 @@ export interface FormBuilderField {
   labelFalse?: string;
   defaultValue?: unknown;
   requiredErrorText?: string;
+  format?: string;
   visibleIf?: string;
   enableIf?: string;
   titleLocation?: string;

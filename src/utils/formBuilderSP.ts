@@ -267,6 +267,24 @@ export async function getAllColumnsForList(listTitle: string, token: string): Pr
  * Fetch distinct values from a list column, with optional OData filter.
  * Used by the Filtered List choice source at runtime.
  */
+/**
+ * Resolve a column's internal name from its display name via SharePoint REST API.
+ * The fields endpoint uses `Title` (display name) for filtering and returns `EntityPropertyName` (OData name).
+ */
+async function resolveInternalName(
+  listTitle: string,
+  displayName: string,
+  token: string
+): Promise<string> {
+  try {
+    const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields?$filter=Title eq '${encodeURIComponent(displayName)}'&$select=Title,EntityPropertyName`;
+    const data = await spGet(token, url) as { value?: { EntityPropertyName?: string }[] };
+    return data.value?.[0]?.EntityPropertyName || displayName;
+  } catch {
+    return displayName;
+  }
+}
+
 export async function getFilteredListChoices(
   listTitle: string,
   valueColumn: string,
@@ -275,16 +293,22 @@ export async function getFilteredListChoices(
   filterValue?: string,
 ): Promise<string[]> {
   const encoded = encodeURIComponent(listTitle);
-  let url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${encodeURIComponent(valueColumn)}&$top=5000`;
-  if (filterColumn && filterValue) {
-    url += `&$filter=${encodeURIComponent(filterColumn)} eq '${encodeURIComponent(filterValue)}'`;
+  // Resolve display names → internal names (SP REST returns fields under internal names)
+  const internalValCol = await resolveInternalName(listTitle, valueColumn, token);
+  const internalFilterCol = filterColumn
+    ? await resolveInternalName(listTitle, filterColumn, token)
+    : undefined;
+
+  let url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${encodeURIComponent(internalValCol)}&$top=5000`;
+  if (internalFilterCol && filterValue) {
+    url += `&$filter=${encodeURIComponent(internalFilterCol)} eq '${encodeURIComponent(filterValue)}'`;
   }
   try {
     const data = await spGet(token, url) as { value?: Record<string, unknown>[] };
     const raw = data.value || [];
     const values = new Set<string>();
     for (const item of raw) {
-      const v = item[valueColumn];
+      const v = item[internalValCol];
       if (v != null && v !== "") {
         values.add(String(v));
       }
@@ -934,6 +958,148 @@ async function getFormVersionByTitle(token: string, listTitle: string, version: 
   }
 }
 
+// ── Matrix Child Lists ────────────────────────────────────────────────────
+
+/** Column definition for a dynamicmatrix child list — mirrors DynamicMatrix.tsx MatrixColumn */
+export interface MatrixColumnDef {
+  name: string;
+  title: string;
+  cellType?: string;
+  choices?: string[];
+  multiSelect?: boolean;
+}
+
+/**
+ * Ensures a child list exists for a dynamicmatrix/tableinput field.
+ * List name: "{formTitle} Matrix {fieldName}" (sanitized).
+ * Creates ParentResponseId (Number), RowIndex (Number), and per-column fields.
+ * Returns { listName, listId } or null on failure.
+ */
+export async function ensureMatrixChildList(
+  token: string,
+  formTitle: string,
+  fieldName: string,
+  columns: MatrixColumnDef[],
+  onLog: (msg: string, type: string) => void = () => {}
+): Promise<{ listName: string; listId: string } | null> {
+  // Sanitize field name for SP list title (remove chars that break URL encoding)
+  const safeName = fieldName.replace(/[^a-zA-Z0-9_ -]/g, '').trim();
+  const listName = `${formTitle} Matrix ${safeName}`;
+
+  onLog(`  Matrix child list "${listName}"…`, 'info');
+
+  // Check if list exists
+  if (await listExists(token, listName)) {
+    onLog(`    ✓ List exists`, 'ok');
+  } else {
+    // Create the list
+    await createSpList(token, listName, 100, `Matrix rows for ${formTitle} — ${fieldName}`);
+    onLog(`    ✓ Created list`, 'ok');
+
+    // Add ParentResponseId column (Number — stores parent response item ID)
+    await addColumn(token, listName, 'ParentResponseId', 9);
+
+    // Add RowIndex column (Number — preserves row ordering)
+    await addColumn(token, listName, 'RowIndex', 9);
+
+    // Add per-column columns based on cellType
+    for (const col of columns) {
+      if (!col.name) continue;
+      const cellType = col.cellType || 'text';
+      switch (cellType) {
+        case 'text':
+          await addColumn(token, listName, col.name, 2);
+          break;
+        case 'dropdown':
+          await addColumn(token, listName, col.name, 6, false, false, col.choices);
+          break;
+        case 'date':
+          await addColumn(token, listName, col.name, 4);
+          break;
+        case 'number':
+          await addColumn(token, listName, col.name, 9);
+          break;
+        case 'checkbox':
+          await addColumn(token, listName, col.name, 15, false, false, col.choices);
+          break;
+        case 'boolean':
+          await addColumn(token, listName, col.name, 8);
+          break;
+        default:
+          await addColumn(token, listName, col.name, 2);
+          break;
+      }
+      onLog(`    ✓ ${col.name} (${cellType})`, 'ok');
+    }
+  }
+
+  // Fetch list ID
+  try {
+    const listData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')?$select=Id`) as { Id?: string };
+    return { listName, listId: listData.Id || '' };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes dynamicmatrix rows as items in a child list.
+ * Each row becomes one SP item with ParentResponseId + RowIndex + column values.
+ * Returns array of created item IDs.
+ */
+export async function writeMatrixChildItems(
+  token: string,
+  listName: string,
+  parentResponseId: number,
+  rows: Record<string, unknown>[],
+  columns: MatrixColumnDef[]
+): Promise<number[]> {
+  const createdIds: number[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const body: Record<string, unknown> = {
+      ParentResponseId: parentResponseId,
+      RowIndex: i,
+    };
+
+    // Map row values to column names
+    for (const col of columns) {
+      if (!col.name) continue;
+      body[col.name] = row[col.name] ?? null;
+    }
+
+    const result = await spPost(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items`,
+      body
+    ) as { Id?: number };
+
+    if (result.Id != null) {
+      createdIds.push(result.Id);
+    }
+  }
+
+  return createdIds;
+}
+
+/**
+ * Reads all child list rows for a given parent response item.
+ * Returns rows sorted by RowIndex ascending.
+ */
+export async function readMatrixChildItems(
+  token: string,
+  listName: string,
+  parentResponseId: number
+): Promise<Record<string, unknown>[]> {
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$filter=ParentResponseId eq ${parentResponseId}&$orderby=RowIndex asc`
+  ) as { value?: Record<string, unknown>[] };
+
+  return data.value || [];
+}
+
 // ── Response List Provisioning ────────────────────────────────────────────
 
 /**
@@ -1032,6 +1198,42 @@ export async function provisionResponseList(
       onLog(`  ✓ ${fieldName} (${kind.label})`, 'ok');
     }
   }
+
+  // Provision child lists for dynamicmatrix/tableinput fields
+  for (const q of questions) {
+    if (q.type !== 'dynamicmatrix' && q.type !== 'matrixdynamic' && q.type !== 'tableinput') continue;
+    const fieldName = q.name;
+    if (!fieldName) continue;
+
+    const matrixCols = (q as unknown as Record<string, unknown>).columns as MatrixColumnDef[] | undefined;
+    if (!Array.isArray(matrixCols) || matrixCols.length === 0) {
+      // No columns defined yet — skip child list creation
+      continue;
+    }
+
+    try {
+      await ensureMatrixChildList(
+        token,
+        formTitle,
+        fieldName,
+        matrixCols.filter((c) => c.name && c.title),
+        onLog
+      );
+    } catch (e) {
+      onLog(`  ⚠ Matrix child list for "${fieldName}": ${(e as Error).message}`, 'warn');
+    }
+  }
+
+  // Provision document library for file/image fields
+  const hasFileFields = questions.some(q => q.type === 'file' || q.type === 'imageupload');
+  if (hasFileFields) {
+    try {
+      await ensureDocLibrary(token, formTitle, (msg) => onLog(`  📁 ${msg}`, 'info'));
+    } catch (e) {
+      onLog(`  ⚠ Doc library: ${(e as Error).message}`, 'warn');
+    }
+  }
+
   onLog('Provisioning complete ✓', 'ok');
 }
 
@@ -1484,14 +1686,6 @@ export async function uploadSignatureImage(
   action: "submission",
   base64DataUrl: string,
 ): Promise<string> {
-  // Strip the data URI prefix and convert to binary
-  const base64 = base64DataUrl.replace(/^data:image\/\w+;base64,/, '');
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-
   const now = new Date();
   const yy = String(now.getFullYear()).slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -1499,9 +1693,7 @@ export async function uploadSignatureImage(
   const counter = await getNextSignatureCounter(token, formId, action);
   const fileName = `${action}-${formId}-${yy}${mm}${dd}${counter}.png`;
 
-  const sitePath = new URL(SP_SITE_URL).pathname;
-  const result = await spUploadFile(token, SIGNATURE_LIBRARY, fileName, bytes) as { ServerRelativeUrl?: string };
-  return result.ServerRelativeUrl ?? `${sitePath}/${SIGNATURE_LIBRARY}/${fileName}`;
+  return uploadFileToDocLib(token, SIGNATURE_LIBRARY, fileName, base64DataUrl);
 }
 
 /**
@@ -1522,6 +1714,57 @@ export async function uploadFormPdf(token: string, formTitle: string, responseId
   const sitePath = new URL(SP_SITE_URL).pathname;
   const result = await spUploadFile(token, PDF_LIBRARY, fileName, bytes) as { ServerRelativeUrl?: string };
   return result.ServerRelativeUrl ?? `${sitePath}/${PDF_LIBRARY}/${fileName}`;
+}
+
+// ── Document Library File Upload ────────────────────────────────────────
+
+/**
+ * Ensures a per-form document library exists for file uploads.
+ * Creates `{formTitle} Files` if it doesn't already exist.
+ * Returns the library name.
+ */
+export async function ensureDocLibrary(
+  token: string,
+  formTitle: string,
+  onLog?: (msg: string) => void,
+): Promise<string> {
+  const libName = `${formTitle} Files`;
+  if (!await listExists(token, libName)) {
+    await createSpList(token, libName, 101, `Uploaded files for ${formTitle}`);
+    onLog?.(`Created document library "${libName}"`);
+  }
+  return libName;
+}
+
+/**
+ * Uploads a base64-encoded file to a SharePoint document library.
+ * Accepts raw base64 or a full data URI (data:mime;base64,...).
+ * Returns the server-relative URL of the uploaded file.
+ */
+export async function uploadFileToDocLib(
+  token: string,
+  listName: string,
+  fileName: string,
+  base64Content: string,
+  onLog?: (msg: string) => void,
+): Promise<string> {
+  // Strip data URI prefix if present: data:mime;base64,<payload>
+  let base64 = base64Content;
+  const match = base64.match(/^data:[\w/+-]+;base64,(.+)$/);
+  if (match) base64 = match[1];
+
+  // Decode base64 → binary
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  const sitePath = new URL(SP_SITE_URL).pathname;
+  const result = await spUploadFile(token, listName, fileName, bytes) as { ServerRelativeUrl?: string };
+  const url = result.ServerRelativeUrl ?? `${sitePath}/${listName}/${fileName}`;
+  onLog?.(`Uploaded "${fileName}" to "${listName}"`);
+  return url;
 }
 
 /**
