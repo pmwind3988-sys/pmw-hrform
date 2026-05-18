@@ -29,6 +29,10 @@ import ResponseViewer from "./components/builder/ResponseViewer";
 import AdminFormBuilder from "./pages/AdminFormBuilder";
 import AdminHomePage from "./pages/AdminHomePage";
 import EvaluationPage from "./pages/EvaluationPage";
+import CareersPage from "./pages/CareersPage";
+import JobApplyPage from "./pages/JobApplyPage";
+import AdminJobsPage from "./pages/AdminJobsPage";
+import AdminJobManagePage from "./pages/AdminJobManagePage";
 import { DashboardProvider } from "./contexts/DashboardContext";
 
 
@@ -667,6 +671,30 @@ if (decision === "guest") {
             }
           />
           <Route
+            path="/admin/jobs"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                    <AdminJobsPage />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/jobs/manage"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                    <AdminJobManagePage />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
             path="/eval/:token"
             element={
               <ErrorBoundary>
@@ -682,6 +710,26 @@ if (decision === "guest") {
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
                   <EvaluationPage />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/careers"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <CareersPage />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/careers/:jobId/apply"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <JobApplyPage />
                 </Box>
               </ErrorBoundary>
             }

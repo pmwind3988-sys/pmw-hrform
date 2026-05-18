@@ -15,8 +15,11 @@ import {
   Person as PersonIcon,
   Logout as LogoutIcon,
   Settings as SettingsIcon,
+  WorkOutlined as WorkIcon,
+  Edit as EditIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import RoleBadge from "./RoleBadge";
 import Logo from "../Logo";
 
@@ -37,6 +40,7 @@ export default function Header({
 }: HeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -135,6 +139,54 @@ export default function Header({
                 Form Builder
               </Button>
             )}
+            <Button
+              variant="outlined"
+              startIcon={<WorkIcon />}
+              onClick={() => navigate("/admin/jobs")}
+              sx={{
+                mr: 1,
+                borderRadius: "12px",
+                textTransform: "none",
+                color: "#0078D4",
+                borderColor: "rgba(0, 120, 212, 0.3)",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                py: 1,
+                px: 2.5,
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                "&:hover": {
+                  borderColor: "#0078D4",
+                  backgroundColor: "rgba(0, 120, 212, 0.06)",
+                  transform: "translateY(-1px)",
+                },
+              }}
+            >
+              Applications
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => navigate("/admin/jobs/manage")}
+              sx={{
+                mr: 1,
+                borderRadius: "12px",
+                textTransform: "none",
+                color: "#6264A7",
+                borderColor: "rgba(98, 100, 167, 0.3)",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                py: 1,
+                px: 2.5,
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                "&:hover": {
+                  borderColor: "#6264A7",
+                  backgroundColor: "rgba(98, 100, 167, 0.06)",
+                  transform: "translateY(-1px)",
+                },
+              }}
+            >
+              Manage Jobs
+            </Button>
 
           </>
         )}

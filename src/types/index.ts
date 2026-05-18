@@ -859,6 +859,106 @@ export interface SpColumnMapping {
   required: boolean;
 }
 
+// ── Career Jobs Types ───────────────────────────────────────────────────────────
+
+export interface CustomFieldDefinition {
+  name: string;
+  label: string;
+  type: "text" | "textarea" | "number" | "choice" | "date";
+  required: boolean;
+  choices?: string[];
+}
+
+export interface JobListing {
+  id: string;
+  title: string;
+  jobDescription: string;
+  department: string;
+  location: string;
+  employmentType: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  closingDate: string | null;
+  status: string;
+  applicationCount: number;
+  created: string;
+  customFields?: CustomFieldDefinition[];
+}
+
+export interface JobApplication {
+  id: string;
+  jobListingId: string;
+  jobTitle: string;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  resumeUrl: string;
+  coverLetterUrl: string;
+  status: string;
+  submittedAt: string;
+  submissionRef: string;
+  customAnswers?: Record<string, unknown>;
+}
+
+export interface JobsApiResponse {
+  jobs: JobListing[];
+}
+
+export interface JobApplyRequest {
+  jobListingId: string;
+  jobTitle: string;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  coverLetter: string;
+  files: { name: string; content: string; contentType: string }[];
+  customAnswers?: Record<string, unknown>;
+}
+
+export interface JobAdminApplication {
+  id: string;
+  jobTitle: string;
+  applicantName: string;
+  applicantEmail: string;
+  status: string;
+  submittedAt: string;
+  submissionRef: string;
+  coverLetterUrl?: string;
+  resumeUrl?: string;
+  customAnswers?: Record<string, unknown>;
+}
+
+export interface ReactiveFormConfig {
+  [key: string]: {
+    value: unknown;
+    validators?: ((value: unknown) => Record<string, boolean> | null)[];
+  };
+}
+
+export interface ReactiveFormResult<T> {
+  controls: {
+    [K in keyof T]: {
+      value: T[K];
+      errors: Record<string, boolean>;
+      touched: boolean;
+      dirty: boolean;
+      setValue: (val: T[K]) => void;
+      onBlur: () => void;
+      setErrors: (errors: Record<string, boolean>) => void;
+      clearValidators: () => void;
+      setValidators: (validators: ((value: T[K]) => Record<string, boolean> | null)[]) => void;
+    };
+  };
+  valid: boolean;
+  value: T;
+  errors: Record<string, Record<string, boolean>>;
+  touched: boolean;
+  dirty: boolean;
+  setValue: (values: Partial<T>) => void;
+  reset: (values?: T) => void;
+  submit: (handler: (values: T) => void) => (e: React.FormEvent) => void;
+}
+
 /** Export format options */
 export type ExportFormat = "json" | "csv" | "html" | "pdf" | "zip";
 
