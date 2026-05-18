@@ -30,6 +30,7 @@ import {
 } from "@mui/icons-material";
 import { useReactiveForm, required, email } from "../hooks/useReactiveForm";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { useMsal } from "@azure/msal-react";
 import { fetchJobs, submitApplication } from "../utils/careersService";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
@@ -268,6 +269,7 @@ export default function JobApplyPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const profile = useUserProfile();
+  const { instance, accounts } = useMsal();
 
   const [job, setJob] = useState<JobListing | null>(null);
   const [jobLoading, setJobLoading] = useState(true);
@@ -276,6 +278,38 @@ export default function JobApplyPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submissionRef, setSubmissionRef] = useState("");
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [duplicateBlocked, setDuplicateBlocked] = useState(false);
+
+  // Check if user is admin (group membership)
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      try {
+        const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+        const resp = await instance.acquireTokenSilent({
+          scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
+          account: accounts[0],
+        });
+        const token = resp.accessToken;
+        const groupResp = await fetch(
+          `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
+          { headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` } },
+        );
+        if (groupResp.ok) {
+          const data = await groupResp.json() as { value?: { Email?: string }[] };
+          const userEmail = accounts[0]?.username?.toLowerCase() || "";
+          if (!cancelled) {
+            setIsAdmin((data.value || []).some((u) => (u.Email || "").toLowerCase() === userEmail));
+          }
+        }
+      } catch {
+        // Not admin — proceed as regular user
+      }
+    }
+    void check();
+    return () => { cancelled = true; };
+  }, [instance, accounts]);
 
   // Fetch job details for summary
   useEffect(() => {
@@ -320,12 +354,25 @@ export default function JobApplyPage() {
     setCustomAnswers((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = form.submit(async (values) => {
+  const doSubmit = async (values: FormValues, forceApply = false) => {
     if (!jobId || !job) return;
     setSubmitting(true);
     setSubmitError(null);
+    setDuplicateBlocked(false);
 
     try {
+      // Acquire user token with Graph scope for file uploads
+      let accessToken = "";
+      try {
+        const resp = await instance.acquireTokenSilent({
+          scopes: ["https://graph.microsoft.com/.default"],
+          account: accounts[0],
+        });
+        accessToken = resp.accessToken;
+      } catch {
+        // User token not available — API will fall back to system credentials
+      }
+
       const result = await submitApplication({
         jobListingId: jobId,
         jobTitle: job.title,
@@ -335,15 +382,25 @@ export default function JobApplyPage() {
         coverLetter: values.coverLetter,
         files: values.files,
         customAnswers,
+        accessToken,
+        submittedByEmail: accounts[0]?.username || "",
+        forceApply,
       });
       setSubmissionRef(result.submissionRef);
       setSubmitted(true);
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Submission failed. Please try again.");
+      const msg = err instanceof Error ? err.message : "";
+      // Detect duplicate rejection (409)
+      if (msg.includes("already applied")) {
+        setDuplicateBlocked(true);
+      }
+      setSubmitError(msg || "Submission failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
-  });
+  };
+
+  const handleSubmit = form.submit((values) => doSubmit(values, false));
 
   if (submitted) {
     return (
@@ -628,9 +685,31 @@ export default function JobApplyPage() {
 
                   {/* Error */}
                   {submitError && (
-                    <Alert severity="error" sx={{ borderRadius: "8px" }}>
+                    <Alert severity={duplicateBlocked ? "warning" : "error"} sx={{ borderRadius: "8px" }}>
                       {submitError}
                     </Alert>
+                  )}
+
+                  {/* Test Submit (admin only — bypasses duplicate check) */}
+                  {duplicateBlocked && isAdmin && (
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      disabled={submitting}
+                      onClick={() => doSubmit(form.value, true)}
+                      sx={{
+                        borderRadius: "12px",
+                        textTransform: "none",
+                        fontWeight: 600,
+                        fontSize: "0.9rem",
+                        py: 1.3,
+                        borderColor: "#E67635",
+                        color: "#E67635",
+                        "&:hover": { borderColor: "#D4621A", backgroundColor: "rgba(230, 118, 53, 0.06)" },
+                      }}
+                    >
+                      Test Submit (bypass duplicate check)
+                    </Button>
                   )}
 
                   {/* Submit */}

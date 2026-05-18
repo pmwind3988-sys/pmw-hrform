@@ -49,6 +49,17 @@ export async function submitApplication(
   return (await response.json()) as ApplyResponse;
 }
 
+export async function fetchMyApplications(email: string): Promise<JobAdminApplication[]> {
+  const response = await fetch(`/api/job-admin?email=${encodeURIComponent(email)}`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
+  }
+
+  const data: AdminListResponse = (await response.json()) as AdminListResponse;
+  return data.applications;
+}
+
 export async function fetchApplications(): Promise<JobAdminApplication[]> {
   const response = await fetch("/api/job-admin");
 
@@ -80,6 +91,22 @@ export async function updateApplicationStatus(
 
   const data: AdminUpdateResponse = (await response.json()) as AdminUpdateResponse;
   return data.success;
+}
+
+export async function deleteApplications(
+  ids: string[],
+): Promise<{ deleted: number; errors?: string[] }> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "delete-applications", ids }),
+  });
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
+    throw new Error(`Failed to delete applications: ${detail}`);
+  }
+  return (await response.json()) as { deleted: number; errors?: string[] };
 }
 
 export async function fetchColumnChoices(
@@ -123,7 +150,9 @@ export async function createJobListing(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to create job listing: ${response.status} ${response.statusText}`);
+    let detail = `${response.status} ${response.statusText}`;
+    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
+    throw new Error(`Failed to create job listing: ${detail}`);
   }
 
   return (await response.json()) as { success: boolean; jobId: string };
@@ -132,7 +161,7 @@ export async function createJobListing(
 export async function updateJobListing(
   jobId: string,
   data: Record<string, unknown>,
-): Promise<boolean> {
+): Promise<{ success: boolean; warning?: string }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -140,9 +169,11 @@ export async function updateJobListing(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update job listing: ${response.status} ${response.statusText}`);
+    let detail = `${response.status} ${response.statusText}`;
+    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
+    throw new Error(`Failed to update job listing: ${detail}`);
   }
 
-  const result: AdminUpdateResponse = (await response.json()) as AdminUpdateResponse;
-  return result.success;
+  const result = (await response.json()) as { success: boolean; warning?: string };
+  return result;
 }

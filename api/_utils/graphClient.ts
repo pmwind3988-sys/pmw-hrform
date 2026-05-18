@@ -170,6 +170,24 @@ export async function createListItem(
   return data;
 }
 
+/**
+ * Add a multi-line text column to a SharePoint list via Graph API.
+ */
+export async function createListColumn(
+  token: string,
+  listDisplayName: string,
+  columnName: string,
+  displayName: string,
+): Promise<void> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  await graphPost(token, `/sites/${siteId}/lists/${listId}/columns`, {
+    name: columnName,
+    text: { multiline: true, allowUnlimitedLength: true },
+    displayName,
+  });
+}
+
 // --- SharePoint field/choice helpers (for server-side survey JSON enrichment) ---
 
 /**
@@ -279,6 +297,25 @@ export async function updateListItemFields(
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Graph PATCH fields ${res.status}: ${text}`);
+  }
+}
+
+export async function deleteListItem(
+  token: string,
+  listDisplayName: string,
+  itemId: string
+): Promise<void> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const res = await fetch(`${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items/${itemId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    throw new Error(`Graph DELETE item ${res.status}: ${text}`);
   }
 }
 

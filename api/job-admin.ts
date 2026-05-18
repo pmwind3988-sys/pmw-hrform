@@ -3,12 +3,14 @@ import {
   queryListItems,
   createListItem,
   updateListItemFields,
+  deleteListItem,
   getListColumnChoices,
 } from "./_utils/graphClient.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
   method: string;
+  url?: string;
 }
 
 interface ApiResponse {
@@ -33,7 +35,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // ── GET: list all applications ────────────────────────────────────────
     if (req.method === "GET") {
-      const items = await queryListItems(token, APPLICATION_LIST, { top: 1000 });
+      const url = new URL(req.url || "", "http://localhost");
+      const emailFilter = url.searchParams.get("email") || "";
+
+      let items = await queryListItems(token, APPLICATION_LIST, { top: 1000 });
+
+      // Filter by applicant email if provided
+      if (emailFilter) {
+        const lower = emailFilter.toLowerCase();
+        items = items.filter((item) => String(item.fields.ApplicantEmail || "").toLowerCase() === lower);
+      }
 
       const applications = items.map((item) => {
         let customAnswers: Record<string, unknown> | undefined;
@@ -53,6 +64,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           coverLetterUrl: String(item.fields.CoverLetterUrl || ""),
           resumeUrl: String(item.fields.ResumeUrl || ""),
           customAnswers,
+          jobListingId: String(item.fields.JobListingID || ""),
         };
       });
 
@@ -83,6 +95,56 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return res.status(200).json({ success: true });
       }
 
+      // Delete applications + decrement applicant counts
+      if (action === "delete-applications") {
+        const ids = rawBody.ids;
+        if (!Array.isArray(ids) || ids.length === 0) {
+          return res.status(400).json({ error: "Missing required field: ids (array)" });
+        }
+
+        // Find which job listings these apps belong to (before deleting)
+        const allApps = await queryListItems(token, APPLICATION_LIST, { top: 1000 });
+        const jobCountMap: Record<string, number> = {};
+        for (const app of allApps) {
+          if (ids.includes(String(app.id))) {
+            const jobId = String(app.fields.JobListingID || "");
+            if (jobId) jobCountMap[jobId] = (jobCountMap[jobId] || 0) + 1;
+          }
+        }
+
+        // Delete applications
+        let deleted = 0;
+        const errors: string[] = [];
+        for (const id of ids) {
+          try {
+            await deleteListItem(token, APPLICATION_LIST, String(id));
+            deleted++;
+          } catch (e) {
+            errors.push(`${id}: ${(e as Error).message}`);
+          }
+        }
+
+        // Decrement counts on affected job listings
+        for (const [jobId, count] of Object.entries(jobCountMap)) {
+          try {
+            const jobItems = await queryListItems(token, JOB_LIST, { top: 1000 });
+            const jobItem = jobItems.find((item) => String(item.id) === jobId);
+            const current = Number(jobItem?.fields?.Application_x0020_Count) || 0;
+            await updateListItemFields(token, JOB_LIST, jobId, {
+              Application_x0020_Count: Math.max(0, current - count),
+            });
+          } catch {
+            // Best effort — count update shouldn't block deletion
+          }
+        }
+
+        return res.status(200).json({
+          success: true,
+          deleted,
+          errors: errors.length > 0 ? errors : undefined,
+        });
+      }
+
       // Create a new job listing
       if (action === "create-job") {
         const title = String(rawBody.title || "");
@@ -91,6 +153,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
 
         const customFields = rawBody.customFields;
+        const hasCustomFields = Array.isArray(customFields) && customFields.length > 0;
         const fields: Record<string, unknown> = {
           Title: title,
           Job_x0020_Description: rawBody.jobDescription || "",
@@ -102,11 +165,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           Closing_x0020_Date: rawBody.closingDate || null,
           Status: "New",
           Application_x0020_Count: 0,
-          CustomFields: customFields ? JSON.stringify(customFields) : "",
         };
 
-        const result = await createListItem(token, JOB_LIST, fields);
-        return res.status(200).json({ success: true, jobId: result.id });
+        // Only include CustomFields if there's data AND the column exists
+        if (hasCustomFields) {
+          fields.CustomFields = JSON.stringify(customFields);
+        }
+
+        try {
+          const result = await createListItem(token, JOB_LIST, fields);
+          return res.status(200).json({ success: true, jobId: result.id });
+        } catch (err) {
+          const msg = (err as Error).message;
+          // If CustomFields column doesn't exist on the list, retry without it
+          if (hasCustomFields && msg.includes("CustomFields") && msg.includes("not recognized")) {
+            delete fields.CustomFields;
+            const result = await createListItem(token, JOB_LIST, fields);
+            return res.status(200).json({ success: true, jobId: result.id, warning: "CustomFields column not available" });
+          }
+          throw err; // Re-throw for the outer catch
+        }
       }
 
       // List all job listings (admin view)
@@ -127,7 +205,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             employmentType: String(item.fields.Employment_x0020_Type || ""),
             salaryMin: item.fields.Salary_x0020_Min != null ? Number(item.fields.Salary_x0020_Min) : null,
             salaryMax: item.fields.Salary_x0020_Max != null ? Number(item.fields.Salary_x0020_Max) : null,
-            closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date) : null,
+            closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date).split("T")[0] : null,
             status: String(item.fields.Status || "New"),
             applicationCount: Number(item.fields.Application_x0020_Count) || 0,
             customFields,
@@ -157,8 +235,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           updateFields.CustomFields = JSON.stringify(rawBody.customFields);
         }
 
-        await updateListItemFields(token, JOB_LIST, jobId, updateFields);
-        return res.status(200).json({ success: true });
+        const hasCustomFields = "CustomFields" in updateFields;
+        let warning: string | undefined;
+        try {
+          await updateListItemFields(token, JOB_LIST, jobId, updateFields);
+        } catch (err) {
+          const msg = (err as Error).message;
+          if (hasCustomFields && msg.includes("CustomFields") && msg.includes("not recognized")) {
+            delete updateFields.CustomFields;
+            await updateListItemFields(token, JOB_LIST, jobId, updateFields);
+            warning = "CustomFields column not available";
+          } else {
+            throw err;
+          }
+        }
+        return res.status(200).json({ success: true, ...(warning ? { warning } : {}) });
       }
 
       // Fetch choices from a SharePoint column

@@ -162,7 +162,7 @@ export function createSpClient(
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
     params.set("$top", String(options?.top ?? 500));
-    params.set("$expand", "Author/Id,Author/Email");
+    params.set("$expand", "Author");
 
     const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?${params}`;
     const response = await fetch(url, {
@@ -202,7 +202,7 @@ export function createSpClient(
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
     params.set("$top", String(options?.top ?? 500));
-    params.set("$expand", "Author/Id,Author/Email");
+    params.set("$expand", "Author");
 
     const url = `${SP_SITE_URL}/_api/web/lists(guid'${listGuid}')/items?${params}`;
     const response = await fetch(url, {
@@ -241,7 +241,7 @@ export function createSpClient(
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
     params.set("$top", String(options?.top ?? 500));
-    params.set("$expand", "Author/Id,Author/Email");
+    params.set("$expand", "Author");
 
     const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?${params}`;
     const response = await fetchWithTimeout(url, {

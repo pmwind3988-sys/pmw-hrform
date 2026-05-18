@@ -913,6 +913,9 @@ export interface JobApplyRequest {
   coverLetter: string;
   files: { name: string; content: string; contentType: string }[];
   customAnswers?: Record<string, unknown>;
+  accessToken?: string;
+  submittedByEmail?: string;
+  forceApply?: boolean;
 }
 
 export interface JobAdminApplication {
@@ -926,6 +929,7 @@ export interface JobAdminApplication {
   coverLetterUrl?: string;
   resumeUrl?: string;
   customAnswers?: Record<string, unknown>;
+  jobListingId?: string;
 }
 
 export interface ReactiveFormConfig {

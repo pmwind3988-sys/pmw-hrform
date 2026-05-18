@@ -17,6 +17,7 @@ import {
   Settings as SettingsIcon,
   WorkOutlined as WorkIcon,
   Edit as EditIcon,
+  Public as PublicIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -186,6 +187,30 @@ export default function Header({
               }}
             >
               Manage Jobs
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<PublicIcon />}
+              onClick={() => navigate("/careers")}
+              sx={{
+                mr: 1,
+                borderRadius: "12px",
+                textTransform: "none",
+                color: "#34A853",
+                borderColor: "rgba(52, 168, 83, 0.3)",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                py: 1,
+                px: 2.5,
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                "&:hover": {
+                  borderColor: "#34A853",
+                  backgroundColor: "rgba(52, 168, 83, 0.06)",
+                  transform: "translateY(-1px)",
+                },
+              }}
+            >
+              Careers
             </Button>
 
           </>

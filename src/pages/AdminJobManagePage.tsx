@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
   Typography,
@@ -11,7 +11,7 @@ import {
   TableRow,
   Button,
   Chip,
-  CircularProgress,
+  Skeleton,
   Alert,
   Dialog,
   DialogTitle,
@@ -25,12 +25,14 @@ import {
   Checkbox,
   FormControlLabel,
   IconButton,
+  ToggleButton,
   Snackbar,
   Grid,
   Card,
   CardContent,
   Divider,
   Stack,
+  Tooltip,
 } from "@mui/material";
 import {
   Add,
@@ -39,7 +41,12 @@ import {
   Close,
   Refresh,
   Work,
+  FormatBold,
+  FormatItalic,
+  FormatListBulleted,
+  FormatListNumbered,
 } from "@mui/icons-material";
+import { useMsal } from "@azure/msal-react";
 import { fetchAdminJobs, createJobListing, updateJobListing, fetchColumnChoices } from "../utils/careersService";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
@@ -72,10 +79,12 @@ function MiniFormBuilder({
     type: "text",
     required: false,
   });
+  const [choicesInput, setChoicesInput] = useState("");
   const [showForm, setShowForm] = useState(false);
 
   const resetForm = () => {
     setEditField({ name: "", label: "", type: "text", required: false });
+    setChoicesInput("");
     setEditIndex(null);
     setShowForm(false);
   };
@@ -83,7 +92,8 @@ function MiniFormBuilder({
   const handleSave = () => {
     if (!editField.label.trim()) return;
     const name = editField.name || editField.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-    const saved = { ...editField, name };
+    const choices = choicesInput.split(",").map((s) => s.trim()).filter(Boolean);
+    const saved = { ...editField, name, choices: choices.length > 0 ? choices : undefined };
     if (editIndex !== null) {
       const next = [...fields];
       next[editIndex] = saved;
@@ -101,6 +111,7 @@ function MiniFormBuilder({
   const handleEdit = (index: number) => {
     setEditIndex(index);
     setEditField({ ...fields[index] });
+    setChoicesInput((fields[index].choices || []).join(", "));
     setShowForm(true);
   };
 
@@ -152,7 +163,7 @@ function MiniFormBuilder({
       {/* Add/Edit form */}
       <Dialog open={showForm} onClose={resetForm} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827" }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
             {editIndex !== null ? "Edit Question" : "Add Question"}
           </Typography>
         </DialogTitle>
@@ -183,9 +194,9 @@ function MiniFormBuilder({
             />
             {editField.type === "choice" && (
               <TextField
-                label="Choices (comma separated)"
-                value={(editField.choices || []).join(", ")}
-                onChange={(e) => setEditField({ ...editField, choices: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+                label="Choices (separate by comma)"
+                value={choicesInput}
+                onChange={(e) => setChoicesInput(e.target.value)}
                 fullWidth
                 size="small"
                 slotProps={{ input: { sx: { borderRadius: "8px" } } }}
@@ -200,6 +211,159 @@ function MiniFormBuilder({
           </Button>
         </DialogActions>
       </Dialog>
+    </Box>
+  );
+}
+
+// ── Lightweight Rich Text Editor ──────────────────────────────────────────
+
+function RichTextEditor({
+  value,
+  onChange,
+  minHeight = 150,
+}: {
+  value: string;
+  onChange: (html: string) => void;
+  minHeight?: number;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [format, setFormat] = useState<string[]>([]);
+
+  // Sync innerHTML when value changes externally
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value;
+    }
+  }, [value]);
+
+  const exec = (cmd: string, val?: string) => {
+    document.execCommand(cmd, false, val);
+    if (editorRef.current) {
+      onChange(editorRef.current.innerHTML);
+    }
+    editorRef.current?.focus();
+  };
+
+  const handleMouseUp = () => {
+    if (!editorRef.current) return;
+    // Detect active formats
+    const active: string[] = [];
+    if (document.queryCommandState("bold")) active.push("bold");
+    if (document.queryCommandState("italic")) active.push("italic");
+    if (document.queryCommandState("insertUnorderedList")) active.push("ul");
+    if (document.queryCommandState("insertOrderedList")) active.push("ol");
+    setFormat(active);
+  };
+
+  const handleInput = () => {
+    if (editorRef.current) {
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    // Strip rich formatting on paste, keep only basic structure
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+  };
+
+  return (
+    <Box
+      sx={{
+        border: "1px solid #D1D5DB",
+        borderRadius: "10px",
+        overflow: "hidden",
+        "&:focus-within": {
+          borderColor: "#0078D4",
+          boxShadow: "0 0 0 2px rgba(0, 120, 212, 0.15)",
+        },
+      }}
+    >
+      {/* Toolbar */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 0.5,
+          p: 0.5,
+          borderBottom: "1px solid #E5E7EB",
+          backgroundColor: "#F9FAFB",
+        }}
+      >
+        <Tooltip title="Bold">
+          <ToggleButton
+            value="bold"
+            selected={format.includes("bold")}
+            onMouseDown={(e) => { e.preventDefault(); exec("bold"); }}
+            size="small"
+            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+          >
+            <FormatBold sx={{ fontSize: 18 }} />
+          </ToggleButton>
+        </Tooltip>
+        <Tooltip title="Italic">
+          <ToggleButton
+            value="italic"
+            selected={format.includes("italic")}
+            onMouseDown={(e) => { e.preventDefault(); exec("italic"); }}
+            size="small"
+            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+          >
+            <FormatItalic sx={{ fontSize: 18 }} />
+          </ToggleButton>
+        </Tooltip>
+        <Box sx={{ width: 1, backgroundColor: "#E5E7EB", mx: 0.5 }} />
+        <Tooltip title="Bullet List">
+          <ToggleButton
+            value="ul"
+            selected={format.includes("ul")}
+            onMouseDown={(e) => { e.preventDefault(); exec("insertUnorderedList"); }}
+            size="small"
+            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+          >
+            <FormatListBulleted sx={{ fontSize: 18 }} />
+          </ToggleButton>
+        </Tooltip>
+        <Tooltip title="Numbered List">
+          <ToggleButton
+            value="ol"
+            selected={format.includes("ol")}
+            onMouseDown={(e) => { e.preventDefault(); exec("insertOrderedList"); }}
+            size="small"
+            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+          >
+            <FormatListNumbered sx={{ fontSize: 18 }} />
+          </ToggleButton>
+        </Tooltip>
+      </Box>
+
+      {/* Editor area */}
+      <Box
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        onMouseUp={handleMouseUp}
+        onKeyUp={handleMouseUp}
+        onPaste={handlePaste}
+        sx={{
+          minHeight,
+          p: 2,
+          outline: "none",
+          fontSize: "0.9rem",
+          lineHeight: 1.7,
+          color: "#374151",
+          "&:empty:before": {
+            content: '"Describe the job role, responsibilities, and requirements..."',
+            color: "#9CA3AF",
+            pointerEvents: "none",
+          },
+          "& ul, & ol": { pl: 3, mb: 1 },
+          "& li": { mb: 0.5 },
+          "& strong": { fontWeight: 600 },
+          "& p": { mb: 1 },
+        }}
+      />
     </Box>
   );
 }
@@ -277,7 +441,7 @@ function JobFormDialog({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827" }}>
+        <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
           {isEdit ? "Edit Job Listing" : "Create New Job"}
         </Typography>
         <IconButton onClick={onClose} size="small"><Close /></IconButton>
@@ -302,7 +466,10 @@ function JobFormDialog({
             <TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
           </Grid>
           <Grid size={{ xs: 12 }}>
-            <TextField label="Job Description" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} fullWidth multiline rows={4} size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
+              Job Description
+            </Typography>
+            <RichTextEditor value={jobDescription} onChange={setJobDescription} minHeight={180} />
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl fullWidth size="small">
@@ -351,14 +518,62 @@ function JobFormDialog({
 }
 
 export default function AdminJobManagePage() {
+  const { instance, accounts } = useMsal();
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editJob, setEditJob] = useState<(typeof EMPTY_JOB) & { customFields: CustomFieldDefinition[] } | null>(null);
-  const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" } | null>(null);
+  const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" | "warning" } | null>(null);
   const [departmentChoices, setDepartmentChoices] = useState<string[]>([]);
   const [employmentTypeChoices, setEmploymentTypeChoices] = useState<string[]>([]);
+
+  /** Create the CustomFields column on the job list via SharePoint REST (client-side token). */
+  async function ensureCustomFieldsColumn(): Promise<boolean> {
+    try {
+      const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+      const tokenRes = await instance.acquireTokenSilent({
+        scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
+        account: accounts[0],
+      });
+      const token = tokenRes.accessToken;
+
+      // Get request digest
+      const digestResp = await fetch(`${SP_SITE_URL}/_api/contextinfo`, {
+        method: "POST",
+        headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` },
+      });
+      if (!digestResp.ok) return false;
+      const digestData = await digestResp.json();
+      const digest: string = digestData.FormDigestValue;
+
+      // Try to add the CustomFields Note column — 400 likely means column already exists
+      const resp = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Internal Job Listing')/fields`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json;odata=verbose",
+          "X-RequestDigest": digest,
+        },
+        body: JSON.stringify({
+          __metadata: { type: "SP.FieldMultiLineText" },
+          FieldTypeKind: 3,
+          Title: "CustomFields",
+          StaticName: "CustomFields",
+        }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        // Column already exists — not an error
+        if (text.toLowerCase().includes("duplicate") || text.toLowerCase().includes("already exists")) return true;
+        console.warn("[ensureCustomFieldsColumn]", resp.status, text);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -413,16 +628,32 @@ export default function AdminJobManagePage() {
     customFields: CustomFieldDefinition[],
   ) => {
     try {
+      // If custom fields are present, ensure the column exists first
+      const hasCustom = Array.isArray(customFields) && customFields.length > 0;
+      if (hasCustom) {
+        await ensureCustomFieldsColumn();
+      }
+
       if (editJob) {
         // Update existing
-        const ok = await updateJobListing(
+        const result = await updateJobListing(
           jobs.find((j) => j.title === editJob.title)?.id || "",
           { ...data, customFields },
         );
-        if (ok) setSnackbar({ message: "Job updated", severity: "success" });
+        if (result.success) {
+          setSnackbar({
+            message: result.warning || "Job updated",
+            severity: result.warning ? "warning" : "success",
+          });
+        }
       } else {
         const result = await createJobListing({ ...data, customFields });
-        if (result.success) setSnackbar({ message: "Job created", severity: "success" });
+        if (result.success) {
+          setSnackbar({
+            message: (result as { warning?: string }).warning || "Job created",
+            severity: (result as { warning?: string }).warning ? "warning" : "success",
+          });
+        }
       }
       setDialogOpen(false);
       void load();
@@ -436,8 +667,8 @@ export default function AdminJobManagePage() {
 
   const handleClose = async (job: JobListing) => {
     try {
-      const ok = await updateJobListing(job.id, { status: "Closed" });
-      if (ok) {
+      const result = await updateJobListing(job.id, { status: "Closed" });
+      if (result.success) {
         setSnackbar({ message: "Job closed", severity: "success" });
         void load();
       }
@@ -495,7 +726,32 @@ export default function AdminJobManagePage() {
         </Grid>
 
         {/* Loading */}
-        {loading && <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress size={40} sx={{ color: "#0078D4" }} /></Box>}
+        {loading && (
+          <TableContainer component={Paper} sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+                  {["Title", "Department", "Type", "Salary", "Status", "Applicants", "Actions"].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {[1, 2, 3, 4].map((i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton variant="text" width={140} /></TableCell>
+                    <TableCell><Skeleton variant="rounded" width={80} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={90} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={70} /></TableCell>
+                    <TableCell><Skeleton variant="rounded" width={60} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={30} /></TableCell>
+                    <TableCell><Skeleton variant="text" width={60} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
 
         {/* Error */}
         {!loading && error && <Alert severity="error" sx={{ borderRadius: "12px", mb: 3 }} action={<Button size="small" onClick={load} sx={{ textTransform: "none" }}>Retry</Button>}>{error}</Alert>}
@@ -563,7 +819,21 @@ export default function AdminJobManagePage() {
 
       {/* Snackbar */}
       <Snackbar open={!!snackbar} autoHideDuration={4000} onClose={() => setSnackbar(null)} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
-        {snackbar ? <Alert severity={snackbar.severity} onClose={() => setSnackbar(null)} sx={{ borderRadius: "10px" }}>{snackbar.message}</Alert> : undefined}
+        {snackbar ? (
+          <Alert
+            severity={snackbar.severity}
+            onClose={() => setSnackbar(null)}
+            sx={{
+              borderRadius: "10px",
+              fontWeight: 600,
+              fontSize: "0.9rem",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+              "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },
+            }}
+          >
+            {snackbar.message}
+          </Alert>
+        ) : undefined}
       </Snackbar>
     </Box>
   );

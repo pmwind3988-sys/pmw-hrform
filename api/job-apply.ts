@@ -23,6 +23,8 @@ interface JobApplyBody {
   coverLetter?: string;
   files?: UploadedFile[];
   customAnswers?: Record<string, unknown>;
+  submittedByEmail?: string;
+  forceApply?: boolean;
 }
 
 interface ApiRequest {
@@ -63,7 +65,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const body = req.body as unknown as JobApplyBody;
+  const body = req.body as unknown as JobApplyBody & { accessToken?: string };
   const {
     jobListingId,
     jobTitle,
@@ -74,6 +76,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     files,
     customAnswers,
   } = body;
+  const userToken = body.accessToken || "";
 
   if (!jobListingId || !jobTitle || !applicantName || !applicantEmail || !applicantPhone) {
     return res.status(400).json({
@@ -82,7 +85,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
-    const token = await getGraphToken();
+    const sysToken = await getGraphToken();
+
+    // Duplicate check: block if same email already applied for same job,
+    // unless the submitter is someone else or forceApply is true (admin test)
+    if (!(body as Record<string, unknown>).forceApply) {
+      try {
+        const existing = await queryListItems(sysToken, "Job Applications", {
+          filter: `fields/ApplicantEmail eq '${encodeURIComponent(applicantEmail)}' and fields/JobListingID eq ${Number(jobListingId)}`,
+          top: 1,
+        });
+        if (existing.length > 0) {
+          const submitterEmail = (body as Record<string, unknown>).submittedByEmail as string || "";
+          if (submitterEmail.toLowerCase() === applicantEmail.toLowerCase()) {
+            return res.status(409).json({
+              error: "You have already applied for this position. Multiple applications are not allowed.",
+            });
+          }
+        }
+      } catch {
+        // If duplicate check fails, proceed anyway
+      }
+    }
+
+    const uploadToken = userToken || sysToken; // prefer user token for file ops
     const submissionRef = generateSubmissionRef();
     const submittedAt = new Date().toISOString();
 
@@ -94,8 +120,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     async function ensureDocLib(): Promise<void> {
       if (!docLibReady) {
-        if (!(await listExistsGraph(token, docLibName))) {
-          await createDocLibrary(token, docLibName);
+        if (!(await listExistsGraph(uploadToken, docLibName))) {
+          await createDocLibrary(uploadToken, docLibName);
         }
         docLibReady = true;
       }
@@ -107,7 +133,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const uniqueName = `${submissionRef}_${safeName}`;
         const binary = decodeBase64(content);
-        const fileUrl = await uploadFileToDrive(token, docLibName, uniqueName, binary);
+        const fileUrl = await uploadFileToDrive(uploadToken, docLibName, uniqueName, binary);
         allDocs.push({ name, url: fileUrl, isCoverLetter });
         return fileUrl;
       } catch (e) {
@@ -146,17 +172,49 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       SubmissionRef: submissionRef,
       ResumeUrl: resumeUrl,
       CoverLetterUrl: coverLetterUrl,
-      CustomAnswers: customAnswers ? JSON.stringify(customAnswers) : "",
     };
 
-    const created = await createListItem(token, "Job Applications", applicationFields);
+    // Only include CustomAnswers if there's data — column may not exist on the list
+    const hasCustomAnswers = customAnswers && typeof customAnswers === "object" && Object.keys(customAnswers).length > 0;
+    if (hasCustomAnswers) {
+      applicationFields.CustomAnswers = JSON.stringify(customAnswers);
+    }
+
+    // Create the item with Title plus essential text fields in one call,
+    // then attempt optional fields individually so missing columns don't block
+    const coreFields: Record<string, unknown> = {
+      Title: applicationFields.Title,
+      Status: "New",
+      SubmissionRef: applicationFields.SubmissionRef,
+    };
+    // Add applicant info fields individually (may not exist on list)
+    for (const k of ["ApplicantName", "ApplicantEmail", "ApplicantPhone", "JobListingID"]) {
+      if (applicationFields[k] != null && applicationFields[k] !== "") {
+        coreFields[k] = applicationFields[k];
+      }
+    }
+
+    const created = await createListItem(sysToken, "Job Applications", coreFields);
+    const itemId = created.id;
+
+    // Attempt optional fields — silently skip any that don't exist or have type issues
+    const optionalFields = ["SubmittedAt", "ResumeUrl", "CoverLetterUrl", "CustomAnswers"];
+    for (const key of optionalFields) {
+      const value = applicationFields[key];
+      if (value === "" || value == null) continue;
+      try {
+        await updateListItemFields(sysToken, "Job Applications", itemId, { [key]: value });
+      } catch {
+        // Column may not exist — application still goes through with core fields
+      }
+    }
 
     // Increment Application_x0020_Count on Internal Job Listing
     try {
-      const jobItems = await queryListItems(token, "Internal Job Listing", { top: 1000 });
+      const jobItems = await queryListItems(sysToken, "Internal Job Listing", { top: 1000 });
       const jobItem = jobItems.find((item) => String(item.id) === String(jobListingId));
       const currentCount = Number(jobItem?.fields?.Application_x0020_Count) || 0;
-      await updateListItemFields(token, "Internal Job Listing", String(jobListingId), {
+      await updateListItemFields(sysToken, "Internal Job Listing", String(jobListingId), {
         Application_x0020_Count: currentCount + 1,
       });
     } catch (e) {
@@ -235,7 +293,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${sysToken}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify(emailPayload),
