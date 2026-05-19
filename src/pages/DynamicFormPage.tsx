@@ -221,7 +221,7 @@ export default function DynamicFormPage() {
           });
         } else if (!isAuthenticated) {
           // Unauthenticated path — try public API fallback
-          const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`);
+          const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`, { headers: { "X-Requested-With": "XMLHttpRequest" } });
           const contentType = res.headers.get("content-type") || "";
           const responseText = await res.text();
 
@@ -820,7 +820,7 @@ export default function DynamicFormPage() {
 
         const res = await fetch("/api/submit-form", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
           body: JSON.stringify({ listTitle: cfg.Title, body, matrixData: Object.keys(matrixData).length > 0 ? matrixData : undefined }),
         });
         const resData = await res.json().catch(() => ({})) as { id?: string; error?: string };

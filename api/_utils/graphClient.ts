@@ -309,7 +309,7 @@ export async function updateListItemFields(
 ): Promise<void> {
   const siteId = await getSiteId(token);
   const listId = await getListId(token, listDisplayName);
-  const res = await fetch(`${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, {
+  const res = await fetch(`${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items/${encodeURIComponent(itemId)}/fields`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -330,7 +330,7 @@ export async function deleteListItem(
 ): Promise<void> {
   const siteId = await getSiteId(token);
   const listId = await getListId(token, listDisplayName);
-  const res = await fetch(`${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items/${itemId}`, {
+  const res = await fetch(`${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items/${encodeURIComponent(itemId)}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,

@@ -11,7 +11,7 @@ const REQUIRED_VITE_VARS = ["VITE_AZURE_CLIENT_ID", "VITE_AZURE_TENANT_ID", "VIT
 const missing = REQUIRED_VITE_VARS.filter((name) => !import.meta.env[name]);
 if (missing.length > 0) {
   const msg = `❌ pmw-hrform: Missing required env vars: ${missing.join(", ")}. Check .env.local or .env file.`;
-  document.body.innerHTML = `<div style="padding:40px;font-family:sans-serif;color:#DC2626"><h2>Configuration Error</h2><p>${msg}</p></div>`;
+  document.body.textContent = msg;
   throw new Error(msg);
 }
 

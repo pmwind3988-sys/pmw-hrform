@@ -82,7 +82,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const body = req.body as unknown as JobApplyBody & { accessToken?: string };
+  const body = req.body as unknown as JobApplyBody;
   const {
     jobListingId,
     jobTitle,
@@ -93,7 +93,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     files,
     customAnswers,
   } = body;
-  const userToken = body.accessToken || "";
+
 
   if (!jobListingId || !jobTitle || !applicantName || !applicantEmail || !applicantPhone) {
     return res.status(400).json({
@@ -109,12 +109,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // differs from applicantEmail (server-side check).
     try {
       const existing = await queryListItems(sysToken, "Job Applications", {
-        filter: `fields/ApplicantEmail eq '${encodeURIComponent(applicantEmail)}' and fields/JobListingID eq ${Number(jobListingId)}`,
+        filter: `fields/ApplicantEmail eq '${applicantEmail.replace(/'/g, "''")}' and fields/JobListingID eq ${Number(jobListingId)}`,
         top: 1,
       });
       if (existing.length > 0) {
         const submitterEmail = (body as Record<string, unknown>).submittedByEmail as string || "";
+        const authCheck = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
         const isForceBypass = (body as Record<string, unknown>).forceApply === true
+          && authCheck.valid
           && submitterEmail.toLowerCase() !== applicantEmail.toLowerCase();
         if (!isForceBypass && submitterEmail.toLowerCase() === applicantEmail.toLowerCase()) {
           return res.status(409).json({
@@ -126,7 +128,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // If duplicate check fails, proceed anyway
     }
 
-    const uploadToken = userToken || sysToken; // prefer user token for file ops
+    const uploadToken = sysToken;
     const submissionRef = body.submissionRef || generateSubmissionRef();
     const submittedAt = new Date().toISOString();
 

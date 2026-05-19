@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, createListItem, getListId, getSiteId, createDocLibrary, uploadFileToDrive, listExistsGraph } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItems, createListItem, getListId, getSiteId, createDocLibrary, uploadFileToDrive, listExistsGraph, updateListItemFields } from "./_utils/graphClient.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -66,6 +66,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const safeExt = ext.replace(/[^a-zA-Z0-9]/g, '');
           const fileName = `${k}_${Date.now()}.${safeExt}`;
           const base64 = v.replace(/^data:[\w/+-]+;base64,/, '');
+          const rawSize = Math.ceil((base64.length * 3) / 4);
+          if (rawSize > 10 * 1024 * 1024) {
+            console.warn("[API submit-form] Skipping oversized file:", k, rawSize);
+            continue;
+          }
           const binary = new Uint8Array(Buffer.from(base64, 'base64'));
           const fileUrl = await uploadFileToDrive(token, docLibName, fileName, binary);
           formBody[k] = { Url: fileUrl, Description: fileName };
@@ -119,7 +124,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           updateFields[`${fieldName}_RowIds`] = JSON.stringify(ids);
         }
         try {
-          const { updateListItemFields } = await import("./_utils/graphClient.js");
           await updateListItemFields(token, listTitle, parentId, updateFields);
         } catch (e) {
           console.warn("[API submit-form] Failed to update parent with RowIds:", (e as Error).message);

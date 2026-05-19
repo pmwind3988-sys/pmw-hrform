@@ -107,6 +107,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         // Fetch applications to get JobListingID before deleting
         const decrementMap: Record<string, number> = {};
         for (const id of ids) {
+          if (!/^\d+$/.test(String(id))) continue;
           try {
             const appResult = await queryListItems(token, APPLICATION_LIST, {
               filter: `id eq ${String(id)}`,
@@ -129,13 +130,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             await deleteListItem(token, APPLICATION_LIST, String(id));
             deleted++;
           } catch (e) {
-            errors.push(`${id}: ${(e as Error).message}`);
+            errors.push(`Delete failed for item ${id}`);
           }
         }
 
         // Decrement Application_x0020_Count on affected job listings
         for (const [jobId, count] of Object.entries(decrementMap)) {
           if (count > 0) {
+            if (!/^\d+$/.test(String(jobId))) continue;
             try {
               const jobItems = await queryListItems(token, JOB_LIST, {
                 filter: `id eq ${jobId}`,

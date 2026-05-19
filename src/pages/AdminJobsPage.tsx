@@ -717,7 +717,7 @@ export default function AdminJobsPage() {
                         {selectedApp.resumeUrl && (
                           <Box
                             component="a"
-                            href={selectedApp.resumeUrl}
+                            href={selectedApp.resumeUrl?.startsWith("https://") ? selectedApp.resumeUrl : "#"}
                             target="_blank"
                             rel="noopener noreferrer"
                             sx={{
@@ -736,7 +736,7 @@ export default function AdminJobsPage() {
                         {selectedApp.coverLetterUrl && (
                           <Box
                             component="a"
-                            href={selectedApp.coverLetterUrl}
+                            href={selectedApp.coverLetterUrl?.startsWith("https://") ? selectedApp.coverLetterUrl : "#"}
                             target="_blank"
                             rel="noopener noreferrer"
                             sx={{

@@ -14,10 +14,10 @@ npm run dev        # Vite dev server (port 3000) — frontend only; /api/* will 
 npm run dev:api    # vercel dev — runs BOTH Vite frontend + API routes locally
 npm run build      # tsc -b && vite build — FAILS on any new TS error
 npm run lint       # ESLint flat config (many pre-existing warnings)
-npx vitest run     # 77 unit tests in src/utils/__tests__/FormBuilderEngine.test.ts, ~300ms
+npx vitest run     # ~77 unit tests in src/utils/__tests__/FormBuilderEngine.test.ts, ~300ms
 ```
 - `npm run build` is the **only** reliable check before commit. `lsp_diagnostics` catches TS errors too.
-- `build_errors.txt` / `build_status.txt` are stale artifacts — ignore them.
+- `build_errors.txt` / `build_status.txt` are stale artifacts gitignored after `git rm --cached` — ignore them.
 - `vitest.config.ts` at root — includes `src/**/*.test.ts`. No setup files, no MSW.
 
 ## Stack
@@ -29,7 +29,9 @@ npx vitest run     # 77 unit tests in src/utils/__tests__/FormBuilderEngine.test
 - `@react-pdf/renderer` — generates PDF on client side. `src/utils/generateFormPdf.ts` handles PDF creation flow.
 - `react-dnd` v16 (HTML5 backend) — drag-drop canvas in form builder.
 - **API**: Vercel serverless functions in `api/` — **not Express**. Graph API client (`api/_utils/graphClient.ts`) for all list operations. No SP REST SDK — raw `fetch` to `graph.microsoft.com`.
-- Other notable deps: `jose`/`jsonwebtoken` (layer tokens), `qrcode`, `dompurify` (HTML sanitization), `libphonenumber-js`.
+- **API auth**: All 7 API routes require `X-Api-Key` header matching `API_SECRET_KEY` env var. Validated by `api/_utils/auth.ts`. Frontend sends via `VITE_API_SECRET_KEY` (same value, compiled into bundle).
+- **Security**: CORS restricted, CSP set, API auth enforced, error messages sanitized server-side, `encodeURIComponent` on all Graph API path params.
+- Other notable deps: `dompurify` (HTML sanitization), `qrcode`, `libphonenumber-js`.
 
 ## CI
 - `.github/workflows/ci.yml`: `npm ci` → `npm run build` → **`npx vitest run`** (build AND tests both gate the pipeline).
@@ -80,11 +82,11 @@ Builder:   AdminFormBuilder.tsx → raw token → src/utils/formBuilderSP.ts (st
 
 ### Career / Job Application System
 - **Public careers page**: `src/pages/CareersPage.tsx` — lists open jobs from "Internal Job Listing" SP list (status === "New").
-- **Job apply flow**: `src/pages/JobApplyPage.tsx` — form with file uploads, sends PDF + application data to `POST /api/job-apply`.
+- **Job apply flow**: `src/pages/JobApplyPage.tsx` — form with file uploads, sends PDF + application data to `POST /api/job-apply`. Resume (required single file) and Supporting Documents (optional, max 5, 10MB each) are separate upload sections.
 - **API routes**:
   - `api/jobs-list.ts` — public: lists active jobs with live applicant counts (computed from "Job Applications" list)
-  - `api/job-apply.ts` — creates application list item, updates count, sends email. **Blocking**: count update and email are mandatory; failure returns 500 with specific error.
-  - `api/job-admin.ts` — admin: list/update/delete applications, CRUD for job listings
+  - `api/job-apply.ts` — creates application list item, updates count, sends email. **Blocking**: count update and email are mandatory; failure returns 500 with specific error. Duplicate check always runs; `forceApply` bypass only works when `submittedByEmail !== applicantEmail`.
+  - `api/job-admin.ts` — admin: list/update/delete applications, CRUD for job listings. All IDs validated as numeric before Graph `$filter` usage.
 - **Email**: Uses Graph API `sendMail`. Requires `EMAIL_FROM_ADDRESS` (mail-enabled user) and `HR_RECRUITMENT_EMAIL` env vars. Azure AD app needs `Mail.Send` application permission (admin-granted).
 - **Applicant count**: Computed live from "Job Applications" list grouped by `JobListingID`. Also stored as `Application_x0020_Count` on the job listing item.
 
@@ -108,7 +110,7 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 - **NO path aliases** — all imports relative (`../../utils/...`). No barrel exports except `src/components/builder/index.ts`.
 - **NO `React.lazy()`** — all pages eagerly imported in `App.tsx`.
 - `FormBuilder.tsx` has `eslint-disable` and `any[]` usage
-- `DetailModal.tsx` uses `dangerouslySetInnerHTML` — audit XSS if user input reaches `value`
+- `DetailModal.tsx` uses `dangerouslySetInnerHTML` — always uses `DOMPurify.sanitize()` but audit if user input bypasses it
 - **Build**: Run `npm run build` after all changes. Do NOT add new TS errors.
 
 ## Conventions
@@ -116,23 +118,25 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 - **Prefer `import type`** for type-only imports (`verbatimModuleSyntax` requires it)
 - **Styling**: Form builder uses inline styles via `C` color object (`src/components/builder/constants.ts`). Published form uses CSS-in-JS with theme tokens. Dashboard uses MUI components with theme overrides. Careers pages use MUI `sx` with inline theme-aware values.
 - **State**: Local `useState` only — no context stores except `DashboardContext` in `AdminHomePage`.
-- **Responsive**: Dashboard uses `useMediaQuery` for mobile detection (SubmissionRow has stacked card layout on mobile). Header collapses admin buttons into a menu on mobile.
+- **Responsive**: Dashboard uses `useMediaQuery` for mobile detection (SubmissionRow has stacked card layout on mobile). Header collapses all nav items into a single hamburger menu on mobile.
 
 ## Testing
-- 77 unit tests in `src/utils/__tests__/FormBuilderEngine.test.ts` (pure logic, no network/SP).
+- ~77 unit tests in `src/utils/__tests__/FormBuilderEngine.test.ts` (pure logic, no network/SP).
 - Run: `npx vitest run`. Watch: `npx vitest`.
 - Config: `vitest.config.ts` — includes `src/**/*.test.ts`.
 - No integration/E2E tests exist. No MSW mock handlers. No test fixtures.
 
 ## Env Vars
-| Var | Controls |
-|---|---|
-| `VITE_SP_SITE_URL` | SharePoint site all SP calls target |
-| `VITE_AZURE_CLIENT_ID` | Azure AD app for MSAL auth |
-| `VITE_AZURE_TENANT_ID` | Tenant for auth + API |
-| `SYSTEM_CLIENT_ID` / `SYSTEM_CLIENT_SECRET` | API server-side auth (Vercel) — NOT `VITE_` prefixed |
-| `HR_RECRUITMENT_EMAIL` / `VITE_HR_RECRUITMENT_EMAIL` | Recipient for job application HR emails |
-| `EMAIL_FROM_ADDRESS` / `VITE_EMAIL_FROM_ADDRESS` | Sender for HR emails (mail-enabled user, needs `Mail.Send`) |
+| Var | Controls | Notes |
+|---|---|---|
+| `VITE_SP_SITE_URL` | SharePoint site all SP calls target | Required, validated at startup |
+| `VITE_AZURE_CLIENT_ID` | Azure AD app for MSAL auth | Required |
+| `VITE_AZURE_TENANT_ID` | Tenant for auth + API | Required |
+| `SYSTEM_CLIENT_ID` / `SYSTEM_CLIENT_SECRET` | API server-side Graph API token (Vercel) | NOT `VITE_` prefixed |
+| `API_SECRET_KEY` | Server-side API key for `X-Api-Key` auth | Should differ from `VITE_API_SECRET_KEY` |
+| `VITE_API_SECRET_KEY` | Client-side API key (compiled into bundle) | Must match `API_SECRET_KEY` for requests to work |
+| `HR_RECRUITMENT_EMAIL` / `VITE_HR_RECRUITMENT_EMAIL` | Recipient for job application HR emails | |
+| `EMAIL_FROM_ADDRESS` / `VITE_EMAIL_FROM_ADDRESS` | Sender for HR emails (mail-enabled user, needs `Mail.Send`) | |
 
 For Vercel deployment setup see `VERCEL_SETUP.md`.
 
@@ -168,4 +172,4 @@ AdminFormBuilder.tsx (page — /admin/builder)
 ## Deployment
 - **Vercel** — SPA + serverless functions. `vercel.json` rewrites all non-API routes to `index.html`.
 - `vercel dev` runs both frontend and API locally (not `npm run dev` which is frontend-only).
-- CORS headers for `/api/*` set via `vercel.json`.
+- CORS restricted to `https://pmw-hrform.vercel.app` via `vercel.json`. Security headers (CSP, XFO, etc.) also set there.

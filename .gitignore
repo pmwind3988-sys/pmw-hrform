@@ -25,3 +25,7 @@ dist-ssr
 .env
 .vercel
 .env*.local
+
+# Build artifacts
+build_errors.txt
+build_status.txt

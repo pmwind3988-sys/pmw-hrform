@@ -137,6 +137,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { token, layerNumber, formTitle, responseItemId, fields, action, signature, rejection } = req.body;
+  const safeResponseItemId = Number(responseItemId);
+  if (!safeResponseItemId) return res.status(400).json({ error: "Invalid responseItemId" });
 
   // Validate required fields
   if (!token || typeof token !== "string") {
@@ -183,7 +185,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // 2. Fetch the response item using Graph API
     const responseListName = `${formTitle} Responses`;
     const items = await queryListItems(graphToken, responseListName, {
-      filter: `fields/id eq ${responseItemId}`,
+      filter: `fields/id eq ${safeResponseItemId}`,
       top: 1,
     });
     const responseItem = items[0];

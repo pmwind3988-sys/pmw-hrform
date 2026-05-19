@@ -24,6 +24,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const { to, subject, body } = req.body as Record<string, unknown>;
 
+  if (typeof to !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return res.status(400).json({ error: "Invalid recipient email address" });
+  }
+
   if (!to || !subject || !body) {
     return res.status(400).json({ error: "Missing required fields: to, subject, body" });
   }
