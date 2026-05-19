@@ -410,8 +410,8 @@ export default function JobApplyPage() {
         // User token not available — API will fall back to system credentials
       }
 
-      // Generate submission ref client-side (mirrors generateSubmissionRef in API)
-      const pdfSubmissionRef = `JOB-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      // Generate submission ref once — used for both the PDF and the API submission
+      const submissionRef = `JOB-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
       // Generate PDF
       let pdfBase64 = "";
@@ -425,7 +425,7 @@ export default function JobApplyPage() {
               applicantPhone: values.phone,
               currentPosition: values.currentPosition,
               currentDepartment: values.currentDepartment,
-              submissionRef: pdfSubmissionRef,
+              submissionRef,
               submittedAt: new Date().toISOString(),
               reasoning: values.coverLetter,
               customAnswers,
@@ -463,6 +463,7 @@ export default function JobApplyPage() {
         accessToken,
         submittedByEmail: accounts[0]?.username || "",
         forceApply,
+        submissionRef,
       });
       setSubmissionRef(result.submissionRef);
       setSubmitted(true);

@@ -918,6 +918,8 @@ export interface JobApplyRequest {
   accessToken?: string;
   submittedByEmail?: string;
   forceApply?: boolean;
+  /** Client-generated submission ref; API will use this if provided instead of generating its own. */
+  submissionRef?: string;
 }
 
 export interface JobAdminApplication {

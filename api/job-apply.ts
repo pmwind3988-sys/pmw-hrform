@@ -28,6 +28,8 @@ interface JobApplyBody {
   customAnswers?: Record<string, unknown>;
   submittedByEmail?: string;
   forceApply?: boolean;
+  /** Client-generated submission ref. If not provided, one is generated server-side. */
+  submissionRef?: string;
 }
 
 interface ApiRequest {
@@ -122,7 +124,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const uploadToken = userToken || sysToken; // prefer user token for file ops
-    const submissionRef = generateSubmissionRef();
+    const submissionRef = body.submissionRef || generateSubmissionRef();
     const submittedAt = new Date().toISOString();
 
     // Upload all documents to document library
