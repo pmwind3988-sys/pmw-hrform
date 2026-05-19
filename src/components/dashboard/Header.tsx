@@ -119,6 +119,48 @@ export default function Header({
 
         <Box sx={{ flexGrow: 1 }} />
 
+        {/* Careers — visible to all authenticated users */}
+        {isMobile ? (
+          <IconButton
+            onClick={() => navigate("/careers")}
+            size="small"
+            sx={{
+              mr: 0.5,
+              borderRadius: "10px",
+              color: "#34A853",
+              backgroundColor: "rgba(52, 168, 83, 0.08)",
+              "&:hover": { backgroundColor: "rgba(52, 168, 83, 0.15)" },
+            }}
+          >
+            <PublicIcon />
+          </IconButton>
+        ) : (
+          <Button
+            variant="outlined"
+            startIcon={<PublicIcon />}
+            onClick={() => navigate("/careers")}
+            sx={{
+              mr: 1,
+              borderRadius: "12px",
+              textTransform: "none",
+              color: "#34A853",
+              borderColor: "rgba(52, 168, 83, 0.3)",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              py: 1,
+              px: 2.5,
+              transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+              "&:hover": {
+                borderColor: "#34A853",
+                backgroundColor: "rgba(52, 168, 83, 0.06)",
+                transform: "translateY(-1px)",
+              },
+            }}
+          >
+            Careers
+          </Button>
+        )}
+
         {isAdmin && (
           <>
             {isMobile ? (
@@ -165,10 +207,6 @@ export default function Header({
                   <MenuItem onClick={() => { handleAdminClose(); navigate("/admin/jobs/manage"); }} sx={{ py: 1.25, px: 2.5 }}>
                     <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
                     <Typography variant="body2">Manage Jobs</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => { handleAdminClose(); navigate("/careers"); }} sx={{ py: 1.25, px: 2.5 }}>
-                    <PublicIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
-                    <Typography variant="body2">Careers</Typography>
                   </MenuItem>
                 </Menu>
               </>
@@ -251,30 +289,6 @@ export default function Header({
                   }}
                 >
                   Manage Jobs
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<PublicIcon />}
-                  onClick={() => navigate("/careers")}
-                  sx={{
-                    mr: 1,
-                    borderRadius: "12px",
-                    textTransform: "none",
-                    color: "#34A853",
-                    borderColor: "rgba(52, 168, 83, 0.3)",
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                    py: 1,
-                    px: 2.5,
-                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                    "&:hover": {
-                      borderColor: "#34A853",
-                      backgroundColor: "rgba(52, 168, 83, 0.06)",
-                      transform: "translateY(-1px)",
-                    },
-                  }}
-                >
-                  Careers
                 </Button>
               </>
             )}
