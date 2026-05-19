@@ -87,7 +87,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (!applicationId || !status) {
           return res.status(400).json({ error: "Missing required fields: applicationId, status" });
         }
-        const validStatuses = ["New", "Reviewed"];
+        const validStatuses = ["New", "KIV", "Shortlisted", "Not Suitable"];
         if (!validStatuses.includes(status)) {
           return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
         }
@@ -171,8 +171,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           Department: rawBody.department || "",
           Location: rawBody.location || "",
           Employment_x0020_Type: rawBody.employmentType || "",
-          Salary_x0020_Min: rawBody.salaryMin ?? 0,
-          Salary_x0020_Max: rawBody.salaryMax ?? 0,
           Closing_x0020_Date: rawBody.closingDate || null,
           Status: "New",
           Application_x0020_Count: 0,
@@ -229,8 +227,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             department: String(item.fields.Department || ""),
             location: String(item.fields.Location || ""),
             employmentType: String(item.fields.Employment_x0020_Type || ""),
-            salaryMin: item.fields.Salary_x0020_Min != null ? Number(item.fields.Salary_x0020_Min) : null,
-            salaryMax: item.fields.Salary_x0020_Max != null ? Number(item.fields.Salary_x0020_Max) : null,
             closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date).split("T")[0] : null,
             status: String(item.fields.Status || "New"),
             applicationCount: appCountByJob[itemId] ?? (Number(item.fields.Application_x0020_Count) || 0),
@@ -253,8 +249,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (rawBody.department !== undefined) updateFields.Department = rawBody.department;
         if (rawBody.location !== undefined) updateFields.Location = rawBody.location;
         if (rawBody.employmentType !== undefined) updateFields.Employment_x0020_Type = rawBody.employmentType;
-        if (rawBody.salaryMin !== undefined) updateFields.Salary_x0020_Min = rawBody.salaryMin;
-        if (rawBody.salaryMax !== undefined) updateFields.Salary_x0020_Max = rawBody.salaryMax;
         if (rawBody.closingDate !== undefined) updateFields.Closing_x0020_Date = rawBody.closingDate;
         if (rawBody.status !== undefined) updateFields.Status = rawBody.status;
         if (rawBody.customFields !== undefined) {

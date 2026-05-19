@@ -35,7 +35,6 @@ import {
   LocationOn,
   CalendarToday,
   People,
-  AttachMoney,
   AccessTime,
   Search as SearchIcon,
   Close,
@@ -44,14 +43,6 @@ import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
 import { fetchJobs, fetchMyApplications } from "../utils/careersService";
 import type { JobListing, JobAdminApplication } from "../types";
-
-function formatSalary(min: number | null, max: number | null): string {
-  if (min == null && max == null) return "";
-  const fmt = (n: number) => `RM ${n.toLocaleString()}`;
-  if (min != null && max != null) return `${fmt(min)} - ${fmt(max)}`;
-  if (min != null) return `From ${fmt(min)}`;
-  return max != null ? `Up to ${fmt(max)}` : "";
-}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
@@ -147,16 +138,6 @@ function JobCard({ job, onSelect, isApplied }: { job: JobListing; onSelect: (job
               </Box>
             </Grid>
           )}
-          {formatSalary(job.salaryMin, job.salaryMax) && (
-            <Grid size={{ xs: 6 }}>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.5 }}>
-                <AttachMoney sx={{ fontSize: 14, color: "#6B7280" }} />
-                <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
-                  {formatSalary(job.salaryMin, job.salaryMax)}
-                </Typography>
-              </Box>
-            </Grid>
-          )}
         </Grid>
 
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -239,11 +220,6 @@ function JobDetailDialog({
           {job.location && (
             <Typography variant="caption" sx={{ color: "#6B7280", display: "flex", alignItems: "center", gap: 0.3 }}>
               <LocationOn sx={{ fontSize: 14 }} /> {job.location}
-            </Typography>
-          )}
-          {formatSalary(job.salaryMin, job.salaryMax) && (
-            <Typography variant="caption" sx={{ color: "#6B7280", display: "flex", alignItems: "center", gap: 0.3 }}>
-              <AttachMoney sx={{ fontSize: 14 }} /> {formatSalary(job.salaryMin, job.salaryMax)}
             </Typography>
           )}
         </Box>
@@ -358,8 +334,6 @@ export default function CareersPage() {
   const [searchText, setSearchText] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [salaryMinFilter, setSalaryMinFilter] = useState("");
-  const [salaryMaxFilter, setSalaryMaxFilter] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
   const [selectedApp, setSelectedApp] = useState<JobAdminApplication | null>(null);
@@ -442,14 +416,6 @@ export default function CareersPage() {
       }
       if (deptFilter && job.department !== deptFilter) return false;
       if (typeFilter && job.employmentType !== typeFilter) return false;
-      if (salaryMinFilter) {
-        const min = Number(salaryMinFilter);
-        if (!isNaN(min) && (job.salaryMax == null || job.salaryMax < min)) return false;
-      }
-      if (salaryMaxFilter) {
-        const max = Number(salaryMaxFilter);
-        if (!isNaN(max) && (job.salaryMin == null || job.salaryMin > max)) return false;
-      }
       if (appliedFilter === "applied" && !isJobApplied(job.id)) return false;
       if (appliedFilter === "unapplied" && isJobApplied(job.id)) return false;
       return true;
@@ -463,9 +429,9 @@ export default function CareersPage() {
     }
 
     return result;
-  }, [jobs, searchText, deptFilter, typeFilter, salaryMinFilter, salaryMaxFilter, sortBy, appliedFilter, appliedJobIds]);
+  }, [jobs, searchText, deptFilter, typeFilter, sortBy, appliedFilter, appliedJobIds]);
 
-  const hasFilters = searchText || deptFilter || typeFilter || salaryMinFilter || salaryMaxFilter || appliedFilter !== "all";
+  const hasFilters = searchText || deptFilter || typeFilter || appliedFilter !== "all";
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
@@ -598,54 +564,6 @@ export default function CareersPage() {
                 ))}
               </Select>
             </FormControl>
-            <TextField
-              placeholder="Min"
-              type="number"
-              value={salaryMinFilter}
-              onChange={(e) => setSalaryMinFilter(e.target.value)}
-              size="small"
-              sx={{
-                width: 100,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
-                  backgroundColor: "#F8F9FC",
-                },
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 600 }}>RM</Typography>
-                    </InputAdornment>
-                  ),
-                },
-                htmlInput: { min: 0 },
-              }}
-            />
-            <TextField
-              placeholder="Max"
-              type="number"
-              value={salaryMaxFilter}
-              onChange={(e) => setSalaryMaxFilter(e.target.value)}
-              size="small"
-              sx={{
-                width: 100,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
-                  backgroundColor: "#F8F9FC",
-                },
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 600 }}>RM</Typography>
-                    </InputAdornment>
-                  ),
-                },
-                htmlInput: { min: 0 },
-              }}
-            />
             <FormControl size="small" sx={{ minWidth: 130 }}>
               <InputLabel>Applied</InputLabel>
               <Select

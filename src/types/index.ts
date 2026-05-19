@@ -876,8 +876,6 @@ export interface JobListing {
   department: string;
   location: string;
   employmentType: string;
-  salaryMin: number | null;
-  salaryMax: number | null;
   closingDate: string | null;
   status: string;
   applicationCount: number;

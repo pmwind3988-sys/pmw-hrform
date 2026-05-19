@@ -34,16 +34,19 @@ import {
   People,
   NewReleases,
   CheckCircle,
+  AccessTime,
   Delete as DeleteIcon,
 } from "@mui/icons-material";
 import { fetchApplications, updateApplicationStatus, deleteApplications } from "../utils/careersService";
 import type { JobAdminApplication } from "../types";
 
-const STATUS_OPTIONS = ["New", "Reviewed"] as const;
+const STATUS_OPTIONS = ["New", "KIV", "Shortlisted", "Not Suitable"] as const;
 
 const STATUS_COLORS: Record<string, string> = {
   New: "#0078D4",
-  Reviewed: "#34A853",
+  KIV: "#F59E0B",
+  Shortlisted: "#34A853",
+  "Not Suitable": "#DC2626",
 };
 
 function StatusChip({ status }: { status: string }) {
@@ -175,7 +178,9 @@ export default function AdminJobsPage() {
   const stats = {
     total: applications.length,
     new: applications.filter((a) => a.status === "New").length,
-    reviewed: applications.filter((a) => a.status === "Reviewed").length,
+    kiv: applications.filter((a) => a.status === "KIV").length,
+    shortlisted: applications.filter((a) => a.status === "Shortlisted").length,
+    notSuitable: applications.filter((a) => a.status === "Not Suitable").length,
   };
 
   return (
@@ -228,10 +233,12 @@ export default function AdminJobsPage() {
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
             { label: "Total Applications", value: stats.total, icon: <People />, color: "#0078D4" },
-            { label: "New", value: stats.new, icon: <NewReleases />, color: "#F59E0B" },
-            { label: "Reviewed", value: stats.reviewed, icon: <CheckCircle />, color: "#34A853" },
+            { label: "New", value: stats.new, icon: <NewReleases />, color: "#0078D4" },
+            { label: "KIV", value: stats.kiv, icon: <AccessTime />, color: "#F59E0B" },
+            { label: "Shortlisted", value: stats.shortlisted, icon: <CheckCircle />, color: "#34A853" },
+            { label: "Not Suitable", value: stats.notSuitable, icon: <People />, color: "#DC2626" },
           ].map((stat) => (
-            <Grid size={{ xs: 6, sm: 4 }} key={stat.label}>
+            <Grid size={{ xs: 6, sm: 4, lg: 2 }} key={stat.label}>
               <Card
                 sx={{
                   borderRadius: "16px",

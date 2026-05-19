@@ -62,8 +62,6 @@ const EMPTY_JOB = {
   department: "",
   location: "",
   employmentType: "",
-  salaryMin: null as number | null,
-  salaryMax: null as number | null,
   closingDate: "",
   status: "New",
 };
@@ -392,8 +390,6 @@ function JobFormDialog({
   const [department, setDepartment] = useState(initial?.department ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
   const [employmentType, setEmploymentType] = useState(initial?.employmentType ?? "");
-  const [salaryMin, setSalaryMin] = useState(initial?.salaryMin ?? null);
-  const [salaryMax, setSalaryMax] = useState(initial?.salaryMax ?? null);
   const [closingDate, setClosingDate] = useState(initial?.closingDate ?? "");
   const [status, setStatus] = useState(initial?.status ?? "New");
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>(initial?.customFields ?? []);
@@ -406,14 +402,12 @@ function JobFormDialog({
       setDepartment(initial.department);
       setLocation(initial.location);
       setEmploymentType(initial.employmentType);
-      setSalaryMin(initial.salaryMin);
-      setSalaryMax(initial.salaryMax);
       setClosingDate(initial.closingDate);
       setStatus(initial.status);
       setCustomFields(initial.customFields);
     } else if (open) {
       setTitle(""); setJobDescription(""); setDepartment(""); setLocation("");
-      setEmploymentType(""); setSalaryMin(null); setSalaryMax(null); setClosingDate(""); setStatus("New");
+      setEmploymentType(""); setClosingDate(""); setStatus("New");
       setCustomFields([]);
     }
   }, [open, initial]);
@@ -429,8 +423,6 @@ function JobFormDialog({
           department: department.trim(),
           location: location.trim(),
           employmentType,
-          salaryMin: salaryMin ?? 0,
-          salaryMax: salaryMax ?? 0,
           closingDate: closingDate || null,
           status,
         },
@@ -483,12 +475,6 @@ function JobFormDialog({
                 ))}
               </Select>
             </FormControl>
-          </Grid>
-          <Grid size={{ xs: 6, md: 2 }}>
-            <TextField label="Salary Min" type="number" value={salaryMin ?? ""} onChange={(e) => setSalaryMin(e.target.value ? Number(e.target.value) : null)} fullWidth size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
-          </Grid>
-          <Grid size={{ xs: 6, md: 2 }}>
-            <TextField label="Salary Max" type="number" value={salaryMax ?? ""} onChange={(e) => setSalaryMax(e.target.value ? Number(e.target.value) : null)} fullWidth size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
           </Grid>
           <Grid size={{ xs: 12, md: 2 }}>
             <TextField label="Closing Date" type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }} />
@@ -620,8 +606,6 @@ export default function AdminJobManagePage() {
       department: job.department,
       location: job.location,
       employmentType: job.employmentType,
-      salaryMin: job.salaryMin,
-      salaryMax: job.salaryMax,
       closingDate: job.closingDate ?? "",
       status: job.status,
       customFields: job.customFields ?? [],
@@ -759,7 +743,7 @@ export default function AdminJobManagePage() {
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Title", "Department", "Type", "Salary", "Status", "Applicants", "Actions"].map((h) => (
+                  {["Title", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -800,7 +784,7 @@ export default function AdminJobManagePage() {
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Title", "Department", "Type", "Salary", "Status", "Applicants", "Actions"].map((h) => (
+                  {["Title", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -814,7 +798,6 @@ export default function AdminJobManagePage() {
                     </TableCell>
                     <TableCell><Chip label={job.department} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: "#6264A7", color: "#fff" }} /></TableCell>
                     <TableCell><Typography variant="body2" sx={{ color: "#374151", fontSize: "0.8rem" }}>{job.employmentType}</Typography></TableCell>
-                    <TableCell><Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>{job.salaryMin ? `RM ${job.salaryMin}` : "-"}</Typography></TableCell>
                     <TableCell>
                       <Chip label={job.status === "New" ? "Active" : "Closed"} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: job.status === "New" ? "#E6F4EA" : "#F3F4F6", color: job.status === "New" ? "#34A853" : "#6B7280", fontWeight: 600 }} />
                     </TableCell>

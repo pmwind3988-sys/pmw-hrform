@@ -57,8 +57,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           department: String(item.fields.Department || ""),
           location: String(item.fields.Location || ""),
           employmentType: String(item.fields.Employment_x0020_Type || ""),
-          salaryMin: item.fields.Salary_x0020_Min != null ? Number(item.fields.Salary_x0020_Min) : null,
-          salaryMax: item.fields.Salary_x0020_Max != null ? Number(item.fields.Salary_x0020_Max) : null,
           closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date) : null,
           status: String(item.fields.Status || "New"),
           applicationCount: appCountByJob[itemId] ?? (Number(item.fields.Application_x0020_Count) || 0),
