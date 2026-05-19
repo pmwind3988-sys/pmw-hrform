@@ -66,10 +66,10 @@ export default function StatsRow({ submissions }: StatsRowProps) {
             sx={{
               backgroundColor: "#ffffff",
               borderRadius: "20px",
-              p: 3,
+              p: { xs: 2, sm: 3 },
               display: "flex",
               alignItems: "center",
-              gap: 2.5,
+              gap: { xs: 1.5, sm: 2.5 },
               transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               border: "1px solid rgba(0, 0, 0, 0.04)",
               boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04)",
@@ -83,8 +83,8 @@ export default function StatsRow({ submissions }: StatsRowProps) {
           >
             <Box
               sx={{
-                width: 56,
-                height: 56,
+                width: { xs: 44, sm: 56 },
+                height: { xs: 44, sm: 56 },
                 borderRadius: "16px",
                 backgroundColor: "rgba(255, 255, 255, 0.8)",
                 display: "flex",
@@ -120,7 +120,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                   color: "#111827",
                   letterSpacing: "-0.02em",
                   lineHeight: 1.15,
-                  fontSize: "2.5rem",
+                  fontSize: { xs: "1.5rem", sm: "2.5rem" },
                 }}
               >
                 {stat.value}

@@ -62,9 +62,10 @@ export default function Toolbar({
         <Box
           sx={{
             display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
             flexWrap: "wrap",
             gap: 2,
-            alignItems: "center",
+            alignItems: { xs: "stretch", sm: "center" },
           }}
         >
           {/* Search */}
@@ -74,8 +75,8 @@ export default function Toolbar({
             onChange={(e) => setSearch(e.target.value)}
             size="small"
             sx={{
-              flex: "1 1 280px",
-              minWidth: 240,
+              flex: { xs: "none", sm: "1 1 280px" },
+              minWidth: { xs: "100%", sm: 240 },
               "& .MuiOutlinedInput-root": {
                 borderRadius: "12px",
                 backgroundColor: "#F8F9FC",
@@ -101,7 +102,7 @@ export default function Toolbar({
           />
 
           {/* List filter */}
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }}>
             <InputLabel>List</InputLabel>
             <Select
               value={listFilter}
@@ -119,7 +120,7 @@ export default function Toolbar({
           </FormControl>
 
           {/* Status filter */}
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }}>
             <InputLabel>Status</InputLabel>
             <Select
               value={statusFilter}
@@ -137,7 +138,7 @@ export default function Toolbar({
           </FormControl>
 
           {/* Sort */}
-          <FormControl size="small" sx={{ minWidth: 140 }}>
+          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 140 } }}>
             <InputLabel>Sort by</InputLabel>
             <Select
               value={sortBy}
@@ -158,9 +159,10 @@ export default function Toolbar({
           <Box
             sx={{
               display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
               flexWrap: "wrap",
               gap: 2,
-              alignItems: "center",
+              alignItems: { xs: "stretch", sm: "center" },
               pt: 2,
               borderTop: "1px solid rgba(0,0,0,0.06)",
             }}
@@ -171,8 +173,8 @@ export default function Toolbar({
               onChange={(e) => setSubmitterFilter(e.target.value)}
               size="small"
               sx={{
-                flex: "1 1 280px",
-                minWidth: 240,
+                flex: { xs: "none", sm: "1 1 280px" },
+                minWidth: { xs: "100%", sm: 240 },
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "12px",
                   backgroundColor: "#F8F9FC",
@@ -191,6 +193,7 @@ export default function Toolbar({
               label="Admin — all users visible"
               size="small"
               sx={{
+                width: { xs: "100%", sm: "auto" },
                 backgroundColor: "rgba(98,100,167,0.08)",
                 color: "#6264A7",
                 border: "1px solid rgba(98,100,167,0.15)",

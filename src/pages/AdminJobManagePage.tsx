@@ -33,11 +33,13 @@ import {
   Divider,
   Stack,
   Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import {
   Add,
   Edit,
   Delete,
+  DeleteForever,
   Close,
   Refresh,
   Work,
@@ -48,7 +50,7 @@ import {
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
-import { fetchAdminJobs, createJobListing, updateJobListing, fetchColumnChoices } from "../utils/careersService";
+import { fetchAdminJobs, createJobListing, updateJobListing, deleteJobListing, fetchColumnChoices } from "../utils/careersService";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
 const EMPLOYMENT_TYPES = ["Full-Time", "Part-Time", "Contract", "Internship"];
@@ -440,7 +442,7 @@ function JobFormDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px", m: { xs: 1, sm: 2 } } } }}>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
         <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
           {isEdit ? "Edit Job Listing" : "Create New Job"}
@@ -482,17 +484,17 @@ function JobFormDialog({
               </Select>
             </FormControl>
           </Grid>
-          <Grid size={{ xs: 3, md: 2 }}>
+          <Grid size={{ xs: 6, md: 2 }}>
             <TextField label="Salary Min" type="number" value={salaryMin ?? ""} onChange={(e) => setSalaryMin(e.target.value ? Number(e.target.value) : null)} fullWidth size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
           </Grid>
-          <Grid size={{ xs: 3, md: 2 }}>
+          <Grid size={{ xs: 6, md: 2 }}>
             <TextField label="Salary Max" type="number" value={salaryMax ?? ""} onChange={(e) => setSalaryMax(e.target.value ? Number(e.target.value) : null)} fullWidth size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
           </Grid>
-          <Grid size={{ xs: 6, md: 2 }}>
+          <Grid size={{ xs: 12, md: 2 }}>
             <TextField label="Closing Date" type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }} />
           </Grid>
           {isEdit && (
-            <Grid size={{ xs: 6, md: 3 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Status</InputLabel>
                 <Select value={status} label="Status" onChange={(e) => setStatus(e.target.value)} sx={{ borderRadius: "8px" }}>
@@ -528,6 +530,9 @@ export default function AdminJobManagePage() {
   const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" | "warning" } | null>(null);
   const [departmentChoices, setDepartmentChoices] = useState<string[]>([]);
   const [employmentTypeChoices, setEmploymentTypeChoices] = useState<string[]>([]);
+  const [closingJobId, setClosingJobId] = useState<string | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [deleteConfirmJob, setDeleteConfirmJob] = useState<JobListing | null>(null);
 
   /** Create the CustomFields column on the job list via SharePoint REST (client-side token). */
   async function ensureCustomFieldsColumn(): Promise<boolean> {
@@ -667,6 +672,7 @@ export default function AdminJobManagePage() {
   };
 
   const handleClose = async (job: JobListing) => {
+    setClosingJobId(job.id);
     try {
       const result = await updateJobListing(job.id, { status: "Closed" });
       if (result.success) {
@@ -678,6 +684,27 @@ export default function AdminJobManagePage() {
         message: err instanceof Error ? err.message : "Failed to close job",
         severity: "error",
       });
+    } finally {
+      setClosingJobId(null);
+    }
+  };
+
+  const handleDeleteJob = async (job: JobListing) => {
+    setDeletingJobId(job.id);
+    try {
+      const result = await deleteJobListing(job.id);
+      if (result.success) {
+        setSnackbar({ message: "Job permanently deleted", severity: "success" });
+        setDeleteConfirmJob(null);
+        void load();
+      }
+    } catch (err) {
+      setSnackbar({
+        message: err instanceof Error ? err.message : "Failed to delete job",
+        severity: "error",
+      });
+    } finally {
+      setDeletingJobId(null);
     }
   };
 
@@ -717,8 +744,8 @@ export default function AdminJobManagePage() {
           ].map((stat) => (
             <Grid size={{ xs: 4 }} key={stat.label}>
               <Card sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                <CardContent sx={{ p: 2.5, textAlign: "center" }}>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: stat.color }}>{stat.value}</Typography>
+                <CardContent sx={{ p: { xs: 1.5, sm: 2.5 }, textAlign: "center" }}>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: stat.color, fontSize: { xs: "1.5rem", sm: "2.125rem" } }}>{stat.value}</Typography>
                   <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 500 }}>{stat.label}</Typography>
                 </CardContent>
               </Card>
@@ -769,7 +796,7 @@ export default function AdminJobManagePage() {
 
         {/* Table */}
         {!loading && !error && jobs.length > 0 && (
-          <TableContainer component={Paper} sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+          <TableContainer component={Paper} sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflowX: "auto" }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
@@ -796,8 +823,31 @@ export default function AdminJobManagePage() {
                       <Box sx={{ display: "flex", gap: 0.5 }}>
                         <IconButton size="small" onClick={() => handleEdit(job)} sx={{ color: "#6B7280" }}><Edit sx={{ fontSize: 18 }} /></IconButton>
                         {job.status === "New" && (
-                          <IconButton size="small" onClick={() => handleClose(job)} sx={{ color: "#DC2626" }}><Delete sx={{ fontSize: 18 }} /></IconButton>
+                          <IconButton
+                            size="small"
+                            disabled={closingJobId === job.id}
+                            onClick={() => handleClose(job)}
+                            sx={{ color: closingJobId === job.id ? "#9CA3AF" : "#DC2626" }}
+                          >
+                            {closingJobId === job.id ? (
+                              <CircularProgress size={18} sx={{ color: "#DC2626" }} />
+                            ) : (
+                              <Delete sx={{ fontSize: 18 }} />
+                            )}
+                          </IconButton>
                         )}
+                        <IconButton
+                          size="small"
+                          disabled={deletingJobId === job.id}
+                          onClick={() => setDeleteConfirmJob(job)}
+                          sx={{ color: deletingJobId === job.id ? "#9CA3AF" : "#6B7280" }}
+                        >
+                          {deletingJobId === job.id ? (
+                            <CircularProgress size={18} sx={{ color: "#DC2626" }} />
+                          ) : (
+                            <DeleteForever sx={{ fontSize: 18 }} />
+                          )}
+                        </IconButton>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -818,6 +868,34 @@ export default function AdminJobManagePage() {
         employmentTypeChoices={employmentTypeChoices}
       />
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmJob} onClose={() => !deletingJobId && setDeleteConfirmJob(null)}>
+        <DialogTitle>Delete job listing?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to permanently delete <strong>{deleteConfirmJob?.title}</strong>?
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            onClick={() => setDeleteConfirmJob(null)}
+            disabled={!!deletingJobId}
+            sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!!deletingJobId}
+            onClick={() => deleteConfirmJob && handleDeleteJob(deleteConfirmJob)}
+            sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#DC2626", "&:hover": { backgroundColor: "#B91C1C" } }}
+          >
+            {deletingJobId ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Snackbar */}
       <Snackbar open={!!snackbar} autoHideDuration={4000} onClose={() => setSnackbar(null)} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
         {snackbar ? (
@@ -829,6 +907,7 @@ export default function AdminJobManagePage() {
               fontWeight: 600,
               fontSize: "0.9rem",
               boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+              color: "#111827",
               "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },
             }}
           >

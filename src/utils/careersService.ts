@@ -43,7 +43,14 @@ export async function submitApplication(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to submit application: ${response.status} ${response.statusText}`);
+    let errMsg = `Failed to submit application: ${response.status} ${response.statusText}`;
+    try {
+      const errBody = (await response.json()) as { error?: string };
+      if (errBody.error) errMsg = errBody.error;
+    } catch {
+      // ignore parse error
+    }
+    throw new Error(errMsg);
   }
 
   return (await response.json()) as ApplyResponse;
@@ -121,6 +128,24 @@ export async function fetchColumnChoices(
   if (!response.ok) return [];
   const res = await response.json() as { choices?: string[] };
   return res.choices ?? [];
+}
+
+export async function deleteJobListing(
+  jobId: string,
+): Promise<{ success: boolean }> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "delete-job", jobId }),
+  });
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
+    throw new Error(`Failed to delete job listing: ${detail}`);
+  }
+
+  return (await response.json()) as { success: boolean };
 }
 
 // ── Admin: Job listing CRUD ──────────────────────────────────────────────────

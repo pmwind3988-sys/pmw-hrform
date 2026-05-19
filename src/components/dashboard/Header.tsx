@@ -18,6 +18,7 @@ import {
   WorkOutlined as WorkIcon,
   Edit as EditIcon,
   Public as PublicIcon,
+  Menu as MenuIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -110,109 +111,163 @@ export default function Header({
 
         {isAdmin && (
           <>
-            {onOpenBuilder && (
-              <Button
-                variant="contained"
-                startIcon={<SettingsIcon />}
-                onClick={onOpenBuilder}
-                sx={{
-                  mr: 1,
-                  borderRadius: "12px",
-                  textTransform: "none",
-                  backgroundColor: "#6264A7",
-                  color: "#ffffff",
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  py: 1,
-                  px: 2.5,
-                  boxShadow: "0 2px 8px rgba(98, 100, 167, 0.25)",
-                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                  "&:hover": {
-                    backgroundColor: "#4A4C80",
-                    boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
-                    transform: "translateY(-1px)",
-                  },
-                  "&:active": {
-                    transform: "scale(0.98) translateY(0)",
-                  },
-                }}
-              >
-                Form Builder
-              </Button>
+            {isMobile ? (
+              <>
+                <IconButton
+                  onClick={handleMenuOpen}
+                  size="small"
+                  sx={{
+                    borderRadius: "10px",
+                    color: "#6B7280",
+                    backgroundColor: "rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <MenuIcon />
+                </IconButton>
+                <Menu
+                  anchorEl={anchorEl}
+                  open={open}
+                  onClose={handleMenuClose}
+                  slotProps={{
+                    paper: {
+                      sx: {
+                        minWidth: 200,
+                        borderRadius: "14px",
+                        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+                        border: "1px solid rgba(0, 0, 0, 0.06)",
+                        mt: 1,
+                      },
+                    },
+                  }}
+                  transformOrigin={{ horizontal: "right", vertical: "top" }}
+                  anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+                >
+                  {onOpenBuilder && (
+                    <MenuItem onClick={() => { handleMenuClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
+                      <SettingsIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                      <Typography variant="body2">Form Builder</Typography>
+                    </MenuItem>
+                  )}
+                  <MenuItem onClick={() => { handleMenuClose(); navigate("/admin/jobs"); }} sx={{ py: 1.25, px: 2.5 }}>
+                    <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                    <Typography variant="body2">Applications</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => { handleMenuClose(); navigate("/admin/jobs/manage"); }} sx={{ py: 1.25, px: 2.5 }}>
+                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                    <Typography variant="body2">Manage Jobs</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => { handleMenuClose(); navigate("/careers"); }} sx={{ py: 1.25, px: 2.5 }}>
+                    <PublicIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
+                    <Typography variant="body2">Careers</Typography>
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <>
+                {onOpenBuilder && (
+                  <Button
+                    variant="contained"
+                    startIcon={<SettingsIcon />}
+                    onClick={onOpenBuilder}
+                    sx={{
+                      mr: 1,
+                      borderRadius: "12px",
+                      textTransform: "none",
+                      backgroundColor: "#6264A7",
+                      color: "#ffffff",
+                      fontWeight: 600,
+                      fontSize: "0.85rem",
+                      py: 1,
+                      px: 2.5,
+                      boxShadow: "0 2px 8px rgba(98, 100, 167, 0.25)",
+                      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                      "&:hover": {
+                        backgroundColor: "#4A4C80",
+                        boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
+                        transform: "translateY(-1px)",
+                      },
+                      "&:active": {
+                        transform: "scale(0.98) translateY(0)",
+                      },
+                    }}
+                  >
+                    Form Builder
+                  </Button>
+                )}
+                <Button
+                  variant="outlined"
+                  startIcon={<WorkIcon />}
+                  onClick={() => navigate("/admin/jobs")}
+                  sx={{
+                    mr: 1,
+                    borderRadius: "12px",
+                    textTransform: "none",
+                    color: "#0078D4",
+                    borderColor: "rgba(0, 120, 212, 0.3)",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    py: 1,
+                    px: 2.5,
+                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                    "&:hover": {
+                      borderColor: "#0078D4",
+                      backgroundColor: "rgba(0, 120, 212, 0.06)",
+                      transform: "translateY(-1px)",
+                    },
+                  }}
+                >
+                  Applications
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={() => navigate("/admin/jobs/manage")}
+                  sx={{
+                    mr: 1,
+                    borderRadius: "12px",
+                    textTransform: "none",
+                    color: "#6264A7",
+                    borderColor: "rgba(98, 100, 167, 0.3)",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    py: 1,
+                    px: 2.5,
+                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                    "&:hover": {
+                      borderColor: "#6264A7",
+                      backgroundColor: "rgba(98, 100, 167, 0.06)",
+                      transform: "translateY(-1px)",
+                    },
+                  }}
+                >
+                  Manage Jobs
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<PublicIcon />}
+                  onClick={() => navigate("/careers")}
+                  sx={{
+                    mr: 1,
+                    borderRadius: "12px",
+                    textTransform: "none",
+                    color: "#34A853",
+                    borderColor: "rgba(52, 168, 83, 0.3)",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    py: 1,
+                    px: 2.5,
+                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                    "&:hover": {
+                      borderColor: "#34A853",
+                      backgroundColor: "rgba(52, 168, 83, 0.06)",
+                      transform: "translateY(-1px)",
+                    },
+                  }}
+                >
+                  Careers
+                </Button>
+              </>
             )}
-            <Button
-              variant="outlined"
-              startIcon={<WorkIcon />}
-              onClick={() => navigate("/admin/jobs")}
-              sx={{
-                mr: 1,
-                borderRadius: "12px",
-                textTransform: "none",
-                color: "#0078D4",
-                borderColor: "rgba(0, 120, 212, 0.3)",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                py: 1,
-                px: 2.5,
-                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                "&:hover": {
-                  borderColor: "#0078D4",
-                  backgroundColor: "rgba(0, 120, 212, 0.06)",
-                  transform: "translateY(-1px)",
-                },
-              }}
-            >
-              Applications
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={() => navigate("/admin/jobs/manage")}
-              sx={{
-                mr: 1,
-                borderRadius: "12px",
-                textTransform: "none",
-                color: "#6264A7",
-                borderColor: "rgba(98, 100, 167, 0.3)",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                py: 1,
-                px: 2.5,
-                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                "&:hover": {
-                  borderColor: "#6264A7",
-                  backgroundColor: "rgba(98, 100, 167, 0.06)",
-                  transform: "translateY(-1px)",
-                },
-              }}
-            >
-              Manage Jobs
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PublicIcon />}
-              onClick={() => navigate("/careers")}
-              sx={{
-                mr: 1,
-                borderRadius: "12px",
-                textTransform: "none",
-                color: "#34A853",
-                borderColor: "rgba(52, 168, 83, 0.3)",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                py: 1,
-                px: 2.5,
-                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                "&:hover": {
-                  borderColor: "#34A853",
-                  backgroundColor: "rgba(52, 168, 83, 0.06)",
-                  transform: "translateY(-1px)",
-                },
-              }}
-            >
-              Careers
-            </Button>
-
           </>
         )}
 

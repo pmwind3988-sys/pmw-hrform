@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { isValidPhoneNumber } from "libphonenumber-js";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -116,17 +117,29 @@ export function useReactiveForm<T extends Record<string, unknown>>(
       dirty: field.dirty,
 
       setValue: (val: T[typeof controlKey]) => {
-        setFields((prev) => ({
-          ...prev,
-          [key]: { ...prev[key], value: val, dirty: true } as FieldInternalState,
-        }));
+        setFields((prev) => {
+          const field = prev[key];
+          const fieldErrors = field?.validators?.length
+            ? runValidators(field.validators, val)
+            : {};
+          return {
+            ...prev,
+            [key]: { ...field, value: val, dirty: true, errors: fieldErrors } as FieldInternalState,
+          };
+        });
       },
 
       onBlur: () => {
-        setFields((prev) => ({
-          ...prev,
-          [key]: { ...prev[key], touched: true } as FieldInternalState,
-        }));
+        setFields((prev) => {
+          const field = prev[key];
+          const fieldErrors = field?.validators?.length
+            ? runValidators(field.validators, field.value)
+            : {};
+          return {
+            ...prev,
+            [key]: { ...field, touched: true, errors: fieldErrors } as FieldInternalState,
+          };
+        });
       },
 
       setErrors: (errors: Record<string, boolean>) => {
@@ -203,10 +216,14 @@ export function useReactiveForm<T extends Record<string, unknown>>(
         const next = { ...prev };
         for (const k of Object.keys(values) as (keyof T & string)[]) {
           if (next[k]) {
+            const fieldErrors = next[k].validators?.length
+              ? runValidators(next[k].validators, values[k])
+              : {};
             next[k] = {
               ...next[k],
               value: values[k],
               dirty: true,
+              errors: fieldErrors,
             } as FieldInternalState;
           }
         }
@@ -358,10 +375,20 @@ export function phone(
   if (typeof value !== "string" || value.trim() === "") {
     return null;
   }
-  const cleaned = value.replace(/[\s-]/g, "").trim();
-  // Malaysian mobile: +60 1x-xxx xxxx or 01x-xxx xxxx
-  const phoneRe = /^(\+?60)?1\d{8,9}$/;
-  if (!phoneRe.test(cleaned)) {
+  const trimmed = value.trim();
+  try {
+    if (trimmed.startsWith("+")) {
+      // International format — detect country from number
+      if (!isValidPhoneNumber(trimmed)) {
+        return { phone: true };
+      }
+    } else {
+      // Local format — assume Malaysia as default
+      if (!isValidPhoneNumber(trimmed, "MY")) {
+        return { phone: true };
+      }
+    }
+  } catch {
     return { phone: true };
   }
   return null;

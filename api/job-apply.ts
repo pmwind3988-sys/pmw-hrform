@@ -1,6 +1,7 @@
 import {
   getGraphToken,
   queryListItems,
+  queryListItemById,
   createListItem,
   updateListItemFields,
   uploadFileToDrive,
@@ -219,133 +220,140 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    // Increment Application_x0020_Count on Internal Job Listing
-    try {
-      const jobItems = await queryListItems(sysToken, "Internal Job Listing", { top: 1000 });
-      const jobItem = jobItems.find((item) => String(item.id) === String(jobListingId));
-      const currentCount = Number(jobItem?.fields?.Application_x0020_Count) || 0;
-      await updateListItemFields(sysToken, "Internal Job Listing", String(jobListingId), {
-        Application_x0020_Count: currentCount + 1,
-      });
-    } catch (e) {
-      console.error("[API job-apply] Failed to increment count:", (e as Error).message);
+    // Update Application_x0020_Count on the job listing
+    {
+      const jobItem = await queryListItemById(sysToken, "Internal Job Listing", jobListingId);
+      if (jobItem) {
+        const currentCount = Number(jobItem.fields.Application_x0020_Count) || 0;
+        await updateListItemFields(sysToken, "Internal Job Listing", jobListingId, {
+          Application_x0020_Count: currentCount + 1,
+        });
+      } else {
+        console.warn("[API job-apply] Job listing not found for count update — id:", jobListingId);
+      }
     }
 
-    // Send email to HR recruitment
-    const hrEmail = process.env.HR_RECRUITMENT_EMAIL || "";
-    const fromAddress = process.env.EMAIL_FROM_ADDRESS || "";
+    // Send email to HR recruitment — blocking; submission fails if email cannot be sent
+    const hrEmail = process.env.HR_RECRUITMENT_EMAIL || process.env.VITE_HR_RECRUITMENT_EMAIL || "";
+    const fromAddress = process.env.EMAIL_FROM_ADDRESS || process.env.VITE_EMAIL_FROM_ADDRESS || "";
 
-    if (hrEmail && fromAddress) {
-      try {
-        const docListHtml = allDocs.length > 0
-          ? `<p><strong>Documents:</strong></p><ul>${allDocs.map((d) =>
-              `<li><a href="${d.url}">${escapeHtml(d.name)}${d.isCoverLetter ? " (Cover Letter)" : ""}</a></li>`
-            ).join("")}</ul>`
-          : "";
+    if (!hrEmail) {
+      throw new Error(
+        "HR_RECRUITMENT_EMAIL not configured. Set HR_RECRUITMENT_EMAIL (or VITE_HR_RECRUITMENT_EMAIL) env var."
+      );
+    }
+    if (!fromAddress) {
+      throw new Error(
+        "EMAIL_FROM_ADDRESS not configured. Set EMAIL_FROM_ADDRESS (or VITE_EMAIL_FROM_ADDRESS) to a mail-enabled user. " +
+        "The Azure AD app also needs the 'Mail.Send' application permission (admin-granted)."
+      );
+    }
 
-        const customHtml = customAnswers && Object.keys(customAnswers).length > 0
-          ? `<p><strong>Additional Responses:</strong></p><table style="border-collapse:collapse;width:100%;max-width:600px;margin-bottom:16px">${
-              Object.entries(customAnswers).map(([k, v]) =>
-                `<tr style="border:1px solid #d1d5db"><td style="padding:8px;border:1px solid #d1d5db;background:#f3f4f6;font-weight:600;width:30%">${escapeHtml(k)}</td><td style="padding:8px;border:1px solid #d1d5db">${escapeHtml(String(v ?? ""))}</td></tr>`
-              ).join("")
-            }</table>`
-          : "";
+    const docListHtml = allDocs.length > 0
+      ? `<p><strong>Documents:</strong></p><ul>${allDocs.map((d) =>
+          `<li><a href="${d.url}">${escapeHtml(d.name)}${d.isCoverLetter ? " (Cover Letter)" : ""}</a></li>`
+        ).join("")}</ul>`
+      : "";
 
-        const submittedAtFormatted = new Date(submittedAt).toLocaleString("en-MY", {
-          year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+    const customHtml = customAnswers && Object.keys(customAnswers).length > 0
+      ? `<p><strong>Additional Responses:</strong></p><table style="border-collapse:collapse;width:100%;max-width:600px;margin-bottom:16px">${
+          Object.entries(customAnswers).map(([k, v]) =>
+            `<tr style="border:1px solid #d1d5db"><td style="padding:8px;border:1px solid #d1d5db;background:#f3f4f6;font-weight:600;width:30%">${escapeHtml(k)}</td><td style="padding:8px;border:1px solid #d1d5db">${escapeHtml(String(v ?? ""))}</td></tr>`
+          ).join("")
+        }</table>`
+      : "";
+
+    const submittedAtFormatted = new Date(submittedAt).toLocaleString("en-MY", {
+      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+    });
+
+    const reasoningPreview = coverLetter && coverLetter.trim()
+      ? `<p><strong>Reasoning:</strong></p><blockquote style="background:#f5f5f5;padding:12px;border-left:4px solid #0078D4;margin:0 0 12px 0;font-size:13px;line-height:1.6;">${escapeHtml(coverLetter).replace(/\n/g, "<br>")}</blockquote>`
+      : "";
+
+    const eh = (s: string) => escapeHtml(s);
+    const htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; font-size: 13px; line-height: 1.5; padding: 24px; }
+          h2 { color: #0078D4; font-size: 20px; font-weight: 600; margin: 0 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #0078D4; }
+          table { border-collapse: collapse; width: 100%; max-width: 600px; margin-bottom: 16px; }
+          td { padding: 8px 12px; border: 1px solid #d1d5db; font-size: 13px; vertical-align: top; }
+          td:first-child { background-color: #f3f4f6; font-weight: 600; width: 30%; white-space: nowrap; }
+          a { color: #0078D4; text-decoration: none; }
+          .section { margin-top: 16px; }
+          .section-title { font-weight: 600; font-size: 14px; color: #0078D4; margin: 0 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
+          @media print {
+            body { padding: 0; font-size: 11px; }
+            td { border-color: #000; }
+            h2 { border-bottom-color: #000; color: #000; }
+            a { color: #000; text-decoration: underline; }
+          }
+        </style>
+      </head>
+      <body>
+        <h2>New Job Application</h2>
+        <table>
+          <tr><td>Position</td><td>${eh(jobTitle)}</td></tr>
+          <tr><td>Applicant</td><td>${eh(applicantName)}</td></tr>
+          <tr><td>Email</td><td><a href="mailto:${eh(applicantEmail)}">${eh(applicantEmail)}</a></td></tr>
+          <tr><td>Phone</td><td>${eh(applicantPhone)}</td></tr>
+          <tr><td>Reference</td><td style="font-family:monospace;letter-spacing:0.05em;">${eh(submissionRef)}</td></tr>
+          <tr><td>Date Submitted</td><td>${submittedAtFormatted}</td></tr>
+        </table>
+        ${customHtml ? `<div class="section"><p class="section-title">Additional Responses</p>${customHtml}</div>` : ""}
+        ${docListHtml ? `<div class="section">${docListHtml}</div>` : ""}
+        ${reasoningPreview ? `<div class="section">${reasoningPreview}</div>` : ""}
+      </body>
+      </html>
+    `;
+
+    const attachments: Array<Record<string, unknown>> = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        if (!file.name || !file.content) continue;
+        let b64 = file.content;
+        if (b64.startsWith("data:")) {
+          const commaIdx = b64.indexOf(",");
+          b64 = commaIdx >= 0 ? b64.substring(commaIdx + 1) : b64;
+        }
+        attachments.push({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: file.name,
+          contentType: file.contentType || "application/octet-stream",
+          contentBytes: b64,
         });
-
-        const reasoningPreview = coverLetter && coverLetter.trim()
-          ? `<p><strong>Reasoning:</strong></p><blockquote style="background:#f5f5f5;padding:12px;border-left:4px solid #0078D4;margin:0 0 12px 0;font-size:13px;line-height:1.6;">${escapeHtml(coverLetter).replace(/\n/g, "<br>")}</blockquote>`
-          : "";
-
-        const eh = (s: string) => escapeHtml(s);
-        const htmlBody = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <style>
-              body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; font-size: 13px; line-height: 1.5; padding: 24px; }
-              h2 { color: #0078D4; font-size: 20px; font-weight: 600; margin: 0 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #0078D4; }
-              table { border-collapse: collapse; width: 100%; max-width: 600px; margin-bottom: 16px; }
-              td { padding: 8px 12px; border: 1px solid #d1d5db; font-size: 13px; vertical-align: top; }
-              td:first-child { background-color: #f3f4f6; font-weight: 600; width: 30%; white-space: nowrap; }
-              a { color: #0078D4; text-decoration: none; }
-              .section { margin-top: 16px; }
-              .section-title { font-weight: 600; font-size: 14px; color: #0078D4; margin: 0 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
-              @media print {
-                body { padding: 0; font-size: 11px; }
-                td { border-color: #000; }
-                h2 { border-bottom-color: #000; color: #000; }
-                a { color: #000; text-decoration: underline; }
-              }
-            </style>
-          </head>
-          <body>
-            <h2>New Job Application</h2>
-            <table>
-              <tr><td>Position</td><td>${eh(jobTitle)}</td></tr>
-              <tr><td>Applicant</td><td>${eh(applicantName)}</td></tr>
-              <tr><td>Email</td><td><a href="mailto:${eh(applicantEmail)}">${eh(applicantEmail)}</a></td></tr>
-              <tr><td>Phone</td><td>${eh(applicantPhone)}</td></tr>
-              <tr><td>Reference</td><td style="font-family:monospace;letter-spacing:0.05em;">${eh(submissionRef)}</td></tr>
-              <tr><td>Date Submitted</td><td>${submittedAtFormatted}</td></tr>
-            </table>
-            ${customHtml ? `<div class="section"><p class="section-title">Additional Responses</p>${customHtml}</div>` : ""}
-            ${docListHtml ? `<div class="section">${docListHtml}</div>` : ""}
-            ${reasoningPreview ? `<div class="section">${reasoningPreview}</div>` : ""}
-          </body>
-          </html>
-        `;
-
-        const attachments: Array<Record<string, unknown>> = [];
-        if (files && files.length > 0) {
-          for (const file of files) {
-            if (!file.name || !file.content) continue;
-            let b64 = file.content;
-            if (b64.startsWith("data:")) {
-              const commaIdx = b64.indexOf(",");
-              b64 = commaIdx >= 0 ? b64.substring(commaIdx + 1) : b64;
-            }
-            attachments.push({
-              "@odata.type": "#microsoft.graph.fileAttachment",
-              name: file.name,
-              contentType: file.contentType || "application/octet-stream",
-              contentBytes: b64,
-            });
-          }
-        }
-
-        const emailPayload: Record<string, unknown> = {
-          message: {
-            subject: `Job Application: ${jobTitle} - ${applicantName}`,
-            body: { contentType: "HTML", content: htmlBody },
-            toRecipients: [{ emailAddress: { address: hrEmail } }],
-            attachments,
-          },
-          saveToSentItems: false,
-        };
-
-        const graphRes = await fetch(
-          `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromAddress)}/sendMail`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${sysToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(emailPayload),
-          }
-        );
-
-        if (!graphRes.ok) {
-          const errText = await graphRes.text();
-          console.error("[API job-apply] sendMail failed:", graphRes.status, errText);
-        }
-      } catch (e) {
-        console.error("[API job-apply] Email failed:", (e as Error).message);
       }
+    }
+
+    const emailPayload: Record<string, unknown> = {
+      message: {
+        subject: `Job Application: ${jobTitle} - ${applicantName}`,
+        body: { contentType: "HTML", content: htmlBody },
+        toRecipients: [{ emailAddress: { address: hrEmail } }],
+        attachments,
+      },
+      saveToSentItems: false,
+    };
+
+    const graphRes = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromAddress)}/sendMail`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sysToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(emailPayload),
+      }
+    );
+
+    if (!graphRes.ok) {
+      const errText = await graphRes.text();
+      throw new Error(`Failed to send HR email (${graphRes.status}): ${errText}`);
     }
 
     return res.status(200).json({
@@ -354,7 +362,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       submissionRef,
     });
   } catch (e) {
+    const msg = (e as Error).message || "Internal server error";
     console.error("[API job-apply]", e);
-    return res.status(500).json({ error: "Internal server error. Please try again." });
+    return res.status(500).json({ error: msg });
   }
 }

@@ -38,7 +38,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const url = new URL(req.url || "", "http://localhost");
       const emailFilter = url.searchParams.get("email") || "";
 
-      let items = await queryListItems(token, APPLICATION_LIST, { top: 1000 });
+      let items = await queryListItems(token, APPLICATION_LIST, { top: 999 });
 
       // Filter by applicant email if provided
       if (emailFilter) {
@@ -95,21 +95,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return res.status(200).json({ success: true });
       }
 
-      // Delete applications + decrement applicant counts
+      // Delete applications + update applicant counts
       if (action === "delete-applications") {
         const ids = rawBody.ids;
         if (!Array.isArray(ids) || ids.length === 0) {
           return res.status(400).json({ error: "Missing required field: ids (array)" });
         }
 
-        // Find which job listings these apps belong to (before deleting)
-        const allApps = await queryListItems(token, APPLICATION_LIST, { top: 1000 });
-        const jobCountMap: Record<string, number> = {};
-        for (const app of allApps) {
-          if (ids.includes(String(app.id))) {
-            const jobId = String(app.fields.JobListingID || "");
-            if (jobId) jobCountMap[jobId] = (jobCountMap[jobId] || 0) + 1;
-          }
+        // Fetch applications to get JobListingID before deleting
+        const decrementMap: Record<string, number> = {};
+        for (const id of ids) {
+          try {
+            const appResult = await queryListItems(token, APPLICATION_LIST, {
+              filter: `id eq ${String(id)}`,
+              top: 1,
+            });
+            if (appResult.length > 0) {
+              const jobId = String(appResult[0].fields.JobListingID || "");
+              if (jobId) {
+                decrementMap[jobId] = (decrementMap[jobId] || 0) + 1;
+              }
+            }
+          } catch { /* proceed even if fetch fails */ }
         }
 
         // Delete applications
@@ -124,17 +131,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           }
         }
 
-        // Decrement counts on affected job listings
-        for (const [jobId, count] of Object.entries(jobCountMap)) {
-          try {
-            const jobItems = await queryListItems(token, JOB_LIST, { top: 1000 });
-            const jobItem = jobItems.find((item) => String(item.id) === jobId);
-            const current = Number(jobItem?.fields?.Application_x0020_Count) || 0;
-            await updateListItemFields(token, JOB_LIST, jobId, {
-              Application_x0020_Count: Math.max(0, current - count),
-            });
-          } catch {
-            // Best effort — count update shouldn't block deletion
+        // Decrement Application_x0020_Count on affected job listings
+        for (const [jobId, count] of Object.entries(decrementMap)) {
+          if (count > 0) {
+            try {
+              const jobItems = await queryListItems(token, JOB_LIST, {
+                filter: `id eq ${jobId}`,
+                top: 1,
+              });
+              if (jobItems.length > 0) {
+                const currentCount = Number(jobItems[0].fields.Application_x0020_Count) || 0;
+                await updateListItemFields(token, JOB_LIST, jobId, {
+                  Application_x0020_Count: Math.max(0, currentCount - count),
+                });
+              }
+            } catch { /* best-effort */ }
           }
         }
 
@@ -189,15 +200,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
       // List all job listings (admin view)
       if (action === "list-jobs") {
-        const items = await queryListItems(token, JOB_LIST, { top: 1000 });
+        const items = await queryListItems(token, JOB_LIST, { top: 999 });
+
+        // Compute live application counts from actual submissions (excluding deleted ones)
+        let appCountByJob: Record<string, number> = {};
+        try {
+          const allApps = await queryListItems(token, APPLICATION_LIST, { top: 999 });
+          appCountByJob = {};
+          for (const app of allApps) {
+            const jobId = String(app.fields.JobListingID || "");
+            if (jobId) appCountByJob[jobId] = (appCountByJob[jobId] || 0) + 1;
+          }
+        } catch (e) {
+          console.error("[API job-admin] Failed to fetch application counts:", (e as Error).message);
+        }
+
         const jobs = items.map((item) => {
+          const itemId = String(item.id || "");
           let customFields: Record<string, unknown>[] | undefined;
           const raw = item.fields.CustomFields;
           if (raw && typeof raw === "string") {
             try { customFields = JSON.parse(raw) as Record<string, unknown>[]; } catch { /* ignore */ }
           }
           return {
-            id: String(item.id || ""),
+            id: itemId,
             title: String(item.fields.Title || ""),
             jobDescription: String(item.fields.Job_x0020_Description || ""),
             department: String(item.fields.Department || ""),
@@ -207,7 +233,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             salaryMax: item.fields.Salary_x0020_Max != null ? Number(item.fields.Salary_x0020_Max) : null,
             closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date).split("T")[0] : null,
             status: String(item.fields.Status || "New"),
-            applicationCount: Number(item.fields.Application_x0020_Count) || 0,
+            applicationCount: appCountByJob[itemId] ?? (Number(item.fields.Application_x0020_Count) || 0),
             customFields,
           };
         });
@@ -250,6 +276,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           }
         }
         return res.status(200).json({ success: true, ...(warning ? { warning } : {}) });
+      }
+
+      // Permanently delete a job listing
+      if (action === "delete-job") {
+        const jobId = String(rawBody.jobId || "");
+        if (!jobId) {
+          return res.status(400).json({ error: "Missing required field: jobId" });
+        }
+        await deleteListItem(token, JOB_LIST, jobId);
+        return res.status(200).json({ success: true });
       }
 
       // Fetch choices from a SharePoint column

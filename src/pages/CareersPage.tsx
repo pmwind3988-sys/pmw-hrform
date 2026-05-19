@@ -31,6 +31,7 @@ import {
 } from "@mui/material";
 import {
   Work,
+  ArrowBack,
   LocationOn,
   CalendarToday,
   People,
@@ -481,6 +482,9 @@ export default function CareersPage() {
       >
         <Container maxWidth="lg">
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, py: 2.5 }}>
+            <IconButton onClick={() => navigate("/adminhomepage")} sx={{ color: "#6B7280" }}>
+              <ArrowBack />
+            </IconButton>
             <Box
               sx={{
                 width: 44,
@@ -706,7 +710,7 @@ export default function CareersPage() {
         {!loading && error && (
           <Alert
             severity="error"
-            sx={{ borderRadius: "12px", mb: 3, fontWeight: 500, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
+            sx={{ borderRadius: "12px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
             action={
               <Button size="small" onClick={() => window.location.reload()} sx={{ textTransform: "none" }}>
                 Retry

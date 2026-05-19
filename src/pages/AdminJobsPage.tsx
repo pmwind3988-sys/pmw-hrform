@@ -26,6 +26,7 @@ import {
   IconButton,
   Checkbox,
   LinearProgress,
+  CircularProgress,
 } from "@mui/material";
 import {
   Close,
@@ -87,6 +88,7 @@ export default function AdminJobsPage() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,6 +109,7 @@ export default function AdminJobsPage() {
 
   const handleStatusChange = useCallback(
     async (applicationId: string, newStatus: string) => {
+      setUpdatingStatusId(applicationId);
       try {
         const success = await updateApplicationStatus(applicationId, newStatus);
         if (success) {
@@ -120,6 +123,8 @@ export default function AdminJobsPage() {
           message: err instanceof Error ? err.message : "Failed to update status",
           severity: "error",
         });
+      } finally {
+        setUpdatingStatusId(null);
       }
     },
     [],
@@ -232,10 +237,10 @@ export default function AdminJobsPage() {
                   "&:hover": { transform: "translateY(-2px)" },
                 }}
               >
-                <CardContent sx={{ p: 2.5 }}>
+                <CardContent sx={{ p: { xs: 1.5, sm: 2.5 } }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
                     <Box sx={{ color: stat.color, display: "flex" }}>{stat.icon}</Box>
-                    <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827" }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.3rem", sm: "1.5rem" } }}>
                       {stat.value}
                     </Typography>
                   </Box>
@@ -282,7 +287,7 @@ export default function AdminJobsPage() {
         {!loading && error && (
           <Alert
             severity="error"
-            sx={{ borderRadius: "12px", mb: 3, fontWeight: 500, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
+            sx={{ borderRadius: "12px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
             action={
               <Button size="small" onClick={load} sx={{ textTransform: "none" }}>
                 Retry
@@ -350,7 +355,7 @@ export default function AdminJobsPage() {
             sx={{
               borderRadius: "16px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              overflow: "hidden",
+              overflowX: "auto",
             }}
           >
             <Table>
@@ -427,23 +432,38 @@ export default function AdminJobsPage() {
                       </Typography>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Select
-                        value={app.status}
-                        size="small"
-                        onChange={(e) => handleStatusChange(app.id, e.target.value)}
-                        sx={{
-                          borderRadius: "8px",
-                          fontSize: "0.8rem",
-                          minWidth: 120,
-                          "& .MuiOutlinedInput-notchedOutline": { borderColor: "#E5E7EB" },
-                        }}
-                      >
-                        {STATUS_OPTIONS.map((opt) => (
-                          <MenuItem key={opt} value={opt} sx={{ fontSize: "0.85rem" }}>
-                            {opt}
-                          </MenuItem>
-                        ))}
-                      </Select>
+                      <Box sx={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                        <Select
+                          value={app.status}
+                          size="small"
+                          disabled={updatingStatusId === app.id}
+                          onChange={(e) => handleStatusChange(app.id, e.target.value)}
+                          sx={{
+                            borderRadius: "8px",
+                            fontSize: "0.8rem",
+                            minWidth: 120,
+                            opacity: updatingStatusId === app.id ? 0.6 : 1,
+                            "& .MuiOutlinedInput-notchedOutline": { borderColor: "#E5E7EB" },
+                          }}
+                        >
+                          {STATUS_OPTIONS.map((opt) => (
+                            <MenuItem key={opt} value={opt} sx={{ fontSize: "0.85rem" }}>
+                              {opt}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        {updatingStatusId === app.id && (
+                          <CircularProgress
+                            size={16}
+                            sx={{
+                              position: "absolute",
+                              right: 28,
+                              color: "#0078D4",
+                              pointerEvents: "none",
+                            }}
+                          />
+                        )}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -654,6 +674,7 @@ export default function AdminJobsPage() {
                 fontWeight: 600,
                 fontSize: "0.9rem",
                 boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+                color: "#111827",
                 "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },
               }}
             >

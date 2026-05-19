@@ -53,6 +53,20 @@ interface FileEntry {
   contentType: string;
 }
 
+const COUNTRY_CODES = [
+  { code: "+60", flag: "🇲🇾", label: "Malaysia" },
+  { code: "+65", flag: "🇸🇬", label: "Singapore" },
+  { code: "+62", flag: "🇮🇩", label: "Indonesia" },
+  { code: "+66", flag: "🇹🇭", label: "Thailand" },
+  { code: "+63", flag: "🇵🇭", label: "Philippines" },
+  { code: "+84", flag: "🇻🇳", label: "Vietnam" },
+  { code: "+86", flag: "🇨🇳", label: "China" },
+  { code: "+1", flag: "🇺🇸", label: "USA" },
+  { code: "+44", flag: "🇬🇧", label: "UK" },
+  { code: "+61", flag: "🇦🇺", label: "Australia" },
+  { code: "+91", flag: "🇮🇳", label: "India" },
+] as const;
+
 const MAX_FILES = 5;
 const ACCEPTED_TYPES = [
   "application/pdf",
@@ -284,6 +298,7 @@ export default function JobApplyPage() {
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [duplicateBlocked, setDuplicateBlocked] = useState(false);
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+60");
 
   // Check if user is admin (group membership)
   useEffect(() => {
@@ -336,7 +351,7 @@ export default function JobApplyPage() {
   const form = useReactiveForm<FormValues>({
     name: { value: "", validators: [required] },
     email: { value: "", validators: [required, email] },
-    phone: { value: "", validators: [required, phone] },
+    phone: { value: "+60 ", validators: [required, phone] },
     currentPosition: { value: "" },
     currentDepartment: { value: "" },
     coverLetter: { value: "" },
@@ -346,10 +361,24 @@ export default function JobApplyPage() {
   // Pre-fill from profile once loaded
   useEffect(() => {
     if (!profile.loading && !profile.error) {
+      let phoneVal = profile.phone || form.value.phone;
+      // Detect country code from profile phone
+      if (profile.phone) {
+        for (const cc of COUNTRY_CODES) {
+          if (profile.phone.startsWith(cc.code.replace("+", "")) || profile.phone.startsWith(cc.code)) {
+            setPhoneCountryCode(cc.code);
+            break;
+          }
+        }
+      }
+      // Ensure phone has country code prefix
+      if (profile.phone && !profile.phone.startsWith("+")) {
+        phoneVal = `${phoneCountryCode} ${profile.phone}`;
+      }
       form.setValue({
         name: profile.displayName || form.value.name,
         email: profile.email || form.value.email,
-        phone: profile.phone || form.value.phone,
+        phone: phoneVal,
         currentPosition: profile.jobTitle || form.value.currentPosition,
         currentDepartment: profile.department || form.value.currentDepartment,
       });
@@ -455,7 +484,7 @@ export default function JobApplyPage() {
     return (
       <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
         <Container maxWidth="sm" sx={{ py: 8 }}>
-          <SuccessView submissionRef={submissionRef} onBrowseMore={() => navigate("/careers")} />
+          <SuccessView submissionRef={submissionRef} onBrowseMore={() => navigate("/careers", { replace: true })} />
         </Container>
       </Box>
     );
@@ -615,27 +644,60 @@ export default function JobApplyPage() {
                   />
 
                   {/* Phone */}
-                  <TextField
-                    label="Phone Number"
-                    value={form.controls.phone.value}
-                    onChange={(e) => form.controls.phone.setValue(e.target.value)}
-                    onBlur={form.controls.phone.onBlur}
-                    error={form.controls.phone.touched && !!(form.controls.phone.errors.required || form.controls.phone.errors.phone)}
-                    helperText={
-                      form.controls.phone.touched && form.controls.phone.errors.required
-                        ? "Phone number is required"
-                        : form.controls.phone.touched && form.controls.phone.errors.phone
-                          ? "Please enter a valid Malaysian phone number"
-                          : ""
-                    }
-                    fullWidth
-                    required
-                    variant="outlined"
-                    placeholder="e.g. +60 12-345 6789"
-                    slotProps={{
-                      input: { sx: { borderRadius: "10px" } },
-                    }}
-                  />
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
+                      Phone Number <span style={{ color: "#DC2626" }}>*</span>
+                    </Typography>
+                    <Grid container spacing={1}>
+                      <Grid size={{ xs: 4, sm: 3 }}>
+                        <FormControl fullWidth error={form.controls.phone.touched && !!(form.controls.phone.errors.required || form.controls.phone.errors.phone)}>
+                          <Select
+                            value={phoneCountryCode}
+                            onChange={(e) => {
+                              setPhoneCountryCode(e.target.value);
+                              const num = form.controls.phone.value.replace(/^\+?\d{1,3}[\s-]?/, "").trim();
+                              form.controls.phone.setValue(`${e.target.value} ${num}`);
+                            }}
+                            variant="outlined"
+                            sx={{ borderRadius: "10px" }}
+                          >
+                            {COUNTRY_CODES.map((cc) => (
+                              <MenuItem key={cc.code} value={cc.code}>
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                  <span>{cc.flag}</span>
+                                  <span>{cc.code}</span>
+                                </Box>
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid size={{ xs: 8, sm: 9 }}>
+                        <TextField
+                          value={form.controls.phone.value.replace(/^\+?\d{1,3}\s?/, "")}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/[^\d\s-]/g, "");
+                            form.controls.phone.setValue(`${phoneCountryCode} ${digits}`);
+                          }}
+                          onBlur={form.controls.phone.onBlur}
+                          error={form.controls.phone.touched && !!(form.controls.phone.errors.required || form.controls.phone.errors.phone)}
+                          helperText={
+                            form.controls.phone.touched && form.controls.phone.errors.required
+                              ? "Phone number is required"
+                              : form.controls.phone.touched && form.controls.phone.errors.phone
+                                ? "Please enter a valid phone number (default: Malaysia)"
+                                : ""
+                          }
+                          fullWidth
+                          placeholder="e.g. 12-345 6789"
+                          variant="outlined"
+                          slotProps={{
+                            input: { sx: { borderRadius: "10px" } },
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
 
                   {/* Current Position */}
                   <TextField
@@ -778,7 +840,7 @@ export default function JobApplyPage() {
                       severity={duplicateBlocked ? "warning" : "error"}
                       sx={{
                         borderRadius: "8px",
-                        fontWeight: 500,
+                        fontWeight: 700,
                         fontSize: "0.85rem",
                         ...(duplicateBlocked ? {} : {
                           backgroundColor: "#FEF2F2",

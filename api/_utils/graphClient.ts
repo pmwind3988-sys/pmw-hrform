@@ -155,6 +155,27 @@ export async function queryListItems(
   }));
 }
 
+/**
+ * Fetch a single list item by its item ID (no OData filter — avoids filter-on-id issues).
+ */
+export async function queryListItemById(
+  token: string,
+  listDisplayName: string,
+  itemId: string,
+): Promise<GraphListItem | null> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  try {
+    const data = (await graphGet(
+      token,
+      `/sites/${siteId}/lists/${listId}/items/${encodeURIComponent(itemId)}?$expand=fields`,
+    )) as { id: string; fields?: Record<string, unknown> };
+    return { id: data.id, fields: data.fields || {} };
+  } catch {
+    return null;
+  }
+}
+
 export async function createListItem(
   token: string,
   listDisplayName: string,

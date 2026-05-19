@@ -22,6 +22,7 @@
     "dompurify": "^3.4.2",
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.3",
+    "libphonenumber-js": "^1.13.2",
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "react-dnd": "^16.0.1",
