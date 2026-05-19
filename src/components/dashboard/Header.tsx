@@ -43,15 +43,25 @@ export default function Header({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
+  const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
+  const [adminAnchorEl, setAdminAnchorEl] = useState<null | HTMLElement>(null);
+  const profileOpen = Boolean(profileAnchorEl);
+  const adminOpen = Boolean(adminAnchorEl);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
+  const handleProfileOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setProfileAnchorEl(event.currentTarget);
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
+  const handleProfileClose = () => {
+    setProfileAnchorEl(null);
+  };
+
+  const handleAdminOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAdminAnchorEl(event.currentTarget);
+  };
+
+  const handleAdminClose = () => {
+    setAdminAnchorEl(null);
   };
 
   return (
@@ -114,7 +124,7 @@ export default function Header({
             {isMobile ? (
               <>
                 <IconButton
-                  onClick={handleMenuOpen}
+                  onClick={handleAdminOpen}
                   size="small"
                   sx={{
                     borderRadius: "10px",
@@ -125,9 +135,9 @@ export default function Header({
                   <MenuIcon />
                 </IconButton>
                 <Menu
-                  anchorEl={anchorEl}
-                  open={open}
-                  onClose={handleMenuClose}
+                  anchorEl={adminAnchorEl}
+                  open={adminOpen}
+                  onClose={handleAdminClose}
                   slotProps={{
                     paper: {
                       sx: {
@@ -143,20 +153,20 @@ export default function Header({
                   anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
                 >
                   {onOpenBuilder && (
-                    <MenuItem onClick={() => { handleMenuClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
+                    <MenuItem onClick={() => { handleAdminClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
                       <SettingsIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => { handleMenuClose(); navigate("/admin/jobs"); }} sx={{ py: 1.25, px: 2.5 }}>
+                  <MenuItem onClick={() => { handleAdminClose(); navigate("/admin/jobs"); }} sx={{ py: 1.25, px: 2.5 }}>
                     <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
                     <Typography variant="body2">Applications</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => { handleMenuClose(); navigate("/admin/jobs/manage"); }} sx={{ py: 1.25, px: 2.5 }}>
+                  <MenuItem onClick={() => { handleAdminClose(); navigate("/admin/jobs/manage"); }} sx={{ py: 1.25, px: 2.5 }}>
                     <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
                     <Typography variant="body2">Manage Jobs</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => { handleMenuClose(); navigate("/careers"); }} sx={{ py: 1.25, px: 2.5 }}>
+                  <MenuItem onClick={() => { handleAdminClose(); navigate("/careers"); }} sx={{ py: 1.25, px: 2.5 }}>
                     <PublicIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
                     <Typography variant="body2">Careers</Typography>
                   </MenuItem>
@@ -274,7 +284,7 @@ export default function Header({
         <RoleBadge isAdmin={isAdmin} />
 
         <IconButton
-          onClick={handleMenuOpen}
+          onClick={handleProfileOpen}
           size="small"
           sx={{
             ml: 0.5,
@@ -306,9 +316,9 @@ export default function Header({
         </IconButton>
 
         <Menu
-          anchorEl={anchorEl}
-          open={open}
-          onClose={handleMenuClose}
+          anchorEl={profileAnchorEl}
+          open={profileOpen}
+          onClose={handleProfileClose}
           slotProps={{
             paper: {
               sx: {
@@ -340,7 +350,7 @@ export default function Header({
           </MenuItem>
           <MenuItem
             onClick={() => {
-              handleMenuClose();
+              handleProfileClose();
               onSwitch();
             }}
             sx={{ py: 1.25, px: 2.5 }}
@@ -350,7 +360,7 @@ export default function Header({
           </MenuItem>
           <MenuItem
             onClick={() => {
-              handleMenuClose();
+              handleProfileClose();
               onLogout();
             }}
             sx={{ py: 1.25, px: 2.5 }}
