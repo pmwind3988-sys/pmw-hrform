@@ -1,3 +1,4 @@
+import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken } from "./_utils/graphClient.js";
 
 interface ApiRequest {
@@ -13,20 +14,12 @@ interface ApiResponse {
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  // Only allow requests from the app's own origin
-  const hdrs = (req as Record<string, unknown>).headers as Record<string, string | undefined> || {};
-  const origin = hdrs['origin'] || hdrs['referer'] || '';
-  const allowedOrigins = [process.env.VITE_SP_SITE_URL || '', process.env.APP_ORIGIN || ''].filter(Boolean);
-  if (allowedOrigins.length > 0 && !allowedOrigins.some(o => origin.startsWith(o))) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setCorsHeaders(res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
+  if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { to, subject, body } = req.body as Record<string, unknown>;

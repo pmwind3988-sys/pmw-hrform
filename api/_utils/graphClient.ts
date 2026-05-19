@@ -284,7 +284,9 @@ export async function getListColumnValues(
   const expand = encodeURIComponent(`fields($select=${internalValueCol})`);
   let filter = "";
   if (internalFilterCol && filterValue) {
-    filter = `&$filter=fields/${encodeURIComponent(internalFilterCol)} eq '${encodeURIComponent(filterValue)}'`;
+    // Sanitize filter value — strip characters that could break Graph $filter syntax
+    const safeValue = String(filterValue).replace(/[^\w\s\-_.,@]/g, "");
+    filter = `&$filter=fields/${encodeURIComponent(internalFilterCol)} eq '${encodeURIComponent(safeValue)}'`;
   }
   const data = (await graphGet(
     token,

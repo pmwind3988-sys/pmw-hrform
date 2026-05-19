@@ -28,7 +28,7 @@ import {
   LocationOn,
   Work,
 } from "@mui/icons-material";
-import { useReactiveForm, required, email, phone, requiredFile } from "../hooks/useReactiveForm";
+import { useReactiveForm, required, email, phone } from "../hooks/useReactiveForm";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useMsal } from "@azure/msal-react";
 import { pdf } from "@react-pdf/renderer";
@@ -44,13 +44,16 @@ interface FormValues extends Record<string, unknown> {
   currentPosition: string;
   currentDepartment: string;
   coverLetter: string;
-  files: FileEntry[];
+  resume: FileEntry | null;
+  supportingDocs: FileEntry[];
 }
 
 interface FileEntry {
   name: string;
   content: string;
   contentType: string;
+  /** File size in bytes (only for display/validation) */
+  size: number;
 }
 
 const COUNTRY_CODES = [
@@ -67,7 +70,8 @@ const COUNTRY_CODES = [
   { code: "+91", flag: "🇮🇳", label: "India" },
 ] as const;
 
-const MAX_FILES = 5;
+const MAX_SUPPORTING_FILES = 5;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ACCEPTED_TYPES = [
   "application/pdf",
   "application/msword",
@@ -156,27 +160,45 @@ function FileUploadArea({
   files,
   onAdd,
   onRemove,
+  maxFiles = 5,
+  maxFileSize = MAX_FILE_SIZE,
+  acceptTypes = ACCEPTED_TYPES,
+  label = "Upload Files",
+  hint,
+  singleFile = false,
 }: {
   files: FileEntry[];
   onAdd: (entries: FileEntry[]) => void;
   onRemove: (index: number) => void;
+  maxFiles?: number;
+  maxFileSize?: number;
+  acceptTypes?: string[];
+  label?: string;
+  hint?: string;
+  singleFile?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
+  const [sizeError, setSizeError] = useState<string | null>(null);
 
   const handleSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
+    setSizeError(null);
     setReading(true);
     const newEntries: FileEntry[] = [];
-    const remaining = MAX_FILES - files.length;
+    const remaining = maxFiles - files.length;
 
     for (let i = 0; i < Math.min(fileList.length, remaining); i++) {
       const file = fileList[i];
+      if (file.size > maxFileSize) {
+        setSizeError(`"${file.name}" exceeds ${Math.round(maxFileSize / 1024 / 1024)} MB limit`);
+        continue;
+      }
       try {
         const content = await readFileAsBase64(file);
-        newEntries.push({ name: file.name, content, contentType: file.type });
+        newEntries.push({ name: file.name, content, contentType: file.type, size: file.size });
       } catch {
         // skip files that fail to read
       }
@@ -184,58 +206,72 @@ function FileUploadArea({
 
     onAdd(newEntries);
     setReading(false);
-    // Reset input so same file can be selected again
     if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
     <Box>
-      <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 1 }}>
-        Resume & Supporting Documents
+      <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
+        {label}
+        {!singleFile && <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 400, ml: 0.5 }}>(Max {maxFiles} files)</Typography>}
       </Typography>
-      <Typography variant="caption" sx={{ color: "#9CA3AF", display: "block", mb: 1.5 }}>
-        Accepted: PDF, DOC, DOCX, JPEG, PNG (Max {MAX_FILES} files)
-      </Typography>
+      {hint && (
+        <Typography variant="caption" sx={{ color: "#9CA3AF", display: "block", mb: 1.5 }}>
+          {hint}
+        </Typography>
+      )}
 
-      {/* Drop zone */}
-      <Paper
-        variant="outlined"
-        onClick={() => inputRef.current?.click()}
-        sx={{
-          borderStyle: "dashed",
-          borderColor: "#D1D5DB",
-          borderRadius: "12px",
-          p: 3,
-          textAlign: "center",
-          cursor: "pointer",
-          transition: "all 0.2s",
-          backgroundColor: "#FAFBFC",
-          "&:hover": {
-            borderColor: "#0078D4",
-            backgroundColor: "#F0F7FF",
-          },
-          opacity: reading ? 0.6 : 1,
-        }}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={ACCEPTED_TYPES.join(",")}
-          onChange={handleSelect}
-          style={{ display: "none" }}
-        />
-        {reading ? (
-          <CircularProgress size={24} sx={{ color: "#0078D4" }} />
-        ) : (
-          <>
-            <UploadFile sx={{ fontSize: 32, color: "#9CA3AF", mb: 1 }} />
-            <Typography variant="body2" sx={{ color: "#6B7280" }}>
-              Click to upload or drag and drop
+      {(!singleFile || files.length === 0) && (
+        <>
+          {/* Drop zone */}
+          <Paper
+            variant="outlined"
+            onClick={() => inputRef.current?.click()}
+            sx={{
+              borderStyle: "dashed",
+              borderColor: sizeError ? "#DC2626" : "#D1D5DB",
+              borderRadius: "12px",
+              p: 3,
+              textAlign: "center",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              backgroundColor: "#FAFBFC",
+              "&:hover": {
+                borderColor: "#0078D4",
+                backgroundColor: "#F0F7FF",
+              },
+              opacity: reading ? 0.6 : 1,
+            }}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              multiple={!singleFile}
+              accept={acceptTypes.join(",")}
+              onChange={handleSelect}
+              style={{ display: "none" }}
+            />
+            {reading ? (
+              <CircularProgress size={24} sx={{ color: "#0078D4" }} />
+            ) : (
+              <>
+                <UploadFile sx={{ fontSize: 32, color: "#9CA3AF", mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "#6B7280" }}>
+                  {singleFile ? "Click to upload" : "Click to upload or drag and drop"}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#9CA3AF", display: "block", mt: 0.5 }}>
+                  PDF, DOC, DOCX, JPEG, PNG (max {Math.round(maxFileSize / 1024 / 1024)} MB)
+                </Typography>
+              </>
+            )}
+          </Paper>
+          {sizeError && (
+            <Typography variant="caption" sx={{ color: "#DC2626", mt: 0.5, display: "block" }}>
+              {sizeError}
             </Typography>
-          </>
-        )}
-      </Paper>
+          )}
+        </>
+      )}
 
       {/* File list */}
       {files.length > 0 && (
@@ -255,14 +291,30 @@ function FileUploadArea({
               }}
             >
               <Description sx={{ fontSize: 18, color: "#6B7280", flexShrink: 0 }} />
-              <Typography variant="body2" sx={{ color: "#374151", flex: 1, fontSize: "0.8rem" }} noWrap>
-                {file.name}
-              </Typography>
-              <IconButton size="small" onClick={() => onRemove(i)} sx={{ color: "#9CA3AF" }}>
-                <Close sx={{ fontSize: 16 }} />
-              </IconButton>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ color: "#374151", fontSize: "0.8rem" }} noWrap>
+                  {file.name}
+                </Typography>
+                {file.size > 0 && (
+                  <Typography variant="caption" sx={{ color: "#9CA3AF" }}>
+                    {file.size < 1024 * 1024
+                      ? `${Math.round(file.size / 1024)} KB`
+                      : `${(file.size / 1024 / 1024).toFixed(1)} MB`}
+                  </Typography>
+                )}
+              </Box>
+              {!singleFile && (
+                <IconButton size="small" onClick={() => onRemove(i)} sx={{ color: "#9CA3AF" }}>
+                  <Close sx={{ fontSize: 16 }} />
+                </IconButton>
+              )}
             </Paper>
           ))}
+          {singleFile && (
+            <Button size="small" onClick={() => onRemove(0)} sx={{ alignSelf: "flex-start", borderRadius: "8px", textTransform: "none", color: "#DC2626", fontSize: "0.75rem", mt: -0.5 }}>
+              Remove file
+            </Button>
+          )}
         </Box>
       )}
     </Box>
@@ -296,6 +348,8 @@ export default function JobApplyPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submissionRef, setSubmissionRef] = useState("");
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
+  const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [duplicateBlocked, setDuplicateBlocked] = useState(false);
   const [phoneCountryCode, setPhoneCountryCode] = useState("+60");
@@ -355,7 +409,8 @@ export default function JobApplyPage() {
     currentPosition: { value: "" },
     currentDepartment: { value: "" },
     coverLetter: { value: "" },
-    files: { value: [], validators: [requiredFile] },
+    resume: { value: null },
+    supportingDocs: { value: [] },
   });
 
   // Pre-fill from profile once loaded
@@ -396,6 +451,31 @@ export default function JobApplyPage() {
     setSubmitting(true);
     setSubmitError(null);
     setDuplicateBlocked(false);
+
+    // Validate resume
+    if (!values.resume) {
+      setResumeError("A resume or CV is required");
+      setSubmitting(false);
+      return;
+    }
+    setResumeError(null);
+
+    // Validate required custom fields
+    const errs: Record<string, string> = {};
+    let hasCustomErr = false;
+    if (job.customFields) {
+      for (const field of job.customFields) {
+        if (field.required && !customAnswers[field.name]) {
+          errs[field.name] = "This field is required";
+          hasCustomErr = true;
+        }
+      }
+    }
+    setCustomFieldErrors(errs);
+    if (hasCustomErr) {
+      setSubmitting(false);
+      return;
+    }
 
     try {
       // Acquire user token with Graph scope for file uploads
@@ -445,9 +525,13 @@ export default function JobApplyPage() {
         // PDF generation failed — submit without it
       }
 
-      const files = pdfBase64
-        ? [...values.files, { name: "JobApplication.pdf", content: pdfBase64, contentType: "application/pdf" }]
-        : values.files;
+      // Combine resume + supporting docs + generated PDF
+      const allFiles: FileEntry[] = [];
+      if (values.resume) allFiles.push(values.resume);
+      allFiles.push(...values.supportingDocs);
+      if (pdfBase64) {
+        allFiles.push({ name: "JobApplication.pdf", content: pdfBase64, contentType: "application/pdf", size: 0 });
+      }
 
       const result = await submitApplication({
         jobListingId: jobId,
@@ -458,7 +542,7 @@ export default function JobApplyPage() {
         currentPosition: values.currentPosition,
         currentDepartment: values.currentDepartment,
         coverLetter: values.coverLetter,
-        files,
+        files: allFiles,
         customAnswers,
         accessToken,
         submittedByEmail: accounts[0]?.username || "",
@@ -479,7 +563,25 @@ export default function JobApplyPage() {
     }
   };
 
-  const handleSubmit = form.submit((values) => doSubmit(values, false));
+  const handleSubmit = form.submit((values) => {
+    setResumeError(null);
+    setCustomFieldErrors({});
+    const hasCustomErr = job?.customFields?.some((f) => f.required && !customAnswers[f.name]);
+    if (!values.resume || hasCustomErr) {
+      if (!values.resume) setResumeError("A resume or CV is required");
+      if (hasCustomErr) {
+        const errs: Record<string, string> = {};
+        for (const field of (job?.customFields || [])) {
+          if (field.required && !customAnswers[field.name]) {
+            errs[field.name] = "This field is required";
+          }
+        }
+        setCustomFieldErrors(errs);
+      }
+      return;
+    }
+    void doSubmit(values, false);
+  });
 
   if (submitted) {
     return (
@@ -540,42 +642,60 @@ export default function JobApplyPage() {
                 </Box>
               ) : job ? (
                 <>
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: "12px",
-                      backgroundColor: "#F0F7FF",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      mb: 1.5,
-                    }}
-                  >
-                    <Work sx={{ fontSize: 24, color: "#0078D4" }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827", fontSize: "1rem", mb: 0.5 }}>
-                    {job.title}
-                  </Typography>
-                  <Chip
-                    label={job.department}
-                    size="small"
-                    sx={{ backgroundColor: "#6264A7", color: "#ffffff", fontWeight: 500, fontSize: "0.7rem", borderRadius: "8px", mb: 1.5 }}
-                  />
-                  {job.location && (
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
-                      <LocationOn sx={{ fontSize: 14, color: "#6B7280" }} />
-                      <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
-                        {job.location}
-                      </Typography>
+                  {/* Row 1: Title left · Icon right (vertically centered) */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827", fontSize: "1rem", flex: 1, lineHeight: 1.3 }}>
+                      {job.title}
+                    </Typography>
+                    <Box
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "10px",
+                        backgroundColor: "#F0F7FF",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Work sx={{ fontSize: 18, color: "#0078D4" }} />
                     </Box>
+                  </Box>
+
+                  {/* Row 2: Department chip alone */}
+                  <Box sx={{ mb: 1.5 }}>
+                    <Chip
+                      label={job.department}
+                      size="small"
+                      sx={{ backgroundColor: "#6264A7", color: "#ffffff", fontWeight: 500, fontSize: "0.7rem", borderRadius: "8px" }}
+                    />
+                  </Box>
+
+                  {/* Row 3: Location ↔ Employment type, spaced apart */}
+                  {job.location ? (
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                        <LocationOn sx={{ fontSize: 14, color: "#6B7280", flexShrink: 0 }} />
+                        <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {job.location}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={job.employmentType}
+                        size="small"
+                        variant="outlined"
+                        sx={{ borderRadius: "8px", fontSize: "0.7rem", borderColor: "#D1D5DB", color: "#6B7280", flexShrink: 0 }}
+                      />
+                    </Box>
+                  ) : (
+                    <Chip
+                      label={job.employmentType}
+                      size="small"
+                      variant="outlined"
+                      sx={{ borderRadius: "8px", fontSize: "0.7rem", borderColor: "#D1D5DB", color: "#6B7280" }}
+                    />
                   )}
-                  <Chip
-                    label={job.employmentType}
-                    size="small"
-                    variant="outlined"
-                    sx={{ borderRadius: "8px", fontSize: "0.7rem", borderColor: "#D1D5DB", color: "#6B7280" }}
-                  />
                 </>
               ) : (
                 <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
@@ -741,97 +861,125 @@ export default function JobApplyPage() {
                     }}
                   />
 
-                  <Divider />
+                  <Divider sx={{ my: 1.5 }} />
 
-                  {/* File Upload */}
+                  {/* Resume Upload (Required) */}
                   <FileUploadArea
-                    files={form.controls.files.value}
+                    files={form.controls.resume.value ? [form.controls.resume.value] : []}
                     onAdd={(newFiles) => {
-                      const current = form.controls.files.value;
-                      form.controls.files.setValue([...current, ...newFiles].slice(0, MAX_FILES));
+                      if (newFiles.length > 0) form.controls.resume.setValue(newFiles[0]);
                     }}
-                    onRemove={(index) => {
-                      const current = form.controls.files.value;
-                      form.controls.files.setValue(current.filter((_, i) => i !== index));
-                    }}
+                    onRemove={() => form.controls.resume.setValue(null)}
+                    maxFiles={1}
+                    singleFile
+                    label="Resume / CV"
+                    hint="Required. Upload your current resume or CV."
                   />
-                  {form.controls.files.touched && form.controls.files.errors.requiredFile && (
-                    <Typography variant="caption" sx={{ color: "#DC2626", fontWeight: 500, display: "flex", alignItems: "center", gap: 0.5 }}>
-                      At least one supporting document is required (resume or CV).
+                  {resumeError && (
+                    <Typography variant="caption" sx={{ color: "#DC2626", fontWeight: 500, display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                      {resumeError}
                     </Typography>
                   )}
+
+                  <Box sx={{ mt: 2.5 }}>
+                    {/* Supporting Documents (Optional) */}
+                    <FileUploadArea
+                      files={form.controls.supportingDocs.value}
+                      onAdd={(newFiles) => {
+                        const current = form.controls.supportingDocs.value;
+                        form.controls.supportingDocs.setValue([...current, ...newFiles].slice(0, MAX_SUPPORTING_FILES));
+                      }}
+                      onRemove={(index) => {
+                        const current = form.controls.supportingDocs.value;
+                        form.controls.supportingDocs.setValue(current.filter((_, i) => i !== index));
+                      }}
+                      maxFiles={MAX_SUPPORTING_FILES}
+                      label="Supporting Documents"
+                      hint="Optional. Certificates, cover letter, portfolio, etc."
+                    />
+                  </Box>
                   {/* Dynamic Custom Fields */}
                   {job?.customFields && job.customFields.length > 0 && (
                     <>
-                      <Divider />
+                      <Divider sx={{ my: 1.5 }} />
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#374151" }}>
                         Additional Questions
                       </Typography>
-                      {job.customFields.map((field: CustomFieldDefinition) => (
-                        <Box key={field.name}>
-                          {field.type === "choice" ? (
-                            <FormControl fullWidth>
-                              <InputLabel>{field.label}{field.required ? " *" : ""}</InputLabel>
-                              <Select
-                                value={String(customAnswers[field.name] ?? "")}
+                      {job.customFields.map((field: CustomFieldDefinition) => {
+                        const fieldError = customFieldErrors[field.name];
+                        const hasError = !!fieldError;
+                        return (
+                          <Box key={field.name}>
+                            {field.type === "choice" ? (
+                              <FormControl fullWidth error={hasError}>
+                                <InputLabel>{field.label}{field.required ? " *" : ""}</InputLabel>
+                                <Select
+                                  value={String(customAnswers[field.name] ?? "")}
+                                  label={`${field.label}${field.required ? " *" : ""}`}
+                                  onChange={(e) => { setCustomAnswer(field.name, e.target.value); setCustomFieldErrors((prev) => { const n = { ...prev }; delete n[field.name]; return n; }); }}
+                                  sx={{ borderRadius: "10px" }}
+                                >
+                                  {(field.choices || []).map((opt) => (
+                                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                                  ))}
+                                </Select>
+                                {hasError && <FormHelperText error>{fieldError}</FormHelperText>}
+                              </FormControl>
+                            ) : field.type === "textarea" ? (
+                              <TextField
                                 label={`${field.label}${field.required ? " *" : ""}`}
-                                onChange={(e) => setCustomAnswer(field.name, e.target.value)}
-                                sx={{ borderRadius: "10px" }}
-                              >
-                                {(field.choices || []).map((opt) => (
-                                  <MenuItem key={opt} value={opt}>{opt}</MenuItem>
-                                ))}
-                              </Select>
-                              {field.required && !customAnswers[field.name] && (
-                                <FormHelperText error>This field is required</FormHelperText>
-                              )}
-                            </FormControl>
-                          ) : field.type === "textarea" ? (
-                            <TextField
-                              label={`${field.label}${field.required ? " *" : ""}`}
-                              value={String(customAnswers[field.name] ?? "")}
-                              onChange={(e) => setCustomAnswer(field.name, e.target.value)}
-                              fullWidth
-                              multiline
-                              rows={3}
-                              variant="outlined"
-                              slotProps={{ input: { sx: { borderRadius: "10px" } } }}
-                            />
-                          ) : field.type === "number" ? (
-                            <TextField
-                              label={`${field.label}${field.required ? " *" : ""}`}
-                              type="number"
-                              value={String(customAnswers[field.name] ?? "")}
-                              onChange={(e) => setCustomAnswer(field.name, e.target.value)}
-                              fullWidth
-                              variant="outlined"
-                              slotProps={{ input: { sx: { borderRadius: "10px" } } }}
-                            />
-                          ) : field.type === "date" ? (
-                            <TextField
-                              label={`${field.label}${field.required ? " *" : ""}`}
-                              type="date"
-                              value={String(customAnswers[field.name] ?? "")}
-                              onChange={(e) => setCustomAnswer(field.name, e.target.value)}
-                              fullWidth
-                              variant="outlined"
-                              slotProps={{
-                                input: { sx: { borderRadius: "10px" } },
-                                inputLabel: { shrink: true },
-                              }}
-                            />
-                          ) : (
-                            <TextField
-                              label={`${field.label}${field.required ? " *" : ""}`}
-                              value={String(customAnswers[field.name] ?? "")}
-                              onChange={(e) => setCustomAnswer(field.name, e.target.value)}
-                              fullWidth
-                              variant="outlined"
-                              slotProps={{ input: { sx: { borderRadius: "10px" } } }}
-                            />
-                          )}
-                        </Box>
-                      ))}
+                                value={String(customAnswers[field.name] ?? "")}
+                                onChange={(e) => { setCustomAnswer(field.name, e.target.value); setCustomFieldErrors((prev) => { const n = { ...prev }; delete n[field.name]; return n; }); }}
+                                fullWidth
+                                multiline
+                                rows={3}
+                                variant="outlined"
+                                error={hasError}
+                                helperText={hasError ? fieldError : undefined}
+                                slotProps={{ input: { sx: { borderRadius: "10px" } } }}
+                              />
+                            ) : field.type === "number" ? (
+                              <TextField
+                                label={`${field.label}${field.required ? " *" : ""}`}
+                                type="number"
+                                value={String(customAnswers[field.name] ?? "")}
+                                onChange={(e) => { setCustomAnswer(field.name, e.target.value); setCustomFieldErrors((prev) => { const n = { ...prev }; delete n[field.name]; return n; }); }}
+                                fullWidth
+                                variant="outlined"
+                                error={hasError}
+                                helperText={hasError ? fieldError : undefined}
+                                slotProps={{ input: { sx: { borderRadius: "10px" } } }}
+                              />
+                            ) : field.type === "date" ? (
+                              <TextField
+                                label={`${field.label}${field.required ? " *" : ""}`}
+                                type="date"
+                                value={String(customAnswers[field.name] ?? "")}
+                                onChange={(e) => { setCustomAnswer(field.name, e.target.value); setCustomFieldErrors((prev) => { const n = { ...prev }; delete n[field.name]; return n; }); }}
+                                fullWidth
+                                variant="outlined"
+                                error={hasError}
+                                helperText={hasError ? fieldError : undefined}
+                                slotProps={{
+                                  input: { sx: { borderRadius: "10px" } },
+                                  inputLabel: { shrink: true },
+                                }}
+                              />
+                            ) : (
+                              <TextField
+                                label={`${field.label}${field.required ? " *" : ""}`}
+                                value={String(customAnswers[field.name] ?? "")}
+                                onChange={(e) => { setCustomAnswer(field.name, e.target.value); setCustomFieldErrors((prev) => { const n = { ...prev }; delete n[field.name]; return n; }); }}
+                                fullWidth
+                                variant="outlined"
+                                error={hasError}
+                                helperText={hasError ? fieldError : undefined}
+                                slotProps={{ input: { sx: { borderRadius: "10px" } } }}
+                              />
+                            )}
+                          </Box>
+                        );
+                      })}
                     </>
                   )}
 

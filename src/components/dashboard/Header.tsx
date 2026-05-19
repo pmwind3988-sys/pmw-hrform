@@ -2,6 +2,7 @@ import {
   AppBar,
   Box,
   Button,
+  Divider,
   IconButton,
   Menu,
   MenuItem,
@@ -46,9 +47,9 @@ export default function Header({
   const navigate = useNavigate();
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
-  const [adminAnchorEl, setAdminAnchorEl] = useState<null | HTMLElement>(null);
+  const [mainMenuAnchorEl, setMainMenuAnchorEl] = useState<null | HTMLElement>(null);
   const profileOpen = Boolean(profileAnchorEl);
-  const adminOpen = Boolean(adminAnchorEl);
+  const mainMenuOpen = Boolean(mainMenuAnchorEl);
 
   const handleProfileOpen = (event: React.MouseEvent<HTMLElement>) => {
     setProfileAnchorEl(event.currentTarget);
@@ -58,13 +59,17 @@ export default function Header({
     setProfileAnchorEl(null);
   };
 
-  const handleAdminOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAdminAnchorEl(event.currentTarget);
+  const handleMainMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMainMenuAnchorEl(event.currentTarget);
   };
 
-  const handleAdminClose = () => {
-    setAdminAnchorEl(null);
+  const handleMainMenuClose = () => {
+    setMainMenuAnchorEl(null);
   };
+
+  const bgIcon = (
+    <Box sx={{ width: 18, height: 18, borderRadius: "4px", background: "linear-gradient(135deg, #6264A7 25%, #0078D4 25%, #0078D4 50%, #6264A7 50%, #6264A7 75%, #0078D4 75%)", border: "1px solid rgba(0,0,0,0.08)" }} />
+  );
 
   return (
     <AppBar
@@ -81,13 +86,7 @@ export default function Header({
     >
       <Toolbar sx={{ gap: 2, minHeight: "inherit" }}>
         {/* Brand mark */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-          }}
-        >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Logo size={isMobile ? 32 : 40} />
           <Stack direction="column" spacing={0}>
             <Typography
@@ -121,70 +120,116 @@ export default function Header({
 
         <Box sx={{ flexGrow: 1 }} />
 
-        <IconButton
-          onClick={() => setBgPickerOpen(true)}
-          size="small"
-          sx={{
-            mr: 0.5,
-            borderRadius: "10px",
-            color: "#6B7280",
-            backgroundColor: "rgba(0,0,0,0.03)",
-            "&:hover": { backgroundColor: "rgba(0,0,0,0.06)" },
-          }}
-        >
-          <Box sx={{ width: 18, height: 18, borderRadius: "4px", background: "linear-gradient(135deg, #6264A7 25%, #0078D4 25%, #0078D4 50%, #6264A7 50%, #6264A7 75%, #0078D4 75%)", border: "1px solid rgba(0,0,0,0.08)" }} />
-        </IconButton>
-
-        {isAdmin && (
+        {isMobile ? (
           <>
-            {isMobile ? (
-              <>
-                <IconButton
-                  onClick={handleAdminOpen}
-                  size="small"
-                  sx={{
-                    borderRadius: "10px",
-                    color: "#6B7280",
-                    backgroundColor: "rgba(0,0,0,0.04)",
-                  }}
-                >
-                  <MenuIcon />
-                </IconButton>
-                <Menu
-                  anchorEl={adminAnchorEl}
-                  open={adminOpen}
-                  onClose={handleAdminClose}
-                  slotProps={{
-                    paper: {
-                      sx: {
-                        minWidth: 200,
-                        borderRadius: "14px",
-                        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
-                        border: "1px solid rgba(0, 0, 0, 0.06)",
-                        mt: 1,
-                      },
-                    },
-                  }}
-                  transformOrigin={{ horizontal: "right", vertical: "top" }}
-                  anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-                >
+            {/* ── Mobile: Single hamburger menu ── */}
+            <IconButton
+              onClick={handleMainMenuOpen}
+              size="small"
+              sx={{
+                borderRadius: "10px",
+                color: "#6B7280",
+                backgroundColor: "rgba(0,0,0,0.04)",
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Menu
+              anchorEl={mainMenuAnchorEl}
+              open={mainMenuOpen}
+              onClose={handleMainMenuClose}
+              slotProps={{
+                paper: {
+                  sx: {
+                    minWidth: 230,
+                    borderRadius: "14px",
+                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+                    border: "1px solid rgba(0, 0, 0, 0.06)",
+                    mt: 1,
+                  },
+                },
+              }}
+              transformOrigin={{ horizontal: "right", vertical: "top" }}
+              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+            >
+              {/* 1. Profile */}
+              <MenuItem disabled sx={{ cursor: "default", px: 2.5, py: 1.5 }}>
+                <Typography variant="body2" sx={{ color: "#111827", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {userEmail}
+                </Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleMainMenuClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Switch account</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleMainMenuClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
+                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+              </MenuItem>
+
+              <Divider sx={{ my: 0.5 }} />
+
+              {/* 2. RoleBadge */}
+              <Box sx={{ px: 2.5, py: 1 }}>
+                <RoleBadge isAdmin={isAdmin} />
+              </Box>
+
+              <Divider sx={{ my: 0.5 }} />
+
+              {/* 3. Careers */}
+              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/careers"); }} sx={{ py: 1.25, px: 2.5 }}>
+                <PublicIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
+                <Typography variant="body2">Careers</Typography>
+              </MenuItem>
+
+              {/* 4. Admin items */}
+              {isAdmin && (
+                <>
+                  <Divider sx={{ my: 0.5 }} />
                   {onOpenBuilder && (
-                    <MenuItem onClick={() => { handleAdminClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
+                    <MenuItem onClick={() => { handleMainMenuClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
                       <SettingsIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => { handleAdminClose(); navigate("/admin/jobs"); }} sx={{ py: 1.25, px: 2.5 }}>
+                  <MenuItem onClick={() => { handleMainMenuClose(); navigate("/admin/jobs"); }} sx={{ py: 1.25, px: 2.5 }}>
                     <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
                     <Typography variant="body2">Applications</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => { handleAdminClose(); navigate("/admin/jobs/manage"); }} sx={{ py: 1.25, px: 2.5 }}>
+                  <MenuItem onClick={() => { handleMainMenuClose(); navigate("/admin/jobs/manage"); }} sx={{ py: 1.25, px: 2.5 }}>
                     <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
                     <Typography variant="body2">Manage Jobs</Typography>
                   </MenuItem>
-                </Menu>
-              </>
-            ) : (
+                </>
+              )}
+
+              <Divider sx={{ my: 0.5 }} />
+
+              {/* 5. Background picker */}
+              <MenuItem onClick={() => { handleMainMenuClose(); setBgPickerOpen(true); }} sx={{ py: 1.25, px: 2.5 }}>
+                <Box sx={{ mr: 1.5, display: "flex", alignItems: "center" }}>{bgIcon}</Box>
+                <Typography variant="body2">Choose Background</Typography>
+              </MenuItem>
+            </Menu>
+          </>
+        ) : (
+          <>
+            {/* ── Desktop: separate controls ── */}
+            <IconButton
+              onClick={() => setBgPickerOpen(true)}
+              size="small"
+              sx={{
+                mr: 0.5,
+                borderRadius: "10px",
+                color: "#6B7280",
+                backgroundColor: "rgba(0,0,0,0.03)",
+                "&:hover": { backgroundColor: "rgba(0,0,0,0.06)" },
+              }}
+            >
+              {bgIcon}
+            </IconButton>
+
+            {isAdmin && (
               <>
                 {onOpenBuilder && (
                   <Button
@@ -208,9 +253,7 @@ export default function Header({
                         boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
                         transform: "translateY(-1px)",
                       },
-                      "&:active": {
-                        transform: "scale(0.98) translateY(0)",
-                      },
+                      "&:active": { transform: "scale(0.98) translateY(0)" },
                     }}
                   >
                     Form Builder
@@ -266,141 +309,90 @@ export default function Header({
                 </Button>
               </>
             )}
-          </>
-        )}
 
-        {/* Careers */}
-        {isMobile ? (
-          <IconButton
-            onClick={() => navigate("/careers")}
-            size="small"
-            sx={{
-              mr: 0.5,
-              borderRadius: "10px",
-              color: "#34A853",
-              backgroundColor: "rgba(52, 168, 83, 0.08)",
-              "&:hover": { backgroundColor: "rgba(52, 168, 83, 0.15)" },
-            }}
-          >
-            <PublicIcon />
-          </IconButton>
-        ) : (
-          <Button
-            variant="outlined"
-            startIcon={<PublicIcon />}
-            onClick={() => navigate("/careers")}
-            sx={{
-              mr: 1,
-              borderRadius: "12px",
-              textTransform: "none",
-              color: "#34A853",
-              borderColor: "rgba(52, 168, 83, 0.3)",
-              fontWeight: 600,
-              fontSize: "0.85rem",
-              py: 1,
-              px: 2.5,
-              transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-              "&:hover": {
-                borderColor: "#34A853",
-                backgroundColor: "rgba(52, 168, 83, 0.06)",
-                transform: "translateY(-1px)",
-              },
-            }}
-          >
-            Careers
-          </Button>
-        )}
-
-        <RoleBadge isAdmin={isAdmin} />
-
-        <IconButton
-          onClick={handleProfileOpen}
-          size="small"
-          sx={{
-            ml: 0.5,
-            p: 0.75,
-            borderRadius: "12px",
-            backgroundColor: "rgba(0, 120, 212, 0.06)",
-            border: "1px solid rgba(0, 120, 212, 0.1)",
-            transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-            "&:hover": {
-              backgroundColor: "rgba(0, 120, 212, 0.12)",
-              borderColor: "rgba(0, 120, 212, 0.2)",
-              transform: "translateY(-1px)",
-            },
-          }}
-        >
-          <Box
-            sx={{
-              width: 32,
-              height: 32,
-              borderRadius: "10px",
-              backgroundColor: "rgba(0, 120, 212, 0.1)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <PersonIcon sx={{ fontSize: 18, color: "#0078D4" }} />
-          </Box>
-        </IconButton>
-
-        <Menu
-          anchorEl={profileAnchorEl}
-          open={profileOpen}
-          onClose={handleProfileClose}
-          slotProps={{
-            paper: {
-              sx: {
-                minWidth: 220,
-                borderRadius: "14px",
-                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
-                border: "1px solid rgba(0, 0, 0, 0.06)",
-                mt: 1,
-              },
-            },
-          }}
-          transformOrigin={{ horizontal: "right", vertical: "top" }}
-          anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-        >
-          <MenuItem disabled sx={{ cursor: "default", px: 2.5, py: 1.5 }}>
-            <Typography
-              variant="body2"
+            <Button
+              variant="outlined"
+              startIcon={<PublicIcon />}
+              onClick={() => navigate("/careers")}
               sx={{
-                color: "#111827",
-                fontWeight: 500,
-                maxWidth: 200,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                mr: 1,
+                borderRadius: "12px",
+                textTransform: "none",
+                color: "#34A853",
+                borderColor: "rgba(52, 168, 83, 0.3)",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                py: 1,
+                px: 2.5,
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                "&:hover": {
+                  borderColor: "#34A853",
+                  backgroundColor: "rgba(52, 168, 83, 0.06)",
+                  transform: "translateY(-1px)",
+                },
               }}
             >
-              {userEmail}
-            </Typography>
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              handleProfileClose();
-              onSwitch();
-            }}
-            sx={{ py: 1.25, px: 2.5 }}
-          >
-            <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
-            <Typography variant="body2">Switch account</Typography>
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              handleProfileClose();
-              onLogout();
-            }}
-            sx={{ py: 1.25, px: 2.5 }}
-          >
-            <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
-            <Typography variant="body2" sx={{ color: "#DC2626" }}>
-              Sign out
-            </Typography>
-          </MenuItem>
-        </Menu>
+              Careers
+            </Button>
+
+            <RoleBadge isAdmin={isAdmin} />
+
+            <IconButton
+              onClick={handleProfileOpen}
+              size="small"
+              sx={{
+                ml: 0.5,
+                p: 0.75,
+                borderRadius: "12px",
+                backgroundColor: "rgba(0, 120, 212, 0.06)",
+                border: "1px solid rgba(0, 120, 212, 0.1)",
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                "&:hover": {
+                  backgroundColor: "rgba(0, 120, 212, 0.12)",
+                  borderColor: "rgba(0, 120, 212, 0.2)",
+                  transform: "translateY(-1px)",
+                },
+              }}
+            >
+              <Box sx={{ width: 32, height: 32, borderRadius: "10px", backgroundColor: "rgba(0, 120, 212, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <PersonIcon sx={{ fontSize: 18, color: "#0078D4" }} />
+              </Box>
+            </IconButton>
+
+            <Menu
+              anchorEl={profileAnchorEl}
+              open={profileOpen}
+              onClose={handleProfileClose}
+              slotProps={{
+                paper: {
+                  sx: {
+                    minWidth: 220,
+                    borderRadius: "14px",
+                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+                    border: "1px solid rgba(0, 0, 0, 0.06)",
+                    mt: 1,
+                  },
+                },
+              }}
+              transformOrigin={{ horizontal: "right", vertical: "top" }}
+              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+            >
+              <MenuItem disabled sx={{ cursor: "default", px: 2.5, py: 1.5 }}>
+                <Typography variant="body2" sx={{ color: "#111827", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {userEmail}
+                </Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleProfileClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Switch account</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleProfileClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
+                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+              </MenuItem>
+            </Menu>
+          </>
+        )}
 
         <BackgroundPicker open={bgPickerOpen} onClose={() => setBgPickerOpen(false)} />
       </Toolbar>

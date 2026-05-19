@@ -1,3 +1,4 @@
+import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems } from "./_utils/graphClient.js";
 
 interface ApiRequest {
@@ -13,11 +14,12 @@ interface ApiResponse {
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setCorsHeaders(res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
+  if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   try {

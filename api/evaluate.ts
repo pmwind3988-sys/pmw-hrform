@@ -1,3 +1,4 @@
+import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems, createListItem, updateListItemFields } from "./_utils/graphClient.js";
 
 interface ApiRequest {
@@ -119,17 +120,17 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     });
   } catch (err) {
     console.error("[API evaluate GET]", err);
-    return res.status(500).json({ error: err instanceof Error ? err.message : "Internal server error" });
+    return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setCorsHeaders(res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
+  if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method === "GET") {
     return handleGet(req, res);
   }
@@ -236,8 +237,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error("[API evaluate]", err);
-    return res.status(500).json({
-      error: err instanceof Error ? err.message : "Internal server error",
-    });
+    return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

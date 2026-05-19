@@ -37,6 +37,7 @@ import {
 } from "@mui/material";
 import {
   Add,
+  ArrowBack,
   Edit,
   Delete,
   DeleteForever,
@@ -50,6 +51,7 @@ import {
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
+import { useNavigate } from "react-router-dom";
 import { fetchAdminJobs, createJobListing, updateJobListing, deleteJobListing, fetchColumnChoices } from "../utils/careersService";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
@@ -507,6 +509,7 @@ function JobFormDialog({
 }
 
 export default function AdminJobManagePage() {
+  const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -519,6 +522,7 @@ export default function AdminJobManagePage() {
   const [closingJobId, setClosingJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<JobListing | null>(null);
+  const [closeConfirmJob, setCloseConfirmJob] = useState<JobListing | null>(null);
 
   /** Create the CustomFields column on the job list via SharePoint REST (client-side token). */
   async function ensureCustomFieldsColumn(): Promise<boolean> {
@@ -698,13 +702,18 @@ export default function AdminJobManagePage() {
       <Paper sx={{ borderRadius: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", backgroundColor: "#ffffff", position: "sticky", top: 0, zIndex: 10 }}>
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: { xs: 1.5, sm: 2.5 } }}>
           <Box sx={{ display: "flex", alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", gap: 1, flexDirection: { xs: "column", sm: "row" } }}>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.05rem", sm: "1.3rem" } }}>
-                Manage Job Listings
-              </Typography>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
-                Create and manage internal job postings
-              </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+              <IconButton onClick={() => navigate("/adminhomepage")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
+                <ArrowBack />
+              </IconButton>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.05rem", sm: "1.3rem" } }}>
+                  Manage Job Listings
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
+                  Create and manage internal job postings
+                </Typography>
+              </Box>
             </Box>
             <Box sx={{ display: "flex", gap: 1, flexShrink: 0, alignSelf: { xs: "stretch", sm: "auto" } }}>
               <Button variant="outlined" startIcon={<Refresh />} onClick={load} disabled={loading} sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, fontSize: { xs: "0.75rem", sm: "0.85rem" }, whiteSpace: "nowrap", flex: { xs: 1, sm: "none" }, borderColor: "#D1D5DB", color: "#6B7280" }}>
@@ -808,9 +817,9 @@ export default function AdminJobManagePage() {
                         {job.status === "New" && (
                           <IconButton
                             size="small"
-                            disabled={closingJobId === job.id}
-                            onClick={() => handleClose(job)}
-                            sx={{ color: closingJobId === job.id ? "#9CA3AF" : "#DC2626" }}
+                            disabled={closingJobId === job.id || !!closeConfirmJob}
+                            onClick={() => setCloseConfirmJob(job)}
+                            sx={{ color: closingJobId === job.id || closeConfirmJob?.id === job.id ? "#9CA3AF" : "#DC2626" }}
                           >
                             {closingJobId === job.id ? (
                               <CircularProgress size={18} sx={{ color: "#DC2626" }} />
@@ -850,6 +859,40 @@ export default function AdminJobManagePage() {
         departmentChoices={departmentChoices}
         employmentTypeChoices={employmentTypeChoices}
       />
+
+      {/* Close Confirmation Dialog */}
+      <Dialog open={!!closeConfirmJob} onClose={() => setCloseConfirmJob(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
+            Close job listing?
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: "#6B7280" }}>
+            Are you sure you want to close <strong>{closeConfirmJob?.title}</strong>?
+            This will stop new applications and mark it as closed.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            onClick={() => setCloseConfirmJob(null)}
+            sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const job = closeConfirmJob;
+              setCloseConfirmJob(null);
+              if (job) handleClose(job);
+            }}
+            sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#F59E0B", "&:hover": { backgroundColor: "#D97706" } }}
+          >
+            Close Job
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteConfirmJob} onClose={() => !deletingJobId && setDeleteConfirmJob(null)}>

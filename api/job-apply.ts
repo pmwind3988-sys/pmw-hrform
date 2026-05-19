@@ -1,3 +1,4 @@
+import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import {
   getGraphToken,
   queryListItems,
@@ -73,9 +74,10 @@ function decodeBase64(content: string): Uint8Array {
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setCorsHeaders(res);
+
+  const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
+  if (!auth.valid) return res.status(401).json({ error: auth.reason });
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -102,25 +104,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     const sysToken = await getGraphToken();
 
-    // Duplicate check: block if same email already applied for same job,
-    // unless the submitter is someone else or forceApply is true (admin test)
-    if (!(body as Record<string, unknown>).forceApply) {
-      try {
-        const existing = await queryListItems(sysToken, "Job Applications", {
-          filter: `fields/ApplicantEmail eq '${encodeURIComponent(applicantEmail)}' and fields/JobListingID eq ${Number(jobListingId)}`,
-          top: 1,
-        });
-        if (existing.length > 0) {
-          const submitterEmail = (body as Record<string, unknown>).submittedByEmail as string || "";
-          if (submitterEmail.toLowerCase() === applicantEmail.toLowerCase()) {
-            return res.status(409).json({
-              error: "You have already applied for this position. Multiple applications are not allowed.",
-            });
-          }
+    // Duplicate check: block if same email already applied for same job.
+    // When forceApply is true, bypass is allowed only if submittedByEmail
+    // differs from applicantEmail (server-side check).
+    try {
+      const existing = await queryListItems(sysToken, "Job Applications", {
+        filter: `fields/ApplicantEmail eq '${encodeURIComponent(applicantEmail)}' and fields/JobListingID eq ${Number(jobListingId)}`,
+        top: 1,
+      });
+      if (existing.length > 0) {
+        const submitterEmail = (body as Record<string, unknown>).submittedByEmail as string || "";
+        const isForceBypass = (body as Record<string, unknown>).forceApply === true
+          && submitterEmail.toLowerCase() !== applicantEmail.toLowerCase();
+        if (!isForceBypass && submitterEmail.toLowerCase() === applicantEmail.toLowerCase()) {
+          return res.status(409).json({
+            error: "You have already applied for this position. Multiple applications are not allowed.",
+          });
         }
-      } catch {
-        // If duplicate check fails, proceed anyway
       }
+    } catch {
+      // If duplicate check fails, proceed anyway
     }
 
     const uploadToken = userToken || sysToken; // prefer user token for file ops
@@ -148,6 +151,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const uniqueName = `${submissionRef}_${safeName}`;
         const binary = decodeBase64(content);
+        if (binary.length > 10 * 1024 * 1024) {
+          console.warn(`[API job-apply] Skipping oversized file "${name}" (${binary.length} bytes > 10MB limit)`);
+          return null;
+        }
         const fileUrl = await uploadFileToDrive(uploadToken, docLibName, uniqueName, binary);
         allDocs.push({ name, url: fileUrl, isCoverLetter });
         return fileUrl;
@@ -366,6 +373,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   } catch (e) {
     const msg = (e as Error).message || "Internal server error";
     console.error("[API job-apply]", e);
-    return res.status(500).json({ error: msg });
+    return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

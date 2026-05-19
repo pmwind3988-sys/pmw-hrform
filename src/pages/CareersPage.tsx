@@ -127,18 +127,14 @@ function JobCard({ job, onSelect, isApplied }: { job: JobListing; onSelect: (job
           )}
         </Box>
 
-        <Grid container spacing={1} sx={{ mb: 1 }}>
-          {job.location && (
-            <Grid size={{ xs: 6 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <LocationOn sx={{ fontSize: 14, color: "#6B7280" }} />
-                <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
-                  {job.location}
-                </Typography>
-              </Box>
-            </Grid>
-          )}
-        </Grid>
+        {job.location && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+            <LocationOn sx={{ fontSize: 14, color: "#6B7280" }} />
+            <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
+              {job.location}
+            </Typography>
+          </Box>
+        )}
 
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {job.closingDate && (
@@ -519,8 +515,8 @@ export default function CareersPage() {
               onChange={(e) => setSearchText(e.target.value)}
               size="small"
               sx={{
-                flex: "1 1 260px",
-                minWidth: 200,
+                flex: { xs: "1 1 100%", sm: "1 1 260px" },
+                minWidth: { xs: "unset", sm: 200 },
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "10px",
                   backgroundColor: "#F8F9FC",
@@ -536,7 +532,7 @@ export default function CareersPage() {
                 },
               }}
             />
-            <FormControl size="small" sx={{ minWidth: 160 }}>
+            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 160 } }}>
               <InputLabel>Department</InputLabel>
               <Select
                 value={deptFilter}
@@ -550,7 +546,7 @@ export default function CareersPage() {
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 150 } }}>
               <InputLabel>Type</InputLabel>
               <Select
                 value={typeFilter}
@@ -564,7 +560,7 @@ export default function CareersPage() {
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 130 }}>
+            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 130 } }}>
               <InputLabel>Applied</InputLabel>
               <Select
                 value={appliedFilter}
@@ -577,7 +573,7 @@ export default function CareersPage() {
                 <MenuItem value="unapplied">Unapplied</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 130 }}>
+            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 130 } }}>
               <InputLabel>Sort</InputLabel>
               <Select
                 value={sortBy}

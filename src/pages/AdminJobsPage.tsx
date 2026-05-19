@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -27,8 +28,13 @@ import {
   Checkbox,
   LinearProgress,
   CircularProgress,
+  ToggleButton,
+  ToggleButtonGroup,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 import {
+  ArrowBack,
   Close,
   Refresh,
   People,
@@ -36,9 +42,48 @@ import {
   CheckCircle,
   AccessTime,
   Delete as DeleteIcon,
+  Today as TodayIcon,
+  DateRange as WeekIcon,
+  CalendarMonth as MonthIcon,
+  FilterList as FilterIcon,
 } from "@mui/icons-material";
 import { fetchApplications, updateApplicationStatus, deleteApplications } from "../utils/careersService";
 import type { JobAdminApplication } from "../types";
+
+type TimelinePreset = "today" | "7d" | "month" | "year" | "all";
+
+function getTimelineCutoff(preset: TimelinePreset): Date | null {
+  const now = new Date();
+  switch (preset) {
+    case "today":
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case "7d": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      return d;
+    }
+    case "month": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
+      return d;
+    }
+    case "year": {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - 1);
+      return d;
+    }
+    default:
+      return null;
+  }
+}
+
+const TIMELINE_OPTIONS: { value: TimelinePreset; label: string; icon: React.ReactNode }[] = [
+  { value: "today", label: "Today", icon: <TodayIcon sx={{ fontSize: 16 }} /> },
+  { value: "7d", label: "7 Days", icon: <WeekIcon sx={{ fontSize: 16 }} /> },
+  { value: "month", label: "Month", icon: <MonthIcon sx={{ fontSize: 16 }} /> },
+  { value: "year", label: "Year", icon: <MonthIcon sx={{ fontSize: 16 }} /> },
+  { value: "all", label: "All", icon: null },
+];
 
 const STATUS_OPTIONS = ["New", "KIV", "Shortlisted", "Not Suitable"] as const;
 
@@ -82,6 +127,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function AdminJobsPage() {
+  const navigate = useNavigate();
   const [applications, setApplications] = useState<JobAdminApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +138,8 @@ export default function AdminJobsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [timelineFilter, setTimelineFilter] = useState<TimelinePreset>("today");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,7 +181,21 @@ export default function AdminJobsPage() {
     [],
   );
 
-  const allSelected = applications.length > 0 && selectedIds.size === applications.length;
+  const filteredApplications = useMemo(() => {
+    const cutoff = getTimelineCutoff(timelineFilter);
+    return applications.filter((app) => {
+      // timeline filter
+      if (cutoff) {
+        const appDate = new Date(app.submittedAt);
+        if (appDate < cutoff) return false;
+      }
+      // status filter
+      if (statusFilter && app.status !== statusFilter) return false;
+      return true;
+    });
+  }, [applications, timelineFilter, statusFilter]);
+
+  const allSelected = filteredApplications.length > 0 && selectedIds.size === filteredApplications.length;
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -147,7 +209,7 @@ export default function AdminJobsPage() {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(applications.map((a) => a.id)));
+      setSelectedIds(new Set(filteredApplications.map((a) => a.id)));
     }
   };
 
@@ -176,11 +238,11 @@ export default function AdminJobsPage() {
   };
 
   const stats = {
-    total: applications.length,
-    new: applications.filter((a) => a.status === "New").length,
-    kiv: applications.filter((a) => a.status === "KIV").length,
-    shortlisted: applications.filter((a) => a.status === "Shortlisted").length,
-    notSuitable: applications.filter((a) => a.status === "Not Suitable").length,
+    total: filteredApplications.length,
+    new: filteredApplications.filter((a) => a.status === "New").length,
+    kiv: filteredApplications.filter((a) => a.status === "KIV").length,
+    shortlisted: filteredApplications.filter((a) => a.status === "Shortlisted").length,
+    notSuitable: filteredApplications.filter((a) => a.status === "Not Suitable").length,
   };
 
   return (
@@ -198,13 +260,18 @@ export default function AdminJobsPage() {
       >
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: { xs: 1.5, sm: 2.5 } }}>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-            <Box sx={{ minWidth: 0, flex: "1 1 auto" }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.05rem", sm: "1.3rem" } }}>
-                Job Applications
-              </Typography>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
-                Manage incoming applications
-              </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: "1 1 auto" }}>
+              <IconButton onClick={() => navigate("/adminhomepage")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
+                <ArrowBack />
+              </IconButton>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.05rem", sm: "1.3rem" } }}>
+                  Job Applications
+                </Typography>
+                <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
+                  Manage incoming applications
+                </Typography>
+              </Box>
             </Box>
             <Button
               variant="outlined"
@@ -229,6 +296,94 @@ export default function AdminJobsPage() {
       </Paper>
 
       <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 3 }}>
+        {/* Filter bar */}
+        <Paper
+          sx={{
+            p: 2,
+            mb: 3,
+            borderRadius: "16px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 2,
+            alignItems: "center",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 1 }}>
+            <FilterIcon sx={{ fontSize: 18, color: "#6B7280" }} />
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", fontSize: "0.85rem" }}>
+              Timeline
+            </Typography>
+          </Box>
+          <ToggleButtonGroup
+            value={timelineFilter}
+            exclusive
+            onChange={(_, val) => { if (val !== null) { setTimelineFilter(val); setSelectedIds(new Set()); } }}
+            size="small"
+            sx={{
+              gap: 0.5,
+              flexWrap: "wrap",
+              "& .MuiToggleButton-root": {
+                borderRadius: "8px !important",
+                border: "1px solid #E5E7EB",
+                px: 1.5,
+                py: 0.5,
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                color: "#6B7280",
+                textTransform: "none",
+                "&:not(:first-of-type)": {
+                  borderLeft: "1px solid #E5E7EB",
+                  marginLeft: 0,
+                },
+                "&.Mui-selected": {
+                  backgroundColor: "#F0F7FF",
+                  color: "#0078D4",
+                  borderColor: "#0078D4",
+                },
+              },
+            }}
+          >
+            {TIMELINE_OPTIONS.map((opt) => (
+              <ToggleButton key={opt.value} value={opt.value}>
+                {opt.icon && <Box sx={{ mr: 0.5, display: "flex" }}>{opt.icon}</Box>}
+                {opt.label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+
+          <Box sx={{ width: "1px", height: 28, backgroundColor: "#E5E7EB", mx: 1 }} />
+
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={statusFilter}
+              label="Status"
+              onChange={(e) => { setStatusFilter(e.target.value); setSelectedIds(new Set()); }}
+              sx={{ borderRadius: "10px", fontSize: "0.8rem" }}
+            >
+              <MenuItem value="">All statuses</MenuItem>
+              {STATUS_OPTIONS.map((opt) => (
+                <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {filteredApplications.length < applications.length && (
+            <Chip
+              label={`${filteredApplications.length} of ${applications.length}`}
+              size="small"
+              sx={{
+                backgroundColor: "#F0F7FF",
+                color: "#0078D4",
+                fontWeight: 600,
+                fontSize: "0.75rem",
+                borderRadius: "8px",
+              }}
+            />
+          )}
+        </Paper>
+
         {/* Stats Row */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
@@ -309,14 +464,17 @@ export default function AdminJobsPage() {
         )}
 
         {/* Empty */}
-        {!loading && !error && applications.length === 0 && (
+        {!loading && !error && filteredApplications.length === 0 && (
           <Box sx={{ textAlign: "center", py: 8 }}>
             <People sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
             <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600 }}>
-              No Applications Yet
+              {applications.length === 0 ? "No Applications Yet" : "No Results Match"}
             </Typography>
             <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
-              Applications from job postings will appear here.
+              {applications.length === 0
+                ? "Applications from job postings will appear here."
+                : "Try adjusting your timeline or status filter."
+              }
             </Typography>
           </Box>
         )}
@@ -359,7 +517,7 @@ export default function AdminJobsPage() {
         )}
 
         {/* Table */}
-        {!loading && !error && applications.length > 0 && (
+        {!loading && !error && filteredApplications.length > 0 && (
           <TableContainer
             component={Paper}
             sx={{
@@ -400,7 +558,7 @@ export default function AdminJobsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {applications.map((app) => (
+                {filteredApplications.map((app) => (
                   <TableRow
                     key={app.id}
                     hover

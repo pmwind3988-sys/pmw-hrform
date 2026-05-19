@@ -1,3 +1,4 @@
+import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems, createListItem, getListId, getSiteId, createDocLibrary, uploadFileToDrive, listExistsGraph } from "./_utils/graphClient.js";
 
 interface ApiRequest {
@@ -13,12 +14,12 @@ interface ApiResponse {
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setCorsHeaders(res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
+  if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { listTitle, body: formBody, matrixData } = req.body as {
@@ -129,8 +130,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(200).json({ success: true, id: parentId, childItemIds });
   } catch (err) {
     console.error("[API submit-form]", err);
-    return res.status(500).json({
-      error: err instanceof Error ? err.message : "Internal server error",
-    });
+    return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

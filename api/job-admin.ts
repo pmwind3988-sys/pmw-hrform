@@ -1,3 +1,4 @@
+import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import {
   getGraphToken,
   queryListItems,
@@ -24,11 +25,12 @@ const APPLICATION_LIST = "Job Applications";
 const JOB_LIST = "Internal Job Listing";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setCorsHeaders(res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
+  if (!auth.valid) return res.status(401).json({ error: auth.reason });
 
   try {
     const token = await getGraphToken();

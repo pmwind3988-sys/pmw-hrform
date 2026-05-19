@@ -20,10 +20,21 @@ interface AdminUpdateResponse {
   success: boolean;
 }
 
+// ── Shared API key header ──────────────────────────────────────────────────────
+const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
+
+function apiHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+    ...extra,
+  };
+}
+
 // ── API client functions ───────────────────────────────────────────────────────
 
 export async function fetchJobs(): Promise<JobListing[]> {
-  const response = await fetch("/api/jobs-list");
+  const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch jobs: ${response.status} ${response.statusText}`);
@@ -38,7 +49,7 @@ export async function submitApplication(
 ): Promise<ApplyResponse> {
   const response = await fetch("/api/job-apply", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify(data),
   });
 
@@ -57,7 +68,7 @@ export async function submitApplication(
 }
 
 export async function fetchMyApplications(email: string): Promise<JobAdminApplication[]> {
-  const response = await fetch(`/api/job-admin?email=${encodeURIComponent(email)}`);
+  const response = await fetch(`/api/job-admin?email=${encodeURIComponent(email)}`, { headers: apiHeaders() });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
@@ -68,7 +79,7 @@ export async function fetchMyApplications(email: string): Promise<JobAdminApplic
 }
 
 export async function fetchApplications(): Promise<JobAdminApplication[]> {
-  const response = await fetch("/api/job-admin");
+  const response = await fetch("/api/job-admin", { headers: apiHeaders() });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
@@ -84,7 +95,7 @@ export async function updateApplicationStatus(
 ): Promise<boolean> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({
       action: "update-status",
       applicationId,
@@ -105,7 +116,7 @@ export async function deleteApplications(
 ): Promise<{ deleted: number; errors?: string[] }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ action: "delete-applications", ids }),
   });
   if (!response.ok) {
@@ -122,7 +133,7 @@ export async function fetchColumnChoices(
 ): Promise<string[]> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ action: "get-column-choices", listName, columnName }),
   });
   if (!response.ok) return [];
@@ -135,7 +146,7 @@ export async function deleteJobListing(
 ): Promise<{ success: boolean }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ action: "delete-job", jobId }),
   });
 
@@ -153,7 +164,7 @@ export async function deleteJobListing(
 export async function fetchAdminJobs(): Promise<JobListing[]> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ action: "list-jobs" }),
   });
 
@@ -170,7 +181,7 @@ export async function createJobListing(
 ): Promise<{ success: boolean; jobId: string }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ action: "create-job", ...data }),
   });
 
@@ -189,7 +200,7 @@ export async function updateJobListing(
 ): Promise<{ success: boolean; warning?: string }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders(),
     body: JSON.stringify({ action: "update-job", jobId, ...data }),
   });
 

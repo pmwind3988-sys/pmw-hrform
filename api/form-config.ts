@@ -1,3 +1,4 @@
+import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems, getListColumnChoices, getListColumnValues } from "./_utils/graphClient.js";
 
 // Minimal Vercel request/response types
@@ -151,12 +152,12 @@ async function enrichSurveyJson(
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setCorsHeaders(res);
 
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
+  if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   const slug = req.query.slug as string;
@@ -216,8 +217,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     });
   } catch (err) {
     console.error("[API form-config]", err);
-    return res.status(500).json({
-      error: err instanceof Error ? err.message : "Internal server error",
-    });
+    return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }
