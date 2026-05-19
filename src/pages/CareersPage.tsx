@@ -434,7 +434,7 @@ export default function CareersPage() {
   const hasFilters = searchText || deptFilter || typeFilter || appliedFilter !== "all";
 
   return (
-    <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
       {/* Header */}
       <Paper
         sx={{

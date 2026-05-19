@@ -483,7 +483,7 @@ export default function JobApplyPage() {
 
   if (submitted) {
     return (
-      <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+      <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
         <Container maxWidth="sm" sx={{ py: 8 }}>
           <SuccessView submissionRef={submissionRef} onBrowseMore={() => navigate("/careers", { replace: true })} />
         </Container>
@@ -492,7 +492,7 @@ export default function JobApplyPage() {
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
       {/* Header */}
       <Paper
         sx={{

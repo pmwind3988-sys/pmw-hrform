@@ -600,7 +600,7 @@ if (decision === "guest") {
             path="/form/:formId"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                   <DynamicFormPage />
                 </Box>
               </ErrorBoundary>
@@ -611,7 +611,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                     <ApprovalDashboard />
                   </Box>
                 </ErrorBoundary>
@@ -623,7 +623,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                     <ResponseViewer />
                   </Box>
                 </ErrorBoundary>
@@ -675,7 +675,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                     <AdminJobsPage />
                   </Box>
                 </ErrorBoundary>
@@ -687,7 +687,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                     <AdminJobManagePage />
                   </Box>
                 </ErrorBoundary>
@@ -698,7 +698,7 @@ if (decision === "guest") {
             path="/eval/:token"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                   <EvaluationPage />
                 </Box>
               </ErrorBoundary>
@@ -708,7 +708,7 @@ if (decision === "guest") {
             path="/eval/:formSlug/:responseId/:layerNumber"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                   <EvaluationPage />
                 </Box>
               </ErrorBoundary>
@@ -718,7 +718,7 @@ if (decision === "guest") {
             path="/careers"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                   <CareersPage />
                 </Box>
               </ErrorBoundary>
@@ -728,7 +728,7 @@ if (decision === "guest") {
             path="/careers/:jobId/apply"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
                   <JobApplyPage />
                 </Box>
               </ErrorBoundary>

@@ -138,6 +138,8 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
+          minHeight: "100vh",
+          background: "var(--app-bg, linear-gradient(145deg, #eef0f7 0%, rgba(248,249,252,0.88) 40%, #f4f0f8 100%))",
           "&::before": {
             content: '""',
             position: "fixed",
@@ -147,8 +149,20 @@ const theme = createTheme({
             height: "100%",
             pointerEvents: "none",
             zIndex: -1,
-            opacity: 0.03,
+            opacity: 0.025,
             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          },
+          "&::after": {
+            content: '""',
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+            zIndex: -1,
+            opacity: 0.04,
+            backgroundImage: `radial-gradient(ellipse at 20% 50%, rgba(98,100,167,0.15) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,120,212,0.08) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(98,100,167,0.06) 0%, transparent 50%)`,
           },
         },
       },

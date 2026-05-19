@@ -693,7 +693,7 @@ export default function AdminJobManagePage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", backgroundColor: "#F8F9FC" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
       {/* Header */}
       <Paper sx={{ borderRadius: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", backgroundColor: "#ffffff", position: "sticky", top: 0, zIndex: 10 }}>
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: { xs: 1.5, sm: 2.5 } }}>
