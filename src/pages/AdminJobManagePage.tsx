@@ -703,7 +703,7 @@ export default function AdminJobManagePage() {
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: { xs: 1.5, sm: 2.5 } }}>
           <Box sx={{ display: "flex", alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", gap: 1, flexDirection: { xs: "column", sm: "row" } }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-              <IconButton onClick={() => navigate("/adminhomepage")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
+              <IconButton onClick={() => navigate("/admin/dashboard")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
                 <ArrowBack />
               </IconButton>
               <Box sx={{ minWidth: 0 }}>

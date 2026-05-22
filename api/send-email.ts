@@ -4,6 +4,7 @@ import { getGraphToken } from "./_utils/graphClient.js";
 interface ApiRequest {
   body: Record<string, unknown>;
   method: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 interface ApiResponse {

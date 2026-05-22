@@ -5,6 +5,7 @@ import { getGraphToken, queryListItems, getListColumnChoices, getListColumnValue
 interface ApiRequest {
   query: Record<string, string | string[]>;
   method: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 interface ApiResponse {

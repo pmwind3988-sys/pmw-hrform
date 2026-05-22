@@ -32,7 +32,7 @@ import { useReactiveForm, required, email, phone } from "../hooks/useReactiveFor
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useMsal } from "@azure/msal-react";
 import { pdf } from "@react-pdf/renderer";
-import { fetchJobs, submitApplication } from "../utils/careersService";
+import { fetchJobs, submitApplication, ensureJobApplicationColumns } from "../utils/careersService";
 import JobApplyPdfDocument from "../utils/JobApplyPdfDocument";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
@@ -523,6 +523,22 @@ export default function JobApplyPage() {
         });
       } catch {
         // PDF generation failed — submit without it
+      }
+
+      // Ensure all SharePoint columns exist — blocks submission if provisioning fails
+      try {
+        const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+        if (SP_SITE_URL) {
+          const spResp = await instance.acquireTokenSilent({
+            scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
+            account: accounts[0],
+          });
+          await ensureJobApplicationColumns(spResp.accessToken, SP_SITE_URL);
+        }
+      } catch (e) {
+        setSubmitError(`Column setup failed: ${(e as Error).message}. Please check browser console and retry.`);
+        setSubmitting(false);
+        return;
       }
 
       // Combine resume + supporting docs + generated PDF

@@ -1,10 +1,11 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, createListItem, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItems, updateListItemFields } from "./_utils/graphClient.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
   query: Record<string, string | string[]>;
   method: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 interface ApiResponse {
@@ -150,7 +151,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!layerNumber || typeof layerNumber !== "number") {
     return res.status(400).json({ error: "Missing or invalid layerNumber" });
   }
-  if (!action || !["approve", "reject", "confirm"].includes(action)) {
+  if (typeof action !== "string" || !["approve", "reject", "confirm"].includes(action)) {
     return res.status(400).json({ error: "action must be 'approve', 'reject', or 'confirm'" });
   }
 

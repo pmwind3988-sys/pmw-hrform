@@ -1,9 +1,10 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, createListItem, getListId, getSiteId, createDocLibrary, uploadFileToDrive, listExistsGraph, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItems, createListItem, createDocLibrary, uploadFileToDrive, listExistsGraph, updateListItemFields } from "./_utils/graphClient.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
   method: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 interface ApiResponse {

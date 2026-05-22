@@ -4,6 +4,7 @@ import { getGraphToken, queryListItems } from "./_utils/graphClient.js";
 interface ApiRequest {
   body: Record<string, unknown>;
   method: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 interface ApiResponse {
@@ -61,7 +62,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           employmentType: String(item.fields.Employment_x0020_Type || ""),
           closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date) : null,
           status: String(item.fields.Status || "New"),
-          applicationCount: appCountByJob[itemId] ?? (Number(item.fields.Application_x0020_Count) || 0),
+          applicationCount: appCountByJob[itemId] ?? 0,
           created: String(item.fields.Created || ""),
           customFields,
         };

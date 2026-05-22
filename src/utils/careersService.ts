@@ -213,3 +213,121 @@ export async function updateJobListing(
   const result = (await response.json()) as { success: boolean; warning?: string };
   return result;
 }
+
+// ── Client-side column provisioning (blocking — throws on failure) ─────────
+
+interface ColumnDef {
+  name: string;
+  /** SP FieldTypeKind values this column can accept */
+  acceptKinds: number[];
+  /** Preferred kind to create (first in acceptKinds) */
+  kind: number;
+  /** Extra SP Field metadata */
+  extra?: Record<string, unknown>;
+}
+
+/** SP FieldTypeKind: 2=Text 3=Note 4=DateTime 7=Lookup 9=Number 11=Hyperlink */
+const REQUIRED_COLUMNS: ColumnDef[] = [
+  // internalName         displayName         acceptKinds   createKind  extra
+  { name: "JobListingID",  acceptKinds: [9, 7], kind: 9 },
+  { name: "ResumeUrl",     acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
+  { name: "CoverLetterUrl", acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
+  { name: "Reasoning",     acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
+  { name: "CustomAnswers", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
+  { name: "CurrentPosition",  acceptKinds: [2], kind: 2 },
+  { name: "CurrentDepartment", acceptKinds: [2], kind: 2 },
+  { name: "ApplicantPhone", acceptKinds: [2], kind: 2 },
+];
+
+/**
+ * Ensures all required columns exist on "Job Applications" with compatible types.
+ * Uses SP REST with the user's token. THROWS on any failure.
+ * Call this BEFORE submitApplication() — if it throws, don't submit.
+ */
+export async function ensureJobApplicationColumns(
+  spRestToken: string,
+  spSiteUrl: string,
+): Promise<void> {
+  const site = spSiteUrl.replace(/\/$/, "");
+  const encList = encodeURIComponent("Job Applications");
+
+  // 1. Get request digest
+  const dr = await fetch(`${site}/_api/contextinfo`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${spRestToken}`, Accept: "application/json;odata=nometadata" },
+  });
+  if (!dr.ok) throw new Error(`Failed to get SharePoint digest (${dr.status}) — check AllSites.Manage permission`);
+  const dd = (await dr.json()) as { FormDigestValue?: string };
+  const digest = dd.FormDigestValue;
+  if (!digest) throw new Error("No FormDigestValue from SharePoint");
+
+  // 2. Fetch existing columns with their types (keyed by InternalName)
+  const fr = await fetch(`${site}/_api/web/lists/getbytitle('${encList}')/fields?$select=Title,FieldTypeKind,InternalName`, {
+    headers: { Authorization: `Bearer ${spRestToken}`, Accept: "application/json;odata=nometadata" },
+  });
+  if (!fr.ok) throw new Error(`Failed to fetch list columns (${fr.status})`);
+  const fd = (await fr.json()) as { value?: Array<{ Title: string; FieldTypeKind: number; InternalName: string }> };
+  const existing = new Map((fd.value || []).map((f) => [f.InternalName, { typeKind: f.FieldTypeKind, title: f.Title }]));
+
+  // 3. Display name mapping (InternalName → display name for SP REST creation)
+  const displayNames: Record<string, string> = {
+    JobListingID: "Job Listing ID",
+    ResumeUrl: "Resume URL",
+    CoverLetterUrl: "Cover Letter URL",
+    Reasoning: "Reasoning",
+    CustomAnswers: "Custom Answers",
+    CurrentPosition: "Current Position",
+    CurrentDepartment: "Current Department",
+    ApplicantPhone: "Applicant Phone",
+  };
+
+  // 4. Type mapping for creation
+  const typeMap: Record<number, string> = {
+    2: "SP.Field", 3: "SP.FieldMultiLineText", 4: "SP.FieldDateTime",
+    7: "SP.FieldLookup", 9: "SP.FieldNumber", 11: "SP.FieldUrl",
+  };
+
+  // 5. Check & create
+  for (const col of REQUIRED_COLUMNS) {
+    const existingCol = existing.get(col.name);
+
+    if (existingCol !== undefined) {
+      // Column exists (matched by InternalName) — check type compatibility
+      if (!col.acceptKinds.includes(existingCol.typeKind)) {
+        throw new Error(
+          `Column "${col.name}" (display: "${existingCol.title}") exists with incompatible type ` +
+          `(kind ${existingCol.typeKind}). Delete it from SharePoint list settings, then retry.`
+        );
+      }
+      continue; // Already exists with OK type
+    }
+
+    // Create missing column
+    const body: Record<string, unknown> = {
+      __metadata: { type: typeMap[col.kind] ?? "SP.Field" },
+      FieldTypeKind: col.kind,
+      Title: displayNames[col.name] ?? col.name,
+      StaticName: col.name,
+    };
+    if (col.extra) Object.assign(body, col.extra);
+
+    const r = await fetch(`${site}/_api/web/lists/getbytitle('${encList}')/fields`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${spRestToken}`,
+        Accept: "application/json;odata=nometadata",
+        "Content-Type": "application/json;odata=verbose",
+        "X-RequestDigest": digest,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const text = await r.text();
+      // "Already exists" is OK — race condition with another tab
+      if (text.toLowerCase().includes("duplicate") || text.toLowerCase().includes("already exists")) continue;
+      throw new Error(`Failed to create column "${col.name}": ${r.status} ${text.slice(0, 200)}`);
+    }
+  }
+}
+
+

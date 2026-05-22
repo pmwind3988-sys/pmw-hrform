@@ -134,6 +134,7 @@ export async function queryListItems(
     filter?: string;
     top?: number;
     expand?: string;
+    preferNonIndexed?: boolean;
   }
 ): Promise<GraphListItem[]> {
   const siteId = await getSiteId(token);
@@ -145,7 +146,26 @@ export async function queryListItems(
   if (options?.top) params.set("$top", String(options.top));
   if (options?.filter) params.set("$filter", options.filter);
 
-  const data = (await graphGet(token, `/sites/${siteId}/lists/${listId}/items?${params.toString()}`)) as {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+
+  // Allow filtering on non-indexed columns (e.g. ApplicantEmail)
+  if (options?.preferNonIndexed) {
+    headers["Prefer"] = "HonorNonIndexedQueriesWarningMayFailRandomly";
+  }
+
+  const res = await fetch(
+    `${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items?${params.toString()}`,
+    { headers },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Graph GET ${res.status}: ${text}`);
+  }
+
+  const data = (await res.json()) as {
     value: Array<{ id: string; fields?: Record<string, unknown> }>;
   };
 
@@ -207,6 +227,68 @@ export async function createListColumn(
     text: { multiline: true, allowUnlimitedLength: true },
     displayName,
   });
+}
+
+/**
+ * Get all columns of a SharePoint list via Graph API.
+ * Returns name and displayName for each column.
+ */
+export async function getListColumns(
+  token: string,
+  listDisplayName: string,
+): Promise<Array<{ name: string; displayName: string }>> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const data = (await graphGet(
+    token,
+    `/sites/${siteId}/lists/${listId}/columns?$select=name,displayName`,
+  )) as { value: Array<{ name: string; displayName: string }> };
+  return data.value || [];
+}
+
+/**
+ * Ensure a column exists on a SharePoint list, creating it if missing.
+ * Supports text, number, note (multiline), hyperlink, and dateTime types.
+ * Efficiently checks existence first — no-op if column already exists.
+ */
+export async function ensureListColumn(
+  token: string,
+  listDisplayName: string,
+  columnName: string,
+  displayName: string,
+  columnType: "text" | "number" | "note" | "hyperlink" | "dateTime",
+): Promise<boolean> {
+  const existing = await getListColumns(token, listDisplayName);
+  if (existing.some((c) => c.name === columnName || c.displayName === displayName)) {
+    return false; // Already exists — nothing done
+  }
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  let columnBody: Record<string, unknown>;
+  switch (columnType) {
+    case "note":
+      columnBody = { text: { multiline: true, allowUnlimitedLength: true } };
+      break;
+    case "number":
+      columnBody = { number: {} };
+      break;
+    case "hyperlink":
+      columnBody = { hyperlinkOrPicture: {} };
+      break;
+    case "dateTime":
+      columnBody = { dateTime: { format: "dateTime" } };
+      break;
+    case "text":
+    default:
+      columnBody = { text: {} };
+      break;
+  }
+  await graphPost(token, `/sites/${siteId}/lists/${listId}/columns`, {
+    name: columnName,
+    displayName,
+    ...columnBody,
+  });
+  return true; // Created
 }
 
 // --- SharePoint field/choice helpers (for server-side survey JSON enrichment) ---
@@ -383,7 +465,7 @@ export async function uploadFileToDrive(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/octet-stream",
       },
-      body: content,
+      body: content as Uint8Array,
     },
   );
 
@@ -394,6 +476,52 @@ export async function uploadFileToDrive(
 
   const data = (await res.json()) as { webUrl?: string; "@microsoft.graph.downloadUrl"?: string };
   return data.webUrl || data["@microsoft.graph.downloadUrl"] || "";
+}
+
+/**
+ * Update a single list item via Graph API (PATCH to the item resource, not /fields).
+ * Some column types (URL/hyperlink) may behave differently on this endpoint.
+ */
+export async function updateListItem(
+  token: string,
+  listDisplayName: string,
+  itemId: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const res = await fetch(`${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items/${encodeURIComponent(itemId)}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Graph PATCH item ${res.status}: ${text}`);
+  }
+}
+
+/**
+ * Lists all files (drive items) in a document library via Graph API.
+ */
+export async function listDocLibraryFiles(
+  token: string,
+  listDisplayName: string,
+): Promise<Array<{ id: string; name: string; webUrl: string }>> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  try {
+    const data = (await graphGet(
+      token,
+      `/sites/${siteId}/lists/${listId}/drive/root/children?$select=id,name,webUrl`,
+    )) as { value: Array<{ id: string; name: string; webUrl: string }> };
+    return data.value || [];
+  } catch {
+    return [];
+  }
 }
 
 /**

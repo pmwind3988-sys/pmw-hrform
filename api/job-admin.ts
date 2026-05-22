@@ -6,12 +6,14 @@ import {
   updateListItemFields,
   deleteListItem,
   getListColumnChoices,
+  listDocLibraryFiles,
 } from "./_utils/graphClient.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
   method: string;
   url?: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 interface ApiResponse {
@@ -63,6 +65,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           status: String(item.fields.Status || ""),
           submittedAt: String(item.fields.SubmittedAt || ""),
           submissionRef: String(item.fields.SubmissionRef || ""),
+          applicantPhone: String(item.fields.ApplicantPhone || ""),
           coverLetterUrl: String(item.fields.CoverLetterUrl || ""),
           resumeUrl: String(item.fields.ResumeUrl || ""),
           customAnswers,
@@ -97,15 +100,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return res.status(200).json({ success: true });
       }
 
-      // Delete applications + update applicant counts
+      // Delete applications + update applicant counts + remove associated files
       if (action === "delete-applications") {
         const ids = rawBody.ids;
         if (!Array.isArray(ids) || ids.length === 0) {
           return res.status(400).json({ error: "Missing required field: ids (array)" });
         }
 
-        // Fetch applications to get JobListingID before deleting
+        const DOC_LIB = "Job Applications Files";
+
+        // Pre-fetch all files in the document library (one call instead of N)
+        let docLibFiles: Array<{ id: string; name: string }> = [];
+        try {
+          docLibFiles = await listDocLibraryFiles(token, DOC_LIB);
+        } catch { /* best-effort — file deletion won't happen but application deletion proceeds */ }
+
+        // Fetch applications to get JobListingID + SubmissionRef before deleting
         const decrementMap: Record<string, number> = {};
+        const fileWarnings: string[] = [];
         for (const id of ids) {
           if (!/^\d+$/.test(String(id))) continue;
           try {
@@ -117,6 +129,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               const jobId = String(appResult[0].fields.JobListingID || "");
               if (jobId) {
                 decrementMap[jobId] = (decrementMap[jobId] || 0) + 1;
+              }
+              // Delete associated files from the Job Applications Files doc library
+              const submissionRef = String(appResult[0].fields.SubmissionRef || "");
+              if (submissionRef && docLibFiles.length > 0) {
+                const matching = docLibFiles.filter((f) => f.name.startsWith(submissionRef));
+                for (const file of matching) {
+                  try {
+                    await deleteListItem(token, DOC_LIB, file.id);
+                  } catch {
+                    fileWarnings.push(`File delete failed: ${file.name}`);
+                  }
+                }
               }
             }
           } catch { /* proceed even if fetch fails */ }
@@ -157,6 +181,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           success: true,
           deleted,
           errors: errors.length > 0 ? errors : undefined,
+          fileWarnings: fileWarnings.length > 0 ? fileWarnings : undefined,
         });
       }
 
@@ -233,7 +258,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             employmentType: String(item.fields.Employment_x0020_Type || ""),
             closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date).split("T")[0] : null,
             status: String(item.fields.Status || "New"),
-            applicationCount: appCountByJob[itemId] ?? (Number(item.fields.Application_x0020_Count) || 0),
+            applicationCount: appCountByJob[itemId] ?? 0,
             customFields,
           };
         });

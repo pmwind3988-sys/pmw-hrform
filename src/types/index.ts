@@ -925,6 +925,7 @@ export interface JobAdminApplication {
   jobTitle: string;
   applicantName: string;
   applicantEmail: string;
+  applicantPhone?: string;
   status: string;
   submittedAt: string;
   submissionRef: string;

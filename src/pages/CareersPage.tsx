@@ -444,7 +444,7 @@ export default function CareersPage() {
       >
         <Container maxWidth="lg">
           <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 }, py: { xs: 1.5, sm: 2.5 } }}>
-            <IconButton onClick={() => navigate("/adminhomepage")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 } }}>
+            <IconButton onClick={() => navigate(isAdmin ? "/admin/dashboard" : "/user/dashboard")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 } }}>
               <ArrowBack />
             </IconButton>
             <Box
@@ -650,7 +650,7 @@ export default function CareersPage() {
             </Typography>
           </Box>
         )}
-        {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && (
+        {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && appliedFilter !== "applied" && (
           <Box sx={{ textAlign: "center", py: 8 }}>
             <SearchIcon sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
             <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600, mb: 0.5 }}>
@@ -737,9 +737,75 @@ export default function CareersPage() {
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Reference</Typography><Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4" }}>{selectedApp.submissionRef}</Typography></Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Job Title</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.jobTitle}</Typography></Box>
-                  <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Applicant</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.applicantName}</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.applicantEmail}</Typography></Box>
+                  <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Applicant</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.applicantName}</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.applicantEmail}</Typography>{selectedApp.applicantPhone && <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>{selectedApp.applicantPhone}</Typography>}</Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Status</Typography><Chip label={selectedApp.status || "New"} size="small" sx={{ borderRadius: "8px", fontWeight: 600, backgroundColor: selectedApp.status === "Reviewed" ? "#E6F4EA" : "#F0F7FF", color: selectedApp.status === "Reviewed" ? "#34A853" : "#0078D4" }} /></Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Submitted</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.submittedAt ? formatDate(selectedApp.submittedAt) : "—"}</Typography></Box>
+
+                  {(selectedApp.resumeUrl || selectedApp.coverLetterUrl) && (
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Documents</Typography>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
+                        {selectedApp.resumeUrl && (
+                          <Box
+                            component="a"
+                            href={selectedApp.resumeUrl?.startsWith("https://") ? selectedApp.resumeUrl : "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{
+                              display: "inline-flex", alignItems: "center", gap: 1,
+                              px: 1.5, py: 0.75, borderRadius: "8px",
+                              color: "#0078D4", fontWeight: 600, fontSize: "0.85rem",
+                              backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
+                              textDecoration: "none", width: "fit-content",
+                              "&:hover": { backgroundColor: "#DBEAFE" },
+                              "&::before": { content: "'📄 '", fontSize: "14px" },
+                            }}
+                          >
+                            View Resume
+                          </Box>
+                        )}
+                        {selectedApp.coverLetterUrl && (
+                          <Box
+                            component="a"
+                            href={selectedApp.coverLetterUrl?.startsWith("https://") ? selectedApp.coverLetterUrl : "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{
+                              display: "inline-flex", alignItems: "center", gap: 1,
+                              px: 1.5, py: 0.75, borderRadius: "8px",
+                              color: "#0078D4", fontWeight: 600, fontSize: "0.85rem",
+                              backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
+                              textDecoration: "none", width: "fit-content",
+                              "&:hover": { backgroundColor: "#DBEAFE" },
+                              "&::before": { content: "'📝 '", fontSize: "14px" },
+                            }}
+                          >
+                            View Cover Letter
+                          </Box>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {selectedApp.customAnswers && Object.keys(selectedApp.customAnswers).length > 0 && (
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                        Additional Responses
+                      </Typography>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 0.5 }}>
+                        {Object.entries(selectedApp.customAnswers).map(([key, value]) => (
+                          <Box key={key}>
+                            <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 600, display: "block" }}>
+                              {key}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: "#374151" }}>
+                              {String(value ?? "")}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
                 </Box>
               </DialogContent>
               <DialogActions sx={{ px: 3, pb: 2 }}>
