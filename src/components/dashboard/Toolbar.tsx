@@ -52,13 +52,13 @@ export default function Toolbar({
     <Box
       sx={{
         backgroundColor: "#ffffff",
-        borderRadius: "20px",
-        border: "1px solid rgba(0,0,0,0.04)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)",
-        p: 2.5,
+        borderRadius: "8px",
+        border: "1px solid rgba(17, 24, 39, 0.08)",
+        boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
+        p: { xs: 1.5, sm: 2 },
       }}
     >
-      <Stack spacing={2.5}>
+      <Stack spacing={{ xs: 1.5, sm: 2 }}>
         <Box
           sx={{
             display: "flex",
@@ -78,7 +78,7 @@ export default function Toolbar({
               flex: { xs: "none", sm: "1 1 280px" },
               minWidth: { xs: "100%", sm: 240 },
               "& .MuiOutlinedInput-root": {
-                borderRadius: "12px",
+                borderRadius: "8px",
                 backgroundColor: "#F8F9FC",
                 transition: "all 0.2s ease",
                 "&:hover": {
@@ -108,7 +108,7 @@ export default function Toolbar({
               value={listFilter}
               label="List"
               onChange={(e) => setListFilter(e.target.value)}
-              sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
+              sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
             >
               <MenuItem value="">All lists</MenuItem>
               {visibleLists.map((list) => (
@@ -126,7 +126,7 @@ export default function Toolbar({
               value={statusFilter}
               label="Status"
               onChange={(e) => setStatusFilter(e.target.value)}
-              sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
+              sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
             >
               <MenuItem value="all">All statuses</MenuItem>
               <MenuItem value="pending">Pending</MenuItem>
@@ -144,7 +144,7 @@ export default function Toolbar({
               value={sortBy}
               label="Sort by"
               onChange={(e) => setSortBy(e.target.value)}
-              sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
+              sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
             >
               <MenuItem value="newest">Newest first</MenuItem>
               <MenuItem value="oldest">Oldest first</MenuItem>
@@ -176,7 +176,7 @@ export default function Toolbar({
                 flex: { xs: "none", sm: "1 1 280px" },
                 minWidth: { xs: "100%", sm: 240 },
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: "12px",
+                  borderRadius: "8px",
                   backgroundColor: "#F8F9FC",
                   transition: "all 0.2s ease",
                   "&:hover": {

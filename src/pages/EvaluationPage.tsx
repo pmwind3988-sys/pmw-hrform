@@ -49,6 +49,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
       'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
+      'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
       'L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature',
@@ -85,18 +86,18 @@ type ActionState = "idle" | "submitting" | "success" | "error";
 
 // ── Styling ──
 const COLORS = {
-  purple: "#5B21B6", purpleLight: "#7C3AED", purplePale: "#EDE9FE",
-  bg: "#F8F7FF", cardBg: "#FFFFFF", border: "#E5E3F0",
-  textPrimary: "#1E1B4B", textSecond: "#6B7280", textMuted: "#9CA3AF",
+  purple: "#0078D4", purpleLight: "#106EBE", purplePale: "#E6F2FB",
+  bg: "#F6F8FB", cardBg: "#FFFFFF", border: "#DDE5EE",
+  textPrimary: "#111827", textSecond: "#6B7280", textMuted: "#9CA3AF",
   green: "#059669", greenPale: "#D1FAE5",
   red: "#DC2626", redPale: "#FEE2E2",
-  shadow: "0 1px 3px rgba(91,33,182,0.08),0 4px 16px rgba(91,33,182,0.06)",
+  shadow: "0 1px 2px rgba(17,24,39,0.05),0 4px 12px rgba(17,24,39,0.06)",
 };
 
 const sectionCard: React.CSSProperties = {
   background: COLORS.cardBg,
   border: `1px solid ${COLORS.border}`,
-  borderRadius: 16,
+  borderRadius: 8,
   padding: 24,
   marginBottom: 20,
   boxShadow: COLORS.shadow,
@@ -104,7 +105,7 @@ const sectionCard: React.CSSProperties = {
 
 const btnPrimary: React.CSSProperties = {
   padding: "12px 32px",
-  borderRadius: 10,
+  borderRadius: 8,
   border: "none",
   background: `linear-gradient(135deg, ${COLORS.purple}, ${COLORS.purpleLight})`,
   color: "#fff",
@@ -399,7 +400,7 @@ export default function EvaluationPage() {
   if (authState === "unauthorized") {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 22, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
+        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>You need to sign in with your Microsoft 365 account to access this evaluation.</p>
@@ -412,7 +413,7 @@ export default function EvaluationPage() {
   if (error) {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 22, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
+        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.red, marginBottom: 8 }}>Error</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13 }}>{error}</p>
@@ -424,7 +425,7 @@ export default function EvaluationPage() {
   if (actionState === "success") {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 22, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
+        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.green, marginBottom: 8 }}>Submitted Successfully</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>
@@ -440,7 +441,7 @@ export default function EvaluationPage() {
   const isCheckboxMode = currentLayer?.type === "approval" && (currentLayer as unknown as Record<string, unknown>).confirmationType === "checkbox";
 
   return (
-    <div style={{ minHeight: "100vh", background: COLORS.bg, padding: "32px 16px" }}>
+    <div style={{ minHeight: "100vh", background: COLORS.bg, padding: "clamp(16px, 3vw, 32px) 16px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
 
         {/* Header */}
@@ -455,7 +456,7 @@ export default function EvaluationPage() {
         {/* Previous Layer Results */}
         {previousResults.length > 0 && (
           <div style={sectionCard}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: 0, marginBottom: 12 }}>
               Previous Layers
             </div>
             {previousResults.map((pr, i) => {
@@ -478,7 +479,7 @@ export default function EvaluationPage() {
                 );
               }
               return (
-                <div key={i} style={{ background: COLORS.purplePale, borderRadius: 10, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
+                <div key={i} style={{ background: COLORS.purplePale, borderRadius: 8, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
                   Layer {Number(pr.layerNumber)}: <strong>{String(pr.status || "Completed")}</strong>
                   {pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>— {new Date(pr.signedAt as string).toLocaleDateString()}</span> : null}
                 </div>
@@ -490,7 +491,7 @@ export default function EvaluationPage() {
         {/* Submission Data Preview */}
         {responseData && (
           <div style={sectionCard}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: 0, marginBottom: 12 }}>
               Submission Data
             </div>
             <div style={{ fontSize: 13, color: COLORS.textSecond }}>

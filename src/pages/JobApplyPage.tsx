@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useParams, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -18,9 +18,11 @@ import {
   FormControl,
   InputLabel,
   FormHelperText,
+  Checkbox,
+  FormControlLabel,
+  Link,
 } from "@mui/material";
 import {
-  ArrowBack,
   UploadFile,
   CheckCircle,
   Description,
@@ -35,6 +37,8 @@ import { pdf } from "@react-pdf/renderer";
 import { fetchJobs, submitApplication, ensureJobApplicationColumns } from "../utils/careersService";
 import JobApplyPdfDocument from "../utils/JobApplyPdfDocument";
 import type { JobListing, CustomFieldDefinition } from "../types";
+import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
+import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 interface FormValues extends Record<string, unknown> {
@@ -118,7 +122,7 @@ function SuccessView({
           gap: 1.5,
           px: 3,
           py: 2,
-          borderRadius: "12px",
+          borderRadius: "8px",
           borderColor: "#0078D4",
           backgroundColor: "#F0F7FF",
           mb: 4,
@@ -129,7 +133,7 @@ function SuccessView({
         </Typography>
         <Typography
           variant="h6"
-          sx={{ fontWeight: 700, color: "#0078D4", letterSpacing: "0.05em", fontFamily: "monospace" }}
+          sx={{ fontWeight: 700, color: "#0078D4", letterSpacing: 0, fontFamily: "monospace" }}
         >
           {submissionRef}
         </Typography>
@@ -141,7 +145,7 @@ function SuccessView({
         variant="outlined"
         onClick={onBrowseMore}
         sx={{
-          borderRadius: "12px",
+          borderRadius: "8px",
           textTransform: "none",
           fontWeight: 600,
           borderColor: "#0078D4",
@@ -150,7 +154,7 @@ function SuccessView({
           py: 1.2,
         }}
       >
-        Browse More Jobs
+        Browse More Opportunities
       </Button>
     </Box>
   );
@@ -230,7 +234,7 @@ function FileUploadArea({
             sx={{
               borderStyle: "dashed",
               borderColor: sizeError ? "#DC2626" : "#D1D5DB",
-              borderRadius: "12px",
+              borderRadius: "8px",
               p: 3,
               textAlign: "center",
               cursor: "pointer",
@@ -353,6 +357,8 @@ export default function JobApplyPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [duplicateBlocked, setDuplicateBlocked] = useState(false);
   const [phoneCountryCode, setPhoneCountryCode] = useState("+60");
+  const [pdpaAccepted, setPdpaAccepted] = useState(false);
+  const [pdpaTouched, setPdpaTouched] = useState(false);
 
   // Check if user is admin (group membership)
   useEffect(() => {
@@ -452,6 +458,13 @@ export default function JobApplyPage() {
     setSubmitError(null);
     setDuplicateBlocked(false);
 
+    if (!pdpaAccepted) {
+      setPdpaTouched(true);
+      setSubmitError("Please read and accept the Privacy Notice before submitting your application.");
+      setSubmitting(false);
+      return;
+    }
+
     // Validate resume
     if (!values.resume) {
       setResumeError("A resume or CV is required");
@@ -546,7 +559,7 @@ export default function JobApplyPage() {
       if (values.resume) allFiles.push(values.resume);
       allFiles.push(...values.supportingDocs);
       if (pdfBase64) {
-        allFiles.push({ name: "JobApplication.pdf", content: pdfBase64, contentType: "application/pdf", size: 0 });
+        allFiles.push({ name: "CareerAdvancementApplication.pdf", content: pdfBase64, contentType: "application/pdf", size: 0 });
       }
 
       const result = await submitApplication({
@@ -564,6 +577,10 @@ export default function JobApplyPage() {
         submittedByEmail: accounts[0]?.username || "",
         forceApply,
         submissionRef,
+        pdpaConsent: true,
+        pdpaNoticeVersion: PDPA_NOTICE_VERSION,
+        pdpaConsentedAt: new Date().toISOString(),
+        retentionUntil: getPdpaRetentionUntil(),
       });
       setSubmissionRef(result.submissionRef);
       setSubmitted(true);
@@ -601,43 +618,25 @@ export default function JobApplyPage() {
 
   if (submitted) {
     return (
-      <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+      <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
         <Container maxWidth="sm" sx={{ py: 8 }}>
-          <SuccessView submissionRef={submissionRef} onBrowseMore={() => navigate("/careers", { replace: true })} />
+          <SuccessView submissionRef={submissionRef} onBrowseMore={() => navigate("/career-portal", { replace: true })} />
         </Container>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
-      {/* Header */}
-      <Paper
-        sx={{
-          borderRadius: 0,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-          backgroundColor: "#ffffff",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <Container maxWidth="md">
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 2 }}>
-            <IconButton onClick={() => navigate("/careers")} sx={{ color: "#6B7280" }}>
-              <ArrowBack />
-            </IconButton>
-            <Box>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
-                Back to jobs
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827", fontSize: "1.1rem" }}>
-                Submit Application
-              </Typography>
-            </Box>
-          </Box>
-        </Container>
-      </Paper>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+      <CareerPortalHeader
+        title="Submit Advancement Application"
+        subtitle={job ? job.title : "Complete your internal opportunity application."}
+        activeSection="apply"
+        backPath="/career-portal"
+        backLabel="Back to opportunities"
+        maxWidth="md"
+        showSectionNav={false}
+      />
 
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Grid container spacing={3}>
@@ -646,7 +645,7 @@ export default function JobApplyPage() {
             <Paper
               sx={{
                 p: 2.5,
-                borderRadius: "16px",
+                borderRadius: "8px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
                 position: "sticky",
                 top: 88,
@@ -667,7 +666,7 @@ export default function JobApplyPage() {
                       sx={{
                         width: 36,
                         height: 36,
-                        borderRadius: "10px",
+                        borderRadius: "8px",
                         backgroundColor: "#F0F7FF",
                         display: "flex",
                         alignItems: "center",
@@ -715,7 +714,7 @@ export default function JobApplyPage() {
                 </>
               ) : (
                 <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
-                  Job not found.
+                  Opportunity not found.
                 </Typography>
               )}
             </Paper>
@@ -723,7 +722,7 @@ export default function JobApplyPage() {
 
           {/* Application Form */}
           <Grid size={{ xs: 12, md: 8 }}>
-            <Paper sx={{ p: 3, borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            <Paper sx={{ p: 3, borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               {/* Profile loading indicator */}
               {profile.loading && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
@@ -753,7 +752,7 @@ export default function JobApplyPage() {
                     required
                     variant="outlined"
                     slotProps={{
-                      input: { sx: { borderRadius: "10px" } },
+                      input: { sx: { borderRadius: "8px" } },
                     }}
                   />
 
@@ -776,7 +775,7 @@ export default function JobApplyPage() {
                     required
                     variant="outlined"
                     slotProps={{
-                      input: { sx: { borderRadius: "10px" } },
+                      input: { sx: { borderRadius: "8px" } },
                     }}
                   />
 
@@ -796,7 +795,7 @@ export default function JobApplyPage() {
                               form.controls.phone.setValue(`${e.target.value} ${num}`);
                             }}
                             variant="outlined"
-                            sx={{ borderRadius: "10px" }}
+                            sx={{ borderRadius: "8px" }}
                           >
                             {COUNTRY_CODES.map((cc) => (
                               <MenuItem key={cc.code} value={cc.code}>
@@ -829,7 +828,7 @@ export default function JobApplyPage() {
                           placeholder="e.g. 12-345 6789"
                           variant="outlined"
                           slotProps={{
-                            input: { sx: { borderRadius: "10px" } },
+                            input: { sx: { borderRadius: "8px" } },
                           }}
                         />
                       </Grid>
@@ -845,7 +844,7 @@ export default function JobApplyPage() {
                     variant="outlined"
                     placeholder="e.g. Senior Engineer"
                     slotProps={{
-                      input: { sx: { borderRadius: "10px" } },
+                      input: { sx: { borderRadius: "8px" } },
                     }}
                   />
 
@@ -858,7 +857,7 @@ export default function JobApplyPage() {
                     variant="outlined"
                     placeholder="e.g. Information Technology"
                     slotProps={{
-                      input: { sx: { borderRadius: "10px" } },
+                      input: { sx: { borderRadius: "8px" } },
                     }}
                   />
 
@@ -873,7 +872,7 @@ export default function JobApplyPage() {
                     variant="outlined"
                     placeholder="Explain your interest in this position and why you'd be a great fit..."
                     slotProps={{
-                      input: { sx: { borderRadius: "10px" } },
+                      input: { sx: { borderRadius: "8px" } },
                     }}
                   />
 
@@ -933,7 +932,7 @@ export default function JobApplyPage() {
                                   value={String(customAnswers[field.name] ?? "")}
                                   label={`${field.label}${field.required ? " *" : ""}`}
                                   onChange={(e) => { setCustomAnswer(field.name, e.target.value); setCustomFieldErrors((prev) => { const n = { ...prev }; delete n[field.name]; return n; }); }}
-                                  sx={{ borderRadius: "10px" }}
+                                  sx={{ borderRadius: "8px" }}
                                 >
                                   {(field.choices || []).map((opt) => (
                                     <MenuItem key={opt} value={opt}>{opt}</MenuItem>
@@ -952,7 +951,7 @@ export default function JobApplyPage() {
                                 variant="outlined"
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
-                                slotProps={{ input: { sx: { borderRadius: "10px" } } }}
+                                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
                               />
                             ) : field.type === "number" ? (
                               <TextField
@@ -964,7 +963,7 @@ export default function JobApplyPage() {
                                 variant="outlined"
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
-                                slotProps={{ input: { sx: { borderRadius: "10px" } } }}
+                                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
                               />
                             ) : field.type === "date" ? (
                               <TextField
@@ -977,7 +976,7 @@ export default function JobApplyPage() {
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
                                 slotProps={{
-                                  input: { sx: { borderRadius: "10px" } },
+                                  input: { sx: { borderRadius: "8px" } },
                                   inputLabel: { shrink: true },
                                 }}
                               />
@@ -990,7 +989,7 @@ export default function JobApplyPage() {
                                 variant="outlined"
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
-                                slotProps={{ input: { sx: { borderRadius: "10px" } } }}
+                                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
                               />
                             )}
                           </Box>
@@ -1023,10 +1022,10 @@ export default function JobApplyPage() {
                     <Button
                       variant="outlined"
                       fullWidth
-                      disabled={submitting}
+                      disabled={submitting || !pdpaAccepted}
                       onClick={() => doSubmit(form.value, true)}
                       sx={{
-                        borderRadius: "12px",
+                        borderRadius: "8px",
                         textTransform: "none",
                         fontWeight: 600,
                         fontSize: "0.9rem",
@@ -1040,14 +1039,56 @@ export default function JobApplyPage() {
                     </Button>
                   )}
 
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: "8px",
+                      borderColor: pdpaTouched && !pdpaAccepted ? "#DC2626" : "#D1D5DB",
+                      backgroundColor: "#F9FAFB",
+                    }}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={pdpaAccepted}
+                          onChange={(e) => {
+                            setPdpaAccepted(e.target.checked);
+                            setPdpaTouched(true);
+                          }}
+                          sx={{ color: "#0078D4", "&.Mui-checked": { color: "#0078D4" } }}
+                        />
+                      }
+                      sx={{ alignItems: "flex-start", m: 0 }}
+                      label={
+                        <Box sx={{ pt: 0.5 }}>
+                          <Typography variant="body2" sx={{ color: "#374151", fontWeight: 600, lineHeight: 1.6 }}>
+                            {PDPA_CONSENT_LABEL}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#6B7280", display: "block", mt: 0.5, lineHeight: 1.7 }}>
+                            {PDPA_SUMMARY}{" "}
+                            <Link component={RouterLink} to="/privacy" target="_blank" rel="noopener noreferrer" sx={{ fontWeight: 700 }}>
+                              View Privacy Notice
+                            </Link>
+                          </Typography>
+                          {pdpaTouched && !pdpaAccepted && (
+                            <Typography variant="caption" sx={{ color: "#DC2626", display: "block", mt: 0.75, fontWeight: 600 }}>
+                              Consent is required before submission.
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </Paper>
+
                   {/* Submit */}
                   <Button
                     type="submit"
                     variant="contained"
                     fullWidth
-                    disabled={submitting || !form.valid}
+                    disabled={submitting || !form.valid || !pdpaAccepted}
                     sx={{
-                      borderRadius: "12px",
+                      borderRadius: "8px",
                       textTransform: "none",
                       backgroundColor: "#0078D4",
                       fontWeight: 600,
@@ -1075,7 +1116,7 @@ export default function JobApplyPage() {
                   </Button>
 
                   <Typography variant="caption" sx={{ color: "#9CA3AF", textAlign: "center" }}>
-                    By submitting, you agree to the processing of your personal data for recruitment purposes.
+                    Notice version {PDPA_NOTICE_VERSION}. Your consent record is stored with this application.
                   </Typography>
                 </Box>
               </form>

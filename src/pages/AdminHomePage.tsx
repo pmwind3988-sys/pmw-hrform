@@ -38,16 +38,16 @@ export default function AdminHomePage() {
     onEditForm,
   } = useDashboard();
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
       <Header
         userEmail={userEmail}
         isAdmin={isAdmin}
         onLogout={onSignOut}
         onSwitch={onSwitchAccount}
-          onOpenBuilder={onOpenBuilder}
-        />
+        onOpenBuilder={onOpenBuilder}
+      />
 
-      <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 4 }}>
+      <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3, md: 4 } }}>
         {missingConfigs.length > 0 && (
           <Box sx={{ mb: 4 }}>
             <ConfigWarningBanner missingLists={missingConfigs} />

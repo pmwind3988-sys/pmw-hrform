@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItems, queryListItemById, updateListItemFields } from "./_utils/graphClient.js";
+import { logError } from "./_utils/logger.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -59,11 +60,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     if (!responseItemId) return res.status(400).json({ error: "Missing responseItemId query parameter" });
 
     const responseListName = `${foundFormTitle} Responses`;
-    const items = await queryListItems(graphToken, responseListName, {
-      filter: `fields/id eq ${responseItemId}`,
-      top: 1,
-    });
-    const responseItem = items[0];
+    const responseItem = await queryListItemById(graphToken, responseListName, String(responseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
 
     // Filter fields based on layer visibility
@@ -120,7 +117,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       },
     });
   } catch (err) {
-    console.error("[API evaluate GET]", err);
+    logError("api:evaluate:get", "Failed to load public evaluation data", err);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }
@@ -185,11 +182,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // 2. Fetch the response item using Graph API
     const responseListName = `${formTitle} Responses`;
-    const items = await queryListItems(graphToken, responseListName, {
-      filter: `fields/id eq ${safeResponseItemId}`,
-      top: 1,
-    });
-    const responseItem = items[0];
+    const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
 
     // 3. Build update payload based on action
@@ -239,7 +232,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     return res.status(200).json({ success: true });
   } catch (err) {
-    console.error("[API evaluate]", err);
+    logError("api:evaluate", "Failed to submit public evaluation action", err);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

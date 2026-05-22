@@ -10,7 +10,7 @@ import { Model, Serializer } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, addColumn } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { LayerConfig } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
@@ -23,8 +23,10 @@ import Logo from "../components/Logo";
 import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
 import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
+import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
 // ── Register custom SurveyJS widgets and properties ────────────────────
 registerSignaturePad();
@@ -40,18 +42,18 @@ if (!Serializer.findProperty("text", "autocapitalize")) {
 
 // Theme tokens
 const LIGHT = {
-  purple: "#5B21B6", purpleLight: "#7C3AED", purplePale: "#EDE9FE", purpleMid: "#DDD6FE",
-  purpleDark: "#3B0764", bg: "#F8F7FF", cardBg: "#FFFFFF", offWhite: "#F8F7FF", border: "#E5E3F0",
-  textPrimary: "#1E1B4B", textSecond: "#6B7280", textMuted: "#9CA3AF",
+  purple: "#0078D4", purpleLight: "#106EBE", purplePale: "#E6F2FB", purpleMid: "#B4D5F0",
+  purpleDark: "#005A9E", bg: "#F6F8FB", cardBg: "#FFFFFF", offWhite: "#F9FAFB", border: "#DDE5EE",
+  textPrimary: "#111827", textSecond: "#6B7280", textMuted: "#9CA3AF",
   green: "#059669", greenPale: "#D1FAE5", greenBorder: "#6EE7B7",
   red: "#DC2626", redPale: "#FEE2E2", amber: "#D97706", amberPale: "#FEF3C7",
-  shadow: "0 1px 3px rgba(91,33,182,0.08),0 4px 16px rgba(91,33,182,0.06)",
-  shadowLg: "0 8px 40px rgba(91,33,182,0.16)", shadowFab: "0 4px 20px rgba(91,33,182,0.18)",
+  shadow: "0 1px 2px rgba(17,24,39,0.05),0 4px 12px rgba(17,24,39,0.06)",
+  shadowLg: "0 12px 40px rgba(17,24,39,0.14)", shadowFab: "0 4px 18px rgba(0,120,212,0.18)",
 };
 
 const DARK = {
-  ...LIGHT, bg: "#0F0B1E", cardBg: "#1A1330", offWhite: "#160E28", border: "#2D2456",
-  textPrimary: "#EDE9FE", textSecond: "#A78BFA", textMuted: "#6D5FA6",
+  ...LIGHT, bg: "#101923", cardBg: "#17212B", offWhite: "#111B25", border: "#2F3B47",
+  textPrimary: "#F8FAFC", textSecond: "#CBD5E1", textMuted: "#94A3B8",
   greenPale: "#052e16", greenBorder: "#166534", redPale: "#3b0707", amberPale: "#2d1b00",
   shadow: "0 1px 3px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3)",
   shadowLg: "0 8px 40px rgba(0,0,0,.5)", shadowFab: "0 4px 20px rgba(0,0,0,.4)",
@@ -69,10 +71,13 @@ const globalCss = (t: typeof LIGHT) => `
 .dfp-survey-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}
   .dfp-header{flex-wrap:nowrap}
   .dfp-survey-wrap .sd-container-modern,.dfp-survey-wrap .sd-root-modern{max-width:100%!important}
+  .dfp-banner-logo img{max-height:48px!important}
   @media(max-width:768px){
-    .dfp-banner-logo{width:100px!important}
+    .dfp-banner-logo{width:116px!important}
     .dfp-banner-row{flex-direction:column!important}
-    .dfp-banner-logo{border-right:none!important;border-bottom:inherit;padding:8px!important}
+    .dfp-banner-logo{border-right:none!important;border-bottom:inherit;padding:10px 12px!important;width:100%!important;min-height:64px}
+    .dfp-banner-logo img{max-height:40px!important}
+    .dfp-banner-info{font-size:12px!important;padding:10px 12px!important}
   }
   @media(max-width:640px){
     .dfp-header{padding:0 12px!important;min-height:48px!important}
@@ -86,7 +91,7 @@ const globalCss = (t: typeof LIGHT) => `
   }
   @media(max-width:480px){
     .dfp-title{max-width:100px}
-    .dfp-banner-logo{width:80px!important}
+    .dfp-banner-logo img{max-height:34px!important}
   }
   ::-webkit-scrollbar{width:5px}
   ::-webkit-scrollbar-thumb{background:${t.purpleMid};border-radius:10px}
@@ -128,17 +133,17 @@ const SuccessScreen = ({ formTitle, onReset, t }: { formTitle: string; onReset: 
     <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
     <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary, marginBottom: 10 }}>Submitted Successfully</div>
     <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.8, maxWidth: 420, margin: "0 auto 10px" }}>Your response for <strong>{formTitle}</strong> has been recorded.</p>
-    <button onClick={onReset} style={{ padding: "11px 30px", borderRadius: 10, border: `1px solid ${t.border}`, background: t.cardBg, color: t.textSecond, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans'" }}>Submit another response</button>
+    <button onClick={onReset} style={{ padding: "11px 30px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardBg, color: t.textSecond, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans'" }}>Submit another response</button>
   </div>
 );
 
 const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: typeof LIGHT }) => (
   <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-    <div style={{ background: t.cardBg, borderRadius: 22, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
+    <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
       <div style={{ width: 66, height: 66, borderRadius: 18, margin: "0 auto 22px", background: t.purplePale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>LOCK</div>
       <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: t.textPrimary, marginBottom: 10 }}>Sign in required</div>
       <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7, marginBottom: 32 }}><strong>{formTitle || "This form"}</strong> is restricted.</p>
-      <button onClick={onSignIn} style={{ width: "100%", padding: "14px", borderRadius: 11, border: "none", background: `linear-gradient(135deg,${t.purple},${t.purpleLight})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+      <button onClick={onSignIn} style={{ width: "100%", padding: "14px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${t.purple},${t.purpleLight})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
         <MsIcon /> Sign in with Microsoft 365
       </button>
     </div>
@@ -162,6 +167,8 @@ export default function DynamicFormPage() {
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  const [pdpaAccepted, setPdpaAccepted] = useState(false);
+  const [pdpaConsentError, setPdpaConsentError] = useState("");
   const [resetKey, setResetKey] = useState(0);
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
@@ -221,7 +228,12 @@ export default function DynamicFormPage() {
           });
         } else if (!isAuthenticated) {
           // Unauthenticated path — try public API fallback
-          const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+          const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`, {
+            headers: {
+              "X-Requested-With": "XMLHttpRequest",
+              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+            },
+          });
           const contentType = res.headers.get("content-type") || "";
           const responseText = await res.text();
 
@@ -462,10 +474,16 @@ export default function DynamicFormPage() {
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
 
   const onCompleting = useCallback((sender: { data: Record<string, unknown> }, options: { allowComplete: boolean }) => {
+    if (!pdpaAccepted) {
+      options.allowComplete = false;
+      setPdpaConsentError("Please read and accept the Privacy Notice before submitting this form.");
+      return;
+    }
+    setPdpaConsentError("");
     lastDataRef.current = { ...sender.data };
     options.allowComplete = false; // prevent survey auto-complete — we handle submission + success/error UI
     setSubmitStatus("loading");
-  }, []);
+  }, [pdpaAccepted]);
   const doSubmitForm = useCallback(async () => {
     const raw = lastDataRef.current ?? {};
     const cfg = formData?.formConfig;
@@ -604,6 +622,10 @@ export default function DynamicFormPage() {
       body.SubmittedAt = new Date().toISOString();
       body.FormVersion = cfg.CurrentVersion;
       body.FormID = cfg.FormID;
+      body.PDPAConsent = "Accepted";
+      body.PDPANoticeVersion = PDPA_NOTICE_VERSION;
+      body.PDPAConsentAt = new Date().toISOString();
+      body.RetentionUntil = getPdpaRetentionUntil(new Date(body.PDPAConsentAt as string));
 
       // Step 4: Write layer status columns
       if (layerConfigParsed?.layers?.length) {
@@ -627,6 +649,12 @@ export default function DynamicFormPage() {
       if (token) {
         submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
         body.SubmittedBy = submittedByEmail;
+        await Promise.all([
+          addColumn(token, cfg.Title as string, "PDPAConsent", 2),
+          addColumn(token, cfg.Title as string, "PDPANoticeVersion", 2),
+          addColumn(token, cfg.Title as string, "PDPAConsentAt", 4),
+          addColumn(token, cfg.Title as string, "RetentionUntil", 4),
+        ]);
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
         let result: { Id?: number } | undefined;
         try {
@@ -743,7 +771,7 @@ export default function DynamicFormPage() {
                 token,
                 `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`
               ) as Record<string, unknown>;
-              const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
+              const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
               const pdfData: Record<string, unknown> = {};
               for (const [k, v] of Object.entries(respItem)) {
                 if (SYSTEM_FIELDS.has(k) || v === null || v === undefined) continue;
@@ -820,8 +848,20 @@ export default function DynamicFormPage() {
 
         const res = await fetch("/api/submit-form", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-          body: JSON.stringify({ listTitle: cfg.Title, body, matrixData: Object.keys(matrixData).length > 0 ? matrixData : undefined }),
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+          },
+          body: JSON.stringify({
+            listTitle: cfg.Title,
+            body,
+            matrixData: Object.keys(matrixData).length > 0 ? matrixData : undefined,
+            pdpaConsent: true,
+            pdpaNoticeVersion: PDPA_NOTICE_VERSION,
+            pdpaConsentedAt: body.PDPAConsentAt,
+            retentionUntil: body.RetentionUntil,
+          }),
         });
         const resData = await res.json().catch(() => ({})) as { id?: string; error?: string };
         if (!res.ok) { throw new Error(resData.error || `Submit failed: ${res.status}`); }
@@ -869,7 +909,13 @@ export default function DynamicFormPage() {
     clearStoredAuthDecision();
     instance.logoutRedirect({ postLogoutRedirectUri: window.location.href });
   }, [instance]);
-  const handleReset = useCallback(() => { setSubmitStatus(null); lastDataRef.current = null; setResetKey(k => k + 1); }, []);
+  const handleReset = useCallback(() => {
+    setSubmitStatus(null);
+    setPdpaAccepted(false);
+    setPdpaConsentError("");
+    lastDataRef.current = null;
+    setResetKey(k => k + 1);
+  }, []);
 
   const isPublicForm = formData?.formConfig?.IsPublic !== false;
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
@@ -901,7 +947,7 @@ export default function DynamicFormPage() {
   if (error) return (
     <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <style>{globalCss(t)}</style>
-      <div style={{ background: t.cardBg, borderRadius: 20, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
+      <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
         <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
         <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form not found</div>
         <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>{error}</p>
@@ -915,24 +961,24 @@ export default function DynamicFormPage() {
     <div style={{ minHeight: "100vh", background: t.bg }}>
       <style>{globalCss(t)}</style>
       <ScrollProgress t={t} />
-      <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 54, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
+      <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", position: "sticky", top: 0, zIndex: 50, gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>
         <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <Logo size={28} />
-          <span className="dfp-title" style={{ fontFamily: "'DM Serif Display',serif", fontSize: 15, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
-          {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
-          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>Private</span>}
+          <Logo size={{ xs: 26, sm: 28, md: 32 }} />
+          <span className="dfp-title" style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 15, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
+          {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
+          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>Private</span>}
         </div>
         <div className="dfp-header-right" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 28, width: 28, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 6, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
+          <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
           {isAuthenticated ? (
             <>
               <div className="dfp-user-badge" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: t.textSecond }}>
                 <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
                 <span className="dfp-user-name">{userEmail?.split("@")[0]}</span>
               </div>
-              <button onClick={handleSignOut} style={{ height: 28, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 6, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
+              <button onClick={handleSignOut} style={{ height: 30, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
             </>
-          ) : (<button onClick={handleSignIn} style={{ height: 28, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
+          ) : (<button onClick={handleSignIn} style={{ height: 30, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
           <span className="dfp-version" style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap" }}>v{formVersion}</span>
         </div>
       </header>
@@ -940,12 +986,12 @@ export default function DynamicFormPage() {
       {showBanner && (
         <div className="dfp-banner" style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
           <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "14px 20px" }}>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{isoStandardsText}</div>
-            <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 17, color: "#fff" }}>{formTitle}</div>
+            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandardsText}</div>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 17, color: "#fff" }}>{formTitle}</div>
           </div>
           <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${t.border}` }}>
-            <div className="dfp-banner-logo" style={{ width: 140, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "9px 14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <img src={logoUrl || "/logo-48.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 42, objectFit: "contain" }} />
+            <div className="dfp-banner-logo" style={{ width: 150, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 48, objectFit: "contain" }} />
             </div>
             <div className="dfp-banner-info" style={{ flex: 1, padding: "12px 16px", fontWeight: 700, fontSize: 13, color: t.textPrimary }}>
               {companyLines.length > 0
@@ -962,15 +1008,36 @@ export default function DynamicFormPage() {
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (
-              <div style={{ background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 12, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 8, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg,${t.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>{(userEmail?.[0] || "?").toUpperCase()}</div>
                 <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: t.green }}>Submitting as yourself</div><div style={{ fontSize: 11, color: t.textSecond }}>{userEmail}</div></div>
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
               </div>
             )}
+            <div style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginBottom: 18, boxShadow: t.shadow }}>
+              <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={pdpaAccepted}
+                  onChange={(e) => {
+                    setPdpaAccepted(e.target.checked);
+                    if (e.target.checked) setPdpaConsentError("");
+                  }}
+                  style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 12, lineHeight: 1.7, color: t.textSecond }}>
+                  <strong style={{ color: t.textPrimary }}>{PDPA_CONSENT_LABEL}</strong><br />
+                  {PDPA_SUMMARY}{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: t.purple, fontWeight: 700 }}>
+                    View Privacy Notice
+                  </a>
+                </span>
+              </label>
+              {pdpaConsentError && <div style={{ color: t.red, fontSize: 12, fontWeight: 700, marginTop: 8 }}>{pdpaConsentError}</div>}
+            </div>
             {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
-            {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 10, color: t.purple, fontSize: 13 }}><Spinner size={14} t={t} /> Submitting...</div>}
-            {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 10, color: t.red, fontSize: 13, display: "flex", flexDirection: "column", gap: 8 }}>
+            {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 8, color: t.purple, fontSize: 13 }}><Spinner size={14} t={t} /> Submitting...</div>}
+            {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, display: "flex", flexDirection: "column", gap: 8 }}>
               <div>X Submission failed. Your answers have been saved — review and try again.</div>
               <button onClick={() => survey?.doComplete()} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry Submit</button>
             </div>}
@@ -981,20 +1048,20 @@ export default function DynamicFormPage() {
 
       {showQr && (
         <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, animation: "fadeUp .2s ease", backdropFilter: "blur(2px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, padding: "32px 28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 8, padding: "32px 28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
             <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: "#1E1B4B", marginBottom: 4 }}>Share this form</div>
             <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 20, lineHeight: 1.5 }}>Scan the QR code or copy the link below</div>
             {qrDataUrl ? (
-              <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 12 }} />
+              <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 8 }} />
             ) : (
               <div style={{ width: 200, height: 200, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF", fontSize: 12 }}>Generating...</div>
             )}
-            <div style={{ fontSize: 11, color: "#6B7280", wordBreak: "break-all", padding: "10px 12px", background: "#F3F4F6", borderRadius: 10, marginBottom: 18, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: "#6B7280", wordBreak: "break-all", padding: "10px 12px", background: "#F3F4F6", borderRadius: 8, marginBottom: 18, lineHeight: 1.5 }}>
               {shareUrl}
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? "#059669" : "#E5E3F0"}`, borderRadius: 10, background: copied ? "#D1FAE5" : "none", color: copied ? "#059669" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
-              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 10, background: "linear-gradient(135deg,#5B21B6,#7C3AED)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
+              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? "#059669" : "#E5E3F0"}`, borderRadius: 8, background: copied ? "#D1FAE5" : "none", color: copied ? "#059669" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
+              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: "linear-gradient(135deg,#005A9E,#0078D4)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
             </div>
           </div>
         </div>

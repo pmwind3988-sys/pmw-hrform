@@ -106,7 +106,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
             animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
           }}
         >
-          <Logo size={isMobile ? 56 : 72} />
+          <Logo size={{ xs: 56, sm: 72 }} />
 
           {/* Animated spinner with glow */}
           <Box sx={{ position: "relative" }}>
@@ -147,7 +147,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
               sx={{
                 fontWeight: 700,
                 color: "#111827",
-                letterSpacing: "-0.03em",
+                letterSpacing: 0,
                 fontSize: "2.25rem",
               }}
             >
@@ -161,7 +161,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
               sx={{
                 fontWeight: 600,
                 color: "#111827",
-                letterSpacing: "-0.01em",
+                letterSpacing: 0,
               }}
             >
               {hasProgress && progress < 100 ? "Loading..." : "Please wait..."}
@@ -209,7 +209,7 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
                 color: "#9CA3AF",
                 fontSize: "0.75rem",
                 lineHeight: 1.5,
-                letterSpacing: "0.01em",
+                letterSpacing: 0,
                 fontWeight: 500,
               }}
             >

@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken } from "./_utils/graphClient.js";
+import { logError } from "./_utils/logger.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -25,15 +26,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const { to, subject, body } = req.body as Record<string, unknown>;
 
-  if (typeof to !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+  const recipients = typeof to === "string"
+    ? [to]
+    : Array.isArray(to)
+      ? to.filter((recipient): recipient is string => typeof recipient === "string")
+      : [];
+  const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+  if (recipients.length === 0 || recipients.some((recipient) => !isEmail(recipient))) {
     return res.status(400).json({ error: "Invalid recipient email address" });
   }
 
-  if (!to || !subject || !body) {
+  if (typeof subject !== "string" || !subject.trim() || typeof body !== "string" || !body.trim()) {
     return res.status(400).json({ error: "Missing required fields: to, subject, body" });
   }
 
-  const recipients = Array.isArray(to) ? (to as string[]) : [to as string];
   // Sender: use EMAIL_FROM env var, or fall back to a placeholder that will fail gracefully
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || process.env.VITE_EMAIL_FROM_ADDRESS || "";
   if (!fromAddress) {
@@ -77,6 +84,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     return res.status(200).json({ ok: true });
   } catch (e) {
+    logError("api:send-email", "Failed to send email", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

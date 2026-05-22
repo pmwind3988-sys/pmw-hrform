@@ -65,19 +65,18 @@ export default function StatsRow({ submissions }: StatsRowProps) {
           <Box
             sx={{
               backgroundColor: "#ffffff",
-              borderRadius: "20px",
-              p: { xs: 2, sm: 3 },
+              borderRadius: "8px",
+              p: { xs: 1.75, sm: 2.5 },
               display: "flex",
               alignItems: "center",
-              gap: { xs: 1.5, sm: 2.5 },
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              border: "1px solid rgba(0, 0, 0, 0.04)",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04)",
+              gap: { xs: 1.25, sm: 2 },
+              transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+              border: "1px solid rgba(17, 24, 39, 0.08)",
+              boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
               cursor: "default",
               "&:hover": {
-                transform: "translateY(-3px)",
-                boxShadow: "0 12px 24px rgba(0, 0, 0, 0.08)",
-                borderColor: "rgba(0, 0, 0, 0.06)",
+                boxShadow: "0 8px 20px rgba(17, 24, 39, 0.08)",
+                borderColor: "rgba(17, 24, 39, 0.12)",
               },
             }}
           >
@@ -85,15 +84,13 @@ export default function StatsRow({ submissions }: StatsRowProps) {
               sx={{
                 width: { xs: 44, sm: 56 },
                 height: { xs: 44, sm: 56 },
-                borderRadius: "16px",
-                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                borderRadius: "8px",
+                backgroundColor: stat.bg,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: stat.color,
-                boxShadow: "inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 2px 4px rgba(0, 0, 0, 0.04)",
-                border: "1px solid rgba(255, 255, 255, 0.5)",
-                backdropFilter: "blur(8px)",
+                border: `1px solid ${stat.accent}40`,
               }}
             >
               {stat.icon}
@@ -103,7 +100,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 variant="caption"
                 sx={{
                   textTransform: "uppercase",
-                  letterSpacing: "0.08em",
+                  letterSpacing: 0,
                   color: "#6B7280",
                   fontWeight: 600,
                   fontSize: "0.7rem",
@@ -118,9 +115,9 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 sx={{
                   fontWeight: 700,
                   color: "#111827",
-                  letterSpacing: "-0.02em",
+                  letterSpacing: 0,
                   lineHeight: 1.15,
-                  fontSize: { xs: "1.5rem", sm: "2.5rem" },
+                  fontSize: "2rem",
                 }}
               >
                 {stat.value}

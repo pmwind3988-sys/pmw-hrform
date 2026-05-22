@@ -19,7 +19,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         px: 3,
         py: 1.5,
         backgroundColor: "rgba(98,100,167,0.04)",
-        borderRadius: "12px 12px 0 0",
+        borderRadius: "8px 8px 0 0",
         alignItems: "center",
       }}
     >
@@ -27,7 +27,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         variant="caption"
         sx={{
           textTransform: "uppercase",
-          letterSpacing: "0.05em",
+          letterSpacing: 0,
           color: "rgba(0,0,0,0.45)",
           fontWeight: 600,
           fontSize: "0.7rem",
@@ -40,7 +40,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           variant="caption"
           sx={{
             textTransform: "uppercase",
-            letterSpacing: "0.05em",
+            letterSpacing: 0,
             color: "rgba(0,0,0,0.45)",
             fontWeight: 600,
             fontSize: "0.7rem",
@@ -53,7 +53,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         variant="caption"
         sx={{
           textTransform: "uppercase",
-          letterSpacing: "0.05em",
+          letterSpacing: 0,
           color: "rgba(0,0,0,0.45)",
           fontWeight: 600,
           fontSize: "0.7rem",
@@ -65,7 +65,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         variant="caption"
         sx={{
           textTransform: "uppercase",
-          letterSpacing: "0.05em",
+          letterSpacing: 0,
           color: "rgba(0,0,0,0.45)",
           fontWeight: 600,
           fontSize: "0.7rem",
@@ -77,7 +77,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         variant="caption"
         sx={{
           textTransform: "uppercase",
-          letterSpacing: "0.05em",
+          letterSpacing: 0,
           color: "rgba(0,0,0,0.45)",
           fontWeight: 600,
           fontSize: "0.7rem",

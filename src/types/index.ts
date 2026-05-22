@@ -918,6 +918,10 @@ export interface JobApplyRequest {
   forceApply?: boolean;
   /** Client-generated submission ref; API will use this if provided instead of generating its own. */
   submissionRef?: string;
+  pdpaConsent: boolean;
+  pdpaNoticeVersion: string;
+  pdpaConsentedAt: string;
+  retentionUntil: string;
 }
 
 export interface JobAdminApplication {

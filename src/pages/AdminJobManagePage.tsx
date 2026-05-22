@@ -37,7 +37,6 @@ import {
 } from "@mui/material";
 import {
   Add,
-  ArrowBack,
   Edit,
   Delete,
   DeleteForever,
@@ -51,8 +50,8 @@ import {
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
-import { useNavigate } from "react-router-dom";
 import { fetchAdminJobs, createJobListing, updateJobListing, deleteJobListing, fetchColumnChoices } from "../utils/careersService";
+import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
 const EMPLOYMENT_TYPES = ["Full-Time", "Part-Time", "Contract", "Internship"];
@@ -164,7 +163,7 @@ function MiniFormBuilder({
       </Stack>
 
       {/* Add/Edit form */}
-      <Dialog open={showForm} onClose={resetForm} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
+      <Dialog open={showForm} onClose={resetForm} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
           <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
             {editIndex !== null ? "Edit Question" : "Add Question"}
@@ -275,7 +274,7 @@ function RichTextEditor({
     <Box
       sx={{
         border: "1px solid #D1D5DB",
-        borderRadius: "10px",
+        borderRadius: "8px",
         overflow: "hidden",
         "&:focus-within": {
           borderColor: "#0078D4",
@@ -357,7 +356,7 @@ function RichTextEditor({
           lineHeight: 1.7,
           color: "#374151",
           "&:empty:before": {
-            content: '"Describe the job role, responsibilities, and requirements..."',
+            content: '"Describe the opportunity, responsibilities, and requirements..."',
             color: "#9CA3AF",
             pointerEvents: "none",
           },
@@ -436,17 +435,17 @@ function JobFormDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px", m: { xs: 1, sm: 2 } } } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px", m: { xs: 1, sm: 2 } } } }}>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
         <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
-          {isEdit ? "Edit Job Listing" : "Create New Job"}
+          {isEdit ? "Edit Opportunity" : "Create Opportunity"}
         </Typography>
         <IconButton onClick={onClose} size="small"><Close /></IconButton>
       </DialogTitle>
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 0.5 }}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <TextField label="Job Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth required size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
+            <TextField label="Role Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth required size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl fullWidth size="small">
@@ -464,7 +463,7 @@ function JobFormDialog({
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
-              Job Description
+              Opportunity Description
             </Typography>
             <RichTextEditor value={jobDescription} onChange={setJobDescription} minHeight={180} />
           </Grid>
@@ -501,7 +500,7 @@ function JobFormDialog({
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
         <Button onClick={onClose} sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}>Cancel</Button>
         <Button variant="contained" onClick={handleSave} disabled={!title.trim() || saving} sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}>
-          {saving ? "Saving..." : isEdit ? "Update Job" : "Create Job"}
+          {saving ? "Saving..." : isEdit ? "Update Opportunity" : "Create Opportunity"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -509,7 +508,6 @@ function JobFormDialog({
 }
 
 export default function AdminJobManagePage() {
-  const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -578,7 +576,7 @@ export default function AdminJobManagePage() {
       const data = await fetchAdminJobs();
       setJobs(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load jobs");
+      setError(err instanceof Error ? err.message : "Failed to load opportunities");
     } finally {
       setLoading(false);
     }
@@ -636,7 +634,7 @@ export default function AdminJobManagePage() {
         );
         if (result.success) {
           setSnackbar({
-            message: result.warning || "Job updated",
+            message: result.warning || "Opportunity updated",
             severity: result.warning ? "warning" : "success",
           });
         }
@@ -644,7 +642,7 @@ export default function AdminJobManagePage() {
         const result = await createJobListing({ ...data, customFields });
         if (result.success) {
           setSnackbar({
-            message: (result as { warning?: string }).warning || "Job created",
+            message: (result as { warning?: string }).warning || "Opportunity created",
             severity: (result as { warning?: string }).warning ? "warning" : "success",
           });
         }
@@ -664,12 +662,12 @@ export default function AdminJobManagePage() {
     try {
       const result = await updateJobListing(job.id, { status: "Closed" });
       if (result.success) {
-        setSnackbar({ message: "Job closed", severity: "success" });
+        setSnackbar({ message: "Opportunity closed", severity: "success" });
         void load();
       }
     } catch (err) {
       setSnackbar({
-        message: err instanceof Error ? err.message : "Failed to close job",
+        message: err instanceof Error ? err.message : "Failed to close opportunity",
         severity: "error",
       });
     } finally {
@@ -682,13 +680,13 @@ export default function AdminJobManagePage() {
     try {
       const result = await deleteJobListing(job.id);
       if (result.success) {
-        setSnackbar({ message: "Job permanently deleted", severity: "success" });
+        setSnackbar({ message: "Opportunity permanently deleted", severity: "success" });
         setDeleteConfirmJob(null);
         void load();
       }
     } catch (err) {
       setSnackbar({
-        message: err instanceof Error ? err.message : "Failed to delete job",
+        message: err instanceof Error ? err.message : "Failed to delete opportunity",
         severity: "error",
       });
     } finally {
@@ -697,46 +695,48 @@ export default function AdminJobManagePage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
-      {/* Header */}
-      <Paper sx={{ borderRadius: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", backgroundColor: "#ffffff", position: "sticky", top: 0, zIndex: 10 }}>
-        <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: { xs: 1.5, sm: 2.5 } }}>
-          <Box sx={{ display: "flex", alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", gap: 1, flexDirection: { xs: "column", sm: "row" } }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-              <IconButton onClick={() => navigate("/admin/dashboard")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
-                <ArrowBack />
-              </IconButton>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.05rem", sm: "1.3rem" } }}>
-                  Manage Job Listings
-                </Typography>
-                <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
-                  Create and manage internal job postings
-                </Typography>
-              </Box>
-            </Box>
-            <Box sx={{ display: "flex", gap: 1, flexShrink: 0, alignSelf: { xs: "stretch", sm: "auto" } }}>
-              <Button variant="outlined" startIcon={<Refresh />} onClick={load} disabled={loading} sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, fontSize: { xs: "0.75rem", sm: "0.85rem" }, whiteSpace: "nowrap", flex: { xs: 1, sm: "none" }, borderColor: "#D1D5DB", color: "#6B7280" }}>
-                Refresh
-              </Button>
-              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, fontSize: { xs: "0.75rem", sm: "0.85rem" }, whiteSpace: "nowrap", flex: { xs: 1, sm: "none" }, backgroundColor: "#0078D4" }}>
-                Create New Job
-              </Button>
-            </Box>
-          </Box>
-        </Box>
-      </Paper>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+      <CareerPortalHeader
+        title="Manage Opportunities"
+        subtitle="Create and maintain internal advancement openings."
+        activeSection="manage"
+        isAdmin
+        backPath="/admin/dashboard"
+        backLabel="Back to forms dashboard"
+        maxWidth="xl"
+        actions={(
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<Refresh />}
+              onClick={load}
+              disabled={loading}
+              sx={{ whiteSpace: "nowrap", borderColor: "#D1D5DB", color: "#6B7280" }}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleCreate}
+              sx={{ whiteSpace: "nowrap", backgroundColor: "#0078D4" }}
+            >
+              Create Opening
+            </Button>
+          </>
+        )}
+      />
 
-      <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 3 }}>
+      <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
         {/* Stats */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
-            { label: "Total Jobs", value: jobs.length, color: "#0078D4", icon: <Work /> },
+            { label: "Total Openings", value: jobs.length, color: "#0078D4", icon: <Work /> },
             { label: "Active", value: jobs.filter((j) => j.status === "New").length, color: "#34A853", icon: <Work /> },
             { label: "Closed", value: jobs.filter((j) => j.status !== "New").length, color: "#9CA3AF", icon: <Work /> },
           ].map((stat) => (
             <Grid size={{ xs: 4 }} key={stat.label}>
-              <Card sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <Card sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                 <CardContent sx={{ p: { xs: 1.5, sm: 2.5 }, textAlign: "center" }}>
                   <Typography variant="h4" sx={{ fontWeight: 700, color: stat.color, fontSize: { xs: "1.5rem", sm: "2.125rem" } }}>{stat.value}</Typography>
                   <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 500 }}>{stat.label}</Typography>
@@ -748,11 +748,11 @@ export default function AdminJobManagePage() {
 
         {/* Loading */}
         {loading && (
-          <TableContainer component={Paper} sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Title", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
+                  {["Role", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -775,25 +775,25 @@ export default function AdminJobManagePage() {
         )}
 
         {/* Error */}
-        {!loading && error && <Alert severity="error" sx={{ borderRadius: "12px", mb: 3, fontWeight: 500, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }} action={<Button size="small" onClick={load} sx={{ textTransform: "none" }}>Retry</Button>}>{error}</Alert>}
+        {!loading && error && <Alert severity="error" sx={{ borderRadius: "8px", mb: 3, fontWeight: 500, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }} action={<Button size="small" onClick={load} sx={{ textTransform: "none" }}>Retry</Button>}>{error}</Alert>}
 
         {/* Empty */}
         {!loading && !error && jobs.length === 0 && (
           <Box sx={{ textAlign: "center", py: 8 }}>
             <Work sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
-            <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600 }}>No Job Listings</Typography>
-            <Typography variant="body2" sx={{ color: "#9CA3AF", mb: 2 }}>Create your first job posting.</Typography>
-            <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "10px", textTransform: "none", backgroundColor: "#0078D4" }}>Create New Job</Button>
+            <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600 }}>No Opportunities</Typography>
+            <Typography variant="body2" sx={{ color: "#9CA3AF", mb: 2 }}>Create the first internal advancement opening.</Typography>
+            <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}>Create Opening</Button>
           </Box>
         )}
 
         {/* Table */}
         {!loading && !error && jobs.length > 0 && (
-          <TableContainer component={Paper} sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflowX: "auto" }}>
+          <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflowX: "auto" }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Title", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
+                  {["Role", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -861,16 +861,16 @@ export default function AdminJobManagePage() {
       />
 
       {/* Close Confirmation Dialog */}
-      <Dialog open={!!closeConfirmJob} onClose={() => setCloseConfirmJob(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
+      <Dialog open={!!closeConfirmJob} onClose={() => setCloseConfirmJob(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
           <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
-            Close job listing?
+            Close opportunity?
           </Typography>
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: "#6B7280" }}>
             Are you sure you want to close <strong>{closeConfirmJob?.title}</strong>?
-            This will stop new applications and mark it as closed.
+            This will stop new applications and mark the opening as closed.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
@@ -889,14 +889,14 @@ export default function AdminJobManagePage() {
             }}
             sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#F59E0B", "&:hover": { backgroundColor: "#D97706" } }}
           >
-            Close Job
+            Close Opening
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteConfirmJob} onClose={() => !deletingJobId && setDeleteConfirmJob(null)}>
-        <DialogTitle>Delete job listing?</DialogTitle>
+        <DialogTitle>Delete opportunity?</DialogTitle>
         <DialogContent>
           <Typography>
             Are you sure you want to permanently delete <strong>{deleteConfirmJob?.title}</strong>?
@@ -929,7 +929,7 @@ export default function AdminJobManagePage() {
             severity={snackbar.severity}
             onClose={() => setSnackbar(null)}
             sx={{
-              borderRadius: "10px",
+              borderRadius: "8px",
               fontWeight: 600,
               fontSize: "0.9rem",
               boxShadow: "0 6px 20px rgba(0,0,0,0.15)",

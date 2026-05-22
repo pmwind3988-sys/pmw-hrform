@@ -30,8 +30,6 @@ import {
   IconButton,
 } from "@mui/material";
 import {
-  Work,
-  ArrowBack,
   LocationOn,
   CalendarToday,
   People,
@@ -42,6 +40,7 @@ import {
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
 import { fetchJobs, fetchMyApplications } from "../utils/careersService";
+import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { JobListing, JobAdminApplication } from "../types";
 
 function formatDate(dateStr: string | null): string {
@@ -68,14 +67,13 @@ function JobCard({ job, onSelect, isApplied }: { job: JobListing; onSelect: (job
   return (
     <Card
       sx={{
-        borderRadius: "16px",
+        borderRadius: "8px",
         boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-        transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "box-shadow 0.2s ease, border-color 0.2s ease",
         cursor: "pointer",
         opacity: isApplied ? 0.75 : 1,
         "&:hover": {
           boxShadow: "0 8px 25px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
-          transform: isApplied ? "none" : "translateY(-2px)",
         },
       }}
       onClick={() => onSelect(job)}
@@ -184,7 +182,7 @@ function JobDetailDialog({
       fullWidth
       slotProps={{
         paper: {
-          sx: { borderRadius: "16px", maxHeight: "90vh" },
+          sx: { borderRadius: "8px", maxHeight: "90vh" },
         },
       }}
     >
@@ -266,7 +264,7 @@ function JobDetailDialog({
       <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
         <Button
           onClick={onClose}
-          sx={{ borderRadius: "10px", textTransform: "none", color: "#6B7280" }}
+          sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}
         >
           Close
         </Button>
@@ -275,7 +273,7 @@ function JobDetailDialog({
             variant="outlined"
             onClick={() => onTestSubmit(job.id)}
             sx={{
-              borderRadius: "10px",
+              borderRadius: "8px",
               textTransform: "none",
               fontWeight: 600,
               borderColor: "#E67635",
@@ -291,7 +289,7 @@ function JobDetailDialog({
             variant="contained"
             disabled
             sx={{
-              borderRadius: "10px",
+              borderRadius: "8px",
               textTransform: "none",
               fontWeight: 600,
               px: 4,
@@ -303,16 +301,16 @@ function JobDetailDialog({
         ) : (
           <Button
             variant="contained"
-            onClick={() => navigate(`/careers/${job.id}/apply`)}
+            onClick={() => navigate(`/career-portal/${job.id}/apply`)}
             sx={{
-              borderRadius: "10px",
+              borderRadius: "8px",
               textTransform: "none",
               backgroundColor: "#0078D4",
               fontWeight: 600,
               px: 4,
             }}
           >
-            Apply Now
+            Apply
           </Button>
         )}
       </DialogActions>
@@ -337,7 +335,7 @@ export default function CareersPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [appliedFilter, setAppliedFilter] = useState("all"); // "all" | "applied" | "unapplied"
 
-  // Jobs that the current user has applied to → set of job listing IDs
+  // Opportunities that the current user has applied to -> set of job listing IDs
   const appliedJobIds = useMemo(() => new Set(myApps.map((a) => a.jobListingId).filter(Boolean)), [myApps]);
 
   const isJobApplied = (jobId: string) => appliedJobIds.has(jobId);
@@ -355,7 +353,7 @@ export default function CareersPage() {
           setMyApps(appData);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load jobs");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load opportunities");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -430,69 +428,33 @@ export default function CareersPage() {
   const hasFilters = searchText || deptFilter || typeFilter || appliedFilter !== "all";
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
-      {/* Header */}
-      <Paper
-        sx={{
-          borderRadius: 0,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-          backgroundColor: "#ffffff",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <Container maxWidth="lg">
-          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 }, py: { xs: 1.5, sm: 2.5 } }}>
-            <IconButton onClick={() => navigate(isAdmin ? "/admin/dashboard" : "/user/dashboard")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 } }}>
-              <ArrowBack />
-            </IconButton>
-            <Box
-              sx={{
-                width: { xs: 36, sm: 44 },
-                height: { xs: 36, sm: 44 },
-                borderRadius: "12px",
-                backgroundColor: "#0078D4",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <Work sx={{ fontSize: { xs: 20, sm: 24 }, color: "#ffffff" }} />
-            </Box>
-            <Box sx={{ minWidth: 0, flex: "1 1 auto" }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1rem", sm: "1.3rem" }, lineHeight: 1.2 }}>
-                Career Opportunities
-              </Typography>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
-                Explore open positions and join our team
-              </Typography>
-            </Box>
-            <Box sx={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }} />
-            {myApps.length > 0 && (
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => setAppliedFilter(appliedFilter === "applied" ? "all" : "applied")}
-                sx={{
-                  borderRadius: "10px",
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: { xs: "0.7rem", sm: "0.8rem" },
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                  borderColor: "#D1D5DB",
-                  color: appliedFilter === "applied" ? "#0078D4" : "#6B7280",
-                  backgroundColor: appliedFilter === "applied" ? "#F0F7FF" : "transparent",
-                }}
-              >
-                My Applications ({myApps.length})
-              </Button>
-            )}
-          </Box>
-        </Container>
-      </Paper>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+      <CareerPortalHeader
+        title="Internal Career Advancement Portal"
+        subtitle="Explore internal openings and track your submitted applications."
+        activeSection="opportunities"
+        isAdmin={isAdmin}
+        backPath={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
+        backLabel="Back to forms dashboard"
+        actions={myApps.length > 0 ? (
+          <Button
+            variant={appliedFilter === "applied" ? "contained" : "outlined"}
+            size="small"
+            onClick={() => setAppliedFilter(appliedFilter === "applied" ? "all" : "applied")}
+            sx={{
+              whiteSpace: "nowrap",
+              backgroundColor: appliedFilter === "applied" ? "#0078D4" : "#ffffff",
+              color: appliedFilter === "applied" ? "#ffffff" : "#6B7280",
+              borderColor: appliedFilter === "applied" ? "#0078D4" : "#D1D5DB",
+              "&:hover": {
+                backgroundColor: appliedFilter === "applied" ? "#106EBE" : "#F8FAFC",
+              },
+            }}
+          >
+            My Applications ({myApps.length})
+          </Button>
+        ) : undefined}
+      />
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
         {/* Filters (hidden when viewing My Applications) */}
@@ -501,7 +463,7 @@ export default function CareersPage() {
             sx={{
               p: 2,
               mb: 3,
-              borderRadius: "16px",
+              borderRadius: "8px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               display: "flex",
               flexWrap: "wrap",
@@ -510,7 +472,7 @@ export default function CareersPage() {
             }}
           >
             <TextField
-              placeholder="Search jobs..."
+              placeholder="Search opportunities..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               size="small"
@@ -518,7 +480,7 @@ export default function CareersPage() {
                 flex: { xs: "1 1 100%", sm: "1 1 260px" },
                 minWidth: { xs: "unset", sm: 200 },
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
+                  borderRadius: "8px",
                   backgroundColor: "#F8F9FC",
                 },
               }}
@@ -538,7 +500,7 @@ export default function CareersPage() {
                 value={deptFilter}
                 label="Department"
                 onChange={(e) => setDeptFilter(e.target.value)}
-                sx={{ borderRadius: "10px", backgroundColor: "#F8F9FC" }}
+                sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
               >
                 <MenuItem value="">All departments</MenuItem>
                 {departments.map((d) => (
@@ -552,7 +514,7 @@ export default function CareersPage() {
                 value={typeFilter}
                 label="Type"
                 onChange={(e) => setTypeFilter(e.target.value)}
-                sx={{ borderRadius: "10px", backgroundColor: "#F8F9FC" }}
+                sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
               >
                 <MenuItem value="">All types</MenuItem>
                 {employmentTypes.map((t) => (
@@ -566,9 +528,9 @@ export default function CareersPage() {
                 value={appliedFilter}
                 label="Applied"
                 onChange={(e) => setAppliedFilter(e.target.value)}
-                sx={{ borderRadius: "10px", backgroundColor: "#F8F9FC" }}
+                sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
               >
-                <MenuItem value="all">All jobs</MenuItem>
+                <MenuItem value="all">All opportunities</MenuItem>
                 <MenuItem value="applied">Applied</MenuItem>
                 <MenuItem value="unapplied">Unapplied</MenuItem>
               </Select>
@@ -579,7 +541,7 @@ export default function CareersPage() {
                 value={sortBy}
                 label="Sort"
                 onChange={(e) => setSortBy(e.target.value)}
-                sx={{ borderRadius: "10px", backgroundColor: "#F8F9FC" }}
+                sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
               >
                 <MenuItem value="newest">Newest</MenuItem>
                 <MenuItem value="name">Name</MenuItem>
@@ -587,7 +549,7 @@ export default function CareersPage() {
             </FormControl>
             {hasFilters && (
               <Chip
-                label={`${filteredJobs.length} of ${jobs.length} positions`}
+                label={`${filteredJobs.length} of ${jobs.length} opportunities`}
                 size="small"
                 sx={{
                   backgroundColor: "#F0F7FF",
@@ -606,7 +568,7 @@ export default function CareersPage() {
           <Grid container spacing={2.5}>
             {[1, 2, 3].map((i) => (
               <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={i}>
-                <Paper sx={{ p: 3, borderRadius: "16px" }}>
+                <Paper sx={{ p: 3, borderRadius: "8px" }}>
                   <Skeleton variant="text" width="75%" height={28} sx={{ mb: 1 }} />
                   <Skeleton variant="rounded" width={100} height={24} sx={{ borderRadius: "8px", mb: 2 }} />
                   <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
@@ -627,7 +589,7 @@ export default function CareersPage() {
         {!loading && error && (
           <Alert
             severity="error"
-            sx={{ borderRadius: "12px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
+            sx={{ borderRadius: "8px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
             action={
               <Button size="small" onClick={() => window.location.reload()} sx={{ textTransform: "none" }}>
                 Retry
@@ -643,10 +605,10 @@ export default function CareersPage() {
           <Box sx={{ textAlign: "center", py: 8 }}>
             <AccessTime sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
             <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600, mb: 0.5 }}>
-              No Open Positions
+              No Internal Opportunities
             </Typography>
             <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
-              There are no job openings at the moment. Please check back later.
+              There are no internal advancement openings at the moment. Please check back later.
             </Typography>
           </Box>
         )}
@@ -654,7 +616,7 @@ export default function CareersPage() {
           <Box sx={{ textAlign: "center", py: 8 }}>
             <SearchIcon sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
             <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600, mb: 0.5 }}>
-              No Positions Match
+              No Opportunities Match
             </Typography>
             <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
               Try adjusting your search or filters.
@@ -664,12 +626,12 @@ export default function CareersPage() {
 
         {/* My Applications list */}
         {!loading && !error && appliedFilter === "applied" && myApps.length > 0 && (
-          <Paper sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+          <Paper sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflow: "hidden" }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Reference</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Job Title</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Role</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Submitted</TableCell>
                 </TableRow>
@@ -724,7 +686,7 @@ export default function CareersPage() {
         )}
 
         {/* Application detail dialog */}
-        <Dialog open={!!selectedApp} onClose={() => setSelectedApp(null)} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
+        <Dialog open={!!selectedApp} onClose={() => setSelectedApp(null)} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
           {selectedApp && (
             <>
               <DialogTitle sx={{ pb: 1 }}>
@@ -736,7 +698,7 @@ export default function CareersPage() {
               <DialogContent>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Reference</Typography><Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4" }}>{selectedApp.submissionRef}</Typography></Box>
-                  <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Job Title</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.jobTitle}</Typography></Box>
+                  <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Role</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.jobTitle}</Typography></Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Applicant</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.applicantName}</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.applicantEmail}</Typography>{selectedApp.applicantPhone && <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>{selectedApp.applicantPhone}</Typography>}</Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Status</Typography><Chip label={selectedApp.status || "New"} size="small" sx={{ borderRadius: "8px", fontWeight: 600, backgroundColor: selectedApp.status === "Reviewed" ? "#E6F4EA" : "#F0F7FF", color: selectedApp.status === "Reviewed" ? "#34A853" : "#0078D4" }} /></Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Submitted</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.submittedAt ? formatDate(selectedApp.submittedAt) : "—"}</Typography></Box>
@@ -824,7 +786,7 @@ export default function CareersPage() {
           isAdmin={isAdmin}
           onTestSubmit={(jobId) => {
             setSelectedJob(null);
-            navigate(`/careers/${jobId}/apply`);
+            navigate(`/career-portal/${jobId}/apply`);
           }}
         />
       </Container>

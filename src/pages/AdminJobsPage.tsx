@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -34,7 +33,6 @@ import {
   InputLabel,
 } from "@mui/material";
 import {
-  ArrowBack,
   Close,
   Refresh,
   People,
@@ -48,6 +46,7 @@ import {
   FilterList as FilterIcon,
 } from "@mui/icons-material";
 import { fetchApplications, updateApplicationStatus, deleteApplications } from "../utils/careersService";
+import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { JobAdminApplication } from "../types";
 
 type TimelinePreset = "today" | "7d" | "month" | "year" | "all";
@@ -127,7 +126,6 @@ function formatDate(dateStr: string): string {
 }
 
 export default function AdminJobsPage() {
-  const navigate = useNavigate();
   const [applications, setApplications] = useState<JobAdminApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -246,62 +244,39 @@ export default function AdminJobsPage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
-      {/* Header */}
-      <Paper
-        sx={{
-          borderRadius: 0,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-          backgroundColor: "#ffffff",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: { xs: 1.5, sm: 2.5 } }}>
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: "1 1 auto" }}>
-              <IconButton onClick={() => navigate("/admin/dashboard")} sx={{ color: "#6B7280", p: { xs: 0.75, sm: 1 }, flexShrink: 0 }}>
-                <ArrowBack />
-              </IconButton>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.05rem", sm: "1.3rem" } }}>
-                  Job Applications
-                </Typography>
-                <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
-                  Manage incoming applications
-                </Typography>
-              </Box>
-            </Box>
-            <Button
-              variant="outlined"
-              startIcon={<Refresh />}
-              onClick={load}
-              disabled={loading}
-              sx={{
-                borderRadius: "10px",
-                textTransform: "none",
-                fontWeight: 600,
-                fontSize: { xs: "0.75rem", sm: "0.85rem" },
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                borderColor: "#D1D5DB",
-                color: "#6B7280",
-              }}
-            >
-              Refresh
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+      <CareerPortalHeader
+        title="Career Applications"
+        subtitle="Review internal advancement submissions and update applicant status."
+        activeSection="applications"
+        isAdmin
+        backPath="/admin/dashboard"
+        backLabel="Back to forms dashboard"
+        maxWidth="xl"
+        actions={(
+          <Button
+            variant="outlined"
+            startIcon={<Refresh />}
+            onClick={load}
+            disabled={loading}
+            sx={{
+              whiteSpace: "nowrap",
+              borderColor: "#D1D5DB",
+              color: "#6B7280",
+            }}
+          >
+            Refresh
+          </Button>
+        )}
+      />
 
-      <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3, md: 4 }, py: 3 }}>
+      <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
         {/* Filter bar */}
         <Paper
           sx={{
             p: 2,
             mb: 3,
-            borderRadius: "16px",
+            borderRadius: "8px",
             boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
             display: "flex",
             flexWrap: "wrap",
@@ -360,7 +335,7 @@ export default function AdminJobsPage() {
               value={statusFilter}
               label="Status"
               onChange={(e) => { setStatusFilter(e.target.value); setSelectedIds(new Set()); }}
-              sx={{ borderRadius: "10px", fontSize: "0.8rem" }}
+              sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
             >
               <MenuItem value="">All statuses</MenuItem>
               {STATUS_OPTIONS.map((opt) => (
@@ -396,10 +371,10 @@ export default function AdminJobsPage() {
             <Grid size={{ xs: 6, sm: 4, lg: 2 }} key={stat.label}>
               <Card
                 sx={{
-                  borderRadius: "16px",
+                  borderRadius: "8px",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                  transition: "transform 0.2s",
-                  "&:hover": { transform: "translateY(-2px)" },
+                  transition: "box-shadow 0.2s ease",
+                  "&:hover": { boxShadow: "0 8px 20px rgba(17,24,39,0.08)" },
                 }}
               >
                 <CardContent sx={{ p: { xs: 1.5, sm: 2.5 } }}>
@@ -420,11 +395,11 @@ export default function AdminJobsPage() {
 
         {/* Loading */}
         {loading && (
-          <TableContainer component={Paper} sx={{ borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Reference", "Applicant", "Job Title", "Status", "Submitted", "Actions"].map((h) => (
+                  {["Reference", "Applicant", "Role", "Status", "Submitted", "Actions"].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -452,7 +427,7 @@ export default function AdminJobsPage() {
         {!loading && error && (
           <Alert
             severity="error"
-            sx={{ borderRadius: "12px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
+            sx={{ borderRadius: "8px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
             action={
               <Button size="small" onClick={load} sx={{ textTransform: "none" }}>
                 Retry
@@ -472,7 +447,7 @@ export default function AdminJobsPage() {
             </Typography>
             <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
               {applications.length === 0
-                ? "Applications from job postings will appear here."
+                ? "Applications from internal advancement openings will appear here."
                 : "Try adjusting your timeline or status filter."
               }
             </Typography>
@@ -485,7 +460,7 @@ export default function AdminJobsPage() {
             sx={{
               mb: 2,
               p: 1.5,
-              borderRadius: "12px",
+              borderRadius: "8px",
               display: "flex",
               alignItems: "center",
               gap: 2,
@@ -521,7 +496,7 @@ export default function AdminJobsPage() {
           <TableContainer
             component={Paper}
             sx={{
-              borderRadius: "16px",
+              borderRadius: "8px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               overflowX: "auto",
             }}
@@ -544,7 +519,7 @@ export default function AdminJobsPage() {
                     Applicant
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
-                    Job Title
+                    Role
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
                     Status
@@ -648,7 +623,7 @@ export default function AdminJobsPage() {
           fullWidth
           slotProps={{
             paper: {
-              sx: { borderRadius: "16px", p: 1 },
+              sx: { borderRadius: "8px", p: 1 },
             },
           }}
         >
@@ -781,7 +756,7 @@ export default function AdminJobsPage() {
                 <Button
                   variant="outlined"
                   onClick={() => setSelectedApp(null)}
-                  sx={{ borderRadius: "10px", textTransform: "none", borderColor: "#D1D5DB", color: "#6B7280" }}
+                  sx={{ borderRadius: "8px", textTransform: "none", borderColor: "#D1D5DB", color: "#6B7280" }}
                 >
                   Close
                 </Button>
@@ -791,7 +766,7 @@ export default function AdminJobsPage() {
         </Dialog>
 
         {/* Delete confirmation dialog */}
-        <Dialog open={confirmDeleteOpen} onClose={() => !deleting && setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
+        <Dialog open={confirmDeleteOpen} onClose={() => !deleting && setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
           <DialogTitle sx={{ pb: 1 }}>
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
               Delete Applications
@@ -838,7 +813,7 @@ export default function AdminJobsPage() {
               severity={snackbar.severity}
               onClose={() => setSnackbar(null)}
               sx={{
-                borderRadius: "10px",
+                borderRadius: "8px",
                 fontWeight: 600,
                 fontSize: "0.9rem",
                 boxShadow: "0 6px 20px rgba(0,0,0,0.15)",

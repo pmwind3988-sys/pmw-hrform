@@ -10,8 +10,14 @@ import {
   createDocLibrary,
   listExistsGraph,
   getListColumns,
+  ensureListColumn,
 } from "./_utils/graphClient.js";
+import { logError, logInfo, logWarn } from "./_utils/logger.js";
 
+function errorMessage(error: unknown, maxLength?: number): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return maxLength ? message.slice(0, maxLength) : message;
+}
 
 /**
  * Query list items allowing filters on non-indexed columns.
@@ -26,6 +32,8 @@ async function queryListItemsNonIndexed(
 }
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
+const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
+const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
 
 /**
  * Write a hyperlink value to a SharePoint "Hyperlink or Picture" column using
@@ -100,20 +108,26 @@ async function patchUrlColumn(
   if (userToken) {
     try {
       await patchHyperlinkViaSPRest(userToken, listName, itemId, fieldName, url, fieldName);
-      console.log(`[API job-apply] URL field "${fieldName}" saved via SP REST v1 (user token)`);
+      logInfo("api:job-apply", "URL field saved via SP REST v1 user token", { fieldName });
       return;
     } catch (e) {
-      console.warn(`[API job-apply] SP REST v1 failed for "${fieldName}" with user token:`, (e as Error).message?.slice(0, 200));
+      logWarn("api:job-apply", "SP REST v1 failed with user token", {
+        fieldName,
+        errorMessage: errorMessage(e, 200),
+      });
     }
   }
 
   // Attempt 2: SP REST v1 with system token (likely fails for hyperlink columns, but try)
   try {
     await patchHyperlinkViaSPRest(sysToken, listName, itemId, fieldName, url, fieldName);
-    console.log(`[API job-apply] URL field "${fieldName}" saved via SP REST v1 (system token)`);
+    logInfo("api:job-apply", "URL field saved via SP REST v1 system token", { fieldName });
     return;
   } catch (e) {
-    console.warn(`[API job-apply] SP REST v1 failed for "${fieldName}" with system token:`, (e as Error).message?.slice(0, 200));
+    logWarn("api:job-apply", "SP REST v1 failed with system token", {
+      fieldName,
+      errorMessage: errorMessage(e, 200),
+    });
   }
 
   // Attempts 3-6: Graph API fallbacks (work if column is changed to Single line of text)
@@ -139,22 +153,21 @@ async function patchUrlColumn(
   for (const attempt of graphAttempts) {
     try {
       await attempt.fn();
-      console.log(`[API job-apply] URL field "${fieldName}" saved — format: ${attempt.label}`);
+      logInfo("api:job-apply", "URL field saved via Graph fallback", { fieldName, format: attempt.label });
       return;
     } catch (e) {
-      console.warn(
-        `[API job-apply] "${fieldName}" attempt "${attempt.label}" failed:`,
-        (e as Error).message?.slice(0, 150),
-      );
+      logWarn("api:job-apply", "URL field Graph fallback failed", {
+        fieldName,
+        format: attempt.label,
+        errorMessage: errorMessage(e, 150),
+      });
     }
   }
 
-  console.error(
-    `[API job-apply] COULD NOT SAVE "${fieldName}" after all attempts. ` +
-    `URL was: ${url.slice(0, 100)}. ` +
-    `If SP REST also failed, check that SP_SITE_URL is correct and the app has ` +
-    `Sites.Selected or Sites.ReadWrite.All permission on the SharePoint site.`,
-  );
+  logError("api:job-apply", "Could not save URL field after all attempts", undefined, {
+    fieldName,
+    urlPreview: url.slice(0, 100),
+  });
 }
 
 interface UploadedFile {
@@ -177,6 +190,10 @@ interface JobApplyBody {
   submittedByEmail?: string;
   forceApply?: boolean;
   submissionRef?: string;
+  pdpaConsent?: boolean;
+  pdpaNoticeVersion?: string;
+  pdpaConsentedAt?: string;
+  retentionUntil?: string;
   /** User's delegated access token (MSAL, AllSites.Manage scope) — used for SP REST v1 calls */
   accessToken?: string;
 }
@@ -221,6 +238,12 @@ function decodeBase64(content: string): Uint8Array {
     b64 = commaIdx >= 0 ? b64.substring(commaIdx + 1) : b64;
   }
   return new Uint8Array(Buffer.from(b64, "base64"));
+}
+
+function getRetentionUntil(from: Date = new Date()): string {
+  const retentionUntil = new Date(from);
+  retentionUntil.setFullYear(retentionUntil.getFullYear() + PDPA_RETENTION_YEARS);
+  return retentionUntil.toISOString();
 }
 
 // ── Column resolver ───────────────────────────────────────────────────────────
@@ -288,18 +311,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       error: "Missing required fields: jobListingId, jobTitle, applicantName, applicantEmail, applicantPhone",
     });
   }
+  if (!/^\d+$/.test(jobListingId)) {
+    return res.status(400).json({ error: "Invalid jobListingId" });
+  }
+  if (body.pdpaConsent !== true) {
+    return res.status(400).json({ error: "PDPA consent is required before submitting an application." });
+  }
 
   try {
     const sysToken = await getGraphToken();
 
+    await Promise.all([
+      ensureListColumn(sysToken, "Job Applications", "PDPAConsent", "PDPA Consent", "text"),
+      ensureListColumn(sysToken, "Job Applications", "PDPANoticeVersion", "PDPA Notice Version", "text"),
+      ensureListColumn(sysToken, "Job Applications", "PDPAConsentAt", "PDPA Consent At", "dateTime"),
+      ensureListColumn(sysToken, "Job Applications", "RetentionUntil", "Retention Until", "dateTime"),
+    ]);
+
     // ── Resolve real column internal names from SharePoint schema ────────
     const colMap = await resolveColumns(sysToken, "Job Applications");
 
-    // Log all discovered columns so you can verify in Vercel logs
-    console.log(
-      "[API job-apply] Discovered columns:",
-      colMap.raw.map((c) => `"${c.displayName}" → "${c.name}"`).join(", "),
-    );
+    logInfo("api:job-apply", "Discovered SharePoint columns", {
+      columnCount: colMap.raw.length,
+      columns: colMap.raw.map((c) => `"${c.displayName}" -> "${c.name}"`).join(", "),
+    });
 
     // Map each logical field to its real internal name
     // findColumn() tries display name first, then internal name, then aliases
@@ -317,9 +352,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       customAnswers:     findColumn(colMap, "CustomAnswers", "Custom Answers"),
       currentPosition:   findColumn(colMap, "CurrentPosition", "Current Position"),
       currentDepartment: findColumn(colMap, "CurrentDepartment", "Current Department", "Current_x0020_Department"),
+      pdpaConsent:       findColumn(colMap, "PDPA Consent", "PDPAConsent"),
+      pdpaNoticeVersion: findColumn(colMap, "PDPA Notice Version", "PDPANoticeVersion"),
+      pdpaConsentAt:     findColumn(colMap, "PDPA Consent At", "PDPAConsentAt"),
+      retentionUntil:    findColumn(colMap, "Retention Until", "RetentionUntil"),
     };
 
-    console.log("[API job-apply] Column mapping:", JSON.stringify(COL, null, 2));
+    logInfo("api:job-apply", "Resolved SharePoint column mapping", {
+      columnMapping: JSON.stringify(COL),
+    });
 
     // Validate required columns exist
     const missingRequired = (["applicantName", "applicantEmail", "applicantPhone"] as const)
@@ -354,12 +395,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           }
         }
       } catch (e) {
-        console.warn("[API job-apply] Duplicate check failed (non-fatal):", (e as Error).message);
+        logWarn("api:job-apply", "Duplicate check failed", {
+          errorMessage: errorMessage(e),
+        });
       }
     }
 
     const submissionRef = body.submissionRef || generateSubmissionRef();
     const submittedAt = new Date().toISOString();
+    const pdpaConsentedAt = typeof body.pdpaConsentedAt === "string" && !Number.isNaN(Date.parse(body.pdpaConsentedAt))
+      ? body.pdpaConsentedAt
+      : submittedAt;
+    const retentionUntil = typeof body.retentionUntil === "string" && !Number.isNaN(Date.parse(body.retentionUntil))
+      ? body.retentionUntil
+      : getRetentionUntil(new Date(submittedAt));
 
     // ── File uploads ─────────────────────────────────────────────────────
     const docLibName = "Job Applications Files";
@@ -382,12 +431,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const uniqueName = `${submissionRef}_${safeName}`;
         const binary = decodeBase64(content);
         if (binary.length > 10 * 1024 * 1024) {
-          console.warn(`[API job-apply] Skipping oversized file "${name}" (${binary.length} bytes)`);
+          logWarn("api:job-apply", "Skipping oversized application file", {
+            fileName: name,
+            rawSize: binary.length,
+          });
           return null;
         }
         return await uploadFileToDrive(sysToken, docLibName, uniqueName, binary);
       } catch (e) {
-        console.error("[API job-apply] Upload failed:", (e as Error).message);
+        logError("api:job-apply", "Application file upload failed", e, { fileName: name });
         return null;
       }
     }
@@ -417,10 +469,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (COL.applicantPhone) coreFields[COL.applicantPhone] = applicantPhone;
     if (COL.status)         coreFields[COL.status]         = "New";
     if (COL.submissionRef)  coreFields[COL.submissionRef]  = submissionRef;
+    if (COL.pdpaConsent) coreFields[COL.pdpaConsent] = "Accepted";
+    if (COL.pdpaNoticeVersion) coreFields[COL.pdpaNoticeVersion] = body.pdpaNoticeVersion || PDPA_NOTICE_VERSION;
+    if (COL.pdpaConsentAt) coreFields[COL.pdpaConsentAt] = pdpaConsentedAt;
+    if (COL.retentionUntil) coreFields[COL.retentionUntil] = retentionUntil;
 
     const created = await createListItem(sysToken, "Job Applications", coreFields);
     const itemId = created.id;
-    console.log(`[API job-apply] Created item ${itemId} with ref ${submissionRef}`);
+    logInfo("api:job-apply", "Created job application item", { itemId, submissionRef });
 
     // ── Step 2: Patch optional fields individually ────────────────────────
 
@@ -435,10 +491,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           [internalName]: value,
         });
       } catch (e) {
-        console.warn(
-          `[API job-apply] Could not set "${label}" (${internalName}):`,
-          (e as Error).message?.slice(0, 200),
-        );
+        logWarn("api:job-apply", "Could not set optional application field", {
+          label,
+          internalName,
+          errorMessage: errorMessage(e, 200),
+        });
       }
     }
 
@@ -446,7 +503,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // NOTE: If these are "Hyperlink or Picture" type in SharePoint, app-only tokens
     // cannot write to them. Change them to "Single line of text" in List Settings
     // and the plain-string fallback below will work automatically.
-    console.log(`[API job-apply] resumeUrl to store: "${resumeUrl || "(empty)"}"`);
+    logInfo("api:job-apply", "Resolved resume URL", {
+      hasResumeUrl: Boolean(resumeUrl),
+    });
     if (COL.resumeUrl && resumeUrl) {
       await patchUrlColumn(sysToken, "Job Applications", itemId, COL.resumeUrl, resumeUrl, accessToken);
     }
@@ -487,10 +546,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           });
         }
       } else {
-        console.warn("[API job-apply] Job listing not found for count update — id:", jobListingId);
+        logWarn("api:job-apply", "Job listing not found for count update", { jobListingId });
       }
     } catch (e) {
-      console.warn("[API job-apply] Count update failed (non-fatal):", (e as Error).message);
+      logWarn("api:job-apply", "Count update failed", {
+        jobListingId,
+        errorMessage: errorMessage(e),
+      });
     }
 
     // ── Step 4: Send HR notification email ────────────────────────────────
@@ -605,8 +667,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       submissionRef,
     });
   } catch (e) {
-    const msg = (e as Error).message || "Internal server error";
-    console.error("[API job-apply]", msg);
+    logError("api:job-apply", "Failed to submit job application", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

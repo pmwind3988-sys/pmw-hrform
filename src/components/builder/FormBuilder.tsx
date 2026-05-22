@@ -10,6 +10,7 @@ import { QUESTION_TYPES, TYPE_GROUPS, createQuestion, buildSurveyJson, validateF
 import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree, reorderFieldsRecursive, moveFieldToRoot } from "../../utils/FormBuilderEngine";
 import { registerSignaturePad } from "../../utils/SignaturePad";
 import { registerDynamicMatrix } from "../../utils/DynamicMatrix";
+import { getAllColumnsForList, getChoiceColumnsForList, getSharePointLists } from "../../utils/formBuilderSP";
 import DOMPurify from "dompurify";
 import { C } from "./constants";
 import "./FormBuilder.css";
@@ -1307,18 +1308,14 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
     if (mode !== "sp" || !token) return;
     setLoadingLists(true);
     setError("");
-    import("../../utils/formBuilderSP").then(({ getSharePointLists }) => {
-      getSharePointLists(token).then(setLists).catch((e: Error) => setError(e.message)).finally(() => setLoadingLists(false));
-    });
+    getSharePointLists(token).then(setLists).catch((e: Error) => setError(e.message)).finally(() => setLoadingLists(false));
   }, [mode, token]);
 
   useEffect(() => {
     if (mode !== "sp" || !token || !source?.list) { setColumns([]); return; }
     setLoadingCols(true);
     setError("");
-    import("../../utils/formBuilderSP").then(({ getChoiceColumnsForList }) => {
-      getChoiceColumnsForList(source.list!, token).then(setColumns).catch((e: Error) => setError(e.message)).finally(() => setLoadingCols(false));
-    });
+    getChoiceColumnsForList(source.list!, token).then(setColumns).catch((e: Error) => setError(e.message)).finally(() => setLoadingCols(false));
   }, [mode, token, source?.list]);
 
   const selectedCol = columns.find(c => c.title === source?.column);
@@ -1380,18 +1377,14 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
     if (!enabled || !token) return;
     setLoadingLists(true);
     setError("");
-    import("../../utils/formBuilderSP").then(({ getSharePointLists }) => {
-      getSharePointLists(token).then(setLists).catch((e: Error) => setError(e.message)).finally(() => setLoadingLists(false));
-    });
+    getSharePointLists(token).then(setLists).catch((e: Error) => setError(e.message)).finally(() => setLoadingLists(false));
   }, [enabled, token]);
 
   useEffect(() => {
     if (!enabled || !token || !source?.list) { setColumns([]); return; }
     setLoadingCols(true);
     setError("");
-    import("../../utils/formBuilderSP").then(({ getAllColumnsForList }) => {
-      getAllColumnsForList(source.list!, token).then(setColumns).catch((e: Error) => setError(e.message)).finally(() => setLoadingCols(false));
-    });
+    getAllColumnsForList(source.list!, token).then(setColumns).catch((e: Error) => setError(e.message)).finally(() => setLoadingCols(false));
   }, [enabled, token, source?.list]);
 
   const toggle = () => {
@@ -1775,6 +1768,8 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
   const companyLines = companies.split("\n").filter(Boolean);
   const logoUrl = (meta?.logoUrl as string) || "";
   const deviceWidth = device === "desktop" ? 760 : device === "tablet" ? 500 : 340;
+  const bannerLogoWidth = device === "desktop" ? 150 : device === "tablet" ? 132 : 104;
+  const bannerLogoMaxHeight = device === "desktop" ? 48 : device === "tablet" ? 42 : 34;
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
@@ -1794,8 +1789,8 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <tbody>
             <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-              <td style={{ width: 140, borderRight: `1px solid ${C.border}`, background: C.offWhite, padding: "9px 14px", verticalAlign: "middle", textAlign: "center" }}>
-                <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 42, objectFit: "contain" }} />
+              <td style={{ width: bannerLogoWidth, borderRight: `1px solid ${C.border}`, background: C.offWhite, padding: device === "mobile" ? "8px 10px" : "10px 16px", verticalAlign: "middle", textAlign: "center" }}>
+                <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: bannerLogoMaxHeight, objectFit: "contain" }} />
               </td>
               <td style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13, color: C.textPrimary }}>
                 {companyLines.length > 0

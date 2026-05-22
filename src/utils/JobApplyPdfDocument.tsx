@@ -1,5 +1,5 @@
 /**
- * JobApplyPdfDocument.tsx — Corporate-style PDF for job applications.
+ * JobApplyPdfDocument.tsx — Corporate-style PDF for internal advancement applications.
  * Printer-friendly, B&W clear, suitable for HR records.
  */
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
@@ -68,8 +68,8 @@ export default function JobApplyPdfDocument({ data }: { data: JobApplyPdfData })
         <View style={S.header}>
           <View style={S.headerTop}>
             <View>
-              <Text style={S.docTitle}>Job Application</Text>
-              <Text style={S.docSub}>Internal Application Form — PMW Group</Text>
+              <Text style={S.docTitle}>Career Advancement Application</Text>
+              <Text style={S.docSub}>Internal Advancement Form — PMW Group</Text>
             </View>
             <View style={S.headerRight}>
               <Text style={S.refText}>Ref: {data.submissionRef}</Text>
@@ -80,7 +80,7 @@ export default function JobApplyPdfDocument({ data }: { data: JobApplyPdfData })
 
         {/* ═══ APPLICANT INFO ═══ */}
         <Text style={S.sectionTitle}>Applicant Information</Text>
-        <View style={S.infoRow}><Text style={S.infoLabel}>Position</Text><Text style={S.infoValue}>{data.jobTitle}</Text></View>
+        <View style={S.infoRow}><Text style={S.infoLabel}>Role</Text><Text style={S.infoValue}>{data.jobTitle}</Text></View>
         <View style={S.infoRow}><Text style={S.infoLabel}>Full Name</Text><Text style={S.infoValue}>{data.applicantName}</Text></View>
         <View style={S.infoRow}><Text style={S.infoLabel}>Email</Text><Text style={S.infoValue}>{data.applicantEmail}</Text></View>
         <View style={S.infoRow}><Text style={S.infoLabel}>Phone</Text><Text style={S.infoValue}>{data.applicantPhone}</Text></View>
@@ -112,7 +112,7 @@ export default function JobApplyPdfDocument({ data }: { data: JobApplyPdfData })
 
         {/* ═══ FOOTER ═══ */}
         <View style={S.footer} fixed>
-          <Text>PMW HR Forms — Job Application</Text>
+          <Text>Internal Career Advancement Portal</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

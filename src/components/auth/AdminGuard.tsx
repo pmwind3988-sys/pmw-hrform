@@ -73,7 +73,7 @@ export default function AdminGuard({ isAdmin, children }: AdminGuardProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--app-bg, rgba(248,249,252,0.88))",
+          background: "var(--app-bg, #F6F8FB)",
           p: 3,
         }}
       >
@@ -111,7 +111,7 @@ export default function AdminGuard({ isAdmin, children }: AdminGuardProps) {
               fontWeight: 700,
               color: "#111827",
               mb: 1,
-              letterSpacing: "-0.02em",
+              letterSpacing: 0,
             }}
           >
             Access Denied
@@ -137,7 +137,7 @@ export default function AdminGuard({ isAdmin, children }: AdminGuardProps) {
             startIcon={<HomeOutlinedIcon />}
             onClick={() => navigate("/user/dashboard", { replace: true })}
             sx={{
-              borderRadius: "12px",
+              borderRadius: "8px",
               textTransform: "none",
               fontWeight: 600,
               px: 4,
@@ -161,7 +161,7 @@ export default function AdminGuard({ isAdmin, children }: AdminGuardProps) {
             variant="filled"
             sx={{
               width: "100%",
-              borderRadius: "12px",
+              borderRadius: "8px",
               fontWeight: 500,
               boxShadow: "0 8px 32px rgba(220, 38, 38, 0.25)",
             }}

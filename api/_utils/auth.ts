@@ -9,9 +9,9 @@ const API_SECRET = process.env.API_SECRET_KEY || "";
 
 export function validateApiKey(headers: Record<string, string | string[] | undefined>): { valid: boolean; reason?: string } {
   if (!API_SECRET) {
-    // No key configured — allow through but warn (dev mode)
-    process.env.NODE_ENV === "production" &&
-      console.warn("[auth] API_SECRET_KEY not set — API is unprotected");
+    if (process.env.NODE_ENV === "production") {
+      return { valid: false, reason: "API key is not configured" };
+    }
     return { valid: true };
   }
 

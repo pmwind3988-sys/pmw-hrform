@@ -9,7 +9,7 @@ import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { FlatLightPanelless } from "survey-core/themes";
 
-import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus } from "../../utils/formBuilderSP";
+import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, addColumn } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
 import { SP_STATIC } from "../../utils/spConfig";
 import { SP_LAYER_STATUS } from "../../utils/statusConstants";
@@ -108,6 +108,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
       'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
+      'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
       'L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature',
@@ -525,6 +526,7 @@ export default function ApprovalDashboard() {
   const SYSTEM_FIELDS = new Set([
     'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
     'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
+    'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
     'Author','Editor','Created','Modified','ContentType','PermMask',
     'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
     'L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature',
@@ -845,8 +847,7 @@ export default function ApprovalDashboard() {
       } catch (e: unknown) {
         const msg = (e as Error).message || "";
         if (msg.includes("does not exist") || msg.includes("not found")) {
-          const { addColumn: addCol } = await import("../../utils/formBuilderSP");
-          await addCol(token, listName, "SelectedBranch", 2);
+          await addColumn(token, listName, "SelectedBranch", 2);
           await spPatch(token, patchUrl, { SelectedBranch: branchName });
         } else { throw e; }
       }

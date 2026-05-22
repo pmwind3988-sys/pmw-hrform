@@ -43,7 +43,7 @@
   font-weight: 700;
   border-radius: 20px;
   padding: 2px 8px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -161,7 +161,7 @@
   font-weight: 600;
   color: #9CA3AF;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   margin-bottom: 5px;
 }
 
@@ -594,7 +594,7 @@
   font-weight: 600;
   color: #9CA3AF;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   margin-bottom: 8px;
 }
 .fb-property-toggle-group {
@@ -658,7 +658,7 @@
   font-weight: 700;
   color: #9CA3AF;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
 }
 .fb-json-header-chars {
   font-size: 10px;
@@ -745,7 +745,7 @@
   font-size: 9px;
   color: rgba(255,255,255,0.5);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   margin-bottom: 3px;
 }
 .fb-preview-banner-title {
@@ -769,7 +769,7 @@
   font-size: 10px;
   color: #6B7280;
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: 0;
   vertical-align: middle;
 }
 .fb-preview-banner-cell-value {
@@ -937,7 +937,7 @@
   font-weight: 700;
   color: #9CA3AF;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
 }
 
 /* Canvas panel */
@@ -1141,4 +1141,55 @@
 
 .fb-toolbar-scroll-right {
   margin-left: 4px;
+}
+
+@media (max-width: 1100px) {
+  .fb-layout {
+    grid-template-columns: 190px minmax(420px, 1fr) 230px;
+    overflow-x: auto;
+  }
+
+  .fb-palette-panel,
+  .fb-canvas-panel,
+  .fb-property-panel-side {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 860px) {
+  .fb-root {
+    overflow: auto;
+  }
+
+  .fb-toolbar {
+    height: auto;
+    min-height: 48px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+
+  .fb-toolbar-left,
+  .fb-toolbar-scroll-container {
+    width: 100%;
+  }
+
+  .fb-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .fb-palette-panel,
+  .fb-property-panel-side {
+    min-height: 240px;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 1px solid #E5E7EB;
+  }
+
+  .fb-canvas-panel {
+    min-height: 520px;
+    border-bottom: 1px solid #E5E7EB;
+  }
 }

@@ -38,7 +38,7 @@ const SKIP = new Set([
   "FileSystemObjectType", "ServerRedirectedEmbedUri", "ServerRedirectedEmbedUrl",
   "ContentTypeId", "OData__UIVersionString", "Attachments", "GUID",
   "OData__ColorTag", "ComplianceAssetId",
-  "CurrentLayer", "EvaluationData",
+  "CurrentLayer", "EvaluationData", "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
 ]);
 
 interface DetailModalProps {
@@ -132,7 +132,7 @@ function LayerProgression({
     <Box sx={{ mb: 3 }}>
       <Typography
         variant="h6"
-        sx={{ fontWeight: 600, color: "#111827", letterSpacing: "-0.01em", mb: 2 }}
+        sx={{ fontWeight: 600, color: "#111827", letterSpacing: 0, mb: 2 }}
       >
         Layer Progression
       </Typography>
@@ -398,7 +398,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
         }}
       >
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 600, letterSpacing: "-0.02em" }}>
+          <Typography variant="h4" sx={{ fontWeight: 600, letterSpacing: 0 }}>
             {item?.title}
           </Typography>
           <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.5 }}>
@@ -470,7 +470,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                               variant="caption"
                               sx={{
                                 textTransform: "uppercase",
-                                letterSpacing: "0.08em",
+                                letterSpacing: 0,
                                 color: "#6B7280",
                                 fontWeight: 600,
                                 fontSize: "0.75rem",
@@ -517,7 +517,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                             variant="caption"
                             sx={{
                               textTransform: "uppercase",
-                              letterSpacing: "0.08em",
+                              letterSpacing: 0,
                               color: "#6B7280",
                               fontWeight: 600,
                               fontSize: "0.75rem",
@@ -557,7 +557,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   variant="caption"
                   sx={{
                     textTransform: "uppercase",
-                    letterSpacing: "0.08em",
+                    letterSpacing: 0,
                     color: "#6B7280",
                     fontWeight: 600,
                     fontSize: "0.75rem",
@@ -586,7 +586,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   variant="caption"
                   sx={{
                     textTransform: "uppercase",
-                    letterSpacing: "0.08em",
+                    letterSpacing: 0,
                     color: "#6B7280",
                     fontWeight: 600,
                     fontSize: "0.75rem",
@@ -624,7 +624,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   <>
                     <Typography
                       variant="h6"
-                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: "-0.01em", mb: 2 }}
+                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: 0, mb: 2 }}
                     >
                       Layer Results
                     </Typography>
@@ -664,7 +664,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   <>
                     <Typography
                       variant="h6"
-                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: "-0.01em" }}
+                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: 0 }}
                     >
                       Approval Chain
                     </Typography>

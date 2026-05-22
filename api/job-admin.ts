@@ -2,12 +2,14 @@ import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import {
   getGraphToken,
   queryListItems,
+  queryListItemById,
   createListItem,
   updateListItemFields,
   deleteListItem,
   getListColumnChoices,
   listDocLibraryFiles,
 } from "./_utils/graphClient.js";
+import { logError, logWarn } from "./_utils/logger.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -92,6 +94,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (!applicationId || !status) {
           return res.status(400).json({ error: "Missing required fields: applicationId, status" });
         }
+        if (!/^\d+$/.test(applicationId)) {
+          return res.status(400).json({ error: "Invalid applicationId" });
+        }
         const validStatuses = ["New", "KIV", "Shortlisted", "Not Suitable"];
         if (!validStatuses.includes(status)) {
           return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
@@ -121,17 +126,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         for (const id of ids) {
           if (!/^\d+$/.test(String(id))) continue;
           try {
-            const appResult = await queryListItems(token, APPLICATION_LIST, {
-              filter: `id eq ${String(id)}`,
-              top: 1,
-            });
-            if (appResult.length > 0) {
-              const jobId = String(appResult[0].fields.JobListingID || "");
+            const appResult = await queryListItemById(token, APPLICATION_LIST, String(id));
+            if (appResult) {
+              const jobId = String(appResult.fields.JobListingID || "");
               if (jobId) {
                 decrementMap[jobId] = (decrementMap[jobId] || 0) + 1;
               }
               // Delete associated files from the Job Applications Files doc library
-              const submissionRef = String(appResult[0].fields.SubmissionRef || "");
+              const submissionRef = String(appResult.fields.SubmissionRef || "");
               if (submissionRef && docLibFiles.length > 0) {
                 const matching = docLibFiles.filter((f) => f.name.startsWith(submissionRef));
                 for (const file of matching) {
@@ -153,7 +155,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           try {
             await deleteListItem(token, APPLICATION_LIST, String(id));
             deleted++;
-          } catch (e) {
+          } catch {
             errors.push(`Delete failed for item ${id}`);
           }
         }
@@ -163,12 +165,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           if (count > 0) {
             if (!/^\d+$/.test(String(jobId))) continue;
             try {
-              const jobItems = await queryListItems(token, JOB_LIST, {
-                filter: `id eq ${jobId}`,
-                top: 1,
-              });
-              if (jobItems.length > 0) {
-                const currentCount = Number(jobItems[0].fields.Application_x0020_Count) || 0;
+              const jobItem = await queryListItemById(token, JOB_LIST, jobId);
+              if (jobItem) {
+                const currentCount = Number(jobItem.fields.Application_x0020_Count) || 0;
                 await updateListItemFields(token, JOB_LIST, jobId, {
                   Application_x0020_Count: Math.max(0, currentCount - count),
                 });
@@ -239,7 +238,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             if (jobId) appCountByJob[jobId] = (appCountByJob[jobId] || 0) + 1;
           }
         } catch (e) {
-          console.error("[API job-admin] Failed to fetch application counts:", (e as Error).message);
+          logWarn("api:job-admin", "Failed to fetch live application counts", {
+            errorMessage: e instanceof Error ? e.message : String(e),
+          });
         }
 
         const jobs = items.map((item) => {
@@ -270,6 +271,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const jobId = String(rawBody.jobId || "");
         if (!jobId) {
           return res.status(400).json({ error: "Missing required field: jobId" });
+        }
+        if (!/^\d+$/.test(jobId)) {
+          return res.status(400).json({ error: "Invalid jobId" });
         }
 
         const updateFields: Record<string, unknown> = {};
@@ -307,6 +311,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (!jobId) {
           return res.status(400).json({ error: "Missing required field: jobId" });
         }
+        if (!/^\d+$/.test(jobId)) {
+          return res.status(400).json({ error: "Invalid jobId" });
+        }
         await deleteListItem(token, JOB_LIST, jobId);
         return res.status(200).json({ success: true });
       }
@@ -327,7 +334,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e) {
-    console.error("[API job-admin]", e);
+    logError("api:job-admin", "Unhandled job admin API error", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

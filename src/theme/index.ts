@@ -26,7 +26,7 @@ const theme = createTheme({
       contrastText: "#ffffff",
     },
     background: {
-      default: "#F8F9FC",
+      default: "#F6F8FB",
       paper: "#FFFFFF",
     },
     text: {
@@ -66,25 +66,25 @@ const theme = createTheme({
     h1: {
       fontSize: "3rem",
       fontWeight: 700,
-      letterSpacing: "-0.04em",
+      letterSpacing: "0",
       lineHeight: 1.15,
     },
     h2: {
       fontSize: "2.25rem",
       fontWeight: 700,
-      letterSpacing: "-0.03em",
+      letterSpacing: "0",
       lineHeight: 1.2,
     },
     h3: {
       fontSize: "1.75rem",
       fontWeight: 600,
-      letterSpacing: "-0.02em",
+      letterSpacing: "0",
       lineHeight: 1.25,
     },
     h4: {
       fontSize: "1.35rem",
       fontWeight: 600,
-      letterSpacing: "-0.01em",
+      letterSpacing: "0",
       lineHeight: 1.3,
     },
     h5: {
@@ -123,7 +123,7 @@ const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 8,
   },
   breakpoints: {
     values: {
@@ -139,56 +139,34 @@ const theme = createTheme({
       styleOverrides: {
         body: {
           minHeight: "100vh",
-          background: "var(--app-bg, linear-gradient(145deg, #eef0f7 0%, rgba(248,249,252,0.88) 40%, #f4f0f8 100%))",
-          "&::before": {
-            content: '""',
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-            zIndex: -1,
-            opacity: 0.025,
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-          },
-          "&::after": {
-            content: '""',
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-            zIndex: -1,
-            opacity: 0.04,
-            backgroundImage: `radial-gradient(ellipse at 20% 50%, rgba(98,100,167,0.15) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,120,212,0.08) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(98,100,167,0.06) 0%, transparent 50%)`,
-          },
+          background: "var(--app-bg, linear-gradient(180deg, #F6F8FB 0%, #EEF3F8 100%))",
+        },
+        "#root": {
+          minHeight: "100vh",
+        },
+        img: {
+          maxWidth: "100%",
         },
       },
     },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 8,
           textTransform: "none",
-          fontWeight: 500,
-          padding: "14px 28px",
+          fontWeight: 600,
+          padding: "10px 18px",
           fontSize: "0.9rem",
-          transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
           boxShadow: "none",
           "&:hover": {
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-            transform: "translateY(-1px)",
-          },
-          "&:active": {
-            transform: "scale(0.98) translateY(0)",
+            boxShadow: "0 3px 10px rgba(17, 24, 39, 0.08)",
           },
         },
         contained: {
-          boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
+          boxShadow: "0 2px 8px rgba(0, 120, 212, 0.18)",
           "&:hover": {
-            boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
+            boxShadow: "0 5px 16px rgba(0, 120, 212, 0.24)",
           },
         },
         outlined: {
@@ -198,7 +176,7 @@ const theme = createTheme({
           },
         },
         sizeLarge: {
-          padding: "16px 32px",
+          padding: "12px 24px",
           fontSize: "1rem",
         },
       },
@@ -206,13 +184,12 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 20,
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04)",
-          border: "1px solid rgba(0, 0, 0, 0.04)",
-          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          borderRadius: 8,
+          boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
+          border: "1px solid rgba(17, 24, 39, 0.08)",
+          transition: "box-shadow 0.2s ease, border-color 0.2s ease",
           "&:hover": {
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)",
-            transform: "translateY(-2px)",
+            boxShadow: "0 8px 20px rgba(17, 24, 39, 0.08)",
           },
         },
       },
@@ -223,16 +200,16 @@ const theme = createTheme({
           backgroundImage: "none",
         },
         rounded: {
-          borderRadius: 16,
+          borderRadius: 8,
         },
         elevation1: {
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04)",
+          boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
         },
         elevation2: {
-          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.06)",
+          boxShadow: "0 2px 6px rgba(17, 24, 39, 0.06), 0 8px 20px rgba(17, 24, 39, 0.06)",
         },
         elevation3: {
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.08)",
+          boxShadow: "0 8px 24px rgba(17, 24, 39, 0.08), 0 16px 40px rgba(17, 24, 39, 0.08)",
         },
       },
     },
@@ -240,7 +217,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           "& .MuiOutlinedInput-root": {
-            borderRadius: 12,
+            borderRadius: 8,
             transition: "all 0.2s ease",
             backgroundColor: "#FFFFFF",
             "&:hover": {
@@ -258,7 +235,7 @@ const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 6,
           fontWeight: 500,
           fontSize: "0.8rem",
           height: 28,
@@ -268,17 +245,17 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 24,
-          boxShadow: "0 8px 40px rgba(0, 0, 0, 0.12)",
+          borderRadius: 10,
+          boxShadow: "0 12px 40px rgba(17, 24, 39, 0.14)",
         },
       },
     },
     MuiMenu: {
       styleOverrides: {
         paper: {
-          borderRadius: 12,
-          boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
-          border: "1px solid rgba(0, 0, 0, 0.06)",
+          borderRadius: 8,
+          boxShadow: "0 8px 24px rgba(17, 24, 39, 0.12)",
+          border: "1px solid rgba(17, 24, 39, 0.08)",
           marginTop: 8,
         },
       },
@@ -286,7 +263,7 @@ const theme = createTheme({
     MuiMenuItem: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 6,
           margin: "2px 6px",
           padding: "10px 12px",
           transition: "all 0.15s ease",
@@ -306,10 +283,10 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          backgroundColor: "rgba(255, 255, 255, 0.9)",
+          backgroundColor: "rgba(255, 255, 255, 0.96)",
           backdropFilter: "blur(16px)",
-          borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+          borderBottom: "1px solid rgba(17, 24, 39, 0.08)",
+          boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05)",
         },
       },
     },
@@ -336,6 +313,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           transition: "all 0.2s ease",
+          borderRadius: 8,
           "&:hover": {
             backgroundColor: "rgba(0, 120, 212, 0.08)",
           },

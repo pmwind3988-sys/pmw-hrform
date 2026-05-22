@@ -1,5 +1,15 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, createListItem, createDocLibrary, uploadFileToDrive, listExistsGraph, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItems, createListItem, createDocLibrary, uploadFileToDrive, listExistsGraph, updateListItemFields, ensureListColumn } from "./_utils/graphClient.js";
+import { logError, logWarn } from "./_utils/logger.js";
+
+const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
+const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
+
+function getRetentionUntil(from: Date = new Date()): string {
+  const retentionUntil = new Date(from);
+  retentionUntil.setFullYear(retentionUntil.getFullYear() + PDPA_RETENTION_YEARS);
+  return retentionUntil.toISOString();
+}
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -23,16 +33,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { listTitle, body: formBody, matrixData } = req.body as {
+  const { listTitle, body: formBody, matrixData, pdpaConsent, pdpaNoticeVersion, pdpaConsentedAt, retentionUntil } = req.body as {
     listTitle?: string;
     body?: Record<string, unknown>;
     matrixData?: Record<string, { rows: Record<string, unknown>[]; columns: { name: string; title: string; cellType?: string; choices?: string[] }[] }>;
+    pdpaConsent?: boolean;
+    pdpaNoticeVersion?: string;
+    pdpaConsentedAt?: string;
+    retentionUntil?: string;
   };
   if (!listTitle || typeof listTitle !== "string") {
     return res.status(400).json({ error: "Missing or invalid listTitle" });
   }
   if (!formBody || typeof formBody !== "object") {
     return res.status(400).json({ error: "Missing or invalid body" });
+  }
+  if (pdpaConsent !== true) {
+    return res.status(400).json({ error: "PDPA consent is required before submitting this form." });
   }
 
   try {
@@ -48,6 +65,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (formConfig.IsPublic === false) {
       return res.status(403).json({ error: "Form is not public" });
     }
+
+    await Promise.all([
+      ensureListColumn(token, listTitle, "PDPAConsent", "PDPA Consent", "text"),
+      ensureListColumn(token, listTitle, "PDPANoticeVersion", "PDPA Notice Version", "text"),
+      ensureListColumn(token, listTitle, "PDPAConsentAt", "PDPA Consent At", "dateTime"),
+      ensureListColumn(token, listTitle, "RetentionUntil", "Retention Until", "dateTime"),
+    ]);
+    const consentedAt = typeof pdpaConsentedAt === "string" && !Number.isNaN(Date.parse(pdpaConsentedAt))
+      ? pdpaConsentedAt
+      : new Date().toISOString();
+    const retentionDate = typeof retentionUntil === "string" && !Number.isNaN(Date.parse(retentionUntil))
+      ? retentionUntil
+      : getRetentionUntil(new Date(consentedAt));
+    formBody.PDPAConsent = "Accepted";
+    formBody.PDPANoticeVersion = pdpaNoticeVersion || PDPA_NOTICE_VERSION;
+    formBody.PDPAConsentAt = consentedAt;
+    formBody.RetentionUntil = retentionDate;
 
     // Upload file/image data to document library (server-side)
     const docLibName = `${listTitle} Files`;
@@ -69,14 +103,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const base64 = v.replace(/^data:[\w/+-]+;base64,/, '');
           const rawSize = Math.ceil((base64.length * 3) / 4);
           if (rawSize > 10 * 1024 * 1024) {
-            console.warn("[API submit-form] Skipping oversized file:", k, rawSize);
+            logWarn("api:submit-form", "Skipping oversized upload", { fieldName: k, rawSize });
             continue;
           }
           const binary = new Uint8Array(Buffer.from(base64, 'base64'));
           const fileUrl = await uploadFileToDrive(token, docLibName, fileName, binary);
           formBody[k] = { Url: fileUrl, Description: fileName };
         } catch (e) {
-          console.warn("[API submit-form] File upload failed for", k, (e as Error).message);
+          logWarn("api:submit-form", "File upload failed", {
+            fieldName: k,
+            errorMessage: e instanceof Error ? e.message : String(e),
+          });
         }
       }
     }
@@ -110,7 +147,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             const item = await createListItem(token, childListDisplayName, fields);
             if (item.id) childIds.push(Number(item.id));
           } catch (e) {
-            console.warn(`[API submit-form] Matrix child item failed for ${fieldName} row ${i}:`, (e as Error).message);
+            logWarn("api:submit-form", "Matrix child item write failed", {
+              fieldName,
+              rowIndex: i,
+              errorMessage: e instanceof Error ? e.message : String(e),
+            });
           }
         }
         if (childIds.length > 0) {
@@ -127,14 +168,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         try {
           await updateListItemFields(token, listTitle, parentId, updateFields);
         } catch (e) {
-          console.warn("[API submit-form] Failed to update parent with RowIds:", (e as Error).message);
+          logWarn("api:submit-form", "Failed to update parent with matrix row ids", {
+            parentId,
+            errorMessage: e instanceof Error ? e.message : String(e),
+          });
         }
       }
     }
 
     return res.status(200).json({ success: true, id: parentId, childItemIds });
   } catch (err) {
-    console.error("[API submit-form]", err);
+    logError("api:submit-form", "Failed to submit public form", err);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

@@ -31,6 +31,7 @@ import AdminHomePage from "./pages/AdminHomePage";
 import EvaluationPage from "./pages/EvaluationPage";
 import CareersPage from "./pages/CareersPage";
 import JobApplyPage from "./pages/JobApplyPage";
+import PrivacyNoticePage from "./pages/PrivacyNoticePage";
 import AdminJobsPage from "./pages/AdminJobsPage";
 import AdminJobManagePage from "./pages/AdminJobManagePage";
 import { DashboardProvider } from "./contexts/DashboardContext";
@@ -172,6 +173,10 @@ function mapSubmission(
       key === "Id" ||
       key === "_authorEmail" ||
       key === "SubmittedAt" ||
+      key === "PDPAConsent" ||
+      key === "PDPANoticeVersion" ||
+      key === "PDPAConsentAt" ||
+      key === "RetentionUntil" ||
       key === "AuthorId"
     ) {
       continue;
@@ -507,6 +512,7 @@ if (decision === "guest") {
   const location = useLocation();
   const currentPath = location.pathname;
   const isFormRoute = currentPath.startsWith("/form/");
+  const isPrivacyRoute = currentPath === "/privacy";
 
   // ---- Render ----
 
@@ -519,7 +525,7 @@ if (decision === "guest") {
     );
   }
 
-  const showAuthGate = !isAuthenticated && !isFormRoute;
+  const showAuthGate = !isAuthenticated && !isFormRoute && !isPrivacyRoute;
 
   if (showAuthGate && pageState === "choice") {
     return (
@@ -597,10 +603,18 @@ if (decision === "guest") {
       <ErrorBoundary>
         <Routes>
           <Route
+            path="/privacy"
+            element={
+              <ErrorBoundary>
+                <PrivacyNoticePage />
+              </ErrorBoundary>
+            }
+          />
+          <Route
             path="/form/:formId"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                   <DynamicFormPage />
                 </Box>
               </ErrorBoundary>
@@ -611,7 +625,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                     <ApprovalDashboard />
                   </Box>
                 </ErrorBoundary>
@@ -623,7 +637,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                     <ResponseViewer />
                   </Box>
                 </ErrorBoundary>
@@ -671,11 +685,11 @@ if (decision === "guest") {
             }
           />
           <Route
-            path="/admin/jobs"
+            path="/admin/career/applications"
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                     <AdminJobsPage />
                   </Box>
                 </ErrorBoundary>
@@ -683,11 +697,11 @@ if (decision === "guest") {
             }
           />
           <Route
-            path="/admin/jobs/manage"
+            path="/admin/career/opportunities"
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                     <AdminJobManagePage />
                   </Box>
                 </ErrorBoundary>
@@ -695,10 +709,26 @@ if (decision === "guest") {
             }
           />
           <Route
+            path="/admin/jobs"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <CatchAllRedirect to="/admin/career/applications" />
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/jobs/manage"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <CatchAllRedirect to="/admin/career/opportunities" />
+              </AdminGuard>
+            }
+          />
+          <Route
             path="/eval/:token"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                   <EvaluationPage />
                 </Box>
               </ErrorBoundary>
@@ -708,27 +738,41 @@ if (decision === "guest") {
             path="/eval/:formSlug/:responseId/:layerNumber"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                   <EvaluationPage />
                 </Box>
               </ErrorBoundary>
             }
           />
           <Route
-            path="/careers"
+            path="/career-portal"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                   <CareersPage />
                 </Box>
               </ErrorBoundary>
             }
           />
           <Route
+            path="/career-portal/:jobId/apply"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                  <JobApplyPage />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/careers"
+            element={<CatchAllRedirect to="/career-portal" />}
+          />
+          <Route
             path="/careers/:jobId/apply"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, rgba(248,249,252,0.88))" }}>
+                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                   <JobApplyPage />
                 </Box>
               </ErrorBoundary>

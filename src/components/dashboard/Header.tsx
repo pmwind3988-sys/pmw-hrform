@@ -17,8 +17,6 @@ import {
   Logout as LogoutIcon,
   Settings as SettingsIcon,
   WorkOutlined as WorkIcon,
-  Edit as EditIcon,
-  Public as PublicIcon,
   Menu as MenuIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
@@ -44,6 +42,7 @@ export default function Header({
 }: HeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isCompact = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
@@ -81,13 +80,22 @@ export default function Header({
         borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
         boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
         zIndex: theme.zIndex.drawer + 1,
-        minHeight: isMobile ? 56 : 64,
+        minHeight: isMobile ? 56 : isCompact ? 60 : 68,
       }}
     >
-      <Toolbar sx={{ gap: 2, minHeight: "inherit" }}>
+      <Toolbar
+        sx={{
+          gap: { xs: 1, sm: 1.5, md: 2 },
+          minHeight: "inherit",
+          width: "100%",
+          maxWidth: 1440,
+          mx: "auto",
+          px: { xs: 1.5, sm: 2.5, md: 4 },
+        }}
+      >
         {/* Brand mark */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Logo size={isMobile ? 32 : 40} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.25, md: 1.5 }, minWidth: 0 }}>
+          <Logo size={{ xs: 32, sm: 36, md: 42 }} />
           <Stack direction="column" spacing={0}>
             <Typography
               variant="h5"
@@ -95,9 +103,10 @@ export default function Header({
               sx={{
                 fontWeight: 700,
                 color: "#111827",
-                letterSpacing: "-0.02em",
+                letterSpacing: 0,
                 lineHeight: 1.2,
-                fontSize: "1.25rem",
+                fontSize: { xs: "1.05rem", sm: "1.15rem", md: "1.25rem" },
+                whiteSpace: "nowrap",
               }}
             >
               PMW HR
@@ -107,10 +116,11 @@ export default function Header({
               sx={{
                 color: "#6B7280",
                 textTransform: "uppercase",
-                letterSpacing: "0.1em",
+                letterSpacing: 0,
                 fontSize: "0.7rem",
                 fontWeight: 600,
                 lineHeight: 1,
+                display: { xs: "none", sm: "block" },
               }}
             >
               Forms Portal
@@ -120,7 +130,7 @@ export default function Header({
 
         <Box sx={{ flexGrow: 1 }} />
 
-        {isMobile ? (
+        {isCompact ? (
           <>
             {/* ── Mobile: Single hamburger menu ── */}
             <IconButton
@@ -141,8 +151,8 @@ export default function Header({
               slotProps={{
                 paper: {
                   sx: {
-                    minWidth: 230,
-                    borderRadius: "14px",
+                    minWidth: { xs: 230, sm: 260 },
+                    borderRadius: "8px",
                     boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
                     border: "1px solid rgba(0, 0, 0, 0.06)",
                     mt: 1,
@@ -176,10 +186,10 @@ export default function Header({
 
               <Divider sx={{ my: 0.5 }} />
 
-              {/* 3. Careers */}
-              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/careers"); }} sx={{ py: 1.25, px: 2.5 }}>
-                <PublicIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
-                <Typography variant="body2">Careers</Typography>
+              {/* 3. Career portal */}
+              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/career-portal"); }} sx={{ py: 1.25, px: 2.5 }}>
+                <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
+                <Typography variant="body2">Career Advancement Portal</Typography>
               </MenuItem>
 
               {/* 4. Admin items */}
@@ -192,14 +202,6 @@ export default function Header({
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => { handleMainMenuClose(); navigate("/admin/jobs"); }} sx={{ py: 1.25, px: 2.5 }}>
-                    <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
-                    <Typography variant="body2">Applications</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => { handleMainMenuClose(); navigate("/admin/jobs/manage"); }} sx={{ py: 1.25, px: 2.5 }}>
-                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
-                    <Typography variant="body2">Manage Jobs</Typography>
-                  </MenuItem>
                 </>
               )}
 
@@ -251,69 +253,19 @@ export default function Header({
                       "&:hover": {
                         backgroundColor: "#4A4C80",
                         boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
-                        transform: "translateY(-1px)",
                       },
-                      "&:active": { transform: "scale(0.98) translateY(0)" },
                     }}
                   >
                     Form Builder
                   </Button>
                 )}
-                <Button
-                  variant="outlined"
-                  startIcon={<WorkIcon />}
-                  onClick={() => navigate("/admin/jobs")}
-                  sx={{
-                    mr: 1,
-                    borderRadius: "12px",
-                    textTransform: "none",
-                    color: "#0078D4",
-                    borderColor: "rgba(0, 120, 212, 0.3)",
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                    py: 1,
-                    px: 2.5,
-                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                    "&:hover": {
-                      borderColor: "#0078D4",
-                      backgroundColor: "rgba(0, 120, 212, 0.06)",
-                      transform: "translateY(-1px)",
-                    },
-                  }}
-                >
-                  Applications
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<EditIcon />}
-                  onClick={() => navigate("/admin/jobs/manage")}
-                  sx={{
-                    mr: 1,
-                    borderRadius: "12px",
-                    textTransform: "none",
-                    color: "#6264A7",
-                    borderColor: "rgba(98, 100, 167, 0.3)",
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                    py: 1,
-                    px: 2.5,
-                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                    "&:hover": {
-                      borderColor: "#6264A7",
-                      backgroundColor: "rgba(98, 100, 167, 0.06)",
-                      transform: "translateY(-1px)",
-                    },
-                  }}
-                >
-                  Manage Jobs
-                </Button>
               </>
             )}
 
             <Button
               variant="outlined"
-              startIcon={<PublicIcon />}
-              onClick={() => navigate("/careers")}
+              startIcon={<WorkIcon />}
+              onClick={() => navigate("/career-portal")}
               sx={{
                 mr: 1,
                 borderRadius: "12px",
@@ -328,11 +280,10 @@ export default function Header({
                 "&:hover": {
                   borderColor: "#34A853",
                   backgroundColor: "rgba(52, 168, 83, 0.06)",
-                  transform: "translateY(-1px)",
                 },
               }}
             >
-              Careers
+              Career Advancement
             </Button>
 
             <RoleBadge isAdmin={isAdmin} />
@@ -350,11 +301,10 @@ export default function Header({
                 "&:hover": {
                   backgroundColor: "rgba(0, 120, 212, 0.12)",
                   borderColor: "rgba(0, 120, 212, 0.2)",
-                  transform: "translateY(-1px)",
                 },
               }}
             >
-              <Box sx={{ width: 32, height: 32, borderRadius: "10px", backgroundColor: "rgba(0, 120, 212, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Box sx={{ width: 32, height: 32, borderRadius: "8px", backgroundColor: "rgba(0, 120, 212, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <PersonIcon sx={{ fontSize: 18, color: "#0078D4" }} />
               </Box>
             </IconButton>
@@ -367,7 +317,7 @@ export default function Header({
                 paper: {
                   sx: {
                     minWidth: 220,
-                    borderRadius: "14px",
+                    borderRadius: "8px",
                     boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
                     border: "1px solid rgba(0, 0, 0, 0.06)",
                     mt: 1,

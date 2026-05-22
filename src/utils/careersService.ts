@@ -226,7 +226,7 @@ interface ColumnDef {
   extra?: Record<string, unknown>;
 }
 
-/** SP FieldTypeKind: 2=Text 3=Note 4=DateTime 7=Lookup 9=Number 11=Hyperlink */
+/** SP FieldTypeKind: 2=Text 3=Note 4=DateTime 7=Lookup 8=Boolean 9=Number 11=Hyperlink */
 const REQUIRED_COLUMNS: ColumnDef[] = [
   // internalName         displayName         acceptKinds   createKind  extra
   { name: "JobListingID",  acceptKinds: [9, 7], kind: 9 },
@@ -237,6 +237,10 @@ const REQUIRED_COLUMNS: ColumnDef[] = [
   { name: "CurrentPosition",  acceptKinds: [2], kind: 2 },
   { name: "CurrentDepartment", acceptKinds: [2], kind: 2 },
   { name: "ApplicantPhone", acceptKinds: [2], kind: 2 },
+  { name: "PDPAConsent", acceptKinds: [2], kind: 2 },
+  { name: "PDPANoticeVersion", acceptKinds: [2], kind: 2 },
+  { name: "PDPAConsentAt", acceptKinds: [4, 2], kind: 4 },
+  { name: "RetentionUntil", acceptKinds: [4, 2], kind: 4 },
 ];
 
 /**
@@ -279,12 +283,16 @@ export async function ensureJobApplicationColumns(
     CurrentPosition: "Current Position",
     CurrentDepartment: "Current Department",
     ApplicantPhone: "Applicant Phone",
+    PDPAConsent: "PDPA Consent",
+    PDPANoticeVersion: "PDPA Notice Version",
+    PDPAConsentAt: "PDPA Consent At",
+    RetentionUntil: "Retention Until",
   };
 
   // 4. Type mapping for creation
   const typeMap: Record<number, string> = {
     2: "SP.Field", 3: "SP.FieldMultiLineText", 4: "SP.FieldDateTime",
-    7: "SP.FieldLookup", 9: "SP.FieldNumber", 11: "SP.FieldUrl",
+    7: "SP.FieldLookup", 8: "SP.Field", 9: "SP.FieldNumber", 11: "SP.FieldUrl",
   };
 
   // 5. Check & create

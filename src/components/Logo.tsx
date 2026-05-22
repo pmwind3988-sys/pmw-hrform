@@ -1,12 +1,15 @@
 import { Box, type SxProps, type Theme } from "@mui/material";
+import type { Breakpoint } from "@mui/material/styles";
 import logo32 from "../assets/logo-32.png";
 import logo48 from "../assets/logo-48.png";
 import logo64 from "../assets/logo-64.png";
 import logo88 from "../assets/logo-88.png";
 import logo128 from "../assets/logo-128.png";
 
+type ResponsiveLogoSize = number | Partial<Record<Breakpoint, number>>;
+
 interface LogoProps {
-  size?: number;
+  size?: ResponsiveLogoSize;
   alt?: string;
   sx?: SxProps<Theme>;
 }
@@ -20,15 +23,20 @@ const SIZE_MAP = [
 ];
 
 function pickSrc(size: number): string {
-  // Pick the smallest source that is >= target size, or the largest if none
   for (const entry of SIZE_MAP) {
     if (entry.width >= size) return entry.src;
   }
   return SIZE_MAP[SIZE_MAP.length - 1].src;
 }
 
+function getLargestRequestedSize(size: ResponsiveLogoSize): number {
+  if (typeof size === "number") return size;
+  const sizes = Object.values(size).filter((value): value is number => typeof value === "number");
+  return sizes.length > 0 ? Math.max(...sizes) : 64;
+}
+
 export default function Logo({ size = 64, alt = "PMW Logo", sx }: LogoProps) {
-  const src = pickSrc(size);
+  const src = pickSrc(getLargestRequestedSize(size));
   return (
     <Box
       component="img"
@@ -38,10 +46,9 @@ export default function Logo({ size = 64, alt = "PMW Logo", sx }: LogoProps) {
         width: size,
         height: size,
         objectFit: "contain",
+        flexShrink: 0,
         display: "block",
-        // Crisp rendering stack
         imageRendering: "-webkit-optimize-contrast",
-        // Force GPU layer for smoother compositing at small sizes
         transform: "translateZ(0)",
         willChange: "transform",
         backfaceVisibility: "hidden",

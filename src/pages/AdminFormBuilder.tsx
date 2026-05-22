@@ -69,7 +69,9 @@ const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const G = `*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:${C.offWhite};color:${C.textPrimary}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:10px}`;
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:10px}
+@media(max-width:860px){.afb-header{height:auto!important;min-height:52px;align-items:flex-start!important;flex-wrap:wrap;padding:8px 12px!important;gap:8px}.afb-header-left{width:100%;overflow-x:auto;padding-bottom:2px}.afb-header-actions{width:100%;overflow-x:auto;justify-content:flex-start!important;padding-bottom:2px}.afb-header-title{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media(max-width:520px){.afb-header-left{gap:8px!important}.afb-header-title{max-width:150px}.afb-header-actions button{flex:0 0 auto}}`;
 const inp = {
   width: "100%",
   height: 34,
@@ -98,7 +100,7 @@ const Spinner = ({ size = 18 }: { size?: number }) => (
 
 // ── Inline helper components ──────────────────────────────────────────────────
 const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: ReactNode; color?: string; bg?: string }) => (
-  <span style={{ fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "2px 9px", textTransform: "uppercase", letterSpacing: ".04em" }}>{children}</span>
+  <span style={{ fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 6, padding: "2px 8px", textTransform: "uppercase", letterSpacing: 0 }}>{children}</span>
 );
 
 function TextInput({ value, onChange, placeholder, error, disabled, ...rest }: { value: string; onChange: (v: string) => void; placeholder?: string; error?: string; disabled?: boolean; [k: string]: unknown }) {
@@ -696,7 +698,7 @@ export default function AdminFormBuilder() {
         }
       }
       // Always-present system columns (legacy + enhanced)
-      for (const [n, k] of [["SubmittedAt", 4], ["FormVersion", 2], ["FormID", 2], ["SubmittedBy", 2]] as [string, number][]) {
+      for (const [n, k] of [["SubmittedAt", 4], ["FormVersion", 2], ["FormID", 2], ["SubmittedBy", 2], ["PDPAConsent", 2], ["PDPANoticeVersion", 2], ["PDPAConsentAt", 4], ["RetentionUntil", 4]] as [string, number][]) {
         await addColumn(token, title, n, k);
       }
       await addColumn(token, title, 'Status', 2); // Legacy status (compat with ApprovalDashboard)
@@ -861,7 +863,7 @@ export default function AdminFormBuilder() {
           background: toast.type === "err" ? C.red : toast.type === "ok" ? C.green : C.purple,
           color: C.white,
           padding: "10px 18px",
-          borderRadius: 10,
+          borderRadius: 8,
           fontSize: 12,
           boxShadow: C.shadowMd,
           animation: "fadeUp .2s ease",
@@ -871,7 +873,7 @@ export default function AdminFormBuilder() {
         </div>
       )}
 
-      <header style={{
+      <header className="afb-header" style={{
         background: C.white,
         borderBottom: `1px solid ${C.border}`,
         height: 52,
@@ -885,7 +887,7 @@ export default function AdminFormBuilder() {
         boxShadow: "0 1px 0 rgba(91,33,182,.06)",
         flexShrink: 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+        <div className="afb-header-left" style={{ display: "flex", alignItems: "center", gap: 11 }}>
           <button
             type="button"
             onClick={() => { window.location.assign("/"); }}
@@ -910,7 +912,7 @@ export default function AdminFormBuilder() {
           </button>
           <div style={{ width: 1, height: 17, background: C.border }} />
           <span style={{ fontSize: 18, color: '#6264A7', display: 'inline-flex' }}><DescriptionIcon style={{ fontSize: 18 }} /></span>
-          <span style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 16, color: C.textPrimary }}>
+          <span className="afb-header-title" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
             {isEditing ? `Editing: ${meta.formTitle}` : "New Form"}
           </span>
           <Tag color={C.amber} bg={C.amberPale}>⚙ Admin</Tag>
@@ -926,7 +928,7 @@ export default function AdminFormBuilder() {
                 color: C.purple,
                 textDecoration: "none",
                 background: C.purplePale,
-                borderRadius: 20,
+                borderRadius: 6,
                 padding: "2px 9px",
                 border: `1px solid ${C.purpleMid}`,
               }}
@@ -935,7 +937,7 @@ export default function AdminFormBuilder() {
             </a>
           )}
         </div>
-        <div style={{ display: "flex", gap: 7 }}>
+        <div className="afb-header-actions" style={{ display: "flex", gap: 7 }}>
           <button
             onClick={() => setLibraryOpen(o => !o)}
             style={{
@@ -1375,7 +1377,7 @@ export default function AdminFormBuilder() {
                       style={{
                         width: "100%",
                         padding: "10px 0",
-                        borderRadius: 9,
+                        borderRadius: 8,
                         border: `1px solid ${C.border}`,
                         background: C.white,
                         color: !meta.formTitle.trim() || viewingOld ? C.textMuted : C.textSecond,
@@ -1396,7 +1398,7 @@ export default function AdminFormBuilder() {
                     style={{
                       width: "100%",
                       padding: "11px 0",
-                      borderRadius: 9,
+                      borderRadius: 8,
                       border: "none",
                       background: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
                       color: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.white,
@@ -1428,7 +1430,7 @@ export default function AdminFormBuilder() {
         }}>
           <div style={{
             background: C.white,
-            borderRadius: 16,
+            borderRadius: 8,
             padding: "24px 28px",
             maxWidth: 400,
             width: "90%",
@@ -1451,7 +1453,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 20px",
-                  borderRadius: 9,
+                  borderRadius: 8,
                   border: `1px solid ${C.border}`,
                   background: C.white,
                   color: C.textSecond,
@@ -1469,7 +1471,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 20px",
-                  borderRadius: 9,
+                  borderRadius: 8,
                   border: "none",
                   background: `linear-gradient(135deg,${C.red},#B91C1C)`,
                   color: C.white,
@@ -1504,7 +1506,7 @@ export default function AdminFormBuilder() {
         }}>
           <div style={{
             background: C.white,
-            borderRadius: 16,
+            borderRadius: 8,
             padding: "24px 28px",
             maxWidth: 420,
             width: "90%",
@@ -1545,7 +1547,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 20px",
-                  borderRadius: 9,
+                  borderRadius: 8,
                   border: `1px solid ${C.border}`,
                   background: C.white,
                   color: C.textSecond,
@@ -1563,7 +1565,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 24px",
-                  borderRadius: 9,
+                  borderRadius: 8,
                   border: "none",
                   background: `linear-gradient(135deg,#DC2626,#991B1B)`,
                   color: C.white,

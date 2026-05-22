@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems } from "./_utils/graphClient.js";
+import { logError, logWarn } from "./_utils/logger.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -37,7 +38,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (jobId) appCountByJob[jobId] = (appCountByJob[jobId] || 0) + 1;
       }
     } catch (e) {
-      console.error("[API jobs-list] Failed to fetch application counts:", (e as Error).message);
+      logWarn("api:jobs-list", "Failed to fetch live application counts", {
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
     }
 
     const jobs = items
@@ -70,7 +73,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     return res.status(200).json({ jobs } as unknown as Record<string, unknown>);
   } catch (e) {
-    console.error("[API jobs-list]", e);
+    logError("api:jobs-list", "Failed to list jobs", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

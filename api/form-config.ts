@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems, getListColumnChoices, getListColumnValues } from "./_utils/graphClient.js";
+import { logError } from "./_utils/logger.js";
 
 // Minimal Vercel request/response types
 interface ApiRequest {
@@ -217,7 +218,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       _enrichment: enrichment,
     });
   } catch (err) {
-    console.error("[API form-config]", err);
+    logError("api:form-config", "Failed to load form configuration", err);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }

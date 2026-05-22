@@ -93,7 +93,7 @@ export default function WrongTenantScreen({
         <Card
           elevation={0}
           sx={{
-            borderRadius: "24px",
+            borderRadius: "8px",
             border: "1px solid rgba(220,38,38,0.1)",
             boxShadow: "0 4px 24px rgba(220,38,38,0.06)",
             backgroundColor: "rgba(255, 255, 255, 0.92)",
@@ -101,7 +101,6 @@ export default function WrongTenantScreen({
             transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             "&:hover": {
               boxShadow: "0 8px 40px rgba(220, 38, 38, 0.1), 0 2px 8px rgba(220, 38, 38, 0.06)",
-              transform: "translateY(-2px)",
             },
             animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
           }}
@@ -128,7 +127,7 @@ export default function WrongTenantScreen({
                   },
                 }}
               >
-                <Logo size={72} />
+                <Logo size={{ xs: 64, sm: 72 }} />
               </Box>
 
               <Typography
@@ -136,7 +135,7 @@ export default function WrongTenantScreen({
                 sx={{
                   fontWeight: 700,
                   color: "#DC2626",
-                  letterSpacing: "-0.03em",
+                  letterSpacing: 0,
                   textAlign: "center",
                   fontSize: isMobile ? "1.75rem" : "2.25rem",
                 }}
@@ -173,7 +172,7 @@ export default function WrongTenantScreen({
                 onClick={onSwitch}
                 sx={{
                   backgroundColor: "#0078D4",
-                  borderRadius: "12px",
+                  borderRadius: "8px",
                   py: 1.75,
                   fontSize: "1rem",
                   fontWeight: 500,
@@ -182,10 +181,6 @@ export default function WrongTenantScreen({
                   "&:hover": {
                     backgroundColor: "#0068C4",
                     boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
-                    transform: "translateY(-1px)",
-                  },
-                  "&:active": {
-                    transform: "scale(0.98) translateY(0)",
                   },
                 }}
               >
@@ -199,7 +194,7 @@ export default function WrongTenantScreen({
                 startIcon={<LogoutIcon />}
                 onClick={onLogout}
                 sx={{
-                  borderRadius: "12px",
+                  borderRadius: "8px",
                   py: 1.75,
                   fontSize: "1rem",
                   fontWeight: 500,
@@ -210,10 +205,6 @@ export default function WrongTenantScreen({
                   "&:hover": {
                     borderColor: "#DC2626",
                     backgroundColor: "rgba(220, 38, 38, 0.04)",
-                    transform: "translateY(-1px)",
-                  },
-                  "&:active": {
-                    transform: "scale(0.98) translateY(0)",
                   },
                 }}
               >

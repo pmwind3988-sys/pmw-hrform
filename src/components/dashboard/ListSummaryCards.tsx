@@ -1,4 +1,4 @@
-import { Box, Grid, Typography, IconButton, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Grid, Typography, IconButton } from "@mui/material";
 import { Description as DescriptionIcon, Edit as EditIcon, ArrowForward as ArrowForwardIcon } from "@mui/icons-material";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
 
@@ -17,12 +17,6 @@ export default function ListSummaryCards({
   isAdmin,
   onEditForm,
 }: ListSummaryCardsProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const isTablet = useMediaQuery(theme.breakpoints.down("md"));
-  const isDesktop = useMediaQuery(theme.breakpoints.up("lg"));
-  const columns = isMobile ? 1 : isTablet ? 2 : isDesktop ? 4 : 3;
-
   return (
     <Grid container spacing={2.5}>
       {visibleLists.map((list) => {
@@ -54,20 +48,20 @@ export default function ListSummaryCards({
         ).length;
 
         return (
-          <Grid size={{ xs: 12, sm: 6, md: 12 / columns }} key={list.id}>
+          <Grid size={{ xs: 12, sm: 6, lg: 3 }} key={list.id}>
             <Box
               sx={{
                 backgroundColor: "#ffffff",
-                borderRadius: "20px",
-                border: "1px solid rgba(0,0,0,0.04)",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)",
-                p: 3,
-                pt: isAdmin ? 3.5 : 3,
+                borderRadius: "8px",
+                border: "1px solid rgba(17, 24, 39, 0.08)",
+                boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
+                p: { xs: 2, sm: 2.5 },
+                pt: isAdmin ? { xs: 2.5, sm: 3 } : { xs: 2, sm: 2.5 },
                 position: "relative",
-                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                transition: "box-shadow 0.2s ease, border-color 0.2s ease",
                 "&:hover": {
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-                  transform: "translateY(-2px)",
+                  boxShadow: "0 8px 20px rgba(17, 24, 39, 0.08)",
+                  borderColor: "rgba(17, 24, 39, 0.12)",
                 },
               }}
             >
@@ -76,7 +70,7 @@ export default function ListSummaryCards({
                   sx={{
                     width: 48,
                     height: 48,
-                    borderRadius: "50%",
+                    borderRadius: "8px",
                     backgroundColor: `${meta.color}12`,
                     display: "flex",
                     alignItems: "center",
@@ -105,7 +99,7 @@ export default function ListSummaryCards({
                       position: "absolute",
                       top: 12,
                       right: 12,
-                      borderRadius: "10px",
+                      borderRadius: "8px",
                       backgroundColor: "rgba(98, 100, 167, 0.08)",
                       color: "#6264A7",
                       opacity: 0,
@@ -129,9 +123,9 @@ export default function ListSummaryCards({
                 sx={{
                   fontWeight: 700,
                   color: "#111827",
-                  letterSpacing: "-0.03em",
+                  letterSpacing: 0,
                   textAlign: "center",
-                  fontSize: "2.5rem",
+                  fontSize: "2.25rem",
                   mb: 1,
                 }}
               >

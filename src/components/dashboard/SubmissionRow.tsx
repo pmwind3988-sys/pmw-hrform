@@ -45,17 +45,16 @@ export default function SubmissionRow({
         onClick={() => onView(item)}
         sx={{
           backgroundColor: "#ffffff",
-          borderRadius: "16px",
-          border: "1px solid rgba(0,0,0,0.04)",
-          p: 2.5,
+          borderRadius: "8px",
+          border: "1px solid rgba(17, 24, 39, 0.08)",
+          p: 2,
           mb: 2,
           cursor: "pointer",
-          transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)",
+          transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+          boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
           "&:hover": {
             borderColor: "rgba(0, 120, 212, 0.2)",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-            transform: "translateY(-1px)",
+            boxShadow: "0 8px 20px rgba(17, 24, 39, 0.08)",
           },
         }}
       >
@@ -126,7 +125,7 @@ export default function SubmissionRow({
         px: 2.5,
         py: 2,
         backgroundColor: "#ffffff",
-        borderRadius: "0 0 16px 16px",
+        borderRadius: 0,
         borderBottom: "1px solid rgba(0,0,0,0.04)",
         alignItems: "center",
         cursor: "pointer",

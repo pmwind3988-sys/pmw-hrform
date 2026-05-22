@@ -21,7 +21,7 @@ export default function EmptyState({ hasFilters }: EmptyStateProps) {
           sx={{
             fontWeight: 300,
             color: "#1a1a2e",
-            letterSpacing: "-0.02em",
+            letterSpacing: 0,
           }}
         >
           {hasFilters ? "No submissions match your filters" : "No submissions yet"}
