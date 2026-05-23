@@ -18,7 +18,7 @@
 
 ## Component Data Flow
 ```
-App.tsx (state: submissions, filters, listMetaMap)
+App.tsx → DashboardProvider (context: submissions, filters, listMetaMap)
   ├── Header (isAdmin, onOpenBuilder → navigate to /admin/builder)
   ├── StatsRow (submissions)
   ├── ListSummaryCards (visibleLists, onEditForm → navigate to /admin/builder/:listTitle)
@@ -26,6 +26,7 @@ App.tsx (state: submissions, filters, listMetaMap)
   └── SubmissionRow[] (submission, onClick)
         └── DetailModal (open, onClose, submissionData)
 ```
+- State managed via `DashboardContext` (`src/contexts/DashboardContext.tsx`) — the ONLY context store in the app.
 
 ## Conventions
 - **Responsive**: desktop table (`ListHeader` + `SubmissionRow` grid) vs mobile stacked cards

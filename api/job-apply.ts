@@ -111,10 +111,13 @@ async function patchUrlColumn(
   throw new Error(`Could not save ${fieldName} URL to SharePoint.`);
 }
 
+type UploadedFileRole = "resume" | "supporting" | "applicationPdf";
+
 interface UploadedFile {
   name: string;
   content: string;
   contentType: string;
+  role?: UploadedFileRole;
 }
 
 interface JobApplyBody {
@@ -187,6 +190,14 @@ function getRetentionUntil(from: Date = new Date()): string {
   return retentionUntil.toISOString();
 }
 
+function inferFileRole(file: UploadedFile, index: number): UploadedFileRole {
+  if (file.role === "resume" || file.role === "supporting" || file.role === "applicationPdf") {
+    return file.role;
+  }
+  if (index === 0) return "resume";
+  return file.name.toLowerCase() === "careeradvancementapplication.pdf" ? "applicationPdf" : "supporting";
+}
+
 // ── Column resolver ───────────────────────────────────────────────────────────
 // Builds a map of displayName → internal name by querying the list schema.
 // This is the only reliable way to handle columns regardless of how they
@@ -225,6 +236,7 @@ const APPLICATION_COLUMN_SPECS: SpColumnSpec[] = [
   { name: "SubmittedAt", displayName: "Submitted At", acceptKinds: [4, 2], kind: 4 },
   { name: "ResumeUrl", displayName: "Resume URL", acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
   { name: "CoverLetterUrl", displayName: "Cover Letter URL", acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
+  { name: "SupportingDocuments", displayName: "Supporting Documents", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "Reasoning", displayName: "Reasoning", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "CustomAnswers", displayName: "Custom Answers", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "CurrentPosition", displayName: "Current Position", acceptKinds: [2], kind: 2 },
@@ -550,6 +562,30 @@ async function hasDuplicateApplication(
   return (data.value || []).length > 0;
 }
 
+async function countApplicationsForJobViaSPRest(
+  token: string,
+  colMap: ColumnMap,
+  columns: { jobListingId: string | null; status: string | null },
+  jobListingId: string,
+): Promise<number | null> {
+  if (!columns.jobListingId) return null;
+  const selectFields = ["Id", ...(columns.status ? [columns.status] : [])].join(",");
+  const params = new URLSearchParams({
+    "$select": selectFields,
+    "$top": "5000",
+    "$filter": jobListingFilter(colMap, columns.jobListingId, jobListingId),
+  });
+  const data = await spGet<{ value?: Array<Record<string, unknown>> }>(
+    token,
+    `${spListEndpoint(APPLICATION_LIST)}/items?${params.toString()}`,
+    "SP REST application count",
+  );
+  const items = data.value || [];
+  const statusField = columns.status;
+  if (!statusField) return items.length;
+  return items.filter((item) => String(item[statusField] || "").toLowerCase() !== "deleted").length;
+}
+
 async function isHrFormsOwner(token: string, authenticatedEmail: string): Promise<boolean> {
   try {
     const data = await spGet<{ value?: Array<{ Email?: string; UserPrincipalName?: string; LoginName?: string }> }>(
@@ -644,6 +680,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       submittedAt:       findColumn(colMap, "Submitted At", "SubmittedAt", "Submitted_x0020_At"),
       resumeUrl:         findColumn(colMap, "Resume URL", "Resume Url", "ResumeUrl", "Resume_x0020_Url"),
       coverLetterUrl:    findColumn(colMap, "Cover Letter URL", "Cover Letter Url", "CoverLetterUrl", "Cover_x0020_Letter_x0020_Url"),
+      supportingDocuments: findColumn(colMap, "Supporting Documents", "SupportingDocuments", "Supporting_x0020_Documents"),
       reasoning:         findColumn(colMap, "Reasoning"),
       customAnswers:     findColumn(colMap, "CustomAnswers", "Custom Answers"),
       currentPosition:   findColumn(colMap, "CurrentPosition", "Current Position"),
@@ -706,6 +743,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // ── File uploads ─────────────────────────────────────────────────────
     let resumeUrl = "";
+    const supportingDocuments: Array<{ name: string; url: string }> = [];
 
     async function uploadDoc(name: string, content: string): Promise<string | null> {
       try {
@@ -730,8 +768,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file.name || !file.content) continue;
+        const role = inferFileRole(file, i);
         const url = await uploadDoc(file.name, file.content);
-        if (i === 0 && url) resumeUrl = url;
+        if (!url) continue;
+        if (role === "resume" && !resumeUrl) {
+          resumeUrl = url;
+        } else if (role === "supporting") {
+          supportingDocuments.push({ name: file.name, url });
+        }
       }
     }
 
@@ -788,20 +832,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // SP.FieldUrlValue; text-compatible URL fields use the fallback in patchUrlColumn().
     logInfo("api:job-apply", "Resolved resume URL", {
       hasResumeUrl: Boolean(resumeUrl),
+      supportingDocumentCount: supportingDocuments.length,
     });
     if (COL.resumeUrl && resumeUrl) {
       await patchUrlColumn(delegatedToken, APPLICATION_LIST, itemId, COL.resumeUrl, resumeUrl, "Resume");
     }
-    // coverLetterUrl — currently unused (cover letters stored as text in Reasoning)
-    // Uncomment when you add cover letter file upload support:
-    // if (COL.coverLetterUrl && coverLetterUrl) {
-    //   await patchUrlColumn(delegatedToken, APPLICATION_LIST, itemId, COL.coverLetterUrl, coverLetterUrl, "Cover Letter");
-    // }
+    if (COL.coverLetterUrl && supportingDocuments[0]) {
+      await patchUrlColumn(
+        delegatedToken,
+        APPLICATION_LIST,
+        itemId,
+        COL.coverLetterUrl,
+        supportingDocuments[0].url,
+        supportingDocuments[0].name || "Supporting Document",
+      );
+    }
 
     // Plain text / note columns
     await patchField(COL.currentPosition,   currentPosition || null,  "CurrentPosition");
     await patchField(COL.currentDepartment, currentDepartment || null, "CurrentDepartment");
     await patchField(COL.reasoning,         coverLetter?.trim() || null, "Reasoning");
+    await patchField(
+      COL.supportingDocuments,
+      supportingDocuments.length > 0 ? JSON.stringify(supportingDocuments) : null,
+      "SupportingDocuments",
+    );
     await patchField(
       COL.customAnswers,
       customAnswers && Object.keys(customAnswers).length > 0
@@ -820,15 +875,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         "Application_x0020_Count",
       );
       if (countCol) {
-        const jobItem = await spGet<Record<string, unknown>>(
+        const liveCount = await countApplicationsForJobViaSPRest(
           delegatedToken,
-          `${spListEndpoint(JOB_LIST)}/items(${jobListingId})?$select=Id,${countCol}`,
-          "SP REST job listing count",
+          colMap,
+          { jobListingId: COL.jobListingId, status: COL.status },
+          jobListingId,
         );
-        const currentCount = Number(jobItem[countCol]) || 0;
-        await updateListItemViaSPRest(delegatedToken, JOB_LIST, jobListingId, {
-          [countCol]: currentCount + 1,
-        });
+        if (liveCount !== null) {
+          await updateListItemViaSPRest(delegatedToken, JOB_LIST, jobListingId, {
+            [countCol]: liveCount,
+          });
+        }
       }
     } catch (e) {
       logWarn("api:job-apply", "Count update failed", {

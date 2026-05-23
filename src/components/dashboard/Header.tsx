@@ -13,6 +13,9 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import {
+  AssignmentInd as ApplicationsIcon,
+  AutoAwesome as CardsIcon,
+  Edit as EditIcon,
   Person as PersonIcon,
   Logout as LogoutIcon,
   Settings as SettingsIcon,
@@ -73,6 +76,16 @@ export default function Header({
 
   const handleMainMenuClose = () => {
     setMainMenuAnchorEl(null);
+  };
+
+  const openDashboardBackgroundPicker = (closeMenu: () => void) => {
+    closeMenu();
+    setBgPickerOpen(true);
+  };
+
+  const navigateFromMenu = (path: string, closeMenu: () => void) => {
+    closeMenu();
+    navigate(path);
   };
 
   return (
@@ -207,13 +220,19 @@ export default function Header({
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                </>
-              )}
-
-              {isAdmin && (
-                <>
-                  <Divider sx={{ my: 0.5 }} />
-                  <MenuItem onClick={() => { handleMainMenuClose(); setBgPickerOpen(true); }} sx={{ py: 1.25, px: 2.5 }}>
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
+                    <ApplicationsIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                    <Typography variant="body2">Career Applications</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
+                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                    <Typography variant="body2">Manage Openings</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
+                    <CardsIcon sx={{ mr: 1.5, fontSize: 20, color: "#16A34A" }} />
+                    <Typography variant="body2">Manage Cards</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
                     <WallpaperIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
                     <Typography variant="body2">Dashboard Background</Typography>
                   </MenuItem>
@@ -224,54 +243,6 @@ export default function Header({
         ) : (
           <>
             {/* ── Desktop: separate controls ── */}
-            {isAdmin && (
-              <IconButton
-                onClick={() => setBgPickerOpen(true)}
-                size="small"
-                aria-label="Open dashboard background picker"
-                sx={{
-                  mr: 0.5,
-                  borderRadius: "10px",
-                  color: "#0078D4",
-                  backgroundColor: "rgba(0,120,212,0.07)",
-                  "&:hover": { backgroundColor: "rgba(0,120,212,0.12)" },
-                }}
-              >
-                <WallpaperIcon />
-              </IconButton>
-            )}
-
-            {isAdmin && (
-              <>
-                {onOpenBuilder && (
-                  <Button
-                    variant="contained"
-                    startIcon={<SettingsIcon />}
-                    onClick={onOpenBuilder}
-                    sx={{
-                      mr: 1,
-                      borderRadius: "12px",
-                      textTransform: "none",
-                      backgroundColor: "#6264A7",
-                      color: "#ffffff",
-                      fontWeight: 600,
-                      fontSize: "0.85rem",
-                      py: 1,
-                      px: 2.5,
-                      boxShadow: "0 2px 8px rgba(98, 100, 167, 0.25)",
-                      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                      "&:hover": {
-                        backgroundColor: "#4A4C80",
-                        boxShadow: "0 4px 12px rgba(98, 100, 167, 0.35)",
-                      },
-                    }}
-                  >
-                    Form Builder
-                  </Button>
-                )}
-              </>
-            )}
-
             <Button
               variant="outlined"
               startIcon={<WorkIcon />}
@@ -350,6 +321,33 @@ export default function Header({
                 <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
                 <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
               </MenuItem>
+              {isAdmin && (
+                <>
+                  <Divider sx={{ my: 0.5 }} />
+                  {onOpenBuilder && (
+                    <MenuItem onClick={() => { handleProfileClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
+                      <SettingsIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                      <Typography variant="body2">Form Builder</Typography>
+                    </MenuItem>
+                  )}
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
+                    <ApplicationsIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                    <Typography variant="body2">Career Applications</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
+                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                    <Typography variant="body2">Manage Openings</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
+                    <CardsIcon sx={{ mr: 1.5, fontSize: 20, color: "#16A34A" }} />
+                    <Typography variant="body2">Manage Cards</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
+                    <WallpaperIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                    <Typography variant="body2">Dashboard Background</Typography>
+                  </MenuItem>
+                </>
+              )}
             </Menu>
           </>
         )}

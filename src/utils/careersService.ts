@@ -1,9 +1,10 @@
-import type { JobListing, JobApplyRequest, JobAdminApplication } from "../types";
+import type { JobListing, JobApplyRequest, JobAdminApplication, CareerPortalCard } from "../types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface JobsListResponse {
   jobs: JobListing[];
+  portalCards?: CareerPortalCard[];
 }
 
 interface ApplyResponse {
@@ -16,8 +17,20 @@ interface AdminListResponse {
   applications: JobAdminApplication[];
 }
 
+interface PortalCardsResponse {
+  portalCards: CareerPortalCard[];
+}
+
 interface AdminUpdateResponse {
   success: boolean;
+}
+
+export interface ApplicationListQuery {
+  email?: string;
+  status?: string;
+  submittedFrom?: string;
+  submittedTo?: string;
+  limit?: number;
 }
 
 // ── Shared API key header ──────────────────────────────────────────────────────
@@ -33,6 +46,17 @@ function apiHeaders(extra: Record<string, string> = {}): Record<string, string> 
 
 // ── API client functions ───────────────────────────────────────────────────────
 
+function applicationQueryString(query: ApplicationListQuery = {}): string {
+  const params = new URLSearchParams();
+  if (query.email) params.set("email", query.email);
+  if (query.status) params.set("status", query.status);
+  if (query.submittedFrom) params.set("submittedFrom", query.submittedFrom);
+  if (query.submittedTo) params.set("submittedTo", query.submittedTo);
+  if (query.limit) params.set("limit", String(query.limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export async function fetchJobs(): Promise<JobListing[]> {
   const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
 
@@ -42,6 +66,17 @@ export async function fetchJobs(): Promise<JobListing[]> {
 
   const data: JobsListResponse = (await response.json()) as JobsListResponse;
   return data.jobs;
+}
+
+export async function fetchCareersPortalData(): Promise<{ jobs: JobListing[]; portalCards: CareerPortalCard[] }> {
+  const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch jobs: ${response.status} ${response.statusText}`);
+  }
+
+  const data: JobsListResponse = (await response.json()) as JobsListResponse;
+  return { jobs: data.jobs, portalCards: data.portalCards ?? [] };
 }
 
 export async function submitApplication(
@@ -67,8 +102,14 @@ export async function submitApplication(
   return (await response.json()) as ApplyResponse;
 }
 
-export async function fetchMyApplications(email: string): Promise<JobAdminApplication[]> {
-  const response = await fetch(`/api/job-admin?email=${encodeURIComponent(email)}`, { headers: apiHeaders() });
+export async function fetchMyApplications(
+  email: string,
+  query: Omit<ApplicationListQuery, "email"> = {},
+): Promise<JobAdminApplication[]> {
+  const response = await fetch(
+    `/api/job-admin${applicationQueryString({ ...query, email })}`,
+    { headers: apiHeaders() },
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
@@ -78,8 +119,8 @@ export async function fetchMyApplications(email: string): Promise<JobAdminApplic
   return data.applications;
 }
 
-export async function fetchApplications(): Promise<JobAdminApplication[]> {
-  const response = await fetch("/api/job-admin", { headers: apiHeaders() });
+export async function fetchApplications(query: ApplicationListQuery = {}): Promise<JobAdminApplication[]> {
+  const response = await fetch(`/api/job-admin${applicationQueryString(query)}`, { headers: apiHeaders() });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
@@ -113,7 +154,7 @@ export async function updateApplicationStatus(
 
 export async function deleteApplications(
   ids: string[],
-): Promise<{ deleted: number; errors?: string[] }> {
+): Promise<{ deleted: number; deletedFiles?: number; errors?: string[]; fileWarnings?: string[] }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
     headers: apiHeaders(),
@@ -124,7 +165,12 @@ export async function deleteApplications(
     try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
     throw new Error(`Failed to delete applications: ${detail}`);
   }
-  return (await response.json()) as { deleted: number; errors?: string[] };
+  return (await response.json()) as {
+    deleted: number;
+    deletedFiles?: number;
+    errors?: string[];
+    fileWarnings?: string[];
+  };
 }
 
 export async function fetchColumnChoices(
@@ -214,6 +260,74 @@ export async function updateJobListing(
   return result;
 }
 
+export async function fetchCareerPortalCards(): Promise<CareerPortalCard[]> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify({ action: "list-portal-cards" }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch portal cards: ${response.status} ${response.statusText}`);
+  }
+
+  const data: PortalCardsResponse = (await response.json()) as PortalCardsResponse;
+  return data.portalCards;
+}
+
+export async function createCareerPortalCard(
+  data: Omit<CareerPortalCard, "id" | "created">,
+): Promise<{ success: boolean; cardId: string }> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify({ action: "create-portal-card", ...data }),
+  });
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
+    throw new Error(`Failed to create portal card: ${detail}`);
+  }
+
+  return (await response.json()) as { success: boolean; cardId: string };
+}
+
+export async function updateCareerPortalCard(
+  cardId: string,
+  data: Partial<Omit<CareerPortalCard, "id" | "created">>,
+): Promise<{ success: boolean }> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify({ action: "update-portal-card", cardId, ...data }),
+  });
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
+    throw new Error(`Failed to update portal card: ${detail}`);
+  }
+
+  return (await response.json()) as { success: boolean };
+}
+
+export async function deleteCareerPortalCard(cardId: string): Promise<{ success: boolean }> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify({ action: "delete-portal-card", cardId }),
+  });
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
+    throw new Error(`Failed to delete portal card: ${detail}`);
+  }
+
+  return (await response.json()) as { success: boolean };
+}
+
 // ── Client-side column provisioning (blocking — throws on failure) ─────────
 
 interface ColumnDef {
@@ -239,6 +353,7 @@ const REQUIRED_COLUMNS: ColumnDef[] = [
   { name: "SubmittedAt", acceptKinds: [4, 2], kind: 4 },
   { name: "ResumeUrl",     acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
   { name: "CoverLetterUrl", acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
+  { name: "SupportingDocuments", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "Reasoning",     acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "CustomAnswers", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "CurrentPosition",  acceptKinds: [2], kind: 2 },
@@ -291,6 +406,7 @@ export async function ensureJobApplicationColumns(
     SubmittedAt: "Submitted At",
     ResumeUrl: "Resume URL",
     CoverLetterUrl: "Cover Letter URL",
+    SupportingDocuments: "Supporting Documents",
     Reasoning: "Reasoning",
     CustomAnswers: "Custom Answers",
     CurrentPosition: "Current Position",

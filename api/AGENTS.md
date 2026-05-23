@@ -8,15 +8,23 @@
 | Public form config | `form-config.ts` | `GET /api/form-config?slug=X[&version=Y]`. Reads Master Form + Web Form Versions via Graph API. |
 | Public form submit | `submit-form.ts` | `POST /api/submit-form`. Verifies form is public, creates list item via Graph API. Accepts optional `matrixData` param for dynamicmatrix child list items. |
 | Public evaluation | `evaluate.ts` | `GET /api/evaluate?token=X&responseItemId=Y` returns filtered layer-visible data; `POST /api/evaluate` submits approve/reject/confirm actions via system credential. |
-| Graph client (active) | `_utils/graphClient.ts` | Client-credentials token for `graph.microsoft.com/v1.0`. Exports: `getGraphToken`, `graphGet`, `graphPost`, `queryListItems`, `createListItem`, `updateListItemFields`. |
-| SP REST client (dead) | `_utils/sharepoint.ts` | Dead code — not imported by any API route. All routes use `graphClient.ts` instead. |
+| Dashboard background | `dashboard-background.ts` | `GET/POST /api/dashboard-background`. Fetches/saves dashboard background setting from SP list. |
+| Send email | `send-email.ts` | `POST /api/send-email`. Sends email via Graph API `sendMail`. Requires `Mail.Send` app permission. |
+| Job listings (public) | `jobs-list.ts` | `GET /api/jobs-list`. Lists active jobs from "Internal Job Listing" SP list with live applicant counts. |
+| Job applications | `job-apply.ts` | `POST /api/job-apply`. Creates "Job Applications" item, uploads files, sends HR email. See gotchas in root AGENTS.md. |
+| Job admin | `job-admin.ts` | `GET/PUT/DELETE /api/job-admin`. Admin CRUD for applications and job listings. All IDs validated as numeric before Graph `$filter`. |
+| Graph client | `_utils/graphClient.ts` | Client-credentials token for `graph.microsoft.com/v1.0`. Exports: `queryListItems`, `createListItem`, `updateListItemFields`, `deleteListItem`, `queryListItemById`, `getListId`, etc. |
+| API auth | `_utils/auth.ts` | Validates `X-Api-Key` header against `API_SECRET_KEY` env var. Used by all routes. |
+| Career portal cards | `_utils/careerPortalCards.ts` | CRUD helpers for "Career Portal Cards" SP list. Used by jobs-list.ts and job-admin.ts. |
+| List provisioning | `_utils/provisioning.ts` | Helpers for ensuring SP list schemas exist (used by submit-form, job-apply). |
+| Logger | `_utils/logger.ts` | Sanitized logging helpers that avoid raw personal data in output. |
 
 ## Conventions
-- **Import paths**: API routes import from `./_utils/graphClient.ts` (relative, `_` prefix convention).
+- **Import paths**: API routes import from `./_utils/...` (relative, `_` prefix convention).
 - **OData**: Uses `odata=nometadata` — responses use `data.value` not `data.d.results`.
-- **CORS**: `vercel.json` adds CORS headers (`Access-Control-Allow-Origin: *`) for all `/api/*` routes.
-- **Environment**: API routes run server-side in Vercel (Node.js runtime). They use `process.env` for secrets, not `import.meta.env.VITE_*`.
+- **CORS**: `vercel.json` restricts `Access-Control-Allow-Origin` to `https://pmw-hrform.vercel.app` for `/api/*`.
+- **Environment**: API routes run server-side in Vercel (Node.js runtime). Use `process.env` for secrets, NOT `import.meta.env.VITE_*`.
+- **Graph API**: Raw `fetch` to `graph.microsoft.com/v1.0` with client credentials flow. No SP REST SDK.
 
 ## Anti-Patterns
-- `_utils/sharepoint.ts` — dead code (superseded by `graphClient.ts`). Safe to delete.
-- `console.error` in both routes — replace with proper logging.
+- `console.error` in API routes — replace with proper logging.

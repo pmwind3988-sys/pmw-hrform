@@ -7,6 +7,7 @@
 - **Sub-instructions** (keep updated if paths change):
   `src/utils/AGENTS.md`, `src/components/builder/AGENTS.md`, `src/pages/AGENTS.md`,
   `api/AGENTS.md`, `src/components/auth/AGENTS.md`, `src/components/dashboard/AGENTS.md`
+- **Only context**: `src/contexts/DashboardContext.tsx` — used by `AdminHomePage`; everything else uses local `useState`.
 
 ## Commands
 ```bash
@@ -29,7 +30,7 @@ npx vitest run     # ~77 unit tests in src/utils/__tests__/FormBuilderEngine.tes
 - `@react-pdf/renderer` — generates PDF on client side. `src/utils/generateFormPdf.ts` handles PDF creation flow.
 - `react-dnd` v16 (HTML5 backend) — drag-drop canvas in form builder.
 - **API**: Vercel serverless functions in `api/` — **not Express**. Graph API client (`api/_utils/graphClient.ts`) for all list operations. No SP REST SDK — raw `fetch` to `graph.microsoft.com`.
-- **API auth**: All 7 API routes require `X-Api-Key` header matching `API_SECRET_KEY` env var. Validated by `api/_utils/auth.ts`. Frontend sends via `VITE_API_SECRET_KEY` (same value, compiled into bundle).
+- **API auth**: All 8 API routes (`form-config`, `submit-form`, `evaluate`, `jobs-list`, `job-apply`, `job-admin`, `send-email`, `dashboard-background`) require `X-Api-Key` header matching `API_SECRET_KEY` env var. Validated by `api/_utils/auth.ts`. Frontend sends via `VITE_API_SECRET_KEY` (same value, compiled into bundle).
 - **Security**: CORS restricted, CSP set, API auth enforced, error messages sanitized server-side, `encodeURIComponent` on all Graph API path params.
 - Other notable deps: `dompurify` (HTML sanitization), `qrcode`, `libphonenumber-js`.
 
@@ -101,7 +102,7 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 - `MatrixColumnDef` (in `formBuilderSP.ts`) — dynamicmatrix column definitions
 
 ## Anti-Patterns
-- **NO `console.log/warn/error`** in production (38 exist across 11 files — remove when touching)
+- **NO `console.log/warn/error`** in production (37 exist across 10 files — remove when touching)
 - **NO `any`** — many files have them; fix types when touching
 - **NO `@ts-ignore` / `@ts-expect-error`** (zero occurrences currently — keep it that way)
 - **NO runtime `enum`/`namespace`** — `erasableSyntaxOnly: true`
@@ -119,6 +120,7 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 - **Styling**: Form builder uses inline styles via `C` color object (`src/components/builder/constants.ts`). Published form uses CSS-in-JS with theme tokens. Dashboard uses MUI components with theme overrides. Careers pages use MUI `sx` with inline theme-aware values.
 - **State**: Local `useState` only — no context stores except `DashboardContext` in `AdminHomePage`.
 - **Responsive**: Dashboard uses `useMediaQuery` for mobile detection (SubmissionRow has stacked card layout on mobile). Header collapses all nav items into a single hamburger menu on mobile.
+- **Hooks**: 3 custom hooks in `src/hooks/` — `useUserProfile` (MS Graph user info), `useDashboardBackground` (background image/gradient), `useReactiveForm` (generic form state management).
 
 ## Testing
 - ~77 unit tests in `src/utils/__tests__/FormBuilderEngine.test.ts` (pure logic, no network/SP).
@@ -147,12 +149,21 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 | `/admin/builder[/:formTitle]` | `AdminFormBuilder` | `src/pages/AdminFormBuilder.tsx` |
 | `/admin/approvals` | `ApprovalDashboard` | `src/components/builder/ApprovalDashboard.tsx` |
 | `/admin/responses/:formTitle` | `ResponseViewer` | `src/components/builder/ResponseViewer.tsx` |
-| `/adminhomepage` | `AdminHomePage` | `src/pages/AdminHomePage.tsx` |
-| `/admin/jobs` | `AdminJobsPage` | `src/pages/AdminJobsPage.tsx` |
-| `/admin/jobs/manage` | `AdminJobManagePage` | `src/pages/AdminJobManagePage.tsx` |
-| `/careers` | `CareersPage` | `src/pages/CareersPage.tsx` |
-| `/careers/:jobId/apply` | `JobApplyPage` | `src/pages/JobApplyPage.tsx` |
+| `/admin/dashboard` | admin dashboard (AdminGuard) | `AdminHomePage` (via `adminDashboardInner`) |
+| `/user/dashboard` | user dashboard (no guard) | `AdminHomePage` (via `adminDashboardInner`) |
+| `/admin/career/applications` | `AdminJobsPage` | `src/pages/AdminJobsPage.tsx` |
+| `/admin/career/opportunities` | `AdminJobManagePage` | `src/pages/AdminJobManagePage.tsx` |
+| `/admin/career/cards` | `AdminCareerPortalCardsPage` | `src/pages/AdminCareerPortalCardsPage.tsx` |
+| `/admin/jobs` | redirect → `/admin/career/applications` | — |
+| `/admin/jobs/manage` | redirect → `/admin/career/opportunities` | — |
+| `/adminhomepage` | (legacy) redirect via catch-all | `AdminHomePage` |
+| `/privacy` | `PrivacyNoticePage` | `src/pages/PrivacyNoticePage.tsx` |
+| `/career-portal` | `CareersPage` | `src/pages/CareersPage.tsx` |
+| `/career-portal/:jobId/apply` | `JobApplyPage` | `src/pages/JobApplyPage.tsx` |
+| `/careers` | redirect → `/career-portal` | — |
+| `/careers/:jobId/apply` | redirect → `/career-portal/:jobId/apply` | — |
 | `/eval/:token` / `/eval/:formSlug/:responseId/:layerNumber` | `EvaluationPage` | `src/pages/EvaluationPage.tsx` |
+| `*` (catch-all) | admin→`/admin/dashboard`, else→`/user/dashboard` | — |
 
 ## Builder Architecture (summary)
 ```

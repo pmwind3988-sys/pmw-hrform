@@ -34,6 +34,7 @@ import JobApplyPage from "./pages/JobApplyPage";
 import PrivacyNoticePage from "./pages/PrivacyNoticePage";
 import AdminJobsPage from "./pages/AdminJobsPage";
 import AdminJobManagePage from "./pages/AdminJobManagePage";
+import AdminCareerPortalCardsPage from "./pages/AdminCareerPortalCardsPage";
 import { DashboardProvider } from "./contexts/DashboardContext";
 
 
@@ -703,6 +704,18 @@ if (decision === "guest") {
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
                     <AdminJobManagePage />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/career/cards"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                    <AdminCareerPortalCardsPage />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>

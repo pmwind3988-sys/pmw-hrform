@@ -56,6 +56,7 @@ interface FileEntry {
   name: string;
   content: string;
   contentType: string;
+  role?: "resume" | "supporting" | "applicationPdf";
   /** File size in bytes (only for display/validation) */
   size: number;
 }
@@ -365,6 +366,8 @@ export default function JobApplyPage() {
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaTouched, setPdpaTouched] = useState(false);
   const adminOverrideMode = alreadyApplied && isAdmin && overrideRequested;
+  const nameLockedFromProfile = !profile.loading && !profile.error && !!profile.displayName;
+  const emailLockedFromProfile = !profile.loading && !profile.error && !!profile.email;
 
   // Check if user is admin (group membership)
   useEffect(() => {
@@ -598,10 +601,16 @@ export default function JobApplyPage() {
 
       // Combine resume + supporting docs + generated PDF
       const allFiles: FileEntry[] = [];
-      if (values.resume) allFiles.push(values.resume);
-      allFiles.push(...values.supportingDocs);
+      if (values.resume) allFiles.push({ ...values.resume, role: "resume" });
+      allFiles.push(...values.supportingDocs.map((file) => ({ ...file, role: "supporting" as const })));
       if (pdfBase64) {
-        allFiles.push({ name: "CareerAdvancementApplication.pdf", content: pdfBase64, contentType: "application/pdf", size: 0 });
+        allFiles.push({
+          name: "CareerAdvancementApplication.pdf",
+          content: pdfBase64,
+          contentType: "application/pdf",
+          role: "applicationPdf",
+          size: 0,
+        });
       }
 
       const result = await submitApplication({
@@ -789,12 +798,24 @@ export default function JobApplyPage() {
                     onChange={(e) => form.controls.name.setValue(e.target.value)}
                     onBlur={form.controls.name.onBlur}
                     error={form.controls.name.touched && !!form.controls.name.errors.required}
-                    helperText={form.controls.name.touched && form.controls.name.errors.required ? "Name is required" : ""}
+                    helperText={
+                      form.controls.name.touched && form.controls.name.errors.required
+                        ? "Name is required"
+                        : nameLockedFromProfile
+                          ? "From your Microsoft profile"
+                          : ""
+                    }
                     fullWidth
                     required
                     variant="outlined"
                     slotProps={{
-                      input: { sx: { borderRadius: "8px" } },
+                      input: {
+                        readOnly: nameLockedFromProfile,
+                        sx: {
+                          borderRadius: "8px",
+                          ...(nameLockedFromProfile ? { backgroundColor: "#F9FAFB" } : {}),
+                        },
+                      },
                     }}
                   />
 
@@ -811,13 +832,21 @@ export default function JobApplyPage() {
                         ? "Email is required"
                         : form.controls.email.touched && form.controls.email.errors.email
                           ? "Please enter a valid email"
-                          : ""
+                          : emailLockedFromProfile
+                            ? "From your Microsoft profile"
+                            : ""
                     }
                     fullWidth
                     required
                     variant="outlined"
                     slotProps={{
-                      input: { sx: { borderRadius: "8px" } },
+                      input: {
+                        readOnly: emailLockedFromProfile,
+                        sx: {
+                          borderRadius: "8px",
+                          ...(emailLockedFromProfile ? { backgroundColor: "#F9FAFB" } : {}),
+                        },
+                      },
                     }}
                   />
 

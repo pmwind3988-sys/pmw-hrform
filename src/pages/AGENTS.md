@@ -9,6 +9,10 @@
 | Form builder page | `AdminFormBuilder.tsx` | Routes `/admin/builder[/:formTitle]`. Hosts `FormBuilder` + `FormLibrary` + sidebar with Layers/Meta/Versions/Log/Publish tabs. Manages `showBanner`, `meta`, `layerConfig`, publish flow. |
 | Public form renderer | `DynamicFormPage.tsx` | Route `/form/:formId`. Auth gate bypassed for public forms. SurveyJS model + theme + submission handler with LayerConfig-based layer resolution. Uses `onCompleting` (prevents auto-complete) + `useEffect` on `submitStatus` to trigger `doSubmitForm()`. `onComplete` is intentionally NOT registered. |
 | Evaluator interface | `EvaluationPage.tsx` | Routes `/eval/:token` (public) and `/eval/:formSlug/:responseId/:layerNumber` (365). Auth gate, layer action (approve/signature/checkbox/reject/confirm). |
+| Privacy notice | `PrivacyNoticePage.tsx` | Route `/privacy`. Public page with PDPA privacy notice content. |
+| Job admin lists | `AdminJobsPage.tsx` | Route `/admin/career/applications`. Lists/manages job applications. |
+| Job admin manage | `AdminJobManagePage.tsx` | Route `/admin/career/opportunities`. CRUD for job listings. |
+| Career portal cards | `AdminCareerPortalCardsPage.tsx` | Route `/admin/career/cards`. Manages career portal hero/feature cards. |
 
 ## Conventions
 - **Prop-drilling**: `AdminHomePage` receives massive props from `App.tsx` — no context abstraction yet.

@@ -883,6 +883,24 @@ export interface JobListing {
   customFields?: CustomFieldDefinition[];
 }
 
+export interface CareerPortalCard {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  sortOrder: number;
+  status: "Active" | "Hidden";
+  targetType: "none" | "job" | "link";
+  targetValue: string;
+  colorStart?: string;
+  colorEnd?: string;
+  colorAccent?: string;
+  isSystemDefault?: boolean;
+  locked?: boolean;
+  source?: "system" | "sharepoint";
+  created: string;
+}
+
 export interface JobApplication {
   id: string;
   jobListingId: string;
@@ -896,10 +914,17 @@ export interface JobApplication {
   submittedAt: string;
   submissionRef: string;
   customAnswers?: Record<string, unknown>;
+  supportingDocuments?: JobDocumentLink[];
 }
 
 export interface JobsApiResponse {
   jobs: JobListing[];
+  portalCards?: CareerPortalCard[];
+}
+
+export interface JobDocumentLink {
+  name: string;
+  url: string;
 }
 
 export interface JobApplyRequest {
@@ -911,7 +936,12 @@ export interface JobApplyRequest {
   currentPosition?: string;
   currentDepartment?: string;
   coverLetter: string;
-  files: { name: string; content: string; contentType: string }[];
+  files: {
+    name: string;
+    content: string;
+    contentType: string;
+    role?: "resume" | "supporting" | "applicationPdf";
+  }[];
   customAnswers?: Record<string, unknown>;
   accessToken?: string;
   submittedByEmail?: string;
@@ -935,6 +965,7 @@ export interface JobAdminApplication {
   submissionRef: string;
   coverLetterUrl?: string;
   resumeUrl?: string;
+  supportingDocuments?: JobDocumentLink[];
   customAnswers?: Record<string, unknown>;
   jobListingId?: string;
 }

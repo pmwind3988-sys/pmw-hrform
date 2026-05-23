@@ -31,6 +31,9 @@ import {
   ToggleButtonGroup,
   FormControl,
   InputLabel,
+  TextField,
+  InputAdornment,
+  TablePagination,
 } from "@mui/material";
 import {
   Close,
@@ -44,43 +47,76 @@ import {
   DateRange as WeekIcon,
   CalendarMonth as MonthIcon,
   FilterList as FilterIcon,
+  Search as SearchIcon,
 } from "@mui/icons-material";
 import { fetchApplications, updateApplicationStatus, deleteApplications } from "../utils/careersService";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { JobAdminApplication } from "../types";
 
-type TimelinePreset = "today" | "7d" | "month" | "year" | "all";
+type TimelinePreset = "today" | "7d" | "month" | "year" | "custom" | "all";
 
-function getTimelineCutoff(preset: TimelinePreset): Date | null {
+type SortOption = "newest" | "oldest" | "applicant" | "role" | "status";
+
+type DateRange = {
+  from?: string;
+  to?: string;
+};
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function endOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function getThisWeekStart(date: Date): Date {
+  const start = startOfDay(date);
+  const day = start.getDay();
+  start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+  return start;
+}
+
+function dateInputToIso(value: string, boundary: "start" | "end"): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return (boundary === "start" ? startOfDay(date) : endOfDay(date)).toISOString();
+}
+
+function getTimelineRange(preset: TimelinePreset, customFrom = "", customTo = ""): DateRange {
   const now = new Date();
   switch (preset) {
     case "today":
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    case "7d": {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 7);
-      return d;
-    }
+      return { from: startOfDay(now).toISOString() };
+    case "7d":
+      return { from: getThisWeekStart(now).toISOString() };
     case "month": {
       const d = new Date(now);
       d.setDate(d.getDate() - 30);
-      return d;
+      return { from: d.toISOString() };
     }
     case "year": {
       const d = new Date(now);
       d.setFullYear(d.getFullYear() - 1);
-      return d;
+      return { from: d.toISOString() };
     }
+    case "custom":
+      return {
+        from: dateInputToIso(customFrom, "start"),
+        to: dateInputToIso(customTo, "end"),
+      };
     default:
-      return null;
+      return {};
   }
 }
 
 const TIMELINE_OPTIONS: { value: TimelinePreset; label: string; icon: React.ReactNode }[] = [
   { value: "today", label: "Today", icon: <TodayIcon sx={{ fontSize: 16 }} /> },
-  { value: "7d", label: "7 Days", icon: <WeekIcon sx={{ fontSize: 16 }} /> },
-  { value: "month", label: "Month", icon: <MonthIcon sx={{ fontSize: 16 }} /> },
+  { value: "7d", label: "This Week", icon: <WeekIcon sx={{ fontSize: 16 }} /> },
+  { value: "month", label: "30 Days", icon: <MonthIcon sx={{ fontSize: 16 }} /> },
   { value: "year", label: "Year", icon: <MonthIcon sx={{ fontSize: 16 }} /> },
+  { value: "custom", label: "Custom", icon: <WeekIcon sx={{ fontSize: 16 }} /> },
   { value: "all", label: "All", icon: null },
 ];
 
@@ -138,23 +174,41 @@ export default function AdminJobsPage() {
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [timelineFilter, setTimelineFilter] = useState<TimelinePreset>("today");
   const [statusFilter, setStatusFilter] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchApplications();
+      const range = getTimelineRange(timelineFilter, customFrom, customTo);
+      const data = await fetchApplications({
+        status: statusFilter,
+        submittedFrom: range.from,
+        submittedTo: range.to,
+        limit: 999,
+      });
       setApplications(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load applications");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [timelineFilter, statusFilter, customFrom, customTo]);
 
   useEffect(() => {
+    setPage(0);
+    setSelectedIds(new Set());
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchText, sortBy]);
 
   const handleStatusChange = useCallback(
     async (applicationId: string, newStatus: string) => {
@@ -180,20 +234,57 @@ export default function AdminJobsPage() {
   );
 
   const filteredApplications = useMemo(() => {
-    const cutoff = getTimelineCutoff(timelineFilter);
-    return applications.filter((app) => {
-      // timeline filter
-      if (cutoff) {
-        const appDate = new Date(app.submittedAt);
-        if (appDate < cutoff) return false;
-      }
-      // status filter
+    const range = getTimelineRange(timelineFilter, customFrom, customTo);
+    const fromTime = range.from ? new Date(range.from).getTime() : null;
+    const toTime = range.to ? new Date(range.to).getTime() : null;
+    const q = searchText.trim().toLowerCase();
+    const result = applications.filter((app) => {
+      const appTime = new Date(app.submittedAt).getTime();
+      if (fromTime !== null && (!Number.isFinite(appTime) || appTime < fromTime)) return false;
+      if (toTime !== null && (!Number.isFinite(appTime) || appTime > toTime)) return false;
       if (statusFilter && app.status !== statusFilter) return false;
+      if (q) {
+        const haystack = [
+          app.applicantName,
+          app.applicantEmail,
+          app.jobTitle,
+          app.submissionRef,
+          app.applicantPhone ?? "",
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       return true;
     });
-  }, [applications, timelineFilter, statusFilter]);
 
-  const allSelected = filteredApplications.length > 0 && selectedIds.size === filteredApplications.length;
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "oldest":
+          return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
+        case "applicant":
+          return a.applicantName.localeCompare(b.applicantName);
+        case "role":
+          return a.jobTitle.localeCompare(b.jobTitle);
+        case "status":
+          return a.status.localeCompare(b.status);
+        default:
+          return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+      }
+    });
+
+    return result;
+  }, [applications, timelineFilter, customFrom, customTo, statusFilter, searchText, sortBy]);
+
+  const pagedApplications = filteredApplications.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+  const allSelected = pagedApplications.length > 0 && pagedApplications.every((app) => selectedIds.has(app.id));
+  const hasFilters = !!searchText.trim() || !!statusFilter || timelineFilter !== "all";
+  const selectedSupportingDocuments = selectedApp?.supportingDocuments?.length
+    ? selectedApp.supportingDocuments
+    : selectedApp?.coverLetterUrl
+      ? [{ name: "Supporting Document", url: selectedApp.coverLetterUrl }]
+      : [];
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -205,9 +296,17 @@ export default function AdminJobsPage() {
 
   const toggleSelectAll = () => {
     if (allSelected) {
-      setSelectedIds(new Set());
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const app of pagedApplications) next.delete(app.id);
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(filteredApplications.map((a) => a.id)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const app of pagedApplications) next.add(app.id);
+        return next;
+      });
     }
   };
 
@@ -216,9 +315,12 @@ export default function AdminJobsPage() {
     setDeleteResult(null);
     try {
       const result = await deleteApplications([...selectedIds]);
-      const msg = `Deleted ${result.deleted} application${result.deleted !== 1 ? "s" : ""}`;
-      if (result.errors && result.errors.length > 0) {
-        setSnackbar({ message: `${msg}. Errors: ${result.errors.join("; ")}`, severity: "error" });
+      const appText = `Deleted ${result.deleted} application${result.deleted !== 1 ? "s" : ""}`;
+      const fileText = `deleted ${result.deletedFiles ?? 0} attached document${(result.deletedFiles ?? 0) !== 1 ? "s" : ""}`;
+      const msg = `${appText} and ${fileText}`;
+      const warnings = [...(result.errors ?? []), ...(result.fileWarnings ?? [])];
+      if (warnings.length > 0) {
+        setSnackbar({ message: `${msg}. Warnings: ${warnings.join("; ")}`, severity: "error" });
       } else {
         setSnackbar({ message: msg, severity: "success" });
       }
@@ -327,7 +429,61 @@ export default function AdminJobsPage() {
             ))}
           </ToggleButtonGroup>
 
+          {timelineFilter === "custom" && (
+            <>
+              <TextField
+                type="date"
+                label="From"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                size="small"
+                sx={{ width: { xs: "100%", sm: 150 } }}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
+                }}
+              />
+              <TextField
+                type="date"
+                label="To"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                size="small"
+                sx={{ width: { xs: "100%", sm: 150 } }}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
+                }}
+              />
+            </>
+          )}
+
           <Box sx={{ width: "1px", height: 28, backgroundColor: "#E5E7EB", mx: 1 }} />
+
+          <TextField
+            placeholder="Search applicant, email, role, ref..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            size="small"
+            sx={{
+              flex: { xs: "1 1 100%", md: "1 1 260px" },
+              minWidth: { xs: "unset", md: 240 },
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "8px",
+                backgroundColor: "#F8F9FC",
+                fontSize: "0.85rem",
+              },
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
 
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel>Status</InputLabel>
@@ -344,7 +500,40 @@ export default function AdminJobsPage() {
             </Select>
           </FormControl>
 
-          {filteredApplications.length < applications.length && (
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Sort</InputLabel>
+            <Select
+              value={sortBy}
+              label="Sort"
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
+            >
+              <MenuItem value="newest">Newest first</MenuItem>
+              <MenuItem value="oldest">Oldest first</MenuItem>
+              <MenuItem value="applicant">Applicant A-Z</MenuItem>
+              <MenuItem value="role">Role A-Z</MenuItem>
+              <MenuItem value="status">Status A-Z</MenuItem>
+            </Select>
+          </FormControl>
+
+          {hasFilters && (
+            <Button
+              size="small"
+              onClick={() => {
+                setTimelineFilter("all");
+                setStatusFilter("");
+                setSearchText("");
+                setCustomFrom("");
+                setCustomTo("");
+                setSelectedIds(new Set());
+              }}
+              sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 600 }}
+            >
+              Clear
+            </Button>
+          )}
+
+          {(filteredApplications.length < applications.length || hasFilters) && (
             <Chip
               label={`${filteredApplications.length} of ${applications.length}`}
               size="small"
@@ -448,7 +637,7 @@ export default function AdminJobsPage() {
             <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
               {applications.length === 0
                 ? "Applications from internal advancement openings will appear here."
-                : "Try adjusting your timeline or status filter."
+                : "Try adjusting your search, timeline, or status filter."
               }
             </Typography>
           </Box>
@@ -507,7 +696,7 @@ export default function AdminJobsPage() {
                   <TableCell padding="checkbox">
                     <Checkbox
                       checked={allSelected}
-                      indeterminate={selectedIds.size > 0 && !allSelected}
+                      indeterminate={pagedApplications.some((app) => selectedIds.has(app.id)) && !allSelected}
                       onChange={toggleSelectAll}
                       sx={{ color: "#D1D5DB", "&.Mui-checked": { color: "#0078D4" } }}
                     />
@@ -533,7 +722,7 @@ export default function AdminJobsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredApplications.map((app) => (
+                {pagedApplications.map((app) => (
                   <TableRow
                     key={app.id}
                     hover
@@ -612,6 +801,18 @@ export default function AdminJobsPage() {
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              component="div"
+              count={filteredApplications.length}
+              page={page}
+              onPageChange={(_, nextPage) => setPage(nextPage)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(Number.parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[25, 50, 100]}
+            />
           </TableContainer>
         )}
 
@@ -683,7 +884,7 @@ export default function AdminJobsPage() {
                     </Typography>
                   </Box>
 
-                  {(selectedApp.resumeUrl || selectedApp.coverLetterUrl) && (
+                  {(selectedApp.resumeUrl || selectedSupportingDocuments.length > 0) && (
                     <Box>
                       <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
                         Documents
@@ -708,10 +909,11 @@ export default function AdminJobsPage() {
                             View Resume
                           </Box>
                         )}
-                        {selectedApp.coverLetterUrl && (
+                        {selectedSupportingDocuments.map((doc) => (
                           <Box
+                            key={doc.url}
                             component="a"
-                            href={selectedApp.coverLetterUrl?.startsWith("https://") ? selectedApp.coverLetterUrl : "#"}
+                            href={doc.url.startsWith("https://") ? doc.url : "#"}
                             target="_blank"
                             rel="noopener noreferrer"
                             sx={{
@@ -724,9 +926,9 @@ export default function AdminJobsPage() {
                               "&::before": { content: "'📝 '", fontSize: "14px" },
                             }}
                           >
-                            View Cover Letter
+                            {doc.name ? `View ${doc.name}` : "View Supporting Document"}
                           </Box>
-                        )}
+                        ))}
                       </Box>
                     </Box>
                   )}

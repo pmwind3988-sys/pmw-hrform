@@ -15,6 +15,9 @@
 | Public link display | `PublicLinkDisplay.tsx` | Copyable public URL with token regeneration |
 | Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results |
 | Approver input (legacy) | `ApproverRow.tsx` | User search + assignee input with static/field-reference modes |
+| Response viewer | `ResponseViewer.tsx` | Route `/admin/responses/:formTitle`. Renders all submissions with SurveyJS read-only, matrix data, PDF generation. ~567 lines. |
+| Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results |
+| Approver input (legacy) | `ApproverRow.tsx` | User search + assignee input with static/field-reference modes |
 | Publish overlay | `ProvisionOverlay.tsx` | SharePoint list provisioning status spinner |
 | Barrel exports | `index.ts` | Only barrel export in the entire app |
 | Colors | `constants.ts` | `C` color object — inline styles, NOT MUI theme |

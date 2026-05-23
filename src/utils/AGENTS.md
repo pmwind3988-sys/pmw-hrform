@@ -10,9 +10,15 @@
 | Config loader | `spConfig.ts` | `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`, `legacyToLayerConfig()` migration helper |
 | Form logic | `FormBuilderEngine.ts` | Pure functions: 57 question types, validation, survey JSON builder, versioning |
 | Status constants | `statusConstants.ts` | `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`, `layerColumn()` helper |
-| Custom widget | `DynamicMatrix.tsx` | Custom SurveyJS widget for matrix questions |
-| Matrix conversion | `matrixToHtml.ts` | Matrix ↔ HTML/JSON conversion |
+| Custom widget | `DynamicMatrix.tsx` | Custom SurveyJS widget for matrix questions + `rowsToHtml()` matrix↔HTML conversion |
 | Auth persistence | `authDecision.ts` | `localStorage` helpers for `pmw_hr_auth_decision` |
+| PDPA compliance | `pdpa.ts` | Constants + helper for PDPA retention date, consent label, privacy notice sections |
+| Career API client | `careersService.ts` | Frontend fetch wrapper for `/api/jobs-list`, `/api/job-apply`, `/api/job-admin`. ~470 lines. |
+| Dashboard backgrounds | `dashboardBackgrounds.ts` | Predefined background gradient/image definitions + CSS variable binding |
+| Dashboard background API | `dashboardBackgroundService.ts` | Frontend fetch wrapper for `/api/dashboard-background` |
+| PDF generation | `generateFormPdf.ts` | Client-side PDF creation via `@react-pdf/renderer`, uploads to SharePoint, opens in new tab |
+| PDF document template | `FormPdfDocument.tsx` | React-PDF document component for form response PDF |
+| Job apply PDF | `JobApplyPdfDocument.tsx` | React-PDF document for job application PDF |
 
 ## Dual SharePoint Client Pattern
 ```

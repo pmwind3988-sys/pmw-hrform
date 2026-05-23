@@ -456,6 +456,29 @@ export async function deleteListItem(
 
 // ── Document Library & File Upload Helpers (server-side) ────────────────
 
+export async function deleteDocLibraryFile(
+  token: string,
+  listDisplayName: string,
+  driveItemId: string,
+): Promise<void> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const drive = (await graphGet(
+    token,
+    `/sites/${siteId}/lists/${listId}/drive?$select=id`,
+  )) as { id: string };
+  const res = await fetch(`${GRAPH_BASE}/drives/${drive.id}/items/${encodeURIComponent(driveItemId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    throw new Error(`Graph DELETE file ${res.status}: ${text}`);
+  }
+}
+
 /**
  * Creates a document library via Graph API.
  * Returns the list id of the newly created library.
@@ -596,11 +619,25 @@ export async function listDocLibraryFiles(
   const siteId = await getSiteId(token);
   const listId = await getListId(token, listDisplayName);
   try {
-    const data = (await graphGet(
-      token,
-      `/sites/${siteId}/lists/${listId}/drive/root/children?$select=id,name,webUrl`,
-    )) as { value: Array<{ id: string; name: string; webUrl: string }> };
-    return data.value || [];
+    const files: Array<{ id: string; name: string; webUrl: string }> = [];
+
+    async function collect(path: string): Promise<void> {
+      const data = (await graphGet(token, path)) as {
+        value: Array<{ id: string; name: string; webUrl: string; folder?: unknown }>;
+      };
+      for (const item of data.value || []) {
+        if (item.folder) {
+          await collect(
+            `/sites/${siteId}/lists/${listId}/drive/items/${encodeURIComponent(item.id)}/children?$select=id,name,webUrl,folder`,
+          );
+        } else {
+          files.push({ id: item.id, name: item.name, webUrl: item.webUrl });
+        }
+      }
+    }
+
+    await collect(`/sites/${siteId}/lists/${listId}/drive/root/children?$select=id,name,webUrl,folder`);
+    return files;
   } catch {
     return [];
   }

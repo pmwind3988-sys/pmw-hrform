@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems } from "./_utils/graphClient.js";
+import { listCareerPortalCards } from "./_utils/careerPortalCards.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
 interface ApiRequest {
@@ -15,6 +16,11 @@ interface ApiResponse {
   end(): void;
 }
 
+function numberField(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -26,22 +32,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
-    const items = await queryListItems(token, "Internal Job Listing", { top: 500 });
-
-    // Compute live application counts from actual submissions (excluding deleted ones)
-    let appCountByJob: Record<string, number> = {};
-    try {
-      const allApps = await queryListItems(token, "Job Applications", { top: 999 });
-      appCountByJob = {};
-      for (const app of allApps) {
-        const jobId = String(app.fields.JobListingIDLookupId || app.fields.JobListingID || "");
-        if (jobId) appCountByJob[jobId] = (appCountByJob[jobId] || 0) + 1;
-      }
-    } catch (e) {
-      logWarn("api:jobs-list", "Failed to fetch live application counts", {
-        errorMessage: e instanceof Error ? e.message : String(e),
-      });
-    }
+    const [items, portalCards] = await Promise.all([
+      queryListItems(token, "Internal Job Listing", { top: 500 }),
+      listCareerPortalCards(token, { activeOnly: true }).catch((e) => {
+        logWarn("api:jobs-list", "Failed to load career portal cards", {
+          errorMessage: e instanceof Error ? e.message : String(e),
+        });
+        return [];
+      }),
+    ]);
 
     const jobs = items
       .filter((item) => {
@@ -65,13 +64,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           employmentType: String(item.fields.Employment_x0020_Type || ""),
           closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date) : null,
           status: String(item.fields.Status || "New"),
-          applicationCount: appCountByJob[itemId] ?? 0,
+          applicationCount: numberField(item.fields.Application_x0020_Count),
           created: String(item.fields.Created || ""),
           customFields,
         };
       });
 
-    return res.status(200).json({ jobs } as unknown as Record<string, unknown>);
+    return res.status(200).json({ jobs, portalCards } as unknown as Record<string, unknown>);
   } catch (e) {
     logError("api:jobs-list", "Failed to list jobs", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
