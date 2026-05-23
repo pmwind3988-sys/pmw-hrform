@@ -282,7 +282,7 @@ function JobDetailDialog({
               "&:hover": { borderColor: "#D4621A", backgroundColor: "rgba(230, 118, 53, 0.06)" },
             }}
           >
-            Test Submit
+            Override Apply
           </Button>
         ) : isApplied ? (
           <Button
@@ -786,7 +786,7 @@ export default function CareersPage() {
           isAdmin={isAdmin}
           onTestSubmit={(jobId) => {
             setSelectedJob(null);
-            navigate(`/career-portal/${jobId}/apply`);
+            navigate(`/career-portal/${jobId}/apply?override=1`);
           }}
         />
       </Container>

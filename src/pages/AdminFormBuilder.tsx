@@ -14,7 +14,7 @@ import AuditLog from "../components/builder/AuditLog";
 import ProvisionOverlay from "../components/builder/ProvisionOverlay";
 import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import { C } from "../components/builder/constants";
-import { flattenQuestions, getSpColumnKind } from "../utils/FormBuilderEngine";
+import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
 import type { SurveyJson, LayerConfig, LayerConfigItem } from "../types";
@@ -55,12 +55,9 @@ import {
   incrementMinor,
   incrementMajor,
   bootstrapSystemLists,
-  addColumn,
-  listExists,
-  createSpList,
+  provisionFormList,
   deleteForm,
   hardDeleteForm,
-  getSharePointChoices,
 } from "../utils/formBuilderSP";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -651,74 +648,10 @@ export default function AdminFormBuilder() {
       if (conflict) throw new Error(`Slug "${meta.slug}" used by "${conflict}".`);
       if (isEditing && originalVersion && !isDraft && !isVersionGreater(version, originalVersion)) throw new Error(`v${version} must be > v${originalVersion}.`);
 
-      pLog(`Checking list "${title}"…`);
-      if (!(await listExists(token, title))) {
-        pLog(`Creating list…`);
-        await createSpList(token, title);
-        pLog(`Created`, "ok");
-      } else pLog(`List exists — checking columns`, "ok");
-
-      pLog(`Provisioning columns…`);
-      const questions = flattenQuestions(usedJson);
-      for (const q of questions) {
-        const sp = getSpColumnKind(q);
-        if (q.type === "matrixdynamic" || q.type === "tableinput" || q.type === "dynamicmatrix") {
-          await addColumn(token, title, `${q.name}_Response`, 3, true, true);
-          pLog(`     ✓ ${q.name}_Response (Enhanced Rich Text)`);
-          await addColumn(token, title, `${q.name}_Json`, 3, true, false);
-          pLog(`     ✓ ${q.name}_Json (JSON backup)`);
-        } else if (sp) {
-          // Formula fields (_expression or expression type) get a Number column
-          // so the calculated value is stored in SharePoint.
-          const isFormula = !!(q as unknown as Record<string, unknown>)._expression || q.type === "expression";
-          if (isFormula) {
-            await addColumn(token, title, q.name, 9, false, false); // Number (kind 9)
-            pLog(`     ✓ ${q.name} (Formula → Number)`);
-            continue; // skip the normal column creation below
-          }
-          // Extract choices for Choice (6) and MultiChoice (15) columns
-          let choiceValues: string[] | undefined;
-          if (sp.FieldTypeKind === 6 || sp.FieldTypeKind === 15) {
-            const src = (q as { spChoicesSource?: { list?: string; column?: string } }).spChoicesSource;
-            if (src?.list && src?.column) {
-              try {
-                choiceValues = await getSharePointChoices(src.list, src.column, token);
-                pLog(`     ↳ Fetched ${choiceValues.length} choices from "${src.list}.${src.column}"`);
-              } catch { choiceValues = []; }
-            }
-            if (!choiceValues || choiceValues.length === 0) {
-              const rawChoices = (q as { choices?: (string | { value: string; text: string })[] }).choices;
-              if (Array.isArray(rawChoices) && rawChoices.length > 0) {
-                choiceValues = rawChoices.map((c) => (typeof c === 'string' ? c : c.value || c.text || '')).filter(Boolean);
-              }
-            }
-          }
-          await addColumn(token, title, q.name, sp.FieldTypeKind, sp.FieldTypeKind === 3, false, choiceValues);
-          pLog(`     ✓ ${q.name} (${sp.label})`);
-        }
-      }
-      // Always-present system columns (legacy + enhanced)
-      for (const [n, k] of [["SubmittedAt", 4], ["FormVersion", 2], ["FormID", 2], ["SubmittedBy", 2], ["PDPAConsent", 2], ["PDPANoticeVersion", 2], ["PDPAConsentAt", 4], ["RetentionUntil", 4]] as [string, number][]) {
-        await addColumn(token, title, n, k);
-      }
-      await addColumn(token, title, 'Status', 2); // Legacy status (compat with ApprovalDashboard)
-      await addColumn(token, title, 'CurrentApprovalLayer', 9); // Legacy layer counter
-      await addColumn(token, title, 'RawJSON', 3, true); // Full survey JSON backup
-      await addColumn(token, title, 'PdfUrl', 2); // Generated PDF link
-      // Per-layer columns (provision at least 3 layers for ApprovalDashboard compat)
-      const provisionLayerCount = Math.max(effectiveNumLayers, 3);
-      for (let n = 1; n <= provisionLayerCount; n++) {
-        for (const [col, k] of [["Status", 2], ["Email", 2], ["SignedAt", 4], ["Rejection", 3], ["Signature", 3]] as [string, number][]) {
-          await addColumn(token, title, `L${n}_${col}`, k, k === 3);
-        }
-      }
-      // Enhanced layer system columns (added when layers are present)
-      if (effectiveNumLayers > 0) {
-        await addColumn(token, title, 'EvaluationData', 3, true);
-        await addColumn(token, title, 'CurrentLayer', 9);
-        await addColumn(token, title, 'FormStatus', 2);
-      }
-      pLog(`Columns done`, "ok");
+      await provisionFormList(token, title, usedJson, pLog, {
+        numLayers: effectiveNumLayers,
+        minLayerColumns: 3,
+      });
 
       pLog(`Updating Form Config…`);
       // Build LayerConfig JSON from UI state if not already set

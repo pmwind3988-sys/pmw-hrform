@@ -127,6 +127,14 @@ export interface GraphListItem {
   fields: Record<string, unknown>;
 }
 
+export type GraphColumnType = "text" | "number" | "note" | "hyperlink" | "dateTime";
+
+export interface GraphColumnSpec {
+  name: string;
+  displayName: string;
+  type: GraphColumnType;
+}
+
 export async function queryListItems(
   token: string,
   listDisplayName: string,
@@ -220,13 +228,7 @@ export async function createListColumn(
   columnName: string,
   displayName: string,
 ): Promise<void> {
-  const siteId = await getSiteId(token);
-  const listId = await getListId(token, listDisplayName);
-  await graphPost(token, `/sites/${siteId}/lists/${listId}/columns`, {
-    name: columnName,
-    text: { multiline: true, allowUnlimitedLength: true },
-    displayName,
-  });
+  await ensureListColumn(token, listDisplayName, columnName, displayName, "note");
 }
 
 /**
@@ -246,6 +248,61 @@ export async function getListColumns(
   return data.value || [];
 }
 
+function buildGraphColumnBody(type: GraphColumnType): Record<string, unknown> {
+  switch (type) {
+    case "note":
+      return { text: { multiline: true, allowUnlimitedLength: true } };
+    case "number":
+      return { number: {} };
+    case "hyperlink":
+      return { hyperlinkOrPicture: {} };
+    case "dateTime":
+      return { dateTime: { format: "dateTime" } };
+    case "text":
+    default:
+      return { text: {} };
+  }
+}
+
+export async function ensureListColumns(
+  token: string,
+  listDisplayName: string,
+  columns: GraphColumnSpec[],
+): Promise<{ created: string[]; existing: string[] }> {
+  if (columns.length === 0) return { created: [], existing: [] };
+
+  const existing = await getListColumns(token, listDisplayName);
+  const known = new Set<string>();
+  for (const column of existing) {
+    known.add(column.name.toLowerCase());
+    known.add(column.displayName.toLowerCase());
+  }
+
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const result = { created: [] as string[], existing: [] as string[] };
+
+  for (const column of columns) {
+    const internalKey = column.name.toLowerCase();
+    const displayKey = column.displayName.toLowerCase();
+    if (known.has(internalKey) || known.has(displayKey)) {
+      result.existing.push(column.name);
+      continue;
+    }
+
+    await graphPost(token, `/sites/${siteId}/lists/${listId}/columns`, {
+      name: column.name,
+      displayName: column.displayName,
+      ...buildGraphColumnBody(column.type),
+    });
+    known.add(internalKey);
+    known.add(displayKey);
+    result.created.push(column.name);
+  }
+
+  return result;
+}
+
 /**
  * Ensure a column exists on a SharePoint list, creating it if missing.
  * Supports text, number, note (multiline), hyperlink, and dateTime types.
@@ -256,39 +313,12 @@ export async function ensureListColumn(
   listDisplayName: string,
   columnName: string,
   displayName: string,
-  columnType: "text" | "number" | "note" | "hyperlink" | "dateTime",
+  columnType: GraphColumnType,
 ): Promise<boolean> {
-  const existing = await getListColumns(token, listDisplayName);
-  if (existing.some((c) => c.name === columnName || c.displayName === displayName)) {
-    return false; // Already exists — nothing done
-  }
-  const siteId = await getSiteId(token);
-  const listId = await getListId(token, listDisplayName);
-  let columnBody: Record<string, unknown>;
-  switch (columnType) {
-    case "note":
-      columnBody = { text: { multiline: true, allowUnlimitedLength: true } };
-      break;
-    case "number":
-      columnBody = { number: {} };
-      break;
-    case "hyperlink":
-      columnBody = { hyperlinkOrPicture: {} };
-      break;
-    case "dateTime":
-      columnBody = { dateTime: { format: "dateTime" } };
-      break;
-    case "text":
-    default:
-      columnBody = { text: {} };
-      break;
-  }
-  await graphPost(token, `/sites/${siteId}/lists/${listId}/columns`, {
-    name: columnName,
-    displayName,
-    ...columnBody,
-  });
-  return true; // Created
+  const result = await ensureListColumns(token, listDisplayName, [
+    { name: columnName, displayName, type: columnType },
+  ]);
+  return result.created.length > 0;
 }
 
 // --- SharePoint field/choice helpers (for server-side survey JSON enrichment) ---
@@ -441,6 +471,58 @@ export async function createDocLibrary(
     list: { template: "documentLibrary" },
   })) as { id: string };
   return data.id;
+}
+
+/**
+ * Creates a generic SharePoint list via Graph API.
+ */
+export async function createGenericList(
+  token: string,
+  displayName: string,
+): Promise<string> {
+  const siteId = await getSiteId(token);
+  const data = (await graphPost(token, `/sites/${siteId}/lists`, {
+    displayName,
+    list: { template: "genericList" },
+  })) as { id: string };
+  cachedListIds[displayName] = data.id;
+  return data.id;
+}
+
+export async function ensureGenericList(
+  token: string,
+  displayName: string,
+): Promise<string | null> {
+  try {
+    return await getListId(token, displayName);
+  } catch {
+    return createGenericList(token, displayName);
+  }
+}
+
+export async function ensureDocLibrary(
+  token: string,
+  displayName: string,
+): Promise<string | null> {
+  try {
+    return await getListId(token, displayName);
+  } catch {
+    return createDocLibrary(token, displayName);
+  }
+}
+
+export async function ensureListSchema(
+  token: string,
+  displayName: string,
+  columns: GraphColumnSpec[],
+  template: "genericList" | "documentLibrary" = "genericList",
+): Promise<void> {
+  if (template === "documentLibrary") {
+    await ensureDocLibrary(token, displayName);
+  } else {
+    await ensureGenericList(token, displayName);
+  }
+  await ensureListColumns(token, displayName, columns);
 }
 
 /**

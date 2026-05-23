@@ -10,7 +10,7 @@ import { Model, Serializer } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, addColumn } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { LayerConfig } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
@@ -649,12 +649,7 @@ export default function DynamicFormPage() {
       if (token) {
         submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
         body.SubmittedBy = submittedByEmail;
-        await Promise.all([
-          addColumn(token, cfg.Title as string, "PDPAConsent", 2),
-          addColumn(token, cfg.Title as string, "PDPANoticeVersion", 2),
-          addColumn(token, cfg.Title as string, "PDPAConsentAt", 4),
-          addColumn(token, cfg.Title as string, "RetentionUntil", 4),
-        ]);
+        await ensurePdpaColumns(token, cfg.Title as string);
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
         let result: { Id?: number } | undefined;
         try {

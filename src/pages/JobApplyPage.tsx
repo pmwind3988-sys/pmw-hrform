@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link as RouterLink, useParams, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -34,7 +34,7 @@ import { useReactiveForm, required, email, phone } from "../hooks/useReactiveFor
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useMsal } from "@azure/msal-react";
 import { pdf } from "@react-pdf/renderer";
-import { fetchJobs, submitApplication, ensureJobApplicationColumns } from "../utils/careersService";
+import { fetchJobs, submitApplication, ensureJobApplicationColumns, fetchMyApplications } from "../utils/careersService";
 import JobApplyPdfDocument from "../utils/JobApplyPdfDocument";
 import type { JobListing, CustomFieldDefinition } from "../types";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
@@ -342,8 +342,11 @@ function readFileAsBase64(file: File): Promise<string> {
 export default function JobApplyPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const profile = useUserProfile();
   const { instance, accounts } = useMsal();
+  const userEmail = accounts[0]?.username?.toLowerCase() || "";
+  const overrideRequested = searchParams.get("override") === "1";
 
   const [job, setJob] = useState<JobListing | null>(null);
   const [jobLoading, setJobLoading] = useState(true);
@@ -356,9 +359,12 @@ export default function JobApplyPage() {
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [duplicateBlocked, setDuplicateBlocked] = useState(false);
+  const [alreadyApplied, setAlreadyApplied] = useState(false);
+  const [duplicateChecking, setDuplicateChecking] = useState(true);
   const [phoneCountryCode, setPhoneCountryCode] = useState("+60");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaTouched, setPdpaTouched] = useState(false);
+  const adminOverrideMode = alreadyApplied && isAdmin && overrideRequested;
 
   // Check if user is admin (group membership)
   useEffect(() => {
@@ -377,7 +383,6 @@ export default function JobApplyPage() {
         );
         if (groupResp.ok) {
           const data = await groupResp.json() as { value?: { Email?: string }[] };
-          const userEmail = accounts[0]?.username?.toLowerCase() || "";
           if (!cancelled) {
             setIsAdmin((data.value || []).some((u) => (u.Email || "").toLowerCase() === userEmail));
           }
@@ -388,7 +393,7 @@ export default function JobApplyPage() {
     }
     void check();
     return () => { cancelled = true; };
-  }, [instance, accounts]);
+  }, [instance, accounts, userEmail]);
 
   // Fetch job details for summary
   useEffect(() => {
@@ -407,6 +412,36 @@ export default function JobApplyPage() {
     void load();
     return () => { cancelled = true; };
   }, [jobId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function checkDuplicate() {
+      if (!jobId || !userEmail) {
+        setDuplicateChecking(false);
+        return;
+      }
+      setDuplicateChecking(true);
+      try {
+        const applications = await fetchMyApplications(userEmail);
+        if (!cancelled) {
+          const applied = applications.some((app) => app.jobListingId === jobId);
+          setAlreadyApplied(applied);
+          setDuplicateBlocked(applied && !adminOverrideMode);
+          setSubmitError(applied && !adminOverrideMode
+            ? "You have already applied for this position. Multiple applications are not allowed."
+            : null);
+        }
+      } catch {
+        if (!cancelled) {
+          setAlreadyApplied(false);
+        }
+      } finally {
+        if (!cancelled) setDuplicateChecking(false);
+      }
+    }
+    void checkDuplicate();
+    return () => { cancelled = true; };
+  }, [jobId, userEmail, adminOverrideMode]);
 
   const form = useReactiveForm<FormValues>({
     name: { value: "", validators: [required] },
@@ -458,6 +493,13 @@ export default function JobApplyPage() {
     setSubmitError(null);
     setDuplicateBlocked(false);
 
+    if (alreadyApplied && !forceApply) {
+      setDuplicateBlocked(true);
+      setSubmitError("You have already applied for this position. Multiple applications are not allowed.");
+      setSubmitting(false);
+      return;
+    }
+
     if (!pdpaAccepted) {
       setPdpaTouched(true);
       setSubmitError("Please read and accept the Privacy Notice before submitting your application.");
@@ -491,16 +533,23 @@ export default function JobApplyPage() {
     }
 
     try {
-      // Acquire user token with Graph scope for file uploads
+      const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+      if (!SP_SITE_URL || !accounts[0]) {
+        setSubmitError("Unable to identify your signed-in SharePoint session. Please sign in again.");
+        setSubmitting(false);
+        return;
+      }
       let accessToken = "";
       try {
         const resp = await instance.acquireTokenSilent({
-          scopes: ["https://graph.microsoft.com/.default"],
+          scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
           account: accounts[0],
         });
         accessToken = resp.accessToken;
       } catch {
-        // User token not available — API will fall back to system credentials
+        setSubmitError("Could not get your SharePoint permission token. Please sign in again and retry.");
+        setSubmitting(false);
+        return;
       }
 
       // Generate submission ref once — used for both the PDF and the API submission
@@ -540,14 +589,7 @@ export default function JobApplyPage() {
 
       // Ensure all SharePoint columns exist — blocks submission if provisioning fails
       try {
-        const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-        if (SP_SITE_URL) {
-          const spResp = await instance.acquireTokenSilent({
-            scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-            account: accounts[0],
-          });
-          await ensureJobApplicationColumns(spResp.accessToken, SP_SITE_URL);
-        }
+        await ensureJobApplicationColumns(accessToken, SP_SITE_URL);
       } catch (e) {
         setSubmitError(`Column setup failed: ${(e as Error).message}. Please check browser console and retry.`);
         setSubmitting(false);
@@ -613,7 +655,7 @@ export default function JobApplyPage() {
       }
       return;
     }
-    void doSubmit(values, false);
+    void doSubmit(values, adminOverrideMode);
   });
 
   if (submitted) {
@@ -1017,13 +1059,19 @@ export default function JobApplyPage() {
                     </Alert>
                   )}
 
+                  {adminOverrideMode && (
+                    <Alert severity="warning" sx={{ borderRadius: "8px", fontWeight: 700, fontSize: "0.85rem" }}>
+                      You already applied for this position. Admin override mode is active and will create a duplicate test application.
+                    </Alert>
+                  )}
+
                   {/* Test Submit (admin only — bypasses duplicate check) */}
                   {duplicateBlocked && isAdmin && (
                     <Button
                       variant="outlined"
                       fullWidth
-                      disabled={submitting || !pdpaAccepted}
-                      onClick={() => doSubmit(form.value, true)}
+                      disabled={submitting || duplicateChecking}
+                      onClick={() => setSearchParams({ override: "1" })}
                       sx={{
                         borderRadius: "8px",
                         textTransform: "none",
@@ -1035,7 +1083,7 @@ export default function JobApplyPage() {
                         "&:hover": { borderColor: "#D4621A", backgroundColor: "rgba(230, 118, 53, 0.06)" },
                       }}
                     >
-                      Test Submit (bypass duplicate check)
+                      Enable Override Apply
                     </Button>
                   )}
 
@@ -1086,7 +1134,7 @@ export default function JobApplyPage() {
                     type="submit"
                     variant="contained"
                     fullWidth
-                    disabled={submitting || !form.valid || !pdpaAccepted}
+                    disabled={submitting || duplicateChecking || !form.valid || !pdpaAccepted || (alreadyApplied && !adminOverrideMode)}
                     sx={{
                       borderRadius: "8px",
                       textTransform: "none",
@@ -1110,6 +1158,8 @@ export default function JobApplyPage() {
                         <CircularProgress size={18} sx={{ color: "#ffffff" }} />
                         <span>Submitting...</span>
                       </Box>
+                    ) : adminOverrideMode ? (
+                      "Submit Duplicate Test Application"
                     ) : (
                       "Submit Application"
                     )}

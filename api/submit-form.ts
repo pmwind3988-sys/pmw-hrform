@@ -1,6 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, createListItem, createDocLibrary, uploadFileToDrive, listExistsGraph, updateListItemFields, ensureListColumn } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
+import { ensurePdpaColumns, ensureUploadLibrary } from "./_utils/provisioning.js";
 
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
@@ -66,12 +67,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Form is not public" });
     }
 
-    await Promise.all([
-      ensureListColumn(token, listTitle, "PDPAConsent", "PDPA Consent", "text"),
-      ensureListColumn(token, listTitle, "PDPANoticeVersion", "PDPA Notice Version", "text"),
-      ensureListColumn(token, listTitle, "PDPAConsentAt", "PDPA Consent At", "dateTime"),
-      ensureListColumn(token, listTitle, "RetentionUntil", "Retention Until", "dateTime"),
-    ]);
+    await ensurePdpaColumns(token, listTitle);
     const consentedAt = typeof pdpaConsentedAt === "string" && !Number.isNaN(Date.parse(pdpaConsentedAt))
       ? pdpaConsentedAt
       : new Date().toISOString();
@@ -91,9 +87,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (typeof v === "string" && v.startsWith("data:")) {
         try {
           if (!docLibReady) {
-            if (!(await listExistsGraph(token, docLibName))) {
-              await createDocLibrary(token, docLibName);
-            }
+            await ensureUploadLibrary(token, docLibName);
             docLibReady = true;
           }
           const mimeMatch = v.match(/^data:([\w/+-]+);/);

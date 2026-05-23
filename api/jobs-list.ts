@@ -34,7 +34,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const allApps = await queryListItems(token, "Job Applications", { top: 999 });
       appCountByJob = {};
       for (const app of allApps) {
-        const jobId = String(app.fields.JobListingID || "");
+        const jobId = String(app.fields.JobListingIDLookupId || app.fields.JobListingID || "");
         if (jobId) appCountByJob[jobId] = (appCountByJob[jobId] || 0) + 1;
       }
     } catch (e) {

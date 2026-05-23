@@ -4,7 +4,7 @@
  */
 import { pdf } from "@react-pdf/renderer";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "./FormPdfDocument";
-import { uploadFormPdf, spPatch, addColumn, readMatrixChildItems } from "./formBuilderSP";
+import { uploadFormPdf, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
 import type { MatrixColumnDef } from "./formBuilderSP";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -149,7 +149,7 @@ export async function generateAndStorePdf(
     // If the PdfUrl column doesn't exist yet, add it and retry
     if (msg.includes('PdfUrl') && (msg.includes('does not exist') || msg.includes('not found'))) {
       try {
-        await addColumn(token, listTitle, 'PdfUrl', 2);
+        await ensurePdfUrlColumn(token, listTitle);
         // SharePoint needs a moment after adding a column before it can be written
         await new Promise(r => setTimeout(r, 2000));
         await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`, {

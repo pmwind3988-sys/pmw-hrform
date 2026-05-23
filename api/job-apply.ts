@@ -1,17 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import {
-  getGraphToken,
-  queryListItems,
-  queryListItemById,
-  createListItem,
-  updateListItemFields,
-  updateListItem,
-  uploadFileToDrive,
-  createDocLibrary,
-  listExistsGraph,
-  getListColumns,
-  ensureListColumn,
-} from "./_utils/graphClient.js";
+import { getGraphToken } from "./_utils/graphClient.js";
 import { logError, logInfo, logWarn } from "./_utils/logger.js";
 
 function errorMessage(error: unknown, maxLength?: number): string {
@@ -19,19 +7,11 @@ function errorMessage(error: unknown, maxLength?: number): string {
   return maxLength ? message.slice(0, maxLength) : message;
 }
 
-/**
- * Query list items allowing filters on non-indexed columns.
- * Requires graphClient.queryListItems to support preferNonIndexed option — see graphClient-patch.md.
- */
-async function queryListItemsNonIndexed(
-  token: string,
-  listName: string,
-  filter: string,
-): Promise<Array<{ id: string; fields: Record<string, unknown> }>> {
-  return queryListItems(token, listName, { filter, top: 1, preferNonIndexed: true });
-}
-
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
+const APPLICATION_LIST = "Job Applications";
+const JOB_LIST = "Internal Job Listing";
+const DOC_LIB_NAME = "Job Applications Files";
+const HR_OWNER_GROUP = "_HR_ Forms Owners";
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
 
@@ -39,9 +19,8 @@ const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
  * Write a hyperlink value to a SharePoint "Hyperlink or Picture" column using
  * the SharePoint REST v1 API (_api/web/lists/...) with a FormDigest.
  *
- * Graph API app-only tokens CANNOT write to hyperlink columns — this is a
- * Microsoft restriction. The SharePoint REST v1 API accepts the same Bearer
- * token but uses a different wire format that SharePoint processes correctly.
+ * Graph's list item endpoints are unreliable for Hyperlink/Picture columns.
+ * SharePoint REST uses the FieldUrlValue wire format that SharePoint expects.
  *
  * The hyperlink wire format for SP REST v1 is:
  *   { "__metadata": { "type": "SP.FieldUrlValue" }, "Url": "...", "Description": "..." }
@@ -56,11 +35,11 @@ async function patchHyperlinkViaSPRest(
 ): Promise<void> {
   if (!SP_SITE_URL) throw new Error("SP_SITE_URL env var not set — cannot use SP REST API");
 
-  const encodedList = encodeURIComponent(`'${listName}'`);
-  const endpoint = `${SP_SITE_URL}/_api/web/lists/getbytitle(${encodedList})/items(${numericItemId})`;
-
+  const endpoint = `${SP_SITE_URL}${spListEndpoint(listName)}/items(${numericItemId})`;
+  const entityType = await getListEntityType(token, listName);
+  const digest = await getSpDigest(token);
   const body = JSON.stringify({
-    __metadata: { type: "SP.Data.Job_x0020_ApplicationsListItem" },
+    __metadata: { type: entityType },
     [fieldName]: {
       __metadata: { type: "SP.FieldUrlValue" },
       Url: url,
@@ -68,9 +47,7 @@ async function patchHyperlinkViaSPRest(
     },
   });
 
-  // SP REST MERGE requires X-HTTP-Method: MERGE + X-RequestDigest
-  // For app-only tokens, X-RequestDigest can be any non-empty string when
-  // using Bearer auth — SP validates the Bearer token, not the digest.
+  // SP REST MERGE requires X-HTTP-Method: MERGE plus a current FormDigest.
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -79,7 +56,7 @@ async function patchHyperlinkViaSPRest(
       "Content-Type": "application/json;odata=verbose",
       "X-HTTP-Method": "MERGE",
       "IF-MATCH": "*",
-      "X-RequestDigest": "app-only-bypass",
+      "X-RequestDigest": digest,
     },
     body,
   });
@@ -92,82 +69,46 @@ async function patchHyperlinkViaSPRest(
 
 /**
  * Patch a URL/hyperlink value into a SharePoint column.
- * Tries SP REST v1 first (works for Hyperlink columns with app-only tokens),
- * then falls back to Graph API formats.
+ * Tries SP REST FieldUrlValue first, then falls back to plain text for lists
+ * where the URL column was changed to a text-compatible field.
  */
 async function patchUrlColumn(
-  sysToken: string,
+  userToken: string,
   listName: string,
   itemId: string,
   fieldName: string,
   url: string,
-  userToken?: string,
+  description: string,
 ): Promise<void> {
-  // Attempt 1: SP REST v1 with user (delegated) token — required for "Hyperlink or Picture"
-  // columns. App-only (client credentials) tokens CANNOT write to hyperlink columns.
-  if (userToken) {
-    try {
-      await patchHyperlinkViaSPRest(userToken, listName, itemId, fieldName, url, fieldName);
-      logInfo("api:job-apply", "URL field saved via SP REST v1 user token", { fieldName });
-      return;
-    } catch (e) {
-      logWarn("api:job-apply", "SP REST v1 failed with user token", {
-        fieldName,
-        errorMessage: errorMessage(e, 200),
-      });
-    }
-  }
-
-  // Attempt 2: SP REST v1 with system token (likely fails for hyperlink columns, but try)
+  // Use the signed-in user's delegated SharePoint token so the item history
+  // records the applicant as the editor.
   try {
-    await patchHyperlinkViaSPRest(sysToken, listName, itemId, fieldName, url, fieldName);
-    logInfo("api:job-apply", "URL field saved via SP REST v1 system token", { fieldName });
+    await patchHyperlinkViaSPRest(userToken, listName, itemId, fieldName, url, description);
+    logInfo("api:job-apply", "URL field saved via SP REST delegated token", { fieldName });
     return;
   } catch (e) {
-    logWarn("api:job-apply", "SP REST v1 failed with system token", {
+    logWarn("api:job-apply", "SP REST FieldUrlValue update failed", {
       fieldName,
       errorMessage: errorMessage(e, 200),
     });
   }
 
-  // Attempts 3-6: Graph API fallbacks (work if column is changed to Single line of text)
-  const graphAttempts: Array<{ fn: () => Promise<void>; label: string }> = [
-    {
-      label: "Graph item PATCH + {Url,Description}",
-      fn: () => updateListItem(sysToken, listName, itemId, { [fieldName]: { Url: url, Description: url } }),
-    },
-    {
-      label: "Graph fields PATCH + {Url,Description}",
-      fn: () => updateListItemFields(sysToken, listName, itemId, { [fieldName]: { Url: url, Description: url } }),
-    },
-    {
-      label: "Graph item PATCH + plain string",
-      fn: () => updateListItem(sysToken, listName, itemId, { [fieldName]: url }),
-    },
-    {
-      label: "Graph fields PATCH + plain string",
-      fn: () => updateListItemFields(sysToken, listName, itemId, { [fieldName]: url }),
-    },
-  ];
-
-  for (const attempt of graphAttempts) {
-    try {
-      await attempt.fn();
-      logInfo("api:job-apply", "URL field saved via Graph fallback", { fieldName, format: attempt.label });
-      return;
-    } catch (e) {
-      logWarn("api:job-apply", "URL field Graph fallback failed", {
-        fieldName,
-        format: attempt.label,
-        errorMessage: errorMessage(e, 150),
-      });
-    }
+  try {
+    await updateListItemViaSPRest(userToken, listName, itemId, { [fieldName]: url });
+    logInfo("api:job-apply", "URL field saved as text via delegated token", { fieldName });
+    return;
+  } catch (e) {
+    logWarn("api:job-apply", "SP REST text URL update failed", {
+      fieldName,
+      errorMessage: errorMessage(e, 200),
+    });
   }
 
   logError("api:job-apply", "Could not save URL field after all attempts", undefined, {
     fieldName,
     urlPreview: url.slice(0, 100),
   });
+  throw new Error(`Could not save ${fieldName} URL to SharePoint.`);
 }
 
 interface UploadedFile {
@@ -252,20 +193,193 @@ function getRetentionUntil(from: Date = new Date()): string {
 // were created (UI, REST, Graph, PnP, etc.).
 
 interface ColumnMap {
-  byDisplay: Record<string, string>; // "Applicant Name" → "ApplicantName"
-  byInternal: Record<string, string>; // "ApplicantName" → "ApplicantName" (identity)
-  raw: Array<{ name: string; displayName: string }>;
+  byDisplay: Record<string, string>;
+  byInternal: Record<string, string>;
+  fieldTypes: Record<string, number>;
+  raw: Array<{ name: string; displayName: string; fieldTypeKind: number }>;
+}
+
+interface SharePointCurrentUser {
+  Email?: string;
+  UserPrincipalName?: string;
+  LoginName?: string;
+  Title?: string;
+}
+
+interface SpColumnSpec {
+  name: string;
+  displayName: string;
+  acceptKinds: number[];
+  kind: number;
+  extra?: Record<string, unknown>;
+}
+
+const APPLICATION_COLUMN_SPECS: SpColumnSpec[] = [
+  { name: "ApplicantName", displayName: "Applicant Name", acceptKinds: [2], kind: 2 },
+  { name: "ApplicantEmail", displayName: "Applicant Email", acceptKinds: [2], kind: 2 },
+  { name: "ApplicantPhone", displayName: "Applicant Phone", acceptKinds: [2], kind: 2 },
+  { name: "JobListingID", displayName: "Job Listing ID", acceptKinds: [9, 7], kind: 9 },
+  { name: "Status", displayName: "Status", acceptKinds: [2, 6], kind: 2 },
+  { name: "SubmissionRef", displayName: "Submission Ref", acceptKinds: [2], kind: 2 },
+  { name: "SubmittedBy", displayName: "Submitted By", acceptKinds: [2], kind: 2 },
+  { name: "SubmittedAt", displayName: "Submitted At", acceptKinds: [4, 2], kind: 4 },
+  { name: "ResumeUrl", displayName: "Resume URL", acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
+  { name: "CoverLetterUrl", displayName: "Cover Letter URL", acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
+  { name: "Reasoning", displayName: "Reasoning", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
+  { name: "CustomAnswers", displayName: "Custom Answers", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
+  { name: "CurrentPosition", displayName: "Current Position", acceptKinds: [2], kind: 2 },
+  { name: "CurrentDepartment", displayName: "Current Department", acceptKinds: [2], kind: 2 },
+  { name: "PDPAConsent", displayName: "PDPA Consent", acceptKinds: [2], kind: 2 },
+  { name: "PDPANoticeVersion", displayName: "PDPA Notice Version", acceptKinds: [2], kind: 2 },
+  { name: "PDPAConsentAt", displayName: "PDPA Consent At", acceptKinds: [4, 2], kind: 4 },
+  { name: "RetentionUntil", displayName: "Retention Until", acceptKinds: [4, 2], kind: 4 },
+];
+
+const SP_FIELD_TYPES: Record<number, string> = {
+  2: "SP.Field",
+  3: "SP.FieldMultiLineText",
+  4: "SP.FieldDateTime",
+  7: "SP.FieldLookup",
+  8: "SP.Field",
+  9: "SP.FieldNumber",
+  11: "SP.FieldUrl",
+};
+
+function requireSpSiteUrl(): string {
+  if (!SP_SITE_URL) throw new Error("SP_SITE_URL env var not set.");
+  return SP_SITE_URL;
+}
+
+function escapeODataString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function spListEndpoint(listName: string): string {
+  return `/_api/web/lists/getbytitle('${encodeURIComponent(escapeODataString(listName))}')`;
+}
+
+async function readJsonOrThrow<T>(res: Response, label: string): Promise<T> {
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`${label} ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return (text ? JSON.parse(text) : {}) as T;
+}
+
+async function getSpDigest(token: string): Promise<string> {
+  const res = await fetch(`${requireSpSiteUrl()}/_api/contextinfo`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+    },
+  });
+  const data = await readJsonOrThrow<{ FormDigestValue?: string }>(res, "SP REST contextinfo");
+  if (!data.FormDigestValue) throw new Error("SharePoint did not return a FormDigestValue.");
+  return data.FormDigestValue;
+}
+
+async function spGet<T>(token: string, path: string, label: string): Promise<T> {
+  const res = await fetch(`${requireSpSiteUrl()}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+    },
+  });
+  return readJsonOrThrow<T>(res, label);
+}
+
+async function getSharePointCurrentUser(token: string): Promise<SharePointCurrentUser> {
+  return spGet<SharePointCurrentUser>(
+    token,
+    "/_api/web/currentuser?$select=Email,UserPrincipalName,LoginName,Title",
+    "SP REST currentuser",
+  );
+}
+
+function resolveSharePointUserEmail(user: SharePointCurrentUser): string {
+  const email = user.Email || user.UserPrincipalName || "";
+  if (email) return email.toLowerCase();
+  const login = user.LoginName || "";
+  const match = login.match(/([^|#]+@[^|#]+)$/);
+  return match?.[1]?.toLowerCase() || "";
+}
+
+async function getListEntityType(token: string, listName: string): Promise<string> {
+  const data = await spGet<{ ListItemEntityTypeFullName?: string }>(
+    token,
+    `${spListEndpoint(listName)}?$select=ListItemEntityTypeFullName`,
+    `SP REST list metadata ${listName}`,
+  );
+  if (!data.ListItemEntityTypeFullName) throw new Error(`Could not resolve SharePoint entity type for "${listName}".`);
+  return data.ListItemEntityTypeFullName;
 }
 
 async function resolveColumns(token: string, listName: string): Promise<ColumnMap> {
-  const cols = await getListColumns(token, listName);
+  const data = await spGet<{ value?: Array<{ InternalName: string; Title: string; FieldTypeKind: number }> }>(
+    token,
+    `${spListEndpoint(listName)}/fields?$select=InternalName,Title,FieldTypeKind`,
+    `SP REST fields ${listName}`,
+  );
   const byDisplay: Record<string, string> = {};
   const byInternal: Record<string, string> = {};
+  const fieldTypes: Record<string, number> = {};
+  const cols = (data.value || []).map((col) => ({
+    name: col.InternalName,
+    displayName: col.Title,
+    fieldTypeKind: col.FieldTypeKind,
+  }));
   for (const col of cols) {
     byDisplay[col.displayName] = col.name;
     byInternal[col.name] = col.name;
+    fieldTypes[col.name] = col.fieldTypeKind;
   }
-  return { byDisplay, byInternal, raw: cols };
+  return { byDisplay, byInternal, fieldTypes, raw: cols };
+}
+
+async function ensureJobApplicationColumnsViaSPRest(token: string): Promise<void> {
+  let colMap = await resolveColumns(token, APPLICATION_LIST);
+  const digest = await getSpDigest(token);
+
+  for (const spec of APPLICATION_COLUMN_SPECS) {
+    const existingInternal = colMap.byInternal[spec.name] || colMap.byDisplay[spec.displayName];
+    if (existingInternal) {
+      const existingType = colMap.fieldTypes[existingInternal];
+      if (!spec.acceptKinds.includes(existingType)) {
+        throw new Error(
+          `Column "${spec.displayName}" exists with incompatible SharePoint type kind ${existingType}.`,
+        );
+      }
+      continue;
+    }
+
+    const body: Record<string, unknown> = {
+      __metadata: { type: SP_FIELD_TYPES[spec.kind] ?? "SP.Field" },
+      FieldTypeKind: spec.kind,
+      Title: spec.displayName,
+      StaticName: spec.name,
+    };
+    if (spec.extra) Object.assign(body, spec.extra);
+
+    const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(APPLICATION_LIST)}/fields`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json;odata=nometadata",
+        "Content-Type": "application/json;odata=verbose",
+        "X-RequestDigest": digest,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      const lower = text.toLowerCase();
+      if (!lower.includes("duplicate") && !lower.includes("already exists")) {
+        throw new Error(`Failed to create column "${spec.displayName}": ${res.status} ${text.slice(0, 200)}`);
+      }
+    }
+    colMap = await resolveColumns(token, APPLICATION_LIST);
+  }
 }
 
 /**
@@ -278,6 +392,180 @@ function findColumn(map: ColumnMap, ...candidates: string[]): string | null {
     if (map.byInternal[c]) return map.byInternal[c];
   }
   return null;
+}
+
+async function ensureDocLibraryViaSPRest(token: string, libraryName: string): Promise<void> {
+  const exists = await fetch(`${requireSpSiteUrl()}${spListEndpoint(libraryName)}?$select=Id`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+    },
+  });
+  if (exists.ok) return;
+  if (exists.status !== 404) {
+    const text = await exists.text();
+    throw new Error(`SP REST library check ${exists.status}: ${text.slice(0, 300)}`);
+  }
+
+  const digest = await getSpDigest(token);
+  const res = await fetch(`${requireSpSiteUrl()}/_api/web/lists`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+      "Content-Type": "application/json;odata=verbose",
+      "X-RequestDigest": digest,
+    },
+    body: JSON.stringify({
+      __metadata: { type: "SP.List" },
+      BaseTemplate: 101,
+      Title: libraryName,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    const lower = text.toLowerCase();
+    if (!lower.includes("duplicate") && !lower.includes("already exists")) {
+      throw new Error(`SP REST create library ${res.status}: ${text.slice(0, 300)}`);
+    }
+  }
+}
+
+async function createListItemViaSPRest(
+  token: string,
+  listName: string,
+  fields: Record<string, unknown>,
+): Promise<{ id: string }> {
+  const digest = await getSpDigest(token);
+  const entityType = await getListEntityType(token, listName);
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/items`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+      "Content-Type": "application/json;odata=verbose",
+      "X-RequestDigest": digest,
+    },
+    body: JSON.stringify({ __metadata: { type: entityType }, ...fields }),
+  });
+  const data = await readJsonOrThrow<{ Id?: number; ID?: number; id?: number }>(res, "SP REST create item");
+  const id = data.Id ?? data.ID ?? data.id;
+  if (!id) throw new Error("SharePoint did not return the created item ID.");
+  return { id: String(id) };
+}
+
+async function updateListItemViaSPRest(
+  token: string,
+  listName: string,
+  itemId: string,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  const digest = await getSpDigest(token);
+  const entityType = await getListEntityType(token, listName);
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/items(${itemId})`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+      "Content-Type": "application/json;odata=verbose",
+      "X-HTTP-Method": "MERGE",
+      "IF-MATCH": "*",
+      "X-RequestDigest": digest,
+    },
+    body: JSON.stringify({ __metadata: { type: entityType }, ...fields }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`SP REST update item ${res.status}: ${text.slice(0, 300)}`);
+  }
+}
+
+async function uploadFileViaSPRest(
+  token: string,
+  libraryName: string,
+  fileName: string,
+  content: Uint8Array,
+): Promise<string> {
+  await ensureDocLibraryViaSPRest(token, libraryName);
+  const digest = await getSpDigest(token);
+  const safeFileName = escapeODataString(fileName);
+  const res = await fetch(
+    `${requireSpSiteUrl()}${spListEndpoint(libraryName)}/RootFolder/Files/add(url='${safeFileName}',overwrite=true)`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json;odata=nometadata",
+        "Content-Type": "application/octet-stream",
+        "X-RequestDigest": digest,
+      },
+      body: content,
+    },
+  );
+  const data = await readJsonOrThrow<{ ServerRelativeUrl?: string; LinkingUrl?: string }>(res, "SP REST upload file");
+  if (data.LinkingUrl) return data.LinkingUrl;
+  if (data.ServerRelativeUrl) return `${new URL(requireSpSiteUrl()).origin}${data.ServerRelativeUrl}`;
+  return "";
+}
+
+function jobListingFilter(colMap: ColumnMap, internalName: string, jobListingId: string): string {
+  const fieldType = colMap.fieldTypes[internalName];
+  const fieldName = fieldType === 7 ? `${internalName}Id` : internalName;
+  return `${fieldName} eq ${Number(jobListingId)}`;
+}
+
+async function hasDuplicateApplication(
+  token: string,
+  colMap: ColumnMap,
+  columns: { jobListingId: string | null; applicantEmail: string | null; submittedBy: string | null },
+  jobListingId: string,
+  applicantEmail: string,
+  authenticatedEmail: string,
+): Promise<boolean> {
+  if (!columns.jobListingId) return false;
+  const identityFilters: string[] = [];
+  const normalizedApplicant = applicantEmail.toLowerCase();
+  if (columns.submittedBy) {
+    identityFilters.push(`${columns.submittedBy} eq '${escapeODataString(authenticatedEmail)}'`);
+  }
+  if (columns.applicantEmail) {
+    identityFilters.push(`${columns.applicantEmail} eq '${escapeODataString(authenticatedEmail)}'`);
+    if (normalizedApplicant !== authenticatedEmail) {
+      identityFilters.push(`${columns.applicantEmail} eq '${escapeODataString(normalizedApplicant)}'`);
+    }
+  }
+  if (identityFilters.length === 0) return false;
+
+  const filter = `${jobListingFilter(colMap, columns.jobListingId, jobListingId)} and (${identityFilters.join(" or ")})`;
+  const params = new URLSearchParams({
+    "$select": "Id",
+    "$top": "1",
+    "$filter": filter,
+  });
+  const data = await spGet<{ value?: Array<{ Id?: number }> }>(
+    token,
+    `${spListEndpoint(APPLICATION_LIST)}/items?${params.toString()}`,
+    "SP REST duplicate check",
+  );
+  return (data.value || []).length > 0;
+}
+
+async function isHrFormsOwner(token: string, authenticatedEmail: string): Promise<boolean> {
+  try {
+    const data = await spGet<{ value?: Array<{ Email?: string; UserPrincipalName?: string; LoginName?: string }> }>(
+      token,
+      `/_api/web/sitegroups/getByName('${encodeURIComponent(escapeODataString(HR_OWNER_GROUP))}')/users?$select=Email,UserPrincipalName,LoginName`,
+      "SP REST owner group",
+    );
+    return (data.value || []).some((user) => {
+      const email = (user.Email || user.UserPrincipalName || "").toLowerCase();
+      const login = (user.LoginName || "").toLowerCase();
+      return email === authenticatedEmail || login.includes(authenticatedEmail);
+    });
+  } catch (e) {
+    logWarn("api:job-apply", "Admin override check failed", { errorMessage: errorMessage(e, 200) });
+    return false;
+  }
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -317,19 +605,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (body.pdpaConsent !== true) {
     return res.status(400).json({ error: "PDPA consent is required before submitting an application." });
   }
+  if (!accessToken) {
+    return res.status(401).json({
+      error: "Please sign in again before submitting. A delegated SharePoint token is required.",
+    });
+  }
+  const delegatedToken = accessToken;
 
   try {
-    const sysToken = await getGraphToken();
+    const currentUser = await getSharePointCurrentUser(delegatedToken);
+    const authenticatedEmail = resolveSharePointUserEmail(currentUser);
+    if (!authenticatedEmail) {
+      return res.status(401).json({ error: "Could not identify the signed-in SharePoint user." });
+    }
 
-    await Promise.all([
-      ensureListColumn(sysToken, "Job Applications", "PDPAConsent", "PDPA Consent", "text"),
-      ensureListColumn(sysToken, "Job Applications", "PDPANoticeVersion", "PDPA Notice Version", "text"),
-      ensureListColumn(sysToken, "Job Applications", "PDPAConsentAt", "PDPA Consent At", "dateTime"),
-      ensureListColumn(sysToken, "Job Applications", "RetentionUntil", "Retention Until", "dateTime"),
-    ]);
+    await ensureJobApplicationColumnsViaSPRest(delegatedToken);
+    await ensureDocLibraryViaSPRest(delegatedToken, DOC_LIB_NAME);
 
     // ── Resolve real column internal names from SharePoint schema ────────
-    const colMap = await resolveColumns(sysToken, "Job Applications");
+    const colMap = await resolveColumns(delegatedToken, APPLICATION_LIST);
 
     logInfo("api:job-apply", "Discovered SharePoint columns", {
       columnCount: colMap.raw.length,
@@ -346,8 +640,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       applicantPhone:    findColumn(colMap, "Applicant Phone", "ApplicantPhone", "Applicant_x0020_Phone"),
       status:            findColumn(colMap, "Status"),
       submissionRef:     findColumn(colMap, "Submission Ref", "SubmissionRef", "Submission_x0020_Ref"),
-      resumeUrl:         findColumn(colMap, "Resume Url", "ResumeUrl", "Resume_x0020_Url"),
-      coverLetterUrl:    findColumn(colMap, "Cover Letter Url", "CoverLetterUrl", "Cover_x0020_Letter_x0020_Url"),
+      submittedBy:       findColumn(colMap, "Submitted By", "SubmittedBy", "Submitted_x0020_By"),
+      submittedAt:       findColumn(colMap, "Submitted At", "SubmittedAt", "Submitted_x0020_At"),
+      resumeUrl:         findColumn(colMap, "Resume URL", "Resume Url", "ResumeUrl", "Resume_x0020_Url"),
+      coverLetterUrl:    findColumn(colMap, "Cover Letter URL", "Cover Letter Url", "CoverLetterUrl", "Cover_x0020_Letter_x0020_Url"),
       reasoning:         findColumn(colMap, "Reasoning"),
       customAnswers:     findColumn(colMap, "CustomAnswers", "Custom Answers"),
       currentPosition:   findColumn(colMap, "CurrentPosition", "Current Position"),
@@ -375,29 +671,27 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // ── Duplicate check ──────────────────────────────────────────────────
     // ApplicantEmail is not indexed — must send Prefer header to allow filter.
     if (COL.applicantEmail && COL.jobListingId) {
-      try {
-        const jobIdFilterKey = `${COL.jobListingId}LookupId`;
-        const existing = await queryListItemsNonIndexed(
-          sysToken,
-          "Job Applications",
-          `fields/${COL.applicantEmail} eq '${applicantEmail.replace(/'/g, "''")}' and fields/${jobIdFilterKey} eq ${Number(jobListingId)}`,
-        );
-        if (existing.length > 0) {
-          const submitterEmail = body.submittedByEmail || "";
-          const isForceBypass =
-            body.forceApply === true &&
-            auth.valid &&
-            submitterEmail.toLowerCase() !== applicantEmail.toLowerCase();
-          if (!isForceBypass) {
-            return res.status(409).json({
-              error: "You have already applied for this position. Multiple applications are not allowed.",
-            });
-          }
+      const duplicate = await hasDuplicateApplication(
+        delegatedToken,
+        colMap,
+        { jobListingId: COL.jobListingId, applicantEmail: COL.applicantEmail, submittedBy: COL.submittedBy },
+        jobListingId,
+        applicantEmail,
+        authenticatedEmail,
+      );
+      if (duplicate) {
+        const isForceBypass = body.forceApply === true
+          ? await isHrFormsOwner(delegatedToken, authenticatedEmail)
+          : false;
+        if (!isForceBypass) {
+          return res.status(409).json({
+            error: "You have already applied for this position. Multiple applications are not allowed.",
+          });
         }
-      } catch (e) {
-        logWarn("api:job-apply", "Duplicate check failed", {
-          errorMessage: errorMessage(e),
-        });
+        logInfo("api:job-apply", "Admin duplicate override accepted", { authenticatedEmail, jobListingId });
+      } else if (body.forceApply === true) {
+        const isAdmin = await isHrFormsOwner(delegatedToken, authenticatedEmail);
+        if (!isAdmin) return res.status(403).json({ error: "Only HR Forms Owners can submit a duplicate test application." });
       }
     }
 
@@ -411,22 +705,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       : getRetentionUntil(new Date(submittedAt));
 
     // ── File uploads ─────────────────────────────────────────────────────
-    const docLibName = "Job Applications Files";
-    let docLibReady = false;
     let resumeUrl = "";
-
-    async function ensureDocLib(): Promise<void> {
-      if (!docLibReady) {
-        if (!(await listExistsGraph(sysToken, docLibName))) {
-          await createDocLibrary(sysToken, docLibName);
-        }
-        docLibReady = true;
-      }
-    }
 
     async function uploadDoc(name: string, content: string): Promise<string | null> {
       try {
-        await ensureDocLib();
         const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const uniqueName = `${submissionRef}_${safeName}`;
         const binary = decodeBase64(content);
@@ -437,7 +719,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           });
           return null;
         }
-        return await uploadFileToDrive(sysToken, docLibName, uniqueName, binary);
+        return await uploadFileViaSPRest(delegatedToken, DOC_LIB_NAME, uniqueName, binary);
       } catch (e) {
         logError("api:job-apply", "Application file upload failed", e, { fileName: name });
         return null;
@@ -462,19 +744,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     };
 
     if (COL.jobListingId) {
-      coreFields[`${COL.jobListingId}LookupId`] = Number(jobListingId);
+      const jobListingField = colMap.fieldTypes[COL.jobListingId] === 7 ? `${COL.jobListingId}Id` : COL.jobListingId;
+      coreFields[jobListingField] = Number(jobListingId);
     }
     if (COL.applicantName)  coreFields[COL.applicantName]  = applicantName;
     if (COL.applicantEmail) coreFields[COL.applicantEmail] = applicantEmail;
     if (COL.applicantPhone) coreFields[COL.applicantPhone] = applicantPhone;
     if (COL.status)         coreFields[COL.status]         = "New";
     if (COL.submissionRef)  coreFields[COL.submissionRef]  = submissionRef;
+    if (COL.submittedBy)    coreFields[COL.submittedBy]    = authenticatedEmail;
+    if (COL.submittedAt)    coreFields[COL.submittedAt]    = submittedAt;
     if (COL.pdpaConsent) coreFields[COL.pdpaConsent] = "Accepted";
     if (COL.pdpaNoticeVersion) coreFields[COL.pdpaNoticeVersion] = body.pdpaNoticeVersion || PDPA_NOTICE_VERSION;
     if (COL.pdpaConsentAt) coreFields[COL.pdpaConsentAt] = pdpaConsentedAt;
     if (COL.retentionUntil) coreFields[COL.retentionUntil] = retentionUntil;
 
-    const created = await createListItem(sysToken, "Job Applications", coreFields);
+    const created = await createListItemViaSPRest(delegatedToken, APPLICATION_LIST, coreFields);
     const itemId = created.id;
     logInfo("api:job-apply", "Created job application item", { itemId, submissionRef });
 
@@ -487,7 +772,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     ): Promise<void> {
       if (!internalName || value === "" || value == null) return;
       try {
-        await updateListItemFields(sysToken, "Job Applications", itemId, {
+        await updateListItemViaSPRest(delegatedToken, APPLICATION_LIST, itemId, {
           [internalName]: value,
         });
       } catch (e) {
@@ -499,20 +784,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    // URL columns (Resume Url, Cover Letter Url).
-    // NOTE: If these are "Hyperlink or Picture" type in SharePoint, app-only tokens
-    // cannot write to them. Change them to "Single line of text" in List Settings
-    // and the plain-string fallback below will work automatically.
+    // URL columns (Resume Url, Cover Letter Url). Hyperlink/Picture columns use
+    // SP.FieldUrlValue; text-compatible URL fields use the fallback in patchUrlColumn().
     logInfo("api:job-apply", "Resolved resume URL", {
       hasResumeUrl: Boolean(resumeUrl),
     });
     if (COL.resumeUrl && resumeUrl) {
-      await patchUrlColumn(sysToken, "Job Applications", itemId, COL.resumeUrl, resumeUrl, accessToken);
+      await patchUrlColumn(delegatedToken, APPLICATION_LIST, itemId, COL.resumeUrl, resumeUrl, "Resume");
     }
     // coverLetterUrl — currently unused (cover letters stored as text in Reasoning)
     // Uncomment when you add cover letter file upload support:
     // if (COL.coverLetterUrl && coverLetterUrl) {
-    //   await patchUrlColumn(sysToken, "Job Applications", itemId, COL.coverLetterUrl, coverLetterUrl);
+    //   await patchUrlColumn(delegatedToken, APPLICATION_LIST, itemId, COL.coverLetterUrl, coverLetterUrl, "Cover Letter");
     // }
 
     // Plain text / note columns
@@ -529,24 +812,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // ── Step 3: Increment application count on job listing ────────────────
     try {
-      const jobItem = await queryListItemById(sysToken, "Internal Job Listing", jobListingId);
-      if (jobItem) {
-        // Resolve count column name on job listing list too
-        const jobColMap = await resolveColumns(sysToken, "Internal Job Listing");
-        const countCol = findColumn(
-          jobColMap,
-          "Application Count",
-          "ApplicationCount",
-          "Application_x0020_Count",
+      const jobColMap = await resolveColumns(delegatedToken, JOB_LIST);
+      const countCol = findColumn(
+        jobColMap,
+        "Application Count",
+        "ApplicationCount",
+        "Application_x0020_Count",
+      );
+      if (countCol) {
+        const jobItem = await spGet<Record<string, unknown>>(
+          delegatedToken,
+          `${spListEndpoint(JOB_LIST)}/items(${jobListingId})?$select=Id,${countCol}`,
+          "SP REST job listing count",
         );
-        if (countCol) {
-          const currentCount = Number(jobItem.fields[countCol]) || 0;
-          await updateListItemFields(sysToken, "Internal Job Listing", jobListingId, {
-            [countCol]: currentCount + 1,
-          });
-        }
-      } else {
-        logWarn("api:job-apply", "Job listing not found for count update", { jobListingId });
+        const currentCount = Number(jobItem[countCol]) || 0;
+        await updateListItemViaSPRest(delegatedToken, JOB_LIST, jobListingId, {
+          [countCol]: currentCount + 1,
+        });
       }
     } catch (e) {
       logWarn("api:job-apply", "Count update failed", {

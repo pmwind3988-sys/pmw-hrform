@@ -3,6 +3,149 @@ import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
 
+export interface SpColumnSpec {
+  n: string;
+  k: number;
+  ml?: boolean;
+  rt?: boolean;
+  choices?: string[];
+  label?: string;
+}
+
+export interface SpListSchema {
+  title: string;
+  baseTemplate?: number;
+  description?: string;
+  columns?: SpColumnSpec[];
+}
+
+interface ExistingFieldInfo {
+  Title?: string;
+  InternalName?: string;
+  StaticName?: string;
+  EntityPropertyName?: string;
+}
+
+export interface EnsureColumnsResult {
+  created: string[];
+  existing: string[];
+}
+
+export const SP_FIELD_KIND = {
+  text: 2,
+  note: 3,
+  dateTime: 4,
+  choice: 6,
+  boolean: 8,
+  number: 9,
+  image: 11,
+  multiChoice: 15,
+} as const;
+
+export const PDPA_COLUMN_SPECS: SpColumnSpec[] = [
+  { n: 'PDPAConsent', k: SP_FIELD_KIND.text },
+  { n: 'PDPANoticeVersion', k: SP_FIELD_KIND.text },
+  { n: 'PDPAConsentAt', k: SP_FIELD_KIND.dateTime },
+  { n: 'RetentionUntil', k: SP_FIELD_KIND.dateTime },
+];
+
+export const PDF_URL_COLUMN_SPEC: SpColumnSpec = { n: 'PdfUrl', k: SP_FIELD_KIND.text };
+
+export const SELECTED_BRANCH_COLUMN_SPEC: SpColumnSpec = {
+  n: 'SelectedBranch',
+  k: SP_FIELD_KIND.text,
+};
+
+const SP_FIELD_TYPE_MAP: Record<number, string> = {
+  [SP_FIELD_KIND.text]: 'SP.Field',
+  [SP_FIELD_KIND.note]: 'SP.FieldMultiLineText',
+  [SP_FIELD_KIND.dateTime]: 'SP.FieldDateTime',
+  [SP_FIELD_KIND.choice]: 'SP.FieldChoice',
+  [SP_FIELD_KIND.boolean]: 'SP.Field',
+  [SP_FIELD_KIND.number]: 'SP.FieldNumber',
+  [SP_FIELD_KIND.image]: 'SP.FieldUrl',
+  [SP_FIELD_KIND.multiChoice]: 'SP.FieldMultiChoice',
+};
+
+const columnCache = new Map<string, Set<string>>();
+
+function columnCacheKey(listTitle: string): string {
+  return listTitle.trim().toLowerCase();
+}
+
+function normalizeColumnName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function rememberColumn(listTitle: string, fieldName: string): void {
+  const key = columnCacheKey(listTitle);
+  const cached = columnCache.get(key) ?? new Set<string>();
+  cached.add(normalizeColumnName(fieldName));
+  columnCache.set(key, cached);
+}
+
+async function getExistingColumnNames(token: string, listTitle: string): Promise<Set<string>> {
+  const key = columnCacheKey(listTitle);
+  const cached = columnCache.get(key);
+  if (cached) return cached;
+
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields?$select=Title,InternalName,StaticName,EntityPropertyName&$top=5000`
+  ) as { value?: ExistingFieldInfo[] };
+  const names = new Set<string>();
+  for (const field of data.value || []) {
+    for (const name of [field.Title, field.InternalName, field.StaticName, field.EntityPropertyName]) {
+      if (name) names.add(normalizeColumnName(name));
+    }
+  }
+  columnCache.set(key, names);
+  return names;
+}
+
+function buildColumnBody(spec: SpColumnSpec): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    __metadata: { type: SP_FIELD_TYPE_MAP[spec.k] ?? 'SP.Field' },
+    FieldTypeKind: spec.k,
+    Title: spec.n,
+    StaticName: spec.n,
+  };
+  if (spec.k === 3 || spec.ml) {
+    body.NumberOfLines = 6;
+    body.RichText = !!spec.rt;
+  }
+  if (spec.k === 11) {
+    body.DisplayFormat = 2; // 2 = Image (0=Hyperlink, 1=Text)
+  }
+  if ((spec.k === 6 || spec.k === 15) && spec.choices && spec.choices.length > 0) {
+    body.Choices = { results: spec.choices };
+  }
+  return body;
+}
+
+async function createColumn(token: string, listTitle: string, spec: SpColumnSpec): Promise<void> {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields`;
+  const response = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json;odata=nometadata',
+      'Content-Type': 'application/json;odata=verbose',
+      'X-RequestDigest': await getDigest(token),
+    },
+    body: JSON.stringify(buildColumnBody(spec)),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    if (text.toLowerCase().includes('duplicate') || text.toLowerCase().includes('already exists')) {
+      rememberColumn(listTitle, spec.n);
+      return;
+    }
+    throw new Error(`addColumn "${spec.n}" ${response.status}: ${text}`);
+  }
+  rememberColumn(listTitle, spec.n);
+}
+
 /** Escape single quotes for OData filter string values to prevent injection */
 function sanitizeODataValue(val: string): string {
   return val.replace(/'/g, "''");
@@ -407,58 +550,29 @@ export async function addColumn(
   richText = false,
   choices?: string[]
 ): Promise<void> {
-  // Check if already exists
-  try {
-    await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields/getbyinternalnameortitle('${encodeURIComponent(fieldName)}')?$select=InternalName`);
-    return; // already exists
-  } catch {
-    // Continue to create
-  }
+  await ensureColumns(token, listTitle, [{ n: fieldName, k: kind, ml: multiLine, rt: richText, choices }]);
+}
 
-  const digest = await getDigest(token);
-  const typeMap: Record<number, string> = {
-    2: 'SP.Field',
-    3: 'SP.FieldMultiLineText',
-    4: 'SP.FieldDateTime',
-    6: 'SP.FieldChoice',
-    8: 'SP.Field',
-    9: 'SP.FieldNumber',
-    11: 'SP.FieldUrl',
-    15: 'SP.FieldMultiChoice',
-  };
-  const body: Record<string, unknown> = {
-    __metadata: { type: typeMap[kind] ?? 'SP.Field' },
-    FieldTypeKind: kind,
-    Title: fieldName,
-    StaticName: fieldName,
-  };
-  if (kind === 3 || multiLine) {
-    body.NumberOfLines = 6;
-    body.RichText = !!richText;
-  }
-  if (kind === 11) {
-    body.DisplayFormat = 2; // 2 = Image (0=Hyperlink, 1=Text)
-  }
-  if ((kind === 6 || kind === 15) && choices && choices.length > 0) {
-    body.Choices = { results: choices };
-  }
+export async function ensureColumns(
+  token: string,
+  listTitle: string,
+  columns: SpColumnSpec[],
+): Promise<EnsureColumnsResult> {
+  if (columns.length === 0) return { created: [], existing: [] };
 
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields`;
-  const response = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json;odata=nometadata',
-      'Content-Type': 'application/json;odata=verbose',
-      'X-RequestDigest': digest,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    if (text.toLowerCase().includes('duplicate') || text.toLowerCase().includes('already exists')) return;
-    throw new Error(`addColumn "${fieldName}" ${response.status}: ${text}`);
+  const existingColumns = await getExistingColumnNames(token, listTitle);
+  const result: EnsureColumnsResult = { created: [], existing: [] };
+  for (const column of columns) {
+    const normalized = normalizeColumnName(column.n);
+    if (existingColumns.has(normalized)) {
+      result.existing.push(column.n);
+      continue;
+    }
+    await createColumn(token, listTitle, column);
+    existingColumns.add(normalized);
+    result.created.push(column.n);
   }
+  return result;
 }
 
 export async function deleteListColumnsWhere(
@@ -497,6 +611,9 @@ export async function deleteListColumnsWhere(
       deleted += 1;
     }
   }
+  if (deleted > 0) {
+    columnCache.delete(columnCacheKey(listTitle));
+  }
   return deleted;
 }
 
@@ -506,6 +623,7 @@ export async function createSpList(
   baseTemplate = 100,
   description = ""
 ): Promise<unknown> {
+  columnCache.delete(columnCacheKey(listTitle));
   const d = await getDigest(token);
   const r = await fetchWithTimeout(`${SP_SITE_URL}/_api/web/lists`, {
     method: "POST",
@@ -541,6 +659,77 @@ export async function listExists(
 }
 
 // ── Low-level HTTP helpers (from reference) ─────────────────────────────────────
+export async function ensureSpList(
+  token: string,
+  listTitle: string,
+  options: { baseTemplate?: number; description?: string } = {},
+): Promise<boolean> {
+  if (await listExists(token, listTitle)) return false;
+  await createSpList(token, listTitle, options.baseTemplate ?? 100, options.description ?? '');
+  return true;
+}
+
+export async function ensureListSchema(
+  token: string,
+  schema: SpListSchema,
+  onLog?: (msg: string, type: string) => void,
+): Promise<EnsureColumnsResult> {
+  const createdList = await ensureSpList(token, schema.title, {
+    baseTemplate: schema.baseTemplate,
+    description: schema.description,
+  });
+  onLog?.(`${createdList ? 'Created' : 'Found'} list "${schema.title}"`, createdList ? 'ok' : 'info');
+
+  const columns = schema.columns ?? [];
+  const result = await ensureColumns(token, schema.title, columns);
+  for (const column of columns) {
+    const status = result.created.includes(column.n) ? 'created' : 'exists';
+    onLog?.(`  ${status}: ${column.n}`, 'ok');
+  }
+  return result;
+}
+
+export function makeListSchema(
+  title: string,
+  columns: SpColumnSpec[],
+  options: { baseTemplate?: number; description?: string } = {},
+): SpListSchema {
+  return {
+    title,
+    baseTemplate: options.baseTemplate,
+    description: options.description,
+    columns,
+  };
+}
+
+export async function ensurePdpaColumns(token: string, listTitle: string): Promise<EnsureColumnsResult> {
+  return ensureColumns(token, listTitle, PDPA_COLUMN_SPECS);
+}
+
+export async function ensurePdfUrlColumn(token: string, listTitle: string): Promise<EnsureColumnsResult> {
+  return ensureColumns(token, listTitle, [PDF_URL_COLUMN_SPEC]);
+}
+
+export async function ensureSelectedBranchColumn(token: string, listTitle: string): Promise<EnsureColumnsResult> {
+  return ensureColumns(token, listTitle, [SELECTED_BRANCH_COLUMN_SPEC]);
+}
+
+export async function ensureDocumentLibrary(
+  token: string,
+  libraryName: string,
+  description = "",
+  onLog?: (msg: string) => void,
+): Promise<string> {
+  const created = await ensureSpList(token, libraryName, {
+    baseTemplate: 101,
+    description,
+  });
+  if (created) {
+    onLog?.(`Created document library "${libraryName}"`);
+  }
+  return libraryName;
+}
+
 export async function spGet(token: string, url: string): Promise<unknown> {
   const response = await fetchWithTimeout(url, {
     headers: {
@@ -805,6 +994,7 @@ export async function deleteResponseList(token: string, formTitle: string): Prom
   const exists = await listExists(token, listName);
   if (!exists) return false;
   await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')`);
+  columnCache.delete(columnCacheKey(listName));
   return true;
 }
 
@@ -895,7 +1085,7 @@ export function diffSurveyJson(before: unknown, after: unknown): unknown[] {
 }
 
 // ── Bootstrap (from reference) ──────────────────────────────────────────
-const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: { n: string; k: number; ml?: boolean; rt?: boolean }[] }> = {
+const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec[] }> = {
   'Master Form': { t: 100, desc: 'Form builder configuration', cols: [
     { n: 'FormID', k: 2 }, { n: 'NumberOfApprovalLayer', k: 9 },
     { n: 'Slug', k: 2 }, { n: 'CurrentVersion', k: 2 },
@@ -918,35 +1108,35 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: { n: string;
     { n: 'BeforeJSON', k: 3, ml: true }, { n: 'AfterJSON', k: 3, ml: true },
     { n: 'EventAt', k: 4 },
   ]},
+  'AdminPanelSettings': { t: 100, desc: 'Shared admin dashboard settings', cols: [
+    { n: 'BackgroundId', k: 2 }, { n: 'CustomImageUrl', k: 3, ml: true },
+    { n: 'UpdatedBy', k: 2 }, { n: 'UpdatedAt', k: 4 },
+  ]},
 };
 
 async function ensureListExists(token: string, listTitle: string): Promise<void> {
   const schema = LIST_SCHEMAS[listTitle];
-  const exists = await listExists(token, listTitle);
-  if (!exists) {
-    await createSpList(token, listTitle, schema?.t ?? 100, schema?.desc ?? '');
-    // createSpList already retries waiting for the list to be available
+  if (!schema) {
+    await ensureSpList(token, listTitle);
+    return;
   }
-  if (schema?.cols) {
-    for (const col of schema.cols) {
-      await addColumn(token, listTitle, col.n, col.k, !!col.ml, !!col.rt);
-    }
-  }
+  await ensureListSchema(token, {
+    title: listTitle,
+    baseTemplate: schema.t,
+    description: schema.desc,
+    columns: schema.cols,
+  });
 }
 
 export async function bootstrapSystemLists(token: string, onLog?: (msg: string, type: string) => void): Promise<void> {
   for (const [title, schema] of Object.entries(LIST_SCHEMAS)) {
     onLog?.(`Checking "${title}"…`, 'info');
-    if (!await listExists(token, title)) {
-      await createSpList(token, title, schema.t, schema.desc);
-      onLog?.('✓ Created', 'ok');
-    } else {
-      onLog?.('✓ Exists', 'ok');
-    }
-    for (const col of schema.cols) {
-      await addColumn(token, title, col.n, col.k, !!col.ml, !!col.rt);
-      onLog?.(`  ✓ ${col.n}`, 'ok');
-    }
+    await ensureListSchema(token, {
+      title,
+      baseTemplate: schema.t,
+      description: schema.desc,
+      columns: schema.cols,
+    }, onLog);
   }
   onLog?.('Bootstrap complete ✓', 'ok');
 }
@@ -992,6 +1182,254 @@ export interface MatrixColumnDef {
   multiSelect?: boolean;
 }
 
+interface ProvisionFormListOptions {
+  formTitle?: string;
+  numLayers?: number;
+  minLayerColumns?: number;
+  includePdpaColumns?: boolean;
+  includePdfUrl?: boolean;
+  includeFileLibrary?: boolean;
+}
+
+const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
+  { n: 'SubmittedAt', k: SP_FIELD_KIND.dateTime },
+  { n: 'FormVersion', k: SP_FIELD_KIND.text },
+  { n: 'FormID', k: SP_FIELD_KIND.text },
+  { n: 'SubmittedBy', k: SP_FIELD_KIND.text },
+  { n: 'Status', k: SP_FIELD_KIND.text },
+  { n: 'CurrentApprovalLayer', k: SP_FIELD_KIND.number },
+  { n: 'RawJSON', k: SP_FIELD_KIND.note, ml: true },
+];
+
+const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
+  { n: 'EvaluationData', k: SP_FIELD_KIND.note, ml: true },
+  { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
+  { n: 'FormStatus', k: SP_FIELD_KIND.text },
+];
+
+function dedupeColumnSpecs(columns: SpColumnSpec[]): SpColumnSpec[] {
+  const seen = new Set<string>();
+  const deduped: SpColumnSpec[] = [];
+  for (const column of columns) {
+    const key = normalizeColumnName(column.n);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(column);
+  }
+  return deduped;
+}
+
+function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
+  const specs: SpColumnSpec[] = [];
+  for (let n = 1; n <= layerCount; n++) {
+    specs.push(
+      { n: `L${n}_Status`, k: 2 },
+      { n: `L${n}_Email`, k: 2 },
+      { n: `L${n}_SignedAt`, k: 4 },
+      { n: `L${n}_Rejection`, k: 3, ml: true },
+      { n: `L${n}_Signature`, k: 3, ml: true },
+    );
+  }
+  return specs;
+}
+
+function matrixColumnSpec(col: MatrixColumnDef): SpColumnSpec {
+  switch (col.cellType || 'text') {
+    case 'dropdown':
+      return { n: col.name, k: 6, choices: col.choices };
+    case 'date':
+      return { n: col.name, k: 4 };
+    case 'number':
+      return { n: col.name, k: 9 };
+    case 'checkbox':
+      return { n: col.name, k: 15, choices: col.choices };
+    case 'boolean':
+      return { n: col.name, k: 8 };
+    case 'text':
+    default:
+      return { n: col.name, k: 2 };
+  }
+}
+
+async function resolveChoiceValues(
+  token: string,
+  question: Record<string, unknown>,
+  onLog: (msg: string, type: string) => void,
+): Promise<string[] | undefined> {
+  const src = question.spChoicesSource as { list?: string; column?: string } | undefined;
+  const flSrc = question.spFilteredListSource as
+    | { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string }
+    | undefined;
+
+  if (src?.list && src?.column) {
+    try {
+      const choices = await getSharePointChoices(src.list, src.column, token);
+      onLog(`  Source choices: ${choices.length} from "${src.list}.${src.column}"`, 'info');
+      return choices;
+    } catch {
+      return [];
+    }
+  }
+
+  if (flSrc?.list && flSrc?.valueColumn) {
+    try {
+      const choices = await getFilteredListChoices(
+        flSrc.list,
+        flSrc.valueColumn,
+        token,
+        flSrc.filterColumn,
+        flSrc.filterValue,
+      );
+      onLog(`  Source choices: ${choices.length} from "${flSrc.list}.${flSrc.valueColumn}"`, 'info');
+      return choices;
+    } catch {
+      return [];
+    }
+  }
+
+  const rawChoices = question.choices as (string | { value?: string; text?: string })[] | undefined;
+  if (!Array.isArray(rawChoices) || rawChoices.length === 0) return undefined;
+  return rawChoices
+    .map((choice) => (typeof choice === 'string' ? choice : choice.value || choice.text || ''))
+    .filter(Boolean);
+}
+
+async function surveyQuestionColumnSpecs(
+  token: string,
+  surveyJson: SurveyJson,
+  onLog: (msg: string, type: string) => void,
+): Promise<{ columns: SpColumnSpec[]; matrixFields: { name: string; columns: MatrixColumnDef[] }[]; hasFileFields: boolean }> {
+  const columns: SpColumnSpec[] = [];
+  const matrixFields: { name: string; columns: MatrixColumnDef[] }[] = [];
+  const questions = flattenQuestions(surveyJson);
+  let hasFileFields = false;
+
+  for (const question of questions) {
+    if (!question.type || !question.name) continue;
+    if (question.type === 'file' || question.type === 'imageupload') hasFileFields = true;
+
+    if (question.type === 'matrixdynamic' || question.type === 'tableinput' || question.type === 'dynamicmatrix') {
+      columns.push(
+        { n: `${question.name}_Response`, k: 3, ml: true, rt: true, label: 'matrix HTML' },
+        { n: `${question.name}_Html`, k: 3, ml: true, rt: true, label: 'matrix HTML fallback' },
+        { n: `${question.name}_Json`, k: 3, ml: true, label: 'matrix JSON' },
+        { n: `${question.name}_RowIds`, k: 3, ml: true, label: 'matrix child row IDs' },
+      );
+      const matrixCols = (question as unknown as Record<string, unknown>).columns as MatrixColumnDef[] | undefined;
+      if (Array.isArray(matrixCols) && matrixCols.length > 0) {
+        matrixFields.push({
+          name: question.name,
+          columns: matrixCols.filter((col) => col.name && col.title),
+        });
+      }
+      continue;
+    }
+
+    const isFormula = !!(question as unknown as Record<string, unknown>)._expression || question.type === 'expression';
+    if (isFormula) {
+      columns.push({ n: question.name, k: 9, label: 'Formula -> Number' });
+      continue;
+    }
+
+    const kind = getSpColumnKind(question);
+    if (!kind) continue;
+
+    let choices: string[] | undefined;
+    if (kind.FieldTypeKind === 6 || kind.FieldTypeKind === 15) {
+      choices = await resolveChoiceValues(token, question as unknown as Record<string, unknown>, onLog);
+    }
+
+    columns.push({
+      n: question.name,
+      k: kind.FieldTypeKind,
+      ml: kind.FieldTypeKind === 3,
+      choices,
+      label: kind.label,
+    });
+  }
+
+  return { columns: dedupeColumnSpecs(columns), matrixFields, hasFileFields };
+}
+
+function responseSystemColumnSpecs(options: ProvisionFormListOptions): SpColumnSpec[] {
+  const numLayers = options.numLayers ?? 0;
+  const layerCount = Math.max(numLayers, options.minLayerColumns ?? 0);
+  return dedupeColumnSpecs([
+    ...BASE_RESPONSE_COLUMNS,
+    ...(options.includePdpaColumns === false ? [] : PDPA_COLUMN_SPECS),
+    ...(options.includePdfUrl === false ? [] : [PDF_URL_COLUMN_SPEC]),
+    ...layerColumnSpecs(layerCount),
+    ...(numLayers > 0 ? ENHANCED_LAYER_COLUMNS : []),
+  ]);
+}
+
+function logEnsuredColumns(
+  columns: SpColumnSpec[],
+  result: EnsureColumnsResult,
+  onLog: (msg: string, type: string) => void,
+): void {
+  const created = new Set(result.created);
+  for (const column of columns) {
+    const status = created.has(column.n) ? 'created' : 'exists';
+    const suffix = column.label ? ` (${column.label})` : '';
+    onLog(`  ${status}: ${column.n}${suffix}`, 'ok');
+  }
+}
+
+/**
+ * Provisions the actual form submission list used by published forms.
+ * Fetches existing columns once, creates only missing fields, and keeps
+ * matrix child-list schemas in sync when matrix columns change later.
+ */
+export async function provisionFormList(
+  token: string,
+  listTitle: string,
+  surveyJson: unknown,
+  onLog: (msg: string, type: string) => void = () => {},
+  options: ProvisionFormListOptions = {},
+): Promise<void> {
+  const formTitle = options.formTitle || listTitle;
+  onLog(`Checking list "${listTitle}"...`, 'info');
+
+  if (!(await listExists(token, listTitle))) {
+    await createSpList(token, listTitle, 100, `Form responses for ${formTitle}`);
+    onLog(`Created list "${listTitle}"`, 'ok');
+  } else {
+    onLog('List exists', 'ok');
+  }
+
+  const systemColumns = responseSystemColumnSpecs(options);
+  const systemResult = await ensureColumns(token, listTitle, systemColumns);
+  logEnsuredColumns(systemColumns, systemResult, onLog);
+
+  if (!surveyJson || typeof surveyJson !== 'object') {
+    onLog('No survey JSON, skipped field columns', 'warn');
+    return;
+  }
+
+  const { columns, matrixFields, hasFileFields } = await surveyQuestionColumnSpecs(token, surveyJson as SurveyJson, onLog);
+  const fieldResult = await ensureColumns(token, listTitle, columns);
+  logEnsuredColumns(columns, fieldResult, onLog);
+
+  for (const matrix of matrixFields) {
+    try {
+      await ensureMatrixChildList(token, formTitle, matrix.name, matrix.columns, onLog);
+    } catch (e) {
+      onLog(`  Matrix child list for "${matrix.name}": ${(e as Error).message}`, 'warn');
+    }
+  }
+
+  if (hasFileFields && options.includeFileLibrary !== false) {
+    try {
+      await ensureDocLibrary(token, formTitle, (msg) => onLog(`  ${msg}`, 'info'));
+    } catch (e) {
+      onLog(`  Doc library: ${(e as Error).message}`, 'warn');
+    }
+  }
+
+  onLog('Provisioning complete', 'ok');
+}
+
 /**
  * Ensures a child list exists for a dynamicmatrix/tableinput field.
  * List name: "{formTitle} Matrix {fieldName}" (sanitized).
@@ -1008,53 +1446,23 @@ export async function ensureMatrixChildList(
   // Sanitize field name for SP list title (remove chars that break URL encoding)
   const safeName = fieldName.replace(/[^a-zA-Z0-9_ -]/g, '').trim();
   const listName = `${formTitle} Matrix ${safeName}`;
+  const columnSpecs = dedupeColumnSpecs([
+    { n: 'ParentResponseId', k: 9 },
+    { n: 'RowIndex', k: 9 },
+    ...columns.filter((col) => col.name).map(matrixColumnSpec),
+  ]);
 
   onLog(`  Matrix child list "${listName}"…`, 'info');
 
-  // Check if list exists
   if (await listExists(token, listName)) {
-    onLog(`    ✓ List exists`, 'ok');
+    onLog(`    List exists`, 'ok');
   } else {
-    // Create the list
-    await createSpList(token, listName, 100, `Matrix rows for ${formTitle} — ${fieldName}`);
-    onLog(`    ✓ Created list`, 'ok');
-
-    // Add ParentResponseId column (Number — stores parent response item ID)
-    await addColumn(token, listName, 'ParentResponseId', 9);
-
-    // Add RowIndex column (Number — preserves row ordering)
-    await addColumn(token, listName, 'RowIndex', 9);
-
-    // Add per-column columns based on cellType
-    for (const col of columns) {
-      if (!col.name) continue;
-      const cellType = col.cellType || 'text';
-      switch (cellType) {
-        case 'text':
-          await addColumn(token, listName, col.name, 2);
-          break;
-        case 'dropdown':
-          await addColumn(token, listName, col.name, 6, false, false, col.choices);
-          break;
-        case 'date':
-          await addColumn(token, listName, col.name, 4);
-          break;
-        case 'number':
-          await addColumn(token, listName, col.name, 9);
-          break;
-        case 'checkbox':
-          await addColumn(token, listName, col.name, 15, false, false, col.choices);
-          break;
-        case 'boolean':
-          await addColumn(token, listName, col.name, 8);
-          break;
-        default:
-          await addColumn(token, listName, col.name, 2);
-          break;
-      }
-      onLog(`    ✓ ${col.name} (${cellType})`, 'ok');
-    }
+    await createSpList(token, listName, 100, `Matrix rows for ${formTitle} - ${fieldName}`);
+    onLog(`    Created list`, 'ok');
   }
+
+  const ensured = await ensureColumns(token, listName, columnSpecs);
+  logEnsuredColumns(columnSpecs, ensured, onLog);
 
   // Fetch list ID
   try {
@@ -1138,126 +1546,13 @@ export async function provisionResponseList(
   numLayers?: number
 ): Promise<void> {
   const listName = `${formTitle} Responses`;
-  onLog(`Checking response list "${listName}"…`, 'info');
-
-  // Create list if missing
-  if (!(await listExists(token, listName))) {
-    await createSpList(token, listName, 100, `Form responses for ${formTitle}`);
-    onLog(`Created list "${listName}"`, 'ok');
-  } else {
-    onLog(`List exists`, 'ok');
-  }
-
-  // Always-present system columns
-  await addColumn(token, listName, 'SubmittedBy', 2); // Text — email or "anonymous"
-  await addColumn(token, listName, 'SubmittedAt', 4); // DateTime
-  await addColumn(token, listName, 'Status', 2); // Text — Submitted/Pending/Approved/Rejected
-  await addColumn(token, listName, 'CurrentApprovalLayer', 9); // Number
-  await addColumn(token, listName, 'FormVersion', 2); // Text
-  await addColumn(token, listName, 'RawJSON', 3, true); // Note — full survey.data JSON backup
-
-  // Enhanced layer system columns (added when layers are present)
-  if (numLayers && numLayers > 0) {
-    await addColumn(token, listName, 'EvaluationData', 3, true); // Note — JSON blob of all evaluation layer results
-    await addColumn(token, listName, 'CurrentLayer', 9); // Number — currently active layer
-    await addColumn(token, listName, 'FormStatus', 2); // Text — Submitted/In Review/Completed/Rejected/Cancelled
-  }
-
-  onLog('  ✓ System columns', 'ok');
-
-  // Per-field columns from survey JSON
-  if (!surveyJson || typeof surveyJson !== 'object') {
-    onLog('  ⚠ No survey JSON, skipping field columns', 'warn');
-    return;
-  }
-
-  const questions = flattenQuestions(surveyJson as SurveyJson);
-  for (const q of questions) {
-    if (!q.type) continue;
-
-    if (q.type === 'matrixdynamic' || q.type === 'tableinput' || q.type === 'dynamicmatrix') {
-      // Matrix/table types create two columns: _Html and _Json
-      const fieldName = q.name;
-      if (fieldName) {
-        await addColumn(token, listName, `${fieldName}_Html`, 3, true, true); // Enhanced Rich Text
-        await addColumn(token, listName, `${fieldName}_Json`, 3, true, false);
-        onLog(`  ✓ ${fieldName}_Html + ${fieldName}_Json`, 'ok');
-      }
-    } else {
-      const kind = getSpColumnKind(q);
-      if (!kind) continue; // html, panel — skip
-      const fieldName = q.name;
-      if (!fieldName) continue;
-
-      // Extract choices for Choice (6) and MultiChoice (15) columns
-      let choiceValues: string[] | undefined;
-      if (kind.FieldTypeKind === 6 || kind.FieldTypeKind === 15) {
-        const src = (q as { spChoicesSource?: { list?: string; column?: string } }).spChoicesSource;
-        const flSrc = (q as { spFilteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string } }).spFilteredListSource;
-        if (src?.list && src?.column) {
-          try {
-            choiceValues = await getSharePointChoices(src.list, src.column, token);
-            onLog(`  ↳ Fetched ${choiceValues.length} choices from "${src.list}.${src.column}"`, 'info');
-          } catch {
-            choiceValues = [];
-          }
-        } else if (flSrc?.list && flSrc?.valueColumn) {
-          try {
-            choiceValues = await getFilteredListChoices(flSrc.list, flSrc.valueColumn, token, flSrc.filterColumn, flSrc.filterValue);
-            onLog(`  ↳ Fetched ${choiceValues.length} choices from filtered list "${flSrc.list}.${flSrc.valueColumn}"`, 'info');
-          } catch {
-            choiceValues = [];
-          }
-        }
-        if (!choiceValues || choiceValues.length === 0) {
-          const rawChoices = (q as { choices?: (string | { value: string; text: string })[] }).choices;
-          if (Array.isArray(rawChoices) && rawChoices.length > 0) {
-            choiceValues = rawChoices.map((c) => (typeof c === 'string' ? c : c.value || c.text || '')).filter(Boolean);
-          }
-        }
-      }
-
-      await addColumn(token, listName, fieldName, kind.FieldTypeKind, kind.FieldTypeKind === 3, false, choiceValues);
-      onLog(`  ✓ ${fieldName} (${kind.label})`, 'ok');
-    }
-  }
-
-  // Provision child lists for dynamicmatrix/tableinput fields
-  for (const q of questions) {
-    if (q.type !== 'dynamicmatrix' && q.type !== 'matrixdynamic' && q.type !== 'tableinput') continue;
-    const fieldName = q.name;
-    if (!fieldName) continue;
-
-    const matrixCols = (q as unknown as Record<string, unknown>).columns as MatrixColumnDef[] | undefined;
-    if (!Array.isArray(matrixCols) || matrixCols.length === 0) {
-      // No columns defined yet — skip child list creation
-      continue;
-    }
-
-    try {
-      await ensureMatrixChildList(
-        token,
-        formTitle,
-        fieldName,
-        matrixCols.filter((c) => c.name && c.title),
-        onLog
-      );
-    } catch (e) {
-      onLog(`  ⚠ Matrix child list for "${fieldName}": ${(e as Error).message}`, 'warn');
-    }
-  }
-
-  // Provision document library for file/image fields
-  const hasFileFields = questions.some(q => q.type === 'file' || q.type === 'imageupload');
-  if (hasFileFields) {
-    try {
-      await ensureDocLibrary(token, formTitle, (msg) => onLog(`  📁 ${msg}`, 'info'));
-    } catch (e) {
-      onLog(`  ⚠ Doc library: ${(e as Error).message}`, 'warn');
-    }
-  }
-
-  onLog('Provisioning complete ✓', 'ok');
+  await provisionFormList(token, listName, surveyJson, onLog, {
+    formTitle,
+    numLayers,
+    minLayerColumns: 0,
+    includePdpaColumns: false,
+    includePdfUrl: false,
+  });
 }
 
 // ── Dynamic Matrix → HTML Serialization ────────────────────────────────────
@@ -1716,6 +2011,7 @@ export async function uploadSignatureImage(
   const counter = await getNextSignatureCounter(token, formId, action);
   const fileName = `${action}-${formId}-${yy}${mm}${dd}${counter}.png`;
 
+  await ensureDocumentLibrary(token, SIGNATURE_LIBRARY, "Signature image uploads");
   return uploadFileToDocLib(token, SIGNATURE_LIBRARY, fileName, base64DataUrl);
 }
 
@@ -1725,9 +2021,7 @@ export async function uploadSignatureImage(
 const PDF_LIBRARY = "Form PDFs";
 
 export async function ensureFormPdfsLibrary(token: string): Promise<void> {
-  if (!await listExists(token, PDF_LIBRARY)) {
-    await createSpList(token, PDF_LIBRARY, 101, "Generated form submission PDFs");
-  }
+  await ensureDocumentLibrary(token, PDF_LIBRARY, "Generated form submission PDFs");
 }
 
 export async function uploadFormPdf(token: string, formTitle: string, responseId: number, pdfBlob: Blob): Promise<string> {
@@ -1752,11 +2046,7 @@ export async function ensureDocLibrary(
   onLog?: (msg: string) => void,
 ): Promise<string> {
   const libName = `${formTitle} Files`;
-  if (!await listExists(token, libName)) {
-    await createSpList(token, libName, 101, `Uploaded files for ${formTitle}`);
-    onLog?.(`Created document library "${libName}"`);
-  }
-  return libName;
+  return ensureDocumentLibrary(token, libName, `Uploaded files for ${formTitle}`, onLog);
 }
 
 /**
@@ -1886,9 +2176,10 @@ export async function migrateExistingForms(
         continue;
       }
 
-      // Ensure FormStatus and CurrentLayer columns exist
-      await addColumn(token, listName, "FormStatus", 2); // Text
-      await addColumn(token, listName, "CurrentLayer", 9); // Number
+      await ensureColumns(token, listName, [
+        { n: "FormStatus", k: SP_FIELD_KIND.text },
+        { n: "CurrentLayer", k: SP_FIELD_KIND.number },
+      ]);
 
       // Query items that don't have FormStatus set
       const items = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Status,CurrentApprovalLayer,CurrentLayer,FormStatus&$top=500&$filter=FormStatus eq null`) as { value?: Record<string, unknown>[] };

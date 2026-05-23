@@ -18,12 +18,14 @@ import {
   Settings as SettingsIcon,
   WorkOutlined as WorkIcon,
   Menu as MenuIcon,
+  Wallpaper as WallpaperIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import RoleBadge from "./RoleBadge";
 import Logo from "../Logo";
 import BackgroundPicker from "./BackgroundPicker";
+import { useDashboardBackground } from "../../hooks/useDashboardBackground";
 
 interface HeaderProps {
   userEmail: string;
@@ -47,6 +49,13 @@ export default function Header({
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
   const [mainMenuAnchorEl, setMainMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const {
+    error: backgroundError,
+    loading: backgroundLoading,
+    save: saveBackground,
+    saving: backgroundSaving,
+    setting: backgroundSetting,
+  } = useDashboardBackground(isAdmin);
   const profileOpen = Boolean(profileAnchorEl);
   const mainMenuOpen = Boolean(mainMenuAnchorEl);
 
@@ -65,10 +74,6 @@ export default function Header({
   const handleMainMenuClose = () => {
     setMainMenuAnchorEl(null);
   };
-
-  const bgIcon = (
-    <Box sx={{ width: 18, height: 18, borderRadius: "4px", background: "linear-gradient(135deg, #6264A7 25%, #0078D4 25%, #0078D4 50%, #6264A7 50%, #6264A7 75%, #0078D4 75%)", border: "1px solid rgba(0,0,0,0.08)" }} />
-  );
 
   return (
     <AppBar
@@ -205,31 +210,36 @@ export default function Header({
                 </>
               )}
 
-              <Divider sx={{ my: 0.5 }} />
-
-              {/* 5. Background picker */}
-              <MenuItem onClick={() => { handleMainMenuClose(); setBgPickerOpen(true); }} sx={{ py: 1.25, px: 2.5 }}>
-                <Box sx={{ mr: 1.5, display: "flex", alignItems: "center" }}>{bgIcon}</Box>
-                <Typography variant="body2">Choose Background</Typography>
-              </MenuItem>
+              {isAdmin && (
+                <>
+                  <Divider sx={{ my: 0.5 }} />
+                  <MenuItem onClick={() => { handleMainMenuClose(); setBgPickerOpen(true); }} sx={{ py: 1.25, px: 2.5 }}>
+                    <WallpaperIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                    <Typography variant="body2">Dashboard Background</Typography>
+                  </MenuItem>
+                </>
+              )}
             </Menu>
           </>
         ) : (
           <>
             {/* ── Desktop: separate controls ── */}
-            <IconButton
-              onClick={() => setBgPickerOpen(true)}
-              size="small"
-              sx={{
-                mr: 0.5,
-                borderRadius: "10px",
-                color: "#6B7280",
-                backgroundColor: "rgba(0,0,0,0.03)",
-                "&:hover": { backgroundColor: "rgba(0,0,0,0.06)" },
-              }}
-            >
-              {bgIcon}
-            </IconButton>
+            {isAdmin && (
+              <IconButton
+                onClick={() => setBgPickerOpen(true)}
+                size="small"
+                aria-label="Open dashboard background picker"
+                sx={{
+                  mr: 0.5,
+                  borderRadius: "10px",
+                  color: "#0078D4",
+                  backgroundColor: "rgba(0,120,212,0.07)",
+                  "&:hover": { backgroundColor: "rgba(0,120,212,0.12)" },
+                }}
+              >
+                <WallpaperIcon />
+              </IconButton>
+            )}
 
             {isAdmin && (
               <>
@@ -344,7 +354,17 @@ export default function Header({
           </>
         )}
 
-        <BackgroundPicker open={bgPickerOpen} onClose={() => setBgPickerOpen(false)} />
+        {isAdmin && (
+          <BackgroundPicker
+            open={bgPickerOpen}
+            onClose={() => setBgPickerOpen(false)}
+            setting={backgroundSetting}
+            loading={backgroundLoading}
+            saving={backgroundSaving}
+            error={backgroundError}
+            onSave={saveBackground}
+          />
+        )}
       </Toolbar>
     </AppBar>
   );

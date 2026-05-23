@@ -49,7 +49,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // Filter by applicant email if provided
       if (emailFilter) {
         const lower = emailFilter.toLowerCase();
-        items = items.filter((item) => String(item.fields.ApplicantEmail || "").toLowerCase() === lower);
+        items = items.filter((item) => {
+          const applicantEmail = String(item.fields.ApplicantEmail || "").toLowerCase();
+          const submittedBy = String(item.fields.SubmittedBy || "").toLowerCase();
+          return applicantEmail === lower || submittedBy === lower;
+        });
       }
 
       const applications = items.map((item) => {
@@ -65,13 +69,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           applicantName: String(item.fields.ApplicantName || ""),
           applicantEmail: String(item.fields.ApplicantEmail || ""),
           status: String(item.fields.Status || ""),
-          submittedAt: String(item.fields.SubmittedAt || ""),
+          submittedAt: String(item.fields.SubmittedAt || item.fields.Created || ""),
           submissionRef: String(item.fields.SubmissionRef || ""),
           applicantPhone: String(item.fields.ApplicantPhone || ""),
           coverLetterUrl: String(item.fields.CoverLetterUrl || ""),
           resumeUrl: String(item.fields.ResumeUrl || ""),
           customAnswers,
-          jobListingId: String(item.fields.JobListingID || ""),
+          jobListingId: String(item.fields.JobListingIDLookupId || item.fields.JobListingID || ""),
         };
       });
 
@@ -128,7 +132,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           try {
             const appResult = await queryListItemById(token, APPLICATION_LIST, String(id));
             if (appResult) {
-              const jobId = String(appResult.fields.JobListingID || "");
+              const jobId = String(appResult.fields.JobListingIDLookupId || appResult.fields.JobListingID || "");
               if (jobId) {
                 decrementMap[jobId] = (decrementMap[jobId] || 0) + 1;
               }
@@ -234,7 +238,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const allApps = await queryListItems(token, APPLICATION_LIST, { top: 999 });
           appCountByJob = {};
           for (const app of allApps) {
-            const jobId = String(app.fields.JobListingID || "");
+            const jobId = String(app.fields.JobListingIDLookupId || app.fields.JobListingID || "");
             if (jobId) appCountByJob[jobId] = (appCountByJob[jobId] || 0) + 1;
           }
         } catch (e) {

@@ -9,7 +9,7 @@ import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { FlatLightPanelless } from "survey-core/themes";
 
-import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, addColumn } from "../../utils/formBuilderSP";
+import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureSelectedBranchColumn } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
 import { SP_STATIC } from "../../utils/spConfig";
 import { SP_LAYER_STATUS } from "../../utils/statusConstants";
@@ -847,7 +847,7 @@ export default function ApprovalDashboard() {
       } catch (e: unknown) {
         const msg = (e as Error).message || "";
         if (msg.includes("does not exist") || msg.includes("not found")) {
-          await addColumn(token, listName, "SelectedBranch", 2);
+          await ensureSelectedBranchColumn(token, listName);
           await spPatch(token, patchUrl, { SelectedBranch: branchName });
         } else { throw e; }
       }

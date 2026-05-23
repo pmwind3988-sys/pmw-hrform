@@ -229,14 +229,20 @@ interface ColumnDef {
 /** SP FieldTypeKind: 2=Text 3=Note 4=DateTime 7=Lookup 8=Boolean 9=Number 11=Hyperlink */
 const REQUIRED_COLUMNS: ColumnDef[] = [
   // internalName         displayName         acceptKinds   createKind  extra
+  { name: "ApplicantName", acceptKinds: [2], kind: 2 },
+  { name: "ApplicantEmail", acceptKinds: [2], kind: 2 },
+  { name: "ApplicantPhone", acceptKinds: [2], kind: 2 },
   { name: "JobListingID",  acceptKinds: [9, 7], kind: 9 },
+  { name: "Status", acceptKinds: [2, 6], kind: 2 },
+  { name: "SubmissionRef", acceptKinds: [2], kind: 2 },
+  { name: "SubmittedBy", acceptKinds: [2], kind: 2 },
+  { name: "SubmittedAt", acceptKinds: [4, 2], kind: 4 },
   { name: "ResumeUrl",     acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
   { name: "CoverLetterUrl", acceptKinds: [11, 2], kind: 11, extra: { DisplayFormat: 0 } },
   { name: "Reasoning",     acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "CustomAnswers", acceptKinds: [3], kind: 3, extra: { NumberOfLines: 6 } },
   { name: "CurrentPosition",  acceptKinds: [2], kind: 2 },
   { name: "CurrentDepartment", acceptKinds: [2], kind: 2 },
-  { name: "ApplicantPhone", acceptKinds: [2], kind: 2 },
   { name: "PDPAConsent", acceptKinds: [2], kind: 2 },
   { name: "PDPANoticeVersion", acceptKinds: [2], kind: 2 },
   { name: "PDPAConsentAt", acceptKinds: [4, 2], kind: 4 },
@@ -275,14 +281,20 @@ export async function ensureJobApplicationColumns(
 
   // 3. Display name mapping (InternalName → display name for SP REST creation)
   const displayNames: Record<string, string> = {
+    ApplicantName: "Applicant Name",
+    ApplicantEmail: "Applicant Email",
+    ApplicantPhone: "Applicant Phone",
     JobListingID: "Job Listing ID",
+    Status: "Status",
+    SubmissionRef: "Submission Ref",
+    SubmittedBy: "Submitted By",
+    SubmittedAt: "Submitted At",
     ResumeUrl: "Resume URL",
     CoverLetterUrl: "Cover Letter URL",
     Reasoning: "Reasoning",
     CustomAnswers: "Custom Answers",
     CurrentPosition: "Current Position",
     CurrentDepartment: "Current Department",
-    ApplicantPhone: "Applicant Phone",
     PDPAConsent: "PDPA Consent",
     PDPANoticeVersion: "PDPA Notice Version",
     PDPAConsentAt: "PDPA Consent At",
