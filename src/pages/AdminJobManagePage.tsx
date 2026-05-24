@@ -50,6 +50,7 @@ import {
   FormatListBulleted,
   FormatListNumbered,
   Search as SearchIcon,
+  FilterList as FilterIcon,
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
@@ -59,13 +60,9 @@ import {
   updateJobListing,
   deleteJobListing,
   fetchColumnChoices,
-  fetchCareerPortalCards,
-  createCareerPortalCard,
-  updateCareerPortalCard,
-  deleteCareerPortalCard,
 } from "../utils/careersService";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
-import type { JobListing, CustomFieldDefinition, CareerPortalCard } from "../types";
+import type { JobListing, CustomFieldDefinition } from "../types";
 
 const EMPLOYMENT_TYPES = ["Full-Time", "Part-Time", "Contract", "Internship"];
 const FIELD_TYPES: CustomFieldDefinition["type"][] = ["text", "textarea", "number", "choice", "date"];
@@ -80,33 +77,6 @@ const EMPTY_JOB = {
   closingDate: "",
   status: "New",
 };
-
-const DEFAULT_CARD_COLORS = {
-  start: "#0078D4",
-  end: "#6264A7",
-  accent: "#16A34A",
-};
-
-const EMPTY_PORTAL_CARD: Omit<CareerPortalCard, "id" | "created"> = {
-  title: "",
-  description: "",
-  imageUrl: "",
-  sortOrder: 0,
-  status: "Active",
-  targetType: "none",
-  targetValue: "",
-  colorStart: DEFAULT_CARD_COLORS.start,
-  colorEnd: DEFAULT_CARD_COLORS.end,
-  colorAccent: DEFAULT_CARD_COLORS.accent,
-};
-
-function safeCardColor(value: string | undefined, fallback: string): string {
-  return value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
-}
-
-function cardGradient(card: Pick<CareerPortalCard, "colorStart" | "colorEnd" | "colorAccent">): string {
-  return `linear-gradient(135deg, ${safeCardColor(card.colorStart, DEFAULT_CARD_COLORS.start)} 0%, ${safeCardColor(card.colorEnd, DEFAULT_CARD_COLORS.end)} 58%, ${safeCardColor(card.colorAccent, DEFAULT_CARD_COLORS.accent)} 100%)`;
-}
 
 function MiniFormBuilder({
   fields,
@@ -548,277 +518,74 @@ function JobFormDialog({
   );
 }
 
-function PortalCardDialog({
-  open,
-  onClose,
-  onSave,
-  initial,
-  saving,
-  jobs,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSave: (card: Omit<CareerPortalCard, "id" | "created">) => void;
-  initial: CareerPortalCard | null;
-  saving: boolean;
-  jobs: JobListing[];
-}) {
-  const [form, setForm] = useState<Omit<CareerPortalCard, "id" | "created">>(() =>
-    initial ? {
-      title: initial.title,
-      description: initial.description,
-      imageUrl: initial.imageUrl,
-      sortOrder: initial.sortOrder,
-      status: initial.status,
-      targetType: initial.targetType,
-      targetValue: initial.targetValue,
-      colorStart: initial.colorStart || DEFAULT_CARD_COLORS.start,
-      colorEnd: initial.colorEnd || DEFAULT_CARD_COLORS.end,
-      colorAccent: initial.colorAccent || DEFAULT_CARD_COLORS.accent,
-      isSystemDefault: initial.isSystemDefault,
-      locked: initial.locked,
-      source: initial.source,
-    } : EMPTY_PORTAL_CARD,
-  );
-  const isSystemDefault = Boolean(initial?.isSystemDefault);
-
-  const updateField = <K extends keyof Omit<CareerPortalCard, "id" | "created">>(
-    key: K,
-    value: Omit<CareerPortalCard, "id" | "created">[K],
-  ) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
+function OpportunitiesLoadingSkeleton() {
   return (
-    <Dialog open={open} onClose={saving ? () => {} : onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
-      <DialogTitle sx={{ pb: 1 }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
-            {initial ? "Edit Portal Card" : "Add Portal Card"}
-          </Typography>
-          {isSystemDefault && (
-            <Chip
-              label="System Default"
-              size="small"
-              sx={{ borderRadius: "8px", backgroundColor: "#EEF2FF", color: "#4F46E5", fontWeight: 800 }}
-            />
-          )}
-        </Stack>
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            label="Title"
-            value={form.title}
-            onChange={(e) => updateField("title", e.target.value)}
-            fullWidth
-            required
-            size="small"
-            slotProps={{ input: { sx: { borderRadius: "8px" } } }}
-          />
-          <TextField
-            label="Description"
-            value={form.description}
-            onChange={(e) => updateField("description", e.target.value)}
-            fullWidth
-            multiline
-            rows={3}
-            size="small"
-            slotProps={{ input: { sx: { borderRadius: "8px" } } }}
-          />
-          {!isSystemDefault && (
-            <TextField
-              label="Picture URL"
-              value={form.imageUrl}
-              onChange={(e) => updateField("imageUrl", e.target.value)}
-              fullWidth
-              size="small"
-              placeholder="https://..."
-              slotProps={{ input: { sx: { borderRadius: "8px" } } }}
-            />
-          )}
-          {isSystemDefault && (
-            <Grid container spacing={1.25}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  label="Start color"
-                  type="color"
-                  value={safeCardColor(form.colorStart, DEFAULT_CARD_COLORS.start)}
-                  onChange={(e) => updateField("colorStart", e.target.value)}
-                  fullWidth
-                  size="small"
-                  slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  label="End color"
-                  type="color"
-                  value={safeCardColor(form.colorEnd, DEFAULT_CARD_COLORS.end)}
-                  onChange={(e) => updateField("colorEnd", e.target.value)}
-                  fullWidth
-                  size="small"
-                  slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  label="Accent color"
-                  type="color"
-                  value={safeCardColor(form.colorAccent, DEFAULT_CARD_COLORS.accent)}
-                  onChange={(e) => updateField("colorAccent", e.target.value)}
-                  fullWidth
-                  size="small"
-                  slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
-                />
-              </Grid>
-            </Grid>
-          )}
-          {!isSystemDefault && form.imageUrl && (
-            <Box
-              component="img"
-              src={form.imageUrl}
-              alt=""
-              sx={{
-                width: "100%",
-                height: 160,
-                objectFit: "cover",
-                borderRadius: "8px",
-                border: "1px solid #E5E7EB",
-                backgroundColor: "#F3F4F6",
-              }}
-            />
-          )}
-          {isSystemDefault && (
-            <Box
-              sx={{
-                width: "100%",
-                height: 160,
-                borderRadius: "8px",
-                border: "1px solid #E5E7EB",
-                background: cardGradient(form),
-              }}
-            />
-          )}
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label="Sort Order"
-                type="number"
-                value={form.sortOrder}
-                onChange={(e) => updateField("sortOrder", Number(e.target.value))}
-                fullWidth
-                size="small"
-                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={form.status}
-                  label="Status"
-                  onChange={(e) => updateField("status", e.target.value as CareerPortalCard["status"])}
-                  sx={{ borderRadius: "8px" }}
-                >
-                  <MenuItem value="Active">Active</MenuItem>
-                  <MenuItem value="Hidden">Hidden</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Click Target</InputLabel>
-                <Select
-                  value={form.targetType}
-                  label="Click Target"
-                  onChange={(e) => {
-                    const targetType = e.target.value as CareerPortalCard["targetType"];
-                    setForm((prev) => ({ ...prev, targetType, targetValue: "" }));
-                  }}
-                  sx={{ borderRadius: "8px" }}
-                >
-                  <MenuItem value="none">No target</MenuItem>
-                  <MenuItem value="job">Job item</MenuItem>
-                  <MenuItem value="link">Custom link</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              {form.targetType === "job" ? (
-                <FormControl fullWidth size="small" required>
-                  <InputLabel>Target Job</InputLabel>
-                  <Select
-                    value={form.targetValue}
-                    label="Target Job"
-                    onChange={(e) => updateField("targetValue", e.target.value)}
-                    sx={{ borderRadius: "8px" }}
-                  >
-                    {jobs.map((job) => (
-                      <MenuItem key={job.id} value={job.id}>
-                        {job.title}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              ) : form.targetType === "link" ? (
-                <TextField
-                  label="Target Link"
-                  value={form.targetValue}
-                  onChange={(e) => updateField("targetValue", e.target.value)}
-                  fullWidth
-                  required
-                  size="small"
-                  placeholder="https://... or /career-portal"
-                  slotProps={{ input: { sx: { borderRadius: "8px" } } }}
-                />
-              ) : null}
-            </Grid>
-          </Grid>
-        </Stack>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button onClick={onClose} disabled={saving} sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          disabled={!form.title.trim() || saving || (form.targetType !== "none" && !form.targetValue.trim())}
-          onClick={() => onSave({
-            ...form,
-            title: form.title.trim(),
-            description: form.description.trim(),
-            imageUrl: isSystemDefault ? "" : form.imageUrl.trim(),
-            targetValue: form.targetType === "none" ? "" : form.targetValue.trim(),
-            colorStart: safeCardColor(form.colorStart, DEFAULT_CARD_COLORS.start),
-            colorEnd: safeCardColor(form.colorEnd, DEFAULT_CARD_COLORS.end),
-            colorAccent: safeCardColor(form.colorAccent, DEFAULT_CARD_COLORS.accent),
-          })}
-          sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}
-        >
-          {saving ? "Saving..." : initial ? "Update Card" : "Add Card"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <>
+      <Paper
+        sx={{
+          p: 2,
+          mb: 3,
+          borderRadius: "8px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "8px", flex: "1 1 300px", minWidth: { xs: "100%", sm: 280 } }} />
+          <Skeleton variant="rounded" width={132} height={40} sx={{ borderRadius: "8px" }} />
+          <Skeleton variant="rounded" width={82} height={32} sx={{ borderRadius: "8px" }} />
+        </Box>
+      </Paper>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        {[1, 2, 3].map((item) => (
+          <Skeleton key={item} variant="rounded" height={92} sx={{ borderRadius: "8px" }} />
+        ))}
+      </Box>
+
+      <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+              {["Role", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
+                <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {[1, 2, 3, 4, 5].map((item) => (
+              <TableRow key={item}>
+                <TableCell>
+                  <Skeleton variant="text" width={150} />
+                  <Skeleton variant="text" width={96} height={14} />
+                </TableCell>
+                <TableCell><Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="text" width={92} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={72} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="text" width={44} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={92} height={32} sx={{ borderRadius: "8px" }} /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </>
   );
 }
 
 export default function AdminJobManagePage() {
   const { instance, accounts } = useMsal();
   const [jobs, setJobs] = useState<JobListing[]>([]);
-  const [portalCards, setPortalCards] = useState<CareerPortalCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editJob, setEditJob] = useState<(typeof EMPTY_JOB) & { customFields: CustomFieldDefinition[] } | null>(null);
-  const [portalCardDialogOpen, setPortalCardDialogOpen] = useState(false);
-  const [editPortalCard, setEditPortalCard] = useState<CareerPortalCard | null>(null);
-  const [savingPortalCard, setSavingPortalCard] = useState(false);
-  const [deletingPortalCardId, setDeletingPortalCardId] = useState<string | null>(null);
-  const [deleteConfirmPortalCard, setDeleteConfirmPortalCard] = useState<CareerPortalCard | null>(null);
-  const [portalCardSearch, setPortalCardSearch] = useState("");
   const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" | "warning" } | null>(null);
   const [departmentChoices, setDepartmentChoices] = useState<string[]>([]);
   const [employmentTypeChoices, setEmploymentTypeChoices] = useState<string[]>([]);
@@ -830,6 +597,7 @@ export default function AdminJobManagePage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortBy, setSortBy] = useState<JobSortOption>("newest");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
@@ -884,12 +652,8 @@ export default function AdminJobManagePage() {
     setLoading(true);
     setError(null);
     try {
-      const [jobData, cardData] = await Promise.all([
-        fetchAdminJobs(),
-        fetchCareerPortalCards(),
-      ]);
+      const jobData = await fetchAdminJobs();
       setJobs(jobData);
-      setPortalCards(cardData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load opportunities");
     } finally {
@@ -959,17 +723,13 @@ export default function AdminJobManagePage() {
     const options = new Set(jobs.map((job) => job.employmentType).filter(Boolean));
     return [...options].sort();
   }, [jobs]);
+  const advancedFilterCount = [
+    Boolean(statusFilter),
+    Boolean(typeFilter),
+    sortBy !== "newest",
+  ].filter(Boolean).length;
   const hasFilters = !!searchText.trim() || !!statusFilter || !!typeFilter;
-  const filteredPortalCards = useMemo(() => {
-    const q = portalCardSearch.trim().toLowerCase();
-    return portalCards.filter((card) => {
-      if (!q) return true;
-      return [card.title, card.description, card.imageUrl, card.status, card.isSystemDefault ? "system default" : ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
-    });
-  }, [portalCards, portalCardSearch]);
+  const hasSearchOptions = hasFilters || sortBy !== "newest";
 
   const handleCreate = () => {
     setEditJob(null);
@@ -988,61 +748,6 @@ export default function AdminJobManagePage() {
       customFields: job.customFields ?? [],
     });
     setDialogOpen(true);
-  };
-
-  const handleCreatePortalCard = () => {
-    setEditPortalCard(null);
-    setPortalCardDialogOpen(true);
-  };
-
-  const handleEditPortalCard = (card: CareerPortalCard) => {
-    setEditPortalCard(card);
-    setPortalCardDialogOpen(true);
-  };
-
-  const handleSavePortalCard = async (card: Omit<CareerPortalCard, "id" | "created">) => {
-    setSavingPortalCard(true);
-    try {
-      if (editPortalCard) {
-        await updateCareerPortalCard(editPortalCard.id, card);
-        setSnackbar({ message: "Portal card updated", severity: "success" });
-      } else {
-        await createCareerPortalCard(card);
-        setSnackbar({ message: "Portal card added", severity: "success" });
-      }
-      setPortalCardDialogOpen(false);
-      setEditPortalCard(null);
-      void load();
-    } catch (err) {
-      setSnackbar({
-        message: err instanceof Error ? err.message : "Failed to save portal card",
-        severity: "error",
-      });
-    } finally {
-      setSavingPortalCard(false);
-    }
-  };
-
-  const handleDeletePortalCard = async (card: CareerPortalCard) => {
-    if (card.isSystemDefault) {
-      setSnackbar({ message: "System default cards cannot be deleted", severity: "error" });
-      setDeleteConfirmPortalCard(null);
-      return;
-    }
-    setDeletingPortalCardId(card.id);
-    try {
-      await deleteCareerPortalCard(card.id);
-      setSnackbar({ message: "Portal card deleted", severity: "success" });
-      setDeleteConfirmPortalCard(null);
-      void load();
-    } catch (err) {
-      setSnackbar({
-        message: err instanceof Error ? err.message : "Failed to delete portal card",
-        severity: "error",
-      });
-    } finally {
-      setDeletingPortalCardId(null);
-    }
   };
 
   const handleSave = async (
@@ -1160,26 +865,26 @@ export default function AdminJobManagePage() {
       <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
         {/* Filters */}
         {!loading && !error && jobs.length > 0 && (
-          <Paper
-            sx={{
-              p: 2,
-              mb: 3,
-              borderRadius: "8px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 2,
-              alignItems: "center",
-            }}
-          >
+        <Paper
+          sx={{
+            p: 2,
+            mb: 3,
+            borderRadius: "8px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 1.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
             <TextField
               placeholder="Search role, department, location..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               size="small"
               sx={{
-                flex: { xs: "1 1 100%", md: "1 1 280px" },
-                minWidth: { xs: "unset", md: 260 },
+                flex: "1 1 300px",
+                minWidth: { xs: "100%", sm: 280 },
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "8px",
                   backgroundColor: "#F8F9FC",
@@ -1195,66 +900,35 @@ export default function AdminJobManagePage() {
                 },
               }}
             />
-
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={statusFilter}
-                label="Status"
-                onChange={(e) => setStatusFilter(e.target.value)}
-                sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
-              >
-                <MenuItem value="">All statuses</MenuItem>
-                <MenuItem value="Active">Active</MenuItem>
-                <MenuItem value="Closed">Closed</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={typeFilter}
-                label="Type"
-                onChange={(e) => setTypeFilter(e.target.value)}
-                sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
-              >
-                <MenuItem value="">All types</MenuItem>
-                {jobTypeOptions.map((type) => (
-                  <MenuItem key={type} value={type}>{type}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }}>
-              <InputLabel>Sort</InputLabel>
-              <Select
-                value={sortBy}
-                label="Sort"
-                onChange={(e) => setSortBy(e.target.value as JobSortOption)}
-                sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
-              >
-                <MenuItem value="newest">Newest first</MenuItem>
-                <MenuItem value="title">Role A-Z</MenuItem>
-                <MenuItem value="department">Department A-Z</MenuItem>
-                <MenuItem value="applicants">Most applicants</MenuItem>
-                <MenuItem value="closing">Closing soon</MenuItem>
-              </Select>
-            </FormControl>
-
-            {hasFilters && (
+            <Button
+              variant={showAdvancedFilters || advancedFilterCount > 0 ? "contained" : "outlined"}
+              startIcon={<FilterIcon />}
+              onClick={() => setShowAdvancedFilters((open) => !open)}
+              sx={{
+                borderRadius: "8px",
+                textTransform: "none",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                width: { xs: "100%", sm: "auto" },
+              }}
+            >
+              Advanced{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ""}
+            </Button>
+            {hasSearchOptions && (
               <Button
                 size="small"
+                startIcon={<Close />}
                 onClick={() => {
                   setSearchText("");
                   setStatusFilter("");
                   setTypeFilter("");
+                  setSortBy("newest");
                 }}
-                sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 600 }}
+                sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 700, width: { xs: "100%", sm: "auto" } }}
               >
                 Clear
               </Button>
             )}
-
             {(hasFilters || filteredJobs.length < jobs.length) && (
               <Chip
                 label={`${filteredJobs.length} of ${jobs.length} openings`}
@@ -1262,201 +936,117 @@ export default function AdminJobManagePage() {
                 sx={{ backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600, fontSize: "0.75rem", borderRadius: "8px" }}
               />
             )}
+          </Box>
+
+          {showAdvancedFilters && (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+                gap: 1.25,
+                width: "100%",
+              }}
+            >
+              <FormControl size="small" fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={statusFilter}
+                  label="Status"
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                >
+                  <MenuItem value="">All statuses</MenuItem>
+                  <MenuItem value="Active">Active</MenuItem>
+                  <MenuItem value="Closed">Closed</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Type</InputLabel>
+                <Select
+                  value={typeFilter}
+                  label="Type"
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                >
+                  <MenuItem value="">All types</MenuItem>
+                  {jobTypeOptions.map((type) => (
+                    <MenuItem key={type} value={type}>{type}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Sort</InputLabel>
+                <Select
+                  value={sortBy}
+                  label="Sort"
+                  onChange={(e) => setSortBy(e.target.value as JobSortOption)}
+                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                >
+                  <MenuItem value="newest">Newest first</MenuItem>
+                  <MenuItem value="title">Role A-Z</MenuItem>
+                  <MenuItem value="department">Department A-Z</MenuItem>
+                  <MenuItem value="applicants">Most applicants</MenuItem>
+                  <MenuItem value="closing">Closing soon</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          )}
           </Paper>
         )}
 
         {/* Stats */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        {!loading && (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+            gap: 2,
+            mb: 3,
+          }}
+        >
           {[
             { label: "Total Openings", value: jobs.length, color: "#0078D4", icon: <Work /> },
             { label: "Active", value: jobs.filter((j) => j.status === "New").length, color: "#34A853", icon: <Work /> },
             { label: "Closed", value: jobs.filter((j) => j.status !== "New").length, color: "#9CA3AF", icon: <Work /> },
           ].map((stat) => (
-            <Grid size={{ xs: 4 }} key={stat.label}>
-              <Card sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                <CardContent sx={{ p: { xs: 1.5, sm: 2.5 }, textAlign: "center" }}>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: stat.color, fontSize: { xs: "1.5rem", sm: "2.125rem" } }}>{stat.value}</Typography>
-                  <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 500 }}>{stat.label}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+            <Card key={stat.label} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <CardContent sx={{ p: { xs: 1.5, sm: 2 }, minHeight: 92 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, height: "100%" }}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "8px",
+                      backgroundColor: `${stat.color}14`,
+                      color: stat.color,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {stat.icon}
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: "#111827", fontSize: { xs: "1.35rem", sm: "1.65rem" }, lineHeight: 1.05 }}>
+                      {stat.value}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700, lineHeight: 1.2, display: "block" }}>
+                      {stat.label}
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
           ))}
-        </Grid>
-
-        {/* Portal welcome cards */}
-        {!loading && !error && (
-        <Paper
-          sx={{
-            p: 2.5,
-            mb: 3,
-            borderRadius: "8px",
-            border: "1px solid rgba(17, 24, 39, 0.08)",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", gap: 1.5, mb: 2, flexDirection: { xs: "column", sm: "row" } }}>
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827", fontSize: "1rem" }}>
-                Welcome Cards
-              </Typography>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.82rem" }}>
-                Cards shown in the portal welcome animation.
-              </Typography>
-            </Box>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={handleCreatePortalCard}
-              sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4", whiteSpace: "nowrap" }}
-            >
-              Add Card
-            </Button>
-          </Box>
-
-          <TextField
-            placeholder="Search cards..."
-            value={portalCardSearch}
-            onChange={(e) => setPortalCardSearch(e.target.value)}
-            size="small"
-            sx={{
-              mb: 2,
-              width: { xs: "100%", md: 360 },
-              "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: "#F8F9FC" },
-            }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-
-          {portalCards.length === 0 ? (
-            <Box sx={{ textAlign: "center", py: 4, border: "1px dashed #D1D5DB", borderRadius: "8px", backgroundColor: "#FAFBFC" }}>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontWeight: 600, mb: 1 }}>
-                No portal cards yet.
-              </Typography>
-              <Button variant="outlined" startIcon={<Add />} onClick={handleCreatePortalCard} sx={{ borderRadius: "8px", textTransform: "none" }}>
-                Add First Card
-              </Button>
-            </Box>
-          ) : filteredPortalCards.length === 0 ? (
-            <Box sx={{ textAlign: "center", py: 4 }}>
-              <SearchIcon sx={{ color: "#D1D5DB", fontSize: 40, mb: 1 }} />
-              <Typography variant="body2" sx={{ color: "#6B7280", fontWeight: 600 }}>
-                No cards match your search.
-              </Typography>
-            </Box>
-          ) : (
-            <Grid container spacing={2}>
-              {filteredPortalCards.map((card) => (
-                <Grid size={{ xs: 12, md: 4 }} key={card.id}>
-                  <Card sx={{ height: "100%", borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-                    <Box
-                      sx={{
-                        height: 130,
-                        background: card.imageUrl
-                          ? `linear-gradient(180deg, rgba(17,24,39,0.04), rgba(17,24,39,0.26)), url("${card.imageUrl}") center/cover`
-                          : cardGradient(card),
-                      }}
-                    />
-                    <CardContent sx={{ p: 2 }}>
-                      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, mb: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#111827", lineHeight: 1.3 }}>
-                          {card.title}
-                        </Typography>
-                        <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                          {card.isSystemDefault && (
-                            <Chip
-                              label="System Default"
-                              size="small"
-                              sx={{
-                                borderRadius: "8px",
-                                fontSize: "0.68rem",
-                                fontWeight: 800,
-                                backgroundColor: "#EEF2FF",
-                                color: "#4F46E5",
-                              }}
-                            />
-                          )}
-                          <Chip
-                            label={card.status}
-                            size="small"
-                            sx={{
-                              borderRadius: "8px",
-                              fontSize: "0.68rem",
-                              fontWeight: 700,
-                              backgroundColor: card.status === "Active" ? "#E6F4EA" : "#F3F4F6",
-                              color: card.status === "Active" ? "#2E7D32" : "#6B7280",
-                            }}
-                          />
-                        </Stack>
-                      </Box>
-                      <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.82rem", minHeight: 44, mb: 1.25 }}>
-                        {card.description || "No description"}
-                      </Typography>
-                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-                        <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 700 }}>
-                          Order {card.sortOrder}
-                        </Typography>
-                        <Box sx={{ display: "flex", gap: 0.5 }}>
-                          <IconButton size="small" onClick={() => handleEditPortalCard(card)} sx={{ color: "#6B7280" }}>
-                            <Edit sx={{ fontSize: 18 }} />
-                          </IconButton>
-                          {!card.isSystemDefault && (
-                            <IconButton
-                              size="small"
-                              disabled={deletingPortalCardId === card.id}
-                              onClick={() => setDeleteConfirmPortalCard(card)}
-                              sx={{ color: deletingPortalCardId === card.id ? "#9CA3AF" : "#DC2626" }}
-                            >
-                              {deletingPortalCardId === card.id ? (
-                                <CircularProgress size={18} sx={{ color: "#DC2626" }} />
-                              ) : (
-                                <Delete sx={{ fontSize: 18 }} />
-                              )}
-                            </IconButton>
-                          )}
-                        </Box>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Paper>
+        </Box>
         )}
 
         {/* Loading */}
         {loading && (
-          <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Role", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {[1, 2, 3, 4].map((i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton variant="text" width={140} /></TableCell>
-                    <TableCell><Skeleton variant="rounded" width={80} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={90} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={70} /></TableCell>
-                    <TableCell><Skeleton variant="rounded" width={60} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={30} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={60} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <OpportunitiesLoadingSkeleton />
         )}
 
         {/* Error */}
@@ -1564,20 +1154,6 @@ export default function AdminJobManagePage() {
         employmentTypeChoices={employmentTypeChoices}
       />
 
-      {portalCardDialogOpen && (
-        <PortalCardDialog
-          open
-          onClose={() => {
-            setPortalCardDialogOpen(false);
-            setEditPortalCard(null);
-          }}
-          onSave={handleSavePortalCard}
-          initial={editPortalCard}
-          saving={savingPortalCard}
-          jobs={jobs}
-        />
-      )}
-
       {/* Close Confirmation Dialog */}
       <Dialog open={!!closeConfirmJob} onClose={() => setCloseConfirmJob(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
@@ -1636,36 +1212,6 @@ export default function AdminJobManagePage() {
             sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#DC2626", "&:hover": { backgroundColor: "#B91C1C" } }}
           >
             {deletingJobId ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={!!deleteConfirmPortalCard} onClose={() => !deletingPortalCardId && setDeleteConfirmPortalCard(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
-        <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
-            Delete portal card?
-          </Typography>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ color: "#6B7280" }}>
-            Are you sure you want to delete <strong>{deleteConfirmPortalCard?.title}</strong> from the welcome animation?
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button
-            onClick={() => setDeleteConfirmPortalCard(null)}
-            disabled={!!deletingPortalCardId}
-            sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            disabled={!!deletingPortalCardId}
-            onClick={() => deleteConfirmPortalCard && handleDeletePortalCard(deleteConfirmPortalCard)}
-            sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#DC2626", "&:hover": { backgroundColor: "#B91C1C" } }}
-          >
-            {deletingPortalCardId ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>

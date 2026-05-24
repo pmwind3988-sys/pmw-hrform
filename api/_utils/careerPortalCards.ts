@@ -13,6 +13,8 @@ export interface CareerPortalCardRecord {
   title: string;
   description: string;
   imageUrl: string;
+  imageSource: string;
+  imageOpacity: number;
   sortOrder: number;
   status: "Active" | "Hidden";
   targetType: "none" | "job" | "link";
@@ -30,6 +32,8 @@ export interface CareerPortalCardInput {
   title?: string;
   description?: string;
   imageUrl?: string;
+  imageSource?: string;
+  imageOpacity?: number;
   sortOrder?: number;
   status?: "Active" | "Hidden";
   targetType?: "none" | "job" | "link";
@@ -46,6 +50,7 @@ const SYSTEM_DEFAULT_CARD_IDS = ["system-default-1", "system-default-2", "system
 const DEFAULT_COLOR_START = "#0078D4";
 const DEFAULT_COLOR_END = "#6264A7";
 const DEFAULT_COLOR_ACCENT = "#16A34A";
+const DEFAULT_CARD_IMAGE_OPACITY = 0.72;
 
 const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
   {
@@ -53,6 +58,8 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
     title: "Grow into your next role",
     description: "Browse internal openings, compare fit, and move forward with confidence.",
     imageUrl: "",
+    imageSource: "",
+    imageOpacity: DEFAULT_CARD_IMAGE_OPACITY,
     sortOrder: 1,
     status: "Active",
     targetType: "none",
@@ -70,6 +77,8 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
     title: "Your progress stays visible",
     description: "Keep every submitted application easy to find while HR reviews your next step.",
     imageUrl: "",
+    imageSource: "",
+    imageOpacity: DEFAULT_CARD_IMAGE_OPACITY,
     sortOrder: 2,
     status: "Active",
     targetType: "none",
@@ -87,6 +96,8 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
     title: "Built for PMW talent",
     description: "Internal advancement opportunities are gathered here for quick, focused browsing.",
     imageUrl: "",
+    imageSource: "",
+    imageOpacity: DEFAULT_CARD_IMAGE_OPACITY,
     sortOrder: 3,
     status: "Active",
     targetType: "none",
@@ -104,6 +115,8 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
 const CAREER_PORTAL_CARD_COLUMNS: GraphColumnSpec[] = [
   { name: "CardDescription", displayName: "Description", type: "note" },
   { name: "ImageUrl", displayName: "Image URL", type: "text" },
+  { name: "ImageSource", displayName: "Image Source", type: "note" },
+  { name: "ImageOpacity", displayName: "Image Opacity", type: "number" },
   { name: "SortOrder", displayName: "Sort Order", type: "number" },
   { name: "Status", displayName: "Status", type: "text" },
   { name: "TargetType", displayName: "Target Type", type: "text" },
@@ -113,6 +126,12 @@ const CAREER_PORTAL_CARD_COLUMNS: GraphColumnSpec[] = [
 function numberField(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function imageOpacityField(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_CARD_IMAGE_OPACITY;
+  return Math.min(1, Math.max(0, parsed));
 }
 
 function statusField(value: unknown): "Active" | "Hidden" {
@@ -135,6 +154,10 @@ function trimString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function sourceString(value: unknown): string {
+  return trimString(value).slice(0, 1000);
+}
+
 export function isSystemDefaultCardId(cardId: string): boolean {
   return SYSTEM_DEFAULT_CARD_IDS.includes(cardId as typeof SYSTEM_DEFAULT_CARD_IDS[number]);
 }
@@ -145,6 +168,8 @@ function mapCareerPortalCard(item: GraphListItem): CareerPortalCardRecord {
     title: String(item.fields.Title || ""),
     description: String(item.fields.CardDescription || ""),
     imageUrl: String(item.fields.ImageUrl || ""),
+    imageSource: sourceString(item.fields.ImageSource),
+    imageOpacity: imageOpacityField(item.fields.ImageOpacity),
     sortOrder: numberField(item.fields.SortOrder),
     status: statusField(item.fields.Status),
     targetType: targetTypeField(item.fields.TargetType),
@@ -164,6 +189,44 @@ function sortCards(a: CareerPortalCardRecord, b: CareerPortalCardRecord): number
   return dateTime(b.created) - dateTime(a.created);
 }
 
+function activeCardsForCarousel(cards: CareerPortalCardRecord[]): CareerPortalCardRecord[] {
+  const sorted = [...cards].sort(sortCards);
+  const activeCards = sorted.filter((card) => card.status === "Active");
+  if (activeCards.length > 0) return activeCards;
+
+  const firstCard = sorted[0];
+  return firstCard ? [{ ...firstCard, status: "Active" }] : [];
+}
+
+async function assertActiveCardRemains(token: string, cardId: string): Promise<void> {
+  const cards = await listCareerPortalCards(token);
+  const hasOtherActiveCard = cards.some((card) => card.id !== cardId && card.status === "Active");
+  if (!hasOtherActiveCard) {
+    throw new Error("At least one carousel card must stay active.");
+  }
+}
+
+async function assertCanCreateCard(token: string, input: CareerPortalCardInput): Promise<void> {
+  if (input.status !== "Hidden") return;
+
+  const cards = await listCareerPortalCards(token);
+  const hasActiveCard = cards.some((card) => card.status === "Active");
+  if (!hasActiveCard) {
+    throw new Error("At least one carousel card must stay active.");
+  }
+}
+
+async function assertCanDeleteCard(token: string, cardId: string): Promise<void> {
+  const cards = await listCareerPortalCards(token);
+  const cardToDelete = cards.find((card) => card.id === cardId);
+  if (cardToDelete?.status !== "Active") return;
+
+  const hasOtherActiveCard = cards.some((card) => card.id !== cardId && card.status === "Active");
+  if (!hasOtherActiveCard) {
+    throw new Error("At least one carousel card must stay active.");
+  }
+}
+
 function isMissingCardListError(error: unknown): boolean {
   return error instanceof Error && error.message.includes(`List "${CAREER_PORTAL_CARD_LIST}" not found`);
 }
@@ -177,7 +240,7 @@ function isCardSchemaError(error: unknown): boolean {
 function cardListSetupMessage(): string {
   return [
     `The SharePoint list "${CAREER_PORTAL_CARD_LIST}" is not ready.`,
-    "Create it once in SharePoint with columns: Description, Image URL, Sort Order, Status, Target Type, and Target Value.",
+    "Create it once in SharePoint with columns: Description, Image URL, Image Source, Image Opacity, Sort Order, Status, Target Type, and Target Value.",
   ].join(" ");
 }
 
@@ -210,6 +273,8 @@ function normalizeSystemCardOverride(
     targetType,
     targetValue: targetType === "none" ? "" : trimString(value.targetValue),
     imageUrl: "",
+    imageSource: "",
+    imageOpacity: DEFAULT_CARD_IMAGE_OPACITY,
     colorStart: colorField(value.colorStart, fallback.colorStart || DEFAULT_COLOR_START),
     colorEnd: colorField(value.colorEnd, fallback.colorEnd || DEFAULT_COLOR_END),
     colorAccent: colorField(value.colorAccent, fallback.colorAccent || DEFAULT_COLOR_ACCENT),
@@ -321,18 +386,16 @@ export async function listCareerPortalCards(
     items = await queryListItems(token, CAREER_PORTAL_CARD_LIST, { top: 500 });
   } catch (error) {
     if (isMissingCardListError(error)) {
-      return systemCards
-        .filter((card) => !options.activeOnly || card.status === "Active")
-        .sort(sortCards);
+      return options.activeOnly ? activeCardsForCarousel(systemCards) : systemCards.sort(sortCards);
     }
     throw error;
   }
-  return [
+  const allCards = [
     ...systemCards,
     ...items.map(mapCareerPortalCard),
-  ]
-    .filter((card) => !options.activeOnly || card.status === "Active")
-    .sort(sortCards);
+  ].sort(sortCards);
+
+  return options.activeOnly ? activeCardsForCarousel(allCards) : allCards;
 }
 
 export function parseCareerPortalCardInput(
@@ -363,6 +426,8 @@ export function parseCareerPortalCardInput(
     ...(title || !options.partial ? { title } : {}),
     ...(raw.description !== undefined ? { description: trimString(raw.description) } : {}),
     ...(raw.imageUrl !== undefined ? { imageUrl: trimString(raw.imageUrl) } : {}),
+    ...(raw.imageSource !== undefined ? { imageSource: sourceString(raw.imageSource) } : {}),
+    ...(raw.imageOpacity !== undefined ? { imageOpacity: imageOpacityField(raw.imageOpacity) } : {}),
     ...(parsedSortOrder !== undefined ? { sortOrder: parsedSortOrder } : {}),
     ...(status ? { status } : {}),
     ...(targetType ? { targetType } : {}),
@@ -378,6 +443,8 @@ function cardFields(input: CareerPortalCardInput): Record<string, unknown> {
     ...(input.title !== undefined ? { Title: input.title } : {}),
     ...(input.description !== undefined ? { CardDescription: input.description } : {}),
     ...(input.imageUrl !== undefined ? { ImageUrl: input.imageUrl } : {}),
+    ...(input.imageSource !== undefined ? { ImageSource: input.imageSource } : {}),
+    ...(input.imageOpacity !== undefined ? { ImageOpacity: input.imageOpacity } : {}),
     ...(input.sortOrder !== undefined ? { SortOrder: input.sortOrder } : {}),
     ...(input.status !== undefined ? { Status: input.status } : {}),
     ...(input.targetType !== undefined ? { TargetType: input.targetType } : {}),
@@ -389,11 +456,16 @@ export async function createCareerPortalCard(
   token: string,
   input: CareerPortalCardInput,
 ): Promise<{ id: string }> {
+  await assertCanCreateCard(token, input);
+  await ensureCareerPortalCardList(token);
+
   return withCardListSetupMessage(() =>
     createListItem(token, CAREER_PORTAL_CARD_LIST, {
       Title: input.title || "",
       CardDescription: input.description || "",
       ImageUrl: input.imageUrl || "",
+      ImageSource: input.imageSource || "",
+      ImageOpacity: input.imageOpacity ?? DEFAULT_CARD_IMAGE_OPACITY,
       SortOrder: input.sortOrder ?? 0,
       Status: input.status || "Active",
       TargetType: input.targetType || "none",
@@ -407,10 +479,16 @@ export async function updateCareerPortalCard(
   cardId: string,
   input: CareerPortalCardInput,
 ): Promise<void> {
+  if (input.status === "Hidden") {
+    await assertActiveCardRemains(token, cardId);
+  }
+
   if (isSystemDefaultCardId(cardId)) {
     await updateSystemDefaultCard(token, cardId, input);
     return;
   }
+
+  await ensureCareerPortalCardList(token);
 
   await withCardListSetupMessage(() =>
     updateListItemFields(token, CAREER_PORTAL_CARD_LIST, cardId, cardFields(input)),
@@ -421,6 +499,8 @@ export async function deleteCareerPortalCard(token: string, cardId: string): Pro
   if (isSystemDefaultCardId(cardId)) {
     throw new Error("System default cards cannot be deleted.");
   }
+
+  await assertCanDeleteCard(token, cardId);
 
   await withCardListSetupMessage(() => deleteListItem(token, CAREER_PORTAL_CARD_LIST, cardId));
 }

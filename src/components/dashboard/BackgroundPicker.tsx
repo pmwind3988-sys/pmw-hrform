@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Slider,
   TextField,
   Typography,
 } from "@mui/material";
@@ -19,10 +20,13 @@ import {
 } from "@mui/icons-material";
 import {
   buildCustomBackgroundCss,
+  buildDashboardBackgroundDefCss,
   DASHBOARD_BACKGROUNDS,
   DEFAULT_DASHBOARD_BACKGROUND_SETTING,
+  DEFAULT_IMAGE_OPACITY,
   findDashboardBackground,
   normalizeImageUrl,
+  normalizeImageOpacity,
   type DashboardBackgroundSetting,
 } from "../../utils/dashboardBackgrounds";
 
@@ -54,24 +58,34 @@ export default function BackgroundPicker({
 }: Props) {
   const [selectedId, setSelectedId] = useState(resolveInitialId(setting));
   const [customUrl, setCustomUrl] = useState(setting.customImageUrl);
+  const [customSource, setCustomSource] = useState(setting.customImageSource || "");
+  const [imageOpacity, setImageOpacity] = useState(normalizeImageOpacity(setting.imageOpacity ?? DEFAULT_IMAGE_OPACITY));
   const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setSelectedId(resolveInitialId(setting));
     setCustomUrl(setting.customImageUrl);
+    setCustomSource(setting.customImageSource || "");
+    setImageOpacity(normalizeImageOpacity(setting.imageOpacity ?? DEFAULT_IMAGE_OPACITY));
     setValidationError("");
-  }, [open, setting.backgroundId, setting.customImageUrl]);
+  }, [open, setting.backgroundId, setting.customImageSource, setting.customImageUrl, setting.imageOpacity]);
 
   const customPreviewUrl = normalizeImageUrl(customUrl);
+  const selectedBackground = findDashboardBackground(selectedId);
   const previewCss = selectedId === "custom"
-    ? buildCustomBackgroundCss(customUrl)
-    : findDashboardBackground(selectedId).css;
+    ? buildCustomBackgroundCss(customUrl, imageOpacity)
+    : buildDashboardBackgroundDefCss(selectedBackground, imageOpacity);
 
   async function handleSave(): Promise<void> {
     const nextCustomUrl = selectedId === "custom" ? normalizeImageUrl(customUrl) : "";
+    const nextCustomSource = selectedId === "custom" ? customSource.trim() : "";
     if (selectedId === "custom" && !nextCustomUrl) {
       setValidationError("Enter a valid http or https image URL.");
+      return;
+    }
+    if (selectedId === "custom" && !nextCustomSource) {
+      setValidationError("Enter the image source, owner, or license note.");
       return;
     }
 
@@ -79,6 +93,8 @@ export default function BackgroundPicker({
       await onSave({
         backgroundId: selectedId,
         customImageUrl: nextCustomUrl || "",
+        customImageSource: nextCustomSource,
+        imageOpacity,
       });
       onClose();
     } catch {
@@ -138,7 +154,7 @@ export default function BackgroundPicker({
                       },
                     }}
                   >
-                    <Box sx={{ position: "relative", height: 90, background: background.preview }}>
+                    <Box sx={{ position: "relative", height: 90, background: buildDashboardBackgroundDefCss(background, imageOpacity, true) }}>
                       {selected && (
                         <Box sx={{ position: "absolute", top: 8, right: 8, width: 22, height: 22, borderRadius: "50%", backgroundColor: "#0078D4", display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <Check sx={{ fontSize: 15, color: "#fff" }} />
@@ -186,6 +202,44 @@ export default function BackgroundPicker({
                   Select
                 </Button>
               </Box>
+              {selectedId === "custom" && (
+                <TextField
+                  label="Image source / credit"
+                  size="small"
+                  value={customSource}
+                  onChange={(event) => {
+                    setCustomSource(event.target.value);
+                    setValidationError("");
+                  }}
+                  placeholder="PMW owned asset, photographer, license, or source URL"
+                  fullWidth
+                  sx={{ mt: 1.25 }}
+                  slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                />
+              )}
+            </Box>
+
+            <Box sx={{ mt: 2, p: 2, border: "1px solid rgba(17,24,39,0.12)", borderRadius: "8px", backgroundColor: "#fff" }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, mb: 0.75 }}>
+                <Typography variant="subtitle2" sx={{ color: "#111827", fontWeight: 700 }}>
+                  Image Opacity
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700 }}>
+                  {Math.round(imageOpacity * 100)}%
+                </Typography>
+              </Box>
+              <Slider
+                value={Math.round(imageOpacity * 100)}
+                min={0}
+                max={75}
+                step={1}
+                onChange={(_, value) => {
+                  const nextValue = Array.isArray(value) ? value[0] : value;
+                  setImageOpacity(normalizeImageOpacity(nextValue / 100));
+                }}
+                aria-label="Image opacity"
+                sx={{ color: "#0078D4" }}
+              />
             </Box>
           </Box>
 
@@ -217,6 +271,9 @@ export default function BackgroundPicker({
                 {customPreviewUrl}
               </Typography>
             )}
+            <Typography variant="caption" sx={{ color: "#6B7280", display: "block", mt: 0.75, wordBreak: "break-word", lineHeight: 1.35 }}>
+              {selectedId === "custom" ? customSource.trim() : selectedBackground.source || selectedBackground.category}
+            </Typography>
           </Box>
         </Box>
       </DialogContent>

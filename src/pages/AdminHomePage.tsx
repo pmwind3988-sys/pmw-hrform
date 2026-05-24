@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Box } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { useDashboard } from "../contexts/DashboardContext";
 import Header from "../components/dashboard/Header";
 import StatsRow from "../components/dashboard/StatsRow";
@@ -9,6 +11,55 @@ import SubmissionRow from "../components/dashboard/SubmissionRow";
 import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
+import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
+import { fetchCareersPortalData } from "../utils/careersService";
+import type { CareerPortalCard } from "../types";
+
+function DashboardCareerCarousel() {
+  const navigate = useNavigate();
+  const [careerPortalCards, setCareerPortalCards] = useState<CareerPortalCard[]>([]);
+  const [careerPortalCardsLoading, setCareerPortalCardsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    void fetchCareersPortalData()
+      .then((data) => {
+        if (mounted) setCareerPortalCards(data.portalCards);
+      })
+      .catch(() => {
+        if (mounted) setCareerPortalCards([]);
+      })
+      .finally(() => {
+        if (mounted) setCareerPortalCardsLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleCareerCardTarget = (card: CareerPortalCard) => {
+    const targetValue = card.targetValue.trim();
+    if (card.targetType === "none" || !targetValue) return;
+
+    if (card.targetType === "job") {
+      navigate(`/career-portal/${encodeURIComponent(targetValue)}/apply`);
+      return;
+    }
+
+    if (targetValue.startsWith("/")) {
+      navigate(targetValue);
+    } else {
+      window.open(targetValue, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  return (
+    <Box component="section" sx={{ mb: { xs: 3, md: 4 } }}>
+      <CareerPortalCarousel cards={careerPortalCards} loading={careerPortalCardsLoading} onCardTarget={handleCareerCardTarget} />
+    </Box>
+  );
+}
 
 export default function AdminHomePage() {
   const {
@@ -48,6 +99,8 @@ export default function AdminHomePage() {
       />
 
       <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3, md: 4 } }}>
+        <DashboardCareerCarousel />
+
         {missingConfigs.length > 0 && (
           <Box sx={{ mb: 4 }}>
             <ConfigWarningBanner missingLists={missingConfigs} />

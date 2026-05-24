@@ -21,6 +21,7 @@ import {
   Checkbox,
   FormControlLabel,
   Link,
+  Skeleton,
 } from "@mui/material";
 import {
   UploadFile,
@@ -157,6 +158,43 @@ function SuccessView({
       >
         Browse More Opportunities
       </Button>
+    </Box>
+  );
+}
+
+function JobSummarySkeleton() {
+  return (
+    <>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
+        <Box sx={{ flex: 1 }}>
+          <Skeleton variant="text" width="88%" height={28} />
+          <Skeleton variant="text" width="54%" height={18} />
+        </Box>
+        <Skeleton variant="rounded" width={36} height={36} sx={{ borderRadius: "8px" }} />
+      </Box>
+      <Skeleton variant="rounded" width={96} height={24} sx={{ borderRadius: "8px", mb: 1.5 }} />
+      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1.5 }}>
+        <Skeleton variant="text" width="46%" height={20} />
+        <Skeleton variant="rounded" width={92} height={24} sx={{ borderRadius: "8px" }} />
+      </Box>
+    </>
+  );
+}
+
+function ApplicationFormSkeleton() {
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+      <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
+      <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "120px 1fr" }, gap: 1.5 }}>
+        <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
+        <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
+      </Box>
+      <Divider />
+      <Skeleton variant="rounded" width="100%" height={92} sx={{ borderRadius: "8px" }} />
+      <Skeleton variant="rounded" width="100%" height={92} sx={{ borderRadius: "8px" }} />
+      <Skeleton variant="rounded" width="100%" height={120} sx={{ borderRadius: "8px" }} />
+      <Skeleton variant="rounded" width={180} height={42} sx={{ borderRadius: "8px", alignSelf: "flex-end" }} />
     </Box>
   );
 }
@@ -703,9 +741,7 @@ export default function JobApplyPage() {
               }}
             >
               {jobLoading ? (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-                  <CircularProgress size={24} sx={{ color: "#0078D4" }} />
-                </Box>
+                <JobSummarySkeleton />
               ) : job ? (
                 <>
                   {/* Row 1: Title left · Icon right (vertically centered) */}
@@ -789,6 +825,9 @@ export default function JobApplyPage() {
                 </Alert>
               )}
 
+              {jobLoading ? (
+                <ApplicationFormSkeleton />
+              ) : (
               <form onSubmit={handleSubmit}>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
                   {/* Name */}
@@ -1199,6 +1238,7 @@ export default function JobApplyPage() {
                   </Typography>
                 </Box>
               </form>
+              )}
             </Paper>
           </Grid>
         </Grid>

@@ -1,7 +1,6 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import {
   Box,
-  Button,
   Chip,
   Container,
   Divider,
@@ -19,6 +18,7 @@ import {
   AutoAwesome,
   Edit,
   Logout,
+  Menu as MenuIcon,
   Person,
   PrivacyTip,
   Settings,
@@ -104,8 +104,11 @@ export default function CareerPortalHeader({
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
+  const [mobileMenuAnchorEl, setMobileMenuAnchorEl] = useState<null | HTMLElement>(null);
   const visibleSections = sectionItems.filter((item) => !item.adminOnly || isAdmin);
   const profileOpen = Boolean(profileAnchorEl);
+  const mobileMenuOpen = Boolean(mobileMenuAnchorEl);
+  const hasMobileActionMenu = Boolean(actions);
   const userEmail = accounts[0]?.username || "";
 
   const handleProfileOpen = (event: MouseEvent<HTMLElement>) => {
@@ -114,6 +117,14 @@ export default function CareerPortalHeader({
 
   const handleProfileClose = () => {
     setProfileAnchorEl(null);
+  };
+
+  const handleMobileMenuOpen = (event: MouseEvent<HTMLElement>) => {
+    setMobileMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMobileMenuClose = () => {
+    setMobileMenuAnchorEl(null);
   };
 
   const navigateFromProfile = (path: string) => {
@@ -167,11 +178,10 @@ export default function CareerPortalHeader({
         <Box
           sx={{
             display: "flex",
-            alignItems: { xs: "stretch", md: "center" },
+            alignItems: "center",
             justifyContent: "space-between",
             gap: { xs: 1.25, sm: 1.5, md: 2 },
-            py: { xs: 1.25, sm: 2 },
-            flexDirection: { xs: "column", md: "row" },
+            py: { xs: 0.8, sm: 1.1, md: 2 },
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
@@ -229,8 +239,8 @@ export default function CareerPortalHeader({
             >
               <Logo size={{ xs: 30, sm: 38 }} />
             </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.25, flexWrap: "wrap" }}>
+            <Box sx={{ minWidth: 0, display: { xs: "none", sm: "block" } }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.25, flexWrap: "wrap", display: { sm: "none", md: "flex" } }}>
                 <Chip
                   label="Internal Career Advancement"
                   size="small"
@@ -257,18 +267,89 @@ export default function CareerPortalHeader({
               >
                 {title}
               </Typography>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { xs: "0.75rem", sm: "0.85rem" } }}>
+              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { sm: "0.8rem", md: "0.85rem" }, display: { sm: "none", md: "block" } }}>
                 {subtitle}
               </Typography>
             </Box>
+          </Box>
+
+          <Box
+            sx={{
+              display: { xs: "flex", md: "none" },
+              alignItems: "center",
+              gap: 0.75,
+              flexShrink: 0,
+            }}
+          >
+            <IconButton
+              onClick={handleProfileOpen}
+              aria-label="Open account menu"
+              sx={{
+                p: 0.45,
+                borderRadius: "8px",
+                backgroundColor: "rgba(0, 120, 212, 0.06)",
+                border: "1px solid rgba(0, 120, 212, 0.12)",
+                transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
+                "&:hover": {
+                  transform: "translateY(-1px)",
+                  backgroundColor: "rgba(0, 120, 212, 0.12)",
+                  borderColor: "rgba(0, 120, 212, 0.24)",
+                },
+                "&:active": { transform: "translateY(0) scale(0.98)" },
+                ...reduceMotionSx,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 31,
+                  height: 31,
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(0, 120, 212, 0.10)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Person sx={{ fontSize: 18, color: "#0078D4" }} />
+              </Box>
+            </IconButton>
+            {hasMobileActionMenu && (
+              <IconButton
+                onClick={handleMobileMenuOpen}
+                aria-label="Open page actions"
+                aria-controls={mobileMenuOpen ? "career-mobile-menu" : undefined}
+                aria-haspopup="true"
+                aria-expanded={mobileMenuOpen ? "true" : undefined}
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "8px",
+                  color: "#374151",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid rgba(17, 24, 39, 0.12)",
+                  transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease",
+                  "&:hover": {
+                    transform: "translateY(-1px)",
+                    color: "#0078D4",
+                    backgroundColor: "#F0F7FF",
+                    borderColor: "rgba(0, 120, 212, 0.22)",
+                  },
+                  "&:active": { transform: "translateY(0) scale(0.98)" },
+                  ...reduceMotionSx,
+                }}
+              >
+                <MenuIcon />
+              </IconButton>
+            )}
           </Box>
 
           <Stack
             direction="row"
             spacing={1}
             sx={{
+              display: { xs: "none", md: "flex" },
               alignItems: "center",
-              justifyContent: { xs: "stretch", md: "flex-end" },
+              justifyContent: "flex-end",
               flexWrap: "wrap",
               flexShrink: 0,
               "& > .MuiButton-root": {
@@ -288,60 +369,7 @@ export default function CareerPortalHeader({
               },
             }}
           >
-            {showSectionNav && visibleSections.map((item) => {
-              const selected = activeSection === item.section;
-              return (
-                <Button
-                  key={item.section}
-                  variant={selected ? "contained" : "outlined"}
-                  startIcon={item.icon}
-                  onClick={() => navigate(item.path)}
-                  sx={{
-                    flex: { xs: "1 1 auto", md: "0 0 auto" },
-                    whiteSpace: "nowrap",
-                    backgroundColor: selected ? "#0078D4" : "#ffffff",
-                    color: selected ? "#ffffff" : "#374151",
-                    borderColor: selected ? "#0078D4" : "#D1D5DB",
-                    "&:hover": {
-                      backgroundColor: selected ? "#106EBE" : "#F8FAFC",
-                      borderColor: selected ? "#106EBE" : "#9CA3AF",
-                      transform: "translateY(-1px)",
-                      boxShadow: selected ? "0 6px 16px rgba(0, 120, 212, 0.18)" : "0 6px 14px rgba(17, 24, 39, 0.08)",
-                      "& .MuiButton-startIcon": {
-                        transform: selected ? "scale(1.08)" : "translateX(1px)",
-                      },
-                    },
-                    ...reduceMotionSx,
-                  }}
-                >
-                  {item.label}
-                </Button>
-              );
-            })}
             {actions}
-            {showPrivacyLink && (
-              <Button
-                variant="text"
-                startIcon={<PrivacyTip />}
-                onClick={() => navigate("/privacy")}
-                sx={{
-                  color: "#6B7280",
-                  flex: { xs: "1 1 auto", md: "0 0 auto" },
-                  whiteSpace: "nowrap",
-                  "&:hover": {
-                    color: "#0078D4",
-                    backgroundColor: "#F0F7FF",
-                    transform: "translateY(-1px)",
-                    "& .MuiButton-startIcon": {
-                      transform: "scale(1.08)",
-                    },
-                  },
-                  ...reduceMotionSx,
-                }}
-              >
-                Privacy
-              </Button>
-            )}
             <IconButton
               onClick={handleProfileOpen}
               aria-label="Open account menu"
@@ -407,6 +435,33 @@ export default function CareerPortalHeader({
                   {userEmail || "Account"}
                 </Typography>
               </MenuItem>
+              {((showSectionNav && visibleSections.length > 0) || showPrivacyLink) && (
+                <>
+                  <Divider sx={{ my: 0.5 }} />
+                  {showSectionNav && visibleSections.map((item) => {
+                    const selected = activeSection === item.section;
+                    return (
+                      <MenuItem
+                        key={item.section}
+                        selected={selected}
+                        onClick={() => navigateFromProfile(item.path)}
+                        sx={{ py: 1.25, px: 2.5 }}
+                      >
+                        <Box sx={{ mr: 1.5, color: selected ? "#0078D4" : "#6B7280", display: "flex", "& .MuiSvgIcon-root": { fontSize: 20 } }}>
+                          {item.icon}
+                        </Box>
+                        <Typography variant="body2">{item.label}</Typography>
+                      </MenuItem>
+                    );
+                  })}
+                  {showPrivacyLink && (
+                    <MenuItem onClick={() => navigateFromProfile("/privacy")} sx={{ py: 1.25, px: 2.5 }}>
+                      <PrivacyTip sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                      <Typography variant="body2">Privacy</Typography>
+                    </MenuItem>
+                  )}
+                </>
+              )}
               {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
@@ -439,6 +494,52 @@ export default function CareerPortalHeader({
               </MenuItem>
             </Menu>
           </Stack>
+          <Menu
+            id="career-mobile-menu"
+            anchorEl={mobileMenuAnchorEl}
+            open={mobileMenuOpen}
+            onClose={handleMobileMenuClose}
+            slotProps={{
+              paper: {
+                sx: {
+                  width: 280,
+                  maxWidth: "calc(100vw - 24px)",
+                  borderRadius: "8px",
+                  boxShadow: "0 10px 34px rgba(17, 24, 39, 0.16)",
+                  border: "1px solid rgba(17, 24, 39, 0.08)",
+                  mt: 1,
+                  overflow: "hidden",
+                  "& .MuiMenuItem-root": {
+                    minHeight: 44,
+                  },
+                },
+              },
+            }}
+            transformOrigin={{ horizontal: "right", vertical: "top" }}
+            anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+          >
+            {actions && (
+              <Box
+                onClick={handleMobileMenuClose}
+                sx={{
+                  px: 1,
+                  py: 0.75,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 0.75,
+                  "& .MuiButton-root": {
+                    width: "100%",
+                    justifyContent: "flex-start",
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    fontWeight: 700,
+                  },
+                }}
+              >
+                {actions}
+              </Box>
+            )}
+          </Menu>
         </Box>
       </Container>
     </Paper>

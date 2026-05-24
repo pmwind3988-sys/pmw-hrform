@@ -19,6 +19,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Slider,
   Skeleton,
   Snackbar,
   Stack,
@@ -53,11 +54,14 @@ const DEFAULT_CARD_COLORS = {
   end: "#6264A7",
   accent: "#16A34A",
 };
+const DEFAULT_IMAGE_OPACITY = 0.72;
 
 const EMPTY_PORTAL_CARD: PortalCardForm = {
   title: "",
   description: "",
   imageUrl: "",
+  imageSource: "",
+  imageOpacity: DEFAULT_IMAGE_OPACITY,
   sortOrder: 0,
   status: "Active",
   targetType: "none",
@@ -88,12 +92,20 @@ function cardGradient(card: Pick<CareerPortalCard, "colorStart" | "colorEnd" | "
   return `linear-gradient(135deg, ${safeColor(card.colorStart, DEFAULT_CARD_COLORS.start)} 0%, ${safeColor(card.colorEnd, DEFAULT_CARD_COLORS.end)} 58%, ${safeColor(card.colorAccent, DEFAULT_CARD_COLORS.accent)} 100%)`;
 }
 
+function safeImageOpacity(value: number | undefined): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_IMAGE_OPACITY;
+  return Math.min(1, Math.max(0, parsed));
+}
+
 function cardFormFromInitial(initial: CareerPortalCard | null): PortalCardForm {
   if (!initial) return { ...EMPTY_PORTAL_CARD };
   return {
     title: initial.title,
     description: initial.description,
     imageUrl: initial.imageUrl,
+    imageSource: initial.imageSource || "",
+    imageOpacity: safeImageOpacity(initial.imageOpacity),
     sortOrder: initial.sortOrder,
     status: initial.status,
     targetType: initial.targetType,
@@ -122,11 +134,63 @@ function targetIcon(card: CareerPortalCard) {
   return <AutoAwesome sx={{ fontSize: 14 }} />;
 }
 
+function CardsLoadingSkeleton() {
+  return (
+    <>
+      <Paper
+        sx={{
+          p: { xs: 2, md: 2.5 },
+          mb: 3,
+          borderRadius: "8px",
+          border: "1px solid rgba(17, 24, 39, 0.08)",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        }}
+      >
+        <Skeleton variant="rounded" width="100%" height={40} sx={{ maxWidth: 420, borderRadius: "8px" }} />
+      </Paper>
+      <Grid container spacing={2}>
+        {[1, 2, 3, 4, 5, 6].map((item) => (
+          <Grid key={item} size={{ xs: 12, md: 6, lg: 4 }}>
+            <Card
+              sx={{
+                height: "100%",
+                borderRadius: "8px",
+                border: "1px solid rgba(17, 24, 39, 0.08)",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                overflow: "hidden",
+              }}
+            >
+              <Skeleton variant="rounded" height={150} sx={{ borderRadius: 0 }} />
+              <CardContent sx={{ p: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, mb: 1 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Skeleton variant="text" width="72%" height={26} />
+                    <Skeleton variant="text" width={76} height={18} />
+                  </Box>
+                  <Skeleton variant="rounded" width={74} height={22} sx={{ borderRadius: "8px" }} />
+                </Box>
+                <Skeleton variant="text" width="100%" height={20} />
+                <Skeleton variant="text" width="82%" height={20} sx={{ mb: 1.25 }} />
+                <Skeleton variant="rounded" width="70%" height={26} sx={{ borderRadius: "8px" }} />
+                <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5, mt: 1.5 }}>
+                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "8px" }} />
+                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "8px" }} />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </>
+  );
+}
+
 function PortalCardDialog({
   open,
   initial,
   jobs,
   saving,
+  mustStayActive,
   onClose,
   onSave,
 }: {
@@ -134,6 +198,7 @@ function PortalCardDialog({
   initial: CareerPortalCard | null;
   jobs: JobListing[];
   saving: boolean;
+  mustStayActive: boolean;
   onClose: () => void;
   onSave: (card: PortalCardForm) => void;
 }) {
@@ -145,7 +210,8 @@ function PortalCardDialog({
   };
 
   const normalizedTargetValue = form.targetType === "none" ? "" : form.targetValue.trim();
-  const saveDisabled = !form.title.trim() || saving || (form.targetType !== "none" && !normalizedTargetValue);
+  const hasCustomImage = !isSystemDefault && Boolean(form.imageUrl.trim());
+  const saveDisabled = !form.title.trim() || saving || (form.targetType !== "none" && !normalizedTargetValue) || (hasCustomImage && !form.imageSource.trim());
 
   return (
     <Dialog
@@ -193,15 +259,49 @@ function PortalCardDialog({
                 slotProps={{ input: { sx: { borderRadius: "8px" } } }}
               />
               {!isSystemDefault && (
-                <TextField
-                  label="Picture URL"
-                  value={form.imageUrl}
-                  onChange={(e) => updateField("imageUrl", e.target.value)}
-                  fullWidth
-                  size="small"
-                  placeholder="https://..."
-                  slotProps={{ input: { sx: { borderRadius: "8px" } } }}
-                />
+                <>
+                  <TextField
+                    label="Picture URL"
+                    value={form.imageUrl}
+                    onChange={(e) => updateField("imageUrl", e.target.value)}
+                    fullWidth
+                    size="small"
+                    placeholder="https://..."
+                    slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                  />
+                  <TextField
+                    label="Image source / credit"
+                    value={form.imageSource}
+                    onChange={(e) => updateField("imageSource", e.target.value)}
+                    fullWidth
+                    required={hasCustomImage}
+                    size="small"
+                    placeholder="PMW owned asset, photographer, license, or source URL"
+                    slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                  />
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: "#374151", fontWeight: 700 }}>
+                        Image Opacity
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700 }}>
+                        {Math.round(safeImageOpacity(form.imageOpacity) * 100)}%
+                      </Typography>
+                    </Box>
+                    <Slider
+                      value={Math.round(safeImageOpacity(form.imageOpacity) * 100)}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onChange={(_, value) => {
+                        const nextValue = Array.isArray(value) ? value[0] : value;
+                        updateField("imageOpacity", safeImageOpacity(nextValue / 100));
+                      }}
+                      aria-label="Image opacity"
+                      sx={{ color: "#0078D4" }}
+                    />
+                  </Box>
+                </>
               )}
               {isSystemDefault && (
                 <Grid container spacing={1.25}>
@@ -262,11 +362,16 @@ function PortalCardDialog({
                       sx={{ borderRadius: "8px" }}
                     >
                       <MenuItem value="Active">Active</MenuItem>
-                      <MenuItem value="Hidden">Hidden</MenuItem>
+                      <MenuItem value="Hidden" disabled={mustStayActive}>Hidden</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
               </Grid>
+              {mustStayActive && (
+                <Alert severity="info" sx={{ borderRadius: "8px" }}>
+                  At least one carousel card must stay active.
+                </Alert>
+              )}
             </Stack>
           </Grid>
 
@@ -285,12 +390,23 @@ function PortalCardDialog({
                 }}
               >
                 {!isSystemDefault && form.imageUrl ? (
-                  <Box
-                    component="img"
-                    src={form.imageUrl}
-                    alt=""
-                    sx={{ width: "100%", height: 190, objectFit: "cover" }}
-                  />
+                  <Box sx={{ width: "100%", height: 190, position: "relative", backgroundColor: "#111827" }}>
+                    <Box
+                      component="img"
+                      src={form.imageUrl}
+                      alt=""
+                      sx={{ width: "100%", height: "100%", objectFit: "cover", opacity: safeImageOpacity(form.imageOpacity) }}
+                    />
+                    <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(17,24,39,0.05), rgba(17,24,39,0.44))" }} />
+                    {form.imageSource.trim() && (
+                      <Typography
+                        variant="caption"
+                        sx={{ position: "absolute", right: 10, bottom: 8, color: "rgba(255,255,255,0.76)", maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.62rem" }}
+                      >
+                        {form.imageSource.trim()}
+                      </Typography>
+                    )}
+                  </Box>
                 ) : (
                   <Box
                     sx={{
@@ -371,6 +487,8 @@ function PortalCardDialog({
             title: form.title.trim(),
             description: form.description.trim(),
             imageUrl: isSystemDefault ? "" : form.imageUrl.trim(),
+            imageSource: isSystemDefault ? "" : form.imageSource.trim(),
+            imageOpacity: isSystemDefault ? DEFAULT_IMAGE_OPACITY : safeImageOpacity(form.imageOpacity),
             targetValue: normalizedTargetValue,
             colorStart: safeColor(form.colorStart, DEFAULT_CARD_COLORS.start),
             colorEnd: safeColor(form.colorEnd, DEFAULT_CARD_COLORS.end),
@@ -430,6 +548,7 @@ export default function AdminCareerPortalCardsPage() {
       card.title,
       card.description,
       card.imageUrl,
+      card.imageSource,
       card.status,
       card.isSystemDefault ? "system default" : "",
       card.targetType,
@@ -522,6 +641,7 @@ export default function AdminCareerPortalCardsPage() {
       />
 
       <Box sx={{ maxWidth: 1320, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
+        {!loading && (
         <Paper
           sx={{
             p: { xs: 2, md: 2.5 },
@@ -551,6 +671,7 @@ export default function AdminCareerPortalCardsPage() {
             }}
           />
         </Paper>
+        )}
 
         {!loading && error && (
           <Alert
@@ -563,13 +684,7 @@ export default function AdminCareerPortalCardsPage() {
         )}
 
         {loading ? (
-          <Grid container spacing={2}>
-            {[1, 2, 3].map((item) => (
-              <Grid key={item} size={{ xs: 12, md: 4 }}>
-                <Skeleton variant="rounded" height={320} sx={{ borderRadius: "8px" }} />
-              </Grid>
-            ))}
-          </Grid>
+          <CardsLoadingSkeleton />
         ) : !error && cards.length === 0 ? (
           <Paper sx={{ textAlign: "center", py: 8, borderRadius: "8px", border: "1px dashed #D1D5DB" }}>
             <AutoAwesome sx={{ fontSize: 44, color: "#9CA3AF", mb: 1 }} />
@@ -616,11 +731,46 @@ export default function AdminCareerPortalCardsPage() {
                   <Box
                     sx={{
                       height: 150,
-                      background: card.imageUrl
-                        ? `linear-gradient(180deg, rgba(17,24,39,0.04), rgba(17,24,39,0.34)), url("${card.imageUrl}") center/cover`
-                        : cardGradient(card),
+                      position: "relative",
+                      overflow: "hidden",
+                      background: card.imageUrl ? "#111827" : cardGradient(card),
                     }}
-                  />
+                  >
+                    {card.imageUrl && (
+                      <>
+                        <Box
+                          component="img"
+                          src={card.imageUrl}
+                          alt=""
+                          sx={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            opacity: safeImageOpacity(card.imageOpacity),
+                          }}
+                        />
+                        <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(17,24,39,0.04), rgba(17,24,39,0.34))" }} />
+                        {card.imageSource && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              position: "absolute",
+                              right: 10,
+                              bottom: 8,
+                              color: "rgba(255,255,255,0.78)",
+                              maxWidth: "72%",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontSize: "0.62rem",
+                            }}
+                          >
+                            {card.imageSource}
+                          </Typography>
+                        )}
+                      </>
+                    )}
+                  </Box>
                   <CardContent sx={{ p: 2 }}>
                     <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
                       <Box sx={{ minWidth: 0 }}>
@@ -719,6 +869,7 @@ export default function AdminCareerPortalCardsPage() {
           initial={editCard}
           jobs={jobs}
           saving={saving}
+          mustStayActive={Boolean(editCard?.status === "Active" && cards.filter((card) => card.status === "Active").length <= 1)}
           onClose={() => {
             setDialogOpen(false);
             setEditCard(null);

@@ -24,6 +24,8 @@ interface ApiResponse {
 interface DashboardBackgroundSetting {
   backgroundId: string;
   customImageUrl: string;
+  customImageSource: string;
+  imageOpacity: number;
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -40,6 +42,8 @@ const SETTING_TITLE = "dashboard-background";
 const DEFAULT_SETTING: DashboardBackgroundSetting = {
   backgroundId: "clarity",
   customImageUrl: "",
+  customImageSource: "",
+  imageOpacity: 0.22,
 };
 const ALLOWED_BACKGROUND_IDS = new Set([
   "clarity",
@@ -86,6 +90,17 @@ function normalizeImageUrl(value: unknown): string {
   }
 }
 
+function normalizeImageSource(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, 1000);
+}
+
+function normalizeImageOpacity(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_SETTING.imageOpacity;
+  return Math.min(0.75, Math.max(0, parsed));
+}
+
 function normalizeSetting(fields: Record<string, unknown> | undefined): DashboardBackgroundSetting {
   const rawBackgroundId = String(fields?.BackgroundId || "");
   const backgroundId = ALLOWED_BACKGROUND_IDS.has(rawBackgroundId)
@@ -93,6 +108,9 @@ function normalizeSetting(fields: Record<string, unknown> | undefined): Dashboar
     : DEFAULT_SETTING.backgroundId;
   const customImageUrl = backgroundId === "custom"
     ? normalizeImageUrl(fields?.CustomImageUrl)
+    : "";
+  const customImageSource = backgroundId === "custom"
+    ? normalizeImageSource(fields?.CustomImageSource)
     : "";
 
   if (backgroundId === "custom" && !customImageUrl) {
@@ -102,6 +120,8 @@ function normalizeSetting(fields: Record<string, unknown> | undefined): Dashboar
   return {
     backgroundId,
     customImageUrl,
+    customImageSource,
+    imageOpacity: normalizeImageOpacity(fields?.ImageOpacity),
     updatedBy: fields?.UpdatedBy ? String(fields.UpdatedBy) : undefined,
     updatedAt: fields?.UpdatedAt ? String(fields.UpdatedAt) : undefined,
   };
@@ -117,6 +137,8 @@ function validateRequestedSetting(body: Record<string, unknown>): DashboardBackg
     return {
       backgroundId,
       customImageUrl: "",
+      customImageSource: "",
+      imageOpacity: normalizeImageOpacity(body.imageOpacity),
     };
   }
 
@@ -124,10 +146,16 @@ function validateRequestedSetting(body: Record<string, unknown>): DashboardBackg
   if (!customImageUrl) {
     return { error: "Custom background must be a valid http or https image URL." };
   }
+  const customImageSource = normalizeImageSource(body.customImageSource);
+  if (!customImageSource) {
+    return { error: "Custom background source is required." };
+  }
 
   return {
     backgroundId,
     customImageUrl,
+    customImageSource,
+    imageOpacity: normalizeImageOpacity(body.imageOpacity),
   };
 }
 
@@ -208,6 +236,8 @@ async function upsertSetting(
     Title: SETTING_TITLE,
     BackgroundId: setting.backgroundId,
     CustomImageUrl: setting.customImageUrl,
+    CustomImageSource: setting.customImageSource,
+    ImageOpacity: setting.imageOpacity,
     UpdatedBy: updatedBy,
     UpdatedAt: updatedAt,
   };

@@ -1,7 +1,6 @@
 import {
   AppBar,
   Box,
-  Button,
   Divider,
   IconButton,
   Menu,
@@ -21,6 +20,7 @@ import {
   Settings as SettingsIcon,
   WorkOutlined as WorkIcon,
   Menu as MenuIcon,
+  PrivacyTip as PrivacyIcon,
   Wallpaper as WallpaperIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
@@ -209,6 +209,10 @@ export default function Header({
                 <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
                 <Typography variant="body2">Career Advancement Portal</Typography>
               </MenuItem>
+              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/privacy"); }} sx={{ py: 1.25, px: 2.5 }}>
+                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Privacy Notice</Typography>
+              </MenuItem>
 
               {/* 4. Admin items */}
               {isAdmin && (
@@ -243,30 +247,6 @@ export default function Header({
         ) : (
           <>
             {/* ── Desktop: separate controls ── */}
-            <Button
-              variant="outlined"
-              startIcon={<WorkIcon />}
-              onClick={() => navigate("/career-portal")}
-              sx={{
-                mr: 1,
-                borderRadius: "12px",
-                textTransform: "none",
-                color: "#34A853",
-                borderColor: "rgba(52, 168, 83, 0.3)",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                py: 1,
-                px: 2.5,
-                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                "&:hover": {
-                  borderColor: "#34A853",
-                  backgroundColor: "rgba(52, 168, 83, 0.06)",
-                },
-              }}
-            >
-              Career Advancement
-            </Button>
-
             <RoleBadge isAdmin={isAdmin} />
 
             <IconButton
@@ -313,6 +293,15 @@ export default function Header({
                   {userEmail}
                 </Typography>
               </MenuItem>
+              <MenuItem onClick={() => navigateFromMenu("/career-portal", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
+                <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
+                <Typography variant="body2">Career Advancement Portal</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => navigateFromMenu("/privacy", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
+                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Privacy Notice</Typography>
+              </MenuItem>
+              <Divider sx={{ my: 0.5 }} />
               <MenuItem onClick={() => { handleProfileClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
                 <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
                 <Typography variant="body2">Switch account</Typography>

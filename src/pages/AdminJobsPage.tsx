@@ -20,7 +20,6 @@ import {
   DialogContent,
   DialogActions,
   Snackbar,
-  Grid,
   Card,
   CardContent,
   IconButton,
@@ -161,6 +160,68 @@ function formatDate(dateStr: string): string {
   }
 }
 
+function AdminApplicationsLoadingSkeleton() {
+  return (
+    <>
+      <Paper
+        sx={{
+          p: 2,
+          mb: 3,
+          borderRadius: "8px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "8px", flex: "1 1 300px", minWidth: { xs: "100%", sm: 280 } }} />
+          <Skeleton variant="rounded" width={132} height={40} sx={{ borderRadius: "8px" }} />
+          <Skeleton variant="rounded" width={82} height={32} sx={{ borderRadius: "8px" }} />
+        </Box>
+      </Paper>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(5, minmax(0, 1fr))" },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        {[1, 2, 3, 4, 5].map((item) => (
+          <Skeleton key={item} variant="rounded" height={96} sx={{ borderRadius: "8px" }} />
+        ))}
+      </Box>
+
+      <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+              {["", "Reference", "Applicant", "Role", "Status", "Submitted", "Actions"].map((h) => (
+                <TableCell key={h || "select"} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {[1, 2, 3, 4, 5].map((item) => (
+              <TableRow key={item}>
+                <TableCell padding="checkbox"><Skeleton variant="rounded" width={22} height={22} sx={{ borderRadius: "4px" }} /></TableCell>
+                <TableCell><Skeleton variant="text" width={110} /></TableCell>
+                <TableCell>
+                  <Skeleton variant="text" width={130} />
+                  <Skeleton variant="text" width={160} height={14} />
+                </TableCell>
+                <TableCell><Skeleton variant="text" width={120} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="text" width={100} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={120} height={34} sx={{ borderRadius: "8px" }} /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </>
+  );
+}
+
 export default function AdminJobsPage() {
   const [applications, setApplications] = useState<JobAdminApplication[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,6 +237,7 @@ export default function AdminJobsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [searchText, setSearchText] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [page, setPage] = useState(0);
@@ -279,7 +341,13 @@ export default function AdminJobsPage() {
     page * rowsPerPage + rowsPerPage,
   );
   const allSelected = pagedApplications.length > 0 && pagedApplications.every((app) => selectedIds.has(app.id));
+  const advancedFilterCount = [
+    timelineFilter !== "all",
+    Boolean(statusFilter),
+    sortBy !== "newest",
+  ].filter(Boolean).length;
   const hasFilters = !!searchText.trim() || !!statusFilter || timelineFilter !== "all";
+  const hasSearchOptions = hasFilters || sortBy !== "newest";
   const selectedSupportingDocuments = selectedApp?.supportingDocuments?.length
     ? selectedApp.supportingDocuments
     : selectedApp?.coverLetterUrl
@@ -374,6 +442,7 @@ export default function AdminJobsPage() {
 
       <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
         {/* Filter bar */}
+        {!loading && (
         <Paper
           sx={{
             p: 2,
@@ -381,175 +450,210 @@ export default function AdminJobsPage() {
             borderRadius: "8px",
             boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
             display: "flex",
-            flexWrap: "wrap",
-            gap: 2,
-            alignItems: "center",
+            flexDirection: "column",
+            gap: 1.5,
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 1 }}>
-            <FilterIcon sx={{ fontSize: 18, color: "#6B7280" }} />
-            <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", fontSize: "0.85rem" }}>
-              Timeline
-            </Typography>
-          </Box>
-          <ToggleButtonGroup
-            value={timelineFilter}
-            exclusive
-            onChange={(_, val) => { if (val !== null) { setTimelineFilter(val); setSelectedIds(new Set()); } }}
-            size="small"
-            sx={{
-              gap: 0.5,
-              flexWrap: "wrap",
-              "& .MuiToggleButton-root": {
-                borderRadius: "8px !important",
-                border: "1px solid #E5E7EB",
-                px: 1.5,
-                py: 0.5,
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                color: "#6B7280",
-                textTransform: "none",
-                "&:not(:first-of-type)": {
-                  borderLeft: "1px solid #E5E7EB",
-                  marginLeft: 0,
-                },
-                "&.Mui-selected": {
-                  backgroundColor: "#F0F7FF",
-                  color: "#0078D4",
-                  borderColor: "#0078D4",
-                },
-              },
-            }}
-          >
-            {TIMELINE_OPTIONS.map((opt) => (
-              <ToggleButton key={opt.value} value={opt.value}>
-                {opt.icon && <Box sx={{ mr: 0.5, display: "flex" }}>{opt.icon}</Box>}
-                {opt.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-
-          {timelineFilter === "custom" && (
-            <>
-              <TextField
-                type="date"
-                label="From"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                size="small"
-                sx={{ width: { xs: "100%", sm: 150 } }}
-                slotProps={{
-                  inputLabel: { shrink: true },
-                  input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
-                }}
-              />
-              <TextField
-                type="date"
-                label="To"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                size="small"
-                sx={{ width: { xs: "100%", sm: 150 } }}
-                slotProps={{
-                  inputLabel: { shrink: true },
-                  input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
-                }}
-              />
-            </>
-          )}
-
-          <Box sx={{ width: "1px", height: 28, backgroundColor: "#E5E7EB", mx: 1 }} />
-
-          <TextField
-            placeholder="Search applicant, email, role, ref..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            size="small"
-            sx={{
-              flex: { xs: "1 1 100%", md: "1 1 260px" },
-              minWidth: { xs: "unset", md: 240 },
-              "& .MuiOutlinedInput-root": {
-                borderRadius: "8px",
-                backgroundColor: "#F8F9FC",
-                fontSize: "0.85rem",
-              },
-            }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={statusFilter}
-              label="Status"
-              onChange={(e) => { setStatusFilter(e.target.value); setSelectedIds(new Set()); }}
-              sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
-            >
-              <MenuItem value="">All statuses</MenuItem>
-              {STATUS_OPTIONS.map((opt) => (
-                <MenuItem key={opt} value={opt}>{opt}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel>Sort</InputLabel>
-            <Select
-              value={sortBy}
-              label="Sort"
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
-            >
-              <MenuItem value="newest">Newest first</MenuItem>
-              <MenuItem value="oldest">Oldest first</MenuItem>
-              <MenuItem value="applicant">Applicant A-Z</MenuItem>
-              <MenuItem value="role">Role A-Z</MenuItem>
-              <MenuItem value="status">Status A-Z</MenuItem>
-            </Select>
-          </FormControl>
-
-          {hasFilters && (
-            <Button
-              size="small"
-              onClick={() => {
-                setTimelineFilter("all");
-                setStatusFilter("");
-                setSearchText("");
-                setCustomFrom("");
-                setCustomTo("");
-                setSelectedIds(new Set());
-              }}
-              sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 600 }}
-            >
-              Clear
-            </Button>
-          )}
-
-          {(filteredApplications.length < applications.length || hasFilters) && (
-            <Chip
-              label={`${filteredApplications.length} of ${applications.length}`}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+            <TextField
+              placeholder="Search applicant, email, role, ref..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               size="small"
               sx={{
-                backgroundColor: "#F0F7FF",
-                color: "#0078D4",
-                fontWeight: 600,
-                fontSize: "0.75rem",
-                borderRadius: "8px",
+                flex: "1 1 300px",
+                minWidth: { xs: "100%", sm: 280 },
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "8px",
+                  backgroundColor: "#F8F9FC",
+                  fontSize: "0.85rem",
+                },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
+            <Button
+              variant={showAdvancedFilters || advancedFilterCount > 0 ? "contained" : "outlined"}
+              startIcon={<FilterIcon />}
+              onClick={() => setShowAdvancedFilters((open) => !open)}
+              sx={{
+                borderRadius: "8px",
+                textTransform: "none",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                width: { xs: "100%", sm: "auto" },
+              }}
+            >
+              Advanced{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ""}
+            </Button>
+            {hasSearchOptions && (
+              <Button
+                size="small"
+                startIcon={<Close />}
+                onClick={() => {
+                  setTimelineFilter("all");
+                  setStatusFilter("");
+                  setSearchText("");
+                  setSortBy("newest");
+                  setCustomFrom("");
+                  setCustomTo("");
+                  setSelectedIds(new Set());
+                }}
+                sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 700, width: { xs: "100%", sm: "auto" } }}
+              >
+                Clear
+              </Button>
+            )}
+            {(filteredApplications.length < applications.length || hasFilters) && (
+              <Chip
+                label={`${filteredApplications.length} of ${applications.length}`}
+                size="small"
+                sx={{
+                  backgroundColor: "#F0F7FF",
+                  color: "#0078D4",
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                  borderRadius: "8px",
+                }}
+              />
+            )}
+          </Box>
+
+          {showAdvancedFilters && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, width: "100%" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <FilterIcon sx={{ fontSize: 18, color: "#6B7280" }} />
+                <Typography variant="body2" sx={{ fontWeight: 700, color: "#374151", fontSize: "0.85rem" }}>
+                  Timeline
+                </Typography>
+              </Box>
+              <ToggleButtonGroup
+                value={timelineFilter}
+                exclusive
+                onChange={(_, val) => { if (val !== null) { setTimelineFilter(val); setSelectedIds(new Set()); } }}
+                size="small"
+                sx={{
+                  gap: 0.5,
+                  flexWrap: "wrap",
+                  "& .MuiToggleButton-root": {
+                    borderRadius: "8px !important",
+                    border: "1px solid #E5E7EB",
+                    px: 1.5,
+                    py: 0.5,
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    color: "#6B7280",
+                    textTransform: "none",
+                    "&:not(:first-of-type)": {
+                      borderLeft: "1px solid #E5E7EB",
+                      marginLeft: 0,
+                    },
+                    "&.Mui-selected": {
+                      backgroundColor: "#F0F7FF",
+                      color: "#0078D4",
+                      borderColor: "#0078D4",
+                    },
+                  },
+                }}
+              >
+                {TIMELINE_OPTIONS.map((opt) => (
+                  <ToggleButton key={opt.value} value={opt.value}>
+                    {opt.icon && <Box sx={{ mr: 0.5, display: "flex" }}>{opt.icon}</Box>}
+                    {opt.label}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: timelineFilter === "custom" ? "repeat(4, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))" },
+                  gap: 1.25,
+                  width: "100%",
+                }}
+              >
+                {timelineFilter === "custom" && (
+                  <>
+                    <TextField
+                      type="date"
+                      label="From"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      size="small"
+                      fullWidth
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
+                      }}
+                    />
+                    <TextField
+                      type="date"
+                      label="To"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      size="small"
+                      fullWidth
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
+                      }}
+                    />
+                  </>
+                )}
+
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={statusFilter}
+                    label="Status"
+                    onChange={(e) => { setStatusFilter(e.target.value); setSelectedIds(new Set()); }}
+                    sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
+                  >
+                    <MenuItem value="">All statuses</MenuItem>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Sort</InputLabel>
+                  <Select
+                    value={sortBy}
+                    label="Sort"
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
+                  >
+                    <MenuItem value="newest">Newest first</MenuItem>
+                    <MenuItem value="oldest">Oldest first</MenuItem>
+                    <MenuItem value="applicant">Applicant A-Z</MenuItem>
+                    <MenuItem value="role">Role A-Z</MenuItem>
+                    <MenuItem value="status">Status A-Z</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
           )}
         </Paper>
+        )}
 
         {/* Stats Row */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        {!loading && (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(5, minmax(0, 1fr))" },
+            gap: 2,
+            mb: 3,
+          }}
+        >
           {[
             { label: "Total Applications", value: stats.total, icon: <People />, color: "#0078D4" },
             { label: "New", value: stats.new, icon: <NewReleases />, color: "#0078D4" },
@@ -557,59 +661,50 @@ export default function AdminJobsPage() {
             { label: "Shortlisted", value: stats.shortlisted, icon: <CheckCircle />, color: "#34A853" },
             { label: "Not Suitable", value: stats.notSuitable, icon: <People />, color: "#DC2626" },
           ].map((stat) => (
-            <Grid size={{ xs: 6, sm: 4, lg: 2 }} key={stat.label}>
-              <Card
-                sx={{
-                  borderRadius: "8px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                  transition: "box-shadow 0.2s ease",
-                  "&:hover": { boxShadow: "0 8px 20px rgba(17,24,39,0.08)" },
-                }}
-              >
-                <CardContent sx={{ p: { xs: 1.5, sm: 2.5 } }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
-                    <Box sx={{ color: stat.color, display: "flex" }}>{stat.icon}</Box>
-                    <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", fontSize: { xs: "1.3rem", sm: "1.5rem" } }}>
+            <Card
+              key={stat.label}
+              sx={{
+                borderRadius: "8px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                transition: "box-shadow 0.2s ease",
+                "&:hover": { boxShadow: "0 8px 20px rgba(17,24,39,0.08)" },
+              }}
+            >
+              <CardContent sx={{ p: { xs: 1.5, sm: 2 }, minHeight: 96 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, height: "100%" }}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "8px",
+                      backgroundColor: `${stat.color}14`,
+                      color: stat.color,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {stat.icon}
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 800, color: "#111827", fontSize: { xs: "1.35rem", sm: "1.5rem" }, lineHeight: 1.05 }}>
                       {stat.value}
                     </Typography>
+                    <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700, lineHeight: 1.2, display: "block" }}>
+                      {stat.label}
+                    </Typography>
                   </Box>
-                  <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 500 }}>
-                    {stat.label}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+                </Box>
+              </CardContent>
+            </Card>
           ))}
-        </Grid>
+        </Box>
+        )}
 
         {/* Loading */}
         {loading && (
-          <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Reference", "Applicant", "Role", "Status", "Submitted", "Actions"].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {[1, 2, 3, 4].map((i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton variant="text" width={110} /></TableCell>
-                    <TableCell>
-                      <Skeleton variant="text" width={130} />
-                      <Skeleton variant="text" width={160} height={14} />
-                    </TableCell>
-                    <TableCell><Skeleton variant="text" width={120} /></TableCell>
-                    <TableCell><Skeleton variant="rounded" width={70} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={100} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={50} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <AdminApplicationsLoadingSkeleton />
         )}
 
         {/* Error */}

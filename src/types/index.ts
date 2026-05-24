@@ -888,6 +888,8 @@ export interface CareerPortalCard {
   title: string;
   description: string;
   imageUrl: string;
+  imageSource: string;
+  imageOpacity: number;
   sortOrder: number;
   status: "Active" | "Hidden";
   targetType: "none" | "job" | "link";

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
+  Badge,
   Card,
   CardContent,
   Button,
@@ -29,6 +30,7 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  Tooltip,
 } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import {
@@ -43,11 +45,13 @@ import {
   AssignmentTurnedIn,
   TrendingUp,
   WorkOutlined,
+  FilterList,
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
 import { fetchCareersPortalData, fetchMyApplications } from "../utils/careersService";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
+import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import type { JobListing, JobAdminApplication, CareerPortalCard } from "../types";
 
 const fadeInUp = keyframes`
@@ -81,15 +85,6 @@ const shimmerSweep = keyframes`
   }
 `;
 
-const softPulse = keyframes`
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.18);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(0, 120, 212, 0);
-  }
-`;
-
 const reduceMotionSx = {
   "@media (prefers-reduced-motion: reduce)": {
     animation: "none",
@@ -106,74 +101,6 @@ const reduceMotionSx = {
 
 function staggerDelay(index: number, step = 55, max = 440): string {
   return `${Math.min(index * step, max)}ms`;
-}
-
-const DEFAULT_CARD_COLORS = {
-  start: "#0078D4",
-  end: "#6264A7",
-  accent: "#16A34A",
-};
-
-const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
-  {
-    id: "system-default-1",
-    title: "Grow into your next role",
-    description: "Browse internal openings, compare fit, and move forward with confidence.",
-    imageUrl: "",
-    sortOrder: 1,
-    status: "Active",
-    targetType: "none",
-    targetValue: "",
-    colorStart: "#0078D4",
-    colorEnd: "#6264A7",
-    colorAccent: "#16A34A",
-    isSystemDefault: true,
-    locked: true,
-    source: "system",
-    created: "",
-  },
-  {
-    id: "system-default-2",
-    title: "Your progress stays visible",
-    description: "Keep every submitted application easy to find while HR reviews your next step.",
-    imageUrl: "",
-    sortOrder: 2,
-    status: "Active",
-    targetType: "none",
-    targetValue: "",
-    colorStart: "#6264A7",
-    colorEnd: "#0078D4",
-    colorAccent: "#E67635",
-    isSystemDefault: true,
-    locked: true,
-    source: "system",
-    created: "",
-  },
-  {
-    id: "system-default-3",
-    title: "Built for PMW talent",
-    description: "Internal advancement opportunities are gathered here for quick, focused browsing.",
-    imageUrl: "",
-    sortOrder: 3,
-    status: "Active",
-    targetType: "none",
-    targetValue: "",
-    colorStart: "#16A34A",
-    colorEnd: "#0078D4",
-    colorAccent: "#6264A7",
-    isSystemDefault: true,
-    locked: true,
-    source: "system",
-    created: "",
-  },
-];
-
-function safeColor(value: string | undefined, fallback: string): string {
-  return value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
-}
-
-function cardGradient(card: CareerPortalCard): string {
-  return `linear-gradient(135deg, ${safeColor(card.colorStart, DEFAULT_CARD_COLORS.start)} 0%, ${safeColor(card.colorEnd, DEFAULT_CARD_COLORS.end)} 58%, ${safeColor(card.colorAccent, DEFAULT_CARD_COLORS.accent)} 100%)`;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -406,233 +333,12 @@ function JobCard({
   );
 }
 
-function PortalCardSwipe({
-  cards,
-  onCardTarget,
-}: {
-  cards: CareerPortalCard[];
-  onCardTarget: (card: CareerPortalCard) => void;
-}) {
-  const activeCards = cards.length > 0 ? cards : DEFAULT_PORTAL_CARDS;
-  const [activeIndex, setActiveIndex] = useState(0);
-  const boundedActiveIndex = Math.min(activeIndex, activeCards.length - 1);
-
-  useEffect(() => {
-    if (activeCards.length <= 1) return undefined;
-    const intervalId = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % activeCards.length);
-    }, 4400);
-    return () => window.clearInterval(intervalId);
-  }, [activeCards.length]);
-
-  return (
-    <Box
-      sx={{
-        position: "relative",
-        minHeight: { xs: 250, md: 280 },
-        borderRadius: "8px",
-        overflow: "hidden",
-        border: "1px solid rgba(17, 24, 39, 0.08)",
-        background: "linear-gradient(135deg, #EEF6FF 0%, #F4F3FF 56%, #EAF7EF 100%)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75), 0 12px 26px rgba(17, 24, 39, 0.08)",
-        ...reduceMotionSx,
-      }}
-      aria-label="Career portal highlights"
-    >
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          width: `${activeCards.length * 100}%`,
-          transform: `translateX(-${boundedActiveIndex * (100 / activeCards.length)}%)`,
-          transition: "transform 0.62s cubic-bezier(0.22, 1, 0.36, 1)",
-          "@media (prefers-reduced-motion: reduce)": {
-            transition: "none",
-          },
-        }}
-      >
-        {activeCards.map((card, index) => {
-          const showFallback = !card.imageUrl;
-          const canOpen = card.targetType !== "none" && Boolean(card.targetValue.trim());
-          return (
-            <Box
-              key={card.id || `${card.title}-${index}`}
-              sx={{
-                flex: `0 0 ${100 / activeCards.length}%`,
-                minWidth: 0,
-                p: { xs: 1.5, sm: 1.75 },
-                boxSizing: "border-box",
-              }}
-            >
-              <Box
-                role={canOpen ? "button" : undefined}
-                tabIndex={canOpen ? 0 : undefined}
-                onClick={canOpen ? () => onCardTarget(card) : undefined}
-                onKeyDown={(event) => {
-                  if (!canOpen) return;
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onCardTarget(card);
-                  }
-                }}
-                sx={{
-                  position: "relative",
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-end",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                  backgroundColor: "#111827",
-                  boxShadow: "0 14px 32px rgba(17, 24, 39, 0.18)",
-                  cursor: canOpen ? "pointer" : "default",
-                  outline: "none",
-                  transition: "transform 0.18s ease, box-shadow 0.18s ease",
-                  "&:hover": canOpen ? {
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 18px 36px rgba(17, 24, 39, 0.22)",
-                  } : undefined,
-                  "&:focus-visible": {
-                    boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.35), 0 18px 36px rgba(17, 24, 39, 0.22)",
-                  },
-                  ...reduceMotionSx,
-                }}
-              >
-                {showFallback ? (
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      inset: 0,
-                      background: cardGradient(card),
-                    }}
-                  />
-                ) : (
-                  <Box
-                    component="img"
-                    src={card.imageUrl}
-                    alt=""
-                    sx={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      filter: "saturate(1.02)",
-                    }}
-                  />
-                )}
-                <Box
-                  sx={{
-                    position: "absolute",
-                    inset: 0,
-                    background: "linear-gradient(180deg, rgba(17,24,39,0.05) 0%, rgba(17,24,39,0.62) 58%, rgba(17,24,39,0.86) 100%)",
-                  }}
-                />
-                <Box sx={{ position: "relative", p: { xs: 2, sm: 2.5 }, pb: { xs: 4.75, sm: 5 } }}>
-                  <Chip
-                    label={canOpen ? "Tap to open" : "Portal highlight"}
-                    size="small"
-                    sx={{
-                      mb: 1,
-                      width: "fit-content",
-                      borderRadius: "8px",
-                      backgroundColor: "rgba(255,255,255,0.88)",
-                      color: "#005A9E",
-                      fontWeight: 800,
-                      fontSize: "0.68rem",
-                    }}
-                  />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      color: "#ffffff",
-                      fontWeight: 800,
-                      fontSize: { xs: "1.05rem", sm: "1.18rem" },
-                      lineHeight: 1.24,
-                      mb: 0.65,
-                    }}
-                  >
-                    {card.title}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "rgba(255,255,255,0.86)",
-                      fontWeight: 500,
-                      lineHeight: 1.5,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {card.description}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-          );
-        })}
-      </Box>
-      <Box
-        sx={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: { xs: 18, sm: 20 },
-          zIndex: 2,
-          display: "flex",
-          justifyContent: "center",
-          gap: 0.75,
-          pointerEvents: "auto",
-        }}
-      >
-        {activeCards.map((card, index) => {
-          const selected = boundedActiveIndex === index;
-          return (
-            <Box
-              key={`dot-${card.id || index}`}
-              component="button"
-              type="button"
-              aria-label={`Show highlight ${index + 1}`}
-              aria-current={selected ? "true" : undefined}
-              onClick={() => setActiveIndex(index)}
-              sx={{
-                width: selected ? 18 : 6,
-                height: 6,
-                p: 0,
-                border: 0,
-                borderRadius: 999,
-                cursor: "pointer",
-                backgroundColor: selected ? "#ffffff" : "rgba(255,255,255,0.52)",
-                boxShadow: selected ? "0 0 0 1px rgba(255,255,255,0.38), 0 2px 8px rgba(0,0,0,0.18)" : "none",
-                transition: "width 0.2s ease, background-color 0.2s ease, transform 0.2s ease",
-                "&:hover": {
-                  transform: "translateY(-1px)",
-                  backgroundColor: "#ffffff",
-                },
-                "&:focus-visible": {
-                  outline: "2px solid #ffffff",
-                  outlineOffset: 3,
-                },
-                ...reduceMotionSx,
-              }}
-            />
-          );
-        })}
-      </Box>
-    </Box>
-  );
-}
-
 function PortalWelcomePanel({
   totalJobs,
   visibleJobs,
   applicationsCount,
   viewingApplications,
   portalCards,
-  onBrowseOpenings,
   onViewApplications,
   onPortalCardTarget,
 }: {
@@ -641,7 +347,6 @@ function PortalWelcomePanel({
   applicationsCount: number;
   viewingApplications: boolean;
   portalCards: CareerPortalCard[];
-  onBrowseOpenings: () => void;
   onViewApplications: () => void;
   onPortalCardTarget: (card: CareerPortalCard) => void;
 }) {
@@ -691,7 +396,7 @@ function PortalWelcomePanel({
           alignItems: "center",
         }}
       >
-        <Box>
+        <Box sx={{ order: { xs: 2, md: 1 } }}>
           <Chip
             icon={<AutoAwesome sx={{ fontSize: 16 }} />}
             label="Welcome back"
@@ -722,30 +427,8 @@ function PortalWelcomePanel({
           <Typography variant="body1" sx={{ color: "#4B5563", maxWidth: 640, mb: 2.25 }}>
             Explore roles built for PMW talent and keep your application journey in view.
           </Typography>
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Button
-              variant="contained"
-              endIcon={<ArrowForward />}
-              onClick={onBrowseOpenings}
-              sx={{
-                borderRadius: "8px",
-                backgroundColor: "#0078D4",
-                fontWeight: 700,
-                px: 2.4,
-                transition: "transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease",
-                animation: `${softPulse} 2.8s ease-in-out infinite`,
-                "&:hover": {
-                  backgroundColor: "#106EBE",
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 8px 20px rgba(0, 120, 212, 0.24)",
-                },
-                "&:active": { transform: "translateY(0) scale(0.98)" },
-                ...reduceMotionSx,
-              }}
-            >
-              Browse openings
-            </Button>
-            {applicationsCount > 0 && (
+          {applicationsCount > 0 && (
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
               <Button
                 variant={viewingApplications ? "contained" : "outlined"}
                 startIcon={<AssignmentTurnedIn />}
@@ -769,18 +452,20 @@ function PortalWelcomePanel({
               >
                 {viewingApplications ? "Viewing applications" : "My applications"}
               </Button>
-            )}
-          </Box>
+            </Box>
+          )}
         </Box>
-        <PortalCardSwipe cards={portalCards} onCardTarget={onPortalCardTarget} />
+        <Box sx={{ order: { xs: 1, md: 2 }, minWidth: 0 }}>
+          <CareerPortalCarousel cards={portalCards} onCardTarget={onPortalCardTarget} />
+        </Box>
       </Box>
 
       <Box
         sx={{
           position: "relative",
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: { xs: 0.75, sm: 1 },
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+          gap: 1,
           mt: { xs: 2, md: 2.5 },
         }}
       >
@@ -790,9 +475,10 @@ function PortalWelcomePanel({
               sx={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: { xs: "center", sm: "flex-start" },
+                justifyContent: "flex-start",
                 gap: { xs: 0.75, sm: 1.25 },
                 p: { xs: 1, sm: 1.35 },
+                minHeight: { xs: 66, sm: 74 },
                 borderRadius: "8px",
                 border: "1px solid rgba(17, 24, 39, 0.08)",
                 backgroundColor: "rgba(255,255,255,0.78)",
@@ -835,6 +521,95 @@ function PortalWelcomePanel({
           ))}
       </Box>
     </Paper>
+  );
+}
+
+function CareersLoadingSkeleton() {
+  return (
+    <>
+      <Paper
+        component="section"
+        sx={{
+          p: { xs: 2.5, md: 3 },
+          mb: 3,
+          borderRadius: "8px",
+          border: "1px solid rgba(17, 24, 39, 0.08)",
+          boxShadow: "0 10px 30px rgba(17, 24, 39, 0.06)",
+          background: "linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 48%, #F7F7FF 100%)",
+        }}
+      >
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(320px, 0.92fr)" },
+            gap: { xs: 2.5, md: 3 },
+            alignItems: "center",
+          }}
+        >
+          <Box sx={{ order: { xs: 2, md: 1 } }}>
+            <Skeleton variant="rounded" width={124} height={26} sx={{ borderRadius: "8px", mb: 1.5 }} />
+            <Skeleton variant="text" width="72%" height={38} />
+            <Skeleton variant="text" width="88%" height={24} sx={{ mb: 2 }} />
+            <Skeleton variant="rounded" width={150} height={38} sx={{ borderRadius: "8px" }} />
+          </Box>
+          <Box sx={{ order: { xs: 1, md: 2 }, minWidth: 0 }}>
+            <Skeleton variant="rounded" width="100%" height={280} sx={{ borderRadius: "8px" }} />
+          </Box>
+        </Box>
+
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1, mt: { xs: 2, md: 2.5 } }}>
+          {[1, 2, 3].map((item) => (
+            <Skeleton key={item} variant="rounded" height={74} sx={{ borderRadius: "8px" }} />
+          ))}
+        </Box>
+      </Paper>
+
+      <Paper
+        sx={{
+          p: 2,
+          mb: 3,
+          borderRadius: "8px",
+          border: "1px solid rgba(17, 24, 39, 0.08)",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "8px", flex: "1 1 360px", minWidth: { xs: "100%", sm: 320 } }} />
+          <Skeleton variant="rounded" width={40} height={40} sx={{ borderRadius: "8px" }} />
+          <Skeleton variant="rounded" width={96} height={32} sx={{ borderRadius: "8px" }} />
+        </Box>
+      </Paper>
+
+      <Grid container spacing={2.5}>
+        {[1, 2, 3, 4, 5, 6].map((item) => (
+          <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={item}>
+            <Paper
+              sx={{
+                p: 3,
+                borderRadius: "8px",
+                border: "1px solid rgba(17, 24, 39, 0.08)",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              }}
+            >
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1.5, mb: 1.5 }}>
+                <Skeleton variant="text" width="64%" height={30} />
+                <Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "8px" }} />
+              </Box>
+              <Box sx={{ display: "flex", gap: 0.5, mb: 2 }}>
+                <Skeleton variant="rounded" width={82} height={24} sx={{ borderRadius: "8px" }} />
+                <Skeleton variant="rounded" width={116} height={24} sx={{ borderRadius: "8px" }} />
+              </Box>
+              <Skeleton variant="text" width="72%" height={20} />
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mt: 1 }}>
+                <Skeleton variant="text" width="42%" height={18} />
+                <Skeleton variant="text" width="34%" height={18} />
+              </Box>
+              <Skeleton variant="text" width={88} height={22} sx={{ mt: 2.25 }} />
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+    </>
   );
 }
 
@@ -1091,6 +866,7 @@ export default function CareersPage() {
   const [deptFilter, setDeptFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [showJobAdvancedFilters, setShowJobAdvancedFilters] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
   const [selectedApp, setSelectedApp] = useState<JobAdminApplication | null>(null);
   const [myApps, setMyApps] = useState<JobAdminApplication[]>([]);
@@ -1103,6 +879,7 @@ export default function CareersPage() {
   const [myAppsFrom, setMyAppsFrom] = useState("");
   const [myAppsTo, setMyAppsTo] = useState("");
   const [myAppsSort, setMyAppsSort] = useState("newest");
+  const [showMyAppsAdvancedFilters, setShowMyAppsAdvancedFilters] = useState(false);
   const [myAppsPage, setMyAppsPage] = useState(0);
   const [myAppsRowsPerPage, setMyAppsRowsPerPage] = useState(10);
 
@@ -1208,7 +985,14 @@ export default function CareersPage() {
     return result;
   }, [jobs, searchText, deptFilter, typeFilter, sortBy, appliedFilter, appliedJobIds]);
 
-  const hasFilters = searchText || deptFilter || typeFilter || appliedFilter !== "all";
+  const jobAdvancedFilterCount = [
+    Boolean(deptFilter),
+    Boolean(typeFilter),
+    appliedFilter !== "all",
+    sortBy !== "newest",
+  ].filter(Boolean).length;
+  const hasFilters = Boolean(searchText.trim()) || Boolean(deptFilter) || Boolean(typeFilter) || appliedFilter !== "all";
+  const hasJobSearchOptions = hasFilters || sortBy !== "newest";
   const pagedJobs = filteredJobs.slice(jobsPage * jobsRowsPerPage, jobsPage * jobsRowsPerPage + jobsRowsPerPage);
   const filteredMyApps = useMemo(() => {
     const q = myAppsSearch.trim().toLowerCase();
@@ -1256,20 +1040,17 @@ export default function CareersPage() {
     myAppsPage * myAppsRowsPerPage,
     myAppsPage * myAppsRowsPerPage + myAppsRowsPerPage,
   );
+  const myAppsAdvancedFilterCount = [
+    myAppsTimeline !== "all",
+    myAppsSort !== "newest",
+  ].filter(Boolean).length;
+  const hasMyAppsFilters = Boolean(myAppsSearch.trim()) || myAppsTimeline !== "all";
+  const hasMyAppsSearchOptions = hasMyAppsFilters || myAppsSort !== "newest";
   const selectedSupportingDocuments = selectedApp?.supportingDocuments?.length
     ? selectedApp.supportingDocuments
     : selectedApp?.coverLetterUrl
       ? [{ name: "Supporting Document", url: selectedApp.coverLetterUrl }]
       : [];
-  const handleBrowseOpenings = () => {
-    setAppliedFilter("all");
-    window.requestAnimationFrame(() => {
-      window.scrollTo({
-        top: 120,
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      });
-    });
-  };
   const handleViewApplications = () => setAppliedFilter("applied");
   const handlePortalCardTarget = (card: CareerPortalCard) => {
     const targetValue = card.targetValue.trim();
@@ -1301,34 +1082,6 @@ export default function CareersPage() {
         isAdmin={isAdmin}
         backPath={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
         backLabel="Back to forms dashboard"
-        actions={(
-          <>
-            {myApps.length > 0 && (
-              <Button
-                variant={appliedFilter === "applied" ? "contained" : "outlined"}
-                size="small"
-                onClick={() => setAppliedFilter(appliedFilter === "applied" ? "all" : "applied")}
-                sx={{
-                  whiteSpace: "nowrap",
-                  fontWeight: 700,
-                  backgroundColor: appliedFilter === "applied" ? "#0078D4" : "#ffffff",
-                  color: appliedFilter === "applied" ? "#ffffff" : "#6B7280",
-                  borderColor: appliedFilter === "applied" ? "#0078D4" : "#D1D5DB",
-                  transition: "transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
-                  "&:hover": {
-                    backgroundColor: appliedFilter === "applied" ? "#106EBE" : "#F8FAFC",
-                    transform: "translateY(-1px)",
-                    boxShadow: "0 6px 16px rgba(0, 120, 212, 0.14)",
-                  },
-                  "&:active": { transform: "translateY(0) scale(0.98)" },
-                  ...reduceMotionSx,
-                }}
-              >
-                My Applications ({myApps.length})
-              </Button>
-            )}
-          </>
-        )}
       />
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -1339,7 +1092,6 @@ export default function CareersPage() {
             applicationsCount={myApps.length}
             viewingApplications={appliedFilter === "applied"}
             portalCards={portalCards}
-            onBrowseOpenings={handleBrowseOpenings}
             onViewApplications={handleViewApplications}
             onPortalCardTarget={handlePortalCardTarget}
           />
@@ -1355,9 +1107,8 @@ export default function CareersPage() {
               border: "1px solid rgba(17, 24, 39, 0.08)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               display: "flex",
-              flexWrap: "wrap",
-              gap: 2,
-              alignItems: "center",
+              flexDirection: "column",
+              gap: 1.5,
               animation: `${fadeInUp} 0.4s ease both`,
               animationDelay: "90ms",
               transition: "box-shadow 0.2s ease, border-color 0.2s ease",
@@ -1368,161 +1119,215 @@ export default function CareersPage() {
               ...reduceMotionSx,
             }}
           >
-            <TextField
-              placeholder="Search opportunities..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              size="small"
-              sx={{
-                flex: { xs: "1 1 100%", sm: "1 1 260px" },
-                minWidth: { xs: "unset", sm: 200 },
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": {
-                    backgroundColor: "#ffffff",
-                    boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)",
-                  },
-                },
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 160 } }}>
-              <InputLabel>Department</InputLabel>
-              <Select
-                value={deptFilter}
-                label="Department"
-                onChange={(e) => setDeptFilter(e.target.value)}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+              <Box
                 sx={{
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                  flex: "1 1 360px",
+                  minWidth: { xs: "100%", sm: 320 },
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
                 }}
               >
-                <MenuItem value="">All departments</MenuItem>
-                {departments.map((d) => (
-                  <MenuItem key={d} value={d}>{d}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 150 } }}>
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={typeFilter}
-                label="Type"
-                onChange={(e) => setTypeFilter(e.target.value)}
+                <TextField
+                  placeholder="Search opportunities..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  size="small"
+                  sx={{
+                    flex: "1 1 auto",
+                    minWidth: 0,
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": {
+                        backgroundColor: "#ffffff",
+                        boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)",
+                      },
+                    },
+                  }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+                <Tooltip title={showJobAdvancedFilters ? "Hide advanced search" : "Show advanced search"}>
+                  <IconButton
+                    aria-label={showJobAdvancedFilters ? "Hide advanced search" : "Show advanced search"}
+                    aria-pressed={showJobAdvancedFilters}
+                    onClick={() => setShowJobAdvancedFilters((open) => !open)}
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "8px",
+                      border: "1px solid",
+                      borderColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? "#0078D4" : "#D1D5DB",
+                      color: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? "#0078D4" : "#6B7280",
+                      backgroundColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? "#F0F7FF" : "#ffffff",
+                      flexShrink: 0,
+                      transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
+                      "&:hover": {
+                        transform: "translateY(-1px)",
+                        backgroundColor: "#F0F7FF",
+                        borderColor: "#0078D4",
+                      },
+                      "&:active": { transform: "translateY(0) scale(0.98)" },
+                      ...reduceMotionSx,
+                    }}
+                  >
+                    <Badge
+                      badgeContent={jobAdvancedFilterCount}
+                      color="primary"
+                      invisible={jobAdvancedFilterCount === 0}
+                      sx={{ "& .MuiBadge-badge": { fontSize: "0.62rem", minWidth: 16, height: 16 } }}
+                    >
+                      <FilterList sx={{ fontSize: 20 }} />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              {hasJobSearchOptions && (
+                <Button
+                  size="small"
+                  startIcon={<Close />}
+                  onClick={() => {
+                    setSearchText("");
+                    setDeptFilter("");
+                    setTypeFilter("");
+                    setAppliedFilter("all");
+                    setSortBy("newest");
+                  }}
+                  sx={{
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    color: "#6B7280",
+                    fontWeight: 700,
+                    minHeight: 40,
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+              {hasFilters && (
+                <Chip
+                  label={`${filteredJobs.length} of ${jobs.length} opportunities`}
+                  size="small"
+                  sx={{
+                    backgroundColor: "#F0F7FF",
+                    color: "#0078D4",
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    height: 32,
+                    animation: `${scaleIn} 0.22s ease both`,
+                    ...reduceMotionSx,
+                  }}
+                />
+              )}
+            </Box>
+
+            {showJobAdvancedFilters && (
+              <Box
                 sx={{
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" },
+                  gap: 1.25,
+                  width: "100%",
                 }}
               >
-                <MenuItem value="">All types</MenuItem>
-                {employmentTypes.map((t) => (
-                  <MenuItem key={t} value={t}>{t}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 130 } }}>
-              <InputLabel>Applied</InputLabel>
-              <Select
-                value={appliedFilter}
-                label="Applied"
-                onChange={(e) => setAppliedFilter(e.target.value)}
-                sx={{
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                }}
-              >
-                <MenuItem value="all">All opportunities</MenuItem>
-                <MenuItem value="applied">Applied</MenuItem>
-                <MenuItem value="unapplied">Unapplied</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ flex: { xs: "1 1 100%", sm: "none" }, minWidth: { xs: "unset", sm: 130 } }}>
-              <InputLabel>Sort</InputLabel>
-              <Select
-                value={sortBy}
-                label="Sort"
-                onChange={(e) => setSortBy(e.target.value)}
-                sx={{
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                }}
-              >
-                <MenuItem value="newest">Newest</MenuItem>
-                <MenuItem value="closing">Closing soon</MenuItem>
-                <MenuItem value="name">Name</MenuItem>
-                <MenuItem value="applicants">Most applicants</MenuItem>
-              </Select>
-            </FormControl>
-            {hasFilters && (
-              <Chip
-                label={`${filteredJobs.length} of ${jobs.length} opportunities`}
-                size="small"
-                sx={{
-                  backgroundColor: "#F0F7FF",
-                  color: "#0078D4",
-                  fontWeight: 600,
-                  fontSize: "0.75rem",
-                  height: 32,
-                  animation: `${scaleIn} 0.22s ease both`,
-                  ...reduceMotionSx,
-                }}
-              />
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Department</InputLabel>
+                  <Select
+                    value={deptFilter}
+                    label="Department"
+                    onChange={(e) => setDeptFilter(e.target.value)}
+                    sx={{
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                    }}
+                  >
+                    <MenuItem value="">All departments</MenuItem>
+                    {departments.map((d) => (
+                      <MenuItem key={d} value={d}>{d}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    value={typeFilter}
+                    label="Type"
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    sx={{
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                    }}
+                  >
+                    <MenuItem value="">All types</MenuItem>
+                    {employmentTypes.map((t) => (
+                      <MenuItem key={t} value={t}>{t}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Applied</InputLabel>
+                  <Select
+                    value={appliedFilter}
+                    label="Applied"
+                    onChange={(e) => setAppliedFilter(e.target.value)}
+                    sx={{
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                    }}
+                  >
+                    <MenuItem value="all">All opportunities</MenuItem>
+                    <MenuItem value="applied">Applied</MenuItem>
+                    <MenuItem value="unapplied">Unapplied</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Sort</InputLabel>
+                  <Select
+                    value={sortBy}
+                    label="Sort"
+                    onChange={(e) => setSortBy(e.target.value)}
+                    sx={{
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                    }}
+                  >
+                    <MenuItem value="newest">Newest</MenuItem>
+                    <MenuItem value="closing">Closing soon</MenuItem>
+                    <MenuItem value="name">Name</MenuItem>
+                    <MenuItem value="applicants">Most applicants</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
             )}
           </Paper>
         )}
 
         {/* Loading */}
         {loading && (
-          <Grid container spacing={2.5}>
-            {[1, 2, 3].map((i) => (
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={i}>
-                <Paper
-                  sx={{
-                    p: 3,
-                    borderRadius: "8px",
-                    border: "1px solid rgba(17, 24, 39, 0.08)",
-                    animation: `${fadeInUp} 0.42s ease both`,
-                    animationDelay: staggerDelay(i - 1),
-                    ...reduceMotionSx,
-                  }}
-                >
-                  <Skeleton variant="text" width="75%" height={28} sx={{ mb: 1 }} />
-                  <Skeleton variant="rounded" width={100} height={24} sx={{ borderRadius: "8px", mb: 2 }} />
-                  <Box sx={{ display: "flex", gap: 2, mb: 1 }}>
-                    <Skeleton variant="text" width="40%" height={20} />
-                    <Skeleton variant="text" width="40%" height={20} />
-                  </Box>
-                  <Box sx={{ display: "flex", gap: 2 }}>
-                    <Skeleton variant="text" width="35%" height={16} />
-                    <Skeleton variant="text" width="30%" height={16} />
-                  </Box>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
+          <CareersLoadingSkeleton />
         )}
 
         {/* Error */}
@@ -1575,9 +1380,8 @@ export default function CareersPage() {
               border: "1px solid rgba(17, 24, 39, 0.08)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               display: "flex",
-              flexWrap: "wrap",
-              gap: 2,
-              alignItems: "center",
+              flexDirection: "column",
+              gap: 1.5,
               animation: `${fadeInUp} 0.4s ease both`,
               animationDelay: "80ms",
               transition: "box-shadow 0.2s ease, border-color 0.2s ease",
@@ -1588,127 +1392,188 @@ export default function CareersPage() {
               ...reduceMotionSx,
             }}
           >
-            <TextField
-              placeholder="Search applications..."
-              value={myAppsSearch}
-              onChange={(e) => setMyAppsSearch(e.target.value)}
-              size="small"
-              sx={{
-                flex: { xs: "1 1 100%", md: "1 1 260px" },
-                minWidth: { xs: "unset", md: 240 },
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": {
-                    backgroundColor: "#ffffff",
-                    boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)",
-                  },
-                },
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
-              <InputLabel>Timeline</InputLabel>
-              <Select
-                value={myAppsTimeline}
-                label="Timeline"
-                onChange={(e) => setMyAppsTimeline(e.target.value)}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+              <Box
                 sx={{
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)" },
+                  flex: "1 1 360px",
+                  minWidth: { xs: "100%", sm: 320 },
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
                 }}
               >
-                <MenuItem value="all">All dates</MenuItem>
-                <MenuItem value="today">Today</MenuItem>
-                <MenuItem value="week">This week</MenuItem>
-                <MenuItem value="30d">30 days</MenuItem>
-                <MenuItem value="custom">Custom</MenuItem>
-              </Select>
-            </FormControl>
-            {myAppsTimeline === "custom" && (
-              <>
                 <TextField
-                  type="date"
-                  label="From"
-                  value={myAppsFrom}
-                  onChange={(e) => setMyAppsFrom(e.target.value)}
+                  placeholder="Search applications..."
+                  value={myAppsSearch}
+                  onChange={(e) => setMyAppsSearch(e.target.value)}
                   size="small"
-                  sx={{ width: { xs: "100%", sm: 150 } }}
-                  slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                  sx={{
+                    flex: "1 1 auto",
+                    minWidth: 0,
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": {
+                        backgroundColor: "#ffffff",
+                        boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)",
+                      },
+                    },
+                  }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
                 />
-                <TextField
-                  type="date"
-                  label="To"
-                  value={myAppsTo}
-                  onChange={(e) => setMyAppsTo(e.target.value)}
+                <Tooltip title={showMyAppsAdvancedFilters ? "Hide advanced search" : "Show advanced search"}>
+                  <IconButton
+                    aria-label={showMyAppsAdvancedFilters ? "Hide advanced search" : "Show advanced search"}
+                    aria-pressed={showMyAppsAdvancedFilters}
+                    onClick={() => setShowMyAppsAdvancedFilters((open) => !open)}
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "8px",
+                      border: "1px solid",
+                      borderColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? "#6264A7" : "#D1D5DB",
+                      color: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? "#6264A7" : "#6B7280",
+                      backgroundColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? "#F4F3FF" : "#ffffff",
+                      flexShrink: 0,
+                      transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
+                      "&:hover": {
+                        transform: "translateY(-1px)",
+                        backgroundColor: "#F4F3FF",
+                        borderColor: "#6264A7",
+                      },
+                      "&:active": { transform: "translateY(0) scale(0.98)" },
+                      ...reduceMotionSx,
+                    }}
+                  >
+                    <Badge
+                      badgeContent={myAppsAdvancedFilterCount}
+                      color="secondary"
+                      invisible={myAppsAdvancedFilterCount === 0}
+                      sx={{ "& .MuiBadge-badge": { fontSize: "0.62rem", minWidth: 16, height: 16 } }}
+                    >
+                      <FilterList sx={{ fontSize: 20 }} />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              {hasMyAppsSearchOptions && (
+                <Button
                   size="small"
-                  sx={{ width: { xs: "100%", sm: 150 } }}
-                  slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                  startIcon={<Close />}
+                  onClick={() => {
+                    setMyAppsSearch("");
+                    setMyAppsTimeline("all");
+                    setMyAppsFrom("");
+                    setMyAppsTo("");
+                    setMyAppsSort("newest");
+                  }}
+                  sx={{
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    color: "#6B7280",
+                    fontWeight: 700,
+                    transition: "transform 0.18s ease, background-color 0.18s ease",
+                    minHeight: 40,
+                    "&:hover": { transform: "translateY(-1px)", backgroundColor: "#F3F4F6" },
+                    "&:active": { transform: "translateY(0) scale(0.98)" },
+                    ...reduceMotionSx,
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+              {filteredMyApps.length < myApps.length && (
+                <Chip
+                  label={`${filteredMyApps.length} of ${myApps.length} applications`}
+                  size="small"
+                  sx={{ backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600, fontSize: "0.75rem", animation: `${scaleIn} 0.22s ease both`, ...reduceMotionSx }}
                 />
-              </>
-            )}
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
-              <InputLabel>Sort</InputLabel>
-              <Select
-                value={myAppsSort}
-                label="Sort"
-                onChange={(e) => setMyAppsSort(e.target.value)}
+              )}
+            </Box>
+
+            {showMyAppsAdvancedFilters && (
+              <Box
                 sx={{
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
-                  transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { backgroundColor: "#ffffff" },
-                  "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)" },
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: myAppsTimeline === "custom" ? "repeat(4, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))" },
+                  gap: 1.25,
+                  width: "100%",
                 }}
               >
-                <MenuItem value="newest">Newest first</MenuItem>
-                <MenuItem value="oldest">Oldest first</MenuItem>
-                <MenuItem value="role">Role A-Z</MenuItem>
-                <MenuItem value="status">Status A-Z</MenuItem>
-              </Select>
-            </FormControl>
-            {(myAppsSearch || myAppsTimeline !== "all") && (
-              <Button
-                size="small"
-                onClick={() => {
-                  setMyAppsSearch("");
-                  setMyAppsTimeline("all");
-                  setMyAppsFrom("");
-                  setMyAppsTo("");
-                }}
-                sx={{
-                  borderRadius: "8px",
-                  textTransform: "none",
-                  color: "#6B7280",
-                  fontWeight: 700,
-                  transition: "transform 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { transform: "translateY(-1px)", backgroundColor: "#F3F4F6" },
-                  "&:active": { transform: "translateY(0) scale(0.98)" },
-                  ...reduceMotionSx,
-                }}
-              >
-                Clear
-              </Button>
-            )}
-            {filteredMyApps.length < myApps.length && (
-              <Chip
-                label={`${filteredMyApps.length} of ${myApps.length} applications`}
-                size="small"
-                sx={{ backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600, fontSize: "0.75rem", animation: `${scaleIn} 0.22s ease both`, ...reduceMotionSx }}
-              />
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Timeline</InputLabel>
+                  <Select
+                    value={myAppsTimeline}
+                    label="Timeline"
+                    onChange={(e) => setMyAppsTimeline(e.target.value)}
+                    sx={{
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)" },
+                    }}
+                  >
+                    <MenuItem value="all">All dates</MenuItem>
+                    <MenuItem value="today">Today</MenuItem>
+                    <MenuItem value="week">This week</MenuItem>
+                    <MenuItem value="30d">30 days</MenuItem>
+                    <MenuItem value="custom">Custom</MenuItem>
+                  </Select>
+                </FormControl>
+                {myAppsTimeline === "custom" && (
+                  <>
+                    <TextField
+                      type="date"
+                      label="From"
+                      value={myAppsFrom}
+                      onChange={(e) => setMyAppsFrom(e.target.value)}
+                      size="small"
+                      fullWidth
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                    />
+                    <TextField
+                      type="date"
+                      label="To"
+                      value={myAppsTo}
+                      onChange={(e) => setMyAppsTo(e.target.value)}
+                      size="small"
+                      fullWidth
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                    />
+                  </>
+                )}
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Sort</InputLabel>
+                  <Select
+                    value={myAppsSort}
+                    label="Sort"
+                    onChange={(e) => setMyAppsSort(e.target.value)}
+                    sx={{
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)" },
+                    }}
+                  >
+                    <MenuItem value="newest">Newest first</MenuItem>
+                    <MenuItem value="oldest">Oldest first</MenuItem>
+                    <MenuItem value="role">Role A-Z</MenuItem>
+                    <MenuItem value="status">Status A-Z</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
             )}
           </Paper>
           <Paper
