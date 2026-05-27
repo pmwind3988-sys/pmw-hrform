@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useMsal } from "@azure/msal-react";
 import {
   Alert,
   Box,
@@ -43,6 +44,7 @@ import {
   fetchCareerPortalCards,
   updateCareerPortalCard,
 } from "../utils/careersService";
+import { ensureCareerPortalCardList } from "../utils/formBuilderSP";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { CareerPortalCard, JobListing } from "../types";
 
@@ -132,6 +134,11 @@ function targetIcon(card: CareerPortalCard) {
   if (card.targetType === "job") return <Work sx={{ fontSize: 14 }} />;
   if (card.targetType === "link") return <LinkIcon sx={{ fontSize: 14 }} />;
   return <AutoAwesome sx={{ fontSize: 14 }} />;
+}
+
+function isPortalCardStorageError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return message.includes("access denied") || (message.includes("career portal cards") && message.includes("not ready"));
 }
 
 function CardsLoadingSkeleton() {
@@ -504,6 +511,7 @@ function PortalCardDialog({
 }
 
 export default function AdminCareerPortalCardsPage() {
+  const { instance, accounts } = useMsal();
   const [cards, setCards] = useState<CareerPortalCard[]>([]);
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -567,16 +575,40 @@ export default function AdminCareerPortalCardsPage() {
     setDialogOpen(true);
   };
 
+  const ensurePortalCardStorage = async () => {
+    const account = accounts[0];
+    if (!account) {
+      throw new Error("No signed-in account is available to prepare SharePoint storage.");
+    }
+    const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
+    const result = await instance.acquireTokenSilent({
+      scopes: [`${origin}/AllSites.Manage`],
+      account,
+    });
+    await ensureCareerPortalCardList(result.accessToken);
+  };
+
   const handleSave = async (card: PortalCardForm) => {
     setSaving(true);
     try {
-      if (editCard) {
-        await updateCareerPortalCard(editCard.id, card);
-        setSnackbar({ message: "Card updated", severity: "success" });
-      } else {
+      const saveCard = async () => {
+        if (editCard) {
+          await updateCareerPortalCard(editCard.id, card);
+          return "Card updated";
+        }
         await createCareerPortalCard(card);
-        setSnackbar({ message: "Card added", severity: "success" });
+        return "Card added";
+      };
+
+      let successMessage: string;
+      try {
+        successMessage = await saveCard();
+      } catch (err) {
+        if (!isPortalCardStorageError(err)) throw err;
+        await ensurePortalCardStorage();
+        successMessage = await saveCard();
       }
+      setSnackbar({ message: successMessage, severity: "success" });
       setDialogOpen(false);
       setEditCard(null);
       await load();
@@ -608,7 +640,7 @@ export default function AdminCareerPortalCardsPage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))" }}>
       <CareerPortalHeader
         title="Manage Cards"
         subtitle="Control the carousel shown on the careers portal welcome card."

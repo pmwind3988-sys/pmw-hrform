@@ -40,6 +40,7 @@ import { DashboardProvider } from "./contexts/DashboardContext";
 
 
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
+const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
 
 function normalizeStatus(status: string | null): string {
   if (!status) return "pending";
@@ -615,7 +616,7 @@ if (decision === "guest") {
             path="/form/:formId"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <DynamicFormPage />
                 </Box>
               </ErrorBoundary>
@@ -626,7 +627,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <ApprovalDashboard />
                   </Box>
                 </ErrorBoundary>
@@ -638,7 +639,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <ResponseViewer />
                   </Box>
                 </ErrorBoundary>
@@ -690,7 +691,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <AdminJobsPage />
                   </Box>
                 </ErrorBoundary>
@@ -702,7 +703,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <AdminJobManagePage />
                   </Box>
                 </ErrorBoundary>
@@ -714,7 +715,7 @@ if (decision === "guest") {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <AdminCareerPortalCardsPage />
                   </Box>
                 </ErrorBoundary>
@@ -741,7 +742,7 @@ if (decision === "guest") {
             path="/eval/:token"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <EvaluationPage />
                 </Box>
               </ErrorBoundary>
@@ -751,7 +752,7 @@ if (decision === "guest") {
             path="/eval/:formSlug/:responseId/:layerNumber"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <EvaluationPage />
                 </Box>
               </ErrorBoundary>
@@ -761,7 +762,7 @@ if (decision === "guest") {
             path="/career-portal"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <CareersPage />
                 </Box>
               </ErrorBoundary>
@@ -771,7 +772,7 @@ if (decision === "guest") {
             path="/career-portal/:jobId/apply"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <JobApplyPage />
                 </Box>
               </ErrorBoundary>
@@ -785,7 +786,7 @@ if (decision === "guest") {
             path="/careers/:jobId/apply"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <JobApplyPage />
                 </Box>
               </ErrorBoundary>

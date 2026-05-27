@@ -3,9 +3,9 @@ import { Box, Chip, Skeleton, Typography } from "@mui/material";
 import type { CareerPortalCard } from "../../types";
 
 const DEFAULT_CARD_COLORS = {
-  start: "#0078D4",
-  end: "#6264A7",
-  accent: "#16A34A",
+  start: "#BFDDF4",
+  end: "#F7F5EF",
+  accent: "#FFF546",
 };
 const DEFAULT_CARD_IMAGE_OPACITY = 0.72;
 
@@ -21,9 +21,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#0078D4",
-    colorEnd: "#6264A7",
-    colorAccent: "#16A34A",
+    colorStart: "#BFDDF4",
+    colorEnd: "#F7F5EF",
+    colorAccent: "#FFF546",
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -40,9 +40,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#6264A7",
-    colorEnd: "#0078D4",
-    colorAccent: "#E67635",
+    colorStart: "#F7F5EF",
+    colorEnd: "#DCECF8",
+    colorAccent: "#FFF546",
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -59,9 +59,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#16A34A",
-    colorEnd: "#0078D4",
-    colorAccent: "#6264A7",
+    colorStart: "#EAF5FC",
+    colorEnd: "#BFDDF4",
+    colorAccent: "#FFF546",
     isSystemDefault: true,
     locked: true,
     source: "system",

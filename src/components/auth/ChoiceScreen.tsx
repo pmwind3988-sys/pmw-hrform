@@ -15,6 +15,7 @@ import {
 import { Login as LoginIcon, Person as PersonIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
+import { editorial, editorialShadow } from "../../theme/editorial";
 
 interface ChoiceScreenProps {
   onLogin: () => void;
@@ -34,7 +35,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        background: "#F6F8FB",
+        background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 48%, #F7F5EF 100%)",
         position: "relative",
         overflow: "hidden",
         padding: isMobile ? 2 : isTablet ? 3 : 4,
@@ -109,16 +110,16 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
         <Card
           sx={{
             width: "100%",
-            maxWidth: isMobile ? "100%" : 480,
+            maxWidth: isMobile ? "100%" : 560,
             mx: "auto",
-            borderRadius: "8px",
-            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
-            border: "1px solid rgba(0, 0, 0, 0.04)",
-            backgroundColor: "rgba(255, 255, 255, 0.92)",
-            backdropFilter: "blur(12px)",
+            borderRadius: "18px",
+            boxShadow: editorialShadow,
+            border: `1px solid ${editorial.ink}`,
+            backgroundColor: "rgba(255, 255, 255, 0.88)",
+            backdropFilter: "blur(10px)",
             transition: "box-shadow 0.2s ease, border-color 0.2s ease",
             "&:hover": {
-              boxShadow: "0 8px 40px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06)",
+              boxShadow: "0 18px 42px rgba(16, 16, 16, 0.14)",
             },
             animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
           }}
@@ -127,8 +128,9 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
           <Box
             sx={{
               height: 4,
-              background: "linear-gradient(90deg, #0078D4 0%, #6264A7 100%)",
-              borderRadius: "8px 8px 0 0",
+              background: editorial.yellow,
+              borderBottom: `1px solid ${editorial.ink}`,
+              borderRadius: "18px 18px 0 0",
             }}
           />
 
@@ -154,7 +156,8 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                   width: isMobile ? 88 : 104,
                   height: isMobile ? 88 : 104,
                   borderRadius: "50%",
-                  background: "radial-gradient(circle, rgba(0, 120, 212, 0.15) 0%, rgba(0, 120, 212, 0) 70%)",
+                background: editorial.blueWash,
+                border: `1px solid ${editorial.border}`,
                   zIndex: -1,
                 },
               }}
@@ -168,10 +171,12 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
               gutterBottom
               align="center"
               sx={{
-                fontWeight: 700,
-                color: "#111827",
+                fontFamily: "Georgia, 'Times New Roman', Times, serif",
+                fontWeight: 400,
+                color: editorial.ink,
                 letterSpacing: 0,
-                fontSize: isMobile ? "1.75rem" : "2.25rem",
+                fontSize: isMobile ? "2.6rem" : "4rem",
+                lineHeight: 0.98,
               }}
             >
               PMW HR Forms
@@ -184,8 +189,8 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                 mb: 4,
                 maxWidth: 380,
                 lineHeight: 1.6,
-                color: "#6B7280",
-                fontSize: "0.95rem",
+                color: editorial.ink,
+                fontSize: "1rem",
               }}
             >
               Sign in with your Microsoft 365 account to access your submission history and track approval status.
@@ -201,17 +206,17 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                   onLogin();
                 }}
                 sx={{
-                  backgroundColor: "#0078D4",
-                  color: "#ffffff",
-                  borderRadius: "8px",
+                  backgroundColor: editorial.black,
+                  color: editorial.white,
+                  borderRadius: 0,
                   py: 1.75,
                   fontSize: "1rem",
-                  fontWeight: 500,
-                  boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
+                  fontWeight: 800,
+                  boxShadow: "none",
                   transition: "background-color 0.2s ease, box-shadow 0.2s ease",
                   "&:hover": {
-                    backgroundColor: "#0068C4",
-                    boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
+                    backgroundColor: "#333333",
+                    boxShadow: "none",
                   },
                 }}
               >
@@ -225,7 +230,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                     sx={{
                       color: "rgba(17, 24, 39, 0.3)",
                       "&.Mui-checked": {
-                        color: "#0078D4",
+                        color: editorial.black,
                       },
                     }}
                   />
@@ -251,18 +256,18 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                 startIcon={<PersonIcon />}
                 onClick={onGuest}
                 sx={{
-                  borderColor: "rgba(17, 24, 39, 0.15)",
-                  color: "#6B7280",
-                  borderRadius: "8px",
+                  borderColor: editorial.black,
+                  color: editorial.black,
+                  borderRadius: 0,
                   py: 1.75,
                   fontSize: "1rem",
                   fontWeight: 500,
                   borderWidth: "1.5px",
                   transition: "background-color 0.2s ease, border-color 0.2s ease",
                   "&:hover": {
-                    borderColor: "rgba(0, 120, 212, 0.5)",
-                    backgroundColor: "rgba(0, 120, 212, 0.04)",
-                    color: "#0078D4",
+                    borderColor: editorial.black,
+                    backgroundColor: editorial.yellow,
+                    color: editorial.black,
                   },
                 }}
               >
@@ -275,7 +280,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
               align="center"
               sx={{
                 mt: 4,
-                color: "#9CA3AF",
+                color: editorial.muted,
                 fontSize: "0.75rem",
                 lineHeight: 1.6,
                 maxWidth: 380,
@@ -283,7 +288,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
             >
               Only PMW internal M365 accounts are permitted. Guests can browse publicly available forms.
               {" "}
-              <Box component="a" href="/privacy" sx={{ color: "#0078D4", fontWeight: 700, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}>
+              <Box component="a" href="/privacy" sx={{ color: editorial.ink, fontWeight: 800, textDecoration: "underline" }}>
                 Privacy Notice
               </Box>
             </Typography>

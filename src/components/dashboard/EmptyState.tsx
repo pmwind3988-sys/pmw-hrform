@@ -1,5 +1,6 @@
 import { Box, Stack, Typography } from "@mui/material";
 import { Description as DescriptionIcon } from "@mui/icons-material";
+import { editorial } from "../../theme/editorial";
 
 interface EmptyStateProps {
   hasFilters: boolean;
@@ -8,19 +9,32 @@ interface EmptyStateProps {
 export default function EmptyState({ hasFilters }: EmptyStateProps) {
   return (
     <Box sx={{ py: 8, display: "flex", justifyContent: "center" }}>
-      <Stack spacing={2} sx={{ alignItems: "center", maxWidth: 400, textAlign: "center" }}>
+      <Stack
+        spacing={2}
+        sx={{
+          alignItems: "center",
+          maxWidth: 440,
+          textAlign: "center",
+          backgroundColor: "rgba(255,255,255,0.62)",
+          border: `1px dashed ${editorial.ink}`,
+          borderRadius: "14px",
+          px: { xs: 3, sm: 5 },
+          py: 5,
+        }}
+      >
         <DescriptionIcon
           sx={{
             fontSize: 64,
-            color: "rgba(0,0,0,0.12)",
+            color: editorial.ink,
           }}
         />
 
         <Typography
           variant="h5"
           sx={{
-            fontWeight: 300,
-            color: "#1a1a2e",
+            fontFamily: "Georgia, 'Times New Roman', Times, serif",
+            fontWeight: 400,
+            color: editorial.ink,
             letterSpacing: 0,
           }}
         >
@@ -30,7 +44,7 @@ export default function EmptyState({ hasFilters }: EmptyStateProps) {
         <Typography
           variant="body2"
           sx={{
-            color: "rgba(0,0,0,0.45)",
+            color: editorial.muted,
             lineHeight: 1.7,
           }}
         >

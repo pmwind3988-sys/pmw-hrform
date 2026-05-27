@@ -11,6 +11,7 @@ import {
 import { Login as LoginIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
+import { editorial, editorialShadow } from "../../theme/editorial";
 
 interface GuestLandingProps {
   onLogin: () => void;
@@ -29,7 +30,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        background: "#F6F8FB",
+        background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 48%, #F7F5EF 100%)",
         position: "relative",
         overflow: "hidden",
         padding: isMobile ? 2 : 4,
@@ -127,16 +128,16 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
         <Card
           sx={{
             width: "100%",
-            maxWidth: isMobile ? "100%" : 480,
+            maxWidth: isMobile ? "100%" : 560,
             mx: "auto",
-            borderRadius: "8px",
-            boxShadow: "0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)",
-            border: "1px solid rgba(0, 0, 0, 0.04)",
-            backgroundColor: "rgba(255, 255, 255, 0.92)",
-            backdropFilter: "blur(12px)",
+            borderRadius: "18px",
+            boxShadow: editorialShadow,
+            border: `1px solid ${editorial.ink}`,
+            backgroundColor: "rgba(255, 255, 255, 0.88)",
+            backdropFilter: "blur(10px)",
             transition: "box-shadow 0.2s ease, border-color 0.2s ease",
             "&:hover": {
-              boxShadow: "0 8px 40px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06)",
+              boxShadow: "0 18px 42px rgba(16, 16, 16, 0.14)",
             },
             animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
           }}
@@ -145,8 +146,9 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
           <Box
             sx={{
               height: 4,
-              background: "linear-gradient(90deg, #0078D4 0%, #6264A7 100%)",
-              borderRadius: "8px 8px 0 0",
+              background: editorial.yellow,
+              borderBottom: `1px solid ${editorial.ink}`,
+              borderRadius: "18px 18px 0 0",
             }}
           />
 
@@ -165,13 +167,13 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
               sx={{
                 alignSelf: "flex-start",
                 mb: 3,
-                color: "#6B7280",
+                color: editorial.muted,
                 fontSize: "0.85rem",
                 fontWeight: 500,
                 textTransform: "none",
                 "&:hover": {
-                  color: "#0078D4",
-                  backgroundColor: "rgba(0, 120, 212, 0.04)",
+                  color: editorial.ink,
+                  backgroundColor: editorial.blueWash,
                 },
               }}
             >
@@ -192,7 +194,8 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                   width: 120,
                   height: 120,
                   borderRadius: "50%",
-                  background: "radial-gradient(circle, rgba(0, 120, 212, 0.1) 0%, rgba(0, 120, 212, 0) 70%)",
+                  background: editorial.blueWash,
+                  border: `1px solid ${editorial.border}`,
                   zIndex: -1,
                 },
               }}
@@ -205,10 +208,12 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
               component="h2"
               align="center"
               sx={{
-                fontWeight: 700,
-                color: "#111827",
+                fontFamily: "Georgia, 'Times New Roman', Times, serif",
+                fontWeight: 400,
+                color: editorial.ink,
                 letterSpacing: 0,
-                fontSize: isMobile ? "1.75rem" : "2.25rem",
+                fontSize: isMobile ? "2.5rem" : "3.6rem",
+                lineHeight: 1,
                 mb: 2,
               }}
             >
@@ -219,7 +224,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
               variant="body1"
               align="center"
               sx={{
-                color: "#6B7280",
+                color: editorial.ink,
                 lineHeight: 1.6,
                 maxWidth: 480,
                 mb: 4,
@@ -234,18 +239,18 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
               startIcon={<LoginIcon />}
               onClick={onLogin}
               sx={{
-                backgroundColor: "#0078D4",
-                color: "#ffffff",
-                borderRadius: "8px",
+                backgroundColor: editorial.black,
+                color: editorial.white,
+                borderRadius: 0,
                 py: 1.75,
                 px: 4,
                 fontSize: "1rem",
-                fontWeight: 500,
-                boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
+                fontWeight: 800,
+                boxShadow: "none",
                 transition: "background-color 0.2s ease, box-shadow 0.2s ease",
                 "&:hover": {
-                  backgroundColor: "#0068C4",
-                  boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
+                  backgroundColor: "#333333",
+                  boxShadow: "none",
                 },
               }}
             >
@@ -255,10 +260,10 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
             <Typography
               variant="caption"
               align="center"
-              sx={{ mt: 3, color: "#9CA3AF", fontSize: "0.75rem", lineHeight: 1.6, maxWidth: 360 }}
+              sx={{ mt: 3, color: editorial.muted, fontSize: "0.75rem", lineHeight: 1.6, maxWidth: 360 }}
             >
               Public form submissions may contain personal data.{" "}
-              <Box component="a" href="/privacy" sx={{ color: "#0078D4", fontWeight: 700, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}>
+              <Box component="a" href="/privacy" sx={{ color: editorial.ink, fontWeight: 800, textDecoration: "underline" }}>
                 Privacy Notice
               </Box>
             </Typography>

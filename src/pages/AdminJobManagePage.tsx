@@ -68,6 +68,35 @@ const EMPLOYMENT_TYPES = ["Full-Time", "Part-Time", "Contract", "Internship"];
 const FIELD_TYPES: CustomFieldDefinition["type"][] = ["text", "textarea", "number", "choice", "date"];
 type JobSortOption = "newest" | "title" | "department" | "applicants" | "closing";
 
+const paginationSx = {
+  "& .MuiTablePagination-toolbar": {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: { xs: 0.75, sm: 1.25 },
+    px: { xs: 1, sm: 2 },
+  },
+  "& .MuiTablePagination-spacer": {
+    display: "none",
+  },
+  "& .MuiTablePagination-selectLabel": {
+    m: 0,
+    mr: 0.75,
+    flexShrink: 0,
+  },
+  "& .MuiTablePagination-input": {
+    flexShrink: 0,
+  },
+  "& .MuiTablePagination-displayedRows": {
+    m: 0,
+    ml: "auto",
+    flexShrink: 0,
+  },
+  "& .MuiTablePagination-actions": {
+    ml: 0,
+    flexShrink: 0,
+  },
+};
+
 const EMPTY_JOB = {
   title: "",
   jobDescription: "",
@@ -830,7 +859,7 @@ export default function AdminJobManagePage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))" }}>
       <CareerPortalHeader
         title="Manage Opportunities"
         subtitle="Create and maintain internal advancement openings."
@@ -1134,6 +1163,8 @@ export default function AdminJobManagePage() {
               page={page}
               onPageChange={(_, nextPage) => setPage(nextPage)}
               rowsPerPage={rowsPerPage}
+              labelRowsPerPage="Rows"
+              sx={paginationSx}
               onRowsPerPageChange={(e) => {
                 setRowsPerPage(Number.parseInt(e.target.value, 10));
                 setPage(0);

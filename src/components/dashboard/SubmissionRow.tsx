@@ -8,6 +8,7 @@ import { ChevronRight as ChevronRightIcon } from "@mui/icons-material";
 import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
+import { editorial, editorialShadow } from "../../theme/editorial";
 
 interface SubmissionRowProps {
   item: Submission;
@@ -26,8 +27,8 @@ export default function SubmissionRow({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const meta = listMetaMap[item.listTitle] ?? {
     icon: "📋",
-    color: "#6264A7",
-    pale: "rgba(98,100,167,0.1)",
+    color: editorial.ink,
+    pale: editorial.blueWash,
     category: "General",
   };
 
@@ -45,22 +46,22 @@ export default function SubmissionRow({
         onClick={() => onView(item)}
         sx={{
           backgroundColor: "#ffffff",
-          borderRadius: "8px",
-          border: "1px solid rgba(17, 24, 39, 0.08)",
+          borderRadius: "14px",
+          border: `1px solid ${editorial.border}`,
           p: 2,
           mb: 2,
           cursor: "pointer",
           transition: "box-shadow 0.2s ease, border-color 0.2s ease",
-          boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
+          boxShadow: "none",
           "&:hover": {
-            borderColor: "rgba(0, 120, 212, 0.2)",
-            boxShadow: "0 8px 20px rgba(17, 24, 39, 0.08)",
+            borderColor: editorial.ink,
+            boxShadow: editorialShadow,
           },
         }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827", mb: 0.5 }}>
+            <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5 }}>
               {item.title}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
@@ -68,8 +69,8 @@ export default function SubmissionRow({
                 variant="caption"
                 sx={{
                   fontFamily: "monospace",
-                  backgroundColor: "rgba(98,100,167,0.08)",
-                  color: "#6264A7",
+                  backgroundColor: editorial.yellow,
+                  color: editorial.ink,
                   px: 1,
                   py: 0.25,
                   borderRadius: "6px",
@@ -79,12 +80,12 @@ export default function SubmissionRow({
               >
                 {item.formId}
               </Typography>
-              <Typography variant="caption" sx={{ color: "#6B7280" }}>
+              <Typography variant="caption" sx={{ color: editorial.muted }}>
                 ID: {item.submissionId}
               </Typography>
             </Box>
           </Box>
-          <ChevronRightIcon sx={{ color: "#6B7280", fontSize: 20, transition: "transform 0.2s ease" }} />
+          <ChevronRightIcon sx={{ color: editorial.muted, fontSize: 20, transition: "transform 0.2s ease" }} />
         </Box>
         <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
           <ListBadge title={item.listTitle} icon={meta.icon} color={meta.color} pale={meta.pale} />
@@ -94,8 +95,8 @@ export default function SubmissionRow({
               variant="caption"
               sx={{
                 fontFamily: "monospace",
-                backgroundColor: "rgba(98,100,167,0.08)",
-                color: "#6264A7",
+                backgroundColor: editorial.yellow,
+                color: editorial.ink,
                 px: 1,
                 py: 0.25,
                 borderRadius: "6px",
@@ -108,7 +109,7 @@ export default function SubmissionRow({
             </Typography>
           )}
         </Box>
-        <Typography variant="caption" sx={{ color: "#6B7280", display: "block" }}>
+        <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
           {submittedAt} · {item.submittedByEmail}
         </Typography>
       </Box>
@@ -126,21 +127,21 @@ export default function SubmissionRow({
         py: 2,
         backgroundColor: "#ffffff",
         borderRadius: 0,
-        borderBottom: "1px solid rgba(0,0,0,0.04)",
+        borderBottom: `1px solid ${editorial.border}`,
         alignItems: "center",
         cursor: "pointer",
         transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         borderLeft: "3px solid transparent",
         "&:hover": {
-          backgroundColor: "#F8F9FC",
-          borderLeft: "3px solid #0078D4",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          backgroundColor: editorial.blueWash,
+          borderLeft: `3px solid ${editorial.ink}`,
+          boxShadow: "none",
         },
       }}
     >
       {/* Submission */}
       <Box>
-        <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827", mb: 0.5 }}>
+        <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5 }}>
           {item.title}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
@@ -148,8 +149,8 @@ export default function SubmissionRow({
             variant="caption"
             sx={{
               fontFamily: "monospace",
-              backgroundColor: "rgba(98,100,167,0.08)",
-              color: "#6264A7",
+              backgroundColor: editorial.yellow,
+              color: editorial.ink,
               px: 1,
               py: 0.25,
               borderRadius: "6px",
@@ -159,7 +160,7 @@ export default function SubmissionRow({
           >
             {item.formId}
           </Typography>
-          <Typography variant="caption" sx={{ color: "#6B7280" }}>
+          <Typography variant="caption" sx={{ color: editorial.muted }}>
             {submittedAt}
           </Typography>
         </Box>
@@ -170,7 +171,7 @@ export default function SubmissionRow({
         <Typography
           variant="body2"
           sx={{
-            color: "#6B7280",
+            color: editorial.muted,
             maxWidth: 180,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -185,7 +186,7 @@ export default function SubmissionRow({
       <ListBadge title={item.listTitle} icon={meta.icon} color={meta.color} pale={meta.pale} />
 
       {/* Category */}
-      <Typography variant="body2" sx={{ color: "#6B7280" }}>
+      <Typography variant="body2" sx={{ color: editorial.muted }}>
         {meta.category}
       </Typography>
 
@@ -197,8 +198,8 @@ export default function SubmissionRow({
             variant="caption"
             sx={{
               fontFamily: "monospace",
-              backgroundColor: "rgba(98,100,167,0.08)",
-              color: "#6264A7",
+              backgroundColor: editorial.yellow,
+              color: editorial.ink,
               px: 1,
               py: 0.25,
               borderRadius: "6px",
@@ -216,7 +217,7 @@ export default function SubmissionRow({
       {/* Chevron */}
       <ChevronRightIcon
         sx={{
-          color: "#6B7280",
+          color: editorial.muted,
           fontSize: 20,
           transition: "transform 0.2s ease",
           ".MuiBox-root:hover &": {

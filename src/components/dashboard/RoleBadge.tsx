@@ -10,14 +10,14 @@ export default function RoleBadge({ isAdmin }: RoleBadgeProps) {
   if (isAdmin) {
     return (
       <Chip
-        icon={<ShieldIcon sx={{ color: "#b45309 !important" }} />}
+        icon={<ShieldIcon sx={{ color: "#101010 !important" }} />}
         label="ADMIN"
         size="small"
         sx={{
-          backgroundColor: "rgba(245,158,11,0.1)",
-          color: "#b45309",
-          border: "1px solid rgba(245,158,11,0.2)",
-          fontWeight: 600,
+          backgroundColor: "#FFF546",
+          color: "#101010",
+          border: "1px solid #101010",
+          fontWeight: 800,
           letterSpacing: 0,
           fontSize: "0.7rem",
         }}
@@ -27,14 +27,14 @@ export default function RoleBadge({ isAdmin }: RoleBadgeProps) {
 
   return (
     <Chip
-      icon={<PersonIcon sx={{ color: "#0078D4 !important" }} />}
+      icon={<PersonIcon sx={{ color: "#101010 !important" }} />}
       label="USER"
       size="small"
       sx={{
-        backgroundColor: "rgba(0,120,212,0.08)",
-        color: "#0078D4",
-        border: "1px solid rgba(0,120,212,0.15)",
-        fontWeight: 600,
+        backgroundColor: "#EAF5FC",
+        color: "#101010",
+        border: "1px solid #101010",
+        fontWeight: 800,
         letterSpacing: 0,
         fontSize: "0.7rem",
       }}

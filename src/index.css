@@ -4,12 +4,26 @@
   box-sizing: border-box;
 }
 
+:root {
+  --pmw-ink: #101010;
+  --pmw-muted: #5f646d;
+  --pmw-paper: #f7f5ef;
+  --pmw-panel: #ffffff;
+  --pmw-sky: #bfddf4;
+  --pmw-sky-soft: #dcecf8;
+  --pmw-blue-wash: #eaf5fc;
+  --pmw-yellow: #fff546;
+  --pmw-border: #d6dce5;
+  --app-bg-fallback: linear-gradient(180deg, #bfddf4 0%, #dcecf8 45%, #f7f5ef 100%);
+}
+
 body {
   margin: 0;
-  font-family: "DM Sans", "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  font-family: "Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #F6F8FB;
+  background: var(--app-bg, var(--app-bg-fallback));
+  color: var(--pmw-ink);
 }
 
 #root {
@@ -21,4 +35,8 @@ svg,
 canvas,
 video {
   max-width: 100%;
+}
+
+a {
+  color: inherit;
 }

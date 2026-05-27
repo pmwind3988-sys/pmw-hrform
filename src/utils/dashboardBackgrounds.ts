@@ -21,12 +21,12 @@ export interface DashboardBackgroundSetting {
 
 const CSS_VAR = "--app-bg";
 const FALLBACK_CSS_VAR = "--app-bg-fallback";
-const DEFAULT_FALLBACK = "#F6F8FB";
+const DEFAULT_FALLBACK = "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%)";
 export const DEFAULT_IMAGE_OPACITY = 0.22;
 
 function clampImageOpacity(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_IMAGE_OPACITY;
-  return Math.min(0.75, Math.max(0, value));
+  return Math.min(1, Math.max(0, value));
 }
 
 export function normalizeImageOpacity(value: unknown): number {
@@ -39,23 +39,23 @@ function overlayAlpha(imageOpacity: number, scale: number): string {
 }
 
 function photo(url: string, imageOpacity = DEFAULT_IMAGE_OPACITY): string {
-  return `linear-gradient(180deg, rgba(246,248,251,${overlayAlpha(imageOpacity, 0.55)}) 0%, rgba(246,248,251,${overlayAlpha(imageOpacity, 1)}) 42%, rgba(246,248,251,${overlayAlpha(imageOpacity, 0.45)}) 100%), url("${url}") center/cover no-repeat`;
+  return `linear-gradient(180deg, rgba(220,236,248,${overlayAlpha(imageOpacity, 0.55)}) 0%, rgba(247,245,239,${overlayAlpha(imageOpacity, 1)}) 42%, rgba(220,236,248,${overlayAlpha(imageOpacity, 0.45)}) 100%), url("${url}") center/cover no-repeat`;
 }
 
 export const DASHBOARD_BACKGROUNDS: DashboardBackgroundDef[] = [
   {
     id: "clarity",
-    label: "Clarity",
+    label: "Editorial Sky",
     category: "Quiet",
-    css: "linear-gradient(180deg, #F6F8FB 0%, #EEF5FB 52%, #F8FAFC 100%)",
-    preview: "linear-gradient(180deg, #F6F8FB 0%, #EEF5FB 52%, #F8FAFC 100%)",
+    css: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%)",
+    preview: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%)",
   },
   {
     id: "paper-grid",
     label: "Paper Grid",
     category: "Quiet",
-    css: "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(246,248,251,0.98) 100%), repeating-linear-gradient(0deg, transparent 0, transparent 27px, rgba(0,120,212,0.05) 28px), repeating-linear-gradient(90deg, transparent 0, transparent 27px, rgba(17,24,39,0.04) 28px)",
-    preview: "linear-gradient(135deg, #F8FAFC 0%, #EAF2FA 100%)",
+    css: "linear-gradient(180deg, rgba(251,250,245,0.96) 0%, rgba(234,245,252,0.96) 100%), repeating-linear-gradient(0deg, transparent 0, transparent 27px, rgba(16,16,16,0.04) 28px), repeating-linear-gradient(90deg, transparent 0, transparent 27px, rgba(16,16,16,0.035) 28px)",
+    preview: "linear-gradient(135deg, #FBFAF5 0%, #EAF5FC 100%)",
   },
   {
     id: "workspace",

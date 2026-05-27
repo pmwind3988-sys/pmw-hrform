@@ -231,7 +231,7 @@ export default function BackgroundPicker({
               <Slider
                 value={Math.round(imageOpacity * 100)}
                 min={0}
-                max={75}
+                max={100}
                 step={1}
                 onChange={(_, value) => {
                   const nextValue = Array.isArray(value) ? value[0] : value;

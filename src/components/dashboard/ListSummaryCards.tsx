@@ -1,6 +1,7 @@
 import { Box, Grid, Typography, IconButton } from "@mui/material";
 import { Description as DescriptionIcon, Edit as EditIcon, ArrowForward as ArrowForwardIcon } from "@mui/icons-material";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
+import { editorial, editorialShadow } from "../../theme/editorial";
 
 interface ListSummaryCardsProps {
   submissions: Submission[];
@@ -22,8 +23,8 @@ export default function ListSummaryCards({
       {visibleLists.map((list) => {
         const meta = listMetaMap[list.title] ?? {
           icon: "📋",
-          color: "#6264A7",
-          pale: "rgba(98,100,167,0.1)",
+          color: editorial.ink,
+          pale: editorial.blueWash,
           category: "General",
         };
         const count = submissions.filter((s) => s.listTitle === list.title).length;
@@ -52,16 +53,16 @@ export default function ListSummaryCards({
             <Box
               sx={{
                 backgroundColor: "#ffffff",
-                borderRadius: "8px",
-                border: "1px solid rgba(17, 24, 39, 0.08)",
-                boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
+                borderRadius: "14px",
+                border: `1px solid ${editorial.border}`,
+                boxShadow: "none",
                 p: { xs: 2, sm: 2.5 },
                 pt: isAdmin ? { xs: 2.5, sm: 3 } : { xs: 2, sm: 2.5 },
                 position: "relative",
                 transition: "box-shadow 0.2s ease, border-color 0.2s ease",
                 "&:hover": {
-                  boxShadow: "0 8px 20px rgba(17, 24, 39, 0.08)",
-                  borderColor: "rgba(17, 24, 39, 0.12)",
+                  boxShadow: editorialShadow,
+                  borderColor: editorial.ink,
                 },
               }}
             >
@@ -70,12 +71,12 @@ export default function ListSummaryCards({
                   sx={{
                     width: 48,
                     height: 48,
-                    borderRadius: "8px",
-                    backgroundColor: `${meta.color}12`,
+                    borderRadius: "50%",
+                    backgroundColor: editorial.blueWash,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    border: `1px solid ${meta.color}20`,
+                    border: `1px solid ${editorial.border}`,
                   }}
                 >
                   <DescriptionIcon sx={{ fontSize: 22, color: meta.color }} />
@@ -83,11 +84,11 @@ export default function ListSummaryCards({
                 <Box sx={{ flex: 1 }}>
                   <Typography
                     variant="h6"
-                    sx={{ fontWeight: 600, color: "#111827", lineHeight: 1.2, mb: 0.25 }}
+                    sx={{ fontWeight: 800, color: editorial.ink, lineHeight: 1.2, mb: 0.25 }}
                   >
                     {list.title}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 500 }}>
+                  <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
                     {meta.category}
                   </Typography>
                 </Box>
@@ -100,8 +101,8 @@ export default function ListSummaryCards({
                       top: 12,
                       right: 12,
                       borderRadius: "8px",
-                      backgroundColor: "rgba(98, 100, 167, 0.08)",
-                      color: "#6264A7",
+                      backgroundColor: editorial.yellow,
+                      color: editorial.ink,
                       opacity: 0,
                       transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                       "&:hover": {
@@ -122,7 +123,7 @@ export default function ListSummaryCards({
                 variant="h2"
                 sx={{
                   fontWeight: 700,
-                  color: "#111827",
+                  color: editorial.ink,
                   letterSpacing: 0,
                   textAlign: "center",
                   fontSize: "2.25rem",
@@ -177,7 +178,7 @@ export default function ListSummaryCards({
               ) : (
                 <Typography
                   variant="body2"
-                  sx={{ color: "#6B7280", fontStyle: "italic", mb: isAdmin ? 2 : 0, textAlign: "center" }}
+                  sx={{ color: editorial.muted, fontStyle: "italic", mb: isAdmin ? 2 : 0, textAlign: "center" }}
                 >
                   No submissions
                 </Typography>
@@ -190,7 +191,7 @@ export default function ListSummaryCards({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 0.5,
-                    color: "#6B7280",
+                    color: editorial.muted,
                     fontSize: "0.75rem",
                     fontWeight: 500,
                     opacity: 0,

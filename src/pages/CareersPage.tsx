@@ -34,6 +34,7 @@ import {
 } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import {
+  ArrowBack,
   ArrowForward,
   LocationOn,
   CalendarToday,
@@ -53,6 +54,7 @@ import { fetchCareersPortalData, fetchMyApplications } from "../utils/careersSer
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import type { JobListing, JobAdminApplication, CareerPortalCard } from "../types";
+import { editorial, editorialShadow } from "../theme/editorial";
 
 const fadeInUp = keyframes`
   from {
@@ -99,6 +101,35 @@ const reduceMotionSx = {
   },
 };
 
+const paginationSx = {
+  "& .MuiTablePagination-toolbar": {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: { xs: 0.75, sm: 1.25 },
+    px: { xs: 1, sm: 2 },
+  },
+  "& .MuiTablePagination-spacer": {
+    display: "none",
+  },
+  "& .MuiTablePagination-selectLabel": {
+    m: 0,
+    mr: 0.75,
+    flexShrink: 0,
+  },
+  "& .MuiTablePagination-input": {
+    flexShrink: 0,
+  },
+  "& .MuiTablePagination-displayedRows": {
+    m: 0,
+    ml: "auto",
+    flexShrink: 0,
+  },
+  "& .MuiTablePagination-actions": {
+    ml: 0,
+    flexShrink: 0,
+  },
+};
+
 function staggerDelay(index: number, step = 55, max = 440): string {
   return `${Math.min(index * step, max)}ms`;
 }
@@ -115,12 +146,12 @@ function formatDate(dateStr: string | null): string {
 
 function getEmploymentTypeColor(type: string): string {
   const map: Record<string, string> = {
-    "Full-time": "#0078D4",
-    "Part-time": "#6264A7",
-    Contract: "#E67635",
-    Internship: "#498205",
+    "Full-time": "#101010",
+    "Part-time": "#5F646D",
+    Contract: "#805800",
+    Internship: "#107C10",
   };
-  return map[type] || "#6B7280";
+  return map[type] || "#5F646D";
 }
 
 function getThisWeekStart(): Date {
@@ -157,12 +188,12 @@ function JobCard({
   return (
     <Card
       sx={{
-        borderRadius: "8px",
+        borderRadius: "18px",
         position: "relative",
         overflow: "hidden",
         height: "100%",
-        border: "1px solid rgba(17, 24, 39, 0.08)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+        border: `1px solid ${editorial.border}`,
+        boxShadow: "none",
         transition: "transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, opacity 0.22s ease",
         animation: `${fadeInUp} 0.42s ease both`,
         animationDelay: staggerDelay(index),
@@ -176,7 +207,7 @@ function JobCard({
           left: 0,
           right: 0,
           height: 3,
-          background: "linear-gradient(90deg, #0078D4, #6264A7, #16A34A)",
+          background: editorial.yellow,
           transform: "scaleX(0)",
           transformOrigin: "left",
           transition: "transform 0.24s ease",
@@ -192,8 +223,8 @@ function JobCard({
         },
         "&:hover": {
           transform: "translateY(-5px)",
-          borderColor: "rgba(0, 120, 212, 0.34)",
-          boxShadow: "0 12px 30px rgba(17,24,39,0.11), 0 4px 10px rgba(0,120,212,0.08)",
+          borderColor: editorial.ink,
+          boxShadow: editorialShadow,
           opacity: 1,
           "&::before": {
             transform: "scaleX(1)",
@@ -203,14 +234,14 @@ function JobCard({
             opacity: 1,
           },
           "& .job-card-title": {
-            color: "#005A9E",
+            color: editorial.ink,
           },
           "& .job-card-cta": {
-            color: "#005A9E",
+            color: editorial.ink,
             transform: "translateX(3px)",
           },
           "& .job-card-icon": {
-            color: "#0078D4",
+            color: editorial.ink,
             transform: "scale(1.08)",
           },
         },
@@ -218,7 +249,7 @@ function JobCard({
           transform: "translateY(-2px) scale(0.99)",
         },
         "&:focus-visible": {
-          outline: "3px solid rgba(0, 120, 212, 0.22)",
+          outline: `3px solid ${editorial.yellow}`,
           outlineOffset: 3,
         },
         ...reduceMotionSx,
@@ -234,99 +265,132 @@ function JobCard({
       tabIndex={0}
       aria-label={`View ${job.title}`}
     >
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}>
-          <Typography
-            className="job-card-title"
-            variant="h6"
-            sx={{ fontWeight: 700, color: "#111827", fontSize: "1.1rem", lineHeight: 1.3, transition: "color 0.2s ease" }}
-          >
-            {job.title}
-          </Typography>
-          <Chip
-            label={job.employmentType}
-            size="small"
-            sx={{
-              backgroundColor: `${getEmploymentTypeColor(job.employmentType)}14`,
-              color: getEmploymentTypeColor(job.employmentType),
-              fontWeight: 600,
-              fontSize: "0.7rem",
-              borderRadius: "8px",
-              ml: 1,
-              flexShrink: 0,
-            }}
-          />
-        </Box>
-
-        <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mb: 2 }}>
-          <Chip
-            label={job.department}
-            size="small"
-            sx={{
-              backgroundColor: "#6264A7",
-              color: "#ffffff",
-              fontWeight: 500,
-              fontSize: "0.7rem",
-              borderRadius: "8px",
-            }}
-          />
-          {isApplied && (
-            <Chip
-              label="Already Submitted"
-              size="small"
-              sx={{
-                backgroundColor: "#E6F4EA",
-                color: "#34A853",
-                fontWeight: 600,
-                fontSize: "0.65rem",
-                borderRadius: "8px",
-              }}
-            />
-          )}
-        </Box>
-
-        {job.location && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
-            <LocationOn className="job-card-icon" sx={{ fontSize: 14, color: "#6B7280", transition: "transform 0.2s ease, color 0.2s ease" }} />
-            <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
-              {job.location}
-            </Typography>
-          </Box>
-        )}
-
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          {job.closingDate && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <CalendarToday className="job-card-icon" sx={{ fontSize: 12, color: "#9CA3AF", transition: "transform 0.2s ease, color 0.2s ease" }} />
-              <Typography variant="caption" sx={{ color: "#9CA3AF" }}>
-                Closing {formatDate(job.closingDate)}
-              </Typography>
-            </Box>
-          )}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: "auto" }}>
-            <People className="job-card-icon" sx={{ fontSize: 12, color: "#9CA3AF", transition: "transform 0.2s ease, color 0.2s ease" }} />
-            <Typography variant="caption" sx={{ color: "#9CA3AF" }}>
-              {job.applicationCount} {job.applicationCount === 1 ? "applicant" : "applicants"}
-            </Typography>
-          </Box>
-        </Box>
+      <CardContent sx={{ p: { xs: 2.25, md: 2.75 }, "&:last-child": { pb: { xs: 2.25, md: 2.75 } } }}>
         <Box
-          className="job-card-cta"
           sx={{
-            mt: 2.25,
-            pt: 1.75,
-            borderTop: "1px solid rgba(17, 24, 39, 0.08)",
-            color: "#0078D4",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 0.5,
-            fontWeight: 700,
-            fontSize: "0.82rem",
-            transition: "transform 0.2s ease, color 0.2s ease",
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(230px, 280px)" },
+            gap: { xs: 2, md: 3 },
+            alignItems: { xs: "stretch", md: "center" },
           }}
         >
-          View role
-          <ArrowForward sx={{ fontSize: 16 }} />
+          <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25, flexWrap: "wrap", mb: 1.25 }}>
+              <Typography
+                className="job-card-title"
+                variant="h6"
+                sx={{
+                  flex: "1 1 320px",
+                  minWidth: 0,
+                  fontWeight: 800,
+                  color: editorial.ink,
+                  fontSize: { xs: "1.08rem", md: "1.2rem" },
+                  lineHeight: 1.25,
+                  wordBreak: "break-word",
+                  transition: "color 0.2s ease",
+                }}
+              >
+                {job.title}
+              </Typography>
+              <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: { xs: "flex-start", md: "flex-end" } }}>
+                <Chip
+                  label={job.department}
+                  size="small"
+                  sx={{
+                    backgroundColor: editorial.yellow,
+                    color: editorial.ink,
+                    fontWeight: 800,
+                    fontSize: "0.7rem",
+                    borderRadius: "999px",
+                    border: `1px solid ${editorial.ink}`,
+                  }}
+                />
+                {isApplied && (
+                  <Chip
+                    label="Already Submitted"
+                    size="small"
+                    sx={{
+                      backgroundColor: "#E6F4EA",
+                      color: "#34A853",
+                      fontWeight: 700,
+                      fontSize: "0.65rem",
+                      borderRadius: "999px",
+                    }}
+                  />
+                )}
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.75 }, flexWrap: "wrap" }}>
+              {job.location && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                  <LocationOn className="job-card-icon" sx={{ fontSize: 15, color: editorial.muted, transition: "transform 0.2s ease, color 0.2s ease" }} />
+                  <Typography variant="body2" sx={{ color: editorial.muted, fontSize: "0.82rem", overflowWrap: "anywhere" }}>
+                    {job.location}
+                  </Typography>
+                </Box>
+              )}
+              {job.closingDate && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <CalendarToday className="job-card-icon" sx={{ fontSize: 14, color: editorial.softMuted, transition: "transform 0.2s ease, color 0.2s ease" }} />
+                  <Typography variant="caption" sx={{ color: editorial.softMuted, fontSize: "0.78rem" }}>
+                    Closing {formatDate(job.closingDate)}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: { xs: "row", md: "column" },
+              alignItems: { xs: "center", md: "flex-end" },
+              justifyContent: { xs: "space-between", md: "center" },
+              gap: { xs: 1.25, md: 1 },
+              minWidth: 0,
+              pt: { xs: 1.5, md: 0 },
+              pl: { xs: 0, md: 2.75 },
+              borderTop: { xs: `1px solid ${editorial.border}`, md: "none" },
+              borderLeft: { xs: "none", md: `1px solid ${editorial.border}` },
+              flexWrap: { xs: "wrap", md: "nowrap" },
+            }}
+          >
+            <Chip
+              label={job.employmentType}
+              size="small"
+              sx={{
+                backgroundColor: `${getEmploymentTypeColor(job.employmentType)}14`,
+                color: getEmploymentTypeColor(job.employmentType),
+                fontWeight: 800,
+                fontSize: "0.7rem",
+                borderRadius: "999px",
+                flexShrink: 0,
+              }}
+            />
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+              <People className="job-card-icon" sx={{ fontSize: 14, color: editorial.softMuted, transition: "transform 0.2s ease, color 0.2s ease" }} />
+              <Typography variant="caption" sx={{ color: editorial.softMuted, fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                {job.applicationCount} {job.applicationCount === 1 ? "applicant" : "applicants"}
+              </Typography>
+            </Box>
+            <Box
+              className="job-card-cta"
+              sx={{
+                color: editorial.ink,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.5,
+                fontWeight: 800,
+                fontSize: "0.82rem",
+                whiteSpace: "nowrap",
+                transition: "transform 0.2s ease, color 0.2s ease",
+              }}
+            >
+              View role
+              <ArrowForward sx={{ fontSize: 16 }} />
+            </Box>
+          </Box>
         </Box>
       </CardContent>
     </Card>
@@ -351,15 +415,15 @@ function PortalWelcomePanel({
   onPortalCardTarget: (card: CareerPortalCard) => void;
 }) {
   const stats = [
-    { label: "Open roles", value: totalJobs, icon: <WorkOutlined />, color: "#0078D4", bg: "#F0F7FF" },
+    { label: "Open roles", value: totalJobs, icon: <WorkOutlined />, color: editorial.ink, bg: editorial.blueWash },
     {
       label: viewingApplications ? "Tracked apps" : "Visible now",
       value: viewingApplications ? applicationsCount : visibleJobs,
       icon: <TrendingUp />,
-      color: "#6264A7",
-      bg: "#F4F3FF",
+      color: editorial.ink,
+      bg: "#FFF7BD",
     },
-    { label: "My applications", value: applicationsCount, icon: <AssignmentTurnedIn />, color: "#16A34A", bg: "#E6F4EA" },
+    { label: "My applications", value: applicationsCount, icon: <AssignmentTurnedIn />, color: editorial.success, bg: "#E3F1E3" },
   ];
 
   return (
@@ -368,10 +432,10 @@ function PortalWelcomePanel({
       sx={{
         p: { xs: 2.5, md: 3 },
         mb: 3,
-        borderRadius: "8px",
-        border: "1px solid rgba(17, 24, 39, 0.08)",
-        boxShadow: "0 10px 30px rgba(17, 24, 39, 0.06)",
-        background: "linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 48%, #F7F7FF 100%)",
+        borderRadius: "18px",
+        border: `1px solid ${editorial.border}`,
+        boxShadow: "none",
+        background: "rgba(255, 255, 255, 0.74)",
         position: "relative",
         overflow: "hidden",
         animation: `${fadeInUp} 0.48s ease both`,
@@ -379,7 +443,7 @@ function PortalWelcomePanel({
           content: '""',
           position: "absolute",
           inset: 0,
-          background: "linear-gradient(110deg, transparent 0%, rgba(0,120,212,0.08) 36%, transparent 58%)",
+          background: "linear-gradient(110deg, transparent 0%, rgba(255,245,70,0.28) 36%, transparent 58%)",
           transform: "translateX(-120%)",
           animation: `${shimmerSweep} 7s ease-in-out infinite`,
           pointerEvents: "none",
@@ -403,54 +467,56 @@ function PortalWelcomePanel({
             size="small"
             sx={{
               mb: 1.5,
-              borderRadius: "8px",
-              backgroundColor: "#E6F4EA",
-              color: "#2E7D32",
-              fontWeight: 700,
-              "& .MuiChip-icon": { color: "#2E7D32" },
+              borderRadius: "999px",
+              backgroundColor: editorial.yellow,
+              color: editorial.ink,
+              fontWeight: 800,
+              border: `1px solid ${editorial.ink}`,
+              "& .MuiChip-icon": { color: editorial.ink },
             }}
           />
           <Typography
             variant="h4"
             component="h2"
             sx={{
-              color: "#111827",
-              fontWeight: 800,
-              fontSize: { xs: "1.35rem", sm: "1.65rem" },
-              lineHeight: 1.2,
+              color: editorial.ink,
+              fontFamily: "Georgia, 'Times New Roman', Times, serif",
+              fontWeight: 400,
+              fontSize: { xs: "2.35rem", sm: "3.25rem" },
+              lineHeight: 1,
               mb: 1,
               letterSpacing: 0,
             }}
           >
             Internal advancement starts here
           </Typography>
-          <Typography variant="body1" sx={{ color: "#4B5563", maxWidth: 640, mb: 2.25 }}>
+          <Typography variant="body1" sx={{ color: editorial.ink, maxWidth: 640, mb: 2.25 }}>
             Explore roles built for PMW talent and keep your application journey in view.
           </Typography>
           {applicationsCount > 0 && (
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
               <Button
                 variant={viewingApplications ? "contained" : "outlined"}
-                startIcon={<AssignmentTurnedIn />}
+                startIcon={viewingApplications ? <ArrowBack /> : <AssignmentTurnedIn />}
                 onClick={onViewApplications}
                 sx={{
-                  borderRadius: "8px",
+                  borderRadius: 0,
                   fontWeight: 700,
-                  borderColor: viewingApplications ? "#6264A7" : "rgba(98, 100, 167, 0.45)",
-                  backgroundColor: viewingApplications ? "#6264A7" : "#ffffff",
-                  color: viewingApplications ? "#ffffff" : "#4A4C80",
+                  borderColor: editorial.ink,
+                  backgroundColor: viewingApplications ? editorial.black : "#ffffff",
+                  color: viewingApplications ? "#ffffff" : editorial.ink,
                   transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease",
                   "&:hover": {
                     transform: "translateY(-2px)",
-                    borderColor: "#6264A7",
-                    backgroundColor: viewingApplications ? "#4A4C80" : "#F4F3FF",
-                    boxShadow: "0 8px 18px rgba(98, 100, 167, 0.16)",
+                    borderColor: editorial.ink,
+                    backgroundColor: viewingApplications ? "#333333" : editorial.yellow,
+                    boxShadow: "none",
                   },
                   "&:active": { transform: "translateY(0) scale(0.98)" },
                   ...reduceMotionSx,
                 }}
               >
-                {viewingApplications ? "Viewing applications" : "My applications"}
+                {viewingApplications ? "Back to careers" : "My applications"}
               </Button>
             </Box>
           )}
@@ -479,16 +545,16 @@ function PortalWelcomePanel({
                 gap: { xs: 0.75, sm: 1.25 },
                 p: { xs: 1, sm: 1.35 },
                 minHeight: { xs: 66, sm: 74 },
-                borderRadius: "8px",
-                border: "1px solid rgba(17, 24, 39, 0.08)",
+                borderRadius: "999px",
+                border: `1px solid ${editorial.border}`,
                 backgroundColor: "rgba(255,255,255,0.78)",
                 transition: "transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
                 animation: `${fadeInUp} 0.42s ease both`,
                 animationDelay: staggerDelay(index + 1, 70, 300),
                 "&:hover": {
                   transform: "translateY(-3px)",
-                  borderColor: `${stat.color}55`,
-                  boxShadow: "0 8px 18px rgba(17, 24, 39, 0.08)",
+                  borderColor: editorial.ink,
+                  boxShadow: editorialShadow,
                 },
                 ...reduceMotionSx,
               }}
@@ -497,7 +563,7 @@ function PortalWelcomePanel({
                 sx={{
                   width: { xs: 30, sm: 38 },
                   height: { xs: 30, sm: 38 },
-                  borderRadius: "8px",
+                  borderRadius: "50%",
                   backgroundColor: stat.bg,
                   color: stat.color,
                   display: "flex",
@@ -510,10 +576,10 @@ function PortalWelcomePanel({
                 {stat.icon}
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ color: "#111827", fontWeight: 800, fontSize: { xs: "0.95rem", sm: "1.1rem" }, lineHeight: 1.1 }}>
+                <Typography sx={{ color: editorial.ink, fontWeight: 800, fontSize: { xs: "0.95rem", sm: "1.1rem" }, lineHeight: 1.1 }}>
                   {stat.value}
                 </Typography>
-                <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700, fontSize: { xs: "0.62rem", sm: "0.75rem" }, lineHeight: 1.2 }}>
+                <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, fontSize: { xs: "0.62rem", sm: "0.75rem" }, lineHeight: 1.2 }}>
                   {stat.label}
                 </Typography>
               </Box>
@@ -1051,7 +1117,7 @@ export default function CareersPage() {
     : selectedApp?.coverLetterUrl
       ? [{ name: "Supporting Document", url: selectedApp.coverLetterUrl }]
       : [];
-  const handleViewApplications = () => setAppliedFilter("applied");
+  const handleViewApplications = () => setAppliedFilter((current) => current === "applied" ? "all" : "applied");
   const handlePortalCardTarget = (card: CareerPortalCard) => {
     const targetValue = card.targetValue.trim();
     if (card.targetType === "none" || !targetValue) return;
@@ -1074,9 +1140,9 @@ export default function CareersPage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+    <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 46%, #F7F5EF 100%)" }}>
       <CareerPortalHeader
-        title="Internal Career Advancement Portal"
+        title="Careers at PMW"
         subtitle="Explore internal openings and track your submitted applications."
         activeSection="opportunities"
         isAdmin={isAdmin}
@@ -1103,9 +1169,9 @@ export default function CareersPage() {
             sx={{
               p: 2,
               mb: 3,
-              borderRadius: "8px",
-              border: "1px solid rgba(17, 24, 39, 0.08)",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              borderRadius: "14px",
+              border: `1px solid ${editorial.border}`,
+              boxShadow: "none",
               display: "flex",
               flexDirection: "column",
               gap: 1.5,
@@ -1113,8 +1179,8 @@ export default function CareersPage() {
               animationDelay: "90ms",
               transition: "box-shadow 0.2s ease, border-color 0.2s ease",
               "&:hover": {
-                borderColor: "rgba(0, 120, 212, 0.18)",
-                boxShadow: "0 8px 24px rgba(17, 24, 39, 0.08)",
+                borderColor: editorial.ink,
+                boxShadow: editorialShadow,
               },
               ...reduceMotionSx,
             }}
@@ -1138,13 +1204,13 @@ export default function CareersPage() {
                     flex: "1 1 auto",
                     minWidth: 0,
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "8px",
-                      backgroundColor: "#F8F9FC",
+                      borderRadius: "10px",
+                      backgroundColor: editorial.paperSoft,
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: "#ffffff" },
                       "&.Mui-focused": {
                         backgroundColor: "#ffffff",
-                        boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)",
+                        boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
                       },
                     },
                   }}
@@ -1152,7 +1218,7 @@ export default function CareersPage() {
                     input: {
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                          <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
                         </InputAdornment>
                       ),
                     },
@@ -1166,17 +1232,17 @@ export default function CareersPage() {
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: "8px",
+                      borderRadius: "10px",
                       border: "1px solid",
-                      borderColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? "#0078D4" : "#D1D5DB",
-                      color: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? "#0078D4" : "#6B7280",
-                      backgroundColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? "#F0F7FF" : "#ffffff",
+                      borderColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.ink : editorial.border,
+                      color: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.ink : editorial.muted,
+                      backgroundColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.yellow : "#ffffff",
                       flexShrink: 0,
                       transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
                       "&:hover": {
                         transform: "translateY(-1px)",
-                        backgroundColor: "#F0F7FF",
-                        borderColor: "#0078D4",
+                        backgroundColor: editorial.blueWash,
+                        borderColor: editorial.ink,
                       },
                       "&:active": { transform: "translateY(0) scale(0.98)" },
                       ...reduceMotionSx,
@@ -1654,6 +1720,8 @@ export default function CareersPage() {
               page={myAppsPage}
               onPageChange={(_, nextPage) => setMyAppsPage(nextPage)}
               rowsPerPage={myAppsRowsPerPage}
+              labelRowsPerPage="Rows"
+              sx={paginationSx}
               onRowsPerPageChange={(e) => {
                 setMyAppsRowsPerPage(Number.parseInt(e.target.value, 10));
                 setMyAppsPage(0);
@@ -1669,7 +1737,7 @@ export default function CareersPage() {
           <>
             <Grid container spacing={2.5}>
               {pagedJobs.map((job, index) => (
-                <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={job.id}>
+                <Grid size={{ xs: 12 }} key={job.id}>
                   <JobCard job={job} onSelect={setSelectedJob} isApplied={isJobApplied(job.id)} index={index} />
                 </Grid>
               ))}
@@ -1692,6 +1760,8 @@ export default function CareersPage() {
                 page={jobsPage}
                 onPageChange={(_, nextPage) => setJobsPage(nextPage)}
                 rowsPerPage={jobsRowsPerPage}
+                labelRowsPerPage="Rows"
+                sx={paginationSx}
                 onRowsPerPageChange={(e) => {
                   setJobsRowsPerPage(Number.parseInt(e.target.value, 10));
                   setJobsPage(0);

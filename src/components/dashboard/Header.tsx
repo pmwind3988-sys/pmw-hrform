@@ -1,6 +1,7 @@
 import {
   AppBar,
   Box,
+  Button,
   Divider,
   IconButton,
   Menu,
@@ -29,6 +30,7 @@ import RoleBadge from "./RoleBadge";
 import Logo from "../Logo";
 import BackgroundPicker from "./BackgroundPicker";
 import { useDashboardBackground } from "../../hooks/useDashboardBackground";
+import { editorial, editorialHairline } from "../../theme/editorial";
 
 interface HeaderProps {
   userEmail: string;
@@ -93,10 +95,10 @@ export default function Header({
       position="sticky"
       elevation={0}
       sx={{
-        backgroundColor: "rgba(255, 255, 255, 0.92)",
-        backdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+        backgroundColor: "rgba(255, 255, 255, 0.82)",
+        backdropFilter: "blur(18px)",
+        borderBottom: editorialHairline,
+        boxShadow: "none",
         zIndex: theme.zIndex.drawer + 1,
         minHeight: isMobile ? 56 : isCompact ? 60 : 68,
       }}
@@ -119,8 +121,8 @@ export default function Header({
               variant="h5"
               component="h1"
               sx={{
-                fontWeight: 700,
-                color: "#111827",
+                fontWeight: 800,
+                color: editorial.ink,
                 letterSpacing: 0,
                 lineHeight: 1.2,
                 fontSize: { xs: "1.05rem", sm: "1.15rem", md: "1.25rem" },
@@ -132,7 +134,7 @@ export default function Header({
             <Typography
               variant="caption"
               sx={{
-                color: "#6B7280",
+                color: editorial.muted,
                 textTransform: "uppercase",
                 letterSpacing: 0,
                 fontSize: "0.7rem",
@@ -156,8 +158,9 @@ export default function Header({
               size="small"
               sx={{
                 borderRadius: "10px",
-                color: "#6B7280",
-                backgroundColor: "rgba(0,0,0,0.04)",
+                color: editorial.ink,
+                backgroundColor: editorial.yellow,
+                border: `1px solid ${editorial.ink}`,
               }}
             >
               <MenuIcon />
@@ -170,9 +173,9 @@ export default function Header({
                 paper: {
                   sx: {
                     minWidth: { xs: 230, sm: 260 },
-                    borderRadius: "8px",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
-                    border: "1px solid rgba(0, 0, 0, 0.06)",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 28px rgba(16, 16, 16, 0.12)",
+                    border: editorialHairline,
                     mt: 1,
                   },
                 },
@@ -247,6 +250,36 @@ export default function Header({
         ) : (
           <>
             {/* ── Desktop: separate controls ── */}
+            <Button
+              size="small"
+              startIcon={<WorkIcon sx={{ fontSize: 18 }} />}
+              onClick={() => navigate("/career-portal")}
+              sx={{
+                height: 34,
+                px: 1.5,
+                borderRadius: "8px",
+                backgroundColor: editorial.white,
+                border: `1px solid ${editorial.ink}`,
+                color: editorial.ink,
+                fontSize: "0.75rem",
+                fontWeight: 800,
+                letterSpacing: 0,
+                lineHeight: 1,
+                minWidth: 0,
+                textTransform: "none",
+                whiteSpace: "nowrap",
+                "& .MuiButton-startIcon": {
+                  mr: 0.75,
+                },
+                "&:hover": {
+                  backgroundColor: editorial.blueWash,
+                  borderColor: editorial.ink,
+                },
+              }}
+            >
+              Career Portal
+            </Button>
+
             <RoleBadge isAdmin={isAdmin} />
 
             <IconButton
@@ -256,17 +289,17 @@ export default function Header({
                 ml: 0.5,
                 p: 0.75,
                 borderRadius: "12px",
-                backgroundColor: "rgba(0, 120, 212, 0.06)",
-                border: "1px solid rgba(0, 120, 212, 0.1)",
+                backgroundColor: editorial.white,
+                border: `1px solid ${editorial.ink}`,
                 transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                 "&:hover": {
-                  backgroundColor: "rgba(0, 120, 212, 0.12)",
-                  borderColor: "rgba(0, 120, 212, 0.2)",
+                  backgroundColor: editorial.yellow,
+                  borderColor: editorial.ink,
                 },
               }}
             >
-              <Box sx={{ width: 32, height: 32, borderRadius: "8px", backgroundColor: "rgba(0, 120, 212, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <PersonIcon sx={{ fontSize: 18, color: "#0078D4" }} />
+              <Box sx={{ width: 32, height: 32, borderRadius: "8px", backgroundColor: editorial.blueWash, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <PersonIcon sx={{ fontSize: 18, color: editorial.ink }} />
               </Box>
             </IconButton>
 
@@ -278,9 +311,9 @@ export default function Header({
                 paper: {
                   sx: {
                     minWidth: 220,
-                    borderRadius: "8px",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
-                    border: "1px solid rgba(0, 0, 0, 0.06)",
+                    borderRadius: "12px",
+                    boxShadow: "0 10px 28px rgba(16, 16, 16, 0.12)",
+                    border: editorialHairline,
                     mt: 1,
                   },
                 },
@@ -292,10 +325,6 @@ export default function Header({
                 <Typography variant="body2" sx={{ color: "#111827", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {userEmail}
                 </Typography>
-              </MenuItem>
-              <MenuItem onClick={() => navigateFromMenu("/career-portal", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
-                <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
-                <Typography variant="body2">Career Advancement Portal</Typography>
               </MenuItem>
               <MenuItem onClick={() => navigateFromMenu("/privacy", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
                 <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />

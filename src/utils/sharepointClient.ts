@@ -89,6 +89,13 @@ function buildSelect(columns: string[]): string {
   return [...cols].join(",");
 }
 
+const AUTHOR_SELECT = ["Author/Id", "Author/EMail"] as const;
+
+function getAuthorEmail(item: Record<string, unknown>): string {
+  const author = item.Author as Record<string, unknown> | undefined;
+  return String(author?.EMail || author?.Email || "");
+}
+
 export function createSpClient(
   instance: IPublicClientApplication,
   accounts: AccountInfo[]
@@ -157,7 +164,7 @@ export function createSpClient(
     const params = new URLSearchParams();
     const selectInput = options?.select;
     const selectArr = Array.isArray(selectInput) ? selectInput : typeof selectInput === "string" ? [selectInput] : [];
-    const selectCols = buildSelect([...selectArr, "Author/Id,Author/Email"]);
+    const selectCols = buildSelect([...selectArr, ...AUTHOR_SELECT]);
     params.set("$select", selectCols);
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
@@ -185,7 +192,7 @@ export function createSpClient(
 
     return items.map((item: Record<string, unknown>) => ({
       ...item,
-      _authorEmail: (item.Author as Record<string, unknown>)?.Email as string || "",
+      _authorEmail: getAuthorEmail(item),
     }));
   }
 
@@ -197,7 +204,7 @@ export function createSpClient(
     const params = new URLSearchParams();
     const selectInput = options?.select;
     const selectArr = Array.isArray(selectInput) ? selectInput : typeof selectInput === "string" ? [selectInput] : [];
-    const selectCols = buildSelect([...selectArr, "Author/Id,Author/Email"]);
+    const selectCols = buildSelect([...selectArr, ...AUTHOR_SELECT]);
     params.set("$select", selectCols);
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
@@ -225,7 +232,7 @@ export function createSpClient(
 
     return items.map((item: Record<string, unknown>) => ({
       ...item,
-      _authorEmail: (item.Author as Record<string, unknown>)?.Email as string || "",
+      _authorEmail: getAuthorEmail(item),
     }));
   }
 
@@ -236,7 +243,9 @@ export function createSpClient(
   ): Promise<Record<string, unknown>[]> {
     const token = await acquireToken();
     const params = new URLSearchParams();
-    const selectCols = buildSelect([...(options?.select as string[] || []), "Author/Id,Author/Email", "FormID", "NumberOfApprovalLayers", "FormStatus"]);
+    const selectInput = options?.select;
+    const selectArr = Array.isArray(selectInput) ? selectInput : typeof selectInput === "string" ? [selectInput] : [];
+    const selectCols = buildSelect([...selectArr, ...AUTHOR_SELECT, "FormID", "NumberOfApprovalLayers", "FormStatus"]);
     params.set("$select", selectCols);
     if (options?.filter) params.set("$filter", options.filter as string);
     if (options?.orderby) params.set("$orderby", options.orderby as string);
@@ -265,12 +274,12 @@ export function createSpClient(
     const userEmailLower = userEmail.toLowerCase();
     return items
       .filter((item: Record<string, unknown>) => {
-        const authorEmail = ((item.Author as Record<string, unknown>)?.Email as string) || "";
+        const authorEmail = getAuthorEmail(item);
         return authorEmail.toLowerCase() === userEmailLower;
       })
       .map((item: Record<string, unknown>) => ({
         ...item,
-        _authorEmail: (item.Author as Record<string, unknown>)?.Email as string || "",
+        _authorEmail: getAuthorEmail(item),
       }));
   }
 

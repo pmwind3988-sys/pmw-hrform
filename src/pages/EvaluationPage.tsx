@@ -86,18 +86,18 @@ type ActionState = "idle" | "submitting" | "success" | "error";
 
 // ── Styling ──
 const COLORS = {
-  purple: "#0078D4", purpleLight: "#106EBE", purplePale: "#E6F2FB",
-  bg: "#F6F8FB", cardBg: "#FFFFFF", border: "#DDE5EE",
-  textPrimary: "#111827", textSecond: "#6B7280", textMuted: "#9CA3AF",
-  green: "#059669", greenPale: "#D1FAE5",
-  red: "#DC2626", redPale: "#FEE2E2",
-  shadow: "0 1px 2px rgba(17,24,39,0.05),0 4px 12px rgba(17,24,39,0.06)",
+  purple: "#101010", purpleLight: "#333333", purplePale: "#EAF5FC",
+  bg: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%)", cardBg: "#FFFFFF", border: "#D6DCE5",
+  textPrimary: "#101010", textSecond: "#5F646D", textMuted: "#747B86",
+  green: "#107C10", greenPale: "#E3F1E3",
+  red: "#C62828", redPale: "#F8E4E4",
+  shadow: "none",
 };
 
 const sectionCard: React.CSSProperties = {
   background: COLORS.cardBg,
   border: `1px solid ${COLORS.border}`,
-  borderRadius: 8,
+  borderRadius: 14,
   padding: 24,
   marginBottom: 20,
   boxShadow: COLORS.shadow,
@@ -105,9 +105,9 @@ const sectionCard: React.CSSProperties = {
 
 const btnPrimary: React.CSSProperties = {
   padding: "12px 32px",
-  borderRadius: 8,
+  borderRadius: 0,
   border: "none",
-  background: `linear-gradient(135deg, ${COLORS.purple}, ${COLORS.purpleLight})`,
+  background: COLORS.purple,
   color: "#fff",
   fontSize: 14,
   fontWeight: 600,

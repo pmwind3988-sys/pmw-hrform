@@ -56,6 +56,19 @@ export const SELECTED_BRANCH_COLUMN_SPEC: SpColumnSpec = {
   k: SP_FIELD_KIND.text,
 };
 
+export const CAREER_PORTAL_CARD_LIST = 'Career Portal Cards';
+
+const CAREER_PORTAL_CARD_COLUMN_SPECS: SpColumnSpec[] = [
+  { n: 'CardDescription', k: SP_FIELD_KIND.note, ml: true },
+  { n: 'ImageUrl', k: SP_FIELD_KIND.text },
+  { n: 'ImageSource', k: SP_FIELD_KIND.note, ml: true },
+  { n: 'ImageOpacity', k: SP_FIELD_KIND.number },
+  { n: 'SortOrder', k: SP_FIELD_KIND.number },
+  { n: 'Status', k: SP_FIELD_KIND.text },
+  { n: 'TargetType', k: SP_FIELD_KIND.text },
+  { n: 'TargetValue', k: SP_FIELD_KIND.text },
+];
+
 const SP_FIELD_TYPE_MAP: Record<number, string> = {
   [SP_FIELD_KIND.text]: 'SP.Field',
   [SP_FIELD_KIND.note]: 'SP.FieldMultiLineText',
@@ -1110,8 +1123,10 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
   ]},
   'AdminPanelSettings': { t: 100, desc: 'Shared admin dashboard settings', cols: [
     { n: 'BackgroundId', k: 2 }, { n: 'CustomImageUrl', k: 3, ml: true },
+    { n: 'CustomImageSource', k: 3, ml: true }, { n: 'ImageOpacity', k: 9 },
     { n: 'UpdatedBy', k: 2 }, { n: 'UpdatedAt', k: 4 },
   ]},
+  [CAREER_PORTAL_CARD_LIST]: { t: 100, desc: 'Career portal carousel cards', cols: CAREER_PORTAL_CARD_COLUMN_SPECS },
 };
 
 async function ensureListExists(token: string, listTitle: string): Promise<void> {
@@ -1126,6 +1141,14 @@ async function ensureListExists(token: string, listTitle: string): Promise<void>
     description: schema.desc,
     columns: schema.cols,
   });
+}
+
+export async function ensureCareerPortalCardList(token: string): Promise<void> {
+  await ensureListExists(token, CAREER_PORTAL_CARD_LIST);
+}
+
+export async function ensureDashboardBackgroundSettingsList(token: string): Promise<void> {
+  await ensureListExists(token, 'AdminPanelSettings');
 }
 
 export async function bootstrapSystemLists(token: string, onLog?: (msg: string, type: string) => void): Promise<void> {

@@ -29,6 +29,7 @@ import { useNavigate } from "react-router-dom";
 import { loginRequest } from "../../auth/msalConfig";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
 import Logo from "../Logo";
+import { editorial, editorialHairline } from "../../theme/editorial";
 
 const headerReveal = keyframes`
   from {
@@ -153,10 +154,10 @@ export default function CareerPortalHeader({
     <Paper
       sx={{
         borderRadius: 0,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        backgroundColor: "rgba(255,255,255,0.94)",
+        boxShadow: "none",
+        backgroundColor: "rgba(255,255,255,0.76)",
         backdropFilter: "blur(14px)",
-        borderBottom: "1px solid rgba(17, 24, 39, 0.08)",
+        borderBottom: editorialHairline,
         position: "sticky",
         top: 0,
         zIndex: 10,
@@ -166,7 +167,7 @@ export default function CareerPortalHeader({
           content: '""',
           position: "absolute",
           inset: 0,
-          background: "linear-gradient(110deg, transparent 0%, rgba(0,120,212,0.06) 35%, transparent 55%)",
+          background: "linear-gradient(110deg, transparent 0%, rgba(255,245,70,0.22) 35%, transparent 55%)",
           transform: "translateX(-120%)",
           animation: `${subtleSheen} 6.5s ease-in-out infinite`,
           pointerEvents: "none",
@@ -195,8 +196,8 @@ export default function CareerPortalHeader({
                 transition: "transform 0.18s ease, background-color 0.18s ease, color 0.18s ease",
                 "&:hover": {
                   transform: "translateX(-2px)",
-                  color: "#0078D4",
-                  backgroundColor: "#F0F7FF",
+                  color: editorial.ink,
+                  backgroundColor: editorial.blueWash,
                 },
                 "&:active": { transform: "translateX(-1px) scale(0.98)" },
                 ...reduceMotionSx,
@@ -209,11 +210,11 @@ export default function CareerPortalHeader({
                 width: { xs: 38, sm: 46 },
                 height: { xs: 38, sm: 46 },
                 borderRadius: "8px",
-                border: "1px solid rgba(17, 24, 39, 0.08)",
+                border: editorialHairline,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "#ffffff",
+                backgroundColor: "rgba(255,255,255,0.82)",
                 flexShrink: 0,
                 overflow: "hidden",
                 position: "relative",
@@ -228,8 +229,8 @@ export default function CareerPortalHeader({
                 },
                 "&:hover": {
                   transform: "translateY(-1px)",
-                  borderColor: "rgba(0, 120, 212, 0.25)",
-                  boxShadow: "0 6px 14px rgba(0, 120, 212, 0.12)",
+                  borderColor: editorial.ink,
+                  boxShadow: "none",
                   "&::after": {
                     animation: `${subtleSheen} 0.9s ease`,
                   },
@@ -247,8 +248,9 @@ export default function CareerPortalHeader({
                   sx={{
                     height: 22,
                     borderRadius: "8px",
-                    backgroundColor: "#E6F4EA",
-                    color: "#2E7D32",
+                    backgroundColor: editorial.yellow,
+                    color: editorial.ink,
+                    border: `1px solid ${editorial.ink}`,
                     fontWeight: 700,
                     fontSize: "0.68rem",
                   }}
@@ -258,16 +260,17 @@ export default function CareerPortalHeader({
                 variant="h5"
                 component="h1"
                 sx={{
-                  fontWeight: 700,
-                  color: "#111827",
-                  fontSize: { xs: "1.05rem", sm: "1.3rem" },
-                  lineHeight: 1.2,
+                  fontFamily: "Georgia, 'Times New Roman', Times, serif",
+                  fontWeight: 400,
+                  color: editorial.ink,
+                  fontSize: { xs: "1.45rem", sm: "2rem" },
+                  lineHeight: 1,
                   letterSpacing: 0,
                 }}
               >
                 {title}
               </Typography>
-              <Typography variant="body2" sx={{ color: "#6B7280", fontSize: { sm: "0.8rem", md: "0.85rem" }, display: { sm: "none", md: "block" } }}>
+              <Typography variant="body2" sx={{ color: editorial.muted, fontSize: { sm: "0.8rem", md: "0.85rem" }, display: { sm: "none", md: "block" } }}>
                 {subtitle}
               </Typography>
             </Box>

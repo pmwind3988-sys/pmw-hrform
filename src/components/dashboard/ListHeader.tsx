@@ -1,4 +1,5 @@
 import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { editorial } from "../../theme/editorial";
 
 interface ListHeaderProps {
   isAdmin: boolean;
@@ -18,8 +19,10 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         gap: 2,
         px: 3,
         py: 1.5,
-        backgroundColor: "rgba(98,100,167,0.04)",
-        borderRadius: "8px 8px 0 0",
+        backgroundColor: editorial.paper,
+        borderRadius: "14px 14px 0 0",
+        border: `1px solid ${editorial.border}`,
+        borderBottom: 0,
         alignItems: "center",
       }}
     >
@@ -28,7 +31,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         sx={{
           textTransform: "uppercase",
           letterSpacing: 0,
-          color: "rgba(0,0,0,0.45)",
+          color: editorial.muted,
           fontWeight: 600,
           fontSize: "0.7rem",
         }}
@@ -41,7 +44,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           sx={{
             textTransform: "uppercase",
             letterSpacing: 0,
-            color: "rgba(0,0,0,0.45)",
+            color: editorial.muted,
             fontWeight: 600,
             fontSize: "0.7rem",
           }}
@@ -54,7 +57,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         sx={{
           textTransform: "uppercase",
           letterSpacing: 0,
-          color: "rgba(0,0,0,0.45)",
+          color: editorial.muted,
           fontWeight: 600,
           fontSize: "0.7rem",
         }}
@@ -66,7 +69,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         sx={{
           textTransform: "uppercase",
           letterSpacing: 0,
-          color: "rgba(0,0,0,0.45)",
+          color: editorial.muted,
           fontWeight: 600,
           fontSize: "0.7rem",
         }}
@@ -78,7 +81,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         sx={{
           textTransform: "uppercase",
           letterSpacing: 0,
-          color: "rgba(0,0,0,0.45)",
+          color: editorial.muted,
           fontWeight: 600,
           fontSize: "0.7rem",
         }}

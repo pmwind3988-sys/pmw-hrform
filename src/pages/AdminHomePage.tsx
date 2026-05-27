@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useDashboard } from "../contexts/DashboardContext";
 import Header from "../components/dashboard/Header";
@@ -14,6 +14,7 @@ import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { fetchCareersPortalData } from "../utils/careersService";
 import type { CareerPortalCard } from "../types";
+import { editorial } from "../theme/editorial";
 
 function DashboardCareerCarousel() {
   const navigate = useNavigate();
@@ -89,7 +90,7 @@ export default function AdminHomePage() {
     onEditForm,
   } = useDashboard();
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))" }}>
       <Header
         userEmail={userEmail}
         isAdmin={isAdmin}
@@ -99,6 +100,53 @@ export default function AdminHomePage() {
       />
 
       <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3, md: 4 } }}>
+        <Box
+          component="section"
+          sx={{
+            mb: { xs: 2.5, md: 4 },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" },
+            gap: 2,
+            alignItems: "end",
+          }}
+        >
+          <Box>
+            <Typography
+              variant="h1"
+              sx={{
+                color: editorial.ink,
+                fontSize: { xs: "2.6rem", sm: "3.4rem", md: "4.4rem" },
+                lineHeight: 0.98,
+              }}
+            >
+              {isAdmin ? "HR operations" : "My forms"}
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                color: editorial.ink,
+                fontWeight: 800,
+                mt: 1,
+                maxWidth: 760,
+              }}
+            >
+              {isAdmin
+                ? "Track submissions, forms, and career activity with a quieter daily workspace."
+                : "Find forms, follow your submissions, and keep pending actions in view."}
+            </Typography>
+          </Box>
+          <Typography
+            variant="body2"
+            sx={{
+              color: editorial.muted,
+              fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
+              justifySelf: { xs: "start", md: "end" },
+            }}
+          >
+            {userEmail}
+          </Typography>
+        </Box>
+
         <DashboardCareerCarousel />
 
         {missingConfigs.length > 0 && (

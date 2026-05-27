@@ -1,5 +1,6 @@
 import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
 import type { DashboardBackgroundSetting } from "./dashboardBackgrounds";
+import { ensureDashboardBackgroundSettingsList } from "./formBuilderSP";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
@@ -65,11 +66,18 @@ export async function saveDashboardBackground(
   setting: DashboardBackgroundSetting,
 ): Promise<DashboardBackgroundSetting> {
   const token = await acquireSharePointToken(instance, accounts);
-  const response = await fetch("/api/dashboard-background", {
-    method: "POST",
-    headers: apiHeaders({ Authorization: `Bearer ${token}` }),
-    body: JSON.stringify(setting),
-  });
+  const postSetting = () =>
+    fetch("/api/dashboard-background", {
+      method: "POST",
+      headers: apiHeaders({ Authorization: `Bearer ${token}` }),
+      body: JSON.stringify(setting),
+    });
+
+  let response = await postSetting();
+  if (!response.ok && response.status >= 500) {
+    await ensureDashboardBackgroundSettingsList(token);
+    response = await postSetting();
+  }
 
   if (!response.ok) {
     let message = `Failed to save dashboard background: ${response.status}`;

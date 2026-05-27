@@ -1,13 +1,13 @@
 import { Chip } from "@mui/material";
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  fullyapproved: { label: "Fully Approved", color: "#16a34a", bg: "#dcfce7", dot: "#22c55e" },
-  approved: { label: "Approved", color: "#16a34a", bg: "#dcfce7", dot: "#22c55e" },
-  confirmed: { label: "Confirmed", color: "#059669", bg: "#d1fae5", dot: "#10b981" },
-  rejected: { label: "Rejected", color: "#dc2626", bg: "#fee2e2", dot: "#ef4444" },
-  inprogress: { label: "In Review", color: "#9333ea", bg: "#f3e8ff", dot: "#a855f7" },
-  pending: { label: "Pending", color: "#d97706", bg: "#fef3c7", dot: "#f59e0b" },
-  cancelled: { label: "Cancelled", color: "#6b7280", bg: "#f3f4f6", dot: "#9ca3af" },
+  fullyapproved: { label: "Fully Approved", color: "#107c10", bg: "#e3f1e3", dot: "#107c10" },
+  approved: { label: "Approved", color: "#107c10", bg: "#e3f1e3", dot: "#107c10" },
+  confirmed: { label: "Confirmed", color: "#107c10", bg: "#e3f1e3", dot: "#107c10" },
+  rejected: { label: "Rejected", color: "#c62828", bg: "#f8e4e4", dot: "#c62828" },
+  inprogress: { label: "In Review", color: "#101010", bg: "#eaf5fc", dot: "#101010" },
+  pending: { label: "Pending", color: "#805800", bg: "#fff7bd", dot: "#805800" },
+  cancelled: { label: "Cancelled", color: "#5f646d", bg: "#f7f5ef", dot: "#5f646d" },
 } as const;
 
 function normalizeStatus(status: string | null): string {
@@ -37,8 +37,8 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       sx={{
         backgroundColor: cfg.bg,
         color: cfg.color,
-        border: `1px solid ${cfg.color}20`,
-        fontWeight: 500,
+        border: `1px solid ${cfg.color}`,
+        fontWeight: 800,
         fontSize: "0.75rem",
         "&::before": {
           content: '""',

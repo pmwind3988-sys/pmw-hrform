@@ -40,6 +40,7 @@ import JobApplyPdfDocument from "../utils/JobApplyPdfDocument";
 import type { JobListing, CustomFieldDefinition } from "../types";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
+import { editorial } from "../theme/editorial";
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 interface FormValues extends Record<string, unknown> {
@@ -94,13 +95,13 @@ function SuccessView({
   onBrowseMore: () => void;
 }) {
   return (
-    <Box sx={{ textAlign: "center", py: 6 }}>
+      <Box sx={{ textAlign: "center", py: 6 }}>
       <Box
         sx={{
           width: 72,
           height: 72,
           borderRadius: "50%",
-          backgroundColor: "#E6F4EA",
+          backgroundColor: "#E3F1E3",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -108,12 +109,12 @@ function SuccessView({
           mb: 3,
         }}
       >
-        <CheckCircle sx={{ fontSize: 40, color: "#34A853" }} />
+        <CheckCircle sx={{ fontSize: 40, color: editorial.success }} />
       </Box>
-      <Typography variant="h5" sx={{ fontWeight: 700, color: "#111827", mb: 1 }}>
-        Application Submitted!
+      <Typography variant="h2" sx={{ fontFamily: "Georgia, 'Times New Roman', Times, serif", fontWeight: 400, color: editorial.ink, mb: 1 }}>
+        Application submitted
       </Typography>
-      <Typography variant="body1" sx={{ color: "#6B7280", mb: 3 }}>
+      <Typography variant="body1" sx={{ color: editorial.muted, mb: 3 }}>
         Your application has been received successfully.
       </Typography>
       <Paper
@@ -124,34 +125,34 @@ function SuccessView({
           gap: 1.5,
           px: 3,
           py: 2,
-          borderRadius: "8px",
-          borderColor: "#0078D4",
-          backgroundColor: "#F0F7FF",
+          borderRadius: "14px",
+          borderColor: editorial.ink,
+          backgroundColor: editorial.yellow,
           mb: 4,
         }}
       >
-        <Typography variant="body2" sx={{ color: "#6B7280" }}>
+        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700 }}>
           Reference No.
         </Typography>
         <Typography
           variant="h6"
-          sx={{ fontWeight: 700, color: "#0078D4", letterSpacing: 0, fontFamily: "monospace" }}
+          sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0, fontFamily: "monospace" }}
         >
           {submissionRef}
         </Typography>
       </Paper>
-      <Typography variant="body2" sx={{ color: "#9CA3AF", mb: 4 }}>
+      <Typography variant="body2" sx={{ color: editorial.muted, mb: 4 }}>
         We will review your application and get back to you via email.
       </Typography>
       <Button
         variant="outlined"
         onClick={onBrowseMore}
         sx={{
-          borderRadius: "8px",
+          borderRadius: 0,
           textTransform: "none",
           fontWeight: 600,
-          borderColor: "#0078D4",
-          color: "#0078D4",
+          borderColor: editorial.black,
+          color: editorial.black,
           px: 4,
           py: 1.2,
         }}
@@ -254,7 +255,7 @@ function FileUploadArea({
 
   return (
     <Box>
-      <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
+      <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5 }}>
         {label}
         {!singleFile && <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 400, ml: 0.5 }}>(Max {maxFiles} files)</Typography>}
       </Typography>
@@ -272,16 +273,16 @@ function FileUploadArea({
             onClick={() => inputRef.current?.click()}
             sx={{
               borderStyle: "dashed",
-              borderColor: sizeError ? "#DC2626" : "#D1D5DB",
-              borderRadius: "8px",
+          borderColor: sizeError ? editorial.error : editorial.ink,
+          borderRadius: "14px",
               p: 3,
               textAlign: "center",
               cursor: "pointer",
               transition: "all 0.2s",
-              backgroundColor: "#FAFBFC",
+          backgroundColor: "rgba(255,255,255,0.58)",
               "&:hover": {
-                borderColor: "#0078D4",
-                backgroundColor: "#F0F7FF",
+            borderColor: editorial.ink,
+            backgroundColor: editorial.blueWash,
               },
               opacity: reading ? 0.6 : 1,
             }}
@@ -295,21 +296,21 @@ function FileUploadArea({
               style={{ display: "none" }}
             />
             {reading ? (
-              <CircularProgress size={24} sx={{ color: "#0078D4" }} />
+              <CircularProgress size={24} sx={{ color: editorial.ink }} />
             ) : (
               <>
-                <UploadFile sx={{ fontSize: 32, color: "#9CA3AF", mb: 1 }} />
-                <Typography variant="body2" sx={{ color: "#6B7280" }}>
+                <UploadFile sx={{ fontSize: 32, color: editorial.ink, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700 }}>
                   {singleFile ? "Click to upload" : "Click to upload or drag and drop"}
                 </Typography>
-                <Typography variant="caption" sx={{ color: "#9CA3AF", display: "block", mt: 0.5 }}>
+                <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.5 }}>
                   PDF, DOC, DOCX, JPEG, PNG (max {Math.round(maxFileSize / 1024 / 1024)} MB)
                 </Typography>
               </>
             )}
           </Paper>
           {sizeError && (
-            <Typography variant="caption" sx={{ color: "#DC2626", mt: 0.5, display: "block" }}>
+            <Typography variant="caption" sx={{ color: editorial.error, mt: 0.5, display: "block" }}>
               {sizeError}
             </Typography>
           )}
@@ -329,17 +330,17 @@ function FileUploadArea({
                 gap: 1,
                 px: 1.5,
                 py: 1,
-                borderRadius: "8px",
-                borderColor: "#E5E7EB",
+                borderRadius: "14px",
+                borderColor: editorial.border,
               }}
             >
-              <Description sx={{ fontSize: 18, color: "#6B7280", flexShrink: 0 }} />
+              <Description sx={{ fontSize: 18, color: editorial.muted, flexShrink: 0 }} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" sx={{ color: "#374151", fontSize: "0.8rem" }} noWrap>
+                <Typography variant="body2" sx={{ color: editorial.ink, fontSize: "0.8rem" }} noWrap>
                   {file.name}
                 </Typography>
                 {file.size > 0 && (
-                  <Typography variant="caption" sx={{ color: "#9CA3AF" }}>
+                  <Typography variant="caption" sx={{ color: editorial.muted }}>
                     {file.size < 1024 * 1024
                       ? `${Math.round(file.size / 1024)} KB`
                       : `${(file.size / 1024 / 1024).toFixed(1)} MB`}
@@ -707,7 +708,7 @@ export default function JobApplyPage() {
 
   if (submitted) {
     return (
-      <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+      <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 48%, #F7F5EF 100%)" }}>
         <Container maxWidth="sm" sx={{ py: 8 }}>
           <SuccessView submissionRef={submissionRef} onBrowseMore={() => navigate("/career-portal", { replace: true })} />
         </Container>
@@ -716,9 +717,9 @@ export default function JobApplyPage() {
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, #F6F8FB)" }}>
+    <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 48%, #F7F5EF 100%)" }}>
       <CareerPortalHeader
-        title="Submit Advancement Application"
+        title="Apply for role"
         subtitle={job ? job.title : "Complete your internal opportunity application."}
         activeSection="apply"
         backPath="/career-portal"
@@ -734,8 +735,9 @@ export default function JobApplyPage() {
             <Paper
               sx={{
                 p: 2.5,
-                borderRadius: "8px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                borderRadius: "18px",
+                border: `1px solid ${editorial.border}`,
+                boxShadow: "none",
                 position: "sticky",
                 top: 88,
               }}
@@ -746,22 +748,22 @@ export default function JobApplyPage() {
                 <>
                   {/* Row 1: Title left · Icon right (vertically centered) */}
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827", fontSize: "1rem", flex: 1, lineHeight: 1.3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: editorial.ink, fontSize: "1rem", flex: 1, lineHeight: 1.3 }}>
                       {job.title}
                     </Typography>
                     <Box
                       sx={{
                         width: 36,
                         height: 36,
-                        borderRadius: "8px",
-                        backgroundColor: "#F0F7FF",
+                        borderRadius: "50%",
+                        backgroundColor: editorial.blueWash,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
                       }}
                     >
-                      <Work sx={{ fontSize: 18, color: "#0078D4" }} />
+                      <Work sx={{ fontSize: 18, color: editorial.ink }} />
                     </Box>
                   </Box>
 
@@ -770,7 +772,7 @@ export default function JobApplyPage() {
                     <Chip
                       label={job.department}
                       size="small"
-                      sx={{ backgroundColor: "#6264A7", color: "#ffffff", fontWeight: 500, fontSize: "0.7rem", borderRadius: "8px" }}
+                      sx={{ backgroundColor: editorial.yellow, color: editorial.ink, fontWeight: 800, fontSize: "0.7rem", borderRadius: "999px", border: `1px solid ${editorial.ink}` }}
                     />
                   </Box>
 
@@ -778,8 +780,8 @@ export default function JobApplyPage() {
                   {job.location ? (
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-                        <LocationOn sx={{ fontSize: 14, color: "#6B7280", flexShrink: 0 }} />
-                        <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <LocationOn sx={{ fontSize: 14, color: editorial.muted, flexShrink: 0 }} />
+                        <Typography variant="body2" sx={{ color: editorial.muted, fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {job.location}
                         </Typography>
                       </Box>
@@ -787,7 +789,7 @@ export default function JobApplyPage() {
                         label={job.employmentType}
                         size="small"
                         variant="outlined"
-                        sx={{ borderRadius: "8px", fontSize: "0.7rem", borderColor: "#D1D5DB", color: "#6B7280", flexShrink: 0 }}
+                        sx={{ borderRadius: "999px", fontSize: "0.7rem", borderColor: editorial.border, color: editorial.muted, flexShrink: 0 }}
                       />
                     </Box>
                   ) : (
@@ -795,12 +797,12 @@ export default function JobApplyPage() {
                       label={job.employmentType}
                       size="small"
                       variant="outlined"
-                      sx={{ borderRadius: "8px", fontSize: "0.7rem", borderColor: "#D1D5DB", color: "#6B7280" }}
+                      sx={{ borderRadius: "999px", fontSize: "0.7rem", borderColor: editorial.border, color: editorial.muted }}
                     />
                   )}
                 </>
               ) : (
-                <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
+                <Typography variant="body2" sx={{ color: editorial.muted }}>
                   Opportunity not found.
                 </Typography>
               )}
@@ -809,12 +811,12 @@ export default function JobApplyPage() {
 
           {/* Application Form */}
           <Grid size={{ xs: 12, md: 8 }}>
-            <Paper sx={{ p: 3, borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+            <Paper sx={{ p: 3, borderRadius: "18px", border: `1px solid ${editorial.border}`, boxShadow: "none" }}>
               {/* Profile loading indicator */}
               {profile.loading && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-                  <CircularProgress size={14} sx={{ color: "#0078D4" }} />
-                  <Typography variant="caption" sx={{ color: "#6B7280" }}>
+                  <CircularProgress size={14} sx={{ color: editorial.ink }} />
+                  <Typography variant="caption" sx={{ color: editorial.muted }}>
                     Loading your profile...
                   </Typography>
                 </Box>
@@ -1178,17 +1180,17 @@ export default function JobApplyPage() {
                       sx={{ alignItems: "flex-start", m: 0 }}
                       label={
                         <Box sx={{ pt: 0.5 }}>
-                          <Typography variant="body2" sx={{ color: "#374151", fontWeight: 600, lineHeight: 1.6 }}>
+                          <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800, lineHeight: 1.6 }}>
                             {PDPA_CONSENT_LABEL}
                           </Typography>
-                          <Typography variant="caption" sx={{ color: "#6B7280", display: "block", mt: 0.5, lineHeight: 1.7 }}>
+                          <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.5, lineHeight: 1.7 }}>
                             {PDPA_SUMMARY}{" "}
                             <Link component={RouterLink} to="/privacy" target="_blank" rel="noopener noreferrer" sx={{ fontWeight: 700 }}>
                               View Privacy Notice
                             </Link>
                           </Typography>
                           {pdpaTouched && !pdpaAccepted && (
-                            <Typography variant="caption" sx={{ color: "#DC2626", display: "block", mt: 0.75, fontWeight: 600 }}>
+                            <Typography variant="caption" sx={{ color: editorial.error, display: "block", mt: 0.75, fontWeight: 700 }}>
                               Consent is required before submission.
                             </Typography>
                           )}
@@ -1204,20 +1206,20 @@ export default function JobApplyPage() {
                     fullWidth
                     disabled={submitting || duplicateChecking || !form.valid || !pdpaAccepted || (alreadyApplied && !adminOverrideMode)}
                     sx={{
-                      borderRadius: "8px",
+                      borderRadius: 0,
                       textTransform: "none",
-                      backgroundColor: "#0078D4",
-                      fontWeight: 600,
+                      backgroundColor: editorial.black,
+                      fontWeight: 800,
                       fontSize: "0.95rem",
                       py: 1.5,
-                      boxShadow: "0 2px 8px rgba(0, 120, 212, 0.25)",
+                      boxShadow: "none",
                       transition: "all 0.25s",
                       "&:hover": {
-                        backgroundColor: "#106EBE",
-                        boxShadow: "0 4px 14px rgba(0, 120, 212, 0.35)",
+                        backgroundColor: "#333333",
+                        boxShadow: "none",
                       },
                       "&:disabled": {
-                        backgroundColor: "#93C5FD",
+                        backgroundColor: "#A7ADB6",
                       },
                     }}
                   >
@@ -1233,7 +1235,7 @@ export default function JobApplyPage() {
                     )}
                   </Button>
 
-                  <Typography variant="caption" sx={{ color: "#9CA3AF", textAlign: "center" }}>
+                  <Typography variant="caption" sx={{ color: editorial.muted, textAlign: "center" }}>
                     Notice version {PDPA_NOTICE_VERSION}. Your consent record is stored with this application.
                   </Typography>
                 </Box>

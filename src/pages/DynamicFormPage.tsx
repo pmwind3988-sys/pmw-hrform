@@ -42,13 +42,13 @@ if (!Serializer.findProperty("text", "autocapitalize")) {
 
 // Theme tokens
 const LIGHT = {
-  purple: "#0078D4", purpleLight: "#106EBE", purplePale: "#E6F2FB", purpleMid: "#B4D5F0",
-  purpleDark: "#005A9E", bg: "#F6F8FB", cardBg: "#FFFFFF", offWhite: "#F9FAFB", border: "#DDE5EE",
-  textPrimary: "#111827", textSecond: "#6B7280", textMuted: "#9CA3AF",
-  green: "#059669", greenPale: "#D1FAE5", greenBorder: "#6EE7B7",
-  red: "#DC2626", redPale: "#FEE2E2", amber: "#D97706", amberPale: "#FEF3C7",
-  shadow: "0 1px 2px rgba(17,24,39,0.05),0 4px 12px rgba(17,24,39,0.06)",
-  shadowLg: "0 12px 40px rgba(17,24,39,0.14)", shadowFab: "0 4px 18px rgba(0,120,212,0.18)",
+  purple: "#101010", purpleLight: "#333333", purplePale: "#EAF5FC", purpleMid: "#BFDDF4",
+  purpleDark: "#000000", bg: "linear-gradient(180deg,#BFDDF4 0%,#DCECF8 46%,#F7F5EF 100%)", cardBg: "#FFFFFF", offWhite: "#F7F5EF", border: "#D6DCE5",
+  textPrimary: "#101010", textSecond: "#5F646D", textMuted: "#747B86",
+  green: "#107C10", greenPale: "#E3F1E3", greenBorder: "#107C10",
+  red: "#C62828", redPale: "#F8E4E4", amber: "#805800", amberPale: "#FFF7BD",
+  shadow: "none",
+  shadowLg: "0 18px 42px rgba(16,16,16,0.14)", shadowFab: "0 10px 28px rgba(16,16,16,0.10)",
 };
 
 const DARK = {

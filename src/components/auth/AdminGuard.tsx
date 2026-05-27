@@ -73,7 +73,7 @@ export default function AdminGuard({ isAdmin, children }: AdminGuardProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--app-bg, #F6F8FB)",
+          background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))",
           p: 3,
         }}
       >

@@ -844,7 +844,7 @@ export default function AdminFormBuilder() {
             <ArrowBackIcon style={{ fontSize: 14 }} /> Dashboard
           </button>
           <div style={{ width: 1, height: 17, background: C.border }} />
-          <span style={{ fontSize: 18, color: '#6264A7', display: 'inline-flex' }}><DescriptionIcon style={{ fontSize: 18 }} /></span>
+          <span style={{ fontSize: 18, color: C.black, display: 'inline-flex' }}><DescriptionIcon style={{ fontSize: 18 }} /></span>
           <span className="afb-header-title" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
             {isEditing ? `Editing: ${meta.formTitle}` : "New Form"}
           </span>

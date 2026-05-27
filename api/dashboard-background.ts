@@ -98,7 +98,7 @@ function normalizeImageSource(value: unknown): string {
 function normalizeImageOpacity(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_SETTING.imageOpacity;
-  return Math.min(0.75, Math.max(0, parsed));
+  return Math.min(1, Math.max(0, parsed));
 }
 
 function normalizeSetting(fields: Record<string, unknown> | undefined): DashboardBackgroundSetting {

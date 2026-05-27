@@ -1,6 +1,7 @@
 import { Box, Grid, Typography } from "@mui/material";
 import { Description as DescriptionIcon, CheckCircle as CheckCircleIcon, AccessTime as AccessTimeIcon, Cancel as CancelIcon } from "@mui/icons-material";
 import type { Submission } from "../../types";
+import { editorial, editorialShadow } from "../../theme/editorial";
 
 interface StatsRowProps {
   submissions: Submission[];
@@ -28,33 +29,33 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       label: "Total",
       value: submissions.length,
       icon: <DescriptionIcon sx={{ fontSize: 24 }} />,
-      bg: "rgba(98, 100, 167, 0.08)",
-      color: "#6264A7",
-      accent: "#8E91C4",
+      bg: editorial.blueWash,
+      color: editorial.ink,
+      accent: editorial.ink,
     },
     {
       label: "Approved",
       value: approved,
       icon: <CheckCircleIcon sx={{ fontSize: 24 }} />,
-      bg: "rgba(22, 163, 74, 0.08)",
-      color: "#16A34A",
-      accent: "#4ADE80",
+      bg: "#E3F1E3",
+      color: editorial.success,
+      accent: editorial.success,
     },
     {
       label: "Pending",
       value: pending,
       icon: <AccessTimeIcon sx={{ fontSize: 24 }} />,
-      bg: "rgba(217, 119, 6, 0.08)",
-      color: "#D97706",
-      accent: "#FBBF24",
+      bg: "#FFF7BD",
+      color: editorial.warning,
+      accent: editorial.warning,
     },
     {
       label: "Rejected",
       value: rejected,
       icon: <CancelIcon sx={{ fontSize: 24 }} />,
-      bg: "rgba(220, 38, 38, 0.08)",
-      color: "#DC2626",
-      accent: "#F87171",
+      bg: "#F8E4E4",
+      color: editorial.error,
+      accent: editorial.error,
     },
   ];
 
@@ -65,18 +66,18 @@ export default function StatsRow({ submissions }: StatsRowProps) {
           <Box
             sx={{
               backgroundColor: "#ffffff",
-              borderRadius: "8px",
+              borderRadius: "14px",
               p: { xs: 1.75, sm: 2.5 },
               display: "flex",
               alignItems: "center",
               gap: { xs: 1.25, sm: 2 },
               transition: "box-shadow 0.2s ease, border-color 0.2s ease",
-              border: "1px solid rgba(17, 24, 39, 0.08)",
-              boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
+              border: `1px solid ${editorial.border}`,
+              boxShadow: "none",
               cursor: "default",
               "&:hover": {
-                boxShadow: "0 8px 20px rgba(17, 24, 39, 0.08)",
-                borderColor: "rgba(17, 24, 39, 0.12)",
+                boxShadow: editorialShadow,
+                borderColor: editorial.ink,
               },
             }}
           >
@@ -84,7 +85,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
               sx={{
                 width: { xs: 44, sm: 56 },
                 height: { xs: 44, sm: 56 },
-                borderRadius: "8px",
+                borderRadius: "50%",
                 backgroundColor: stat.bg,
                 display: "flex",
                 alignItems: "center",
@@ -101,7 +102,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 sx={{
                   textTransform: "uppercase",
                   letterSpacing: 0,
-                  color: "#6B7280",
+                color: editorial.muted,
                   fontWeight: 600,
                   fontSize: "0.7rem",
                   display: "block",
@@ -114,7 +115,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 variant="h4"
                 sx={{
                   fontWeight: 700,
-                  color: "#111827",
+                  color: editorial.ink,
                   letterSpacing: 0,
                   lineHeight: 1.15,
                   fontSize: "2rem",

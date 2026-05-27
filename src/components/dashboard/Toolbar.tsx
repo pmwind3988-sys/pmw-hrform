@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { Search as SearchIcon, FilterList as FilterListIcon } from "@mui/icons-material";
 import type { DiscoveredList } from "../../types";
+import { editorial } from "../../theme/editorial";
 
 interface ToolbarProps {
   search: string;
@@ -52,9 +53,9 @@ export default function Toolbar({
     <Box
       sx={{
         backgroundColor: "#ffffff",
-        borderRadius: "8px",
-        border: "1px solid rgba(17, 24, 39, 0.08)",
-        boxShadow: "0 1px 2px rgba(17, 24, 39, 0.05), 0 4px 12px rgba(17, 24, 39, 0.05)",
+        borderRadius: "14px",
+        border: `1px solid ${editorial.border}`,
+        boxShadow: "none",
         p: { xs: 1.5, sm: 2 },
       }}
     >
@@ -78,15 +79,15 @@ export default function Toolbar({
               flex: { xs: "none", sm: "1 1 280px" },
               minWidth: { xs: "100%", sm: 240 },
               "& .MuiOutlinedInput-root": {
-                borderRadius: "8px",
-                backgroundColor: "#F8F9FC",
+                borderRadius: "10px",
+                backgroundColor: editorial.paperSoft,
                 transition: "all 0.2s ease",
                 "&:hover": {
-                  backgroundColor: "#F3F4F6",
+                  backgroundColor: editorial.blueWash,
                 },
                 "&.Mui-focused": {
                   backgroundColor: "#ffffff",
-                  boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.1)",
+                  boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
                 },
               },
             }}
@@ -94,7 +95,7 @@ export default function Toolbar({
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                    <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
                   </InputAdornment>
                 ),
               },
@@ -108,7 +109,7 @@ export default function Toolbar({
               value={listFilter}
               label="List"
               onChange={(e) => setListFilter(e.target.value)}
-              sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+              sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
             >
               <MenuItem value="">All lists</MenuItem>
               {visibleLists.map((list) => (
@@ -126,7 +127,7 @@ export default function Toolbar({
               value={statusFilter}
               label="Status"
               onChange={(e) => setStatusFilter(e.target.value)}
-              sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+              sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
             >
               <MenuItem value="all">All statuses</MenuItem>
               <MenuItem value="pending">Pending</MenuItem>
@@ -144,7 +145,7 @@ export default function Toolbar({
               value={sortBy}
               label="Sort by"
               onChange={(e) => setSortBy(e.target.value)}
-              sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+              sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
             >
               <MenuItem value="newest">Newest first</MenuItem>
               <MenuItem value="oldest">Oldest first</MenuItem>
@@ -164,7 +165,7 @@ export default function Toolbar({
               gap: 2,
               alignItems: { xs: "stretch", sm: "center" },
               pt: 2,
-              borderTop: "1px solid rgba(0,0,0,0.06)",
+              borderTop: `1px solid ${editorial.border}`,
             }}
           >
             <TextField
@@ -177,14 +178,14 @@ export default function Toolbar({
                 minWidth: { xs: "100%", sm: 240 },
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
+                  backgroundColor: editorial.paperSoft,
                   transition: "all 0.2s ease",
                   "&:hover": {
-                    backgroundColor: "#F3F4F6",
+                    backgroundColor: editorial.blueWash,
                   },
                   "&.Mui-focused": {
                     backgroundColor: "#ffffff",
-                    boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.1)",
+                    boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
                   },
                 },
               }}
@@ -194,9 +195,9 @@ export default function Toolbar({
               size="small"
               sx={{
                 width: { xs: "100%", sm: "auto" },
-                backgroundColor: "rgba(98,100,167,0.08)",
-                color: "#6264A7",
-                border: "1px solid rgba(98,100,167,0.15)",
+                backgroundColor: editorial.yellow,
+                color: editorial.ink,
+                border: `1px solid ${editorial.ink}`,
                 fontWeight: 500,
                 fontSize: "0.75rem",
                 height: 32,
@@ -207,14 +208,14 @@ export default function Toolbar({
 
         {hasFilters && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1 }}>
-            <FilterListIcon sx={{ fontSize: 18, color: "#6B7280" }} />
+            <FilterListIcon sx={{ fontSize: 18, color: editorial.muted }} />
             <Chip
               label={`Showing ${filtered} of ${total} submissions`}
               size="small"
               sx={{
-                backgroundColor: "#F8F9FC",
-                color: "#111827",
-                border: "1px solid rgba(0,0,0,0.06)",
+                backgroundColor: editorial.paperSoft,
+                color: editorial.ink,
+                border: `1px solid ${editorial.border}`,
                 fontWeight: 500,
                 fontSize: "0.75rem",
                 height: 32,
