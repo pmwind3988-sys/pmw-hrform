@@ -14,7 +14,7 @@ import type { LayerConfigItem, EvaluationDataEntry } from "../types";
 import DOMPurify from "dompurify";
 import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
-import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { rowsToHtml, getDynamicMatrixFields } from "../utils/DynamicMatrix";
 import LockIcon from "@mui/icons-material/Lock";
@@ -63,6 +63,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
       }
     }
 
+    const { generateAndStorePdf, buildPdfLayerResults } = await import("../utils/generateFormPdf");
     await generateAndStorePdf(token, listTitle, responseItemId, {
       surveyJson: surveyContent as PdfFormData["surveyJson"],
       responseData: data,
@@ -173,8 +174,8 @@ export default function EvaluationPage() {
     const email = accounts[0]?.username || null;
     setUserEmail(email);
     const origin = new URL(SP_SITE_URL).origin;
-    instance.acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
-      .then(r => { setToken(r.accessToken); setAuthState("authorized"); })
+    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
+      .then((accessToken) => { setToken(accessToken); setAuthState("authorized"); })
       .catch(() => { setAuthState("error"); setError("Failed to acquire token."); });
   }, [isPublic, isAuthenticated, inProgress, instance, accounts]);
 

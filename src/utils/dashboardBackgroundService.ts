@@ -1,5 +1,6 @@
 import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
 import type { DashboardBackgroundSetting } from "./dashboardBackgrounds";
+import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
 import { ensureDashboardBackgroundSettingsList } from "./formBuilderSP";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -33,18 +34,10 @@ async function acquireSharePointToken(
     throw new Error("No signed-in account found.");
   }
 
-  try {
-    const response = await instance.acquireTokenSilent({
-      scopes: [sharePointScope()],
-      account: accounts[0],
-    });
-    return response.accessToken;
-  } catch {
-    const response = await instance.acquireTokenPopup({
-      scopes: [sharePointScope()],
-    });
-    return response.accessToken;
-  }
+  return acquireAccessTokenSilentOrRedirect(instance, {
+    scopes: [sharePointScope()],
+    account: accounts[0],
+  });
 }
 
 export async function fetchDashboardBackground(): Promise<DashboardBackgroundSetting> {

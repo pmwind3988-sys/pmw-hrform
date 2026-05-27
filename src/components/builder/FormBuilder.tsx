@@ -5,6 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo, Fragment } from "react";
 import { Survey } from "survey-react-ui";
 import { Model, Serializer } from "survey-core";
+import "survey-core/survey-core.min.css";
 import type { SurveyJson, FormBuilderField } from "../../types/index";
 import { QUESTION_TYPES, TYPE_GROUPS, createQuestion, buildSurveyJson, validateFields, getSpColumnKind, safeEvalArithmetic } from "../../utils/FormBuilderEngine";
 import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree, reorderFieldsRecursive, moveFieldToRoot } from "../../utils/FormBuilderEngine";

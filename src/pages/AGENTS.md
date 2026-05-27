@@ -16,7 +16,7 @@
 
 ## Conventions
 - **Prop-drilling**: `AdminHomePage` receives massive props from `App.tsx` — no context abstraction yet.
-- **Eager imports**: All pages imported statically in `App.tsx` — no `React.lazy()` or route-level code splitting.
+- **Route imports**: Pages are dynamically imported from `App.tsx` via `src/components/LazyRoute.tsx` — no `React.lazy()`.
 - **No barrel export**: Import each page directly by path, e.g. `import AdminHomePage from "../pages/AdminHomePage"`.
 - **Each page is self-contained**: Pages don't import from other pages.
 

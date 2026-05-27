@@ -3,6 +3,7 @@ import type {
   DiscoveredList,
   SharePointClient,
 } from "../types";
+import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
 
 /** Wraps fetch with an AbortController timeout (default 30s) */
 async function fetchWithTimeout(url: string | URL | Request, options: RequestInit = {}, timeoutMs = 30000): Promise<Response> {
@@ -37,18 +38,10 @@ async function getToken(
     throw new Error("No accounts found. User must sign in first.");
   }
 
-  try {
-    const response = await instance.acquireTokenSilent({
-      scopes: [spScope()],
-      account: accounts[0],
-    });
-    return response.accessToken;
-  } catch {
-    const response = await instance.acquireTokenPopup({
-      scopes: [spScope()],
-    });
-    return response.accessToken;
-  }
+  return acquireAccessTokenSilentOrRedirect(instance, {
+    scopes: [spScope()],
+    account: accounts[0],
+  });
 }
 
 async function getDigest(token: string): Promise<string> {

@@ -16,6 +16,7 @@ import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import { C } from "../components/builder/constants";
 import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { SP_STATIC } from "../utils/spConfig";
 import type { SurveyJson, LayerConfig, LayerConfigItem } from "../types";
 
@@ -332,16 +333,16 @@ export default function AdminFormBuilder() {
       setAuthChecked(true);
       const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
       try {
-        const r = await instance.acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
-        tokenRef.current = r.accessToken;
-        bootstrapSystemLists(r.accessToken, () => { }).catch(e => console.warn("[AFB] bootstrap:", e.message));
+        const token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
+        tokenRef.current = token;
+        bootstrapSystemLists(token, () => { }).catch(e => console.warn("[AFB] bootstrap:", e.message));
         try {
           const ud = await fetch(`${SP_SITE_URL}/_api/web/siteusers?$select=Email,Title&$filter=PrincipalType eq 1`, {
-            headers: { Authorization: `Bearer ${r.accessToken}`, Accept: "application/json;odata=nometadata" },
+            headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" },
           }).then(res => res.json());
           setSiteUsers((ud.value || []).filter((u: { Email: string }) => u.Email).map((u: { Email: string; Title: string }) => ({ email: u.Email, name: u.Title })));
         } catch { /* ignore */ }
-        getAllFormConfigs(r.accessToken).then(setAllForms).catch(e => showToast(`Could not load forms: ${e.message}`, "err"));
+        getAllFormConfigs(token).then(setAllForms).catch(e => showToast(`Could not load forms: ${e.message}`, "err"));
       } catch (e) {
         console.error("[AFB] token:", e);
         showToast("Authentication error — please refresh.", "err");
@@ -792,15 +793,21 @@ export default function AdminFormBuilder() {
           position: "fixed",
           top: 16,
           right: 16,
-          zIndex: 10000,
-          background: toast.type === "err" ? C.red : toast.type === "ok" ? C.green : C.purple,
-          color: C.white,
-          padding: "10px 18px",
+          zIndex: 20000,
+          background: C.white,
+          color: C.black,
+          padding: "12px 18px",
           borderRadius: 8,
-          fontSize: 12,
-          boxShadow: C.shadowMd,
+          border: `1px solid ${C.border}`,
+          borderLeft: `6px solid ${toast.type === "err" ? C.red : toast.type === "ok" ? C.green : C.purple}`,
+          fontSize: 13,
+          fontWeight: 800,
+          lineHeight: 1.45,
+          boxShadow: "0 16px 42px rgba(16,16,16,0.22)",
           animation: "fadeUp .2s ease",
           maxWidth: 360,
+          opacity: 1,
+          wordBreak: "break-word",
         }}>
           {toast.msg}
         </div>

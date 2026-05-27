@@ -9,6 +9,7 @@ import { InteractionStatus } from "@azure/msal-browser";
 import { Model, Serializer } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
+import "survey-core/survey-core.min.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
@@ -18,9 +19,7 @@ import { registerSignaturePad } from "../utils/SignaturePad";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import IosShareIcon from "@mui/icons-material/IosShare";
-import QRCode from "qrcode";
 import Logo from "../components/Logo";
-import { generateAndStorePdf, buildPdfLayerResults } from "../utils/generateFormPdf";
 import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
@@ -801,6 +800,7 @@ export default function DynamicFormPage() {
                   for (const page of sPages) { if (page.elements) walkEls(page.elements); }
                 }
               } catch { /* ignore matrix injection errors */ }
+              const { generateAndStorePdf, buildPdfLayerResults } = await import("../utils/generateFormPdf");
               await generateAndStorePdf(token, cfg.Title as string, result.Id, {
                 surveyJson: surveyContent as PdfFormData["surveyJson"],
                 responseData: pdfData,
@@ -920,9 +920,20 @@ export default function DynamicFormPage() {
   // Generate QR when modal opens
   useEffect(() => {
     if (!showQr) return;
-    QRCode.toDataURL(shareUrl, { width: 280, margin: 2, color: { dark: "#1E1B4B", light: "#FFFFFF" } })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(""));
+    let cancelled = false;
+    import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(shareUrl, { width: 280, margin: 2, color: { dark: "#1E1B4B", light: "#FFFFFF" } }),
+      )
+      .then((dataUrl) => {
+        if (!cancelled) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl("");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [showQr]);
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
   const showBanner = (formData?.meta?.showBanner as boolean) !== false;

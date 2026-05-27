@@ -30,6 +30,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
+  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+
   try {
     const token = await getGraphToken();
     const [items, portalCards] = await Promise.all([

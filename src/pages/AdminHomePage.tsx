@@ -44,7 +44,7 @@ function DashboardCareerCarousel() {
     if (card.targetType === "none" || !targetValue) return;
 
     if (card.targetType === "job") {
-      navigate(`/career-portal/${encodeURIComponent(targetValue)}/apply`);
+      navigate(`/career-portal?job=${encodeURIComponent(targetValue)}`);
       return;
     }
 

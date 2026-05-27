@@ -8,13 +8,14 @@ import { InteractionStatus } from "@azure/msal-browser";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { FlatLightPanelless } from "survey-core/themes";
+import "survey-core/survey-core.min.css";
 
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureSelectedBranchColumn } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
+import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
-import { generateAndStorePdf, buildPdfLayerResults } from "../../utils/generateFormPdf";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig } from "../../types";
 import BlockIcon from "@mui/icons-material/Block";
@@ -123,6 +124,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
       }
     }
 
+    const { buildPdfLayerResults } = await import("../../utils/generateFormPdf");
     return {
       surveyJson: surveyContent as PdfFormData["surveyJson"],
       responseData: data,
@@ -296,9 +298,8 @@ export default function ApprovalDashboard() {
     if (!isAuthenticated) return;
 
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    instance
-      .acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
-      .then((r) => setToken(r.accessToken))
+    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
+      .then(setToken)
       .catch(() => setError("Failed to acquire token"));
   }, [adminChecked, isAdmin, isAuthenticated, inProgress, instance, accounts]);
 
@@ -800,6 +801,7 @@ export default function ApprovalDashboard() {
         const pdfData = await loadPdfData(selectedItem, token);
         if (pdfData) {
           pdfData.meta.formStatus = isFinal ? "completed" : "in_review";
+          const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
           pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
         }
       } catch (pdfErr) {
@@ -939,6 +941,7 @@ export default function ApprovalDashboard() {
           const pdfData = await loadPdfData(selectedItem, token);
           if (pdfData) {
             pdfData.meta.formStatus = "approved";
+            const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
             pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
           }
         } catch (pdfErr) {
@@ -987,6 +990,7 @@ export default function ApprovalDashboard() {
         const pdfData = await loadPdfData(selectedItem, token);
         if (pdfData) {
           pdfData.meta.formStatus = "rejected";
+          const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
           pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
         }
       } catch (pdfErr) {

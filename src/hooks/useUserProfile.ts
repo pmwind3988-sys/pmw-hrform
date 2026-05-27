@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import type { AccountInfo } from "@azure/msal-browser";
+import { acquireAccessTokenSilentOrRedirect, startReauthentication } from "../utils/authRecovery";
+import { getStoredAuthDecision } from "../utils/authDecision";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,9 @@ export function useUserProfile(): UserProfile {
 
     async function fetchProfile(): Promise<void> {
       if (!account || !userIdentifier) {
+        if (getStoredAuthDecision() === "msal") {
+          await startReauthentication(instance, ["User.Read"]);
+        }
         setProfile({
           ...defaultProfile,
           loading: false,
@@ -73,7 +78,7 @@ export function useUserProfile(): UserProfile {
       }
 
       try {
-        const tokenResponse = await instance.acquireTokenSilent({
+        const accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: ["User.Read"],
           account,
         });
@@ -82,10 +87,14 @@ export function useUserProfile(): UserProfile {
           "https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,mobilePhone,businessPhones,department,jobTitle",
           {
             headers: {
-              Authorization: `Bearer ${tokenResponse.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
             },
           },
         );
+
+        if (response.status === 401) {
+          await startReauthentication(instance, ["User.Read"], account);
+        }
 
         if (!response.ok) {
           throw new Error(`Graph API error: ${response.status}`);

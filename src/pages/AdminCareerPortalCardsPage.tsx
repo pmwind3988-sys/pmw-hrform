@@ -44,6 +44,7 @@ import {
   fetchCareerPortalCards,
   updateCareerPortalCard,
 } from "../utils/careersService";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { ensureCareerPortalCardList } from "../utils/formBuilderSP";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { CareerPortalCard, JobListing } from "../types";
@@ -581,11 +582,11 @@ export default function AdminCareerPortalCardsPage() {
       throw new Error("No signed-in account is available to prepare SharePoint storage.");
     }
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    const result = await instance.acquireTokenSilent({
+    const token = await acquireAccessTokenSilentOrRedirect(instance, {
       scopes: [`${origin}/AllSites.Manage`],
       account,
     });
-    await ensureCareerPortalCardList(result.accessToken);
+    await ensureCareerPortalCardList(token);
   };
 
   const handleSave = async (card: PortalCardForm) => {

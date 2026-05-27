@@ -7,6 +7,9 @@ const CLIENT_SECRET = process.env.SYSTEM_CLIENT_SECRET || process.env.VITE_AZURE
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+let cachedGraphToken: { value: string; expiresAt: number } | null = null;
 
 // Extract hostname and server-relative path from SP_SITE_URL
 function parseSiteUrl(url: string): { hostname: string; path: string } {
@@ -32,6 +35,10 @@ export async function getGraphToken(): Promise<string> {
     );
   }
 
+  if (cachedGraphToken && cachedGraphToken.expiresAt - TOKEN_EXPIRY_BUFFER_MS > Date.now()) {
+    return cachedGraphToken.value;
+  }
+
   const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
@@ -51,7 +58,12 @@ export async function getGraphToken(): Promise<string> {
     throw new Error(`Token acquisition failed: ${res.status} ${errText}`);
   }
 
-  const data = (await res.json()) as { access_token: string };
+  const data = (await res.json()) as { access_token: string; expires_in?: number };
+  const expiresInMs = (Number(data.expires_in) || 3600) * 1000;
+  cachedGraphToken = {
+    value: data.access_token,
+    expiresAt: Date.now() + expiresInMs,
+  };
   return data.access_token;
 }
 

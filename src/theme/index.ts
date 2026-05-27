@@ -129,6 +129,9 @@ const theme = createTheme({
   shape: {
     borderRadius: 12,
   },
+  zIndex: {
+    snackbar: 20000,
+  },
   breakpoints: {
     values: {
       xs: 0,
@@ -303,6 +306,51 @@ const theme = createTheme({
             "&:hover": {
               backgroundColor: editorial.skySoft,
             },
+          },
+        },
+      },
+    },
+    MuiSnackbar: {
+      styleOverrides: {
+        root: {
+          zIndex: 20000,
+          "& .MuiAlert-root": {
+            alignItems: "center",
+            backgroundColor: editorial.white,
+            border: "1px solid rgba(16, 16, 16, 0.22)",
+            borderLeft: `6px solid ${editorial.pmwBlue}`,
+            borderRadius: "8px",
+            boxShadow: "0 16px 42px rgba(16, 16, 16, 0.22)",
+            color: editorial.black,
+            fontWeight: 800,
+            opacity: 1,
+          },
+          "& .MuiAlert-message": {
+            color: editorial.black,
+            fontWeight: 800,
+            lineHeight: 1.45,
+            padding: "8px 0",
+          },
+          "& .MuiAlert-icon": {
+            alignItems: "center",
+            opacity: 1,
+          },
+          "& .MuiAlert-action": {
+            alignItems: "center",
+            color: editorial.black,
+            paddingTop: 0,
+          },
+          "& .MuiAlert-standardSuccess, & .MuiAlert-filledSuccess, & .MuiAlert-outlinedSuccess": {
+            borderLeftColor: editorial.success,
+          },
+          "& .MuiAlert-standardError, & .MuiAlert-filledError, & .MuiAlert-outlinedError": {
+            borderLeftColor: editorial.error,
+          },
+          "& .MuiAlert-standardWarning, & .MuiAlert-filledWarning, & .MuiAlert-outlinedWarning": {
+            borderLeftColor: editorial.warning,
+          },
+          "& .MuiAlert-standardInfo, & .MuiAlert-filledInfo, & .MuiAlert-outlinedInfo": {
+            borderLeftColor: editorial.pmwBlue,
           },
         },
       },

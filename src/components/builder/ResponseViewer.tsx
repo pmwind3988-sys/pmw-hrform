@@ -9,6 +9,7 @@ import { InteractionStatus } from "@azure/msal-browser";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { FlatLightPanelless } from "survey-core/themes";
+import "survey-core/survey-core.min.css";
 
 import DOMPurify from "dompurify";
 import LockIcon from "@mui/icons-material/Lock";
@@ -16,6 +17,7 @@ import BlockIcon from "@mui/icons-material/Block";
 import { spGet, getFormConfigByTitle, readMatrixChildItems } from "../../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
+import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
 
@@ -109,9 +111,8 @@ export default function ResponseViewer() {
     if (!isAuthenticated) return;
 
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    instance
-      .acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
-      .then((r) => setToken(r.accessToken))
+    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
+      .then(setToken)
       .catch(() => setError("Failed to acquire token"));
   }, [adminChecked, isAdmin, isAuthenticated, inProgress, instance, accounts]);
 

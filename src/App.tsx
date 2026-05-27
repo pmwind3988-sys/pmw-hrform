@@ -8,6 +8,7 @@ import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
 import { createSpClient } from "./utils/sharepointClient";
+import { acquireAccessTokenSilentOrRedirect } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry } from "./types";
@@ -21,26 +22,39 @@ import LoadingScreen from "./components/auth/LoadingScreen";
 import ErrorScreen from "./components/auth/ErrorScreen";
 import AdminGuard from "./components/auth/AdminGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
-
-// Form builder pages
-import DynamicFormPage from "./pages/DynamicFormPage";
-import ApprovalDashboard from "./components/builder/ApprovalDashboard";
-import ResponseViewer from "./components/builder/ResponseViewer";
-import AdminFormBuilder from "./pages/AdminFormBuilder";
-import AdminHomePage from "./pages/AdminHomePage";
-import EvaluationPage from "./pages/EvaluationPage";
-import CareersPage from "./pages/CareersPage";
-import JobApplyPage from "./pages/JobApplyPage";
-import PrivacyNoticePage from "./pages/PrivacyNoticePage";
-import AdminJobsPage from "./pages/AdminJobsPage";
-import AdminJobManagePage from "./pages/AdminJobManagePage";
-import AdminCareerPortalCardsPage from "./pages/AdminCareerPortalCardsPage";
+import LazyRoute from "./components/LazyRoute";
 import { DashboardProvider } from "./contexts/DashboardContext";
 
 
 
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
+const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
+
+const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
+const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboard");
+const loadResponseViewer = () => import("./components/builder/ResponseViewer");
+const loadAdminFormBuilder = () => import("./pages/AdminFormBuilder");
+const loadAdminHomePage = () => import("./pages/AdminHomePage");
+const loadEvaluationPage = () => import("./pages/EvaluationPage");
+const loadCareersPage = () => import("./pages/CareersPage");
+const loadJobApplyPage = () => import("./pages/JobApplyPage");
+const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
+const loadAdminJobsPage = () => import("./pages/AdminJobsPage");
+const loadAdminJobManagePage = () => import("./pages/AdminJobManagePage");
+const loadAdminCareerPortalCardsPage = () => import("./pages/AdminCareerPortalCardsPage");
+
+function isPublicRoutePath(pathname: string): boolean {
+  return (
+    pathname === "/privacy" ||
+    pathname === "/career-portal" ||
+    pathname === "/careers" ||
+    pathname.startsWith("/form/") ||
+    pathname.startsWith("/eval/") ||
+    pathname.startsWith("/career-portal/") ||
+    pathname.startsWith("/careers/")
+  );
+}
 
 function normalizeStatus(status: string | null): string {
   if (!status) return "pending";
@@ -50,6 +64,28 @@ function normalizeStatus(status: string | null): string {
   if (normalized.includes("reject")) return "rejected";
   if (normalized.includes("progress") || normalized.includes("review")) return "inprogress";
   return "pending";
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      }
+    }),
+  );
+
+  return results;
 }
 
 function mapSubmission(
@@ -241,6 +277,9 @@ export default function App() {
   const [submitterFilter, setSubmitterFilter] = useState("");
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const isPublicRoute = isPublicRoutePath(currentPath);
   const authInitializedRef = useRef(false);
 
   // Auth state machine — runs only once after initial login
@@ -248,13 +287,18 @@ export default function App() {
     if (inProgress !== "none") return;
 
     // After the initial auth flow completes, ignore subsequent MSAL
-    // inProgress transitions (e.g. from silent token refreshes triggered
-    // by AdminFormBuilder's acquireTokenSilent) to prevent redirecting
+    // inProgress transitions (e.g. from token refreshes triggered
+    // by app pages) to prevent redirecting
     // the user away from their current page.
     if (authInitializedRef.current) return;
 
     if (isAuthenticated) {
-      setPageState("loading");
+      setPageState(isPublicRoute ? "ready" : "loading");
+      return;
+    }
+
+    if (isPublicRoute) {
+      setPageState("guest");
       return;
     }
 
@@ -265,11 +309,47 @@ if (decision === "guest") {
 } else {
   setPageState("choice");
 }
-  }, [isAuthenticated, inProgress, accounts, instance]);
+  }, [isAuthenticated, inProgress, accounts, instance, isPublicRoute]);
+
+  useEffect(() => {
+    if (!isAuthenticated || inProgress !== "none" || !accounts[0]) return;
+
+    let validating = false;
+    const validateActiveSession = () => {
+      if (validating || document.visibilityState === "hidden") return;
+      validating = true;
+      void acquireAccessTokenSilentOrRedirect(instance, {
+        scopes: loginRequest.scopes,
+        account: accounts[0],
+      })
+        .catch(() => {
+          // Non-auth token errors are handled by the request that needs the token.
+        })
+        .finally(() => {
+          validating = false;
+        });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        validateActiveSession();
+      }
+    };
+
+    window.addEventListener("focus", validateActiveSession);
+    window.addEventListener("pageshow", validateActiveSession);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", validateActiveSession);
+      window.removeEventListener("pageshow", validateActiveSession);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isAuthenticated, inProgress, instance, accounts]);
 
   
   useEffect(() => {
-    if (pageState !== "loading" || !isAuthenticated) return;
+    if (pageState !== "loading" || !isAuthenticated || isPublicRoute) return;
 
     const email = accounts[0]?.username || "";
     const tenantId = accounts[0]?.tenantId || "";
@@ -286,21 +366,15 @@ if (decision === "guest") {
 
     async function fetchData() {
       try {
-        // Step 1: Check admin status
-        setLoadStatus("Checking permissions...");
+        // Steps 1-3: These calls are independent, so start them together.
+        setLoadStatus("Loading permissions, lists, and configuration...");
         setLoadProgress(10);
-        const adminResult = await spClient.isGroupMember(SP_STATIC.adminGroup);
+        const [adminResult, allLists, config] = await Promise.all([
+          spClient.isGroupMember(SP_STATIC.adminGroup),
+          spClient.discoverLists(),
+          loadConfig(spClient),
+        ]);
         setIsAdmin(adminResult);
-        setLoadProgress(20);
-
-        // Step 2: Discover lists
-        setLoadStatus("Discovering lists...");
-        const allLists = await spClient.discoverLists();
-        setLoadProgress(35);
-
-        // Step 3: Load config from Master Form
-        setLoadStatus("Loading configuration...");
-        const config = await loadConfig(spClient);
         setLoadedConfig(config);
         setLoadProgress(50);
 
@@ -335,25 +409,30 @@ if (decision === "guest") {
             : "No lists to fetch from."
         );
 
-        const allSubmissions: Submission[] = [];
-        for (let i = 0; i < visible.length; i++) {
-          const list = visible[i];
-          setLoadStatus(`Fetching submissions from "${list.title}" (${i + 1}/${totalLists})...`);
-          setLoadProgress(50 + Math.round(((i + 1) / totalLists) * 45));
+        let completedLists = 0;
+        const submissionsByList = await mapWithConcurrency(
+          visible,
+          DASHBOARD_LIST_FETCH_CONCURRENCY,
+          async (list) => {
+            setLoadStatus(`Fetching submissions from "${list.title}"...`);
 
-          try {
-            const items = await spClient.queryList(list.title, {
-              select: "*",
-              orderby: "Created desc",
-              top: adminResult ? 5000 : 1000,
-            });
-            for (const item of items) {
-              allSubmissions.push(mapSubmission(item, list.title, listMetaMap, config.layerConfigs));
+            try {
+              const items = await spClient.queryList(list.title, {
+                select: "*",
+                orderby: "Created desc",
+                top: adminResult ? 5000 : 1000,
+              });
+              return items.map((item) => mapSubmission(item, list.title, listMetaMap, config.layerConfigs));
+            } catch {
+              return [] as Submission[];
+            } finally {
+              completedLists += 1;
+              setLoadProgress(50 + Math.round((completedLists / Math.max(totalLists, 1)) * 45));
+              setLoadStatus(`Fetched ${completedLists}/${totalLists} list${totalLists !== 1 ? "s" : ""}...`);
             }
-          } catch {
-            // Skip lists that fail to query
-          }
-        }
+          },
+        );
+        const allSubmissions = submissionsByList.flat();
 
         // Step 6: Finalize
         setLoadStatus("Finalizing...");
@@ -389,15 +468,15 @@ if (decision === "guest") {
     }
 
     fetchData();
-  }, [pageState, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pageState, isAuthenticated, isPublicRoute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to preserved route after successful login — fires only once
   const postAuthRedirectRef = useRef(false);
   useEffect(() => {
     if (pageState === "ready" && isAuthenticated && !postAuthRedirectRef.current) {
       postAuthRedirectRef.current = true;
-      // Don't redirect away from form/eval pages
-      if (window.location.pathname.startsWith("/form/") || window.location.pathname.startsWith("/eval/")) return;
+      // Don't redirect away from public pages
+      if (isPublicRoute) return;
       try {
         const redirectPath = sessionStorage.getItem("pmw_post_login_redirect");
         if (redirectPath) {
@@ -416,7 +495,7 @@ if (decision === "guest") {
         // Ignore storage errors
       }
     }
-  }, [pageState, isAuthenticated, navigate, isAdmin]);
+  }, [pageState, isAuthenticated, navigate, isAdmin, isPublicRoute]);
 
   const handleLogin = () => {
     // Check if login already in progress
@@ -511,14 +590,9 @@ if (decision === "guest") {
 
   const hasFilters = !!(search || listFilter || statusFilter !== "all" || submitterFilter);
 
-  const location = useLocation();
-  const currentPath = location.pathname;
-  const isFormRoute = currentPath.startsWith("/form/");
-  const isPrivacyRoute = currentPath === "/privacy";
-
   // ---- Render ----
 
-  if (pageState === "checking" || (pageState === "loading" && loading && !isFormRoute)) {
+  if ((pageState === "checking" && !isPublicRoute) || (pageState === "loading" && loading && !isPublicRoute)) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -527,7 +601,7 @@ if (decision === "guest") {
     );
   }
 
-  const showAuthGate = !isAuthenticated && !isFormRoute && !isPrivacyRoute;
+  const showAuthGate = !isAuthenticated && !isPublicRoute;
 
   if (showAuthGate && pageState === "choice") {
     return (
@@ -594,7 +668,7 @@ if (decision === "guest") {
         onOpenBuilder={() => navigate("/admin/builder")}
         onEditForm={(listTitle: string) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
       >
-        <AdminHomePage />
+        <LazyRoute load={loadAdminHomePage} fallback={<LoadingScreen status="Loading dashboard..." />} />
       </DashboardProvider>
     </ErrorBoundary>
   );
@@ -608,7 +682,7 @@ if (decision === "guest") {
             path="/privacy"
             element={
               <ErrorBoundary>
-                <PrivacyNoticePage />
+                <LazyRoute load={loadPrivacyNoticePage} fallback={<LoadingScreen status="Loading page..." />} />
               </ErrorBoundary>
             }
           />
@@ -617,7 +691,7 @@ if (decision === "guest") {
             element={
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <DynamicFormPage />
+                  <LazyRoute load={loadDynamicFormPage} fallback={<LoadingScreen status="Loading form..." />} />
                 </Box>
               </ErrorBoundary>
             }
@@ -628,7 +702,7 @@ if (decision === "guest") {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                    <ApprovalDashboard />
+                    <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
@@ -640,7 +714,7 @@ if (decision === "guest") {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                    <ResponseViewer />
+                    <LazyRoute load={loadResponseViewer} fallback={<LoadingScreen status="Loading responses..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
@@ -652,7 +726,7 @@ if (decision === "guest") {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh" }}>
-                    <AdminFormBuilder />
+                    <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
@@ -664,7 +738,7 @@ if (decision === "guest") {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh" }}>
-                    <AdminFormBuilder />
+                    <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
@@ -692,7 +766,7 @@ if (decision === "guest") {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                    <AdminJobsPage />
+                    <LazyRoute load={loadAdminJobsPage} fallback={<LoadingScreen status="Loading applications..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
@@ -704,7 +778,7 @@ if (decision === "guest") {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                    <AdminJobManagePage />
+                    <LazyRoute load={loadAdminJobManagePage} fallback={<LoadingScreen status="Loading opportunities..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
@@ -716,7 +790,7 @@ if (decision === "guest") {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                    <AdminCareerPortalCardsPage />
+                    <LazyRoute load={loadAdminCareerPortalCardsPage} fallback={<LoadingScreen status="Loading cards..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
@@ -743,7 +817,7 @@ if (decision === "guest") {
             element={
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <EvaluationPage />
+                  <LazyRoute load={loadEvaluationPage} fallback={<LoadingScreen status="Loading evaluation..." />} />
                 </Box>
               </ErrorBoundary>
             }
@@ -753,7 +827,7 @@ if (decision === "guest") {
             element={
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <EvaluationPage />
+                  <LazyRoute load={loadEvaluationPage} fallback={<LoadingScreen status="Loading evaluation..." />} />
                 </Box>
               </ErrorBoundary>
             }
@@ -763,7 +837,7 @@ if (decision === "guest") {
             element={
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <CareersPage />
+                  <LazyRoute load={loadCareersPage} fallback={<LoadingScreen status="Loading career portal..." />} />
                 </Box>
               </ErrorBoundary>
             }
@@ -773,7 +847,7 @@ if (decision === "guest") {
             element={
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <JobApplyPage />
+                  <LazyRoute load={loadJobApplyPage} fallback={<LoadingScreen status="Loading application..." />} />
                 </Box>
               </ErrorBoundary>
             }
@@ -787,7 +861,7 @@ if (decision === "guest") {
             element={
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <JobApplyPage />
+                  <LazyRoute load={loadJobApplyPage} fallback={<LoadingScreen status="Loading application..." />} />
                 </Box>
               </ErrorBoundary>
             }

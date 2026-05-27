@@ -109,7 +109,7 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 - **NO `forwardRef`** or manual memoization — React 19 makes these unnecessary
 - **NO `useMemo`/`useCallback`** — redundant in React 19. Exception: `src/hooks/useReactiveForm.ts` (hook implementation) has 5 — leave those.
 - **NO path aliases** — all imports relative (`../../utils/...`). No barrel exports except `src/components/builder/index.ts`.
-- **NO `React.lazy()`** — all pages eagerly imported in `App.tsx`.
+- **NO `React.lazy()`** — route pages are loaded through `src/components/LazyRoute.tsx` dynamic imports in `App.tsx`.
 - `FormBuilder.tsx` has `eslint-disable` and `any[]` usage
 - `DetailModal.tsx` uses `dangerouslySetInnerHTML` — always uses `DOMPurify.sanitize()` but audit if user input bypasses it
 - **Build**: Run `npm run build` after all changes. Do NOT add new TS errors.

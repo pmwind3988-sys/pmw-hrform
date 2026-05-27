@@ -1,6 +1,9 @@
+import { useState } from "react";
 import {
   Box,
+  Button,
   Chip,
+  Collapse,
   FormControl,
   InputAdornment,
   InputLabel,
@@ -9,7 +12,12 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
-import { Search as SearchIcon, FilterList as FilterListIcon } from "@mui/icons-material";
+import {
+  ExpandLess,
+  ExpandMore,
+  FilterList as FilterListIcon,
+  Search as SearchIcon,
+} from "@mui/icons-material";
 import type { DiscoveredList } from "../../types";
 import { editorial } from "../../theme/editorial";
 
@@ -46,6 +54,13 @@ export default function Toolbar({
   total,
   filtered,
 }: ToolbarProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const detailedFilterCount = [
+    Boolean(listFilter),
+    statusFilter !== "all",
+    sortBy !== "newest",
+    Boolean(submitterFilter),
+  ].filter(Boolean).length;
   const hasFilters =
     search || listFilter || statusFilter !== "all" || submitterFilter;
 
@@ -62,22 +77,19 @@ export default function Toolbar({
       <Stack spacing={{ xs: 1.5, sm: 2 }}>
         <Box
           sx={{
-            display: "flex",
-            flexDirection: { xs: "column", sm: "row" },
-            flexWrap: "wrap",
-            gap: 2,
-            alignItems: { xs: "stretch", sm: "center" },
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            gap: { xs: 1, sm: 1.5 },
+            alignItems: "center",
           }}
         >
-          {/* Search */}
           <TextField
             placeholder="Search submissions..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             size="small"
             sx={{
-              flex: { xs: "none", sm: "1 1 280px" },
-              minWidth: { xs: "100%", sm: 240 },
+              minWidth: 0,
               "& .MuiOutlinedInput-root": {
                 borderRadius: "10px",
                 backgroundColor: editorial.paperSoft,
@@ -102,109 +114,145 @@ export default function Toolbar({
             }}
           />
 
-          {/* List filter */}
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }}>
-            <InputLabel>List</InputLabel>
-            <Select
-              value={listFilter}
-              label="List"
-              onChange={(e) => setListFilter(e.target.value)}
-              sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
-            >
-              <MenuItem value="">All lists</MenuItem>
-              {visibleLists.map((list) => (
-                <MenuItem key={list.title} value={list.title}>
-                  {list.title}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {/* Status filter */}
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }}>
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={statusFilter}
-              label="Status"
-              onChange={(e) => setStatusFilter(e.target.value)}
-              sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
-            >
-              <MenuItem value="all">All statuses</MenuItem>
-              <MenuItem value="pending">Pending</MenuItem>
-              <MenuItem value="inProgress">In Review</MenuItem>
-              <MenuItem value="approved">Approved</MenuItem>
-              <MenuItem value="fullyApproved">Fully Approved</MenuItem>
-              <MenuItem value="rejected">Rejected</MenuItem>
-            </Select>
-          </FormControl>
-
-          {/* Sort */}
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 140 } }}>
-            <InputLabel>Sort by</InputLabel>
-            <Select
-              value={sortBy}
-              label="Sort by"
-              onChange={(e) => setSortBy(e.target.value)}
-              sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
-            >
-              <MenuItem value="newest">Newest first</MenuItem>
-              <MenuItem value="oldest">Oldest first</MenuItem>
-              <MenuItem value="status">By status</MenuItem>
-              <MenuItem value="list">By list</MenuItem>
-            </Select>
-          </FormControl>
+          <Button
+            variant={advancedOpen ? "contained" : "outlined"}
+            startIcon={<FilterListIcon />}
+            endIcon={advancedOpen ? <ExpandLess /> : <ExpandMore />}
+            onClick={() => setAdvancedOpen((open) => !open)}
+            sx={{
+              justifySelf: "end",
+              height: 40,
+              minWidth: { xs: 116, sm: 178 },
+              px: { xs: 1.25, sm: 2 },
+              borderRadius: "10px",
+              whiteSpace: "nowrap",
+              "& .MuiButton-startIcon": {
+                mr: { xs: 0.5, sm: 0.75 },
+              },
+              "& .MuiButton-endIcon": {
+                ml: { xs: 0.25, sm: 0.75 },
+              },
+            }}
+          >
+            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+              Advanced Search
+            </Box>
+            <Box component="span" sx={{ display: { xs: "inline", sm: "none" } }}>
+              Advanced
+            </Box>
+            {detailedFilterCount > 0 && (
+              <Box component="span" sx={{ ml: 0.75 }}>
+                ({detailedFilterCount})
+              </Box>
+            )}
+          </Button>
         </Box>
 
-        {/* Admin submitter filter + indicator */}
-        {isAdmin && (
+        <Collapse in={advancedOpen} timeout={180} unmountOnExit>
           <Box
             sx={{
-              display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
-              flexWrap: "wrap",
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: isAdmin ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
+                lg: isAdmin ? "repeat(4, minmax(0, 1fr)) auto" : "repeat(3, minmax(0, 1fr))",
+              },
               gap: 2,
-              alignItems: { xs: "stretch", sm: "center" },
+              alignItems: "center",
               pt: 2,
               borderTop: `1px solid ${editorial.border}`,
             }}
           >
-            <TextField
-              placeholder="Filter by submitter email..."
-              value={submitterFilter}
-              onChange={(e) => setSubmitterFilter(e.target.value)}
-              size="small"
-              sx={{
-                flex: { xs: "none", sm: "1 1 280px" },
-                minWidth: { xs: "100%", sm: 240 },
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "8px",
-                  backgroundColor: editorial.paperSoft,
-                  transition: "all 0.2s ease",
-                  "&:hover": {
-                    backgroundColor: editorial.blueWash,
-                  },
-                  "&.Mui-focused": {
-                    backgroundColor: "#ffffff",
-                    boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
-                  },
-                },
-              }}
-            />
-            <Chip
-              label="Admin — all users visible"
-              size="small"
-              sx={{
-                width: { xs: "100%", sm: "auto" },
-                backgroundColor: editorial.yellow,
-                color: editorial.ink,
-                border: `1px solid ${editorial.ink}`,
-                fontWeight: 500,
-                fontSize: "0.75rem",
-                height: 32,
-              }}
-            />
+            <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel>List</InputLabel>
+              <Select
+                value={listFilter}
+                label="List"
+                onChange={(e) => setListFilter(e.target.value)}
+                sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
+              >
+                <MenuItem value="">All lists</MenuItem>
+                {visibleLists.map((list) => (
+                  <MenuItem key={list.title} value={list.title}>
+                    {list.title}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={statusFilter}
+                label="Status"
+                onChange={(e) => setStatusFilter(e.target.value)}
+                sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
+              >
+                <MenuItem value="all">All statuses</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="inProgress">In Review</MenuItem>
+                <MenuItem value="approved">Approved</MenuItem>
+                <MenuItem value="fullyApproved">Fully Approved</MenuItem>
+                <MenuItem value="rejected">Rejected</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 0 }}>
+              <InputLabel>Sort by</InputLabel>
+              <Select
+                value={sortBy}
+                label="Sort by"
+                onChange={(e) => setSortBy(e.target.value)}
+                sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
+              >
+                <MenuItem value="newest">Newest first</MenuItem>
+                <MenuItem value="oldest">Oldest first</MenuItem>
+                <MenuItem value="status">By status</MenuItem>
+                <MenuItem value="list">By list</MenuItem>
+              </Select>
+            </FormControl>
+
+            {isAdmin && (
+              <>
+                <TextField
+                  placeholder="Filter by submitter email..."
+                  value={submitterFilter}
+                  onChange={(e) => setSubmitterFilter(e.target.value)}
+                  size="small"
+                  sx={{
+                    minWidth: 0,
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "8px",
+                      backgroundColor: editorial.paperSoft,
+                      transition: "all 0.2s ease",
+                      "&:hover": {
+                        backgroundColor: editorial.blueWash,
+                      },
+                      "&.Mui-focused": {
+                        backgroundColor: "#ffffff",
+                        boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
+                      },
+                    },
+                  }}
+                />
+                <Chip
+                  label="Admin - all users visible"
+                  size="small"
+                  sx={{
+                    justifySelf: { xs: "stretch", lg: "end" },
+                    width: { xs: "100%", lg: "auto" },
+                    backgroundColor: editorial.yellow,
+                    color: editorial.ink,
+                    border: `1px solid ${editorial.ink}`,
+                    fontWeight: 500,
+                    fontSize: "0.75rem",
+                    height: 32,
+                  }}
+                />
+              </>
+            )}
           </Box>
-        )}
+        </Collapse>
 
         {hasFilters && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1 }}>

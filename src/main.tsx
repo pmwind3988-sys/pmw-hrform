@@ -18,7 +18,6 @@ if (missing.length > 0) {
 import { msalInstance } from "./auth/msalConfig";
 import AuthProvider from "./auth/AuthProvider";
 import "./index.css";
-import "survey-core/survey-core.min.css";
 import App from "./App";
 
 async function initializeMsal() {

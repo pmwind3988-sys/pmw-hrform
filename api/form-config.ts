@@ -166,6 +166,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const pinVersion = req.query.version as string | undefined;
   if (!slug) return res.status(400).json({ error: "Missing slug parameter" });
 
+  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+
   try {
     const token = await getGraphToken();
 

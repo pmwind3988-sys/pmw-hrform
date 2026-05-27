@@ -34,10 +34,9 @@ import {
 import { useReactiveForm, required, email, phone } from "../hooks/useReactiveForm";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useMsal } from "@azure/msal-react";
-import { pdf } from "@react-pdf/renderer";
 import { fetchJobs, submitApplication, ensureJobApplicationColumns, fetchMyApplications } from "../utils/careersService";
-import JobApplyPdfDocument from "../utils/JobApplyPdfDocument";
 import type { JobListing, CustomFieldDefinition } from "../types";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import { editorial } from "../theme/editorial";
@@ -412,13 +411,13 @@ export default function JobApplyPage() {
   useEffect(() => {
     let cancelled = false;
     async function check() {
+      if (!accounts[0]) return;
       try {
         const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-        const resp = await instance.acquireTokenSilent({
+        const token = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
           account: accounts[0],
         });
-        const token = resp.accessToken;
         const groupResp = await fetch(
           `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
           { headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` } },
@@ -583,11 +582,10 @@ export default function JobApplyPage() {
       }
       let accessToken = "";
       try {
-        const resp = await instance.acquireTokenSilent({
+        accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
           account: accounts[0],
         });
-        accessToken = resp.accessToken;
       } catch {
         setSubmitError("Could not get your SharePoint permission token. Please sign in again and retry.");
         setSubmitting(false);
@@ -600,6 +598,10 @@ export default function JobApplyPage() {
       // Generate PDF
       let pdfBase64 = "";
       try {
+        const [{ pdf }, { default: JobApplyPdfDocument }] = await Promise.all([
+          import("@react-pdf/renderer"),
+          import("../utils/JobApplyPdfDocument"),
+        ]);
         const pdfBlob = await pdf(
           JobApplyPdfDocument({
             data: {

@@ -61,6 +61,7 @@ import {
   deleteJobListing,
   fetchColumnChoices,
 } from "../utils/careersService";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
@@ -634,11 +635,10 @@ export default function AdminJobManagePage() {
   async function ensureCustomFieldsColumn(): Promise<boolean> {
     try {
       const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-      const tokenRes = await instance.acquireTokenSilent({
+      const token = await acquireAccessTokenSilentOrRedirect(instance, {
         scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
         account: accounts[0],
       });
-      const token = tokenRes.accessToken;
 
       // Get request digest
       const digestResp = await fetch(`${SP_SITE_URL}/_api/contextinfo`, {

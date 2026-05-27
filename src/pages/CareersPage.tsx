@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -51,6 +51,7 @@ import {
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
 import { fetchCareersPortalData, fetchMyApplications } from "../utils/careersService";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import type { JobListing, JobAdminApplication, CareerPortalCard } from "../types";
@@ -923,6 +924,7 @@ function JobDetailDialog({
 export default function CareersPage() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
+  const location = useLocation();
   const userEmail = accounts[0]?.username?.toLowerCase() || "";
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [portalCards, setPortalCards] = useState<CareerPortalCard[]>([]);
@@ -981,13 +983,13 @@ export default function CareersPage() {
   useEffect(() => {
     let cancelled = false;
     async function check() {
+      if (!accounts[0]) return;
       try {
         const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-        const resp = await instance.acquireTokenSilent({
+        const token = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
           account: accounts[0],
         });
-        const token = resp.accessToken;
         const groupResp = await fetch(
           `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
           { headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` } },
@@ -1117,6 +1119,24 @@ export default function CareersPage() {
     : selectedApp?.coverLetterUrl
       ? [{ name: "Supporting Document", url: selectedApp.coverLetterUrl }]
       : [];
+  const requestedJobId = new URLSearchParams(location.search).get("job")?.trim() || "";
+
+  useEffect(() => {
+    if (!requestedJobId || loading) return;
+    const targetJob = jobs.find((job) => job.id === requestedJobId);
+    if (targetJob) setSelectedJob(targetJob);
+  }, [jobs, loading, requestedJobId]);
+
+  function closeJobDetail(): void {
+    setSelectedJob(null);
+    if (!requestedJobId) return;
+
+    const params = new URLSearchParams(location.search);
+    params.delete("job");
+    const nextSearch = params.toString();
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ""}`, { replace: true });
+  }
+
   const handleViewApplications = () => setAppliedFilter((current) => current === "applied" ? "all" : "applied");
   const handlePortalCardTarget = (card: CareerPortalCard) => {
     const targetValue = card.targetValue.trim();
@@ -1127,7 +1147,7 @@ export default function CareersPage() {
       if (targetJob) {
         setSelectedJob(targetJob);
       } else {
-        navigate(`/career-portal/${encodeURIComponent(targetValue)}/apply`);
+        navigate(`/career-portal?job=${encodeURIComponent(targetValue)}`);
       }
       return;
     }
@@ -1925,7 +1945,7 @@ export default function CareersPage() {
         <JobDetailDialog
           job={selectedJob}
           open={!!selectedJob}
-          onClose={() => setSelectedJob(null)}
+          onClose={closeJobDetail}
           isApplied={!!(selectedJob && isJobApplied(selectedJob.id))}
           isAdmin={isAdmin}
           onTestSubmit={(jobId) => {
