@@ -108,7 +108,7 @@ export function rowsToHtml(columns: MatrixColumn[], rows: MatrixRow[]): string {
       return `<tr>${cells}</tr>`;
     })
     .join("");
-  return `<table style="border-collapse:collapse;width:100%;font-family:sans-serif"><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+  return `<table style="border-collapse:collapse;width:100%;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif"><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>`;
 }
 
 // ── Cell renderer (single cell in a row) ──

@@ -4,6 +4,7 @@ import {
   useMsal,
   useIsAuthenticated,
 } from "@azure/msal-react";
+import type { AccountInfo } from "@azure/msal-browser";
 import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
@@ -30,6 +31,7 @@ import { DashboardProvider } from "./contexts/DashboardContext";
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
 const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
+type AuthProfileStatus = "unknown" | "loading" | "ready";
 
 const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
 const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboard");
@@ -54,6 +56,11 @@ function isPublicRoutePath(pathname: string): boolean {
     pathname.startsWith("/career-portal/") ||
     pathname.startsWith("/careers/")
   );
+}
+
+function getAccountKey(account: AccountInfo | null): string {
+  if (!account) return "";
+  return account.homeAccountId || account.localAccountId || account.username || "";
 }
 
 function normalizeStatus(status: string | null): string {
@@ -253,11 +260,14 @@ function CatchAllRedirect({ to }: { to: string }) {
 export default function App() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
+  const activeAccount = instance.getActiveAccount() ?? accounts[0] ?? null;
+  const accountKey = getAccountKey(activeAccount);
 
   const [pageState, setPageState] = useState<PageState>("checking");
   const [errorMsg, setErrorMsg] = useState("");
-  const userEmail = accounts[0]?.username || "";
+  const userEmail = activeAccount?.username || "";
   const [isAdmin, setIsAdmin] = useState(false);
+  const [authProfileStatus, setAuthProfileStatus] = useState<AuthProfileStatus>("unknown");
 
   // Dashboard data
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -265,7 +275,6 @@ export default function App() {
   const [loadedConfig, setLoadedConfig] = useState<LoadedConfig | null>(null);
   const [missingConfigs, setMissingConfigs] = useState<string[]>([]);
   const [detailItem, setDetailItem] = useState<Submission | null>(null);
-  const [loading, setLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadStatus, setLoadStatus] = useState("Initializing...");
 
@@ -280,9 +289,31 @@ export default function App() {
   const location = useLocation();
   const currentPath = location.pathname;
   const isPublicRoute = isPublicRoutePath(currentPath);
-  const authInitializedRef = useRef(false);
+  const authProfileAccountRef = useRef("");
+  const postAuthRedirectRef = useRef(false);
+  const authProfileReady = Boolean(accountKey) && authProfileStatus === "ready" && authProfileAccountRef.current === accountKey;
 
-  // Auth state machine — runs only once after initial login
+  useEffect(() => {
+    if (accounts.length > 0 && !instance.getActiveAccount()) {
+      instance.setActiveAccount(accounts[0]);
+    }
+  }, [instance, accounts]);
+
+  useEffect(() => {
+    if (authProfileAccountRef.current === accountKey) return;
+
+    authProfileAccountRef.current = accountKey;
+    setAuthProfileStatus("unknown");
+    setIsAdmin(false);
+    setSubmissions([]);
+    setVisibleLists([]);
+    setLoadedConfig(null);
+    setMissingConfigs([]);
+    setDetailItem(null);
+    postAuthRedirectRef.current = false;
+  }, [accountKey]);
+
+  // Auth state machine.
   useEffect(() => {
     if (inProgress !== "none") return;
 
@@ -290,10 +321,8 @@ export default function App() {
     // inProgress transitions (e.g. from token refreshes triggered
     // by app pages) to prevent redirecting
     // the user away from their current page.
-    if (authInitializedRef.current) return;
-
-    if (isAuthenticated) {
-      setPageState(isPublicRoute ? "ready" : "loading");
+    if (isAuthenticated && activeAccount) {
+      setPageState(isPublicRoute || authProfileReady ? "ready" : "loading");
       return;
     }
 
@@ -303,16 +332,16 @@ export default function App() {
     }
 
     // Check for redirect result first before deciding page state
-const decision = getStoredAuthDecision();
-if (decision === "guest") {
-  setPageState("guest");
-} else {
-  setPageState("choice");
-}
-  }, [isAuthenticated, inProgress, accounts, instance, isPublicRoute]);
+    const decision = getStoredAuthDecision();
+    if (decision === "guest") {
+      setPageState("guest");
+    } else {
+      setPageState("choice");
+    }
+  }, [isAuthenticated, inProgress, activeAccount, isPublicRoute, authProfileReady]);
 
   useEffect(() => {
-    if (!isAuthenticated || inProgress !== "none" || !accounts[0]) return;
+    if (!isAuthenticated || inProgress !== "none" || !activeAccount) return;
 
     let validating = false;
     const validateActiveSession = () => {
@@ -320,7 +349,7 @@ if (decision === "guest") {
       validating = true;
       void acquireAccessTokenSilentOrRedirect(instance, {
         scopes: loginRequest.scopes,
-        account: accounts[0],
+        account: activeAccount,
       })
         .catch(() => {
           // Non-auth token errors are handled by the request that needs the token.
@@ -345,24 +374,31 @@ if (decision === "guest") {
       window.removeEventListener("pageshow", validateActiveSession);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isAuthenticated, inProgress, instance, accounts]);
+  }, [isAuthenticated, inProgress, instance, activeAccount]);
 
   
   useEffect(() => {
-    if (pageState !== "loading" || !isAuthenticated || isPublicRoute) return;
+    if (pageState !== "loading" || !isAuthenticated || isPublicRoute || !activeAccount) return;
+    if (authProfileStatus === "loading") return;
+    if (authProfileReady) {
+      setPageState("ready");
+      return;
+    }
 
-    const email = accounts[0]?.username || "";
-    const tenantId = accounts[0]?.tenantId || "";
+    const email = activeAccount.username || "";
+    const tenantId = activeAccount.tenantId || "";
 
     if (ALLOWED_TENANT_ID && tenantId !== ALLOWED_TENANT_ID) {
+      setAuthProfileStatus("unknown");
       setPageState("wrong_tenant");
       return;
     }
 
-    setLoading(true);
+    let cancelled = false;
+    setAuthProfileStatus("loading");
     setLoadProgress(0);
     setLoadStatus("Initializing...");
-    const spClient = createSpClient(instance, accounts);
+    const spClient = createSpClient(instance, [activeAccount]);
 
     async function fetchData() {
       try {
@@ -374,6 +410,7 @@ if (decision === "guest") {
           spClient.discoverLists(),
           loadConfig(spClient),
         ]);
+        if (cancelled) return;
         setIsAdmin(adminResult);
         setLoadedConfig(config);
         setLoadProgress(50);
@@ -433,6 +470,7 @@ if (decision === "guest") {
           },
         );
         const allSubmissions = submissionsByList.flat();
+        if (cancelled) return;
 
         // Step 6: Finalize
         setLoadStatus("Finalizing...");
@@ -456,27 +494,34 @@ if (decision === "guest") {
         setMissingConfigs(getMissingConfigs(visible, config.layerConfig));
         setLoadProgress(100);
         setLoadStatus("Ready.");
-        authInitializedRef.current = true;
+        authProfileAccountRef.current = accountKey;
+        setAuthProfileStatus("ready");
         setPageState("ready");
       } catch (err: unknown) {
+        if (cancelled) return;
         const message = err instanceof Error ? err.message : "Unknown error occurred";
         setErrorMsg(message);
+        setAuthProfileStatus("unknown");
         setPageState("error");
-      } finally {
-        setLoading(false);
       }
     }
 
     fetchData();
-  }, [pageState, isAuthenticated, isPublicRoute]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+  }, [pageState, isAuthenticated, isPublicRoute, activeAccount, authProfileStatus, authProfileReady, instance, accountKey]);
 
-  // Navigate to preserved route after successful login — fires only once
-  const postAuthRedirectRef = useRef(false);
+  // Navigate to preserved route after successful login.
   useEffect(() => {
-    if (pageState === "ready" && isAuthenticated && !postAuthRedirectRef.current) {
+    if (
+      pageState === "ready" &&
+      isAuthenticated &&
+      authProfileReady &&
+      !isPublicRoute &&
+      !postAuthRedirectRef.current
+    ) {
       postAuthRedirectRef.current = true;
-      // Don't redirect away from public pages
-      if (isPublicRoute) return;
       try {
         const redirectPath = sessionStorage.getItem("pmw_post_login_redirect");
         if (redirectPath) {
@@ -487,7 +532,7 @@ if (decision === "guest") {
           } else {
             navigate(redirectPath);
           }
-        } else {
+        } else if (currentPath === "/" || currentPath === "/adminhomepage") {
           // No stored redirect — go to role-appropriate dashboard
           navigate(isAdmin ? "/admin/dashboard" : "/user/dashboard", { replace: true });
         }
@@ -495,7 +540,13 @@ if (decision === "guest") {
         // Ignore storage errors
       }
     }
-  }, [pageState, isAuthenticated, navigate, isAdmin, isPublicRoute]);
+  }, [pageState, isAuthenticated, authProfileReady, isPublicRoute, navigate, isAdmin, currentPath]);
+
+  useEffect(() => {
+    if (pageState === "ready" && authProfileReady && isAdmin && currentPath === "/user/dashboard") {
+      navigate("/admin/dashboard", { replace: true });
+    }
+  }, [pageState, authProfileReady, isAdmin, currentPath, navigate]);
 
   const handleLogin = () => {
     // Check if login already in progress
@@ -592,7 +643,26 @@ if (decision === "guest") {
 
   // ---- Render ----
 
-  if ((pageState === "checking" && !isPublicRoute) || (pageState === "loading" && loading && !isPublicRoute)) {
+  if (!isPublicRoute && pageState === "wrong_tenant") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <WrongTenantScreen userEmail={userEmail} onLogout={handleSignOut} onSwitch={handleSwitchAccount} />
+      </ThemeProvider>
+    );
+  }
+
+  if (!isPublicRoute && pageState === "error") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ErrorScreen errorMsg={errorMsg} onRetry={() => setPageState("loading")} onSignOut={handleSignOut} />
+      </ThemeProvider>
+    );
+  }
+
+  const privateRouteNeedsProfile = isAuthenticated && !isPublicRoute && !authProfileReady;
+  if (!isPublicRoute && (pageState === "checking" || pageState === "loading" || privateRouteNeedsProfile)) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -617,24 +687,6 @@ if (decision === "guest") {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <GuestLanding onLogin={handleLogin} onForgetChoice={handleForgetChoice} />
-      </ThemeProvider>
-    );
-  }
-
-  if (showAuthGate && pageState === "wrong_tenant") {
-    return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <WrongTenantScreen userEmail={userEmail} onLogout={handleSignOut} onSwitch={handleSwitchAccount} />
-      </ThemeProvider>
-    );
-  }
-
-  if (showAuthGate && pageState === "error") {
-    return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <ErrorScreen errorMsg={errorMsg} onRetry={() => setPageState("loading")} onSignOut={handleSignOut} />
       </ThemeProvider>
     );
   }

@@ -47,6 +47,7 @@ import {
   TrendingUp,
   WorkOutlined,
   FilterList,
+  Business,
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
@@ -294,6 +295,20 @@ function JobCard({
                 {job.title}
               </Typography>
               <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: { xs: "flex-start", md: "flex-end" } }}>
+                {job.company && (
+                  <Chip
+                    label={job.company}
+                    size="small"
+                    sx={{
+                      backgroundColor: editorial.blueWash,
+                      color: editorial.ink,
+                      fontWeight: 800,
+                      fontSize: "0.7rem",
+                      borderRadius: "999px",
+                      border: `1px solid ${editorial.border}`,
+                    }}
+                  />
+                )}
                 <Chip
                   label={job.department}
                   size="small"
@@ -752,6 +767,14 @@ function JobDetailDialog({
           )}
         </Box>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+          {job.company && (
+            <Chip
+              icon={<Business sx={{ fontSize: 14 }} />}
+              label={job.company}
+              size="small"
+              sx={{ backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600, borderRadius: "8px", "& .MuiChip-icon": { color: "#0078D4" } }}
+            />
+          )}
           <Chip
             label={job.department}
             size="small"
@@ -925,12 +948,14 @@ export default function CareersPage() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
   const location = useLocation();
-  const userEmail = accounts[0]?.username?.toLowerCase() || "";
+  const activeAccount = instance.getActiveAccount() ?? accounts[0];
+  const userEmail = activeAccount?.username?.toLowerCase() || "";
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [portalCards, setPortalCards] = useState<CareerPortalCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortBy, setSortBy] = useState("newest");
@@ -960,9 +985,17 @@ export default function CareersPage() {
     let cancelled = false;
     async function load() {
       try {
+        const myApplications = userEmail && activeAccount
+          ? acquireAccessTokenSilentOrRedirect(instance, {
+              scopes: [`${new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin}/AllSites.Manage`],
+              account: activeAccount,
+            })
+              .then((accessToken) => fetchMyApplications(userEmail, { accessToken }))
+              .catch(() => [] as JobAdminApplication[])
+          : Promise.resolve([] as JobAdminApplication[]);
         const [portalData, appData] = await Promise.all([
           fetchCareersPortalData(),
-          userEmail ? fetchMyApplications(userEmail).catch(() => []) : Promise.resolve([] as JobAdminApplication[]),
+          myApplications,
         ]);
         if (!cancelled) {
           setJobs(portalData.jobs);
@@ -977,18 +1010,18 @@ export default function CareersPage() {
     }
     void load();
     return () => { cancelled = true; };
-  }, [userEmail]);
+  }, [instance, activeAccount, userEmail]);
 
   // Check admin status
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (!accounts[0]) return;
+      if (!activeAccount) return;
       try {
         const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
         const token = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: accounts[0],
+          account: activeAccount,
         });
         const groupResp = await fetch(
           `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
@@ -1002,11 +1035,11 @@ export default function CareersPage() {
     }
     if (userEmail) void check();
     return () => { cancelled = true; };
-  }, [instance, accounts, userEmail]);
+  }, [instance, activeAccount, userEmail]);
 
   useEffect(() => {
     setJobsPage(0);
-  }, [searchText, deptFilter, typeFilter, sortBy, appliedFilter]);
+  }, [searchText, companyFilter, deptFilter, typeFilter, sortBy, appliedFilter]);
 
   useEffect(() => {
     setMyAppsPage(0);
@@ -1014,6 +1047,14 @@ export default function CareersPage() {
 
   const departments = useMemo(() => {
     const set = new Set(jobs.map((j) => j.department).filter(Boolean));
+    return [...set].sort();
+  }, [jobs]);
+
+  const companies = useMemo(() => {
+    const set = new Set<string>();
+    for (const job of jobs) {
+      if (job.company) set.add(job.company);
+    }
     return [...set].sort();
   }, [jobs]);
 
@@ -1028,11 +1069,13 @@ export default function CareersPage() {
         const q = searchText.toLowerCase();
         const matchesSearch =
           job.title.toLowerCase().includes(q) ||
+          (job.company || "").toLowerCase().includes(q) ||
           job.department.toLowerCase().includes(q) ||
           (job.location || "").toLowerCase().includes(q) ||
           job.employmentType.toLowerCase().includes(q);
         if (!matchesSearch) return false;
       }
+      if (companyFilter && job.company !== companyFilter) return false;
       if (deptFilter && job.department !== deptFilter) return false;
       if (typeFilter && job.employmentType !== typeFilter) return false;
       if (appliedFilter === "applied" && !isJobApplied(job.id)) return false;
@@ -1051,15 +1094,16 @@ export default function CareersPage() {
     }
 
     return result;
-  }, [jobs, searchText, deptFilter, typeFilter, sortBy, appliedFilter, appliedJobIds]);
+  }, [jobs, searchText, companyFilter, deptFilter, typeFilter, sortBy, appliedFilter, appliedJobIds]);
 
   const jobAdvancedFilterCount = [
+    Boolean(companyFilter),
     Boolean(deptFilter),
     Boolean(typeFilter),
     appliedFilter !== "all",
     sortBy !== "newest",
   ].filter(Boolean).length;
-  const hasFilters = Boolean(searchText.trim()) || Boolean(deptFilter) || Boolean(typeFilter) || appliedFilter !== "all";
+  const hasFilters = Boolean(searchText.trim()) || Boolean(companyFilter) || Boolean(deptFilter) || Boolean(typeFilter) || appliedFilter !== "all";
   const hasJobSearchOptions = hasFilters || sortBy !== "newest";
   const pagedJobs = filteredJobs.slice(jobsPage * jobsRowsPerPage, jobsPage * jobsRowsPerPage + jobsRowsPerPage);
   const filteredMyApps = useMemo(() => {
@@ -1085,6 +1129,7 @@ export default function CareersPage() {
       if (q) {
         const haystack = [
           app.jobTitle,
+          app.company ?? "",
           app.submissionRef,
           app.status,
           app.applicantName,
@@ -1285,6 +1330,7 @@ export default function CareersPage() {
                   startIcon={<Close />}
                   onClick={() => {
                     setSearchText("");
+                    setCompanyFilter("");
                     setDeptFilter("");
                     setTypeFilter("");
                     setAppliedFilter("all");
@@ -1322,11 +1368,31 @@ export default function CareersPage() {
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" },
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(5, minmax(0, 1fr))" },
                   gap: 1.25,
                   width: "100%",
                 }}
               >
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Company</InputLabel>
+                  <Select
+                    value={companyFilter}
+                    label="Company"
+                    onChange={(e) => setCompanyFilter(e.target.value)}
+                    sx={{
+                      borderRadius: "8px",
+                      backgroundColor: "#F8F9FC",
+                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                    }}
+                  >
+                    <MenuItem value="">All companies</MenuItem>
+                    {companies.map((company) => (
+                      <MenuItem key={company} value={company}>{company}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <FormControl size="small" fullWidth>
                   <InputLabel>Department</InputLabel>
                   <Select
@@ -1711,6 +1777,11 @@ export default function CareersPage() {
                       <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.85rem" }}>
                         {app.jobTitle}
                       </Typography>
+                      {app.company && (
+                        <Typography variant="caption" sx={{ color: "#6B7280", display: "block" }}>
+                          {app.company}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -1841,7 +1912,11 @@ export default function CareersPage() {
               <DialogContent>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Reference</Typography><Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4" }}>{selectedApp.submissionRef}</Typography></Box>
-                  <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Role</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.jobTitle}</Typography></Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Role</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.jobTitle}</Typography>
+                    {selectedApp.company && <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>{selectedApp.company}</Typography>}
+                  </Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Applicant</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.applicantName}</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.applicantEmail}</Typography>{selectedApp.applicantPhone && <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>{selectedApp.applicantPhone}</Typography>}</Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Status</Typography><Chip label={selectedApp.status || "New"} size="small" sx={{ borderRadius: "8px", fontWeight: 600, backgroundColor: selectedApp.status === "Reviewed" ? "#E6F4EA" : "#F0F7FF", color: selectedApp.status === "Reviewed" ? "#34A853" : "#0078D4" }} /></Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Submitted</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.submittedAt ? formatDate(selectedApp.submittedAt) : "—"}</Typography></Box>

@@ -48,7 +48,9 @@ import {
   FilterList as FilterIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
+import { useMsal } from "@azure/msal-react";
 import { fetchApplications, updateApplicationStatus, deleteApplications } from "../utils/careersService";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import type { JobAdminApplication } from "../types";
 
@@ -251,7 +253,13 @@ function AdminApplicationsLoadingSkeleton() {
   );
 }
 
+function sharePointScope(): string {
+  const spSiteUrl = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+  return `${new URL(spSiteUrl).origin}/AllSites.Manage`;
+}
+
 export default function AdminJobsPage() {
+  const { instance, accounts } = useMsal();
   const [applications, setApplications] = useState<JobAdminApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -272,12 +280,22 @@ export default function AdminJobsPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
+  const getAdminAccessToken = useCallback(async () => {
+    const account = instance.getActiveAccount() ?? accounts[0];
+    if (!account) throw new Error("No signed-in account found.");
+    return acquireAccessTokenSilentOrRedirect(instance, {
+      scopes: [sharePointScope()],
+      account,
+    });
+  }, [instance, accounts]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const range = getTimelineRange(timelineFilter, customFrom, customTo);
-      const data = await fetchApplications({
+      const accessToken = await getAdminAccessToken();
+      const data = await fetchApplications({ accessToken }, {
         status: statusFilter,
         submittedFrom: range.from,
         submittedTo: range.to,
@@ -289,7 +307,7 @@ export default function AdminJobsPage() {
     } finally {
       setLoading(false);
     }
-  }, [timelineFilter, statusFilter, customFrom, customTo]);
+  }, [timelineFilter, statusFilter, customFrom, customTo, getAdminAccessToken]);
 
   useEffect(() => {
     setPage(0);
@@ -305,7 +323,8 @@ export default function AdminJobsPage() {
     async (applicationId: string, newStatus: string) => {
       setUpdatingStatusId(applicationId);
       try {
-        const success = await updateApplicationStatus(applicationId, newStatus);
+        const accessToken = await getAdminAccessToken();
+        const success = await updateApplicationStatus(applicationId, newStatus, { accessToken });
         if (success) {
           setApplications((prev) =>
             prev.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app)),
@@ -321,7 +340,7 @@ export default function AdminJobsPage() {
         setUpdatingStatusId(null);
       }
     },
-    [],
+    [getAdminAccessToken],
   );
 
   const filteredApplications = useMemo(() => {
@@ -339,6 +358,7 @@ export default function AdminJobsPage() {
           app.applicantName,
           app.applicantEmail,
           app.jobTitle,
+          app.company ?? "",
           app.submissionRef,
           app.applicantPhone ?? "",
         ].join(" ").toLowerCase();
@@ -411,7 +431,8 @@ export default function AdminJobsPage() {
     setDeleting(true);
     setDeleteResult(null);
     try {
-      const result = await deleteApplications([...selectedIds]);
+      const accessToken = await getAdminAccessToken();
+      const result = await deleteApplications([...selectedIds], { accessToken });
       const appText = `Deleted ${result.deleted} application${result.deleted !== 1 ? "s" : ""}`;
       const fileText = `deleted ${result.deletedFiles ?? 0} attached document${(result.deletedFiles ?? 0) !== 1 ? "s" : ""}`;
       const msg = `${appText} and ${fileText}`;
@@ -878,6 +899,11 @@ export default function AdminJobsPage() {
                       <Typography variant="body2" sx={{ color: "#374151", fontSize: "0.85rem" }}>
                         {app.jobTitle}
                       </Typography>
+                      {app.company && (
+                        <Typography variant="caption" sx={{ color: "#6B7280", display: "block" }}>
+                          {app.company}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <StatusChip status={app.status} />
@@ -992,6 +1018,11 @@ export default function AdminJobsPage() {
                     <Typography variant="body1" sx={{ color: "#374151" }}>
                       {selectedApp.jobTitle}
                     </Typography>
+                    {selectedApp.company && (
+                      <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>
+                        {selectedApp.company}
+                      </Typography>
+                    )}
                   </Box>
                   <Box>
                     <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>

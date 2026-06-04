@@ -100,6 +100,7 @@ const paginationSx = {
 
 const EMPTY_JOB = {
   title: "",
+  company: "",
   jobDescription: "",
   department: "",
   location: "",
@@ -107,6 +108,12 @@ const EMPTY_JOB = {
   closingDate: "",
   status: "New",
 };
+type EditableJob = typeof EMPTY_JOB & { id?: string; customFields: CustomFieldDefinition[] };
+
+function sharePointScope(): string {
+  const spSiteUrl = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+  return `${new URL(spSiteUrl).origin}/AllSites.Manage`;
+}
 
 function MiniFormBuilder({
   fields,
@@ -416,18 +423,21 @@ function JobFormDialog({
   onClose,
   onSave,
   initial,
+  companyChoices,
   departmentChoices,
   employmentTypeChoices,
 }: {
   open: boolean;
   onClose: () => void;
   onSave: (data: Record<string, unknown>, customFields: CustomFieldDefinition[]) => Promise<void>;
-  initial: (typeof EMPTY_JOB) & { customFields: CustomFieldDefinition[] } | null;
+  initial: EditableJob | null;
+  companyChoices: string[];
   departmentChoices: string[];
   employmentTypeChoices: string[];
 }) {
   const isEdit = !!initial;
   const [title, setTitle] = useState(initial?.title ?? "");
+  const [company, setCompany] = useState(initial?.company ?? "");
   const [jobDescription, setJobDescription] = useState(initial?.jobDescription ?? "");
   const [department, setDepartment] = useState(initial?.department ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
@@ -436,10 +446,14 @@ function JobFormDialog({
   const [status, setStatus] = useState(initial?.status ?? "New");
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>(initial?.customFields ?? []);
   const [saving, setSaving] = useState(false);
+  const companyOptions = company && !companyChoices.includes(company)
+    ? [company, ...companyChoices]
+    : companyChoices;
 
   useEffect(() => {
     if (open && initial) {
       setTitle(initial.title);
+      setCompany(initial.company);
       setJobDescription(initial.jobDescription);
       setDepartment(initial.department);
       setLocation(initial.location);
@@ -449,6 +463,7 @@ function JobFormDialog({
       setCustomFields(initial.customFields);
     } else if (open) {
       setTitle(""); setJobDescription(""); setDepartment(""); setLocation("");
+      setCompany("");
       setEmploymentType(""); setClosingDate(""); setStatus("New");
       setCustomFields([]);
     }
@@ -461,6 +476,7 @@ function JobFormDialog({
       await onSave(
         {
           title: title.trim(),
+          company,
           jobDescription,
           department: department.trim(),
           location: location.trim(),
@@ -487,6 +503,18 @@ function JobFormDialog({
         <Grid container spacing={2} sx={{ mt: 0.5 }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField label="Role Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth required size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
+          </Grid>
+          <Grid size={{ xs: 6, md: 3 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Company</InputLabel>
+              <Select value={company} label="Company" onChange={(e) => setCompany(e.target.value)} sx={{ borderRadius: "8px" }}>
+                <MenuItem value="">Unassigned</MenuItem>
+                {companyOptions.length > 0
+                  ? companyOptions.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)
+                  : <MenuItem value="__no_company_choices" disabled>No choices loaded</MenuItem>
+                }
+              </Select>
+            </FormControl>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl fullWidth size="small">
@@ -583,7 +611,7 @@ function OpportunitiesLoadingSkeleton() {
         <Table>
           <TableHead>
             <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-              {["Role", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
+              {["Role", "Company", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -595,6 +623,7 @@ function OpportunitiesLoadingSkeleton() {
                   <Skeleton variant="text" width={150} />
                   <Skeleton variant="text" width={96} height={14} />
                 </TableCell>
+                <TableCell><Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
                 <TableCell><Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
                 <TableCell><Skeleton variant="text" width={92} /></TableCell>
                 <TableCell><Skeleton variant="rounded" width={72} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
@@ -615,8 +644,9 @@ export default function AdminJobManagePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editJob, setEditJob] = useState<(typeof EMPTY_JOB) & { customFields: CustomFieldDefinition[] } | null>(null);
+  const [editJob, setEditJob] = useState<EditableJob | null>(null);
   const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" | "warning" } | null>(null);
+  const [companyChoices, setCompanyChoices] = useState<string[]>([]);
   const [departmentChoices, setDepartmentChoices] = useState<string[]>([]);
   const [employmentTypeChoices, setEmploymentTypeChoices] = useState<string[]>([]);
   const [closingJobId, setClosingJobId] = useState<string | null>(null);
@@ -625,20 +655,27 @@ export default function AdminJobManagePage() {
   const [closeConfirmJob, setCloseConfirmJob] = useState<JobListing | null>(null);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortBy, setSortBy] = useState<JobSortOption>("newest");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
+  const getAdminAccessToken = useCallback(async () => {
+    const account = instance.getActiveAccount() ?? accounts[0];
+    if (!account) throw new Error("No signed-in account found.");
+    return acquireAccessTokenSilentOrRedirect(instance, {
+      scopes: [sharePointScope()],
+      account,
+    });
+  }, [instance, accounts]);
+
   /** Create the CustomFields column on the job list via SharePoint REST (client-side token). */
   async function ensureCustomFieldsColumn(): Promise<boolean> {
     try {
       const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-      const token = await acquireAccessTokenSilentOrRedirect(instance, {
-        scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-        account: accounts[0],
-      });
+      const token = await getAdminAccessToken();
 
       // Get request digest
       const digestResp = await fetch(`${SP_SITE_URL}/_api/contextinfo`, {
@@ -681,32 +718,42 @@ export default function AdminJobManagePage() {
     setLoading(true);
     setError(null);
     try {
-      const jobData = await fetchAdminJobs();
+      const accessToken = await getAdminAccessToken();
+      const jobData = await fetchAdminJobs({ accessToken });
       setJobs(jobData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load opportunities");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAdminAccessToken]);
 
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     async function loadChoices() {
-      const [dept, emp] = await Promise.all([
-        fetchColumnChoices("Internal Job Listing", "Department"),
-        fetchColumnChoices("Internal Job Listing", "Employment Type"),
-      ]);
-      setDepartmentChoices(dept);
-      setEmploymentTypeChoices(emp);
+      try {
+        const accessToken = await getAdminAccessToken();
+        const [company, dept, emp] = await Promise.all([
+          fetchColumnChoices("Internal Job Listing", "Company", { accessToken }),
+          fetchColumnChoices("Internal Job Listing", "Department", { accessToken }),
+          fetchColumnChoices("Internal Job Listing", "Employment Type", { accessToken }),
+        ]);
+        setCompanyChoices(company);
+        setDepartmentChoices(dept);
+        setEmploymentTypeChoices(emp);
+      } catch {
+        setCompanyChoices([]);
+        setDepartmentChoices([]);
+        setEmploymentTypeChoices([]);
+      }
     }
     void loadChoices();
-  }, []);
+  }, [getAdminAccessToken]);
 
   useEffect(() => {
     setPage(0);
-  }, [searchText, statusFilter, typeFilter, sortBy]);
+  }, [searchText, statusFilter, companyFilter, typeFilter, sortBy]);
 
   const filteredJobs = useMemo(() => {
     const q = searchText.trim().toLowerCase();
@@ -715,10 +762,12 @@ export default function AdminJobManagePage() {
         const normalized = job.status === "New" ? "Active" : "Closed";
         if (normalized !== statusFilter) return false;
       }
+      if (companyFilter && job.company !== companyFilter) return false;
       if (typeFilter && job.employmentType !== typeFilter) return false;
       if (q) {
         const haystack = [
           job.title,
+          job.company ?? "",
           job.department,
           job.location,
           job.employmentType,
@@ -745,19 +794,27 @@ export default function AdminJobManagePage() {
     });
 
     return result;
-  }, [jobs, searchText, statusFilter, typeFilter, sortBy]);
+  }, [jobs, searchText, statusFilter, companyFilter, typeFilter, sortBy]);
 
   const pagedJobs = filteredJobs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   const jobTypeOptions = useMemo(() => {
     const options = new Set(jobs.map((job) => job.employmentType).filter(Boolean));
     return [...options].sort();
   }, [jobs]);
+  const jobCompanyOptions = useMemo(() => {
+    const options = new Set<string>();
+    for (const job of jobs) {
+      if (job.company) options.add(job.company);
+    }
+    return [...options].sort();
+  }, [jobs]);
   const advancedFilterCount = [
     Boolean(statusFilter),
+    Boolean(companyFilter),
     Boolean(typeFilter),
     sortBy !== "newest",
   ].filter(Boolean).length;
-  const hasFilters = !!searchText.trim() || !!statusFilter || !!typeFilter;
+  const hasFilters = !!searchText.trim() || !!statusFilter || !!companyFilter || !!typeFilter;
   const hasSearchOptions = hasFilters || sortBy !== "newest";
 
   const handleCreate = () => {
@@ -767,7 +824,9 @@ export default function AdminJobManagePage() {
 
   const handleEdit = (job: JobListing) => {
     setEditJob({
+      id: job.id,
       title: job.title,
+      company: job.company ?? "",
       jobDescription: job.jobDescription,
       department: job.department,
       location: job.location,
@@ -784,6 +843,7 @@ export default function AdminJobManagePage() {
     customFields: CustomFieldDefinition[],
   ) => {
     try {
+      const accessToken = await getAdminAccessToken();
       // If custom fields are present, ensure the column exists first
       const hasCustom = Array.isArray(customFields) && customFields.length > 0;
       if (hasCustom) {
@@ -793,8 +853,9 @@ export default function AdminJobManagePage() {
       if (editJob) {
         // Update existing
         const result = await updateJobListing(
-          jobs.find((j) => j.title === editJob.title)?.id || "",
+          editJob.id || "",
           { ...data, customFields },
+          { accessToken },
         );
         if (result.success) {
           setSnackbar({
@@ -803,7 +864,7 @@ export default function AdminJobManagePage() {
           });
         }
       } else {
-        const result = await createJobListing({ ...data, customFields });
+        const result = await createJobListing({ ...data, customFields }, { accessToken });
         if (result.success) {
           setSnackbar({
             message: (result as { warning?: string }).warning || "Opportunity created",
@@ -824,7 +885,8 @@ export default function AdminJobManagePage() {
   const handleClose = async (job: JobListing) => {
     setClosingJobId(job.id);
     try {
-      const result = await updateJobListing(job.id, { status: "Closed" });
+      const accessToken = await getAdminAccessToken();
+      const result = await updateJobListing(job.id, { status: "Closed" }, { accessToken });
       if (result.success) {
         setSnackbar({ message: "Opportunity closed", severity: "success" });
         void load();
@@ -842,7 +904,8 @@ export default function AdminJobManagePage() {
   const handleDeleteJob = async (job: JobListing) => {
     setDeletingJobId(job.id);
     try {
-      const result = await deleteJobListing(job.id);
+      const accessToken = await getAdminAccessToken();
+      const result = await deleteJobListing(job.id, { accessToken });
       if (result.success) {
         setSnackbar({ message: "Opportunity permanently deleted", severity: "success" });
         setDeleteConfirmJob(null);
@@ -950,6 +1013,7 @@ export default function AdminJobManagePage() {
                 onClick={() => {
                   setSearchText("");
                   setStatusFilter("");
+                  setCompanyFilter("");
                   setTypeFilter("");
                   setSortBy("newest");
                 }}
@@ -971,7 +1035,7 @@ export default function AdminJobManagePage() {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+                gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" },
                 gap: 1.25,
                 width: "100%",
               }}
@@ -987,6 +1051,21 @@ export default function AdminJobManagePage() {
                   <MenuItem value="">All statuses</MenuItem>
                   <MenuItem value="Active">Active</MenuItem>
                   <MenuItem value="Closed">Closed</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" fullWidth>
+                <InputLabel>Company</InputLabel>
+                <Select
+                  value={companyFilter}
+                  label="Company"
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                >
+                  <MenuItem value="">All companies</MenuItem>
+                  {jobCompanyOptions.map((company) => (
+                    <MenuItem key={company} value={company}>{company}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
 
@@ -1104,7 +1183,7 @@ export default function AdminJobManagePage() {
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
-                  {["Role", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
+                  {["Role", "Company", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -1115,6 +1194,13 @@ export default function AdminJobManagePage() {
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.85rem" }}>{job.title}</Typography>
                       {job.location && <Typography variant="caption" sx={{ color: "#9CA3AF" }}>{job.location}</Typography>}
+                    </TableCell>
+                    <TableCell>
+                      {job.company ? (
+                        <Chip label={job.company} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600 }} />
+                      ) : (
+                        <Typography variant="caption" sx={{ color: "#9CA3AF" }}>Unassigned</Typography>
+                      )}
                     </TableCell>
                     <TableCell><Chip label={job.department} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: "#6264A7", color: "#fff" }} /></TableCell>
                     <TableCell><Typography variant="body2" sx={{ color: "#374151", fontSize: "0.8rem" }}>{job.employmentType}</Typography></TableCell>
@@ -1181,6 +1267,7 @@ export default function AdminJobManagePage() {
         onClose={() => setDialogOpen(false)}
         onSave={handleSave}
         initial={editJob}
+        companyChoices={companyChoices}
         departmentChoices={departmentChoices}
         employmentTypeChoices={employmentTypeChoices}
       />

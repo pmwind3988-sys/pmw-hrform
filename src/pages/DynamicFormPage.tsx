@@ -26,6 +26,7 @@ import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SU
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
+const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
 
 // ── Register custom SurveyJS widgets and properties ────────────────────
 registerSignaturePad();
@@ -59,9 +60,9 @@ const DARK = {
 };
 
 const globalCss = (t: typeof LIGHT) => `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'DM Sans',sans-serif;background:${t.bg};color:${t.textPrimary};transition:background .3s,color .3s}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;font-family:${APP_FONT_FAMILY}!important}
+  body{font-family:${APP_FONT_FAMILY};background:${t.bg};color:${t.textPrimary};transition:background .3s,color .3s}
   @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -292,11 +293,12 @@ export default function DynamicFormPage() {
     const baseJson = formData?.surveyJson;
     if (!baseJson) { setEnrichedSurveyJson(null); return; }
 
+    const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Inter" });
     const tokenRaw = tokenRef.current;
-    if (!tokenRaw) { setEnrichedSurveyJson(baseJson); return; }
+    if (!tokenRaw) { setEnrichedSurveyJson(withAppFont(baseJson)); return; }
     const token = tokenRaw; // narrowed to string
 
-    const clone = JSON.parse(JSON.stringify(baseJson)) as Record<string, unknown>;
+    const clone = withAppFont(JSON.parse(JSON.stringify(baseJson)) as Record<string, unknown>);
 
     async function enrich(): Promise<void> {
       const pages = (clone.pages || []) as { elements?: Record<string, unknown>[] }[];
@@ -370,7 +372,7 @@ export default function DynamicFormPage() {
       setEnrichedSurveyJson(clone);
     }
 
-    enrich().catch(() => setEnrichedSurveyJson(baseJson));
+    enrich().catch(() => setEnrichedSurveyJson(withAppFont(baseJson)));
   }, [formData]);
 
   const survey = useMemo(() => {

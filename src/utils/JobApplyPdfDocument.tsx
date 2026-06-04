@@ -21,7 +21,7 @@ const S = StyleSheet.create({
   docTitle: { fontSize: 18, fontWeight: "heavy", color: C.text },
   docSub: { fontSize: 7, color: C.muted, marginTop: 2 },
   headerRight: { alignItems: "flex-end" },
-  refText: { fontSize: 8, fontFamily: "Courier", color: C.muted },
+  refText: { fontSize: 8, fontFamily: "Helvetica", color: C.muted },
   dateText: { fontSize: 7, color: C.muted, marginTop: 2 },
   // Section
   sectionTitle: { fontSize: 10, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 1, marginTop: 16, marginBottom: 6, paddingBottom: 2, borderBottomWidth: 1, borderBottomColor: C.text },
@@ -43,6 +43,7 @@ const S = StyleSheet.create({
 
 interface JobApplyPdfData {
   jobTitle: string;
+  company?: string;
   applicantName: string;
   applicantEmail: string;
   applicantPhone: string;
@@ -81,6 +82,7 @@ export default function JobApplyPdfDocument({ data }: { data: JobApplyPdfData })
         {/* ═══ APPLICANT INFO ═══ */}
         <Text style={S.sectionTitle}>Applicant Information</Text>
         <View style={S.infoRow}><Text style={S.infoLabel}>Role</Text><Text style={S.infoValue}>{data.jobTitle}</Text></View>
+        {data.company && <View style={S.infoRow}><Text style={S.infoLabel}>Company</Text><Text style={S.infoValue}>{data.company}</Text></View>}
         <View style={S.infoRow}><Text style={S.infoLabel}>Full Name</Text><Text style={S.infoValue}>{data.applicantName}</Text></View>
         <View style={S.infoRow}><Text style={S.infoLabel}>Email</Text><Text style={S.infoValue}>{data.applicantEmail}</Text></View>
         <View style={S.infoRow}><Text style={S.infoLabel}>Phone</Text><Text style={S.infoValue}>{data.applicantPhone}</Text></View>

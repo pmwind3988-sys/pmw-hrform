@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems } from "./_utils/graphClient.js";
+import { getGraphToken, getListColumns, queryListItems } from "./_utils/graphClient.js";
 import { listCareerPortalCards } from "./_utils/careerPortalCards.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -21,6 +21,30 @@ function numberField(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function textField(fields: Record<string, unknown>, ...names: string[]): string {
+  for (const name of names) {
+    if (fields[name] !== undefined) return String(fields[name] || "");
+  }
+  return "";
+}
+
+async function resolveCompanyColumn(token: string): Promise<string | null> {
+  try {
+    const columns = await getListColumns(token, "Internal Job Listing");
+    const column = columns.find((item) =>
+      item.displayName === "Company" ||
+      item.displayName === "Company Name" ||
+      item.name === "Company" ||
+      item.name === "Company_x0020_Name" ||
+      item.name === "JobCompany" ||
+      item.name === "Job_x0020_Company"
+    );
+    return column?.name || null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -34,7 +58,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
-    const [items, portalCards] = await Promise.all([
+    const [items, portalCards, companyColumn] = await Promise.all([
       queryListItems(token, "Internal Job Listing", { top: 500 }),
       listCareerPortalCards(token, { activeOnly: true }).catch((e) => {
         logWarn("api:jobs-list", "Failed to load career portal cards", {
@@ -42,6 +66,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         });
         return [];
       }),
+      resolveCompanyColumn(token),
     ]);
 
     const jobs = items
@@ -60,6 +85,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return {
           id: itemId,
           title: String(item.fields.Title || ""),
+          company: textField(item.fields, ...(companyColumn ? [companyColumn] : []), "Company", "Company_x0020_Name", "JobCompany", "Job_x0020_Company"),
           jobDescription: String(item.fields.Job_x0020_Description || ""),
           department: String(item.fields.Department || ""),
           location: String(item.fields.Location || ""),

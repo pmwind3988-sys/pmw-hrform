@@ -64,7 +64,7 @@ import {
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const G = `*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:${C.offWhite};color:${C.textPrimary}}
+const G = `*{box-sizing:border-box;margin:0;padding:0;font-family:var(--pmw-font-main)!important}body{font-family:var(--pmw-font-main);background:${C.offWhite};color:${C.textPrimary}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:10px}

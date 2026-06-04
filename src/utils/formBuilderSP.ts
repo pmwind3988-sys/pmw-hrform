@@ -1624,7 +1624,7 @@ export function dynamicMatrixToHtml(
     })
     .join('');
 
-  return `<table style="border-collapse:collapse;width:100%;font-family:sans-serif;font-size:13px">
+  return `<table style="border-collapse:collapse;width:100%;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;font-size:13px">
     <thead><tr>${headerHtml}</tr></thead>
     <tbody>${bodyHtml}</tbody>
   </table>`;
@@ -1698,7 +1698,7 @@ function emailBody(params: {
   const pdfHtml = params.pdfUrl ? `<div style="margin-top:12px">${makePdfLink(params.pdfUrl)}</div>` : '';
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#F3F4F6;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F3F4F6"><tr><td align="center" style="padding:32px 16px">
 <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
 

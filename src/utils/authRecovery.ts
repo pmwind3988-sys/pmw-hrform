@@ -23,6 +23,7 @@ const STALE_AUTH_ERROR_CODES = new Set([
   "monitor_window_timeout",
 ]);
 
+const SILENT_TOKEN_TIMEOUT_MS = 20000;
 let redirectStarted = false;
 
 function getErrorField(error: unknown, field: string): string {
@@ -64,6 +65,27 @@ function preserveCurrentRoute(): void {
   }
 }
 
+function createSilentTokenTimeoutError(): Error {
+  const error = new Error("Silent token acquisition timed out. Please sign in again.");
+  const authError = error as Error & { errorCode: string; code: string };
+  authError.errorCode = "monitor_window_timeout";
+  authError.code = "monitor_window_timeout";
+  return error;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(createSilentTokenTimeoutError()), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 export async function startReauthentication(
   instance: IPublicClientApplication,
   scopes: string[] = loginRequest.scopes,
@@ -97,7 +119,7 @@ export async function acquireTokenSilentOrRedirect(
   request: SilentRequest,
 ): Promise<AuthenticationResult> {
   try {
-    return await instance.acquireTokenSilent(request);
+    return await withTimeout(instance.acquireTokenSilent(request), SILENT_TOKEN_TIMEOUT_MS);
   } catch (error) {
     if (isStaleAuthError(error)) {
       return startReauthentication(instance, request.scopes, request.account);

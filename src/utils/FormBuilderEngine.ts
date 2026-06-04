@@ -663,6 +663,7 @@ export function buildSurveyJson(
   const json: SurveyJson = {
     title: (surveySettings.title as string) ?? "New Form",
     description: (surveySettings.description as string) ?? "",
+    fontFamily: "Inter",
     pages: [{ name: "page1", elements }],
   };
 
@@ -678,7 +679,6 @@ export function buildSurveyJson(
     "backgroundColor",
     "textColor",
     "errorColor",
-    "fontFamily",
     "borderRadius",
     "labelPosition",
   ] as const;

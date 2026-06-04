@@ -107,6 +107,9 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 registerSignaturePad();
 registerDynamicMatrix();
 
+const APP_FONT_NAME = "Inter";
+const APP_FONT_STACK = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
+
 if (!Serializer.findProperty("text", "autocapitalize")) {
   Serializer.addProperty("text", {
     name: "autocapitalize",
@@ -1813,7 +1816,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
         ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
         ["--sjs-general-forecolor" as string]: json.textColor || "#1E1B4B",
         ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1E1B4B",
-        ["--sjs-font-family" as string]: json.fontFamily ? `'${json.fontFamily}',sans-serif` : "'DM Sans',sans-serif",
+        ["--sjs-font-family" as string]: APP_FONT_STACK,
         ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
         ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
         ["--sjs-questionpanel-cornerRadius" as string]: json.borderRadius || "8px",
@@ -1877,7 +1880,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       backgroundColor: initialJson.backgroundColor || "#FFFFFF",
       textColor: initialJson.textColor || "#1E1B4B",
       errorColor: initialJson.errorColor || "#DC2626",
-      fontFamily: initialJson.fontFamily || "DM Sans",
+      fontFamily: APP_FONT_NAME,
       borderRadius: initialJson.borderRadius || "8px",
       labelPosition: initialJson.labelPosition || "top",
     };
@@ -1957,7 +1960,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         backgroundColor: initialJson.backgroundColor || "#FFFFFF",
         textColor: initialJson.textColor || "#1E1B4B",
         errorColor: initialJson.errorColor || "#DC2626",
-        fontFamily: initialJson.fontFamily || "DM Sans",
+        fontFamily: APP_FONT_NAME,
         borderRadius: initialJson.borderRadius || "8px",
         labelPosition: initialJson.labelPosition || "top",
       });
@@ -1976,7 +1979,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         backgroundColor: "#FFFFFF",
         textColor: "#1E1B4B",
         errorColor: "#DC2626",
-        fontFamily: "DM Sans",
+        fontFamily: APP_FONT_NAME,
         borderRadius: "8px",
         labelPosition: "top",
       });
@@ -2420,7 +2423,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   <div style={{ fontSize: 11, color: C.textMuted }}>Export field names and types as CSV</div>
                 </button>
                 <button onClick={() => {
-                  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:system-ui;padding:40px;max-width:800px;margin:0 auto;}h1{color:#5B21B6;}label{display:block;margin:12px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:12px;border:1px solid #ddd;border-radius:4px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>` + (f.type === "textarea" ? `<textarea rows="3" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}"></textarea>` : f.type === "select" || f.type === "dropdown" ? `<select><option>Select...</option>${(f.choices || []).map((c: unknown) => `<option>${DOMPurify.sanitize(typeof c === "string" ? String(c) : String((c as { text: string }).text))}</option>`).join("")}</select>` : `<input type="${DOMPurify.sanitize(String(f.inputType ?? "text"))}" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}">`)).join("\n")}</body></html>`;
+                  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;}h1{color:#5B21B6;}label{display:block;margin:12px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:12px;border:1px solid #ddd;border-radius:4px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>` + (f.type === "textarea" ? `<textarea rows="3" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}"></textarea>` : f.type === "select" || f.type === "dropdown" ? `<select><option>Select...</option>${(f.choices || []).map((c: unknown) => `<option>${DOMPurify.sanitize(typeof c === "string" ? String(c) : String((c as { text: string }).text))}</option>`).join("")}</select>` : `<input type="${DOMPurify.sanitize(String(f.inputType ?? "text"))}" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}">`)).join("\n")}</body></html>`;
                   const blob = new Blob([html], { type: "text/html" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `${surveySettings.title || "form"}.html`; a.click();
@@ -2430,7 +2433,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 </button>
                 <button onClick={() => {
                   // Simple PDF generation using window.print
-                  const printContent = `<html><head><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Arial,sans-serif;padding:40px;}h1{color:#5B21B6;border-bottom:2px solid #5B21B6;padding-bottom:10px;}label{display:block;margin:16px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;}.field-list{margin-top:30px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<div class="field-list"><label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>${f.description ? `<small style="color:#666">${DOMPurify.sanitize(String(f.description))}</small><br/>` : ""}<div style="height:24px;border-bottom:1px solid #ccc;"></div></div>`).join("\n")}</body></html>`;
+                  const printContent = `<html><head><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;}h1{color:#5B21B6;border-bottom:2px solid #5B21B6;padding-bottom:10px;}label{display:block;margin:16px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;}.field-list{margin-top:30px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<div class="field-list"><label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>${f.description ? `<small style="color:#666">${DOMPurify.sanitize(String(f.description))}</small><br/>` : ""}<div style="height:24px;border-bottom:1px solid #ccc;"></div></div>`).join("\n")}</body></html>`;
                   const printWindow = window.open("", "_blank");
                   if (printWindow) { printWindow.document.write(printContent); printWindow.document.close(); printWindow.print(); }
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
@@ -2527,7 +2530,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               </div>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Typography</div>
-                <div style={{ marginBottom: 8 }}><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Font Family</label><select value={String(surveySettings.fontFamily || "DM Sans")} onChange={(e) => setSurveySettings({ ...surveySettings, fontFamily: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}><option>DM Sans</option><option>Inter</option><option>Roboto</option><option>Open Sans</option><option>Poppins</option></select></div>
+                <div style={{ marginBottom: 8 }}><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Font Family</label><select value={String(surveySettings.fontFamily || APP_FONT_NAME)} onChange={() => setSurveySettings({ ...surveySettings, fontFamily: APP_FONT_NAME })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}><option>{APP_FONT_NAME}</option></select></div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Label Position</label><select value={String(surveySettings.labelPosition || "top")} onChange={(e) => setSurveySettings({ ...surveySettings, labelPosition: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}><option value="top">Top</option><option value="left">Left</option><option value="floating">Floating</option></select></div>
                   <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Border Radius</label><select value={String(surveySettings.borderRadius || "8px")} onChange={(e) => setSurveySettings({ ...surveySettings, borderRadius: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}><option>0px</option><option>4px</option><option>8px</option><option>12px</option></select></div>

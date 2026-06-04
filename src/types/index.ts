@@ -872,6 +872,7 @@ export interface CustomFieldDefinition {
 export interface JobListing {
   id: string;
   title: string;
+  company?: string;
   jobDescription: string;
   department: string;
   location: string;
@@ -907,6 +908,7 @@ export interface JobApplication {
   id: string;
   jobListingId: string;
   jobTitle: string;
+  company?: string;
   applicantName: string;
   applicantEmail: string;
   applicantPhone: string;
@@ -932,6 +934,7 @@ export interface JobDocumentLink {
 export interface JobApplyRequest {
   jobListingId: string;
   jobTitle: string;
+  company?: string;
   applicantName: string;
   applicantEmail: string;
   applicantPhone: string;
@@ -959,6 +962,7 @@ export interface JobApplyRequest {
 export interface JobAdminApplication {
   id: string;
   jobTitle: string;
+  company?: string;
   applicantName: string;
   applicantEmail: string;
   applicantPhone?: string;

@@ -30,6 +30,7 @@ import {
   Close,
   LocationOn,
   Work,
+  Business,
 } from "@mui/icons-material";
 import { useReactiveForm, required, email, phone } from "../hooks/useReactiveForm";
 import { useUserProfile } from "../hooks/useUserProfile";
@@ -384,7 +385,8 @@ export default function JobApplyPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const profile = useUserProfile();
   const { instance, accounts } = useMsal();
-  const userEmail = accounts[0]?.username?.toLowerCase() || "";
+  const activeAccount = instance.getActiveAccount() ?? accounts[0];
+  const userEmail = activeAccount?.username?.toLowerCase() || "";
   const overrideRequested = searchParams.get("override") === "1";
 
   const [job, setJob] = useState<JobListing | null>(null);
@@ -411,12 +413,12 @@ export default function JobApplyPage() {
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (!accounts[0]) return;
+      if (!activeAccount) return;
       try {
         const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
         const token = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: accounts[0],
+          account: activeAccount,
         });
         const groupResp = await fetch(
           `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
@@ -434,7 +436,7 @@ export default function JobApplyPage() {
     }
     void check();
     return () => { cancelled = true; };
-  }, [instance, accounts, userEmail]);
+  }, [instance, activeAccount, userEmail]);
 
   // Fetch job details for summary
   useEffect(() => {
@@ -463,7 +465,13 @@ export default function JobApplyPage() {
       }
       setDuplicateChecking(true);
       try {
-        const applications = await fetchMyApplications(userEmail);
+        if (!activeAccount) throw new Error("No signed-in account");
+        const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+        const accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
+          scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
+          account: activeAccount,
+        });
+        const applications = await fetchMyApplications(userEmail, { accessToken });
         if (!cancelled) {
           const applied = applications.some((app) => app.jobListingId === jobId);
           setAlreadyApplied(applied);
@@ -482,7 +490,7 @@ export default function JobApplyPage() {
     }
     void checkDuplicate();
     return () => { cancelled = true; };
-  }, [jobId, userEmail, adminOverrideMode]);
+  }, [jobId, userEmail, adminOverrideMode, instance, activeAccount]);
 
   const form = useReactiveForm<FormValues>({
     name: { value: "", validators: [required] },
@@ -575,7 +583,7 @@ export default function JobApplyPage() {
 
     try {
       const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-      if (!SP_SITE_URL || !accounts[0]) {
+      if (!SP_SITE_URL || !activeAccount) {
         setSubmitError("Unable to identify your signed-in SharePoint session. Please sign in again.");
         setSubmitting(false);
         return;
@@ -584,7 +592,7 @@ export default function JobApplyPage() {
       try {
         accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: accounts[0],
+          account: activeAccount,
         });
       } catch {
         setSubmitError("Could not get your SharePoint permission token. Please sign in again and retry.");
@@ -606,6 +614,7 @@ export default function JobApplyPage() {
           JobApplyPdfDocument({
             data: {
               jobTitle: job.title,
+              company: job.company,
               applicantName: values.name,
               applicantEmail: values.email,
               applicantPhone: values.phone,
@@ -657,6 +666,7 @@ export default function JobApplyPage() {
       const result = await submitApplication({
         jobListingId: jobId,
         jobTitle: job.title,
+        company: job.company,
         applicantName: values.name,
         applicantEmail: values.email,
         applicantPhone: values.phone,
@@ -666,7 +676,7 @@ export default function JobApplyPage() {
         files: allFiles,
         customAnswers,
         accessToken,
-        submittedByEmail: accounts[0]?.username || "",
+        submittedByEmail: activeAccount.username || "",
         forceApply,
         submissionRef,
         pdpaConsent: true,
@@ -771,6 +781,23 @@ export default function JobApplyPage() {
 
                   {/* Row 2: Department chip alone */}
                   <Box sx={{ mb: 1.5 }}>
+                    {job.company && (
+                      <Chip
+                        icon={<Business sx={{ fontSize: 14 }} />}
+                        label={job.company}
+                        size="small"
+                        sx={{
+                          mr: 0.75,
+                          mb: 0.75,
+                          backgroundColor: "#F0F7FF",
+                          color: "#0078D4",
+                          fontWeight: 800,
+                          fontSize: "0.7rem",
+                          borderRadius: "999px",
+                          "& .MuiChip-icon": { color: "#0078D4" },
+                        }}
+                      />
+                    )}
                     <Chip
                       label={job.department}
                       size="small"

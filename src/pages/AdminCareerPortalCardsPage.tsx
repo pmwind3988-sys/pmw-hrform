@@ -125,7 +125,7 @@ function cardFormFromInitial(initial: CareerPortalCard | null): PortalCardForm {
 function targetSummary(card: CareerPortalCard, jobs: JobListing[]): string {
   if (card.targetType === "job") {
     const job = jobs.find((item) => item.id === card.targetValue);
-    return `Job: ${job?.title || card.targetValue || "Not selected"}`;
+    return `Job: ${job ? [job.title, job.company].filter(Boolean).join(" - ") : card.targetValue || "Not selected"}`;
   }
   if (card.targetType === "link") return card.targetValue || "Link not set";
   return "No click target";
@@ -140,6 +140,11 @@ function targetIcon(card: CareerPortalCard) {
 function isPortalCardStorageError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
   return message.includes("access denied") || (message.includes("career portal cards") && message.includes("not ready"));
+}
+
+function sharePointScope(): string {
+  const spSiteUrl = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+  return `${new URL(spSiteUrl).origin}/AllSites.Manage`;
 }
 
 function CardsLoadingSkeleton() {
@@ -460,7 +465,7 @@ function PortalCardDialog({
                   >
                     {jobs.map((job) => (
                       <MenuItem key={job.id} value={job.id}>
-                        {job.title}
+                        {[job.title, job.company].filter(Boolean).join(" - ")}
                       </MenuItem>
                     ))}
                   </Select>
@@ -525,13 +530,25 @@ export default function AdminCareerPortalCardsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<CareerPortalCard | null>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>(null);
 
+  const getAdminAccessToken = async (): Promise<string> => {
+    const account = instance.getActiveAccount() ?? accounts[0];
+    if (!account) {
+      throw new Error("No signed-in account found.");
+    }
+    return acquireAccessTokenSilentOrRedirect(instance, {
+      scopes: [sharePointScope()],
+      account,
+    });
+  };
+
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
+      const accessToken = await getAdminAccessToken();
       const [cardData, jobData] = await Promise.all([
-        fetchCareerPortalCards(),
-        fetchAdminJobs(),
+        fetchCareerPortalCards({ accessToken }),
+        fetchAdminJobs({ accessToken }),
       ]);
       setCards(cardData);
       setJobs(jobData);
@@ -577,27 +594,20 @@ export default function AdminCareerPortalCardsPage() {
   };
 
   const ensurePortalCardStorage = async () => {
-    const account = accounts[0];
-    if (!account) {
-      throw new Error("No signed-in account is available to prepare SharePoint storage.");
-    }
-    const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    const token = await acquireAccessTokenSilentOrRedirect(instance, {
-      scopes: [`${origin}/AllSites.Manage`],
-      account,
-    });
+    const token = await getAdminAccessToken();
     await ensureCareerPortalCardList(token);
   };
 
   const handleSave = async (card: PortalCardForm) => {
     setSaving(true);
     try {
+      const accessToken = await getAdminAccessToken();
       const saveCard = async () => {
         if (editCard) {
-          await updateCareerPortalCard(editCard.id, card);
+          await updateCareerPortalCard(editCard.id, card, { accessToken });
           return "Card updated";
         }
-        await createCareerPortalCard(card);
+        await createCareerPortalCard(card, { accessToken });
         return "Card added";
       };
 
@@ -629,7 +639,8 @@ export default function AdminCareerPortalCardsPage() {
     }
     setDeletingId(deleteConfirm.id);
     try {
-      await deleteCareerPortalCard(deleteConfirm.id);
+      const accessToken = await getAdminAccessToken();
+      await deleteCareerPortalCard(deleteConfirm.id, { accessToken });
       setSnackbar({ message: "Card deleted", severity: "success" });
       setDeleteConfirm(null);
       await load();

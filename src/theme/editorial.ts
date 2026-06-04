@@ -22,8 +22,8 @@ export const editorial = {
 
 export const editorialFonts = {
   sans: '"Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif',
-  serif: 'Georgia, "Times New Roman", Times, serif',
-  mono: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+  serif: '"Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif',
+  mono: '"Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif',
 } as const;
 
 export const editorialShadow = "0 10px 28px rgba(16, 16, 16, 0.07)";

@@ -2,12 +2,12 @@ import { type Configuration, PublicClientApplication } from "@azure/msal-browser
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
-let spScope: string[] = ["User.Read"];
+let spScope: string[] = ["openid", "profile"];
 try {
   const origin = new URL(SP_SITE_URL).origin;
-  spScope = ["User.Read", `${origin}/AllSites.Manage`];
+  spScope = [`${origin}/AllSites.Manage`];
 } catch {
-  // SP_SITE_URL not configured, fall back to basic scopes
+  // SP_SITE_URL not configured, fall back to basic sign-in scopes
 }
 
 const msalConfig: Configuration = {

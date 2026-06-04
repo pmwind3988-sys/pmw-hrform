@@ -1,10 +1,16 @@
-* {
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  font-family: var(--pmw-font-main) !important;
 }
 
 :root {
+  --pmw-font-main: "Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
   --pmw-ink: #101010;
   --pmw-muted: #5f646d;
   --pmw-paper: #f7f5ef;
@@ -19,11 +25,18 @@
 
 body {
   margin: 0;
-  font-family: "Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--app-bg, var(--app-bg-fallback));
   color: var(--pmw-ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--pmw-font-main);
 }
 
 #root {

@@ -17,28 +17,50 @@ if (missing.length > 0) {
 
 import { msalInstance } from "./auth/msalConfig";
 import AuthProvider from "./auth/AuthProvider";
+import type { AuthenticationResult } from "@azure/msal-browser";
 import "./index.css";
 import App from "./App";
+
+function setActiveAccount(result: AuthenticationResult | null): void {
+  if (result?.account) {
+    msalInstance.setActiveAccount(result.account);
+    return;
+  }
+
+  const activeAccount = msalInstance.getActiveAccount();
+  if (activeAccount) return;
+
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length === 1) {
+    msalInstance.setActiveAccount(accounts[0]);
+  }
+}
 
 async function initializeMsal() {
   try {
     await msalInstance.initialize();
-  } catch (err) {
-    console.warn("MSAL initialization warning (expected in private browsing):", err);
+  } catch {
     return;
   }
 
   // Handle any redirect response from previous auth flow
   // Cap at 3s so a hung redirect never blocks app render
   try {
+    const redirectPromise = msalInstance
+      .handleRedirectPromise()
+      .then((result) => {
+        setActiveAccount(result);
+      })
+      .catch(() => undefined);
+
     await Promise.race([
-      msalInstance.handleRedirectPromise(),
+      redirectPromise,
       new Promise<void>((resolve) => setTimeout(resolve, 3000)),
     ]);
-  } catch (err) {
+    setActiveAccount(null);
+  } catch {
     // no_token_request_cache_error is expected in private/incognito windows
     // where localStorage is restricted or cleared between redirects
-    console.warn("MSAL redirect handling warning (expected in private browsing):", err);
   }
 }
 

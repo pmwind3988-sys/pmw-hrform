@@ -123,6 +123,7 @@ interface UploadedFile {
 interface JobApplyBody {
   jobListingId: string;
   jobTitle: string;
+  company?: string;
   applicantName: string;
   applicantEmail: string;
   applicantPhone: string;
@@ -230,6 +231,7 @@ const APPLICATION_COLUMN_SPECS: SpColumnSpec[] = [
   { name: "ApplicantEmail", displayName: "Applicant Email", acceptKinds: [2], kind: 2 },
   { name: "ApplicantPhone", displayName: "Applicant Phone", acceptKinds: [2], kind: 2 },
   { name: "JobListingID", displayName: "Job Listing ID", acceptKinds: [9, 7], kind: 9 },
+  { name: "Company", displayName: "Company", acceptKinds: [2, 6], kind: 2 },
   { name: "Status", displayName: "Status", acceptKinds: [2, 6], kind: 2 },
   { name: "SubmissionRef", displayName: "Submission Ref", acceptKinds: [2], kind: 2 },
   { name: "SubmittedBy", displayName: "Submitted By", acceptKinds: [2], kind: 2 },
@@ -619,6 +621,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const {
     jobListingId,
     jobTitle,
+    company,
     applicantName,
     applicantEmail,
     applicantPhone,
@@ -674,6 +677,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       applicantName:     findColumn(colMap, "Applicant Name", "ApplicantName", "Applicant_x0020_Name"),
       applicantEmail:    findColumn(colMap, "Applicant Email", "ApplicantEmail", "Applicant_x0020_Email"),
       applicantPhone:    findColumn(colMap, "Applicant Phone", "ApplicantPhone", "Applicant_x0020_Phone"),
+      company:           findColumn(colMap, "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company"),
       status:            findColumn(colMap, "Status"),
       submissionRef:     findColumn(colMap, "Submission Ref", "SubmissionRef", "Submission_x0020_Ref"),
       submittedBy:       findColumn(colMap, "Submitted By", "SubmittedBy", "Submitted_x0020_By"),
@@ -794,6 +798,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (COL.applicantName)  coreFields[COL.applicantName]  = applicantName;
     if (COL.applicantEmail) coreFields[COL.applicantEmail] = applicantEmail;
     if (COL.applicantPhone) coreFields[COL.applicantPhone] = applicantPhone;
+    if (COL.company && company) coreFields[COL.company] = company;
     if (COL.status)         coreFields[COL.status]         = "New";
     if (COL.submissionRef)  coreFields[COL.submissionRef]  = submissionRef;
     if (COL.submittedBy)    coreFields[COL.submittedBy]    = authenticatedEmail;
@@ -930,7 +935,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const htmlBody = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
-  body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;font-size:13px;line-height:1.5;padding:24px}
+  body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;color:#1a1a1a;font-size:13px;line-height:1.5;padding:24px}
   h2{color:#0078D4;font-size:20px;font-weight:600;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid #0078D4}
   table{border-collapse:collapse;width:100%;max-width:600px;margin-bottom:16px}
   td{padding:8px 12px;border:1px solid #d1d5db;font-size:13px;vertical-align:top}
@@ -944,10 +949,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   <h2>New Job Application</h2>
   <table>
     <tr><td>Position</td><td>${eh(jobTitle)}</td></tr>
+    ${company ? `<tr><td>Company</td><td>${eh(company)}</td></tr>` : ""}
     <tr><td>Applicant</td><td>${eh(applicantName)}</td></tr>
     <tr><td>Email</td><td><a href="mailto:${eh(applicantEmail)}">${eh(applicantEmail)}</a></td></tr>
     <tr><td>Phone</td><td>${eh(applicantPhone)}</td></tr>
-    <tr><td>Reference</td><td style="font-family:monospace">${eh(submissionRef)}</td></tr>
+    <tr><td>Reference</td><td style="font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif">${eh(submissionRef)}</td></tr>
     <tr><td>Submitted</td><td>${submittedAtFormatted}</td></tr>
     ${currentPosition ? `<tr><td>Current Position</td><td>${eh(currentPosition)}</td></tr>` : ""}
     ${currentDepartment ? `<tr><td>Department</td><td>${eh(currentDepartment)}</td></tr>` : ""}

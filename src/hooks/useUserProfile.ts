@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import type { AccountInfo } from "@azure/msal-browser";
-import { acquireAccessTokenSilentOrRedirect, startReauthentication } from "../utils/authRecovery";
-import { getStoredAuthDecision } from "../utils/authDecision";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -58,7 +56,7 @@ export function useUserProfile(): UserProfile {
   const { instance, accounts } = useMsal();
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
 
-  const account: AccountInfo | undefined = accounts[0];
+  const account: AccountInfo | undefined = instance.getActiveAccount() ?? accounts[0];
   const userIdentifier = account?.username ?? "";
 
   useEffect(() => {
@@ -66,9 +64,6 @@ export function useUserProfile(): UserProfile {
 
     async function fetchProfile(): Promise<void> {
       if (!account || !userIdentifier) {
-        if (getStoredAuthDecision() === "msal") {
-          await startReauthentication(instance, ["User.Read"]);
-        }
         setProfile({
           ...defaultProfile,
           loading: false,
@@ -78,7 +73,7 @@ export function useUserProfile(): UserProfile {
       }
 
       try {
-        const accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
+        const tokenResult = await instance.acquireTokenSilent({
           scopes: ["User.Read"],
           account,
         });
@@ -87,14 +82,10 @@ export function useUserProfile(): UserProfile {
           "https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,mobilePhone,businessPhones,department,jobTitle",
           {
             headers: {
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${tokenResult.accessToken}`,
             },
           },
         );
-
-        if (response.status === 401) {
-          await startReauthentication(instance, ["User.Read"], account);
-        }
 
         if (!response.ok) {
           throw new Error(`Graph API error: ${response.status}`);

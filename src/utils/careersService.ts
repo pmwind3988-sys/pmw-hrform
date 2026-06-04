@@ -33,6 +33,10 @@ export interface ApplicationListQuery {
   limit?: number;
 }
 
+export interface AdminApiOptions {
+  accessToken: string;
+}
+
 // ── Shared API key header ──────────────────────────────────────────────────────
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
@@ -42,6 +46,10 @@ function apiHeaders(extra: Record<string, string> = {}): Record<string, string> 
     ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
     ...extra,
   };
+}
+
+function delegatedHeaders(options: AdminApiOptions): Record<string, string> {
+  return apiHeaders({ Authorization: `Bearer ${options.accessToken}` });
 }
 
 // ── API client functions ───────────────────────────────────────────────────────
@@ -104,11 +112,12 @@ export async function submitApplication(
 
 export async function fetchMyApplications(
   email: string,
+  options: AdminApiOptions,
   query: Omit<ApplicationListQuery, "email"> = {},
 ): Promise<JobAdminApplication[]> {
   const response = await fetch(
     `/api/job-admin${applicationQueryString({ ...query, email })}`,
-    { headers: apiHeaders() },
+    { headers: delegatedHeaders(options) },
   );
 
   if (!response.ok) {
@@ -119,8 +128,8 @@ export async function fetchMyApplications(
   return data.applications;
 }
 
-export async function fetchApplications(query: ApplicationListQuery = {}): Promise<JobAdminApplication[]> {
-  const response = await fetch(`/api/job-admin${applicationQueryString(query)}`, { headers: apiHeaders() });
+export async function fetchApplications(options: AdminApiOptions, query: ApplicationListQuery = {}): Promise<JobAdminApplication[]> {
+  const response = await fetch(`/api/job-admin${applicationQueryString(query)}`, { headers: delegatedHeaders(options) });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
@@ -133,10 +142,11 @@ export async function fetchApplications(query: ApplicationListQuery = {}): Promi
 export async function updateApplicationStatus(
   applicationId: string,
   status: string,
+  options: AdminApiOptions,
 ): Promise<boolean> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({
       action: "update-status",
       applicationId,
@@ -154,10 +164,11 @@ export async function updateApplicationStatus(
 
 export async function deleteApplications(
   ids: string[],
+  options: AdminApiOptions,
 ): Promise<{ deleted: number; deletedFiles?: number; errors?: string[]; fileWarnings?: string[] }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "delete-applications", ids }),
   });
   if (!response.ok) {
@@ -176,10 +187,11 @@ export async function deleteApplications(
 export async function fetchColumnChoices(
   listName: string,
   columnName: string,
+  options: AdminApiOptions,
 ): Promise<string[]> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "get-column-choices", listName, columnName }),
   });
   if (!response.ok) return [];
@@ -189,10 +201,11 @@ export async function fetchColumnChoices(
 
 export async function deleteJobListing(
   jobId: string,
+  options: AdminApiOptions,
 ): Promise<{ success: boolean }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "delete-job", jobId }),
   });
 
@@ -207,10 +220,10 @@ export async function deleteJobListing(
 
 // ── Admin: Job listing CRUD ──────────────────────────────────────────────────
 
-export async function fetchAdminJobs(): Promise<JobListing[]> {
+export async function fetchAdminJobs(options: AdminApiOptions): Promise<JobListing[]> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "list-jobs" }),
   });
 
@@ -224,10 +237,11 @@ export async function fetchAdminJobs(): Promise<JobListing[]> {
 
 export async function createJobListing(
   data: Record<string, unknown>,
+  options: AdminApiOptions,
 ): Promise<{ success: boolean; jobId: string }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "create-job", ...data }),
   });
 
@@ -243,10 +257,11 @@ export async function createJobListing(
 export async function updateJobListing(
   jobId: string,
   data: Record<string, unknown>,
+  options: AdminApiOptions,
 ): Promise<{ success: boolean; warning?: string }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "update-job", jobId, ...data }),
   });
 
@@ -260,10 +275,10 @@ export async function updateJobListing(
   return result;
 }
 
-export async function fetchCareerPortalCards(): Promise<CareerPortalCard[]> {
+export async function fetchCareerPortalCards(options: AdminApiOptions): Promise<CareerPortalCard[]> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "list-portal-cards" }),
   });
 
@@ -277,10 +292,11 @@ export async function fetchCareerPortalCards(): Promise<CareerPortalCard[]> {
 
 export async function createCareerPortalCard(
   data: Omit<CareerPortalCard, "id" | "created">,
+  options: AdminApiOptions,
 ): Promise<{ success: boolean; cardId: string }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "create-portal-card", ...data }),
   });
 
@@ -296,10 +312,11 @@ export async function createCareerPortalCard(
 export async function updateCareerPortalCard(
   cardId: string,
   data: Partial<Omit<CareerPortalCard, "id" | "created">>,
+  options: AdminApiOptions,
 ): Promise<{ success: boolean }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "update-portal-card", cardId, ...data }),
   });
 
@@ -312,10 +329,10 @@ export async function updateCareerPortalCard(
   return (await response.json()) as { success: boolean };
 }
 
-export async function deleteCareerPortalCard(cardId: string): Promise<{ success: boolean }> {
+export async function deleteCareerPortalCard(cardId: string, options: AdminApiOptions): Promise<{ success: boolean }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
-    headers: apiHeaders(),
+    headers: delegatedHeaders(options),
     body: JSON.stringify({ action: "delete-portal-card", cardId }),
   });
 
@@ -347,6 +364,7 @@ const REQUIRED_COLUMNS: ColumnDef[] = [
   { name: "ApplicantEmail", acceptKinds: [2], kind: 2 },
   { name: "ApplicantPhone", acceptKinds: [2], kind: 2 },
   { name: "JobListingID",  acceptKinds: [9, 7], kind: 9 },
+  { name: "Company", acceptKinds: [2, 6], kind: 2 },
   { name: "Status", acceptKinds: [2, 6], kind: 2 },
   { name: "SubmissionRef", acceptKinds: [2], kind: 2 },
   { name: "SubmittedBy", acceptKinds: [2], kind: 2 },
@@ -400,6 +418,7 @@ export async function ensureJobApplicationColumns(
     ApplicantEmail: "Applicant Email",
     ApplicantPhone: "Applicant Phone",
     JobListingID: "Job Listing ID",
+    Company: "Company",
     Status: "Status",
     SubmissionRef: "Submission Ref",
     SubmittedBy: "Submitted By",

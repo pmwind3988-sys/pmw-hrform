@@ -6,6 +6,7 @@ import {
   createListItem,
   updateListItemFields,
   deleteListItem,
+  getListColumns,
   getListColumnChoices,
   listDocLibraryFiles,
   deleteDocLibraryFile,
@@ -38,12 +39,90 @@ interface ApiResponse {
 
 const APPLICATION_LIST = "Job Applications";
 const JOB_LIST = "Internal Job Listing";
+const ADMIN_GROUP = "_HR_ Forms Owners";
+const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 const DEFAULT_APPLICATION_LIMIT = 500;
 const MAX_APPLICATION_LIMIT = 999;
 
 interface JobDocumentLink {
   name: string;
   url: string;
+}
+
+interface SharePointUser {
+  Email?: string;
+  LoginName?: string;
+  UserPrincipalName?: string;
+}
+
+interface DelegatedUser {
+  email: string;
+  login: string;
+}
+
+interface ColumnMap {
+  byDisplay: Record<string, string>;
+  byInternal: Record<string, string>;
+}
+
+interface ApplicationColumns {
+  applicantName: string | null;
+  applicantEmail: string | null;
+  applicantPhone: string | null;
+  company: string | null;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  status: string | null;
+  submissionRef: string | null;
+  jobListingId: string | null;
+  resumeUrl: string | null;
+  coverLetterUrl: string | null;
+  supportingDocuments: string | null;
+  customAnswers: string | null;
+}
+
+async function resolveColumnMap(token: string, listName: string): Promise<ColumnMap> {
+  const columns = await getListColumns(token, listName);
+  const map: ColumnMap = { byDisplay: {}, byInternal: {} };
+  for (const column of columns) {
+    map.byDisplay[column.displayName] = column.name;
+    map.byInternal[column.name] = column.name;
+  }
+  return map;
+}
+
+function findColumn(map: ColumnMap, ...candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    if (map.byDisplay[candidate]) return map.byDisplay[candidate];
+    if (map.byInternal[candidate]) return map.byInternal[candidate];
+  }
+  return null;
+}
+
+function resolveApplicationColumns(map: ColumnMap): ApplicationColumns {
+  return {
+    applicantName: findColumn(map, "Applicant Name", "ApplicantName", "Applicant_x0020_Name"),
+    applicantEmail: findColumn(map, "Applicant Email", "ApplicantEmail", "Applicant_x0020_Email"),
+    applicantPhone: findColumn(map, "Applicant Phone", "ApplicantPhone", "Applicant_x0020_Phone"),
+    company: findColumn(map, "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company"),
+    submittedBy: findColumn(map, "Submitted By", "SubmittedBy", "Submitted_x0020_By"),
+    submittedAt: findColumn(map, "Submitted At", "SubmittedAt", "Submitted_x0020_At"),
+    status: findColumn(map, "Status"),
+    submissionRef: findColumn(map, "Submission Ref", "SubmissionRef", "Submission_x0020_Ref"),
+    jobListingId: findColumn(map, "Job Listing ID", "JobListingID", "Job_x0020_Listing_x0020_ID"),
+    resumeUrl: findColumn(map, "Resume URL", "ResumeUrl", "Resume_x0020_URL"),
+    coverLetterUrl: findColumn(map, "Cover Letter URL", "CoverLetterUrl", "Cover_x0020_Letter_x0020_URL"),
+    supportingDocuments: findColumn(map, "Supporting Documents", "SupportingDocuments", "Supporting_x0020_Documents"),
+    customAnswers: findColumn(map, "Custom Answers", "CustomAnswers", "Custom_x0020_Answers"),
+  };
+}
+
+function readField(fields: Record<string, unknown>, columnName: string | null, ...fallbackNames: string[]): unknown {
+  if (columnName && fields[columnName] !== undefined) return fields[columnName];
+  for (const name of fallbackNames) {
+    if (fields[name] !== undefined) return fields[name];
+  }
+  return undefined;
 }
 
 function fieldUrl(value: unknown): string {
@@ -126,12 +205,13 @@ function docLibraryFileMatchesApplication(
   return false;
 }
 
-function getApplicationJobId(fields: Record<string, unknown>): string {
-  return String(fields.JobListingIDLookupId || fields.JobListingID || "");
+function getApplicationJobId(fields: Record<string, unknown>, columnName: string | null = null): string {
+  const value = readField(fields, columnName, "JobListingIDLookupId", "JobListingID", "Job_x0020_Listing_x0020_ID");
+  return String(value || "");
 }
 
-function isDeletedApplication(fields: Record<string, unknown>): boolean {
-  return String(fields.Status || "").toLowerCase() === "deleted";
+function isDeletedApplication(fields: Record<string, unknown>, statusColumn: string | null = null): boolean {
+  return String(readField(fields, statusColumn, "Status") || "").toLowerCase() === "deleted";
 }
 
 function escapeODataString(value: string): string {
@@ -144,8 +224,8 @@ function parseDateParam(value: string): string {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
-function getSubmittedTime(fields: Record<string, unknown>): number {
-  return new Date(String(fields.SubmittedAt || fields.Created || "")).getTime();
+function getSubmittedTime(fields: Record<string, unknown>, submittedAtColumn: string | null = null): number {
+  return new Date(String(readField(fields, submittedAtColumn, "SubmittedAt", "Submitted_x0020_At", "Created") || "")).getTime();
 }
 
 function getApplicationLimit(value: string): number {
@@ -157,6 +237,112 @@ function getApplicationLimit(value: string): number {
 function numberField(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function textField(fields: Record<string, unknown>, ...names: string[]): string {
+  for (const name of names) {
+    if (fields[name] !== undefined) return String(fields[name] || "");
+  }
+  return "";
+}
+
+function jobCompany(fields: Record<string, unknown>, columnName: string | null = null): string {
+  const candidates = [
+    ...(columnName ? [columnName] : []),
+    "Company",
+    "Company_x0020_Name",
+    "JobCompany",
+    "Job_x0020_Company",
+  ];
+  return textField(fields, ...candidates);
+}
+
+function isColumnNotRecognized(message: string, columnName: string): boolean {
+  const lowerMessage = message.toLowerCase();
+  return (
+    lowerMessage.includes(columnName.toLowerCase()) &&
+    (lowerMessage.includes("not recognized") || lowerMessage.includes("does not exist"))
+  );
+}
+
+function getHeader(headers: Record<string, string | string[] | undefined>, name: string): string {
+  const lowerName = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== lowerName) continue;
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) return value[0] || "";
+  }
+  return "";
+}
+
+function getBearerToken(headers: Record<string, string | string[] | undefined>): string {
+  const authorization = getHeader(headers, "authorization");
+  if (!authorization.toLowerCase().startsWith("bearer ")) return "";
+  return authorization.slice(7).trim();
+}
+
+async function delegatedSharePointGet<T>(accessToken: string, path: string): Promise<T> {
+  if (!SP_SITE_URL) throw new Error("SharePoint site URL is not configured");
+  const response = await fetch(`${SP_SITE_URL}${path}`, {
+    headers: {
+      Accept: "application/json;odata=nometadata",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`SharePoint GET ${response.status}`);
+  }
+
+  return await response.json() as T;
+}
+
+function normalizeDelegatedUser(user: SharePointUser): DelegatedUser | null {
+  const email = String(user.Email || user.UserPrincipalName || "").toLowerCase();
+  const login = String(user.LoginName || "").toLowerCase();
+  const loginEmail = login.split("|").pop() || "";
+  const resolvedEmail = email || loginEmail;
+  if (!resolvedEmail && !login) return null;
+  return { email: resolvedEmail, login };
+}
+
+async function resolveDelegatedUser(accessToken: string): Promise<DelegatedUser | null> {
+  try {
+    const currentUser = await delegatedSharePointGet<SharePointUser>(
+      accessToken,
+      "/_api/web/currentuser?$select=Email,UserPrincipalName,LoginName",
+    );
+    return normalizeDelegatedUser(currentUser);
+  } catch (error) {
+    logWarn("api:job-admin", "Failed to resolve delegated user", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+async function isDelegatedAdmin(accessToken: string, user: DelegatedUser): Promise<boolean> {
+  try {
+    const members = await delegatedSharePointGet<{ value?: SharePointUser[] }>(
+      accessToken,
+      `/_api/web/sitegroups/getByName('${encodeURIComponent(ADMIN_GROUP)}')/users?$select=LoginName,Email,UserPrincipalName`,
+    );
+
+    return (members.value || []).some((member) => {
+      const memberUser = normalizeDelegatedUser(member);
+      if (!memberUser) return false;
+      return (
+        (user.email && memberUser.email === user.email) ||
+        (user.login && memberUser.login === user.login) ||
+        (user.email && memberUser.login.endsWith(user.email))
+      );
+    });
+  } catch (error) {
+    logWarn("api:job-admin", "Failed to verify admin group membership", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
 }
 
 async function getApplicationCountsByJob(token: string): Promise<Record<string, number>> {
@@ -177,6 +363,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
+  const delegatedToken = getBearerToken(req.headers);
+  if (!delegatedToken) return res.status(401).json({ error: "Missing delegated SharePoint token" });
+
+  const delegatedUser = await resolveDelegatedUser(delegatedToken);
+  if (!delegatedUser) return res.status(401).json({ error: "Unable to verify signed-in user" });
+
+  const delegatedIsAdmin = await isDelegatedAdmin(delegatedToken, delegatedUser);
 
   try {
     const token = await getGraphToken();
@@ -189,20 +382,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const submittedFrom = parseDateParam(url.searchParams.get("submittedFrom") || "");
       const submittedTo = parseDateParam(url.searchParams.get("submittedTo") || "");
       const limit = getApplicationLimit(url.searchParams.get("limit") || "");
+      const effectiveEmailFilter = delegatedIsAdmin ? emailFilter : delegatedUser.email;
+
+      if (!delegatedIsAdmin && (!emailFilter || emailFilter.toLowerCase() !== delegatedUser.email)) {
+        return res.status(403).json({ error: "You can only view your own applications." });
+      }
+
+      const applicationColumns = resolveApplicationColumns(await resolveColumnMap(token, APPLICATION_LIST));
       const graphFilters: string[] = [];
 
-      if (emailFilter) {
-        const safeEmail = escapeODataString(emailFilter);
-        graphFilters.push(`(fields/ApplicantEmail eq '${safeEmail}' or fields/SubmittedBy eq '${safeEmail}')`);
+      if (effectiveEmailFilter) {
+        const safeEmail = escapeODataString(effectiveEmailFilter);
+        const emailFilters = [];
+        if (applicationColumns.applicantEmail) emailFilters.push(`fields/${applicationColumns.applicantEmail} eq '${safeEmail}'`);
+        if (applicationColumns.submittedBy) emailFilters.push(`fields/${applicationColumns.submittedBy} eq '${safeEmail}'`);
+        if (emailFilters.length > 0) graphFilters.push(`(${emailFilters.join(" or ")})`);
       }
-      if (statusFilter) {
-        graphFilters.push(`fields/Status eq '${escapeODataString(statusFilter)}'`);
+      if (statusFilter && applicationColumns.status) {
+        graphFilters.push(`fields/${applicationColumns.status} eq '${escapeODataString(statusFilter)}'`);
       }
-      if (submittedFrom) {
-        graphFilters.push(`fields/SubmittedAt ge '${submittedFrom}'`);
+      if (submittedFrom && applicationColumns.submittedAt) {
+        graphFilters.push(`fields/${applicationColumns.submittedAt} ge '${submittedFrom}'`);
       }
-      if (submittedTo) {
-        graphFilters.push(`fields/SubmittedAt le '${submittedTo}'`);
+      if (submittedTo && applicationColumns.submittedAt) {
+        graphFilters.push(`fields/${applicationColumns.submittedAt} le '${submittedTo}'`);
       }
 
       let items: GraphListItem[];
@@ -220,50 +423,69 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         items = await queryListItems(token, APPLICATION_LIST, { top: limit });
       }
 
-      const lowerEmail = emailFilter.toLowerCase();
+      const lowerEmail = effectiveEmailFilter.toLowerCase();
       const fromTime = submittedFrom ? new Date(submittedFrom).getTime() : null;
       const toTime = submittedTo ? new Date(submittedTo).getTime() : null;
       items = items
         .filter((item) => {
-          if (isDeletedApplication(item.fields)) return false;
+          if (isDeletedApplication(item.fields, applicationColumns.status)) return false;
           if (lowerEmail) {
-            const applicantEmail = String(item.fields.ApplicantEmail || "").toLowerCase();
-            const submittedBy = String(item.fields.SubmittedBy || "").toLowerCase();
+            const applicantEmail = String(readField(item.fields, applicationColumns.applicantEmail, "ApplicantEmail", "Applicant_x0020_Email") || "").toLowerCase();
+            const submittedBy = String(readField(item.fields, applicationColumns.submittedBy, "SubmittedBy", "Submitted_x0020_By") || "").toLowerCase();
             if (applicantEmail !== lowerEmail && submittedBy !== lowerEmail) return false;
           }
-          if (statusFilter && String(item.fields.Status || "") !== statusFilter) return false;
-          const submittedTime = getSubmittedTime(item.fields);
+          if (statusFilter && String(readField(item.fields, applicationColumns.status, "Status") || "") !== statusFilter) return false;
+          const submittedTime = getSubmittedTime(item.fields, applicationColumns.submittedAt);
           if (fromTime !== null && (!Number.isFinite(submittedTime) || submittedTime < fromTime)) return false;
           if (toTime !== null && (!Number.isFinite(submittedTime) || submittedTime > toTime)) return false;
           return true;
         })
-        .sort((a, b) => getSubmittedTime(b.fields) - getSubmittedTime(a.fields));
+        .sort((a, b) => getSubmittedTime(b.fields, applicationColumns.submittedAt) - getSubmittedTime(a.fields, applicationColumns.submittedAt));
+
+      const jobCompanyById: Record<string, string> = {};
+      try {
+        const jobCompanyColumn = findColumn(await resolveColumnMap(token, JOB_LIST), "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company");
+        const jobItems = await queryListItems(token, JOB_LIST, { top: 999 });
+        for (const job of jobItems) {
+          const jobId = String(job.id || "");
+          if (jobId) jobCompanyById[jobId] = jobCompany(job.fields, jobCompanyColumn);
+        }
+      } catch (e) {
+        logWarn("api:job-admin", "Failed to enrich application company details", {
+          errorMessage: e instanceof Error ? e.message : String(e),
+        });
+      }
 
       const applications = items.map((item) => {
         let customAnswers: Record<string, unknown> | undefined;
-        const raw = item.fields.CustomAnswers;
+        const raw = readField(item.fields, applicationColumns.customAnswers, "CustomAnswers", "Custom_x0020_Answers");
         if (raw && typeof raw === "string") {
           try { customAnswers = JSON.parse(raw) as Record<string, unknown>; } catch { /* ignore */ }
         }
 
-        const resumeUrl = fieldUrl(item.fields.ResumeUrl);
-        const coverLetterUrl = fieldUrl(item.fields.CoverLetterUrl);
-        const supportingDocuments = parseSupportingDocuments(item.fields.SupportingDocuments, coverLetterUrl);
+        const resumeUrl = fieldUrl(readField(item.fields, applicationColumns.resumeUrl, "ResumeUrl", "Resume_x0020_URL"));
+        const coverLetterUrl = fieldUrl(readField(item.fields, applicationColumns.coverLetterUrl, "CoverLetterUrl", "Cover_x0020_Letter_x0020_URL"));
+        const supportingDocuments = parseSupportingDocuments(
+          readField(item.fields, applicationColumns.supportingDocuments, "SupportingDocuments", "Supporting_x0020_Documents"),
+          coverLetterUrl,
+        );
+        const jobListingId = getApplicationJobId(item.fields, applicationColumns.jobListingId);
 
         return {
           id: String(item.id || ""),
           jobTitle: String(item.fields.Title || "").split(" - ")[0] || String(item.fields.Title || ""),
-          applicantName: String(item.fields.ApplicantName || ""),
-          applicantEmail: String(item.fields.ApplicantEmail || ""),
-          status: String(item.fields.Status || ""),
-          submittedAt: String(item.fields.Created || item.fields.SubmittedAt || ""),
-          submissionRef: String(item.fields.SubmissionRef || ""),
-          applicantPhone: String(item.fields.ApplicantPhone || ""),
+          company: String(readField(item.fields, applicationColumns.company, "Company", "Company_x0020_Name", "JobCompany", "Job_x0020_Company") || jobCompanyById[jobListingId] || ""),
+          applicantName: String(readField(item.fields, applicationColumns.applicantName, "ApplicantName", "Applicant_x0020_Name") || ""),
+          applicantEmail: String(readField(item.fields, applicationColumns.applicantEmail, "ApplicantEmail", "Applicant_x0020_Email") || ""),
+          status: String(readField(item.fields, applicationColumns.status, "Status") || ""),
+          submittedAt: String(readField(item.fields, null, "Created") || readField(item.fields, applicationColumns.submittedAt, "SubmittedAt", "Submitted_x0020_At") || ""),
+          submissionRef: String(readField(item.fields, applicationColumns.submissionRef, "SubmissionRef", "Submission_x0020_Ref") || ""),
+          applicantPhone: String(readField(item.fields, applicationColumns.applicantPhone, "ApplicantPhone", "Applicant_x0020_Phone") || ""),
           coverLetterUrl: supportingDocuments[0]?.url || coverLetterUrl,
           resumeUrl,
           supportingDocuments,
           customAnswers,
-          jobListingId: getApplicationJobId(item.fields),
+          jobListingId,
         };
       });
 
@@ -277,6 +499,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
       if (!action) {
         return res.status(400).json({ error: "Missing required field: action" });
+      }
+      if (!delegatedIsAdmin) {
+        return res.status(403).json({ error: "Only HR Forms Owners can use this admin action." });
       }
 
       // Update application status (New / Reviewed)
@@ -393,6 +618,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
         const customFields = rawBody.customFields;
         const hasCustomFields = Array.isArray(customFields) && customFields.length > 0;
+        let companyColumn: string | null = "Company";
+        try {
+          companyColumn = findColumn(await resolveColumnMap(token, JOB_LIST), "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company");
+        } catch { /* use default internal name */ }
         const fields: Record<string, unknown> = {
           Title: title,
           Job_x0020_Description: rawBody.jobDescription || "",
@@ -403,6 +632,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           Status: "New",
           Application_x0020_Count: 0,
         };
+        if (rawBody.company !== undefined && companyColumn) {
+          fields[companyColumn] = rawBody.company || "";
+        }
 
         // Only include CustomFields if there's data AND the column exists
         if (hasCustomFields) {
@@ -414,11 +646,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           return res.status(200).json({ success: true, jobId: result.id });
         } catch (err) {
           const msg = (err as Error).message;
+          const warningParts: string[] = [];
           // If CustomFields column doesn't exist on the list, retry without it
           if (hasCustomFields && msg.includes("CustomFields") && msg.includes("not recognized")) {
             delete fields.CustomFields;
+            warningParts.push("CustomFields column not available");
+          }
+          if (companyColumn && companyColumn in fields && isColumnNotRecognized(msg, companyColumn)) {
+            delete fields[companyColumn];
+            warningParts.push("Company column not available");
+          }
+          if (warningParts.length > 0) {
             const result = await createListItem(token, JOB_LIST, fields);
-            return res.status(200).json({ success: true, jobId: result.id, warning: "CustomFields column not available" });
+            return res.status(200).json({ success: true, jobId: result.id, warning: warningParts.join("; ") });
           }
           throw err; // Re-throw for the outer catch
         }
@@ -427,6 +667,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // List all job listings (admin view)
       if (action === "list-jobs") {
         const items = await queryListItems(token, JOB_LIST, { top: 999 });
+        let companyColumn: string | null = null;
+        try {
+          companyColumn = findColumn(await resolveColumnMap(token, JOB_LIST), "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company");
+        } catch { /* use known fallback names */ }
 
         const jobs = items.map((item) => {
           const itemId = String(item.id || "");
@@ -438,6 +682,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           return {
             id: itemId,
             title: String(item.fields.Title || ""),
+            company: jobCompany(item.fields, companyColumn),
             jobDescription: String(item.fields.Job_x0020_Description || ""),
             department: String(item.fields.Department || ""),
             location: String(item.fields.Location || ""),
@@ -463,7 +708,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
 
         const updateFields: Record<string, unknown> = {};
+        let companyColumn: string | null = "Company";
+        try {
+          companyColumn = findColumn(await resolveColumnMap(token, JOB_LIST), "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company");
+        } catch { /* use default internal name */ }
         if (rawBody.title !== undefined) updateFields.Title = rawBody.title;
+        if (rawBody.company !== undefined && companyColumn) updateFields[companyColumn] = rawBody.company;
         if (rawBody.jobDescription !== undefined) updateFields.Job_x0020_Description = rawBody.jobDescription;
         if (rawBody.department !== undefined) updateFields.Department = rawBody.department;
         if (rawBody.location !== undefined) updateFields.Location = rawBody.location;
@@ -475,18 +725,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
 
         const hasCustomFields = "CustomFields" in updateFields;
+        const hasCompany = Boolean(companyColumn && companyColumn in updateFields);
         let warning: string | undefined;
         try {
           await updateListItemFields(token, JOB_LIST, jobId, updateFields);
         } catch (err) {
           const msg = (err as Error).message;
+          const warningParts: string[] = [];
           if (hasCustomFields && msg.includes("CustomFields") && msg.includes("not recognized")) {
             delete updateFields.CustomFields;
-            await updateListItemFields(token, JOB_LIST, jobId, updateFields);
-            warning = "CustomFields column not available";
-          } else {
-            throw err;
+            warningParts.push("CustomFields column not available");
           }
+          if (hasCompany && companyColumn && isColumnNotRecognized(msg, companyColumn)) {
+            delete updateFields[companyColumn];
+            warningParts.push("Company column not available");
+          }
+          if (warningParts.length === 0) throw err;
+          await updateListItemFields(token, JOB_LIST, jobId, updateFields);
+          warning = warningParts.join("; ");
         }
         return res.status(200).json({ success: true, ...(warning ? { warning } : {}) });
       }

@@ -165,7 +165,7 @@ export function createSpClient(
     params.set("$expand", "Author");
 
     const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?${params}`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         Accept: "application/json;odata=nometadata",
         Authorization: `Bearer ${token}`,
@@ -205,7 +205,7 @@ export function createSpClient(
     params.set("$expand", "Author");
 
     const url = `${SP_SITE_URL}/_api/web/lists(guid'${listGuid}')/items?${params}`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         Accept: "application/json;odata=nometadata",
         Authorization: `Bearer ${token}`,
