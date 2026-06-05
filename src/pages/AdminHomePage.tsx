@@ -119,7 +119,7 @@ export default function AdminHomePage() {
                 lineHeight: 0.98,
               }}
             >
-              {isAdmin ? "HR operations" : "My forms"}
+              {isAdmin ? "PMW Group HR Portal" : "PMW Group HR Portal"}
             </Typography>
             <Typography
               variant="h6"
@@ -131,8 +131,8 @@ export default function AdminHomePage() {
               }}
             >
               {isAdmin
-                ? "Track submissions, forms, and career activity with a quieter daily workspace."
-                : "Find forms, follow your submissions, and keep pending actions in view."}
+                ? "Manage HR forms, review submissions, monitor approval workflows, and maintain form configurations."
+                : "Submit HR forms, track approval status, and access your submission history."}
             </Typography>
           </Box>
           <Typography
