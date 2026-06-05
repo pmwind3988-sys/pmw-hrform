@@ -32,6 +32,10 @@ import { DashboardProvider } from "./contexts/DashboardContext";
 const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
 const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
 const AUTH_PROFILE_REAUTH_TIMEOUT_MS = 60000;
+const INTERNAL_EMAIL_DOMAINS = String(import.meta.env.VITE_INTERNAL_EMAIL_DOMAINS || "pmw-group.com")
+  .split(",")
+  .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
+  .filter(Boolean);
 type AuthProfileStatus = "unknown" | "loading" | "ready" | "restricted";
 
 const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
@@ -64,6 +68,45 @@ function getAccountKey(account: AccountInfo | null): string {
   return account.homeAccountId || account.localAccountId || account.username || "";
 }
 
+function getAccountClaim(account: AccountInfo | null, key: string): string {
+  const claims = account?.idTokenClaims;
+  if (!claims || typeof claims !== "object" || !(key in claims)) return "";
+  const value = (claims as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+function normalizeAccountEmail(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  const loginName = trimmed.includes("|") ? trimmed.split("|").pop() || trimmed : trimmed;
+  return loginName.replace(/^mailto:/, "");
+}
+
+function getAccountEmailCandidates(account: AccountInfo | null): string[] {
+  const candidates = new Set<string>();
+  for (const value of [
+    account?.username,
+    getAccountClaim(account, "preferred_username"),
+    getAccountClaim(account, "email"),
+    getAccountClaim(account, "upn"),
+  ]) {
+    if (!value) continue;
+    const normalized = normalizeAccountEmail(value);
+    if (normalized) candidates.add(normalized);
+  }
+  return [...candidates];
+}
+
+function isInternalAccount(account: AccountInfo | null): boolean {
+  if (INTERNAL_EMAIL_DOMAINS.length === 0) return false;
+  return getAccountEmailCandidates(account).some((email) => {
+    if (email.includes("#ext#")) return false;
+    const atIndex = email.lastIndexOf("@");
+    if (atIndex === -1) return false;
+    return INTERNAL_EMAIL_DOMAINS.includes(email.slice(atIndex + 1));
+  });
+}
+
 function isUnauthorizedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /\b401\b/.test(message) || message.toLowerCase().includes("unauthorized");
@@ -77,6 +120,25 @@ function normalizeStatus(status: string | null): string {
   if (normalized.includes("reject")) return "rejected";
   if (normalized.includes("progress") || normalized.includes("review")) return "inprogress";
   return "pending";
+}
+
+function buildConfiguredListFallback(allowedTitles: Set<string>): DiscoveredList[] {
+  return [...allowedTitles]
+    .sort((a, b) => a.localeCompare(b))
+    .map((title) => ({
+      title,
+      id: "",
+      itemCount: 0,
+      created: "",
+      hidden: false,
+      baseTemplate: 100,
+      baseType: 0,
+      isCatalog: false,
+      isSiteAssetsLibrary: false,
+      isApplicationList: false,
+      isSystemList: false,
+      noCrawl: false,
+    }));
 }
 
 async function mapWithConcurrency<T, R>(
@@ -407,6 +469,7 @@ export default function App() {
     }
 
     const account = activeAccount;
+    const accountIsInternal = isInternalAccount(account);
     const email = account.username || "";
 
     let cancelled = false;
@@ -438,20 +501,33 @@ export default function App() {
 
     async function fetchData() {
       try {
-        setLoadStatus("Checking SharePoint site access...");
+        setLoadStatus(accountIsInternal ? "Preparing PMW account access..." : "Checking SharePoint site access...");
         setLoadProgress(10);
-        await spClient.ensureSiteAccess();
-        if (cancelled) return;
+        if (!accountIsInternal) {
+          await spClient.ensureSiteAccess();
+          if (cancelled) return;
+        }
 
-        // Steps 1-3: These calls are independent, so start them together.
-        setLoadStatus("Loading permissions, lists, and configuration...");
+        setLoadStatus("Loading permissions and form configuration...");
         setLoadProgress(20);
-        const [adminResult, allLists, config] = await Promise.all([
+        const [adminResult, config] = await Promise.all([
           spClient.isGroupMember(SP_STATIC.adminGroup),
-          spClient.discoverLists(),
           loadConfig(spClient),
         ]);
         if (cancelled) return;
+
+        let allLists: DiscoveredList[];
+        try {
+          setLoadStatus("Discovering SharePoint form lists...");
+          allLists = await spClient.discoverLists();
+        } catch (error) {
+          if (!isSharePointForbiddenError(error)) {
+            throw error;
+          }
+          allLists = buildConfiguredListFallback(config.allowedTitles);
+        }
+        if (cancelled) return;
+
         setIsAdmin(adminResult);
         setLoadedConfig(config);
         setLoadProgress(50);
@@ -548,6 +624,12 @@ export default function App() {
         if (isSharePointForbiddenError(err)) {
           finishProfileLoad();
           setErrorMsg("");
+          if (accountIsInternal) {
+            setErrorMsg("SharePoint returned 403 for this PMW account while loading portal data. Please confirm the account can open the PMW HR Docs SharePoint site and lists.");
+            setAuthProfileStatus("unknown");
+            setPageState("error");
+            return;
+          }
           authProfileAccountRef.current = accountKey;
           setAuthProfileStatus("restricted");
           setPageState("restricted");
