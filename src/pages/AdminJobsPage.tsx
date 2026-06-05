@@ -20,8 +20,6 @@ import {
   DialogContent,
   DialogActions,
   Snackbar,
-  Card,
-  CardContent,
   IconButton,
   Checkbox,
   LinearProgress,
@@ -42,6 +40,7 @@ import {
   CheckCircle,
   AccessTime,
   Delete as DeleteIcon,
+  Description,
   Today as TodayIcon,
   DateRange as WeekIcon,
   CalendarMonth as MonthIcon,
@@ -52,6 +51,19 @@ import { useMsal } from "@azure/msal-react";
 import { fetchApplications, updateApplicationStatus, deleteApplications } from "../utils/careersService";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
+import {
+  CareerEmptyState,
+  CareerErrorState,
+  CareerMetricPill,
+  careerActionButtonSx,
+  careerContentSx,
+  careerPageSx,
+  careerSearchFieldSx,
+  careerTableShellSx,
+  careerToolbarSx,
+  getCareerErrorMessage,
+} from "../components/careers/careerUi";
+import { editorial } from "../theme/editorial";
 import type { JobAdminApplication } from "../types";
 
 type TimelinePreset = "today" | "7d" | "month" | "year" | "custom" | "all";
@@ -153,14 +165,14 @@ const TIMELINE_OPTIONS: { value: TimelinePreset; label: string; icon: React.Reac
 const STATUS_OPTIONS = ["New", "KIV", "Shortlisted", "Not Suitable"] as const;
 
 const STATUS_COLORS: Record<string, string> = {
-  New: "#0078D4",
-  KIV: "#F59E0B",
-  Shortlisted: "#34A853",
-  "Not Suitable": "#DC2626",
+  New: editorial.pmwBlue,
+  KIV: editorial.warning,
+  Shortlisted: editorial.success,
+  "Not Suitable": editorial.error,
 };
 
 function StatusChip({ status }: { status: string }) {
-  const color = STATUS_COLORS[status] || "#6B7280";
+  const color = STATUS_COLORS[status] || editorial.muted;
   return (
     <Chip
       label={status}
@@ -303,7 +315,7 @@ export default function AdminJobsPage() {
       });
       setApplications(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load applications");
+      setError(getCareerErrorMessage(err, "Failed to load applications."));
     } finally {
       setLoading(false);
     }
@@ -333,7 +345,7 @@ export default function AdminJobsPage() {
         }
       } catch (err) {
         setSnackbar({
-          message: err instanceof Error ? err.message : "Failed to update status",
+          message: getCareerErrorMessage(err, "Failed to update status."),
           severity: "error",
         });
       } finally {
@@ -447,7 +459,7 @@ export default function AdminJobsPage() {
       void load();
     } catch (err) {
       setSnackbar({
-        message: err instanceof Error ? err.message : "Failed to delete applications",
+        message: getCareerErrorMessage(err, "Failed to delete applications."),
         severity: "error",
       });
     } finally {
@@ -464,7 +476,7 @@ export default function AdminJobsPage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))" }}>
+    <Box sx={careerPageSx}>
       <CareerPortalHeader
         title="Career Applications"
         subtitle="Review internal advancement submissions and update applicant status."
@@ -480,9 +492,10 @@ export default function AdminJobsPage() {
             onClick={load}
             disabled={loading}
             sx={{
+              ...careerActionButtonSx,
               whiteSpace: "nowrap",
-              borderColor: "#D1D5DB",
-              color: "#6B7280",
+              borderColor: editorial.pmwBlueSoft,
+              color: editorial.pmwBlueDark,
             }}
           >
             Refresh
@@ -490,18 +503,13 @@ export default function AdminJobsPage() {
         )}
       />
 
-      <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
+      <Box sx={careerContentSx}>
         {/* Filter bar */}
         {!loading && (
         <Paper
           sx={{
-            p: 2,
+            ...careerToolbarSx,
             mb: 3,
-            borderRadius: "8px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 1.5,
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
@@ -511,11 +519,10 @@ export default function AdminJobsPage() {
               onChange={(e) => setSearchText(e.target.value)}
               size="small"
               sx={{
-                flex: "1 1 300px",
-                minWidth: { xs: "100%", sm: 280 },
+                ...careerSearchFieldSx,
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
+                  borderRadius: "10px",
+                  backgroundColor: editorial.white,
                   fontSize: "0.85rem",
                 },
               }}
@@ -523,7 +530,7 @@ export default function AdminJobsPage() {
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                      <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
                     </InputAdornment>
                   ),
                 },
@@ -534,8 +541,7 @@ export default function AdminJobsPage() {
               startIcon={<FilterIcon />}
               onClick={() => setShowAdvancedFilters((open) => !open)}
               sx={{
-                borderRadius: "8px",
-                textTransform: "none",
+                ...careerActionButtonSx,
                 fontWeight: 700,
                 whiteSpace: "nowrap",
                 width: { xs: "100%", sm: "auto" },
@@ -556,7 +562,7 @@ export default function AdminJobsPage() {
                   setCustomTo("");
                   setSelectedIds(new Set());
                 }}
-                sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 700, width: { xs: "100%", sm: "auto" } }}
+                sx={{ ...careerActionButtonSx, color: editorial.muted, fontWeight: 700, width: { xs: "100%", sm: "auto" } }}
               >
                 Clear
               </Button>
@@ -566,11 +572,12 @@ export default function AdminJobsPage() {
                 label={`${filteredApplications.length} of ${applications.length}`}
                 size="small"
                 sx={{
-                  backgroundColor: "#F0F7FF",
-                  color: "#0078D4",
-                  fontWeight: 600,
+                  backgroundColor: editorial.blueWash,
+                  color: editorial.pmwBlueDark,
+                  fontWeight: 800,
                   fontSize: "0.75rem",
                   borderRadius: "8px",
+                  fontVariantNumeric: "tabular-nums",
                 }}
               />
             )}
@@ -579,8 +586,8 @@ export default function AdminJobsPage() {
           {showAdvancedFilters && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, width: "100%" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <FilterIcon sx={{ fontSize: 18, color: "#6B7280" }} />
-                <Typography variant="body2" sx={{ fontWeight: 700, color: "#374151", fontSize: "0.85rem" }}>
+                <FilterIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />
+                <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink, fontSize: "0.85rem" }}>
                   Timeline
                 </Typography>
               </Box>
@@ -594,21 +601,21 @@ export default function AdminJobsPage() {
                   flexWrap: "wrap",
                   "& .MuiToggleButton-root": {
                     borderRadius: "8px !important",
-                    border: "1px solid #E5E7EB",
+                    border: `1px solid ${editorial.border}`,
                     px: 1.5,
                     py: 0.5,
                     fontSize: "0.78rem",
                     fontWeight: 600,
-                    color: "#6B7280",
+                    color: editorial.muted,
                     textTransform: "none",
                     "&:not(:first-of-type)": {
                       borderLeft: "1px solid #E5E7EB",
                       marginLeft: 0,
                     },
                     "&.Mui-selected": {
-                      backgroundColor: "#F0F7FF",
-                      color: "#0078D4",
-                      borderColor: "#0078D4",
+                      backgroundColor: editorial.blueWash,
+                      color: editorial.pmwBlueDark,
+                      borderColor: editorial.pmwBlue,
                     },
                   },
                 }}
@@ -705,49 +712,19 @@ export default function AdminJobsPage() {
           }}
         >
           {[
-            { label: "Total Applications", value: stats.total, icon: <People />, color: "#0078D4" },
-            { label: "New", value: stats.new, icon: <NewReleases />, color: "#0078D4" },
-            { label: "KIV", value: stats.kiv, icon: <AccessTime />, color: "#F59E0B" },
-            { label: "Shortlisted", value: stats.shortlisted, icon: <CheckCircle />, color: "#34A853" },
-            { label: "Not Suitable", value: stats.notSuitable, icon: <People />, color: "#DC2626" },
+            { label: "Total Applications", value: stats.total, icon: <People />, tone: "blue" as const },
+            { label: "New", value: stats.new, icon: <NewReleases />, tone: "blue" as const },
+            { label: "KIV", value: stats.kiv, icon: <AccessTime />, tone: "warning" as const },
+            { label: "Shortlisted", value: stats.shortlisted, icon: <CheckCircle />, tone: "success" as const },
+            { label: "Not Suitable", value: stats.notSuitable, icon: <People />, tone: "neutral" as const },
           ].map((stat) => (
-            <Card
+            <CareerMetricPill
               key={stat.label}
-              sx={{
-                borderRadius: "8px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                transition: "box-shadow 0.2s ease",
-                "&:hover": { boxShadow: "0 8px 20px rgba(17,24,39,0.08)" },
-              }}
-            >
-              <CardContent sx={{ p: { xs: 1.5, sm: 2 }, minHeight: 96 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, height: "100%" }}>
-                  <Box
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "8px",
-                      backgroundColor: `${stat.color}14`,
-                      color: stat.color,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {stat.icon}
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 800, color: "#111827", fontSize: { xs: "1.35rem", sm: "1.5rem" }, lineHeight: 1.05 }}>
-                      {stat.value}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700, lineHeight: 1.2, display: "block" }}>
-                      {stat.label}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+              icon={stat.icon}
+              label={stat.label}
+              value={stat.value}
+              tone={stat.tone}
+            />
           ))}
         </Box>
         )}
@@ -759,33 +736,20 @@ export default function AdminJobsPage() {
 
         {/* Error */}
         {!loading && error && (
-          <Alert
-            severity="error"
-            sx={{ borderRadius: "8px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
-            action={
-              <Button size="small" onClick={load} sx={{ textTransform: "none" }}>
-                Retry
-              </Button>
-            }
-          >
-            {error}
-          </Alert>
+          <CareerErrorState message={error} onRetry={load} />
         )}
 
         {/* Empty */}
         {!loading && !error && filteredApplications.length === 0 && (
-          <Box sx={{ textAlign: "center", py: 8 }}>
-            <People sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
-            <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600 }}>
-              {applications.length === 0 ? "No Applications Yet" : "No Results Match"}
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
-              {applications.length === 0
+          <CareerEmptyState
+            icon={<People />}
+            title={applications.length === 0 ? "No applications yet" : "No results match"}
+            description={
+              applications.length === 0
                 ? "Applications from internal advancement openings will appear here."
-                : "Try adjusting your search, timeline, or status filter."
-              }
-            </Typography>
-          </Box>
+                : "Try adjusting your search, timeline, status, or sort filter."
+            }
+          />
         )}
 
         {/* Delete bar */}
@@ -830,20 +794,18 @@ export default function AdminJobsPage() {
           <TableContainer
             component={Paper}
             sx={{
-              borderRadius: "8px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              overflowX: "auto",
+              ...careerTableShellSx,
             }}
           >
             <Table>
               <TableHead>
-                <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+                <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
                   <TableCell padding="checkbox">
                     <Checkbox
                       checked={allSelected}
                       indeterminate={pagedApplications.some((app) => selectedIds.has(app.id)) && !allSelected}
                       onChange={toggleSelectAll}
-                      sx={{ color: "#D1D5DB", "&.Mui-checked": { color: "#0078D4" } }}
+                      sx={{ color: editorial.border, "&.Mui-checked": { color: editorial.pmwBlue } }}
                     />
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
@@ -872,14 +834,14 @@ export default function AdminJobsPage() {
                     key={app.id}
                     hover
                     selected={selectedIds.has(app.id)}
-                    sx={{ cursor: "pointer", "&:hover": { backgroundColor: "#FAFBFC" } }}
+                    sx={{ cursor: "pointer", "&:hover": { backgroundColor: editorial.blueSoft } }}
                     onClick={() => setSelectedApp(app)}
                   >
                     <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(app.id)}
                         onChange={() => toggleSelect(app.id)}
-                        sx={{ color: "#D1D5DB", "&.Mui-checked": { color: "#0078D4" } }}
+                        sx={{ color: editorial.border, "&.Mui-checked": { color: editorial.pmwBlue } }}
                       />
                     </TableCell>
                     <TableCell>
@@ -1060,9 +1022,9 @@ export default function AdminJobsPage() {
                               backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
                               "&:hover": { backgroundColor: "#DBEAFE" },
-                              "&::before": { content: "'📄 '", fontSize: "14px" },
                             }}
                           >
+                            <Description sx={{ fontSize: 16 }} />
                             View Resume
                           </Box>
                         )}
@@ -1080,9 +1042,9 @@ export default function AdminJobsPage() {
                               backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
                               "&:hover": { backgroundColor: "#DBEAFE" },
-                              "&::before": { content: "'📝 '", fontSize: "14px" },
                             }}
                           >
+                            <Description sx={{ fontSize: 16 }} />
                             {doc.name ? `View ${doc.name}` : "View Supporting Document"}
                           </Box>
                         ))}

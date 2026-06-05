@@ -1,10 +1,17 @@
 import {
   Box,
+  Chip,
   Typography,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { ChevronRight as ChevronRightIcon } from "@mui/icons-material";
+import {
+  ChevronRight as ChevronRightIcon,
+  LayersOutlined as LayersIcon,
+  NumbersOutlined as NumbersIcon,
+  VisibilityOutlined as ViewIcon,
+} from "@mui/icons-material";
+import type { KeyboardEvent } from "react";
 import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
@@ -39,23 +46,72 @@ export default function SubmissionRow({
         year: "numeric",
       })
     : "N/A";
+  const layerLabel =
+    item.totalLayers > 1 && item.currentLayer !== undefined
+      ? item.currentLayer > 0
+        ? `Layer ${item.currentLayer}/${item.totalLayers}`
+        : `${item.totalLayers} layers`
+      : null;
+  const handleOpen = () => onView(item);
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleOpen();
+    }
+  };
+  const identityChipSx = {
+    borderRadius: "8px",
+    backgroundColor: editorial.blueWash,
+    color: editorial.pmwBlueDark,
+    border: `1px solid ${editorial.pmwBlueSoft}`,
+    fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
+    fontWeight: 800,
+    fontSize: "0.7rem",
+    height: 24,
+    "& .MuiChip-icon": {
+      color: editorial.pmwBlueDark,
+    },
+  } as const;
+  const layerChipSx = {
+    borderRadius: "8px",
+    backgroundColor: editorial.purpleWash,
+    color: editorial.pmwPurpleDark,
+    border: `1px solid ${editorial.pmwPurpleSoft}`,
+    fontWeight: 800,
+    fontSize: "0.7rem",
+    height: 24,
+    "& .MuiChip-icon": {
+      color: editorial.pmwPurpleDark,
+    },
+  } as const;
 
   if (isMobile) {
     return (
       <Box
-        onClick={() => onView(item)}
+        role="button"
+        tabIndex={0}
+        aria-label={`View submission ${item.title}`}
+        onClick={handleOpen}
+        onKeyDown={handleKeyDown}
         sx={{
           backgroundColor: "#ffffff",
-          borderRadius: "14px",
+          borderRadius: "12px",
           border: `1px solid ${editorial.border}`,
           p: 2,
           mb: 2,
           cursor: "pointer",
-          transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+          transition: "box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease",
           boxShadow: "none",
           "&:hover": {
-            borderColor: editorial.ink,
+            borderColor: editorial.pmwBlueSoft,
             boxShadow: editorialShadow,
+          },
+          "&:active": {
+            transform: "scale(0.995)",
+          },
+          "&:focus-visible": {
+            outline: `3px solid ${editorial.pmwBlueSoft}`,
+            outlineOffset: 2,
           },
         }}
       >
@@ -65,48 +121,34 @@ export default function SubmissionRow({
               {item.title}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontFamily: "monospace",
-                  backgroundColor: editorial.yellow,
-                  color: editorial.ink,
-                  px: 1,
-                  py: 0.25,
-                  borderRadius: "6px",
-                  fontSize: "0.7rem",
-                  fontWeight: 600,
-                }}
-              >
-                {item.formId}
-              </Typography>
+              <Chip icon={<NumbersIcon />} label={item.formId} size="small" sx={identityChipSx} />
               <Typography variant="caption" sx={{ color: editorial.muted }}>
                 ID: {item.submissionId}
               </Typography>
             </Box>
           </Box>
-          <ChevronRightIcon sx={{ color: editorial.muted, fontSize: 20, transition: "transform 0.2s ease" }} />
+          <Box
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: "10px",
+              border: `1px solid ${editorial.pmwBlueSoft}`,
+              backgroundColor: editorial.blueWash,
+              color: editorial.pmwBlueDark,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <ViewIcon sx={{ fontSize: 18 }} />
+          </Box>
         </Box>
         <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
-          <ListBadge title={item.listTitle} icon={meta.icon} color={meta.color} pale={meta.pale} />
+          <ListBadge title={item.listTitle} color={meta.color} pale={meta.pale} />
           <StatusBadge status={item.formStatus} />
-          {item.totalLayers > 1 && item.currentLayer !== undefined && (
-            <Typography
-              variant="caption"
-              sx={{
-                fontFamily: "monospace",
-                backgroundColor: editorial.yellow,
-                color: editorial.ink,
-                px: 1,
-                py: 0.25,
-                borderRadius: "6px",
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                ml: 1,
-              }}
-            >
-              {item.currentLayer > 0 ? `Layer ${item.currentLayer}/${item.totalLayers}` : `${item.totalLayers} layers`}
-            </Typography>
+          {layerLabel && (
+            <Chip icon={<LayersIcon />} label={layerLabel} size="small" sx={layerChipSx} />
           )}
         </Box>
         <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
@@ -118,7 +160,11 @@ export default function SubmissionRow({
 
   return (
     <Box
-      onClick={() => onView(item)}
+      role="button"
+      tabIndex={0}
+      aria-label={`View submission ${item.title}`}
+      onClick={handleOpen}
+      onKeyDown={handleKeyDown}
       sx={{
         display: "grid",
         gridTemplateColumns: isAdmin ? "2fr 1.5fr 1fr 1fr 1fr 40px" : "2fr 1fr 1fr 1fr 40px",
@@ -130,12 +176,15 @@ export default function SubmissionRow({
         borderBottom: `1px solid ${editorial.border}`,
         alignItems: "center",
         cursor: "pointer",
-        transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-        borderLeft: "3px solid transparent",
+        transition: "background-color 0.2s ease, box-shadow 0.2s ease",
+        outline: "none",
         "&:hover": {
-          backgroundColor: editorial.blueWash,
-          borderLeft: `3px solid ${editorial.ink}`,
+          backgroundColor: editorial.blueSoft,
           boxShadow: "none",
+        },
+        "&:focus-visible": {
+          backgroundColor: editorial.blueSoft,
+          boxShadow: `inset 0 0 0 3px ${editorial.pmwBlueSoft}`,
         },
       }}
     >
@@ -145,21 +194,7 @@ export default function SubmissionRow({
           {item.title}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: "monospace",
-              backgroundColor: editorial.yellow,
-              color: editorial.ink,
-              px: 1,
-              py: 0.25,
-              borderRadius: "6px",
-              fontSize: "0.7rem",
-              fontWeight: 600,
-            }}
-          >
-            {item.formId}
-          </Typography>
+          <Chip icon={<NumbersIcon />} label={item.formId} size="small" sx={identityChipSx} />
           <Typography variant="caption" sx={{ color: editorial.muted }}>
             {submittedAt}
           </Typography>
@@ -183,7 +218,7 @@ export default function SubmissionRow({
       )}
 
       {/* List */}
-      <ListBadge title={item.listTitle} icon={meta.icon} color={meta.color} pale={meta.pale} />
+      <ListBadge title={item.listTitle} color={meta.color} pale={meta.pale} />
 
       {/* Category */}
       <Typography variant="body2" sx={{ color: editorial.muted }}>
@@ -193,31 +228,15 @@ export default function SubmissionRow({
       {/* Status */}
       <Box>
         <StatusBadge status={item.formStatus} />
-        {item.totalLayers > 1 && item.currentLayer !== undefined && (
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: "monospace",
-              backgroundColor: editorial.yellow,
-              color: editorial.ink,
-              px: 1,
-              py: 0.25,
-              borderRadius: "6px",
-              fontSize: "0.7rem",
-              fontWeight: 600,
-              display: "inline-block",
-              mt: 0.5,
-            }}
-          >
-            {item.currentLayer > 0 ? `Layer ${item.currentLayer}/${item.totalLayers}` : `${item.totalLayers} layers`}
-          </Typography>
+        {layerLabel && (
+          <Chip icon={<LayersIcon />} label={layerLabel} size="small" sx={{ ...layerChipSx, mt: 0.75 }} />
         )}
       </Box>
 
       {/* Chevron */}
       <ChevronRightIcon
         sx={{
-          color: editorial.muted,
+          color: editorial.pmwBlueDark,
           fontSize: 20,
           transition: "transform 0.2s ease",
           ".MuiBox-root:hover &": {

@@ -26,6 +26,7 @@ import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerRes
 import StatusBadge from "./StatusBadge";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import DOMPurify from "dompurify";
+import { editorial, editorialHairline } from "../../theme/editorial";
 
 const SKIP = new Set([
   "Id", "_authorEmail", "AuthorId", "EditorId", "FormVersion", "FormStatus",
@@ -132,7 +133,7 @@ function LayerProgression({
     <Box sx={{ mb: 3 }}>
       <Typography
         variant="h6"
-        sx={{ fontWeight: 600, color: "#111827", letterSpacing: 0, mb: 2 }}
+        sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0, mb: 2 }}
       >
         Layer Progression
       </Typography>
@@ -142,30 +143,30 @@ function LayerProgression({
           const enhanced = enhancedLayers?.[i];
           const isActive = currentLayer === layerNum;
 
-          let borderColor = "#E5E7EB";
-          let bgColor = "#F9FAFB";
-          let statusIcon = "○";
+          let borderColor: string = editorial.border;
+          let bgColor: string = editorial.paperSoft;
+          let statusIcon = <AccessTimeIcon sx={{ fontSize: 16 }} />;
           let statusLabel = "Waiting";
-          let iconColor = "#9CA3AF";
+          let iconColor: string = editorial.muted;
 
           if (enhanced?.status === "approved" || enhanced?.status === "confirmed") {
-            borderColor = "#16A34A";
-            bgColor = "rgba(22,163,74,0.04)";
-            statusIcon = "✓";
+            borderColor = editorial.success;
+            bgColor = "rgba(16, 124, 16, 0.06)";
+            statusIcon = <CheckCircleIcon sx={{ fontSize: 16 }} />;
             statusLabel = enhanced.status === "confirmed" ? "Confirmed" : "Approved";
-            iconColor = "#16A34A";
+            iconColor = editorial.success;
           } else if (enhanced?.status === "rejected") {
-            borderColor = "#DC2626";
-            bgColor = "rgba(220,38,38,0.04)";
-            statusIcon = "✕";
+            borderColor = editorial.error;
+            bgColor = "rgba(198, 40, 40, 0.06)";
+            statusIcon = <CancelIcon sx={{ fontSize: 16 }} />;
             statusLabel = "Rejected";
-            iconColor = "#DC2626";
+            iconColor = editorial.error;
           } else if (isActive) {
-            borderColor = "#6264A7";
-            bgColor = "rgba(98,100,167,0.04)";
-            statusIcon = "●";
+            borderColor = editorial.pmwPurple;
+            bgColor = editorial.purpleWash;
+            statusIcon = <AccessTimeIcon sx={{ fontSize: 16 }} />;
             statusLabel = enhanced?.type === "evaluation" ? "Pending Evaluation" : "Pending Approval";
-            iconColor = "#6264A7";
+            iconColor = editorial.pmwPurpleDark;
           }
 
           return (
@@ -177,18 +178,18 @@ function LayerProgression({
                 backgroundColor: bgColor,
                 borderRadius: "10px",
                 p: 2,
-                borderLeft: `3px solid ${borderColor}`,
                 display: "flex",
                 alignItems: "center",
                 gap: 1.5,
+                boxShadow: isActive ? `0 0 0 3px ${editorial.pmwPurpleSoft}` : "none",
               }}
             >
               <Box
                 sx={{
                   width: 28,
                   height: 28,
-                  borderRadius: "50%",
-                  backgroundColor: `${iconColor}15`,
+                  borderRadius: "8px",
+                  backgroundColor: `${iconColor}14`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -201,10 +202,10 @@ function LayerProgression({
                 {statusIcon}
               </Box>
               <Box sx={{ flex: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827" }}>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink }}>
                   Layer {layerNum}
                   {enhanced?.type === "evaluation" && (
-                    <Typography component="span" variant="caption" sx={{ color: "#6B7280", ml: 1 }}>
+                    <Typography component="span" variant="caption" sx={{ color: editorial.muted, ml: 1 }}>
                       (Evaluation)
                     </Typography>
                   )}
@@ -214,7 +215,7 @@ function LayerProgression({
                 </Typography>
               </Box>
               {enhanced?.email && (
-                <Typography variant="caption" sx={{ color: "#6B7280", textAlign: "right" }}>
+                <Typography variant="caption" sx={{ color: editorial.muted, textAlign: "right" }}>
                   {enhanced.email}
                 </Typography>
               )}
@@ -238,22 +239,22 @@ function ApprovalCard({
   const isSigned = layer.status === "approved" || layer.status === "signed";
   const isRejected = layer.status === "rejected";
 
-  let borderColor = "#6264A7";
-  let bgColor = "rgba(98,100,167,0.04)";
-  let iconColor = "#6264A7";
+  let borderColor: string = editorial.pmwPurple;
+  let bgColor: string = editorial.purpleWash;
+  let iconColor: string = editorial.pmwPurpleDark;
   let statusIcon = <AccessTimeIcon sx={{ fontSize: 20 }} />;
   let statusLabel = "Awaiting";
 
   if (isSigned) {
-    borderColor = "#16A34A";
-    bgColor = "rgba(22,163,74,0.04)";
-    iconColor = "#16A34A";
+    borderColor = editorial.success;
+    bgColor = "rgba(16, 124, 16, 0.06)";
+    iconColor = editorial.success;
     statusIcon = <CheckCircleIcon sx={{ fontSize: 20 }} />;
     statusLabel = "Signed";
   } else if (isRejected) {
-    borderColor = "#DC2626";
-    bgColor = "rgba(220,38,38,0.04)";
-    iconColor = "#DC2626";
+    borderColor = editorial.error;
+    bgColor = "rgba(198, 40, 40, 0.06)";
+    iconColor = editorial.error;
     statusIcon = <CancelIcon sx={{ fontSize: 20 }} />;
     statusLabel = "Rejected";
   }
@@ -262,14 +263,14 @@ function ApprovalCard({
     <Paper
       elevation={0}
       sx={{
-        border: `1px solid rgba(0,0,0,0.04)`,
+        border: `1px solid ${borderColor}33`,
         backgroundColor: bgColor,
         borderRadius: "12px",
         p: 2.5,
-        borderLeft: `4px solid ${borderColor}`,
-        transition: "all 0.2s ease",
+        transition: "box-shadow 0.2s ease, border-color 0.2s ease",
         "&:hover": {
-          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          borderColor,
+          boxShadow: "0 8px 20px rgba(16, 16, 16, 0.06)",
         },
       }}
     >
@@ -278,7 +279,7 @@ function ApprovalCard({
           sx={{
             width: 36,
             height: 36,
-            borderRadius: "50%",
+            borderRadius: "10px",
             backgroundColor: `${iconColor}15`,
             display: "flex",
             alignItems: "center",
@@ -288,7 +289,7 @@ function ApprovalCard({
         >
           {statusIcon}
         </Box>
-        <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>
+        <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink }}>
           Layer {index + 1}
         </Typography>
         <Chip
@@ -306,13 +307,13 @@ function ApprovalCard({
       </Box>
 
       {layer.email && (
-        <Typography variant="body2" sx={{ color: "#6B7280", mb: 0.5 }}>
+        <Typography variant="body2" sx={{ color: editorial.muted, mb: 0.5 }}>
           {layer.email}
         </Typography>
       )}
 
       {layer.signedAt && (
-        <Typography variant="caption" sx={{ color: "#6B7280" }}>
+        <Typography variant="caption" sx={{ color: editorial.muted }}>
           {new Date(layer.signedAt).toLocaleString("en-GB", {
             day: "2-digit",
             month: "short",
@@ -326,7 +327,7 @@ function ApprovalCard({
       {layer.rejectionReason && (
         <Typography
           variant="body2"
-          sx={{ color: "#DC2626", mt: 1, fontStyle: "italic" }}
+          sx={{ color: editorial.error, mt: 1, fontStyle: "italic" }}
         >
           Reason: {layer.rejectionReason}
         </Typography>
@@ -341,7 +342,7 @@ function ApprovalCard({
             maxHeight: 100,
             mt: 1.5,
             borderRadius: "8px",
-            border: "1px solid rgba(0,0,0,0.06)",
+            border: editorialHairline,
           }}
         />
       )}
@@ -368,7 +369,8 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
       slotProps={{
         paper: {
           sx: {
-            borderRadius: isMobile ? 0 : "24px",
+            borderRadius: isMobile ? 0 : "12px",
+            border: isMobile ? 0 : editorialHairline,
             overflow: "hidden",
             animation: "fadeInUp 0.3s ease-out",
             "@keyframes fadeInUp": {
@@ -381,6 +383,9 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                 transform: "translateY(0)",
               },
             },
+            "@media (prefers-reduced-motion: reduce)": {
+              animation: "none",
+            },
           },
         },
       }}
@@ -388,7 +393,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
       {/* Header */}
       <DialogTitle
         sx={{
-          background: "linear-gradient(135deg, #6264A7, #4A4C80)",
+          background: `linear-gradient(135deg, ${editorial.pmwBlue}, ${editorial.pmwPurpleDark})`,
           color: "#ffffff",
           py: 3,
           px: 4,
@@ -398,14 +403,26 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
         }}
       >
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 600, letterSpacing: 0 }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: 0 }}>
             {item?.title}
           </Typography>
           <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.5 }}>
             Submission Details
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small" sx={{ color: "#ffffff" }}>
+        <IconButton
+          aria-label="Close submission details"
+          onClick={onClose}
+          size="small"
+          sx={{
+            color: "#ffffff",
+            backgroundColor: "rgba(255, 255, 255, 0.14)",
+            border: "1px solid rgba(255, 255, 255, 0.28)",
+            "&:hover": {
+              backgroundColor: "rgba(255, 255, 255, 0.22)",
+            },
+          }}
+        >
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -432,10 +449,10 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   })}`}
                   size="small"
                   sx={{
-                    backgroundColor: "#F8F9FC",
-                    color: "#6B7280",
-                    border: "1px solid rgba(0,0,0,0.06)",
-                    fontWeight: 500,
+                    backgroundColor: editorial.blueSoft,
+                    color: editorial.pmwBlueDark,
+                    border: `1px solid ${editorial.pmwBlueSoft}`,
+                    fontWeight: 800,
                   }}
                 />
               )}
@@ -443,14 +460,14 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                 label={`SP ID: ${item.id}`}
                 size="small"
                 sx={{
-                  backgroundColor: "rgba(98,100,167,0.08)",
-                  color: "#6264A7",
-                  border: "1px solid rgba(98,100,167,0.15)",
-                  fontWeight: 500,
+                  backgroundColor: editorial.purpleWash,
+                  color: editorial.pmwPurpleDark,
+                  border: `1px solid ${editorial.pmwPurpleSoft}`,
+                  fontWeight: 800,
                   fontFamily: "monospace",
                 }}
               />
-              <Typography variant="body2" sx={{ color: "#6B7280", ml: "auto" }}>
+              <Typography variant="body2" sx={{ color: editorial.muted, ml: "auto" }}>
                 {item.submittedByEmail}
               </Typography>
             </Box>
@@ -471,7 +488,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                               sx={{
                                 textTransform: "uppercase",
                                 letterSpacing: 0,
-                                color: "#6B7280",
+                                color: editorial.muted,
                                 fontWeight: 600,
                                 fontSize: "0.75rem",
                                 display: "block",
@@ -483,7 +500,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                             <Box
                               sx={{
                                 backgroundColor: "#ffffff",
-                                border: "1px solid rgba(0,0,0,0.06)",
+                                border: editorialHairline,
                                 borderRadius: "12px",
                                 p: 2,
                                 "& table": {
@@ -491,12 +508,12 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                                   borderCollapse: "collapse",
                                 },
                                 "& td, & th": {
-                                  border: "1px solid rgba(0,0,0,0.08)",
+                                  border: editorialHairline,
                                   padding: "10px 14px",
                                   fontSize: "0.875rem",
                                 },
                                 "& th": {
-                                  backgroundColor: "#F8F9FC",
+                                  backgroundColor: editorial.blueSoft,
                                   fontWeight: 600,
                                 },
                                 "& tr:nth-of-type(even)": {
@@ -518,7 +535,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                             sx={{
                               textTransform: "uppercase",
                               letterSpacing: 0,
-                              color: "#6B7280",
+                              color: editorial.muted,
                               fontWeight: 600,
                               fontSize: "0.75rem",
                               display: "block",
@@ -530,10 +547,10 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                           <Box
                             sx={{
                               backgroundColor: "#ffffff",
-                              border: "1px solid rgba(0,0,0,0.06)",
+                              border: editorialHairline,
                               borderRadius: "12px",
                               p: 2,
-                              color: "#111827",
+                              color: editorial.ink,
                               wordBreak: "break-word",
                             }}
                           >
@@ -558,7 +575,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   sx={{
                     textTransform: "uppercase",
                     letterSpacing: 0,
-                    color: "#6B7280",
+                    color: editorial.muted,
                     fontWeight: 600,
                     fontSize: "0.75rem",
                     display: "block",
@@ -574,7 +591,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   sx={{
                     maxHeight: 100,
                     borderRadius: "8px",
-                    border: "1px solid rgba(0,0,0,0.06)",
+                    border: editorialHairline,
                   }}
                 />
               </Box>
@@ -587,7 +604,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   sx={{
                     textTransform: "uppercase",
                     letterSpacing: 0,
-                    color: "#6B7280",
+                    color: editorial.muted,
                     fontWeight: 600,
                     fontSize: "0.75rem",
                     display: "block",
@@ -603,7 +620,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   sx={{
                     maxHeight: 100,
                     borderRadius: "8px",
-                    border: "1px solid rgba(0,0,0,0.06)",
+                    border: editorialHairline,
                   }}
                 />
               </Box>
@@ -624,7 +641,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   <>
                     <Typography
                       variant="h6"
-                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: 0, mb: 2 }}
+                      sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0, mb: 2 }}
                     >
                       Layer Results
                     </Typography>
@@ -664,7 +681,7 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
                   <>
                     <Typography
                       variant="h6"
-                      sx={{ fontWeight: 600, color: "#111827", letterSpacing: 0 }}
+                      sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0 }}
                     >
                       Approval Chain
                     </Typography>
@@ -682,13 +699,13 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
       </DialogContent>
 
       {/* Footer */}
-      <DialogActions sx={{ px: 4, py: 2.5, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+      <DialogActions sx={{ px: 4, py: 2.5, borderTop: editorialHairline, backgroundColor: editorial.blueSoft }}>
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
             gap: 1,
-            color: "#6B7280",
+            color: editorial.muted,
             fontSize: "0.8rem",
           }}
         >
@@ -698,14 +715,15 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
         <Button
           onClick={onClose}
           variant="contained"
+          startIcon={<CloseIcon />}
           sx={{
-            backgroundColor: "#0078D4",
+            backgroundColor: editorial.pmwBlue,
             borderRadius: "12px",
             textTransform: "none",
-            fontWeight: 600,
+            fontWeight: 800,
             px: 3,
             py: 1,
-            "&:hover": { backgroundColor: "#005A9E" },
+            "&:hover": { backgroundColor: editorial.pmwBlueDark },
           }}
         >
           Close

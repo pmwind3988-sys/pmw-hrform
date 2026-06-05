@@ -52,6 +52,22 @@ function delegatedHeaders(options: AdminApiOptions): Record<string, string> {
   return apiHeaders({ Authorization: `Bearer ${options.accessToken}` });
 }
 
+async function readApiError(response: Response, fallback: string): Promise<Error> {
+  let detail = "";
+  try {
+    const body = (await response.json()) as { error?: unknown; message?: unknown };
+    const raw = body.error ?? body.message;
+    if (typeof raw === "string" && raw.trim()) {
+      detail = raw.trim();
+    }
+  } catch {
+    // Some API failures return an empty body or non-JSON response.
+  }
+
+  const statusText = [response.status, response.statusText].filter(Boolean).join(" ");
+  return new Error(detail || `${fallback} (${statusText})`);
+}
+
 // ── API client functions ───────────────────────────────────────────────────────
 
 function applicationQueryString(query: ApplicationListQuery = {}): string {
@@ -69,7 +85,7 @@ export async function fetchJobs(): Promise<JobListing[]> {
   const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch jobs: ${response.status} ${response.statusText}`);
+    throw await readApiError(response, "Failed to fetch jobs");
   }
 
   const data: JobsListResponse = (await response.json()) as JobsListResponse;
@@ -80,7 +96,7 @@ export async function fetchCareersPortalData(): Promise<{ jobs: JobListing[]; po
   const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch jobs: ${response.status} ${response.statusText}`);
+    throw await readApiError(response, "Failed to fetch jobs");
   }
 
   const data: JobsListResponse = (await response.json()) as JobsListResponse;
@@ -97,14 +113,7 @@ export async function submitApplication(
   });
 
   if (!response.ok) {
-    let errMsg = `Failed to submit application: ${response.status} ${response.statusText}`;
-    try {
-      const errBody = (await response.json()) as { error?: string };
-      if (errBody.error) errMsg = errBody.error;
-    } catch {
-      // ignore parse error
-    }
-    throw new Error(errMsg);
+    throw await readApiError(response, "Failed to submit application");
   }
 
   return (await response.json()) as ApplyResponse;
@@ -121,7 +130,7 @@ export async function fetchMyApplications(
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
+    throw await readApiError(response, "Failed to fetch applications");
   }
 
   const data: AdminListResponse = (await response.json()) as AdminListResponse;
@@ -132,7 +141,7 @@ export async function fetchApplications(options: AdminApiOptions, query: Applica
   const response = await fetch(`/api/job-admin${applicationQueryString(query)}`, { headers: delegatedHeaders(options) });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}`);
+    throw await readApiError(response, "Failed to fetch applications");
   }
 
   const data: AdminListResponse = (await response.json()) as AdminListResponse;
@@ -155,7 +164,7 @@ export async function updateApplicationStatus(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to update application status: ${response.status} ${response.statusText}`);
+    throw await readApiError(response, "Failed to update application status");
   }
 
   const data: AdminUpdateResponse = (await response.json()) as AdminUpdateResponse;
@@ -172,9 +181,7 @@ export async function deleteApplications(
     body: JSON.stringify({ action: "delete-applications", ids }),
   });
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
-    throw new Error(`Failed to delete applications: ${detail}`);
+    throw await readApiError(response, "Failed to delete applications");
   }
   return (await response.json()) as {
     deleted: number;
@@ -210,9 +217,7 @@ export async function deleteJobListing(
   });
 
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
-    throw new Error(`Failed to delete job listing: ${detail}`);
+    throw await readApiError(response, "Failed to delete job listing");
   }
 
   return (await response.json()) as { success: boolean };
@@ -228,7 +233,7 @@ export async function fetchAdminJobs(options: AdminApiOptions): Promise<JobListi
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch admin jobs: ${response.status} ${response.statusText}`);
+    throw await readApiError(response, "Failed to fetch admin jobs");
   }
 
   const data: JobsListResponse = (await response.json()) as JobsListResponse;
@@ -246,9 +251,7 @@ export async function createJobListing(
   });
 
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
-    throw new Error(`Failed to create job listing: ${detail}`);
+    throw await readApiError(response, "Failed to create job listing");
   }
 
   return (await response.json()) as { success: boolean; jobId: string };
@@ -266,9 +269,7 @@ export async function updateJobListing(
   });
 
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
-    throw new Error(`Failed to update job listing: ${detail}`);
+    throw await readApiError(response, "Failed to update job listing");
   }
 
   const result = (await response.json()) as { success: boolean; warning?: string };
@@ -283,7 +284,7 @@ export async function fetchCareerPortalCards(options: AdminApiOptions): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch portal cards: ${response.status} ${response.statusText}`);
+    throw await readApiError(response, "Failed to fetch portal cards");
   }
 
   const data: PortalCardsResponse = (await response.json()) as PortalCardsResponse;
@@ -301,9 +302,7 @@ export async function createCareerPortalCard(
   });
 
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
-    throw new Error(`Failed to create portal card: ${detail}`);
+    throw await readApiError(response, "Failed to create portal card");
   }
 
   return (await response.json()) as { success: boolean; cardId: string };
@@ -321,9 +320,7 @@ export async function updateCareerPortalCard(
   });
 
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
-    throw new Error(`Failed to update portal card: ${detail}`);
+    throw await readApiError(response, "Failed to update portal card");
   }
 
   return (await response.json()) as { success: boolean };
@@ -337,9 +334,7 @@ export async function deleteCareerPortalCard(cardId: string, options: AdminApiOp
   });
 
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const body = await response.json() as { error?: string }; if (body.error) detail += `: ${body.error}`; } catch { /* ignore */ }
-    throw new Error(`Failed to delete portal card: ${detail}`);
+    throw await readApiError(response, "Failed to delete portal card");
   }
 
   return (await response.json()) as { success: boolean };

@@ -31,6 +31,10 @@ import {
   LocationOn,
   Work,
   Business,
+  AssignmentInd,
+  AttachFile,
+  PrivacyTip,
+  Send,
 } from "@mui/icons-material";
 import { useReactiveForm, required, email, phone } from "../hooks/useReactiveForm";
 import { useUserProfile } from "../hooks/useUserProfile";
@@ -40,6 +44,7 @@ import type { JobListing, CustomFieldDefinition } from "../types";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
+import { CareerErrorState, careerActionButtonSx, careerPageSx, careerPanelSx, getCareerErrorMessage } from "../components/careers/careerUi";
 import { editorial } from "../theme/editorial";
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
@@ -95,7 +100,7 @@ function SuccessView({
   onBrowseMore: () => void;
 }) {
   return (
-      <Box sx={{ textAlign: "center", py: 6 }}>
+    <Box sx={{ textAlign: "center", py: 6 }}>
       <Box
         sx={{
           width: 72,
@@ -111,7 +116,7 @@ function SuccessView({
       >
         <CheckCircle sx={{ fontSize: 40, color: editorial.success }} />
       </Box>
-      <Typography variant="h2" sx={{ fontFamily: "Georgia, 'Times New Roman', Times, serif", fontWeight: 400, color: editorial.ink, mb: 1 }}>
+      <Typography variant="h3" sx={{ fontWeight: 800, color: editorial.ink, mb: 1, textWrap: "balance" }}>
         Application submitted
       </Typography>
       <Typography variant="body1" sx={{ color: editorial.muted, mb: 3 }}>
@@ -126,8 +131,8 @@ function SuccessView({
           px: 3,
           py: 2,
           borderRadius: "14px",
-          borderColor: editorial.ink,
-          backgroundColor: editorial.yellow,
+          borderColor: editorial.pmwBlueSoft,
+          backgroundColor: editorial.blueWash,
           mb: 4,
         }}
       >
@@ -146,18 +151,16 @@ function SuccessView({
       </Typography>
       <Button
         variant="outlined"
+        startIcon={<Work />}
         onClick={onBrowseMore}
         sx={{
-          borderRadius: 0,
-          textTransform: "none",
-          fontWeight: 600,
-          borderColor: editorial.black,
-          color: editorial.black,
+          ...careerActionButtonSx,
+          fontWeight: 800,
           px: 4,
           py: 1.2,
         }}
       >
-        Browse More Opportunities
+        Browse opportunities
       </Button>
     </Box>
   );
@@ -200,6 +203,45 @@ function ApplicationFormSkeleton() {
   );
 }
 
+function FormSectionHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25, mb: 0.5 }}>
+      <Box
+        sx={{
+          width: 34,
+          height: 34,
+          borderRadius: "10px",
+          backgroundColor: editorial.blueWash,
+          color: editorial.pmwBlueDark,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          "& .MuiSvgIcon-root": { fontSize: 19 },
+        }}
+      >
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="subtitle1" sx={{ color: editorial.ink, fontWeight: 900, lineHeight: 1.2 }}>
+          {title}
+        </Typography>
+        <Typography variant="body2" sx={{ color: editorial.muted, lineHeight: 1.45, textWrap: "pretty" }}>
+          {description}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 function FileUploadArea({
   files,
   onAdd,
@@ -224,32 +266,51 @@ function FileUploadArea({
   const inputRef = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
   const [sizeError, setSizeError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
 
-  const handleSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
-
+  const handleFiles = async (selectedFiles: File[]) => {
+    if (selectedFiles.length === 0) return;
     setSizeError(null);
     setReading(true);
     const newEntries: FileEntry[] = [];
     const remaining = maxFiles - files.length;
 
-    for (let i = 0; i < Math.min(fileList.length, remaining); i++) {
-      const file = fileList[i];
+    if (remaining <= 0) {
+      setSizeError(`You can upload up to ${maxFiles} file${maxFiles !== 1 ? "s" : ""}.`);
+      setReading(false);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
+    if (selectedFiles.length > remaining) {
+      setSizeError(`Only ${remaining} more file${remaining !== 1 ? "s" : ""} can be added.`);
+    }
+
+    for (const file of selectedFiles.slice(0, remaining)) {
       if (file.size > maxFileSize) {
         setSizeError(`"${file.name}" exceeds ${Math.round(maxFileSize / 1024 / 1024)} MB limit`);
+        continue;
+      }
+      if (file.type && !acceptTypes.includes(file.type)) {
+        setSizeError(`"${file.name}" is not an accepted file type.`);
         continue;
       }
       try {
         const content = await readFileAsBase64(file);
         newEntries.push({ name: file.name, content, contentType: file.type, size: file.size });
-      } catch {
-        // skip files that fail to read
+      } catch (err) {
+        setSizeError(getCareerErrorMessage(err, `Could not read "${file.name}". Please try again.`));
       }
     }
 
     onAdd(newEntries);
     setReading(false);
+  };
+
+  const handleSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    await handleFiles(Array.from(fileList));
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -271,18 +332,44 @@ function FileUploadArea({
           <Paper
             variant="outlined"
             onClick={() => inputRef.current?.click()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                inputRef.current?.click();
+              }
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              void handleFiles(Array.from(event.dataTransfer.files));
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label={singleFile ? `Upload ${label}` : `Upload ${label} files`}
             sx={{
               borderStyle: "dashed",
-          borderColor: sizeError ? editorial.error : editorial.ink,
-          borderRadius: "14px",
+              borderColor: sizeError ? editorial.error : dragging ? editorial.pmwBlue : editorial.pmwBlueSoft,
+              borderRadius: "14px",
               p: 3,
               textAlign: "center",
               cursor: "pointer",
-              transition: "all 0.2s",
-          backgroundColor: "rgba(255,255,255,0.58)",
+              transition: "background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease",
+              backgroundColor: dragging ? editorial.blueWash : "rgba(255,255,255,0.72)",
               "&:hover": {
-            borderColor: editorial.ink,
-            backgroundColor: editorial.blueWash,
+                borderColor: editorial.pmwBlue,
+                backgroundColor: editorial.blueWash,
+              },
+              "&:focus-visible": {
+                outline: `3px solid ${editorial.pmwBlueSoft}`,
+                outlineOffset: 2,
+              },
+              "&:active": {
+                transform: "scale(0.99)",
               },
               opacity: reading ? 0.6 : 1,
             }}
@@ -299,9 +386,9 @@ function FileUploadArea({
               <CircularProgress size={24} sx={{ color: editorial.ink }} />
             ) : (
               <>
-                <UploadFile sx={{ fontSize: 32, color: editorial.ink, mb: 1 }} />
+                <UploadFile sx={{ fontSize: 32, color: editorial.pmwBlue, mb: 1 }} />
                 <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700 }}>
-                  {singleFile ? "Click to upload" : "Click to upload or drag and drop"}
+                  {dragging ? "Drop files here" : singleFile ? "Click to upload" : "Click or drop files here"}
                 </Typography>
                 <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.5 }}>
                   PDF, DOC, DOCX, JPEG, PNG (max {Math.round(maxFileSize / 1024 / 1024)} MB)
@@ -391,6 +478,7 @@ export default function JobApplyPage() {
 
   const [job, setJob] = useState<JobListing | null>(null);
   const [jobLoading, setJobLoading] = useState(true);
+  const [jobLoadError, setJobLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -442,12 +530,17 @@ export default function JobApplyPage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setJobLoading(true);
+      setJobLoadError(null);
       try {
         const jobs = await fetchJobs();
         const found = jobs.find((j) => j.id === jobId);
         if (!cancelled) setJob(found || null);
-      } catch {
-        if (!cancelled) setJob(null);
+      } catch (err) {
+        if (!cancelled) {
+          setJob(null);
+          setJobLoadError(getCareerErrorMessage(err, "Could not load this opportunity."));
+        }
       } finally {
         if (!cancelled) setJobLoading(false);
       }
@@ -643,8 +736,8 @@ export default function JobApplyPage() {
       // Ensure all SharePoint columns exist — blocks submission if provisioning fails
       try {
         await ensureJobApplicationColumns(accessToken, SP_SITE_URL);
-      } catch (e) {
-        setSubmitError(`Column setup failed: ${(e as Error).message}. Please check browser console and retry.`);
+      } catch (err) {
+        setSubmitError(getCareerErrorMessage(err, "Required application storage could not be prepared. Please retry or contact HR."));
         setSubmitting(false);
         return;
       }
@@ -692,7 +785,7 @@ export default function JobApplyPage() {
       if (msg.includes("already applied")) {
         setDuplicateBlocked(true);
       }
-      setSubmitError(msg || "Submission failed. Please try again.");
+      setSubmitError(getCareerErrorMessage(err, msg || "Submission failed. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -720,7 +813,7 @@ export default function JobApplyPage() {
 
   if (submitted) {
     return (
-      <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 48%, #F7F5EF 100%)" }}>
+      <Box sx={careerPageSx}>
         <Container maxWidth="sm" sx={{ py: 8 }}>
           <SuccessView submissionRef={submissionRef} onBrowseMore={() => navigate("/career-portal", { replace: true })} />
         </Container>
@@ -729,7 +822,7 @@ export default function JobApplyPage() {
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 48%, #F7F5EF 100%)" }}>
+    <Box sx={careerPageSx}>
       <CareerPortalHeader
         title="Apply for role"
         subtitle={job ? job.title : "Complete your internal opportunity application."}
@@ -789,19 +882,19 @@ export default function JobApplyPage() {
                         sx={{
                           mr: 0.75,
                           mb: 0.75,
-                          backgroundColor: "#F0F7FF",
-                          color: "#0078D4",
+                          backgroundColor: editorial.blueWash,
+                          color: editorial.pmwBlueDark,
                           fontWeight: 800,
                           fontSize: "0.7rem",
                           borderRadius: "999px",
-                          "& .MuiChip-icon": { color: "#0078D4" },
+                          "& .MuiChip-icon": { color: editorial.pmwBlue },
                         }}
                       />
                     )}
                     <Chip
                       label={job.department}
                       size="small"
-                      sx={{ backgroundColor: editorial.yellow, color: editorial.ink, fontWeight: 800, fontSize: "0.7rem", borderRadius: "999px", border: `1px solid ${editorial.ink}` }}
+                      sx={{ backgroundColor: editorial.purpleWash, color: editorial.pmwPurpleDark, fontWeight: 800, fontSize: "0.7rem", borderRadius: "999px", border: `1px solid ${editorial.pmwPurpleSoft}` }}
                     />
                   </Box>
 
@@ -830,6 +923,8 @@ export default function JobApplyPage() {
                     />
                   )}
                 </>
+              ) : jobLoadError ? (
+                <CareerErrorState message={jobLoadError} />
               ) : (
                 <Typography variant="body2" sx={{ color: editorial.muted }}>
                   Opportunity not found.
@@ -840,7 +935,7 @@ export default function JobApplyPage() {
 
           {/* Application Form */}
           <Grid size={{ xs: 12, md: 8 }}>
-            <Paper sx={{ p: 3, borderRadius: "18px", border: `1px solid ${editorial.border}`, boxShadow: "none" }}>
+            <Paper sx={{ ...careerPanelSx, p: { xs: 2.25, sm: 3 }, borderRadius: "12px" }}>
               {/* Profile loading indicator */}
               {profile.loading && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
@@ -861,6 +956,11 @@ export default function JobApplyPage() {
               ) : (
               <form onSubmit={handleSubmit}>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+                  <FormSectionHeader
+                    icon={<AssignmentInd />}
+                    title="Applicant details"
+                    description="Confirm your profile details so HR can reach you about this role."
+                  />
                   {/* Name */}
                   <TextField
                     label="Full Name"
@@ -1019,6 +1119,12 @@ export default function JobApplyPage() {
 
                   <Divider sx={{ my: 1.5 }} />
 
+                  <FormSectionHeader
+                    icon={<AttachFile />}
+                    title="Documents"
+                    description="Attach your resume first, then add any supporting files that strengthen your application."
+                  />
+
                   {/* Resume Upload (Required) */}
                   <FileUploadArea
                     files={form.controls.resume.value ? [form.controls.resume.value] : []}
@@ -1058,9 +1164,11 @@ export default function JobApplyPage() {
                   {job?.customFields && job.customFields.length > 0 && (
                     <>
                       <Divider sx={{ my: 1.5 }} />
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#374151" }}>
-                        Additional Questions
-                      </Typography>
+                      <FormSectionHeader
+                        icon={<Description />}
+                        title="Additional questions"
+                        description="Answer the role-specific questions requested by HR."
+                      />
                       {job.customFields.map((field: CustomFieldDefinition) => {
                         const fieldError = customFieldErrors[field.name];
                         const hasError = !!fieldError;
@@ -1172,8 +1280,7 @@ export default function JobApplyPage() {
                       disabled={submitting || duplicateChecking}
                       onClick={() => setSearchParams({ override: "1" })}
                       sx={{
-                        borderRadius: "8px",
-                        textTransform: "none",
+                        ...careerActionButtonSx,
                         fontWeight: 600,
                         fontSize: "0.9rem",
                         py: 1.3,
@@ -1186,13 +1293,20 @@ export default function JobApplyPage() {
                     </Button>
                   )}
 
+                  <Divider sx={{ my: 1.5 }} />
+                  <FormSectionHeader
+                    icon={<PrivacyTip />}
+                    title="Privacy consent"
+                    description="Review the notice and confirm consent before submitting this application."
+                  />
+
                   <Paper
                     variant="outlined"
                     sx={{
                       p: 2,
-                      borderRadius: "8px",
-                      borderColor: pdpaTouched && !pdpaAccepted ? "#DC2626" : "#D1D5DB",
-                      backgroundColor: "#F9FAFB",
+                      borderRadius: "12px",
+                      borderColor: pdpaTouched && !pdpaAccepted ? editorial.error : editorial.pmwBlueSoft,
+                      backgroundColor: editorial.blueSoft,
                     }}
                   >
                     <FormControlLabel
@@ -1203,7 +1317,7 @@ export default function JobApplyPage() {
                             setPdpaAccepted(e.target.checked);
                             setPdpaTouched(true);
                           }}
-                          sx={{ color: "#0078D4", "&.Mui-checked": { color: "#0078D4" } }}
+                          sx={{ color: editorial.pmwBlue, "&.Mui-checked": { color: editorial.pmwBlue } }}
                         />
                       }
                       sx={{ alignItems: "flex-start", m: 0 }}
@@ -1233,18 +1347,18 @@ export default function JobApplyPage() {
                     type="submit"
                     variant="contained"
                     fullWidth
+                    startIcon={submitting ? undefined : <Send />}
                     disabled={submitting || duplicateChecking || !form.valid || !pdpaAccepted || (alreadyApplied && !adminOverrideMode)}
                     sx={{
-                      borderRadius: 0,
-                      textTransform: "none",
-                      backgroundColor: editorial.black,
+                      ...careerActionButtonSx,
+                      borderRadius: "8px",
+                      backgroundColor: editorial.pmwBlue,
                       fontWeight: 800,
                       fontSize: "0.95rem",
                       py: 1.5,
                       boxShadow: "none",
-                      transition: "all 0.25s",
                       "&:hover": {
-                        backgroundColor: "#333333",
+                        backgroundColor: editorial.pmwBlueDark,
                         boxShadow: "none",
                       },
                       "&:disabled": {

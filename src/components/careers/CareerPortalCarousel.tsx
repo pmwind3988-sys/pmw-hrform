@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Chip, Skeleton, Typography } from "@mui/material";
 import type { CareerPortalCard } from "../../types";
+import { editorial } from "../../theme/editorial";
 
 const DEFAULT_CARD_COLORS = {
-  start: "#BFDDF4",
-  end: "#F7F5EF",
-  accent: "#FFF546",
+  start: "#0078D4",
+  end: "#6264A7",
+  accent: "#EAF5FC",
 };
 const DEFAULT_CARD_IMAGE_OPACITY = 0.72;
 
@@ -21,9 +22,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#BFDDF4",
-    colorEnd: "#F7F5EF",
-    colorAccent: "#FFF546",
+    colorStart: DEFAULT_CARD_COLORS.start,
+    colorEnd: DEFAULT_CARD_COLORS.end,
+    colorAccent: DEFAULT_CARD_COLORS.accent,
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -40,9 +41,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#F7F5EF",
-    colorEnd: "#DCECF8",
-    colorAccent: "#FFF546",
+    colorStart: editorial.pmwPurple,
+    colorEnd: editorial.pmwBlue,
+    colorAccent: editorial.pmwBlueSoft,
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -59,9 +60,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#EAF5FC",
-    colorEnd: "#BFDDF4",
-    colorAccent: "#FFF546",
+    colorStart: editorial.pmwBlueDark,
+    colorEnd: editorial.pmwPurple,
+    colorAccent: editorial.blueWash,
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -119,6 +120,7 @@ export default function CareerPortalCarousel({
 
   useEffect(() => {
     if (activeCards.length <= 1) return undefined;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
     const intervalId = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % activeCards.length);
     }, 4400);
@@ -174,9 +176,9 @@ export default function CareerPortalCarousel({
         minHeight: { xs: 250, md: 280 },
         borderRadius: "8px",
         overflow: "hidden",
-        border: "1px solid rgba(17, 24, 39, 0.08)",
-        background: "linear-gradient(135deg, #EEF6FF 0%, #F4F3FF 56%, #EAF7EF 100%)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75), 0 12px 26px rgba(17, 24, 39, 0.08)",
+        border: `1px solid ${editorial.pmwBlueSoft}`,
+        background: `linear-gradient(135deg, ${editorial.blueSoft} 0%, ${editorial.purpleWash} 56%, ${editorial.white} 100%)`,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75), 0 12px 26px rgba(0, 90, 158, 0.08)",
         touchAction: "pan-y",
         ...reduceMotionSx,
       }}
@@ -231,13 +233,13 @@ export default function CareerPortalCarousel({
                   borderRadius: "8px",
                   overflow: "hidden",
                   backgroundColor: "#111827",
-                  boxShadow: "0 14px 32px rgba(17, 24, 39, 0.18)",
+                  boxShadow: "0 14px 32px rgba(0, 90, 158, 0.18)",
                   cursor: canOpen ? "pointer" : "default",
                   outline: "none",
                   transition: "transform 0.18s ease, box-shadow 0.18s ease",
                   "&:hover": canOpen ? {
                     transform: "translateY(-2px)",
-                    boxShadow: "0 18px 36px rgba(17, 24, 39, 0.22)",
+                    boxShadow: "0 18px 36px rgba(0, 90, 158, 0.22)",
                   } : undefined,
                   "&:focus-visible": {
                     boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.35), 0 18px 36px rgba(17, 24, 39, 0.22)",
@@ -285,7 +287,7 @@ export default function CareerPortalCarousel({
                       width: "fit-content",
                       borderRadius: "8px",
                       backgroundColor: "rgba(255,255,255,0.88)",
-                      color: "#005A9E",
+                      color: editorial.pmwBlueDark,
                       fontWeight: 800,
                       fontSize: "0.68rem",
                     }}

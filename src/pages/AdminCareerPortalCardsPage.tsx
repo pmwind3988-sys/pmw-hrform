@@ -47,15 +47,25 @@ import {
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { ensureCareerPortalCardList } from "../utils/formBuilderSP";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
+import {
+  CareerEmptyState,
+  CareerErrorState,
+  careerActionButtonSx,
+  careerPageSx,
+  careerSearchFieldSx,
+  careerToolbarSx,
+  getCareerErrorMessage,
+} from "../components/careers/careerUi";
+import { editorial } from "../theme/editorial";
 import type { CareerPortalCard, JobListing } from "../types";
 
 type PortalCardForm = Omit<CareerPortalCard, "id" | "created">;
 type SnackbarState = { message: string; severity: "success" | "error" } | null;
 
 const DEFAULT_CARD_COLORS = {
-  start: "#0078D4",
-  end: "#6264A7",
-  accent: "#16A34A",
+  start: editorial.pmwBlue,
+  end: editorial.pmwPurple,
+  accent: editorial.blueWash,
 };
 const DEFAULT_IMAGE_OPACITY = 0.72;
 
@@ -553,7 +563,7 @@ export default function AdminCareerPortalCardsPage() {
       setCards(cardData);
       setJobs(jobData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load cards");
+      setError(getCareerErrorMessage(err, "Failed to load cards."));
     } finally {
       setLoading(false);
     }
@@ -624,7 +634,7 @@ export default function AdminCareerPortalCardsPage() {
       setEditCard(null);
       await load();
     } catch (err) {
-      setSnackbar({ message: err instanceof Error ? err.message : "Failed to save card", severity: "error" });
+      setSnackbar({ message: getCareerErrorMessage(err, "Failed to save card."), severity: "error" });
     } finally {
       setSaving(false);
     }
@@ -645,14 +655,14 @@ export default function AdminCareerPortalCardsPage() {
       setDeleteConfirm(null);
       await load();
     } catch (err) {
-      setSnackbar({ message: err instanceof Error ? err.message : "Failed to delete card", severity: "error" });
+      setSnackbar({ message: getCareerErrorMessage(err, "Failed to delete card."), severity: "error" });
     } finally {
       setDeletingId(null);
     }
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))" }}>
+    <Box sx={careerPageSx}>
       <CareerPortalHeader
         title="Manage Cards"
         subtitle="Control the carousel shown on the careers portal welcome card."
@@ -668,7 +678,7 @@ export default function AdminCareerPortalCardsPage() {
               startIcon={<Refresh />}
               onClick={() => void load()}
               disabled={loading}
-              sx={{ backgroundColor: "#ffffff", borderColor: "#D1D5DB", color: "#374151" }}
+              sx={{ ...careerActionButtonSx, backgroundColor: "#ffffff", borderColor: editorial.pmwBlueSoft, color: editorial.pmwBlueDark }}
             >
               Refresh
             </Button>
@@ -676,7 +686,7 @@ export default function AdminCareerPortalCardsPage() {
               variant="contained"
               startIcon={<Add />}
               onClick={handleCreate}
-              sx={{ backgroundColor: "#0078D4", color: "#ffffff" }}
+              sx={{ ...careerActionButtonSx, backgroundColor: editorial.pmwBlue, color: "#ffffff" }}
             >
               Add Card
             </Button>
@@ -688,11 +698,8 @@ export default function AdminCareerPortalCardsPage() {
         {!loading && (
         <Paper
           sx={{
-            p: { xs: 2, md: 2.5 },
+            ...careerToolbarSx,
             mb: 3,
-            borderRadius: "8px",
-            border: "1px solid rgba(17, 24, 39, 0.08)",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
           }}
         >
           <TextField
@@ -701,14 +708,15 @@ export default function AdminCareerPortalCardsPage() {
             onChange={(e) => setSearchText(e.target.value)}
             size="small"
             sx={{
+              ...careerSearchFieldSx,
               width: { xs: "100%", md: 420 },
-              "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: "#F8F9FC" },
+              "& .MuiOutlinedInput-root": { borderRadius: "10px", backgroundColor: editorial.white },
             }}
             slotProps={{
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                    <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
                   </InputAdornment>
                 ),
               },
@@ -718,40 +726,28 @@ export default function AdminCareerPortalCardsPage() {
         )}
 
         {!loading && error && (
-          <Alert
-            severity="error"
-            sx={{ borderRadius: "8px", mb: 3, fontWeight: 600, backgroundColor: "#FEF2F2", color: "#991B1B" }}
-            action={<Button size="small" onClick={() => void load()} sx={{ textTransform: "none" }}>Retry</Button>}
-          >
-            {error}
-          </Alert>
+          <CareerErrorState message={error} onRetry={() => void load()} />
         )}
 
         {loading ? (
           <CardsLoadingSkeleton />
         ) : !error && cards.length === 0 ? (
-          <Paper sx={{ textAlign: "center", py: 8, borderRadius: "8px", border: "1px dashed #D1D5DB" }}>
-            <AutoAwesome sx={{ fontSize: 44, color: "#9CA3AF", mb: 1 }} />
-            <Typography variant="h6" sx={{ color: "#374151", fontWeight: 800, mb: 0.5 }}>
-              No Cards
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#6B7280", mb: 2 }}>
-              Add the first carousel item for the careers page.
-            </Typography>
-            <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "8px", backgroundColor: "#0078D4" }}>
-              Add Card
-            </Button>
-          </Paper>
+          <CareerEmptyState
+            icon={<AutoAwesome />}
+            title="No cards"
+            description="Add the first carousel item for the careers page."
+            action={
+              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ ...careerActionButtonSx, borderRadius: "8px", backgroundColor: editorial.pmwBlue }}>
+                Add Card
+              </Button>
+            }
+          />
         ) : !error && filteredCards.length === 0 ? (
-          <Paper sx={{ textAlign: "center", py: 8, borderRadius: "8px", border: "1px solid rgba(17, 24, 39, 0.08)" }}>
-            <SearchIcon sx={{ fontSize: 44, color: "#CBD5E1", mb: 1 }} />
-            <Typography variant="h6" sx={{ color: "#374151", fontWeight: 800 }}>
-              No Matching Cards
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#6B7280" }}>
-              Try a different title, target, or link.
-            </Typography>
-          </Paper>
+          <CareerEmptyState
+            icon={<SearchIcon />}
+            title="No matching cards"
+            description="Try a different title, target, link, or status."
+          />
         ) : (
           <Grid container spacing={2}>
             {filteredCards.map((card) => (
@@ -759,15 +755,15 @@ export default function AdminCareerPortalCardsPage() {
                 <Card
                   sx={{
                     height: "100%",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(17, 24, 39, 0.08)",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                    borderRadius: "12px",
+                    border: `1px solid ${editorial.border}`,
+                    boxShadow: "none",
                     overflow: "hidden",
                     transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
                     "&:hover": {
                       transform: "translateY(-3px)",
-                      borderColor: "rgba(0, 120, 212, 0.18)",
-                      boxShadow: "0 12px 28px rgba(17, 24, 39, 0.10)",
+                      borderColor: editorial.pmwBlue,
+                      boxShadow: "0 12px 28px rgba(0, 90, 158, 0.10)",
                     },
                     ...reduceMotionSx,
                   }}
@@ -818,10 +814,10 @@ export default function AdminCareerPortalCardsPage() {
                   <CardContent sx={{ p: 2 }}>
                     <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
                       <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#111827", lineHeight: 1.25 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: editorial.ink, lineHeight: 1.25 }}>
                           {card.title}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 700 }}>
+                        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                           Order {card.sortOrder}
                         </Typography>
                       </Box>
@@ -834,8 +830,8 @@ export default function AdminCareerPortalCardsPage() {
                               borderRadius: "8px",
                               fontSize: "0.68rem",
                               fontWeight: 800,
-                              backgroundColor: "#EEF2FF",
-                              color: "#4F46E5",
+                              backgroundColor: editorial.purpleWash,
+                              color: editorial.pmwPurpleDark,
                             }}
                           />
                         )}
@@ -846,8 +842,8 @@ export default function AdminCareerPortalCardsPage() {
                             borderRadius: "8px",
                             fontSize: "0.68rem",
                             fontWeight: 800,
-                            backgroundColor: card.status === "Active" ? "#E6F4EA" : "#F3F4F6",
-                            color: card.status === "Active" ? "#2E7D32" : "#6B7280",
+                            backgroundColor: card.status === "Active" ? "rgba(16, 124, 16, 0.12)" : "rgba(95, 100, 109, 0.12)",
+                            color: card.status === "Active" ? editorial.success : editorial.muted,
                           }}
                         />
                       </Stack>
@@ -855,7 +851,7 @@ export default function AdminCareerPortalCardsPage() {
                     <Typography
                       variant="body2"
                       sx={{
-                        color: "#4B5563",
+                        color: editorial.muted,
                         minHeight: 44,
                         mb: 1.25,
                         display: "-webkit-box",
@@ -873,8 +869,8 @@ export default function AdminCareerPortalCardsPage() {
                       sx={{
                         maxWidth: "100%",
                         borderRadius: "8px",
-                        backgroundColor: card.targetType === "none" ? "#F3F4F6" : "#F0F7FF",
-                        color: card.targetType === "none" ? "#6B7280" : "#005A9E",
+                        backgroundColor: card.targetType === "none" ? "rgba(95, 100, 109, 0.12)" : editorial.blueWash,
+                        color: card.targetType === "none" ? editorial.muted : editorial.pmwBlueDark,
                         fontWeight: 700,
                         "& .MuiChip-label": {
                           display: "block",
@@ -884,7 +880,7 @@ export default function AdminCareerPortalCardsPage() {
                       }}
                     />
                     <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5, mt: 1.5 }}>
-                      <IconButton aria-label={`Edit ${card.title}`} size="small" onClick={() => handleEdit(card)} sx={{ color: "#6B7280" }}>
+                      <IconButton aria-label={`Edit ${card.title}`} size="small" onClick={() => handleEdit(card)} sx={{ color: editorial.muted }}>
                         <Edit sx={{ fontSize: 18 }} />
                       </IconButton>
                       {!card.isSystemDefault && (
@@ -893,7 +889,7 @@ export default function AdminCareerPortalCardsPage() {
                           size="small"
                           disabled={deletingId === card.id}
                           onClick={() => setDeleteConfirm(card)}
-                          sx={{ color: deletingId === card.id ? "#9CA3AF" : "#DC2626" }}
+                          sx={{ color: deletingId === card.id ? editorial.softMuted : editorial.error }}
                         >
                           {deletingId === card.id ? <CircularProgress size={18} sx={{ color: "#DC2626" }} /> : <Delete sx={{ fontSize: 18 }} />}
                         </IconButton>

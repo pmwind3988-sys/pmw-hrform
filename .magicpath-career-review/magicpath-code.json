@@ -1,0 +1,29 @@
+{
+  "mode": "edit",
+  "componentId": "413582402162659328",
+  "projectId": "413571729848418304",
+  "selectedRevisionId": "413582402162659329",
+  "jobId": "413571729538039808-external-agent-413583700408799232",
+  "generatedName": "rich-shore-6626",
+  "name": "PMW Career Pages Review",
+  "dimensions": {
+    "width": 1440,
+    "height": 920
+  },
+  "selectedImages": [],
+  "editableFiles": [
+    {
+      "path": "src/App.tsx",
+      "sha256": "9c28ceaf413198fc2104bed1f5adcd7378a0352e9907b489d1bf344b036e5c48"
+    },
+    {
+      "path": "src/components/generated/PMWCareerPagesReview.tsx",
+      "sha256": "da7ebec07bc778cfa7c3e7427cd9b8fc56c6ca779f8709e237afee1b6ec634e9"
+    },
+    {
+      "path": "src/index.css",
+      "sha256": "3af92f9f6b5e93767188381bda25e0b3e26d2885569cffb8b46ff6d8966b1860"
+    }
+  ],
+  "baseRevisionId": "413582402162659329"
+}

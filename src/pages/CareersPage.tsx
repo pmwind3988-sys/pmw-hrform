@@ -9,7 +9,6 @@ import {
   Button,
   Chip,
   Grid,
-  Alert,
   Container,
   Paper,
   TextField,
@@ -48,6 +47,7 @@ import {
   WorkOutlined,
   FilterList,
   Business,
+  Description,
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
@@ -55,6 +55,17 @@ import { fetchCareersPortalData, fetchMyApplications } from "../utils/careersSer
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
+import {
+  CareerEmptyState,
+  CareerErrorState,
+  CareerMetricPill,
+  careerActionButtonSx,
+  careerIconButtonSx,
+  careerPageSx,
+  careerSearchFieldSx,
+  careerToolbarSx,
+  getCareerErrorMessage,
+} from "../components/careers/careerUi";
 import type { JobListing, JobAdminApplication, CareerPortalCard } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
 
@@ -77,15 +88,6 @@ const scaleIn = keyframes`
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
-  }
-`;
-
-const shimmerSweep = keyframes`
-  from {
-    transform: translateX(-120%);
-  }
-  to {
-    transform: translateX(120%);
   }
 `;
 
@@ -190,7 +192,7 @@ function JobCard({
   return (
     <Card
       sx={{
-        borderRadius: "18px",
+        borderRadius: "12px",
         position: "relative",
         overflow: "hidden",
         height: "100%",
@@ -209,49 +211,36 @@ function JobCard({
           left: 0,
           right: 0,
           height: 3,
-          background: editorial.yellow,
+          background: `linear-gradient(90deg, ${editorial.pmwBlue}, ${editorial.pmwPurple})`,
           transform: "scaleX(0)",
           transformOrigin: "left",
           transition: "transform 0.24s ease",
         },
-        "&::after": {
-          content: '""',
-          position: "absolute",
-          inset: 0,
-          background: "linear-gradient(110deg, transparent 12%, rgba(255,255,255,0.45) 44%, transparent 68%)",
-          opacity: 0,
-          transform: "translateX(-120%)",
-          pointerEvents: "none",
-        },
         "&:hover": {
-          transform: "translateY(-5px)",
-          borderColor: editorial.ink,
+          transform: "translateY(-3px)",
+          borderColor: editorial.pmwBlue,
           boxShadow: editorialShadow,
           opacity: 1,
           "&::before": {
             transform: "scaleX(1)",
           },
-          "&::after": {
-            animation: `${shimmerSweep} 0.86s ease`,
-            opacity: 1,
-          },
           "& .job-card-title": {
-            color: editorial.ink,
+            color: editorial.pmwBlueDark,
           },
           "& .job-card-cta": {
-            color: editorial.ink,
+            color: editorial.pmwBlueDark,
             transform: "translateX(3px)",
           },
           "& .job-card-icon": {
-            color: editorial.ink,
+            color: editorial.pmwBlue,
             transform: "scale(1.08)",
           },
         },
         "&:active": {
-          transform: "translateY(-2px) scale(0.99)",
+          transform: "translateY(-1px) scale(0.96)",
         },
         "&:focus-visible": {
-          outline: `3px solid ${editorial.yellow}`,
+          outline: `3px solid ${editorial.pmwBlueSoft}`,
           outlineOffset: 3,
         },
         ...reduceMotionSx,
@@ -313,12 +302,12 @@ function JobCard({
                   label={job.department}
                   size="small"
                   sx={{
-                    backgroundColor: editorial.yellow,
-                    color: editorial.ink,
+                    backgroundColor: editorial.purpleWash,
+                    color: editorial.pmwPurpleDark,
                     fontWeight: 800,
                     fontSize: "0.7rem",
                     borderRadius: "999px",
-                    border: `1px solid ${editorial.ink}`,
+                    border: `1px solid ${editorial.pmwPurpleSoft}`,
                   }}
                 />
                 {isApplied && (
@@ -431,15 +420,14 @@ function PortalWelcomePanel({
   onPortalCardTarget: (card: CareerPortalCard) => void;
 }) {
   const stats = [
-    { label: "Open roles", value: totalJobs, icon: <WorkOutlined />, color: editorial.ink, bg: editorial.blueWash },
+    { label: "Open roles", value: totalJobs, icon: <WorkOutlined />, tone: "blue" as const },
     {
       label: viewingApplications ? "Tracked apps" : "Visible now",
       value: viewingApplications ? applicationsCount : visibleJobs,
       icon: <TrendingUp />,
-      color: editorial.ink,
-      bg: "#FFF7BD",
+      tone: "purple" as const,
     },
-    { label: "My applications", value: applicationsCount, icon: <AssignmentTurnedIn />, color: editorial.success, bg: "#E3F1E3" },
+    { label: "My applications", value: applicationsCount, icon: <AssignmentTurnedIn />, tone: "success" as const },
   ];
 
   return (
@@ -448,22 +436,13 @@ function PortalWelcomePanel({
       sx={{
         p: { xs: 2.5, md: 3 },
         mb: 3,
-        borderRadius: "18px",
-        border: `1px solid ${editorial.border}`,
+        borderRadius: "12px",
+        border: `1px solid ${editorial.pmwBlueSoft}`,
         boxShadow: "none",
-        background: "rgba(255, 255, 255, 0.74)",
+        background: "rgba(255, 255, 255, 0.9)",
         position: "relative",
         overflow: "hidden",
         animation: `${fadeInUp} 0.48s ease both`,
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          inset: 0,
-          background: "linear-gradient(110deg, transparent 0%, rgba(255,245,70,0.28) 36%, transparent 58%)",
-          transform: "translateX(-120%)",
-          animation: `${shimmerSweep} 7s ease-in-out infinite`,
-          pointerEvents: "none",
-        },
         ...reduceMotionSx,
       }}
     >
@@ -484,11 +463,11 @@ function PortalWelcomePanel({
             sx={{
               mb: 1.5,
               borderRadius: "999px",
-              backgroundColor: editorial.yellow,
-              color: editorial.ink,
+              backgroundColor: editorial.blueWash,
+              color: editorial.pmwBlueDark,
               fontWeight: 800,
-              border: `1px solid ${editorial.ink}`,
-              "& .MuiChip-icon": { color: editorial.ink },
+              border: `1px solid ${editorial.pmwBlueSoft}`,
+              "& .MuiChip-icon": { color: editorial.pmwBlue },
             }}
           />
           <Typography
@@ -496,12 +475,12 @@ function PortalWelcomePanel({
             component="h2"
             sx={{
               color: editorial.ink,
-              fontFamily: "Georgia, 'Times New Roman', Times, serif",
-              fontWeight: 400,
-              fontSize: { xs: "2.35rem", sm: "3.25rem" },
-              lineHeight: 1,
+              fontWeight: 800,
+              fontSize: { xs: "1.75rem", sm: "2.2rem" },
+              lineHeight: 1.08,
               mb: 1,
               letterSpacing: 0,
+              textWrap: "balance",
             }}
           >
             Internal advancement starts here
@@ -516,19 +495,17 @@ function PortalWelcomePanel({
                 startIcon={viewingApplications ? <ArrowBack /> : <AssignmentTurnedIn />}
                 onClick={onViewApplications}
                 sx={{
-                  borderRadius: 0,
+                  ...careerActionButtonSx,
                   fontWeight: 700,
-                  borderColor: editorial.ink,
-                  backgroundColor: viewingApplications ? editorial.black : "#ffffff",
-                  color: viewingApplications ? "#ffffff" : editorial.ink,
-                  transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease",
+                  borderColor: viewingApplications ? editorial.pmwBlue : editorial.pmwBlueSoft,
+                  backgroundColor: viewingApplications ? editorial.pmwBlue : "#ffffff",
+                  color: viewingApplications ? "#ffffff" : editorial.pmwBlueDark,
                   "&:hover": {
                     transform: "translateY(-2px)",
-                    borderColor: editorial.ink,
-                    backgroundColor: viewingApplications ? "#333333" : editorial.yellow,
+                    borderColor: editorial.pmwBlueDark,
+                    backgroundColor: viewingApplications ? editorial.pmwBlueDark : editorial.blueWash,
                     boxShadow: "none",
                   },
-                  "&:active": { transform: "translateY(0) scale(0.98)" },
                   ...reduceMotionSx,
                 }}
               >
@@ -551,56 +528,15 @@ function PortalWelcomePanel({
           mt: { xs: 2, md: 2.5 },
         }}
       >
-          {stats.map((stat, index) => (
-            <Box
-              key={stat.label}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-start",
-                gap: { xs: 0.75, sm: 1.25 },
-                p: { xs: 1, sm: 1.35 },
-                minHeight: { xs: 66, sm: 74 },
-                borderRadius: "999px",
-                border: `1px solid ${editorial.border}`,
-                backgroundColor: "rgba(255,255,255,0.78)",
-                transition: "transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
-                animation: `${fadeInUp} 0.42s ease both`,
-                animationDelay: staggerDelay(index + 1, 70, 300),
-                "&:hover": {
-                  transform: "translateY(-3px)",
-                  borderColor: editorial.ink,
-                  boxShadow: editorialShadow,
-                },
-                ...reduceMotionSx,
-              }}
-            >
-              <Box
-                sx={{
-                  width: { xs: 30, sm: 38 },
-                  height: { xs: 30, sm: 38 },
-                  borderRadius: "50%",
-                  backgroundColor: stat.bg,
-                  color: stat.color,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  "& .MuiSvgIcon-root": { fontSize: { xs: 17, sm: 20 } },
-                }}
-              >
-                {stat.icon}
-              </Box>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ color: editorial.ink, fontWeight: 800, fontSize: { xs: "0.95rem", sm: "1.1rem" }, lineHeight: 1.1 }}>
-                  {stat.value}
-                </Typography>
-                <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, fontSize: { xs: "0.62rem", sm: "0.75rem" }, lineHeight: 1.2 }}>
-                  {stat.label}
-                </Typography>
-              </Box>
-            </Box>
-          ))}
+        {stats.map((stat) => (
+          <CareerMetricPill
+            key={stat.label}
+            icon={stat.icon}
+            label={stat.label}
+            value={stat.value}
+            tone={stat.tone}
+          />
+        ))}
       </Box>
     </Paper>
   );
@@ -729,10 +665,10 @@ function JobDetailDialog({
         },
         paper: {
           sx: {
-            borderRadius: "8px",
+            borderRadius: "12px",
             maxHeight: "90vh",
             overflow: "hidden",
-            border: "1px solid rgba(17, 24, 39, 0.08)",
+            border: `1px solid ${editorial.pmwBlueSoft}`,
             animation: `${scaleIn} 0.24s ease both`,
             ...reduceMotionSx,
           },
@@ -745,21 +681,13 @@ function JobDetailDialog({
           pr: 8,
           position: "relative",
           overflow: "hidden",
-          background: "linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 58%, #F4F3FF 100%)",
-          borderBottom: "1px solid rgba(17, 24, 39, 0.08)",
-          "&::before": {
-            content: '""',
-            position: "absolute",
-            inset: 0,
-            background: "linear-gradient(110deg, transparent 4%, rgba(0,120,212,0.08) 42%, transparent 68%)",
-            animation: `${shimmerSweep} 5.8s ease-in-out infinite`,
-            pointerEvents: "none",
-          },
+          backgroundColor: "#FFFFFF",
+          borderBottom: `1px solid ${editorial.pmwBlueSoft}`,
           ...reduceMotionSx,
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 1 }}>
-          <Typography variant="h5" component="div" sx={{ fontWeight: 700, color: "#111827", fontSize: "1.25rem" }}>
+          <Typography variant="h5" component="div" sx={{ fontWeight: 800, color: editorial.ink, fontSize: "1.25rem", textWrap: "balance" }}>
             {job.title}
           </Typography>
           {isApplied && (
@@ -772,13 +700,13 @@ function JobDetailDialog({
               icon={<Business sx={{ fontSize: 14 }} />}
               label={job.company}
               size="small"
-              sx={{ backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600, borderRadius: "8px", "& .MuiChip-icon": { color: "#0078D4" } }}
+              sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800, borderRadius: "8px", "& .MuiChip-icon": { color: editorial.pmwBlue } }}
             />
           )}
           <Chip
             label={job.department}
             size="small"
-            sx={{ backgroundColor: "#6264A7", color: "#fff", fontWeight: 500, borderRadius: "8px" }}
+            sx={{ backgroundColor: editorial.pmwPurple, color: "#fff", fontWeight: 800, borderRadius: "8px" }}
           />
           <Chip
             label={job.employmentType}
@@ -791,18 +719,18 @@ function JobDetailDialog({
             }}
           />
           {job.location && (
-            <Typography variant="caption" sx={{ color: "#6B7280", display: "flex", alignItems: "center", gap: 0.3 }}>
+            <Typography variant="caption" sx={{ color: editorial.muted, display: "flex", alignItems: "center", gap: 0.3 }}>
               <LocationOn sx={{ fontSize: 14 }} /> {job.location}
             </Typography>
           )}
         </Box>
         <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
           {job.closingDate && (
-            <Typography variant="caption" sx={{ color: "#9CA3AF", display: "flex", alignItems: "center", gap: 0.3 }}>
+            <Typography variant="caption" sx={{ color: editorial.muted, display: "flex", alignItems: "center", gap: 0.3 }}>
               <CalendarToday sx={{ fontSize: 12 }} /> Closing {formatDate(job.closingDate)}
             </Typography>
           )}
-          <Typography variant="caption" sx={{ color: "#9CA3AF", display: "flex", alignItems: "center", gap: 0.3 }}>
+          <Typography variant="caption" sx={{ color: editorial.muted, display: "flex", alignItems: "center", gap: 0.3 }}>
             <People sx={{ fontSize: 12 }} /> {job.applicationCount} {job.applicationCount === 1 ? "applicant" : "applicants"}
           </Typography>
         </Box>
@@ -810,16 +738,15 @@ function JobDetailDialog({
           onClick={onClose}
           size="small"
           sx={{
+            ...careerIconButtonSx,
             position: "absolute",
             right: 12,
             top: 12,
             zIndex: 1,
-            color: "#6B7280",
-            backgroundColor: "rgba(255,255,255,0.72)",
-            transition: "transform 0.18s ease, background-color 0.18s ease",
+            color: editorial.muted,
             "&:hover": {
               transform: "rotate(90deg)",
-              backgroundColor: "#F0F7FF",
+              backgroundColor: editorial.blueWash,
             },
             ...reduceMotionSx,
           }}
@@ -832,13 +759,13 @@ function JobDetailDialog({
         {job.jobDescription ? (
           <Box
             sx={{
-              "& p": { mb: 1.5, lineHeight: 1.7, color: "#374151", fontSize: "0.9rem" },
+              "& p": { mb: 1.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.9rem" },
               "& ul, & ol": { pl: 3, mb: 1.5 },
-              "& li": { mb: 0.5, lineHeight: 1.7, color: "#374151", fontSize: "0.9rem" },
-              "& h1, & h2, & h3, & h4": { mt: 2, mb: 1, fontWeight: 600, color: "#111827" },
+              "& li": { mb: 0.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.9rem" },
+              "& h1, & h2, & h3, & h4": { mt: 2, mb: 1, fontWeight: 800, color: editorial.ink },
               "& strong": { fontWeight: 600 },
               "& a": {
-                color: "#0078D4",
+                color: editorial.pmwBlueDark,
                 textDecoration: "none",
                 fontWeight: 500,
                 display: "inline-flex",
@@ -846,37 +773,31 @@ function JobDetailDialog({
                 gap: "4px",
                 padding: "1px 6px",
                 borderRadius: "6px",
-                backgroundColor: "#F0F7FF",
+                backgroundColor: editorial.blueWash,
                 border: "1px solid rgba(0,120,212,0.15)",
                 transition: "transform 0.18s ease, background-color 0.18s ease",
-                "&:hover": { backgroundColor: "#DBEAFE", textDecoration: "underline", transform: "translateY(-1px)" },
+                "&:hover": { backgroundColor: editorial.pmwBlueSoft, textDecoration: "underline", transform: "translateY(-1px)" },
               },
-              "& a[href$='.jpg'], & a[href$='.jpeg'], & a[href$='.png'], & a[href$='.gif'], & a[href$='.svg'], & a[href$='.webp']": { "&::before": { content: "'🖼 '", fontSize: "12px" } },
-              "& a[href$='.pdf']": { "&::before": { content: "'📄 '", fontSize: "12px" } },
-              "& a[href$='.doc'], & a[href$='.docx']": { "&::before": { content: "'📝 '", fontSize: "12px" } },
-              "& a[href$='.xls'], & a[href$='.xlsx']": { "&::before": { content: "'📊 '", fontSize: "12px" } },
               "& br": { display: "block", content: '""', mb: 0.5 },
             }}
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.jobDescription) }}
           />
         ) : (
-          <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
+          <Typography variant="body2" sx={{ color: editorial.muted }}>
             No description provided.
           </Typography>
         )}
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2, gap: 1, backgroundColor: "#FAFBFC" }}>
+      <DialogActions sx={{ px: 3, py: 2, gap: 1, backgroundColor: editorial.blueSoft }}>
         <Button
+          startIcon={<Close />}
           onClick={onClose}
           sx={{
-            borderRadius: "8px",
-            textTransform: "none",
-            color: "#6B7280",
+            ...careerActionButtonSx,
+            color: editorial.muted,
             fontWeight: 700,
-            transition: "transform 0.18s ease, background-color 0.18s ease",
-            "&:hover": { transform: "translateY(-1px)", backgroundColor: "#F3F4F6" },
-            "&:active": { transform: "translateY(0) scale(0.98)" },
+            "&:hover": { transform: "translateY(-1px)", backgroundColor: editorial.white },
             ...reduceMotionSx,
           }}
         >
@@ -906,8 +827,7 @@ function JobDetailDialog({
             variant="contained"
             disabled
             sx={{
-              borderRadius: "8px",
-              textTransform: "none",
+              ...careerActionButtonSx,
               fontWeight: 600,
               px: 4,
               backgroundColor: "#9CA3AF",
@@ -921,22 +841,19 @@ function JobDetailDialog({
             endIcon={<ArrowForward />}
             onClick={() => navigate(`/career-portal/${job.id}/apply`)}
             sx={{
-              borderRadius: "8px",
-              textTransform: "none",
-              backgroundColor: "#0078D4",
-              fontWeight: 600,
+              ...careerActionButtonSx,
+              backgroundColor: editorial.pmwBlue,
+              fontWeight: 800,
               px: 4,
-              transition: "transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease",
               "&:hover": {
-                backgroundColor: "#106EBE",
+                backgroundColor: editorial.pmwBlueDark,
                 transform: "translateY(-2px)",
                 boxShadow: "0 8px 18px rgba(0, 120, 212, 0.24)",
               },
-              "&:active": { transform: "translateY(0) scale(0.98)" },
               ...reduceMotionSx,
             }}
           >
-            Apply
+            Apply now
           </Button>
         )}
       </DialogActions>
@@ -954,6 +871,7 @@ export default function CareersPage() {
   const [portalCards, setPortalCards] = useState<CareerPortalCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [searchText, setSearchText] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
@@ -1003,14 +921,14 @@ export default function CareersPage() {
           setMyApps(appData);
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load opportunities");
+        if (!cancelled) setError(getCareerErrorMessage(err, "Failed to load opportunities."));
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     void load();
     return () => { cancelled = true; };
-  }, [instance, activeAccount, userEmail]);
+  }, [instance, activeAccount, userEmail, reloadKey]);
 
   // Check admin status
   useEffect(() => {
@@ -1205,7 +1123,7 @@ export default function CareersPage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 46%, #F7F5EF 100%)" }}>
+    <Box sx={careerPageSx}>
       <CareerPortalHeader
         title="PMW Careers"
         subtitle="Explore internal openings and track your submitted applications."
@@ -1232,19 +1150,12 @@ export default function CareersPage() {
         {!loading && !error && jobs.length > 0 && appliedFilter !== "applied" && (
           <Paper
             sx={{
-              p: 2,
+              ...careerToolbarSx,
               mb: 3,
-              borderRadius: "14px",
-              border: `1px solid ${editorial.border}`,
-              boxShadow: "none",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1.5,
               animation: `${fadeInUp} 0.4s ease both`,
               animationDelay: "90ms",
-              transition: "box-shadow 0.2s ease, border-color 0.2s ease",
               "&:hover": {
-                borderColor: editorial.ink,
+                borderColor: editorial.pmwBlue,
                 boxShadow: editorialShadow,
               },
               ...reduceMotionSx,
@@ -1266,16 +1177,17 @@ export default function CareersPage() {
                   onChange={(e) => setSearchText(e.target.value)}
                   size="small"
                   sx={{
+                    ...careerSearchFieldSx,
                     flex: "1 1 auto",
                     minWidth: 0,
                     "& .MuiOutlinedInput-root": {
                       borderRadius: "10px",
-                      backgroundColor: editorial.paperSoft,
+                      backgroundColor: editorial.white,
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&:hover": { backgroundColor: editorial.blueSoft },
                       "&.Mui-focused": {
                         backgroundColor: "#ffffff",
-                        boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
+                        boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.16)",
                       },
                     },
                   }}
@@ -1295,21 +1207,18 @@ export default function CareersPage() {
                     aria-pressed={showJobAdvancedFilters}
                     onClick={() => setShowJobAdvancedFilters((open) => !open)}
                     sx={{
-                      width: 40,
-                      height: 40,
+                      ...careerIconButtonSx,
                       borderRadius: "10px",
-                      border: "1px solid",
-                      borderColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.ink : editorial.border,
-                      color: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.ink : editorial.muted,
-                      backgroundColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.yellow : "#ffffff",
+                      borderColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.pmwBlue : editorial.border,
+                      color: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.pmwBlueDark : editorial.muted,
+                      backgroundColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.blueWash : "#ffffff",
                       flexShrink: 0,
-                      transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
                       "&:hover": {
                         transform: "translateY(-1px)",
                         backgroundColor: editorial.blueWash,
-                        borderColor: editorial.ink,
+                        borderColor: editorial.pmwBlue,
                       },
-                      "&:active": { transform: "translateY(0) scale(0.98)" },
+                      "&:active": { transform: "scale(0.96)" },
                       ...reduceMotionSx,
                     }}
                   >
@@ -1337,11 +1246,10 @@ export default function CareersPage() {
                     setSortBy("newest");
                   }}
                   sx={{
+                    ...careerActionButtonSx,
                     borderRadius: "8px",
-                    textTransform: "none",
-                    color: "#6B7280",
+                    color: editorial.muted,
                     fontWeight: 700,
-                    minHeight: 40,
                   }}
                 >
                   Clear
@@ -1352,11 +1260,12 @@ export default function CareersPage() {
                   label={`${filteredJobs.length} of ${jobs.length} opportunities`}
                   size="small"
                   sx={{
-                    backgroundColor: "#F0F7FF",
-                    color: "#0078D4",
-                    fontWeight: 600,
+                    backgroundColor: editorial.blueWash,
+                    color: editorial.pmwBlueDark,
+                    fontWeight: 800,
                     fontSize: "0.75rem",
                     height: 32,
+                    fontVariantNumeric: "tabular-nums",
                     animation: `${scaleIn} 0.22s ease both`,
                     ...reduceMotionSx,
                   }}
@@ -1484,41 +1393,23 @@ export default function CareersPage() {
 
         {/* Error */}
         {!loading && error && (
-          <Alert
-            severity="error"
-            sx={{ borderRadius: "8px", mb: 3, fontWeight: 700, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }}
-            action={
-              <Button size="small" onClick={() => window.location.reload()} sx={{ textTransform: "none" }}>
-                Retry
-              </Button>
-            }
-          >
-            {error}
-          </Alert>
+          <CareerErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />
         )}
 
         {/* Empty */}
         {!loading && !error && jobs.length === 0 && (
-          <Box sx={{ textAlign: "center", py: 8, animation: `${fadeInUp} 0.38s ease both`, ...reduceMotionSx }}>
-            <AccessTime sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
-            <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600, mb: 0.5 }}>
-              No Internal Opportunities
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
-              There are no internal advancement openings at the moment. Please check back later.
-            </Typography>
-          </Box>
+          <CareerEmptyState
+            icon={<AccessTime />}
+            title="No internal opportunities"
+            description="There are no internal advancement openings at the moment. Check back later."
+          />
         )}
         {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && appliedFilter !== "applied" && (
-          <Box sx={{ textAlign: "center", py: 8, animation: `${fadeInUp} 0.38s ease both`, ...reduceMotionSx }}>
-            <SearchIcon sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
-            <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600, mb: 0.5 }}>
-              No Opportunities Match
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#9CA3AF" }}>
-              Try adjusting your search or filters.
-            </Typography>
-          </Box>
+          <CareerEmptyState
+            icon={<SearchIcon />}
+            title="No opportunities match"
+            description="Try adjusting your search, company, department, type, or applied filter."
+          />
         )}
 
         {/* My Applications list */}
@@ -1526,20 +1417,13 @@ export default function CareersPage() {
           <>
           <Paper
             sx={{
-              p: 2,
+              ...careerToolbarSx,
               mb: 2,
-              borderRadius: "8px",
-              border: "1px solid rgba(17, 24, 39, 0.08)",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1.5,
               animation: `${fadeInUp} 0.4s ease both`,
               animationDelay: "80ms",
-              transition: "box-shadow 0.2s ease, border-color 0.2s ease",
               "&:hover": {
-                borderColor: "rgba(98, 100, 167, 0.22)",
-                boxShadow: "0 8px 24px rgba(17, 24, 39, 0.08)",
+                borderColor: editorial.pmwPurple,
+                boxShadow: editorialShadow,
               },
               ...reduceMotionSx,
             }}
@@ -1560,13 +1444,14 @@ export default function CareersPage() {
                   onChange={(e) => setMyAppsSearch(e.target.value)}
                   size="small"
                   sx={{
+                    ...careerSearchFieldSx,
                     flex: "1 1 auto",
                     minWidth: 0,
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "8px",
-                      backgroundColor: "#F8F9FC",
+                      borderRadius: "10px",
+                      backgroundColor: editorial.white,
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: "#ffffff" },
+                      "&:hover": { backgroundColor: editorial.purpleWash },
                       "&.Mui-focused": {
                         backgroundColor: "#ffffff",
                         boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)",
@@ -1577,7 +1462,7 @@ export default function CareersPage() {
                     input: {
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                          <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
                         </InputAdornment>
                       ),
                     },
@@ -1589,21 +1474,18 @@ export default function CareersPage() {
                     aria-pressed={showMyAppsAdvancedFilters}
                     onClick={() => setShowMyAppsAdvancedFilters((open) => !open)}
                     sx={{
-                      width: 40,
-                      height: 40,
+                      ...careerIconButtonSx,
                       borderRadius: "8px",
-                      border: "1px solid",
-                      borderColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? "#6264A7" : "#D1D5DB",
-                      color: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? "#6264A7" : "#6B7280",
-                      backgroundColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? "#F4F3FF" : "#ffffff",
+                      borderColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.pmwPurple : editorial.border,
+                      color: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.pmwPurpleDark : editorial.muted,
+                      backgroundColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.purpleWash : "#ffffff",
                       flexShrink: 0,
-                      transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease",
                       "&:hover": {
                         transform: "translateY(-1px)",
-                        backgroundColor: "#F4F3FF",
-                        borderColor: "#6264A7",
+                        backgroundColor: editorial.purpleWash,
+                        borderColor: editorial.pmwPurple,
                       },
-                      "&:active": { transform: "translateY(0) scale(0.98)" },
+                      "&:active": { transform: "scale(0.96)" },
                       ...reduceMotionSx,
                     }}
                   >
@@ -1630,14 +1512,11 @@ export default function CareersPage() {
                     setMyAppsSort("newest");
                   }}
                   sx={{
+                    ...careerActionButtonSx,
                     borderRadius: "8px",
-                    textTransform: "none",
-                    color: "#6B7280",
+                    color: editorial.muted,
                     fontWeight: 700,
-                    transition: "transform 0.18s ease, background-color 0.18s ease",
-                    minHeight: 40,
-                    "&:hover": { transform: "translateY(-1px)", backgroundColor: "#F3F4F6" },
-                    "&:active": { transform: "translateY(0) scale(0.98)" },
+                    "&:hover": { transform: "translateY(-1px)", backgroundColor: editorial.purpleWash },
                     ...reduceMotionSx,
                   }}
                 >
@@ -1648,7 +1527,7 @@ export default function CareersPage() {
                 <Chip
                   label={`${filteredMyApps.length} of ${myApps.length} applications`}
                   size="small"
-                  sx={{ backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600, fontSize: "0.75rem", animation: `${scaleIn} 0.22s ease both`, ...reduceMotionSx }}
+                  sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800, fontSize: "0.75rem", fontVariantNumeric: "tabular-nums", animation: `${scaleIn} 0.22s ease both`, ...reduceMotionSx }}
                 />
               )}
             </Box>
@@ -1730,9 +1609,9 @@ export default function CareersPage() {
           </Paper>
           <Paper
             sx={{
-              borderRadius: "8px",
-              border: "1px solid rgba(17, 24, 39, 0.08)",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              borderRadius: "12px",
+              border: `1px solid ${editorial.border}`,
+              boxShadow: "none",
               overflow: "hidden",
               animation: `${fadeInUp} 0.42s ease both`,
               animationDelay: "140ms",
@@ -1741,7 +1620,7 @@ export default function CareersPage() {
           >
             <Table>
               <TableHead>
-                <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+                <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Reference</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Role</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Status</TableCell>
@@ -1836,9 +1715,9 @@ export default function CareersPage() {
             <Paper
               sx={{
                 mt: 2,
-                borderRadius: "8px",
-                border: "1px solid rgba(17, 24, 39, 0.08)",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                borderRadius: "12px",
+                border: `1px solid ${editorial.border}`,
+                boxShadow: "none",
                 overflow: "hidden",
                 animation: `${fadeInUp} 0.32s ease both`,
                 animationDelay: "180ms",
@@ -1941,9 +1820,9 @@ export default function CareersPage() {
                               "&:hover": { backgroundColor: "#DBEAFE", transform: "translateY(-1px)" },
                               "&:active": { transform: "translateY(0) scale(0.99)" },
                               ...reduceMotionSx,
-                              "&::before": { content: "'📄 '", fontSize: "14px" },
                             }}
                           >
+                            <Description sx={{ fontSize: 16 }} />
                             View Resume
                           </Box>
                         )}
@@ -1964,9 +1843,9 @@ export default function CareersPage() {
                               "&:hover": { backgroundColor: "#DBEAFE", transform: "translateY(-1px)" },
                               "&:active": { transform: "translateY(0) scale(0.99)" },
                               ...reduceMotionSx,
-                              "&::before": { content: "'📝 '", fontSize: "14px" },
                             }}
                           >
+                            <Description sx={{ fontSize: 16 }} />
                             {doc.name ? `View ${doc.name}` : "View Supporting Document"}
                           </Box>
                         ))}

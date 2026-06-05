@@ -1,5 +1,6 @@
 import { Chip } from "@mui/material";
 import { Shield as ShieldIcon, Person as PersonIcon } from "@mui/icons-material";
+import { editorial } from "../../theme/editorial";
 
 interface RoleBadgeProps {
   isAdmin: boolean;
@@ -10,13 +11,13 @@ export default function RoleBadge({ isAdmin }: RoleBadgeProps) {
   if (isAdmin) {
     return (
       <Chip
-        icon={<ShieldIcon sx={{ color: "#101010 !important" }} />}
-        label="ADMIN"
+        icon={<ShieldIcon sx={{ color: `${editorial.pmwPurpleDark} !important` }} />}
+        label="Admin"
         size="small"
         sx={{
-          backgroundColor: "#FFF546",
-          color: "#101010",
-          border: "1px solid #101010",
+          backgroundColor: editorial.purpleWash,
+          color: editorial.pmwPurpleDark,
+          border: `1px solid ${editorial.pmwPurpleSoft}`,
           fontWeight: 800,
           letterSpacing: 0,
           fontSize: "0.7rem",
@@ -27,13 +28,13 @@ export default function RoleBadge({ isAdmin }: RoleBadgeProps) {
 
   return (
     <Chip
-      icon={<PersonIcon sx={{ color: "#101010 !important" }} />}
-      label="USER"
+      icon={<PersonIcon sx={{ color: `${editorial.pmwBlueDark} !important` }} />}
+      label="User"
       size="small"
       sx={{
-        backgroundColor: "#EAF5FC",
-        color: "#101010",
-        border: "1px solid #101010",
+        backgroundColor: editorial.blueWash,
+        color: editorial.pmwBlueDark,
+        border: `1px solid ${editorial.pmwBlueSoft}`,
         fontWeight: 800,
         letterSpacing: 0,
         fontSize: "0.7rem",

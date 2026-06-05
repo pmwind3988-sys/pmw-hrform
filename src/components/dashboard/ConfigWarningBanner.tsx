@@ -7,6 +7,7 @@ import {
 } from "@mui/material";
 import { Warning as WarningIcon, Close as CloseIcon } from "@mui/icons-material";
 import { useState } from "react";
+import { editorial } from "../../theme/editorial";
 
 interface ConfigWarningBannerProps {
   missingLists: string[];
@@ -24,10 +25,13 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
         icon={<WarningIcon />}
         sx={{
           borderRadius: "12px",
-          border: "1px solid rgba(245,158,11,0.2)",
-          backgroundColor: "rgba(254,243,199,0.5)",
+          border: `1px solid ${editorial.yellowSoft}`,
+          backgroundColor: "rgba(255, 248, 184, 0.45)",
           "& .MuiAlert-message": {
             width: "100%",
+          },
+          "& .MuiAlert-icon": {
+            color: editorial.warning,
           },
         }}
         action={
@@ -36,15 +40,22 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
             color="inherit"
             size="small"
             onClick={() => setOpen(false)}
+            sx={{
+              borderRadius: "10px",
+              "&:focus-visible": {
+                outline: `3px solid ${editorial.yellowSoft}`,
+                outlineOffset: 2,
+              },
+            }}
           >
             <CloseIcon fontSize="inherit" />
           </IconButton>
         }
       >
-        <Typography variant="body2" sx={{ fontWeight: 600, color: "#92400e", mb: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.warning, mb: 0.5 }}>
           Lists missing configuration
         </Typography>
-        <Typography variant="body2" sx={{ color: "rgba(146,64,14,0.8)", mb: 1 }}>
+        <Typography variant="body2" sx={{ color: editorial.muted, mb: 1 }}>
           The following lists are not yet configured in the Documents config library:
         </Typography>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
@@ -52,8 +63,8 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
             <Box
               key={list}
               sx={{
-                backgroundColor: "rgba(245,158,11,0.15)",
-                color: "#92400e",
+                backgroundColor: editorial.yellowSoft,
+                color: editorial.warning,
                 fontFamily: "monospace",
                 fontSize: "0.75rem",
                 px: 1.5,

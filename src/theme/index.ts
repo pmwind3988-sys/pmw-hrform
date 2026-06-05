@@ -15,16 +15,16 @@ const fadeInUp = keyframes`
 const theme = createTheme({
   palette: {
     primary: {
-      main: editorial.black,
-      light: "#3A3A3A",
-      dark: editorial.black,
+      main: editorial.pmwBlue,
+      light: "#2F96DD",
+      dark: editorial.pmwBlueDark,
       contrastText: editorial.white,
     },
     secondary: {
-      main: editorial.yellow,
-      light: "#FFF985",
-      dark: "#D6CC00",
-      contrastText: editorial.black,
+      main: editorial.pmwPurple,
+      light: "#7A7CC0",
+      dark: editorial.pmwPurpleDark,
+      contrastText: editorial.white,
     },
     background: {
       default: editorial.skySoft,
@@ -146,15 +146,15 @@ const theme = createTheme({
       styleOverrides: {
         body: {
           minHeight: "100vh",
-          background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))",
+          background: "var(--app-bg, linear-gradient(180deg, #EAF5FC 0%, #F7FAFD 48%, #FFFFFF 100%))",
           color: editorial.ink,
         },
         "#root": {
           minHeight: "100vh",
         },
         "::selection": {
-          background: editorial.yellow,
-          color: editorial.black,
+          background: editorial.pmwBlueSoft,
+          color: editorial.ink,
         },
         img: {
           maxWidth: "100%",
@@ -176,29 +176,29 @@ const theme = createTheme({
             transform: "translateY(-1px)",
           },
           "&:active": {
-            transform: "translateY(0)",
+            transform: "scale(0.96)",
           },
         },
         contained: {
-          backgroundColor: editorial.black,
+          backgroundColor: editorial.pmwBlue,
           color: editorial.white,
-          border: `1px solid ${editorial.black}`,
+          border: `1px solid ${editorial.pmwBlue}`,
           boxShadow: "none",
           "&:hover": {
-            backgroundColor: "#333333",
-            borderColor: "#333333",
+            backgroundColor: editorial.pmwBlueDark,
+            borderColor: editorial.pmwBlueDark,
             boxShadow: "none",
           },
         },
         outlined: {
-          color: editorial.black,
-          borderColor: editorial.black,
+          color: editorial.pmwBlueDark,
+          borderColor: editorial.pmwBlue,
           borderWidth: "1px",
           backgroundColor: "rgba(255, 255, 255, 0.72)",
           "&:hover": {
             borderWidth: "1px",
-            backgroundColor: editorial.white,
-            borderColor: editorial.black,
+            backgroundColor: editorial.blueWash,
+            borderColor: editorial.pmwBlueDark,
           },
         },
         sizeLarge: {
@@ -216,7 +216,7 @@ const theme = createTheme({
           transition: "box-shadow 0.2s ease, border-color 0.2s ease",
           "&:hover": {
             boxShadow: editorialShadow,
-            borderColor: "rgba(16, 16, 16, 0.36)",
+            borderColor: "rgba(0, 120, 212, 0.36)",
           },
         },
       },
@@ -247,15 +247,15 @@ const theme = createTheme({
         root: {
           "& .MuiOutlinedInput-root": {
             borderRadius: 10,
-            transition: "all 0.2s ease",
+            transition: "background-color 0.2s ease, box-shadow 0.2s ease",
             backgroundColor: editorial.white,
             "&:hover": {
               "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: "rgba(16, 16, 16, 0.52)",
+                borderColor: editorial.pmwBlue,
               },
             },
             "&.Mui-focused": {
-              boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
+              boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.16)",
             },
           },
         },
@@ -297,14 +297,14 @@ const theme = createTheme({
           borderRadius: 8,
           margin: "2px 6px",
           padding: "10px 12px",
-          transition: "all 0.15s ease",
+          transition: "background-color 0.15s ease, color 0.15s ease",
           "&:hover": {
             backgroundColor: editorial.blueWash,
           },
           "&.Mui-selected": {
             backgroundColor: editorial.blueWash,
             "&:hover": {
-              backgroundColor: editorial.skySoft,
+              backgroundColor: editorial.pmwBlueSoft,
             },
           },
         },
@@ -317,16 +317,15 @@ const theme = createTheme({
           "& .MuiAlert-root": {
             alignItems: "center",
             backgroundColor: editorial.white,
-            border: "1px solid rgba(16, 16, 16, 0.22)",
-            borderLeft: `6px solid ${editorial.pmwBlue}`,
+            border: `1px solid ${editorial.pmwBlueSoft}`,
             borderRadius: "8px",
-            boxShadow: "0 16px 42px rgba(16, 16, 16, 0.22)",
-            color: editorial.black,
+            boxShadow: "0 10px 28px rgba(0, 90, 158, 0.14)",
+            color: editorial.ink,
             fontWeight: 800,
             opacity: 1,
           },
           "& .MuiAlert-message": {
-            color: editorial.black,
+            color: editorial.ink,
             fontWeight: 800,
             lineHeight: 1.45,
             padding: "8px 0",
@@ -337,20 +336,20 @@ const theme = createTheme({
           },
           "& .MuiAlert-action": {
             alignItems: "center",
-            color: editorial.black,
+            color: editorial.ink,
             paddingTop: 0,
           },
           "& .MuiAlert-standardSuccess, & .MuiAlert-filledSuccess, & .MuiAlert-outlinedSuccess": {
-            borderLeftColor: editorial.success,
+            borderColor: "rgba(16, 124, 16, 0.24)",
           },
           "& .MuiAlert-standardError, & .MuiAlert-filledError, & .MuiAlert-outlinedError": {
-            borderLeftColor: editorial.error,
+            borderColor: "rgba(198, 40, 40, 0.28)",
           },
           "& .MuiAlert-standardWarning, & .MuiAlert-filledWarning, & .MuiAlert-outlinedWarning": {
-            borderLeftColor: editorial.warning,
+            borderColor: "rgba(177, 92, 0, 0.28)",
           },
           "& .MuiAlert-standardInfo, & .MuiAlert-filledInfo, & .MuiAlert-outlinedInfo": {
-            borderLeftColor: editorial.pmwBlue,
+            borderColor: editorial.pmwBlueSoft,
           },
         },
       },
@@ -381,17 +380,20 @@ const theme = createTheme({
     MuiCircularProgress: {
       styleOverrides: {
         root: {
-          color: editorial.black,
+          color: editorial.pmwBlue,
         },
       },
     },
     MuiIconButton: {
       styleOverrides: {
         root: {
-          transition: "all 0.2s ease",
+          transition: "background-color 0.2s ease, color 0.2s ease, transform 0.2s ease",
           borderRadius: 8,
           "&:hover": {
             backgroundColor: editorial.blueWash,
+          },
+          "&:active": {
+            transform: "scale(0.96)",
           },
         },
       },
@@ -399,7 +401,7 @@ const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         head: {
-          backgroundColor: editorial.paper,
+          backgroundColor: editorial.blueSoft,
           color: editorial.ink,
           fontWeight: 800,
           fontSize: "0.75rem",

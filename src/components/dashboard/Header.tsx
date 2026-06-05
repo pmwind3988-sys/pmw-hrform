@@ -24,6 +24,7 @@ import {
   PrivacyTip as PrivacyIcon,
   Wallpaper as WallpaperIcon,
 } from "@mui/icons-material";
+import type { MouseEvent } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import RoleBadge from "./RoleBadge";
@@ -63,8 +64,39 @@ export default function Header({
   } = useDashboardBackground(isAdmin);
   const profileOpen = Boolean(profileAnchorEl);
   const mainMenuOpen = Boolean(mainMenuAnchorEl);
+  const menuPaperSx = {
+    minWidth: { xs: 230, sm: 260 },
+    borderRadius: "12px",
+    boxShadow: "0 14px 32px rgba(16, 16, 16, 0.12)",
+    border: editorialHairline,
+    mt: 1,
+  } as const;
+  const menuItemSx = { py: 1.25, px: 2.5 } as const;
+  const menuIconSx = (color: string) => ({
+    mr: 1.5,
+    fontSize: 20,
+    color,
+  });
+  const iconButtonSx = {
+    borderRadius: "10px",
+    color: editorial.pmwBlueDark,
+    backgroundColor: editorial.blueWash,
+    border: `1px solid ${editorial.pmwBlueSoft}`,
+    transition: "background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease",
+    "&:hover": {
+      backgroundColor: editorial.pmwBlueSoft,
+      borderColor: editorial.pmwBlue,
+    },
+    "&:active": {
+      transform: "scale(0.96)",
+    },
+    "&:focus-visible": {
+      outline: `3px solid ${editorial.pmwBlueSoft}`,
+      outlineOffset: 2,
+    },
+  } as const;
 
-  const handleProfileOpen = (event: React.MouseEvent<HTMLElement>) => {
+  const handleProfileOpen = (event: MouseEvent<HTMLElement>) => {
     setProfileAnchorEl(event.currentTarget);
   };
 
@@ -72,7 +104,7 @@ export default function Header({
     setProfileAnchorEl(null);
   };
 
-  const handleMainMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+  const handleMainMenuOpen = (event: MouseEvent<HTMLElement>) => {
     setMainMenuAnchorEl(event.currentTarget);
   };
 
@@ -156,12 +188,7 @@ export default function Header({
             <IconButton
               onClick={handleMainMenuOpen}
               size="small"
-              sx={{
-                borderRadius: "10px",
-                color: editorial.ink,
-                backgroundColor: editorial.yellow,
-                border: `1px solid ${editorial.ink}`,
-              }}
+              sx={iconButtonSx}
             >
               <MenuIcon />
             </IconButton>
@@ -171,13 +198,7 @@ export default function Header({
               onClose={handleMainMenuClose}
               slotProps={{
                 paper: {
-                  sx: {
-                    minWidth: { xs: 230, sm: 260 },
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 28px rgba(16, 16, 16, 0.12)",
-                    border: editorialHairline,
-                    mt: 1,
-                  },
+                  sx: menuPaperSx,
                 },
               }}
               transformOrigin={{ horizontal: "right", vertical: "top" }}
@@ -185,7 +206,7 @@ export default function Header({
             >
               {/* 1. Profile */}
               <MenuItem disabled sx={{ cursor: "default", px: 2.5, py: 1.5 }}>
-                <Typography variant="body2" sx={{ color: "#111827", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {userEmail}
                 </Typography>
               </MenuItem>
@@ -200,8 +221,8 @@ export default function Header({
               <Divider sx={{ my: 0.5 }} />
 
               {/* 3. Career portal */}
-              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/career-portal"); }} sx={{ py: 1.25, px: 2.5 }}>
-                <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
+              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/career-portal"); }} sx={menuItemSx}>
+                <WorkIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                 <Typography variant="body2">Internal Hiring Portal</Typography>
               </MenuItem>
 
@@ -211,24 +232,24 @@ export default function Header({
                   <Divider sx={{ my: 0.5 }} />
                   {onOpenBuilder && (
                     <MenuItem onClick={() => { handleMainMenuClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
-                      <SettingsIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                      <SettingsIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <ApplicationsIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleMainMenuClose)} sx={menuItemSx}>
+                    <ApplicationsIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                     <Typography variant="body2">Career Applications</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleMainMenuClose)} sx={menuItemSx}>
+                    <EditIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                     <Typography variant="body2">Manage Openings</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <CardsIcon sx={{ mr: 1.5, fontSize: 20, color: "#16A34A" }} />
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleMainMenuClose)} sx={menuItemSx}>
+                    <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
                     <Typography variant="body2">Manage Cards</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <WallpaperIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
+                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                     <Typography variant="body2">Dashboard Background</Typography>
                   </MenuItem>
                 </>
@@ -236,17 +257,17 @@ export default function Header({
 
               <Divider sx={{ my: 0.5 }} />
 
-              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/privacy"); }} sx={{ py: 1.25, px: 2.5 }}>
-                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/privacy"); }} sx={menuItemSx}>
+                <PrivacyIcon sx={menuIconSx(editorial.muted)} />
                 <Typography variant="body2">Privacy Notice</Typography>
               </MenuItem>
-              <MenuItem onClick={() => { handleMainMenuClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+              <MenuItem onClick={() => { handleMainMenuClose(); onSwitch(); }} sx={menuItemSx}>
+                <PersonIcon sx={menuIconSx(editorial.muted)} />
                 <Typography variant="body2">Switch account</Typography>
               </MenuItem>
-              <MenuItem onClick={() => { handleMainMenuClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
-                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+              <MenuItem onClick={() => { handleMainMenuClose(); onLogout(); }} sx={menuItemSx}>
+                <LogoutIcon sx={menuIconSx(editorial.error)} />
+                <Typography variant="body2" sx={{ color: editorial.error }}>Sign out</Typography>
               </MenuItem>
             </Menu>
           </>
@@ -262,8 +283,8 @@ export default function Header({
                 px: 1.5,
                 borderRadius: "8px",
                 backgroundColor: editorial.white,
-                border: `1px solid ${editorial.ink}`,
-                color: editorial.ink,
+                border: `1px solid ${editorial.pmwBlueSoft}`,
+                color: editorial.pmwBlueDark,
                 fontSize: "0.75rem",
                 fontWeight: 800,
                 letterSpacing: 0,
@@ -276,7 +297,7 @@ export default function Header({
                 },
                 "&:hover": {
                   backgroundColor: editorial.blueWash,
-                  borderColor: editorial.ink,
+                  borderColor: editorial.pmwBlue,
                 },
               }}
             >
@@ -293,16 +314,23 @@ export default function Header({
                 p: 0.75,
                 borderRadius: "12px",
                 backgroundColor: editorial.white,
-                border: `1px solid ${editorial.ink}`,
-                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                border: `1px solid ${editorial.pmwBlueSoft}`,
+                transition: "background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease",
                 "&:hover": {
-                  backgroundColor: editorial.yellow,
-                  borderColor: editorial.ink,
+                  backgroundColor: editorial.blueWash,
+                  borderColor: editorial.pmwBlue,
+                },
+                "&:active": {
+                  transform: "scale(0.96)",
+                },
+                "&:focus-visible": {
+                  outline: `3px solid ${editorial.pmwBlueSoft}`,
+                  outlineOffset: 2,
                 },
               }}
             >
               <Box sx={{ width: 32, height: 32, borderRadius: "8px", backgroundColor: editorial.blueWash, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <PersonIcon sx={{ fontSize: 18, color: editorial.ink }} />
+                <PersonIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />
               </Box>
             </IconButton>
 
@@ -312,20 +340,14 @@ export default function Header({
               onClose={handleProfileClose}
               slotProps={{
                 paper: {
-                  sx: {
-                    minWidth: 220,
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 28px rgba(16, 16, 16, 0.12)",
-                    border: editorialHairline,
-                    mt: 1,
-                  },
+                  sx: menuPaperSx,
                 },
               }}
               transformOrigin={{ horizontal: "right", vertical: "top" }}
               anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
             >
               <MenuItem disabled sx={{ cursor: "default", px: 2.5, py: 1.5 }}>
-                <Typography variant="body2" sx={{ color: "#111827", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {userEmail}
                 </Typography>
               </MenuItem>
@@ -334,40 +356,40 @@ export default function Header({
                   <Divider sx={{ my: 0.5 }} />
                   {onOpenBuilder && (
                     <MenuItem onClick={() => { handleProfileClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
-                      <SettingsIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                      <SettingsIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <ApplicationsIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleProfileClose)} sx={menuItemSx}>
+                    <ApplicationsIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                     <Typography variant="body2">Career Applications</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: "#6264A7" }} />
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleProfileClose)} sx={menuItemSx}>
+                    <EditIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                     <Typography variant="body2">Manage Openings</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <CardsIcon sx={{ mr: 1.5, fontSize: 20, color: "#16A34A" }} />
+                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleProfileClose)} sx={menuItemSx}>
+                    <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
                     <Typography variant="body2">Manage Cards</Typography>
                   </MenuItem>
-                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
-                    <WallpaperIcon sx={{ mr: 1.5, fontSize: 20, color: "#0078D4" }} />
+                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>
+                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                     <Typography variant="body2">Dashboard Background</Typography>
                   </MenuItem>
                 </>
               )}
               <Divider sx={{ my: 0.5 }} />
-              <MenuItem onClick={() => navigateFromMenu("/privacy", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
-                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+              <MenuItem onClick={() => navigateFromMenu("/privacy", handleProfileClose)} sx={menuItemSx}>
+                <PrivacyIcon sx={menuIconSx(editorial.muted)} />
                 <Typography variant="body2">Privacy Notice</Typography>
               </MenuItem>
-              <MenuItem onClick={() => { handleProfileClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+              <MenuItem onClick={() => { handleProfileClose(); onSwitch(); }} sx={menuItemSx}>
+                <PersonIcon sx={menuIconSx(editorial.muted)} />
                 <Typography variant="body2">Switch account</Typography>
               </MenuItem>
-              <MenuItem onClick={() => { handleProfileClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
-                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+              <MenuItem onClick={() => { handleProfileClose(); onLogout(); }} sx={menuItemSx}>
+                <LogoutIcon sx={menuIconSx(editorial.error)} />
+                <Typography variant="body2" sx={{ color: editorial.error }}>Sign out</Typography>
               </MenuItem>
             </Menu>
           </>

@@ -1,5 +1,12 @@
-import { Box, Grid, Typography, IconButton } from "@mui/material";
-import { Description as DescriptionIcon, Edit as EditIcon, ArrowForward as ArrowForwardIcon } from "@mui/icons-material";
+import { Box, Grid, Typography, IconButton, Tooltip } from "@mui/material";
+import {
+  AccessTime as AccessTimeIcon,
+  ArrowForward as ArrowForwardIcon,
+  Cancel as CancelIcon,
+  CheckCircle as CheckCircleIcon,
+  Description as DescriptionIcon,
+  Edit as EditIcon,
+} from "@mui/icons-material";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
 import { editorial, editorialShadow } from "../../theme/editorial";
 
@@ -52,8 +59,8 @@ export default function ListSummaryCards({
           <Grid size={{ xs: 12, sm: 6, lg: 3 }} key={list.id}>
             <Box
               sx={{
-                backgroundColor: "#ffffff",
-                borderRadius: "14px",
+                backgroundColor: "rgba(255, 255, 255, 0.92)",
+                borderRadius: "12px",
                 border: `1px solid ${editorial.border}`,
                 boxShadow: "none",
                 p: { xs: 2, sm: 2.5 },
@@ -62,7 +69,7 @@ export default function ListSummaryCards({
                 transition: "box-shadow 0.2s ease, border-color 0.2s ease",
                 "&:hover": {
                   boxShadow: editorialShadow,
-                  borderColor: editorial.ink,
+                  borderColor: editorial.pmwBlueSoft,
                 },
               }}
             >
@@ -71,7 +78,7 @@ export default function ListSummaryCards({
                   sx={{
                     width: 48,
                     height: 48,
-                    borderRadius: "50%",
+                    borderRadius: "12px",
                     backgroundColor: editorial.blueWash,
                     display: "flex",
                     alignItems: "center",
@@ -93,29 +100,36 @@ export default function ListSummaryCards({
                   </Typography>
                 </Box>
                 {isAdmin && (
-                  <IconButton
-                    onClick={() => onEditForm(list.title)}
-                    size="small"
-                    sx={{
-                      position: "absolute",
-                      top: 12,
-                      right: 12,
-                      borderRadius: "8px",
-                      backgroundColor: editorial.yellow,
-                      color: editorial.ink,
-                      opacity: 0,
-                      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                      "&:hover": {
-                        backgroundColor: "rgba(98, 100, 167, 0.15)",
-                        color: "#4A4C80",
-                      },
-                      ".MuiBox-root:hover &": {
-                        opacity: 1,
-                      },
-                    }}
-                  >
-                    <EditIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
+                  <Tooltip title={`Edit ${list.title}`}>
+                    <IconButton
+                      aria-label={`Edit ${list.title}`}
+                      onClick={() => onEditForm(list.title)}
+                      size="small"
+                      sx={{
+                        position: "absolute",
+                        top: 12,
+                        right: 12,
+                        borderRadius: "10px",
+                        backgroundColor: editorial.purpleWash,
+                        color: editorial.pmwPurpleDark,
+                        border: `1px solid ${editorial.pmwPurpleSoft}`,
+                        transition: "background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease",
+                        "&:hover": {
+                          backgroundColor: editorial.pmwPurpleSoft,
+                          borderColor: editorial.pmwPurple,
+                        },
+                        "&:active": {
+                          transform: "scale(0.96)",
+                        },
+                        "&:focus-visible": {
+                          outline: `3px solid ${editorial.pmwPurpleSoft}`,
+                          outlineOffset: 2,
+                        },
+                      }}
+                    >
+                      <EditIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
                 )}
               </Box>
 
@@ -128,6 +142,7 @@ export default function ListSummaryCards({
                   textAlign: "center",
                   fontSize: "2.25rem",
                   mb: 1,
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {count}
@@ -141,11 +156,11 @@ export default function ListSummaryCards({
                       alignItems: "center",
                       gap: 0.75,
                       fontSize: "0.75rem",
-                      color: "#16A34A",
-                      fontWeight: 500,
+                      color: editorial.success,
+                      fontWeight: 700,
                     }}
                   >
-                    <Box sx={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#16A34A" }} />
+                    <CheckCircleIcon sx={{ fontSize: 14 }} />
                     {listApproved} approved
                   </Box>
                   <Box
@@ -154,11 +169,11 @@ export default function ListSummaryCards({
                       alignItems: "center",
                       gap: 0.75,
                       fontSize: "0.75rem",
-                      color: "#D97706",
-                      fontWeight: 500,
+                      color: editorial.warning,
+                      fontWeight: 700,
                     }}
                   >
-                    <Box sx={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#D97706" }} />
+                    <AccessTimeIcon sx={{ fontSize: 14 }} />
                     {listPending} pending
                   </Box>
                   <Box
@@ -167,11 +182,11 @@ export default function ListSummaryCards({
                       alignItems: "center",
                       gap: 0.75,
                       fontSize: "0.75rem",
-                      color: "#DC2626",
-                      fontWeight: 500,
+                      color: editorial.error,
+                      fontWeight: 700,
                     }}
                   >
-                    <Box sx={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#DC2626" }} />
+                    <CancelIcon sx={{ fontSize: 14 }} />
                     {listRejected} rejected
                   </Box>
                 </Box>
@@ -191,13 +206,12 @@ export default function ListSummaryCards({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 0.5,
-                    color: editorial.muted,
+                    color: editorial.pmwBlueDark,
                     fontSize: "0.75rem",
-                    fontWeight: 500,
-                    opacity: 0,
-                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                    fontWeight: 800,
+                    transition: "transform 0.2s ease",
                     ".MuiBox-root:hover &": {
-                      opacity: 1,
+                      transform: "translateX(2px)",
                     },
                   }}
                 >

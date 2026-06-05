@@ -15,25 +15,37 @@ export default function EmptyState({ hasFilters }: EmptyStateProps) {
           alignItems: "center",
           maxWidth: 440,
           textAlign: "center",
-          backgroundColor: "rgba(255,255,255,0.62)",
-          border: `1px dashed ${editorial.ink}`,
-          borderRadius: "14px",
+          backgroundColor: "rgba(255,255,255,0.88)",
+          border: `1px dashed ${editorial.pmwBlueSoft}`,
+          borderRadius: "12px",
           px: { xs: 3, sm: 5 },
           py: 5,
         }}
       >
-        <DescriptionIcon
+        <Box
           sx={{
-            fontSize: 64,
-            color: editorial.ink,
+            width: 64,
+            height: 64,
+            borderRadius: "16px",
+            backgroundColor: editorial.blueWash,
+            border: `1px solid ${editorial.pmwBlueSoft}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-        />
+        >
+          <DescriptionIcon
+            sx={{
+              fontSize: 32,
+              color: editorial.pmwBlueDark,
+            }}
+          />
+        </Box>
 
         <Typography
           variant="h5"
           sx={{
-            fontFamily: "Georgia, 'Times New Roman', Times, serif",
-            fontWeight: 400,
+            fontWeight: 800,
             color: editorial.ink,
             letterSpacing: 0,
           }}

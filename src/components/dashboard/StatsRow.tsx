@@ -30,14 +30,14 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       value: submissions.length,
       icon: <DescriptionIcon sx={{ fontSize: 24 }} />,
       bg: editorial.blueWash,
-      color: editorial.ink,
-      accent: editorial.ink,
+      color: editorial.pmwBlueDark,
+      accent: editorial.pmwBlue,
     },
     {
       label: "Approved",
       value: approved,
       icon: <CheckCircleIcon sx={{ fontSize: 24 }} />,
-      bg: "#E3F1E3",
+      bg: "rgba(16, 124, 16, 0.08)",
       color: editorial.success,
       accent: editorial.success,
     },
@@ -45,7 +45,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       label: "Pending",
       value: pending,
       icon: <AccessTimeIcon sx={{ fontSize: 24 }} />,
-      bg: "#FFF7BD",
+      bg: editorial.yellowSoft,
       color: editorial.warning,
       accent: editorial.warning,
     },
@@ -53,7 +53,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       label: "Rejected",
       value: rejected,
       icon: <CancelIcon sx={{ fontSize: 24 }} />,
-      bg: "#F8E4E4",
+      bg: "rgba(198, 40, 40, 0.08)",
       color: editorial.error,
       accent: editorial.error,
     },
@@ -65,8 +65,8 @@ export default function StatsRow({ submissions }: StatsRowProps) {
         <Grid size={{ xs: 6, md: 3 }} key={stat.label}>
           <Box
             sx={{
-              backgroundColor: "#ffffff",
-              borderRadius: "14px",
+              backgroundColor: "rgba(255, 255, 255, 0.92)",
+              borderRadius: "12px",
               p: { xs: 1.75, sm: 2.5 },
               display: "flex",
               alignItems: "center",
@@ -77,7 +77,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
               cursor: "default",
               "&:hover": {
                 boxShadow: editorialShadow,
-                borderColor: editorial.ink,
+                borderColor: stat.accent,
               },
             }}
           >
@@ -101,8 +101,8 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 variant="caption"
                 sx={{
                   textTransform: "uppercase",
-                  letterSpacing: 0,
-                color: editorial.muted,
+                letterSpacing: 0,
+                  color: editorial.muted,
                   fontWeight: 600,
                   fontSize: "0.7rem",
                   display: "block",
@@ -119,6 +119,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                   letterSpacing: 0,
                   lineHeight: 1.15,
                   fontSize: "2rem",
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {stat.value}

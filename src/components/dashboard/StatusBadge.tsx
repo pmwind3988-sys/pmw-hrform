@@ -1,13 +1,21 @@
 import { Chip } from "@mui/material";
+import {
+  AccessTime as AccessTimeIcon,
+  Cancel as CancelIcon,
+  CheckCircle as CheckCircleIcon,
+  HourglassEmpty as WaitingIcon,
+  TaskAlt as ConfirmedIcon,
+} from "@mui/icons-material";
+import { editorial } from "../../theme/editorial";
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  fullyapproved: { label: "Fully Approved", color: "#107c10", bg: "#e3f1e3", dot: "#107c10" },
-  approved: { label: "Approved", color: "#107c10", bg: "#e3f1e3", dot: "#107c10" },
-  confirmed: { label: "Confirmed", color: "#107c10", bg: "#e3f1e3", dot: "#107c10" },
-  rejected: { label: "Rejected", color: "#c62828", bg: "#f8e4e4", dot: "#c62828" },
-  inprogress: { label: "In Review", color: "#101010", bg: "#eaf5fc", dot: "#101010" },
-  pending: { label: "Pending", color: "#805800", bg: "#fff7bd", dot: "#805800" },
-  cancelled: { label: "Cancelled", color: "#5f646d", bg: "#f7f5ef", dot: "#5f646d" },
+  fullyapproved: { label: "Fully Approved", color: editorial.success, bg: "rgba(16, 124, 16, 0.08)", dot: editorial.success },
+  approved: { label: "Approved", color: editorial.success, bg: "rgba(16, 124, 16, 0.08)", dot: editorial.success },
+  confirmed: { label: "Confirmed", color: editorial.success, bg: "rgba(16, 124, 16, 0.08)", dot: editorial.success },
+  rejected: { label: "Rejected", color: editorial.error, bg: "rgba(198, 40, 40, 0.08)", dot: editorial.error },
+  inprogress: { label: "In Review", color: editorial.pmwBlueDark, bg: editorial.blueWash, dot: editorial.pmwBlue },
+  pending: { label: "Pending", color: editorial.warning, bg: editorial.yellowSoft, dot: editorial.warning },
+  cancelled: { label: "Cancelled", color: editorial.muted, bg: editorial.paperSoft, dot: editorial.muted },
 } as const;
 
 function normalizeStatus(status: string | null): string {
@@ -26,29 +34,30 @@ interface StatusBadgeProps {
   status: string | null;
 }
 
+function getStatusIcon(key: string, color: string) {
+  const iconSx = { color: `${color} !important`, fontSize: "1rem" };
+  if (key === "fullyapproved" || key === "approved") return <CheckCircleIcon sx={iconSx} />;
+  if (key === "confirmed") return <ConfirmedIcon sx={iconSx} />;
+  if (key === "rejected" || key === "cancelled") return <CancelIcon sx={iconSx} />;
+  if (key === "inprogress") return <AccessTimeIcon sx={iconSx} />;
+  return <WaitingIcon sx={iconSx} />;
+}
+
 export default function StatusBadge({ status }: StatusBadgeProps) {
   const key = normalizeStatus(status);
   const cfg = STATUS_CFG[key] ?? STATUS_CFG.pending;
 
   return (
     <Chip
+      icon={getStatusIcon(key, cfg.color)}
       label={cfg.label}
       size="small"
       sx={{
         backgroundColor: cfg.bg,
         color: cfg.color,
-        border: `1px solid ${cfg.color}`,
+        border: `1px solid ${cfg.dot}33`,
         fontWeight: 800,
         fontSize: "0.75rem",
-        "&::before": {
-          content: '""',
-          display: "inline-block",
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          backgroundColor: cfg.dot,
-          marginRight: 6,
-        },
       }}
     />
   );

@@ -13,9 +13,11 @@ import {
   TextField,
 } from "@mui/material";
 import {
+  AdminPanelSettings as AdminIcon,
   ExpandLess,
   ExpandMore,
   FilterList as FilterListIcon,
+  RestartAlt as ClearFiltersIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
 import type { DiscoveredList } from "../../types";
@@ -62,13 +64,42 @@ export default function Toolbar({
     Boolean(submitterFilter),
   ].filter(Boolean).length;
   const hasFilters =
-    search || listFilter || statusFilter !== "all" || submitterFilter;
+    search || listFilter || statusFilter !== "all" || sortBy !== "newest" || submitterFilter;
+  const searchFieldSx = {
+    minWidth: 0,
+    "& .MuiOutlinedInput-root": {
+      borderRadius: "10px",
+      backgroundColor: editorial.paperSoft,
+      transition: "background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+      "&:hover": {
+        backgroundColor: editorial.blueSoft,
+      },
+      "&.Mui-focused": {
+        backgroundColor: "#ffffff",
+        boxShadow: `0 0 0 3px ${editorial.pmwBlueSoft}`,
+      },
+    },
+  } as const;
+  const selectSx = {
+    borderRadius: "10px",
+    backgroundColor: editorial.paperSoft,
+    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+      borderColor: editorial.pmwBlue,
+    },
+  } as const;
+  const clearFilters = () => {
+    setSearch("");
+    setListFilter("");
+    setStatusFilter("all");
+    setSortBy("newest");
+    setSubmitterFilter("");
+  };
 
   return (
     <Box
       sx={{
-        backgroundColor: "#ffffff",
-        borderRadius: "14px",
+        backgroundColor: "rgba(255, 255, 255, 0.92)",
+        borderRadius: "12px",
         border: `1px solid ${editorial.border}`,
         boxShadow: "none",
         p: { xs: 1.5, sm: 2 },
@@ -88,21 +119,7 @@ export default function Toolbar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             size="small"
-            sx={{
-              minWidth: 0,
-              "& .MuiOutlinedInput-root": {
-                borderRadius: "10px",
-                backgroundColor: editorial.paperSoft,
-                transition: "all 0.2s ease",
-                "&:hover": {
-                  backgroundColor: editorial.blueWash,
-                },
-                "&.Mui-focused": {
-                  backgroundColor: "#ffffff",
-                  boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
-                },
-              },
-            }}
+            sx={searchFieldSx}
             slotProps={{
               input: {
                 startAdornment: (
@@ -126,6 +143,23 @@ export default function Toolbar({
               px: { xs: 1.25, sm: 2 },
               borderRadius: "10px",
               whiteSpace: "nowrap",
+              ...(advancedOpen
+                ? {
+                    backgroundColor: editorial.pmwBlue,
+                    color: editorial.white,
+                    "&:hover": {
+                      backgroundColor: editorial.pmwBlueDark,
+                    },
+                  }
+                : {
+                    backgroundColor: editorial.white,
+                    color: editorial.pmwBlueDark,
+                    borderColor: editorial.pmwBlueSoft,
+                    "&:hover": {
+                      backgroundColor: editorial.blueWash,
+                      borderColor: editorial.pmwBlue,
+                    },
+                  }),
               "& .MuiButton-startIcon": {
                 mr: { xs: 0.5, sm: 0.75 },
               },
@@ -169,7 +203,7 @@ export default function Toolbar({
                 value={listFilter}
                 label="List"
                 onChange={(e) => setListFilter(e.target.value)}
-                sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
+                sx={selectSx}
               >
                 <MenuItem value="">All lists</MenuItem>
                 {visibleLists.map((list) => (
@@ -186,7 +220,7 @@ export default function Toolbar({
                 value={statusFilter}
                 label="Status"
                 onChange={(e) => setStatusFilter(e.target.value)}
-                sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
+                sx={selectSx}
               >
                 <MenuItem value="all">All statuses</MenuItem>
                 <MenuItem value="pending">Pending</MenuItem>
@@ -203,7 +237,7 @@ export default function Toolbar({
                 value={sortBy}
                 label="Sort by"
                 onChange={(e) => setSortBy(e.target.value)}
-                sx={{ borderRadius: "10px", backgroundColor: editorial.paperSoft }}
+                sx={selectSx}
               >
                 <MenuItem value="newest">Newest first</MenuItem>
                 <MenuItem value="oldest">Oldest first</MenuItem>
@@ -219,34 +253,24 @@ export default function Toolbar({
                   value={submitterFilter}
                   onChange={(e) => setSubmitterFilter(e.target.value)}
                   size="small"
-                  sx={{
-                    minWidth: 0,
-                    "& .MuiOutlinedInput-root": {
-                      borderRadius: "8px",
-                      backgroundColor: editorial.paperSoft,
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        backgroundColor: editorial.blueWash,
-                      },
-                      "&.Mui-focused": {
-                        backgroundColor: "#ffffff",
-                        boxShadow: "0 0 0 3px rgba(255, 245, 70, 0.45)",
-                      },
-                    },
-                  }}
+                  sx={searchFieldSx}
                 />
                 <Chip
+                  icon={<AdminIcon />}
                   label="Admin - all users visible"
                   size="small"
                   sx={{
                     justifySelf: { xs: "stretch", lg: "end" },
                     width: { xs: "100%", lg: "auto" },
-                    backgroundColor: editorial.yellow,
-                    color: editorial.ink,
-                    border: `1px solid ${editorial.ink}`,
-                    fontWeight: 500,
+                    backgroundColor: editorial.purpleWash,
+                    color: editorial.pmwPurpleDark,
+                    border: `1px solid ${editorial.pmwPurpleSoft}`,
+                    fontWeight: 800,
                     fontSize: "0.75rem",
                     height: 32,
+                    "& .MuiChip-icon": {
+                      color: editorial.pmwPurpleDark,
+                    },
                   }}
                 />
               </>
@@ -255,20 +279,39 @@ export default function Toolbar({
         </Collapse>
 
         {hasFilters && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1, flexWrap: "wrap" }}>
             <FilterListIcon sx={{ fontSize: 18, color: editorial.muted }} />
             <Chip
               label={`Showing ${filtered} of ${total} submissions`}
               size="small"
               sx={{
-                backgroundColor: editorial.paperSoft,
-                color: editorial.ink,
-                border: `1px solid ${editorial.border}`,
-                fontWeight: 500,
+                backgroundColor: editorial.blueWash,
+                color: editorial.pmwBlueDark,
+                border: `1px solid ${editorial.pmwBlueSoft}`,
+                fontWeight: 800,
                 fontSize: "0.75rem",
                 height: 32,
+                fontVariantNumeric: "tabular-nums",
               }}
             />
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<ClearFiltersIcon />}
+              onClick={clearFilters}
+              sx={{
+                color: editorial.pmwBlueDark,
+                fontWeight: 800,
+                textTransform: "none",
+                minHeight: 32,
+                px: 1,
+                "&:hover": {
+                  backgroundColor: editorial.blueWash,
+                },
+              }}
+            >
+              Clear filters
+            </Button>
           </Box>
         )}
       </Stack>

@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Chip, Stack, Typography } from "@mui/material";
+import {
+  AdminPanelSettingsOutlined as AdminIcon,
+  PersonOutlined as PersonIcon,
+  SpaceDashboardOutlined as DashboardIcon,
+} from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useDashboard } from "../contexts/DashboardContext";
 import Header from "../components/dashboard/Header";
@@ -90,7 +95,7 @@ export default function AdminHomePage() {
     onEditForm,
   } = useDashboard();
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))" }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #EAF5FC 0%, #F7FAFD 48%, #FFFFFF 100%))" }}>
       <Header
         userEmail={userEmail}
         isAdmin={isAdmin}
@@ -107,16 +112,32 @@ export default function AdminHomePage() {
             display: "grid",
             gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" },
             gap: 2,
-            alignItems: "end",
+            alignItems: "center",
           }}
         >
           <Box>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1.25 }}>
+              <Chip
+                icon={<DashboardIcon />}
+                label={isAdmin ? "Admin workspace" : "Employee workspace"}
+                size="small"
+                sx={{
+                  backgroundColor: isAdmin ? editorial.purpleWash : editorial.blueWash,
+                  color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
+                  border: `1px solid ${isAdmin ? editorial.pmwPurpleSoft : editorial.pmwBlueSoft}`,
+                  fontWeight: 800,
+                  "& .MuiChip-icon": {
+                    color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
+                  },
+                }}
+              />
+            </Stack>
             <Typography
               variant="h1"
               sx={{
                 color: editorial.ink,
-                fontSize: { xs: "2.6rem", sm: "3.4rem", md: "4.4rem" },
-                lineHeight: 0.98,
+                fontSize: { xs: "2.1rem", sm: "2.7rem", md: "3.2rem" },
+                lineHeight: 1.02,
               }}
             >
               {isAdmin ? "PMW Group HR Portal" : "PMW Group HR Portal"}
@@ -138,11 +159,20 @@ export default function AdminHomePage() {
           <Typography
             variant="body2"
             sx={{
-              color: editorial.muted,
-              fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
               justifySelf: { xs: "start", md: "end" },
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 0.75,
+              maxWidth: "100%",
+              px: 1.25,
+              py: 0.75,
+              borderRadius: "10px",
+              color: editorial.muted,
+              backgroundColor: "rgba(255, 255, 255, 0.72)",
+              border: `1px solid ${editorial.border}`,
             }}
           >
+            {isAdmin ? <AdminIcon sx={{ fontSize: 18, color: editorial.pmwPurpleDark }} /> : <PersonIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />}
             {userEmail}
           </Typography>
         </Box>

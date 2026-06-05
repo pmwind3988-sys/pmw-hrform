@@ -28,8 +28,6 @@ import {
   ToggleButton,
   Snackbar,
   Grid,
-  Card,
-  CardContent,
   Divider,
   Stack,
   Tooltip,
@@ -63,6 +61,19 @@ import {
 } from "../utils/careersService";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
+import {
+  CareerEmptyState,
+  CareerErrorState,
+  CareerMetricPill,
+  careerActionButtonSx,
+  careerContentSx,
+  careerPageSx,
+  careerSearchFieldSx,
+  careerTableShellSx,
+  careerToolbarSx,
+  getCareerErrorMessage,
+} from "../components/careers/careerUi";
+import { editorial } from "../theme/editorial";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
 const EMPLOYMENT_TYPES = ["Full-Time", "Part-Time", "Contract", "Internship"];
@@ -722,7 +733,7 @@ export default function AdminJobManagePage() {
       const jobData = await fetchAdminJobs({ accessToken });
       setJobs(jobData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load opportunities");
+      setError(getCareerErrorMessage(err, "Failed to load opportunities."));
     } finally {
       setLoading(false);
     }
@@ -876,7 +887,7 @@ export default function AdminJobManagePage() {
       void load();
     } catch (err) {
       setSnackbar({
-        message: err instanceof Error ? err.message : "Operation failed",
+        message: getCareerErrorMessage(err, "Operation failed."),
         severity: "error",
       });
     }
@@ -893,7 +904,7 @@ export default function AdminJobManagePage() {
       }
     } catch (err) {
       setSnackbar({
-        message: err instanceof Error ? err.message : "Failed to close opportunity",
+        message: getCareerErrorMessage(err, "Failed to close opportunity."),
         severity: "error",
       });
     } finally {
@@ -913,7 +924,7 @@ export default function AdminJobManagePage() {
       }
     } catch (err) {
       setSnackbar({
-        message: err instanceof Error ? err.message : "Failed to delete opportunity",
+        message: getCareerErrorMessage(err, "Failed to delete opportunity."),
         severity: "error",
       });
     } finally {
@@ -922,7 +933,7 @@ export default function AdminJobManagePage() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))" }}>
+    <Box sx={careerPageSx}>
       <CareerPortalHeader
         title="Manage Opportunities"
         subtitle="Create and maintain internal advancement openings."
@@ -938,7 +949,7 @@ export default function AdminJobManagePage() {
               startIcon={<Refresh />}
               onClick={load}
               disabled={loading}
-              sx={{ whiteSpace: "nowrap", borderColor: "#D1D5DB", color: "#6B7280" }}
+              sx={{ ...careerActionButtonSx, whiteSpace: "nowrap", borderColor: editorial.pmwBlueSoft, color: editorial.pmwBlueDark }}
             >
               Refresh
             </Button>
@@ -946,7 +957,7 @@ export default function AdminJobManagePage() {
               variant="contained"
               startIcon={<Add />}
               onClick={handleCreate}
-              sx={{ whiteSpace: "nowrap", backgroundColor: "#0078D4" }}
+              sx={{ ...careerActionButtonSx, whiteSpace: "nowrap", backgroundColor: editorial.pmwBlue }}
             >
               Create Opening
             </Button>
@@ -954,18 +965,13 @@ export default function AdminJobManagePage() {
         )}
       />
 
-      <Box sx={{ maxWidth: 1440, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
+      <Box sx={careerContentSx}>
         {/* Filters */}
         {!loading && !error && jobs.length > 0 && (
         <Paper
           sx={{
-            p: 2,
+            ...careerToolbarSx,
             mb: 3,
-            borderRadius: "8px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 1.5,
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
@@ -975,18 +981,17 @@ export default function AdminJobManagePage() {
               onChange={(e) => setSearchText(e.target.value)}
               size="small"
               sx={{
-                flex: "1 1 300px",
-                minWidth: { xs: "100%", sm: 280 },
+                ...careerSearchFieldSx,
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: "8px",
-                  backgroundColor: "#F8F9FC",
+                  borderRadius: "10px",
+                  backgroundColor: editorial.white,
                 },
               }}
               slotProps={{
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ color: "#6B7280", fontSize: 20 }} />
+                      <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
                     </InputAdornment>
                   ),
                 },
@@ -997,8 +1002,7 @@ export default function AdminJobManagePage() {
               startIcon={<FilterIcon />}
               onClick={() => setShowAdvancedFilters((open) => !open)}
               sx={{
-                borderRadius: "8px",
-                textTransform: "none",
+                ...careerActionButtonSx,
                 fontWeight: 700,
                 whiteSpace: "nowrap",
                 width: { xs: "100%", sm: "auto" },
@@ -1017,7 +1021,7 @@ export default function AdminJobManagePage() {
                   setTypeFilter("");
                   setSortBy("newest");
                 }}
-                sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 700, width: { xs: "100%", sm: "auto" } }}
+                sx={{ ...careerActionButtonSx, color: editorial.muted, fontWeight: 700, width: { xs: "100%", sm: "auto" } }}
               >
                 Clear
               </Button>
@@ -1026,7 +1030,7 @@ export default function AdminJobManagePage() {
               <Chip
                 label={`${filteredJobs.length} of ${jobs.length} openings`}
                 size="small"
-                sx={{ backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600, fontSize: "0.75rem", borderRadius: "8px" }}
+                sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800, fontSize: "0.75rem", borderRadius: "8px", fontVariantNumeric: "tabular-nums" }}
               />
             )}
           </Box>
@@ -1115,39 +1119,17 @@ export default function AdminJobManagePage() {
           }}
         >
           {[
-            { label: "Total Openings", value: jobs.length, color: "#0078D4", icon: <Work /> },
-            { label: "Active", value: jobs.filter((j) => j.status === "New").length, color: "#34A853", icon: <Work /> },
-            { label: "Closed", value: jobs.filter((j) => j.status !== "New").length, color: "#9CA3AF", icon: <Work /> },
+            { label: "Total Openings", value: jobs.length, tone: "blue" as const, icon: <Work /> },
+            { label: "Active", value: jobs.filter((j) => j.status === "New").length, tone: "success" as const, icon: <Work /> },
+            { label: "Closed", value: jobs.filter((j) => j.status !== "New").length, tone: "neutral" as const, icon: <Work /> },
           ].map((stat) => (
-            <Card key={stat.label} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <CardContent sx={{ p: { xs: 1.5, sm: 2 }, minHeight: 92 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, height: "100%" }}>
-                  <Box
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "8px",
-                      backgroundColor: `${stat.color}14`,
-                      color: stat.color,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {stat.icon}
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: "#111827", fontSize: { xs: "1.35rem", sm: "1.65rem" }, lineHeight: 1.05 }}>
-                      {stat.value}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700, lineHeight: 1.2, display: "block" }}>
-                      {stat.label}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+            <CareerMetricPill
+              key={stat.label}
+              icon={stat.icon}
+              label={stat.label}
+              value={stat.value}
+              tone={stat.tone}
+            />
           ))}
         </Box>
         )}
@@ -1158,31 +1140,35 @@ export default function AdminJobManagePage() {
         )}
 
         {/* Error */}
-        {!loading && error && <Alert severity="error" sx={{ borderRadius: "8px", mb: 3, fontWeight: 500, backgroundColor: "#FEF2F2", color: "#991B1B", "& .MuiAlert-icon": { color: "#DC2626" } }} action={<Button size="small" onClick={load} sx={{ textTransform: "none" }}>Retry</Button>}>{error}</Alert>}
+        {!loading && error && <CareerErrorState message={error} onRetry={load} />}
 
         {/* Empty */}
         {!loading && !error && jobs.length === 0 && (
-          <Box sx={{ textAlign: "center", py: 8 }}>
-            <Work sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
-            <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600 }}>No Opportunities</Typography>
-            <Typography variant="body2" sx={{ color: "#9CA3AF", mb: 2 }}>Create the first internal advancement opening.</Typography>
-            <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}>Create Opening</Button>
-          </Box>
+          <CareerEmptyState
+            icon={<Work />}
+            title="No opportunities"
+            description="Create the first internal advancement opening for PMW employees."
+            action={
+              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}>
+                Create Opening
+              </Button>
+            }
+          />
         )}
         {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && (
-          <Box sx={{ textAlign: "center", py: 8 }}>
-            <SearchIcon sx={{ fontSize: 48, color: "#D1D5DB", mb: 2 }} />
-            <Typography variant="h6" sx={{ color: "#6B7280", fontWeight: 600 }}>No Results Match</Typography>
-            <Typography variant="body2" sx={{ color: "#9CA3AF" }}>Try adjusting your search or filters.</Typography>
-          </Box>
+          <CareerEmptyState
+            icon={<SearchIcon />}
+            title="No results match"
+            description="Try adjusting your search, status, company, type, or sort filter."
+          />
         )}
 
         {/* Table */}
         {!loading && !error && filteredJobs.length > 0 && (
-          <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflowX: "auto" }}>
+          <TableContainer component={Paper} sx={careerTableShellSx}>
             <Table>
               <TableHead>
-                <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+                <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
                   {["Role", "Company", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
@@ -1197,17 +1183,17 @@ export default function AdminJobManagePage() {
                     </TableCell>
                     <TableCell>
                       {job.company ? (
-                        <Chip label={job.company} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: "#F0F7FF", color: "#0078D4", fontWeight: 600 }} />
+                        <Chip label={job.company} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800 }} />
                       ) : (
                         <Typography variant="caption" sx={{ color: "#9CA3AF" }}>Unassigned</Typography>
                       )}
                     </TableCell>
-                    <TableCell><Chip label={job.department} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: "#6264A7", color: "#fff" }} /></TableCell>
+                    <TableCell><Chip label={job.department} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: editorial.pmwPurple, color: "#fff", fontWeight: 800 }} /></TableCell>
                     <TableCell><Typography variant="body2" sx={{ color: "#374151", fontSize: "0.8rem" }}>{job.employmentType}</Typography></TableCell>
                     <TableCell>
                       <Chip label={job.status === "New" ? "Active" : "Closed"} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: job.status === "New" ? "#E6F4EA" : "#F3F4F6", color: job.status === "New" ? "#34A853" : "#6B7280", fontWeight: 600 }} />
                     </TableCell>
-                    <TableCell><Typography variant="body2" sx={{ fontWeight: 600, color: "#0078D4", fontSize: "0.85rem" }}>{job.applicationCount}</Typography></TableCell>
+                    <TableCell><Typography variant="body2" sx={{ fontWeight: 800, color: editorial.pmwBlueDark, fontSize: "0.85rem", fontVariantNumeric: "tabular-nums" }}>{job.applicationCount}</Typography></TableCell>
                     <TableCell>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
                         <IconButton size="small" onClick={() => handleEdit(job)} sx={{ color: "#6B7280" }}><Edit sx={{ fontSize: 18 }} /></IconButton>
