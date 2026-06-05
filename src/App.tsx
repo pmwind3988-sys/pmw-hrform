@@ -9,7 +9,7 @@ import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
 import { createSpClient } from "./utils/sharepointClient";
-import { acquireAccessTokenSilentOrRedirect } from "./utils/authRecovery";
+import { acquireAccessTokenSilentOrRedirect, startFreshReauthentication } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry } from "./types";
@@ -31,6 +31,7 @@ import { DashboardProvider } from "./contexts/DashboardContext";
 const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
 const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
+const AUTH_PROFILE_REAUTH_TIMEOUT_MS = 60000;
 type AuthProfileStatus = "unknown" | "loading" | "ready";
 
 const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
@@ -61,6 +62,11 @@ function isPublicRoutePath(pathname: string): boolean {
 function getAccountKey(account: AccountInfo | null): string {
   if (!account) return "";
   return account.homeAccountId || account.localAccountId || account.username || "";
+}
+
+function isUnauthorizedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b401\b/.test(message) || message.toLowerCase().includes("unauthorized");
 }
 
 function normalizeStatus(status: string | null): string {
@@ -290,6 +296,7 @@ export default function App() {
   const currentPath = location.pathname;
   const isPublicRoute = isPublicRoutePath(currentPath);
   const authProfileAccountRef = useRef("");
+  const authProfileLoadingRef = useRef(false);
   const postAuthRedirectRef = useRef(false);
   const authProfileReady = Boolean(accountKey) && authProfileStatus === "ready" && authProfileAccountRef.current === accountKey;
 
@@ -310,6 +317,7 @@ export default function App() {
     setLoadedConfig(null);
     setMissingConfigs([]);
     setDetailItem(null);
+    authProfileLoadingRef.current = false;
     postAuthRedirectRef.current = false;
   }, [accountKey]);
 
@@ -379,7 +387,7 @@ export default function App() {
   
   useEffect(() => {
     if (pageState !== "loading" || !isAuthenticated || isPublicRoute || !activeAccount) return;
-    if (authProfileStatus === "loading") return;
+    if (authProfileLoadingRef.current) return;
     if (authProfileReady) {
       setPageState("ready");
       return;
@@ -395,10 +403,31 @@ export default function App() {
     }
 
     let cancelled = false;
+    authProfileLoadingRef.current = true;
     setAuthProfileStatus("loading");
     setLoadProgress(0);
     setLoadStatus("Initializing...");
     const spClient = createSpClient(instance, [activeAccount]);
+    const finishProfileLoad = () => {
+      authProfileLoadingRef.current = false;
+      window.clearTimeout(reauthTimeoutId);
+    };
+    const redirectToFreshSignIn = () => {
+      window.clearTimeout(reauthTimeoutId);
+      setLoadStatus("Authentication is taking too long. Redirecting to sign in...");
+      void startFreshReauthentication(instance, loginRequest.scopes, activeAccount).catch((error: unknown) => {
+        if (cancelled) return;
+        finishProfileLoad();
+        setErrorMsg(error instanceof Error ? error.message : "Could not restart sign-in.");
+        setAuthProfileStatus("unknown");
+        setPageState("error");
+      });
+    };
+    const reauthTimeoutId = window.setTimeout(() => {
+      if (!cancelled && authProfileLoadingRef.current) {
+        redirectToFreshSignIn();
+      }
+    }, AUTH_PROFILE_REAUTH_TIMEOUT_MS);
 
     async function fetchData() {
       try {
@@ -495,11 +524,17 @@ export default function App() {
         setLoadProgress(100);
         setLoadStatus("Ready.");
         authProfileAccountRef.current = accountKey;
+        finishProfileLoad();
         setAuthProfileStatus("ready");
         setPageState("ready");
       } catch (err: unknown) {
         if (cancelled) return;
+        if (isUnauthorizedError(err)) {
+          redirectToFreshSignIn();
+          return;
+        }
         const message = err instanceof Error ? err.message : "Unknown error occurred";
+        finishProfileLoad();
         setErrorMsg(message);
         setAuthProfileStatus("unknown");
         setPageState("error");
@@ -509,8 +544,9 @@ export default function App() {
     fetchData();
     return () => {
       cancelled = true;
+      finishProfileLoad();
     };
-  }, [pageState, isAuthenticated, isPublicRoute, activeAccount, authProfileStatus, authProfileReady, instance, accountKey]);
+  }, [pageState, isAuthenticated, isPublicRoute, activeAccount, authProfileReady, instance, accountKey]);
 
   // Navigate to preserved route after successful login.
   useEffect(() => {

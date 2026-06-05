@@ -86,10 +86,20 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
+async function clearCachedAuth(instance: IPublicClientApplication, account?: AccountInfo): Promise<void> {
+  try {
+    instance.setActiveAccount(null);
+    await instance.clearCache({ account: account ?? null });
+  } catch {
+    // If cache cleanup fails, still attempt the interactive sign-in below.
+  }
+}
+
 export async function startReauthentication(
   instance: IPublicClientApplication,
   scopes: string[] = loginRequest.scopes,
   account?: AccountInfo,
+  forceFresh = false,
 ): Promise<never> {
   if (redirectStarted) {
     return new Promise<never>(() => undefined);
@@ -100,10 +110,15 @@ export async function startReauthentication(
   preserveCurrentRoute();
 
   try {
+    if (forceFresh) {
+      await clearCachedAuth(instance, account);
+    }
+
     await instance.loginRedirect({
       scopes,
-      account,
+      account: forceFresh ? undefined : account,
       loginHint: account?.username,
+      prompt: forceFresh ? "login" : undefined,
       redirectStartPage: window.location.href,
     });
   } catch (error) {
@@ -114,6 +129,14 @@ export async function startReauthentication(
   return new Promise<never>(() => undefined);
 }
 
+export async function startFreshReauthentication(
+  instance: IPublicClientApplication,
+  scopes: string[] = loginRequest.scopes,
+  account?: AccountInfo,
+): Promise<never> {
+  return startReauthentication(instance, scopes, account, true);
+}
+
 export async function acquireTokenSilentOrRedirect(
   instance: IPublicClientApplication,
   request: SilentRequest,
@@ -122,7 +145,7 @@ export async function acquireTokenSilentOrRedirect(
     return await withTimeout(instance.acquireTokenSilent(request), SILENT_TOKEN_TIMEOUT_MS);
   } catch (error) {
     if (isStaleAuthError(error)) {
-      return startReauthentication(instance, request.scopes, request.account);
+      return startFreshReauthentication(instance, request.scopes, request.account);
     }
     throw error;
   }
