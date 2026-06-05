@@ -179,7 +179,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                 lineHeight: 0.98,
               }}
             >
-              PMW HR Forms
+              PMW HR Group Portal
             </Typography>
 
             <Typography

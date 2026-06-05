@@ -241,21 +241,6 @@ export default function CareerPortalHeader({
               <Logo size={{ xs: 30, sm: 38 }} />
             </Box>
             <Box sx={{ minWidth: 0, display: { xs: "none", sm: "block" } }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.25, flexWrap: "wrap", display: { sm: "none", md: "flex" } }}>
-                <Chip
-                  label="Internal Career Advancement"
-                  size="small"
-                  sx={{
-                    height: 22,
-                    borderRadius: "8px",
-                    backgroundColor: editorial.yellow,
-                    color: editorial.ink,
-                    border: `1px solid ${editorial.ink}`,
-                    fontWeight: 700,
-                    fontSize: "0.68rem",
-                  }}
-                />
-              </Stack>
               <Typography
                 variant="h5"
                 component="h1"

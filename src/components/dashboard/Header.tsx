@@ -129,7 +129,7 @@ export default function Header({
                 whiteSpace: "nowrap",
               }}
             >
-              PMW HR
+              PMW Group
             </Typography>
             <Typography
               variant="caption"
@@ -143,7 +143,7 @@ export default function Header({
                 display: { xs: "none", sm: "block" },
               }}
             >
-              Forms Portal
+              HR Portal
             </Typography>
           </Stack>
         </Box>
@@ -202,7 +202,7 @@ export default function Header({
               {/* 3. Career portal */}
               <MenuItem onClick={() => { handleMainMenuClose(); navigate("/career-portal"); }} sx={{ py: 1.25, px: 2.5 }}>
                 <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
-                <Typography variant="body2">Career Advancement Portal</Typography>
+                <Typography variant="body2">Internal Hiring Portal</Typography>
               </MenuItem>
 
               {/* 4. Admin items */}

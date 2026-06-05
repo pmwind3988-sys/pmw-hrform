@@ -1207,7 +1207,7 @@ export default function CareersPage() {
   return (
     <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 46%, #F7F5EF 100%)" }}>
       <CareerPortalHeader
-        title="Careers at PMW"
+        title="PMW Careers"
         subtitle="Explore internal openings and track your submitted applications."
         activeSection="opportunities"
         isAdmin={isAdmin}

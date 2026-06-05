@@ -217,7 +217,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                 mb: 2,
               }}
             >
-              PMW HR Forms Portal
+              PMW HR Group Portal
             </Typography>
 
             <Typography
