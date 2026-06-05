@@ -8,7 +8,7 @@ import type { AccountInfo } from "@azure/msal-browser";
 import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
-import { createSpClient } from "./utils/sharepointClient";
+import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect, startFreshReauthentication } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
@@ -19,6 +19,7 @@ import { normalizeLayerStatus } from "./utils/statusConstants";
 import ChoiceScreen from "./components/auth/ChoiceScreen";
 import GuestLanding from "./components/auth/GuestLanding";
 import WrongTenantScreen from "./components/auth/WrongTenantScreen";
+import RestrictedAccessScreen from "./components/auth/RestrictedAccessScreen";
 import LoadingScreen from "./components/auth/LoadingScreen";
 import ErrorScreen from "./components/auth/ErrorScreen";
 import AdminGuard from "./components/auth/AdminGuard";
@@ -28,11 +29,10 @@ import { DashboardProvider } from "./contexts/DashboardContext";
 
 
 
-const ALLOWED_TENANT_ID = import.meta.env.VITE_AZURE_TENANT_ID || "";
 const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
 const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
 const AUTH_PROFILE_REAUTH_TIMEOUT_MS = 60000;
-type AuthProfileStatus = "unknown" | "loading" | "ready";
+type AuthProfileStatus = "unknown" | "loading" | "ready" | "restricted";
 
 const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
 const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboard");
@@ -299,6 +299,7 @@ export default function App() {
   const authProfileLoadingRef = useRef(false);
   const postAuthRedirectRef = useRef(false);
   const authProfileReady = Boolean(accountKey) && authProfileStatus === "ready" && authProfileAccountRef.current === accountKey;
+  const authProfileRestricted = Boolean(accountKey) && authProfileStatus === "restricted" && authProfileAccountRef.current === accountKey;
 
   useEffect(() => {
     if (accounts.length > 0 && !instance.getActiveAccount()) {
@@ -330,7 +331,13 @@ export default function App() {
     // by app pages) to prevent redirecting
     // the user away from their current page.
     if (isAuthenticated && activeAccount) {
-      setPageState(isPublicRoute || authProfileReady ? "ready" : "loading");
+      if (isPublicRoute || authProfileReady) {
+        setPageState("ready");
+      } else if (authProfileRestricted) {
+        setPageState("restricted");
+      } else {
+        setPageState("loading");
+      }
       return;
     }
 
@@ -346,10 +353,12 @@ export default function App() {
     } else {
       setPageState("choice");
     }
-  }, [isAuthenticated, inProgress, activeAccount, isPublicRoute, authProfileReady]);
+  }, [isAuthenticated, inProgress, accountKey, isPublicRoute, authProfileReady, authProfileRestricted]);
 
   useEffect(() => {
     if (!isAuthenticated || inProgress !== "none" || !activeAccount) return;
+
+    const account = activeAccount;
 
     let validating = false;
     const validateActiveSession = () => {
@@ -357,7 +366,7 @@ export default function App() {
       validating = true;
       void acquireAccessTokenSilentOrRedirect(instance, {
         scopes: loginRequest.scopes,
-        account: activeAccount,
+        account,
       })
         .catch(() => {
           // Non-auth token errors are handled by the request that needs the token.
@@ -382,7 +391,7 @@ export default function App() {
       window.removeEventListener("pageshow", validateActiveSession);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isAuthenticated, inProgress, instance, activeAccount]);
+  }, [isAuthenticated, inProgress, instance, accountKey]);
 
   
   useEffect(() => {
@@ -392,22 +401,20 @@ export default function App() {
       setPageState("ready");
       return;
     }
-
-    const email = activeAccount.username || "";
-    const tenantId = activeAccount.tenantId || "";
-
-    if (ALLOWED_TENANT_ID && tenantId !== ALLOWED_TENANT_ID) {
-      setAuthProfileStatus("unknown");
-      setPageState("wrong_tenant");
+    if (authProfileRestricted) {
+      setPageState("restricted");
       return;
     }
+
+    const account = activeAccount;
+    const email = account.username || "";
 
     let cancelled = false;
     authProfileLoadingRef.current = true;
     setAuthProfileStatus("loading");
     setLoadProgress(0);
     setLoadStatus("Initializing...");
-    const spClient = createSpClient(instance, [activeAccount]);
+    const spClient = createSpClient(instance, [account]);
     const finishProfileLoad = () => {
       authProfileLoadingRef.current = false;
       window.clearTimeout(reauthTimeoutId);
@@ -415,7 +422,7 @@ export default function App() {
     const redirectToFreshSignIn = () => {
       window.clearTimeout(reauthTimeoutId);
       setLoadStatus("Authentication is taking too long. Redirecting to sign in...");
-      void startFreshReauthentication(instance, loginRequest.scopes, activeAccount).catch((error: unknown) => {
+      void startFreshReauthentication(instance, loginRequest.scopes, account).catch((error: unknown) => {
         if (cancelled) return;
         finishProfileLoad();
         setErrorMsg(error instanceof Error ? error.message : "Could not restart sign-in.");
@@ -431,9 +438,14 @@ export default function App() {
 
     async function fetchData() {
       try {
+        setLoadStatus("Checking SharePoint site access...");
+        setLoadProgress(10);
+        await spClient.ensureSiteAccess();
+        if (cancelled) return;
+
         // Steps 1-3: These calls are independent, so start them together.
         setLoadStatus("Loading permissions, lists, and configuration...");
-        setLoadProgress(10);
+        setLoadProgress(20);
         const [adminResult, allLists, config] = await Promise.all([
           spClient.isGroupMember(SP_STATIC.adminGroup),
           spClient.discoverLists(),
@@ -533,6 +545,14 @@ export default function App() {
           redirectToFreshSignIn();
           return;
         }
+        if (isSharePointForbiddenError(err)) {
+          finishProfileLoad();
+          setErrorMsg("");
+          authProfileAccountRef.current = accountKey;
+          setAuthProfileStatus("restricted");
+          setPageState("restricted");
+          return;
+        }
         const message = err instanceof Error ? err.message : "Unknown error occurred";
         finishProfileLoad();
         setErrorMsg(message);
@@ -546,7 +566,7 @@ export default function App() {
       cancelled = true;
       finishProfileLoad();
     };
-  }, [pageState, isAuthenticated, isPublicRoute, activeAccount, authProfileReady, instance, accountKey]);
+  }, [pageState, isAuthenticated, isPublicRoute, authProfileReady, authProfileRestricted, instance, accountKey]);
 
   // Navigate to preserved route after successful login.
   useEffect(() => {
@@ -636,6 +656,13 @@ export default function App() {
     setPageState("choice");
   };
 
+  const handleRestrictedRetry = () => {
+    setAuthProfileStatus("unknown");
+    setLoadProgress(0);
+    setLoadStatus("Initializing...");
+    setPageState("loading");
+  };
+
   // Filter + sort logic
   const filteredSubmissions = submissions.filter((item) => {
     if (search) {
@@ -684,6 +711,20 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <WrongTenantScreen userEmail={userEmail} onLogout={handleSignOut} onSwitch={handleSwitchAccount} />
+      </ThemeProvider>
+    );
+  }
+
+  if (!isPublicRoute && pageState === "restricted") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <RestrictedAccessScreen
+          userEmail={userEmail}
+          onRetry={handleRestrictedRetry}
+          onSwitch={handleSwitchAccount}
+          onSignOut={handleSignOut}
+        />
       </ThemeProvider>
     );
   }

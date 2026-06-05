@@ -11,6 +11,7 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 | `choice` | `ChoiceScreen` | MSAL login vs guest decision (persisted to localStorage) |
 | `guest` | `GuestLanding` | Guest mode entry point |
 | `loading` | `LoadingScreen` | Animated progress bar while fetching data |
+| `restricted` | `RestrictedAccessScreen` | Signed-in account lacks SharePoint site access |
 | `wrong_tenant` | `WrongTenantScreen` | Tenant mismatch error with sign-out |
 | `error` | `ErrorScreen` | Generic error with "Try Again" button |
 | `ready` | `AdminGuard` | Route guard for admin pages (not an auth state screen) |
@@ -22,6 +23,7 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 | Auth choice | `ChoiceScreen.tsx` | MSAL vs guest toggle — note: checkbox state is NOT wired (decision always persisted) |
 | Guest landing | `GuestLanding.tsx` | Public user landing page |
 | Loading indicator | `LoadingScreen.tsx` | `LinearProgress` with fade-in animation |
+| SharePoint access restriction | `RestrictedAccessScreen.tsx` | Shows site membership guidance with retry/switch/sign-out |
 | Wrong tenant | `WrongTenantScreen.tsx` | Identity mismatch — shows current vs expected tenant |
 | Error fallback | `ErrorScreen.tsx` | Catch-all error with retry callback |
 | Admin guard | `AdminGuard.tsx` | Wraps admin routes; shows "Access Denied" + 4s redirect to `/` |

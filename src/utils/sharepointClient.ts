@@ -5,6 +5,103 @@ import type {
 } from "../types";
 import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
 
+export class SharePointHttpError extends Error {
+  readonly status: number;
+  readonly statusText: string;
+  readonly action: string;
+
+  constructor(action: string, response: Response) {
+    const statusText = response.statusText ? ` ${response.statusText}` : "";
+    super(`${action}: ${response.status}${statusText}`);
+    this.name = "SharePointHttpError";
+    this.status = response.status;
+    this.statusText = response.statusText;
+    this.action = action;
+  }
+}
+
+export function isSharePointForbiddenError(error: unknown): boolean {
+  return error instanceof SharePointHttpError && error.status === 403;
+}
+
+function createSharePointHttpError(action: string, response: Response): SharePointHttpError {
+  return new SharePointHttpError(action, response);
+}
+
+function getAccountClaims(account: AccountInfo | undefined): Record<string, unknown> {
+  const claims = account?.idTokenClaims;
+  return claims && typeof claims === "object" ? claims as Record<string, unknown> : {};
+}
+
+function normalizeSharePointIdentity(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  const loginName = trimmed.includes("|") ? trimmed.split("|").pop() || trimmed : trimmed;
+  return loginName.replace(/^mailto:/, "");
+}
+
+function getOriginalEmailFromExternalIdentity(identity: string): string {
+  const extMarker = "#ext#@";
+  const markerIndex = identity.indexOf(extMarker);
+  if (markerIndex === -1) return "";
+
+  const externalLocalPart = identity.slice(0, markerIndex);
+  const separatorIndex = externalLocalPart.lastIndexOf("_");
+  if (separatorIndex <= 0) return "";
+
+  const localPart = externalLocalPart.slice(0, separatorIndex);
+  const domain = externalLocalPart.slice(separatorIndex + 1);
+  if (!localPart || !domain.includes(".")) return "";
+
+  return `${localPart}@${domain}`;
+}
+
+function addIdentityCandidate(candidates: Set<string>, value: unknown): void {
+  if (typeof value !== "string") return;
+  const normalized = normalizeSharePointIdentity(value);
+  if (!normalized) return;
+
+  candidates.add(normalized);
+
+  const originalEmail = getOriginalEmailFromExternalIdentity(normalized);
+  if (originalEmail) candidates.add(originalEmail);
+}
+
+function getAccountIdentityCandidates(account: AccountInfo | undefined): Set<string> {
+  const candidates = new Set<string>();
+  const claims = getAccountClaims(account);
+
+  addIdentityCandidate(candidates, account?.username);
+  addIdentityCandidate(candidates, claims.preferred_username);
+  addIdentityCandidate(candidates, claims.email);
+  addIdentityCandidate(candidates, claims.upn);
+
+  return candidates;
+}
+
+function isExternalIdentityMatch(memberIdentity: string, userIdentity: string): boolean {
+  if (!userIdentity.includes("@")) return false;
+  const externalPrefix = `${userIdentity.replace("@", "_")}#ext#`;
+  return memberIdentity.includes(externalPrefix);
+}
+
+function matchesSharePointUser(member: Record<string, unknown>, identities: Set<string>): boolean {
+  const memberValues = [
+    member.Email,
+    member.UserPrincipalName,
+    member.LoginName,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .map(normalizeSharePointIdentity)
+    .filter(Boolean);
+
+  return memberValues.some((memberIdentity) =>
+    [...identities].some((userIdentity) =>
+      memberIdentity === userIdentity || isExternalIdentityMatch(memberIdentity, userIdentity)
+    )
+  );
+}
+
 /** Wraps fetch with an AbortController timeout (default 30s) */
 async function fetchWithTimeout(url: string | URL | Request, options: RequestInit = {}, timeoutMs = 30000): Promise<Response> {
   const controller = new AbortController();
@@ -110,6 +207,20 @@ export function createSpClient(
     return email;
   }
 
+  async function ensureSiteAccess(): Promise<void> {
+    const token = await acquireToken();
+    const response = await fetchWithTimeout(`${SP_SITE_URL}/_api/web?$select=Title`, {
+      headers: {
+        Accept: "application/json;odata=nometadata",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw createSharePointHttpError("Failed to access SharePoint site", response);
+    }
+  }
+
   async function discoverLists(): Promise<DiscoveredList[]> {
     const token = await acquireToken();
     const response = await fetchWithTimeout(
@@ -123,7 +234,7 @@ export function createSpClient(
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to discover lists: ${response.status}`);
+      throw createSharePointHttpError("Failed to discover lists", response);
     }
 
     const data = await response.json();
@@ -278,7 +389,7 @@ export function createSpClient(
 
   async function isGroupMember(groupName: string): Promise<boolean> {
     const token = await acquireToken();
-    const email = getCurrentUserEmail();
+    const identityCandidates = getAccountIdentityCandidates(accounts[0]);
 
     try {
       const response = await fetchWithTimeout(
@@ -295,13 +406,8 @@ export function createSpClient(
 
       const data = await response.json();
       const members: Record<string, unknown>[] = data.value || [];
-      const userEmail = email.toLowerCase();
 
-      return members.some(
-        (m) =>
-          (String(m.Email || "")).toLowerCase() === userEmail ||
-          (String(m.LoginName || "")).toLowerCase().split("|").pop() === userEmail
-      );
+      return members.some((member) => matchesSharePointUser(member, identityCandidates));
     } catch {
       return false;
     }
@@ -545,6 +651,7 @@ export function createSpClient(
   }
 
   return {
+    ensureSiteAccess,
     discoverLists,
     queryList,
     queryListByGuid,

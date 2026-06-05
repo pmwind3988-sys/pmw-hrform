@@ -189,14 +189,6 @@ export default function Header({
                   {userEmail}
                 </Typography>
               </MenuItem>
-              <MenuItem onClick={() => { handleMainMenuClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
-                <Typography variant="body2">Switch account</Typography>
-              </MenuItem>
-              <MenuItem onClick={() => { handleMainMenuClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
-                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
-              </MenuItem>
 
               <Divider sx={{ my: 0.5 }} />
 
@@ -211,10 +203,6 @@ export default function Header({
               <MenuItem onClick={() => { handleMainMenuClose(); navigate("/career-portal"); }} sx={{ py: 1.25, px: 2.5 }}>
                 <WorkIcon sx={{ mr: 1.5, fontSize: 20, color: "#34A853" }} />
                 <Typography variant="body2">Career Advancement Portal</Typography>
-              </MenuItem>
-              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/privacy"); }} sx={{ py: 1.25, px: 2.5 }}>
-                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
-                <Typography variant="body2">Privacy Notice</Typography>
               </MenuItem>
 
               {/* 4. Admin items */}
@@ -245,6 +233,21 @@ export default function Header({
                   </MenuItem>
                 </>
               )}
+
+              <Divider sx={{ my: 0.5 }} />
+
+              <MenuItem onClick={() => { handleMainMenuClose(); navigate("/privacy"); }} sx={{ py: 1.25, px: 2.5 }}>
+                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Privacy Notice</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleMainMenuClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Switch account</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleMainMenuClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
+                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+              </MenuItem>
             </Menu>
           </>
         ) : (
@@ -326,19 +329,6 @@ export default function Header({
                   {userEmail}
                 </Typography>
               </MenuItem>
-              <MenuItem onClick={() => navigateFromMenu("/privacy", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
-                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
-                <Typography variant="body2">Privacy Notice</Typography>
-              </MenuItem>
-              <Divider sx={{ my: 0.5 }} />
-              <MenuItem onClick={() => { handleProfileClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
-                <Typography variant="body2">Switch account</Typography>
-              </MenuItem>
-              <MenuItem onClick={() => { handleProfileClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
-                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
-                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
-              </MenuItem>
               {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
@@ -366,6 +356,19 @@ export default function Header({
                   </MenuItem>
                 </>
               )}
+              <Divider sx={{ my: 0.5 }} />
+              <MenuItem onClick={() => navigateFromMenu("/privacy", handleProfileClose)} sx={{ py: 1.25, px: 2.5 }}>
+                <PrivacyIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Privacy Notice</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleProfileClose(); onSwitch(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <PersonIcon sx={{ mr: 1.5, fontSize: 20, color: "#6B7280" }} />
+                <Typography variant="body2">Switch account</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { handleProfileClose(); onLogout(); }} sx={{ py: 1.25, px: 2.5 }}>
+                <LogoutIcon sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
+                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+              </MenuItem>
             </Menu>
           </>
         )}

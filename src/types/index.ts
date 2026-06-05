@@ -5,6 +5,7 @@ export const PAGE_STATES = {
   guest: "guest",
   loading: "loading",
   ready: "ready",
+  restricted: "restricted",
   wrongTenant: "wrong_tenant",
   error: "error",
 } as const;
@@ -192,6 +193,7 @@ export interface StatusConfigEntry {
 
 // SharePoint client interface
 export interface SharePointClient {
+  ensureSiteAccess(): Promise<void>;
   discoverLists(): Promise<DiscoveredList[]>;
   queryList(listName: string, options?: Record<string, unknown>): Promise<Record<string, unknown>[]>;
   queryListByGuid(listGuid: string, options?: Record<string, unknown>): Promise<Record<string, unknown>[]>;
