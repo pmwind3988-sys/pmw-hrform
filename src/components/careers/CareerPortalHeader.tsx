@@ -1,7 +1,6 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import {
   Box,
-  Chip,
   Container,
   Divider,
   IconButton,
