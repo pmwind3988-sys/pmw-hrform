@@ -156,8 +156,8 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                   width: isMobile ? 88 : 104,
                   height: isMobile ? 88 : 104,
                   borderRadius: "50%",
-                background: editorial.blueWash,
-                border: `1px solid ${editorial.border}`,
+                  background: editorial.blueWash,
+                  border: `1px solid ${editorial.border}`,
                   zIndex: -1,
                 },
               }}
@@ -179,7 +179,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                 lineHeight: 0.98,
               }}
             >
-              PMW HR Group Portal
+              PMW Group HR Portal
             </Typography>
 
             <Typography
@@ -193,7 +193,7 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                 fontSize: "1rem",
               }}
             >
-              Sign in with your Microsoft 365 account to access your submission history and track approval status.
+              Sign in with your Microsoft 365 account to access your submission history.
             </Typography>
 
             <Stack spacing={2.5} sx={{ width: "100%" }}>
@@ -240,39 +240,15 @@ export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
                     Remember my choice on this device
                   </Typography>
                 }
-                sx={{ alignSelf: "flex-start", ml: 0.5 }}
+                sx={{
+                  width: "100%",
+                  justifyContent: "center",
+                  mx: "auto",
+                }}
               />
 
               <Divider>
-                <Typography variant="body2" sx={{ color: "#9CA3AF", fontSize: "0.75rem" }}>
-                  or
-                </Typography>
               </Divider>
-
-              <Button
-                variant="outlined"
-                fullWidth
-                size="large"
-                startIcon={<PersonIcon />}
-                onClick={onGuest}
-                sx={{
-                  borderColor: editorial.black,
-                  color: editorial.black,
-                  borderRadius: 0,
-                  py: 1.75,
-                  fontSize: "1rem",
-                  fontWeight: 500,
-                  borderWidth: "1.5px",
-                  transition: "background-color 0.2s ease, border-color 0.2s ease",
-                  "&:hover": {
-                    borderColor: editorial.black,
-                    backgroundColor: editorial.yellow,
-                    color: editorial.black,
-                  },
-                }}
-              >
-                Continue as Guest
-              </Button>
             </Stack>
 
             <Typography
