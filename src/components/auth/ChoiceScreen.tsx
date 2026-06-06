@@ -12,7 +12,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Login as LoginIcon, Person as PersonIcon } from "@mui/icons-material";
+import { Login as LoginIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 import { editorial, editorialShadow } from "../../theme/editorial";
@@ -22,7 +22,7 @@ interface ChoiceScreenProps {
   onGuest: () => void;
 }
 
-export default function ChoiceScreen({ onLogin, onGuest }: ChoiceScreenProps) {
+export default function ChoiceScreen({ onLogin }: ChoiceScreenProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
