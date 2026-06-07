@@ -393,7 +393,7 @@ export function createSpClient(
 
     try {
       const response = await fetchWithTimeout(
-        `${SP_SITE_URL}/_api/web/sitegroups/getByName('${encodeURIComponent(groupName)}')/users?$select=LoginName,Email`,
+        `${SP_SITE_URL}/_api/web/sitegroups/getByName('${encodeURIComponent(groupName)}')/users?$select=LoginName,Email,UserPrincipalName`,
         {
           headers: {
             Accept: "application/json;odata=nometadata",

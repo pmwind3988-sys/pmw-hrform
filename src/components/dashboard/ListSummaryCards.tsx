@@ -15,6 +15,7 @@ interface ListSummaryCardsProps {
   visibleLists: DiscoveredList[];
   listMetaMap: Record<string, ListMetaEntry>;
   isAdmin: boolean;
+  canUseFormBuilder: boolean;
   onEditForm: (listTitle: string) => void;
 }
 
@@ -23,6 +24,7 @@ export default function ListSummaryCards({
   visibleLists,
   listMetaMap,
   isAdmin,
+  canUseFormBuilder,
   onEditForm,
 }: ListSummaryCardsProps) {
   return (
@@ -64,7 +66,7 @@ export default function ListSummaryCards({
                 border: `1px solid ${editorial.border}`,
                 boxShadow: "none",
                 p: { xs: 2, sm: 2.5 },
-                pt: isAdmin ? { xs: 2.5, sm: 3 } : { xs: 2, sm: 2.5 },
+                pt: canUseFormBuilder ? { xs: 2.5, sm: 3 } : { xs: 2, sm: 2.5 },
                 position: "relative",
                 transition: "box-shadow 0.2s ease, border-color 0.2s ease",
                 "&:hover": {
@@ -99,7 +101,7 @@ export default function ListSummaryCards({
                     {meta.category}
                   </Typography>
                 </Box>
-                {isAdmin && (
+                {canUseFormBuilder && (
                   <Tooltip title={`Edit ${list.title}`}>
                     <IconButton
                       aria-label={`Edit ${list.title}`}
@@ -149,7 +151,7 @@ export default function ListSummaryCards({
               </Typography>
 
               {count > 0 ? (
-                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center", mb: isAdmin ? 2 : 0 }}>
+                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center", mb: canUseFormBuilder ? 2 : 0 }}>
                   <Box
                     sx={{
                       display: "flex",
@@ -193,13 +195,13 @@ export default function ListSummaryCards({
               ) : (
                 <Typography
                   variant="body2"
-                  sx={{ color: editorial.muted, fontStyle: "italic", mb: isAdmin ? 2 : 0, textAlign: "center" }}
+                  sx={{ color: editorial.muted, fontStyle: "italic", mb: canUseFormBuilder ? 2 : 0, textAlign: "center" }}
                 >
                   No submissions
                 </Typography>
               )}
 
-              {!isAdmin && count > 0 && (
+              {!isAdmin && !canUseFormBuilder && count > 0 && (
                 <Box
                   sx={{
                     display: "flex",

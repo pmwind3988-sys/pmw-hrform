@@ -1,6 +1,6 @@
 # AGENTS.md — src/components/builder/
 
-**Scope:** Custom drag-drop form builder (admin-only). NOT SurveyJS Creator — bespoke UI over `survey-react-ui`.
+**Scope:** Custom drag-drop form builder (Form Builder Superuser-only). NOT SurveyJS Creator — bespoke UI over `survey-react-ui`.
 
 ## WHERE TO LOOK
 | Task | File | Notes |
@@ -22,7 +22,7 @@
 
 ## Builder Architecture
 ```
-AdminFormBuilder.tsx (page — route: /admin/builder)
+AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + superuser)
   ├── FormLibrary (sidebar — fetches from Master Form SP list)
   ├── FormBuilder.tsx (canvas — react-dnd drag-drop)
   │     ├── Palette (question types sidebar)

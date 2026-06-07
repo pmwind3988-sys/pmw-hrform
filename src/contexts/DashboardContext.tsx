@@ -4,6 +4,7 @@ import type { Submission, DiscoveredList, ListMetaEntry } from "../types";
 export interface DashboardContextValue {
   userEmail: string;
   isAdmin: boolean;
+  canUseFormBuilder: boolean;
   submissions: Submission[];
   visibleLists: DiscoveredList[];
   listMetaMap: Record<string, ListMetaEntry>;

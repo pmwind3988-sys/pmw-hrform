@@ -71,6 +71,7 @@ export default function AdminHomePage() {
   const {
     userEmail,
     isAdmin,
+    canUseFormBuilder,
     submissions,
     visibleLists,
     listMetaMap,
@@ -99,6 +100,7 @@ export default function AdminHomePage() {
       <Header
         userEmail={userEmail}
         isAdmin={isAdmin}
+        canUseFormBuilder={canUseFormBuilder}
         onLogout={onSignOut}
         onSwitch={onSwitchAccount}
         onOpenBuilder={onOpenBuilder}
@@ -152,7 +154,9 @@ export default function AdminHomePage() {
               }}
             >
               {isAdmin
-                ? "Manage HR forms, review submissions, monitor approval workflows, and maintain form configurations."
+                ? canUseFormBuilder
+                  ? "Manage HR forms, review submissions, monitor approval workflows, and maintain form configurations."
+                  : "Review submissions, monitor approval workflows, and manage HR portal operations."
                 : "Submit HR forms, track approval status, and access your submission history."}
             </Typography>
           </Box>
@@ -196,6 +200,7 @@ export default function AdminHomePage() {
               visibleLists={visibleLists}
               listMetaMap={listMetaMap}
               isAdmin={isAdmin}
+              canUseFormBuilder={canUseFormBuilder}
               onEditForm={onEditForm}
             />
           </Box>

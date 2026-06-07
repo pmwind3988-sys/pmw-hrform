@@ -21,10 +21,11 @@ import theme from "../../theme";
 
 interface AdminGuardProps {
   isAdmin: boolean;
+  restrictedTo?: string;
   children: React.ReactNode;
 }
 
-export default function AdminGuard({ isAdmin, children }: AdminGuardProps) {
+export default function AdminGuard({ isAdmin, restrictedTo = "HR Form Owners", children }: AdminGuardProps) {
   const navigate = useNavigate();
   const [showDenied, setShowDenied] = useState(false);
   const [showRedirect, setShowRedirect] = useState(false);
@@ -128,7 +129,7 @@ export default function AdminGuard({ isAdmin, children }: AdminGuardProps) {
             variant="body2"
             sx={{ color: "#9CA3AF", mb: 4, lineHeight: 1.5 }}
           >
-            This area is restricted to HR Form Owners. You&apos;ll be redirected
+            This area is restricted to {restrictedTo}. You&apos;ll be redirected
             to the dashboard shortly.
           </Typography>
 

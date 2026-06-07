@@ -6,7 +6,7 @@
 | Task | File | Notes |
 |------|------|-------|
 | Admin dashboard | `AdminHomePage.tsx` | Route `/adminhomepage` and catch-all. Props: ~25 from `App.tsx` (prop-drilling). |
-| Form builder page | `AdminFormBuilder.tsx` | Routes `/admin/builder[/:formTitle]`. Hosts `FormBuilder` + `FormLibrary` + sidebar with Layers/Meta/Versions/Log/Publish tabs. Manages `showBanner`, `meta`, `layerConfig`, publish flow. |
+| Form builder page | `AdminFormBuilder.tsx` | Routes `/admin/builder[/:formTitle]`. Form Builder Superuser-only: route guard and page backup check require HR Forms Owner + `superuser`. Hosts `FormBuilder` + `FormLibrary` + sidebar with Layers/Meta/Versions/Log/Publish tabs. Manages `showBanner`, `meta`, `layerConfig`, publish flow. |
 | Public form renderer | `DynamicFormPage.tsx` | Route `/form/:formId`. Auth gate bypassed for public forms. SurveyJS model + theme + submission handler with LayerConfig-based layer resolution. Uses `onCompleting` (prevents auto-complete) + `useEffect` on `submitStatus` to trigger `doSubmitForm()`. `onComplete` is intentionally NOT registered. |
 | Evaluator interface | `EvaluationPage.tsx` | Routes `/eval/:token` (public) and `/eval/:formSlug/:responseId/:layerNumber` (365). Auth gate, layer action (approve/signature/checkbox/reject/confirm). |
 | Privacy notice | `PrivacyNoticePage.tsx` | Route `/privacy`. Public page with PDPA privacy notice content. |

@@ -7,7 +7,7 @@
 |------|------|-------|
 | SP REST client (dashboard) | `sharepointClient.ts` | Factory `createSpClient(instance, accounts)` — CRUD, digest cache, `isGroupMember`, list discovery, `resolveUserEmails` |
 | SP REST client (builder) | `formBuilderSP.ts` | **Standalone** — raw `token: string` param, NOT `createSpClient`; ~1470 lines, 43 exports |
-| Config loader | `spConfig.ts` | `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`, `legacyToLayerConfig()` migration helper |
+| Config loader | `spConfig.ts` | `SP_STATIC` group names, `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`, `legacyToLayerConfig()` migration helper |
 | Form logic | `FormBuilderEngine.ts` | Pure functions: 57 question types, validation, survey JSON builder, versioning |
 | Status constants | `statusConstants.ts` | `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`, `layerColumn()` helper |
 | Custom widget | `DynamicMatrix.tsx` | Custom SurveyJS widget for matrix questions + `rowsToHtml()` matrix↔HTML conversion |
@@ -34,6 +34,7 @@ Builder path:
 
 ## Conventions
 - `sharepointClient.ts`: returns `SharePointClient` interface; MSAL-aware
+- `spConfig.ts`: `SP_STATIC.adminGroup` is broad HR owner access; `SP_STATIC.formBuilderSuperuserGroup` is the narrower builder-access group.
 - `formBuilderSP.ts`: standalone functions; no MSAL dependency
 - `FormBuilderEngine.ts`: pure logic, no side effects, no React imports
 - **OData**: `odata=nometadata` — responses use `data.value` not `data.d.results`

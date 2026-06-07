@@ -26,7 +26,7 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 | SharePoint access restriction | `RestrictedAccessScreen.tsx` | Shows site membership guidance with retry/switch/sign-out |
 | Wrong tenant | `WrongTenantScreen.tsx` | Identity mismatch — shows current vs expected tenant |
 | Error fallback | `ErrorScreen.tsx` | Catch-all error with retry callback |
-| Admin guard | `AdminGuard.tsx` | Wraps admin routes; shows "Access Denied" + 4s redirect to `/` |
+| Admin guard | `AdminGuard.tsx` | Wraps protected admin-style routes; shows "Access Denied" + 4s redirect to `/user/dashboard`. Builder routes pass a superuser restriction label. |
 
 ## Conventions
 
@@ -39,5 +39,5 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 ## Anti-Patterns
 
 - `ChoiceScreen.tsx` has `console.log("Choice clicked")` — remove
-- `AdminGuard.tsx` receives `isAdmin` as prop from `App.tsx` rather than checking group membership itself (defense-in-depth backup only — real check is in `ApprovalDashboard` and other pages)
+- `AdminGuard.tsx` receives the already-computed permission flag from `App.tsx` rather than checking group membership itself. Builder routes pass `canUseFormBuilder`; other admin routes pass `isAdmin`.
 - `WrongTenantScreen.tsx` exposes `accounts[0]?.tenantId` (the current tenant) — this is visible to the user; acceptable for debugging

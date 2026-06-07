@@ -335,6 +335,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState("");
   const userEmail = activeAccount?.username || "";
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canUseFormBuilder, setCanUseFormBuilder] = useState(false);
   const [authProfileStatus, setAuthProfileStatus] = useState<AuthProfileStatus>("unknown");
 
   // Dashboard data
@@ -375,6 +376,7 @@ export default function App() {
     authProfileAccountRef.current = accountKey;
     setAuthProfileStatus("unknown");
     setIsAdmin(false);
+    setCanUseFormBuilder(false);
     setSubmissions([]);
     setVisibleLists([]);
     setLoadedConfig(null);
@@ -510,11 +512,13 @@ export default function App() {
 
         setLoadStatus("Loading permissions and form configuration...");
         setLoadProgress(20);
-        const [adminResult, config] = await Promise.all([
+        const [adminResult, builderSuperuserResult, config] = await Promise.all([
           spClient.isGroupMember(SP_STATIC.adminGroup),
+          spClient.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
           loadConfig(spClient),
         ]);
         if (cancelled) return;
+        const builderAccessResult = adminResult && builderSuperuserResult;
 
         let allLists: DiscoveredList[];
         try {
@@ -529,6 +533,7 @@ export default function App() {
         if (cancelled) return;
 
         setIsAdmin(adminResult);
+        setCanUseFormBuilder(builderAccessResult);
         setLoadedConfig(config);
         setLoadProgress(50);
 
@@ -856,6 +861,7 @@ export default function App() {
       <DashboardProvider
         userEmail={userEmail}
         isAdmin={isAdmin}
+        canUseFormBuilder={canUseFormBuilder}
         submissions={submissions}
         visibleLists={visibleLists}
         listMetaMap={listMetaMap}
@@ -934,7 +940,7 @@ export default function App() {
           <Route
             path="/admin/builder"
             element={
-              <AdminGuard isAdmin={isAdmin}>
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh" }}>
                     <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
@@ -946,7 +952,7 @@ export default function App() {
           <Route
             path="/admin/builder/:formTitle"
             element={
-              <AdminGuard isAdmin={isAdmin}>
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh" }}>
                     <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />

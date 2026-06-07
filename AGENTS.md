@@ -62,6 +62,7 @@ Used by: `SignaturePad` (`src/utils/SignaturePad.tsx`) and `DynamicMatrix` (`src
 - Auth state machine in `App.tsx`: `checking → loading → ready/wrong_tenant/error` or `guest/choice`.
 - Auth decision persisted in `localStorage` (`pmw_hr_auth_decision`). Post-login redirect in `sessionStorage` (`pmw_post_login_redirect`).
 - Admin detection via SharePoint group `_HR_ Forms Owners`.
+- Form builder access is narrower: user must be an HR Forms Owner **and** a member of SharePoint group `superuser`. Only this subset can see or open `/admin/builder[/:formTitle]`.
 - `handleRedirectPromise()` uses **3s timeout** (`Promise.race`) — fix for hung redirects in private/incognito. DO NOT remove.
 - Clears `sessionStorage` keys `msal.interaction.status` + `msal.login.error` before `loginRedirect()` — DO NOT remove.
 - Required env vars validated at startup in `main.tsx`: `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_SP_SITE_URL`.
@@ -146,7 +147,7 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 | Route | Component | File |
 |---|---|---|
 | `/form/:formId` | `DynamicFormPage` | `src/pages/DynamicFormPage.tsx` |
-| `/admin/builder[/:formTitle]` | `AdminFormBuilder` | `src/pages/AdminFormBuilder.tsx` |
+| `/admin/builder[/:formTitle]` | `AdminFormBuilder` (superuser-only) | `src/pages/AdminFormBuilder.tsx` |
 | `/admin/approvals` | `ApprovalDashboard` | `src/components/builder/ApprovalDashboard.tsx` |
 | `/admin/responses/:formTitle` | `ResponseViewer` | `src/components/builder/ResponseViewer.tsx` |
 | `/admin/dashboard` | admin dashboard (AdminGuard) | `AdminHomePage` (via `adminDashboardInner`) |
@@ -167,7 +168,7 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 
 ## Builder Architecture (summary)
 ```
-AdminFormBuilder.tsx (page — /admin/builder)
+AdminFormBuilder.tsx (page — /admin/builder, Form Builder Superuser-only)
   ├── FormLibrary (sidebar)
   ├── FormBuilder.tsx (canvas — react-dnd drag-drop)
   │     ├── Palette (57 question types)

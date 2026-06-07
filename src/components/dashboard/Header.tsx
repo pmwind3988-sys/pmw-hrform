@@ -36,6 +36,7 @@ import { editorial, editorialHairline } from "../../theme/editorial";
 interface HeaderProps {
   userEmail: string;
   isAdmin: boolean;
+  canUseFormBuilder: boolean;
   onLogout: () => void;
   onSwitch: () => void;
   onOpenBuilder?: () => void;
@@ -44,6 +45,7 @@ interface HeaderProps {
 export default function Header({
   userEmail,
   isAdmin,
+  canUseFormBuilder,
   onLogout,
   onSwitch,
   onOpenBuilder,
@@ -226,32 +228,36 @@ export default function Header({
                 <Typography variant="body2">Internal Hiring Portal</Typography>
               </MenuItem>
 
-              {/* 4. Admin items */}
-              {isAdmin && (
+              {/* 4. Privileged items */}
+              {(isAdmin || canUseFormBuilder) && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  {onOpenBuilder && (
+                  {canUseFormBuilder && onOpenBuilder && (
                     <MenuItem onClick={() => { handleMainMenuClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
                       <SettingsIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleMainMenuClose)} sx={menuItemSx}>
-                    <ApplicationsIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                    <Typography variant="body2">Career Applications</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleMainMenuClose)} sx={menuItemSx}>
-                    <EditIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
-                    <Typography variant="body2">Manage Openings</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleMainMenuClose)} sx={menuItemSx}>
-                    <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
-                    <Typography variant="body2">Manage Cards</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
-                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                    <Typography variant="body2">Dashboard Background</Typography>
-                  </MenuItem>
+                  {isAdmin && (
+                    <>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleMainMenuClose)} sx={menuItemSx}>
+                        <ApplicationsIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                        <Typography variant="body2">Career Applications</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleMainMenuClose)} sx={menuItemSx}>
+                        <EditIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                        <Typography variant="body2">Manage Openings</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleMainMenuClose)} sx={menuItemSx}>
+                        <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
+                        <Typography variant="body2">Manage Cards</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
+                        <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                        <Typography variant="body2">Dashboard Background</Typography>
+                      </MenuItem>
+                    </>
+                  )}
                 </>
               )}
 
@@ -351,31 +357,35 @@ export default function Header({
                   {userEmail}
                 </Typography>
               </MenuItem>
-              {isAdmin && (
+              {(isAdmin || canUseFormBuilder) && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  {onOpenBuilder && (
+                  {canUseFormBuilder && onOpenBuilder && (
                     <MenuItem onClick={() => { handleProfileClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
                       <SettingsIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleProfileClose)} sx={menuItemSx}>
-                    <ApplicationsIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                    <Typography variant="body2">Career Applications</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleProfileClose)} sx={menuItemSx}>
-                    <EditIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
-                    <Typography variant="body2">Manage Openings</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleProfileClose)} sx={menuItemSx}>
-                    <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
-                    <Typography variant="body2">Manage Cards</Typography>
-                  </MenuItem>
-                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>
-                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                    <Typography variant="body2">Dashboard Background</Typography>
-                  </MenuItem>
+                  {isAdmin && (
+                    <>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleProfileClose)} sx={menuItemSx}>
+                        <ApplicationsIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                        <Typography variant="body2">Career Applications</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/career/opportunities", handleProfileClose)} sx={menuItemSx}>
+                        <EditIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                        <Typography variant="body2">Manage Openings</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleProfileClose)} sx={menuItemSx}>
+                        <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
+                        <Typography variant="body2">Manage Cards</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>
+                        <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                        <Typography variant="body2">Dashboard Background</Typography>
+                      </MenuItem>
+                    </>
+                  )}
                 </>
               )}
               <Divider sx={{ my: 0.5 }} />

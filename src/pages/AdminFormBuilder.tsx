@@ -229,7 +229,7 @@ export default function AdminFormBuilder() {
 
   useEffect(() => {
     if (accessDenied) {
-      showToast("Access denied — redirecting to dashboard. You need HR Form Owner permissions.", "err");
+      showToast("Access denied — redirecting to dashboard. You need Form Builder Superuser permissions.", "err");
       setAccessDenied(false);
     }
   }, [accessDenied, showToast]);
@@ -324,8 +324,12 @@ export default function AdminFormBuilder() {
       navigate("/user/dashboard");
       return;
     }
-    createSpClient(instance, accounts).isGroupMember(SP_STATIC.adminGroup).then(async admin => {
-      if (!admin) {
+    const spClient = createSpClient(instance, accounts);
+    Promise.all([
+      spClient.isGroupMember(SP_STATIC.adminGroup),
+      spClient.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
+    ]).then(async ([admin, builderSuperuser]) => {
+      if (!admin || !builderSuperuser) {
         setAccessDenied(true);
         setTimeout(() => navigate("/user/dashboard"), 200);
         return;

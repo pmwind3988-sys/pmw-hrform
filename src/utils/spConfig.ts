@@ -1,6 +1,7 @@
 import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient, LayerConfig } from "../types";
 
 const ADMIN_GROUP = "_HR_ Forms Owners";
+const FORM_BUILDER_SUPERUSER_GROUP = "superuser";
 
 const EXCLUDE_ALWAYS = [
   "Style Library",
@@ -20,6 +21,7 @@ const EXCLUDE_ALWAYS = [
 
 export const SP_STATIC = {
   adminGroup: ADMIN_GROUP,
+  formBuilderSuperuserGroup: FORM_BUILDER_SUPERUSER_GROUP,
   statusColumn: null,
   excludeAlways: [...EXCLUDE_ALWAYS],
 } as const;
