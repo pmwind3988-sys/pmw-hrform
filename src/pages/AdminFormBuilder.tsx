@@ -39,6 +39,9 @@ import CloseIcon from "@mui/icons-material/Close";
 import PublicIcon from "@mui/icons-material/Public";
 import BlockIcon from "@mui/icons-material/Block";
 import LockIcon from "@mui/icons-material/Lock";
+import BusinessIcon from "@mui/icons-material/Business";
+import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import {
   slugify,
@@ -62,14 +65,25 @@ import {
 } from "../utils/formBuilderSP";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+const DEFAULT_COMPANIES = [
+  "PMW INDUSTRIES SDN BHD",
+  "PMW CONCRETE INDUSTRIES SDN BHD",
+  "PMW LIGHTING INDUSTRIES SDN BHD",
+  "PMW WINABUMI SDN BHD",
+].join("\n");
+const COMPANY_FIELD_NAME = "company";
+const COMPANY_FIELD_LABEL = "Company";
+type MetaTextKey = "formTitle" | "formId" | "formVersion" | "slug" | "isoStandards" | "companies" | "logoUrl";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const G = `*{box-sizing:border-box;margin:0;padding:0;font-family:var(--pmw-font-main)!important}body{font-family:var(--pmw-font-main);background:${C.offWhite};color:${C.textPrimary}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:10px}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid ${C.purple};outline-offset:2px}
 @media(max-width:860px){.afb-header{height:auto!important;min-height:52px;align-items:flex-start!important;flex-wrap:wrap;padding:8px 12px!important;gap:8px}.afb-header-left{width:100%;overflow-x:auto;padding-bottom:2px}.afb-header-actions{width:100%;overflow-x:auto;justify-content:flex-start!important;padding-bottom:2px}.afb-header-title{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-@media(max-width:520px){.afb-header-left{gap:8px!important}.afb-header-title{max-width:150px}.afb-header-actions button{flex:0 0 auto}}`;
+@media(max-width:520px){.afb-header-left{gap:8px!important}.afb-header-title{max-width:150px}.afb-header-actions button{flex:0 0 auto}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}}`;
 const inp = {
   width: "100%",
   height: 34,
@@ -114,7 +128,7 @@ function TextInput({ value, onChange, placeholder, error, disabled, ...rest }: {
           ...inp,
           borderColor: error ? C.red : f ? C.purple : C.border,
           boxShadow: f ? `0 0 0 3px ${error ? C.redPale : C.purplePale}` : "none",
-          transition: "all .15s",
+          transition: "border-color .15s, box-shadow .15s, opacity .15s",
           opacity: disabled ? 0.6 : 1,
           cursor: disabled ? "not-allowed" : "text",
         }}
@@ -145,14 +159,14 @@ function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange
       <div
         onClick={() => onChange(!checked)}
         style={{
-          width: 36, height: 20, borderRadius: 10, flexShrink: 0,
+          width: 40, height: 22, borderRadius: 999, flexShrink: 0,
           background: checked ? C.purple : "#D1D5DB", position: "relative",
-          transition: "background 0.2s", cursor: "pointer",
+          transition: "background-color 0.2s", cursor: "pointer",
         }}
       >
         <div style={{
-          position: "absolute", top: 3, left: checked ? 19 : 3,
-          width: 14, height: 14, borderRadius: "50%", background: C.white,
+          position: "absolute", top: 3, left: checked ? 21 : 3,
+          width: 16, height: 16, borderRadius: "50%", background: C.white,
           transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
         }} />
       </div>
@@ -181,12 +195,13 @@ export default function AdminFormBuilder() {
     formVersion: "1.0",
     slug: "",
     isoStandards: "ISO 9001 · ISO 14001 · ISO 45001",
-    companies: "PMW INDUSTRIES SDN BHD\nPMW CONCRETE INDUSTRIES SDN BHD\nPMW LIGHTING INDUSTRIES SDN BHD\nPMW WINABUMI SDN BHD",
+    companies: DEFAULT_COMPANIES,
+    companyChoiceEnabled: false,
     logoUrl: "",
   });
   const [showBanner, setShowBanner] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
-  const setM = useCallback((k: string, v: string) => setMeta(m => ({ ...m, [k]: v })), []);
+  const setM = useCallback((k: MetaTextKey, v: string) => setMeta(m => ({ ...m, [k]: v })), []);
   const [slugError, setSlugError] = useState("");
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugLocked, setSlugLocked] = useState(false);
@@ -229,7 +244,7 @@ export default function AdminFormBuilder() {
 
   useEffect(() => {
     if (accessDenied) {
-      showToast("Access denied — redirecting to dashboard. You need Form Builder Superuser permissions.", "err");
+      showToast("Access denied. Redirecting to dashboard. You need Form Builder Superuser permissions.", "err");
       setAccessDenied(false);
     }
   }, [accessDenied, showToast]);
@@ -349,7 +364,7 @@ export default function AdminFormBuilder() {
         getAllFormConfigs(token).then(setAllForms).catch(e => showToast(`Could not load forms: ${e.message}`, "err"));
       } catch (e) {
         console.error("[AFB] token:", e);
-        showToast("Authentication error — please refresh.", "err");
+        showToast("Authentication error. Please refresh.", "err");
       }
     }).catch(e => {
       console.warn("[AFB] init effect error:", e);
@@ -377,6 +392,7 @@ export default function AdminFormBuilder() {
         return;
       }
       const loaded = (data.surveyJson || data) as SurveyJson;
+      const loadedMeta = (data.meta as Record<string, unknown>) || {};
       setInitialJson(loaded);
       prevSurveyRef.current = loaded;
       setViewingOld(null);
@@ -386,7 +402,8 @@ export default function AdminFormBuilder() {
         formVersion: (c.CurrentVersion as string) || "1.0",
         slug: (c.Slug as string) || slugify(c.Title as string),
         isoStandards: (data.meta as Record<string, unknown>)?.isoStandards as string || "ISO 9001 · ISO 14001 · ISO 45001",
-        companies: (data.meta as Record<string, unknown>)?.companies as string || "PMW INDUSTRIES SDN BHD\nPMW CONCRETE INDUSTRIES SDN BHD\nPMW LIGHTING INDUSTRIES SDN BHD\nPMW WINABUMI SDN BHD",
+        companies: loadedMeta.companies as string || DEFAULT_COMPANIES,
+        companyChoiceEnabled: loadedMeta.companyChoiceEnabled === true,
         logoUrl: ((data.meta as Record<string, unknown>)?.logoUrl as string) || "",
       });
       setShowBanner((data.meta as Record<string, unknown>)?.showBanner !== false);
@@ -454,7 +471,8 @@ export default function AdminFormBuilder() {
       formVersion: "1.0",
       slug: "",
       isoStandards: "ISO 9001 · ISO 14001 · ISO 45001",
-      companies: "PMW INDUSTRIES SDN BHD\nPMW CONCRETE INDUSTRIES SDN BHD\nPMW LIGHTING INDUSTRIES SDN BHD\nPMW WINABUMI SDN BHD",
+      companies: DEFAULT_COMPANIES,
+      companyChoiceEnabled: false,
       logoUrl: "",
     });
     setNumLayers(0);
@@ -468,6 +486,12 @@ export default function AdminFormBuilder() {
   const handleSaveDraft = useCallback(async () => {
     if (!meta.formTitle.trim()) {
       showToast("Form title required.", "err");
+      setSidebarTab("meta");
+      return;
+    }
+    const draftCompanyOptions = meta.companies.split(/\r?\n/).map(c => c.trim()).filter(Boolean);
+    if (meta.companyChoiceEnabled && draftCompanyOptions.length < 2) {
+      showToast("Add at least two companies before saving the required Company selector.", "err");
       setSidebarTab("meta");
       return;
     }
@@ -506,7 +530,7 @@ export default function AdminFormBuilder() {
         slug: meta.slug,
         version,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: meta.companies, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
+        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
         changedBy: userEmail,
         layerConfig: layerConfig,
       });
@@ -540,7 +564,7 @@ export default function AdminFormBuilder() {
         deleteConfirm.Id || "",
       );
       showToast(
-        `Deleted "${deleteConfirm.Title}" — ${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed.`,
+        `Deleted "${deleteConfirm.Title}". ${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed.`,
         "ok"
       );
       if (meta.formTitle === deleteConfirm.Title) {
@@ -570,7 +594,7 @@ export default function AdminFormBuilder() {
       }
       parts.push(`${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed`);
       showToast(
-        `Hard-deleted "${hardDeleteConfirm.Title}" — ${parts.join("; ")}.`,
+        `Hard-deleted "${hardDeleteConfirm.Title}". ${parts.join("; ")}.`,
         "ok"
       );
       if (meta.formTitle === hardDeleteConfirm.Title) {
@@ -616,6 +640,12 @@ export default function AdminFormBuilder() {
     }
     if (!meta.formId.trim()) {
       showToast("Form ID required.", "err");
+      setSidebarTab("meta");
+      return;
+    }
+    const publishCompanyOptions = meta.companies.split(/\r?\n/).map(c => c.trim()).filter(Boolean);
+    if (meta.companyChoiceEnabled && publishCompanyOptions.length < 2) {
+      showToast("Add at least two companies before publishing the required Company selector.", "err");
       setSidebarTab("meta");
       return;
     }
@@ -707,7 +737,7 @@ export default function AdminFormBuilder() {
         slug: meta.slug,
         version,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: meta.companies, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
+        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
         changedBy: userEmail,
         layerConfig: layerConfig,
       });
@@ -737,7 +767,7 @@ export default function AdminFormBuilder() {
           formTitle: title,
           eventType: "VERSION_BUMPED",
           changedBy: userEmail,
-          summary: `v${originalVersion} → v${version}`,
+          summary: `v${originalVersion} to v${version}`,
           before: { version: originalVersion },
           after: { version },
         });
@@ -750,7 +780,7 @@ export default function AdminFormBuilder() {
           after: { version, slug: meta.slug },
         });
       }
-        pLog(`✓ "${title}" v${version} live at /form/${meta.slug}`, "ok");
+        pLog(`"${title}" v${version} live at /form/${meta.slug}`, "ok");
       setProvOk(true);
       prevSurveyRef.current = usedJson;
       setOriginalVersion(version);
@@ -776,7 +806,7 @@ export default function AdminFormBuilder() {
   }
 
   const sidebarTabs = [
-    { id: "meta", label: "Meta", icon: <DescriptionIcon style={{ fontSize: 14 }} /> },
+    { id: "meta", label: "Form Setup", icon: <DescriptionIcon style={{ fontSize: 14 }} /> },
     { id: "layers", label: "Layers", icon: <LayersIcon style={{ fontSize: 14 }} /> },
     { id: "version", label: "Versions", icon: <HistoryIcon style={{ fontSize: 14 }} /> },
     { id: "log", label: "Log", icon: <ReceiptLongIcon style={{ fontSize: 14 }} /> },
@@ -788,6 +818,19 @@ export default function AdminFormBuilder() {
     : initialJson
       ? `edit_${meta.formTitle}_${JSON.stringify(initialJson).slice(0, 60)}`
       : "new";
+  const companyOptions = meta.companies
+    .split(/\r?\n/)
+    .map(c => c.trim())
+    .filter(Boolean);
+  const companyFieldCandidates = surveyJson
+    ? flattenQuestions(surveyJson).filter(q => {
+        const name = String(q.name || "").toLowerCase();
+        const title = String(q.title || "").toLowerCase();
+        return name.includes("company") || title.includes("company");
+      })
+    : [];
+  const extraCompanyFields = companyFieldCandidates.filter(q => q.name !== COMPANY_FIELD_NAME);
+  const toastColor = toast?.type === "err" ? C.red : toast?.type === "ok" ? C.green : C.purple;
 
   return (
     <div style={{ minHeight: "100vh", background: C.offWhite, display: "flex", flexDirection: "column" }}>
@@ -802,17 +845,20 @@ export default function AdminFormBuilder() {
           color: C.black,
           padding: "12px 18px",
           borderRadius: 8,
-          border: `1px solid ${C.border}`,
-          borderLeft: `6px solid ${toast.type === "err" ? C.red : toast.type === "ok" ? C.green : C.purple}`,
+          border: `1px solid ${toastColor}`,
           fontSize: 13,
           fontWeight: 800,
           lineHeight: 1.45,
-          boxShadow: "0 16px 42px rgba(16,16,16,0.22)",
+          boxShadow: "0 10px 28px rgba(26,31,43,0.16)",
           animation: "fadeUp .2s ease",
           maxWidth: 360,
           opacity: 1,
           wordBreak: "break-word",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 10,
         }}>
+          <span style={{ width: 10, height: 10, borderRadius: 999, background: toastColor, marginTop: 5, flexShrink: 0 }} />
           {toast.msg}
         </div>
       )}
@@ -859,7 +905,7 @@ export default function AdminFormBuilder() {
           <span className="afb-header-title" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
             {isEditing ? `Editing: ${meta.formTitle}` : "New Form"}
           </span>
-          <Tag color={C.amber} bg={C.amberPale}>⚙ Admin</Tag>
+          <Tag color={C.amber} bg={C.amberPale}>Admin</Tag>
           {isEditing && <Tag>v{meta.formVersion}</Tag>}
           {isDraft && <Tag color={C.amber} bg={C.amberPale}>Draft</Tag>}
           {meta.slug && (
@@ -980,7 +1026,7 @@ export default function AdminFormBuilder() {
 
       {viewingOld && (
         <div style={{ background: C.amberPale, borderBottom: "1px solid #FDE68A", padding: "7px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: C.amber }}>
-          <span>👁 Viewing archived <strong>v{viewingOld.version}</strong> — read only</span>
+          <span>Viewing archived <strong>v{viewingOld.version}</strong> (read only)</span>
           <button
             onClick={() => setViewingOld(null)}
             style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}
@@ -1010,6 +1056,12 @@ export default function AdminFormBuilder() {
             token={tokenRef.current || undefined}
             showBanner={showBanner}
             meta={{ isoStandards: meta.isoStandards, companies: meta.companies, formTitle: meta.formTitle, logoUrl: meta.logoUrl }}
+            companyChoice={{
+              enabled: meta.companyChoiceEnabled,
+              choices: companyOptions,
+              fieldName: COMPANY_FIELD_NAME,
+              title: COMPANY_FIELD_LABEL,
+            }}
           />
         </div>
 
@@ -1110,6 +1162,21 @@ export default function AdminFormBuilder() {
             <div style={{ flex: 1, overflowY: "auto", padding: "13px 13px 24px" }}>
               {sidebarTab === "meta" && (
                 <div style={{ animation: "fadeUp .15s ease" }}>
+                  <div style={{
+                    background: C.offWhite,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 10,
+                    padding: "10px 11px",
+                    marginBottom: 14,
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "flex-start",
+                  }}>
+                    <InfoOutlinedIcon style={{ fontSize: 15, color: C.textMuted, marginTop: 1 }} />
+                    <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
+                      Form Setup controls identity, banner, access, and the managed Company selector. Canvas Properties now handles per-field and display behavior only; duplicate fields are flagged below instead of removed.
+                    </div>
+                  </div>
                   <FB label="Form Title" hint="Becomes the SP list name. Locked after first publish." required>
                     <TextInput
                       value={meta.formTitle}
@@ -1122,7 +1189,7 @@ export default function AdminFormBuilder() {
                   <FB label="Form ID / Doc No." required>
                     <TextInput value={meta.formId} onChange={v => setM("formId", v)} placeholder="PMW-HR-001" />
                   </FB>
-                  <FB label="Version" hint={isEditing && !isDraft ? `Current: v${originalVersion} → New: v${proposedVersion}` : isEditing ? `v${meta.formVersion} (draft)` : undefined}>
+                  <FB label="Version" hint={isEditing && !isDraft ? `Current: v${originalVersion} to v${proposedVersion}` : isEditing ? `v${meta.formVersion} (draft)` : undefined}>
                     {isEditing ? (
                       <div style={{ display: "flex", gap: 7 }}>
                         {(["minor", "major"] as const).map(m => (
@@ -1169,9 +1236,9 @@ export default function AdminFormBuilder() {
                         </div>
                       )}
                       {!slugError && !slugChecking && meta.slug && !slugLocked && (
-                        <div style={{ fontSize: 10, color: C.green, marginTop: 3 }}>✓ Slug available</div>
+                        <div style={{ fontSize: 10, color: C.green, marginTop: 3 }}>Slug available</div>
                       )}
-                      {slugLocked && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>Locked — cannot change after publish</div>}
+                      {slugLocked && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>Locked after publish</div>}
                     </div>
                   </FB>
                   <FB label="ISO Standards">
@@ -1185,6 +1252,86 @@ export default function AdminFormBuilder() {
                       style={{ ...inp, height: "auto", padding: "7px 10px", resize: "vertical", lineHeight: 1.7 }}
                     />
                   </FB>
+                  <div style={{
+                    background: meta.companyChoiceEnabled ? C.purplePale : C.offWhite,
+                    border: `1px solid ${meta.companyChoiceEnabled ? C.purpleMid : C.border}`,
+                    borderRadius: 10,
+                    padding: "11px 12px",
+                    marginBottom: 14,
+                    boxShadow: meta.companyChoiceEnabled ? "0 8px 20px rgba(16,16,16,0.06)" : "none",
+                    transition: "background-color .15s, border-color .15s, box-shadow .15s",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
+                      <BusinessIcon style={{ fontSize: 16, color: meta.companyChoiceEnabled ? C.purple : C.textMuted, marginTop: 1 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary, marginBottom: 2 }}>Company selector</div>
+                        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.5 }}>
+                          Uses the Companies list above as a required single-select field. Default answer stays empty.
+                        </div>
+                      </div>
+                      <ToggleSwitch
+                        checked={meta.companyChoiceEnabled}
+                        onChange={v => setMeta(m => ({ ...m, companyChoiceEnabled: v }))}
+                        label={meta.companyChoiceEnabled ? "On" : "Off"}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                      <button
+                        type="button"
+                        style={{
+                          flex: 1,
+                          minHeight: 34,
+                          border: `1px solid ${meta.companyChoiceEnabled ? C.purple : C.border}`,
+                          borderRadius: 8,
+                          background: meta.companyChoiceEnabled ? C.white : C.offWhite,
+                          color: meta.companyChoiceEnabled ? C.purple : C.textMuted,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 5,
+                          cursor: "default",
+                        }}
+                      >
+                        <RadioButtonCheckedIcon style={{ fontSize: 14 }} /> Radio
+                      </button>
+                      <button
+                        type="button"
+                        disabled
+                        title="Checkbox fields allow multiple selections, so they are not used for one-company selection."
+                        style={{
+                          flex: 1,
+                          minHeight: 34,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 8,
+                          background: C.white,
+                          color: C.textMuted,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          opacity: 0.55,
+                          cursor: "not-allowed",
+                        }}
+                      >
+                        Checkbox
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, lineHeight: 1.5 }}>
+                      Field maintained on the canvas: <strong>{COMPANY_FIELD_LABEL}</strong> / <code>{COMPANY_FIELD_NAME}</code>.
+                    </div>
+                    {meta.companyChoiceEnabled && companyOptions.length < 2 && (
+                      <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "7px 9px", fontSize: 10, color: C.amber, marginTop: 8, lineHeight: 1.45 }}>
+                        <WarningIcon style={{ fontSize: 12, verticalAlign: "middle", marginRight: 4 }} />
+                        Add at least two company lines before publishing.
+                      </div>
+                    )}
+                    {meta.companyChoiceEnabled && extraCompanyFields.length > 0 && (
+                      <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: "7px 9px", fontSize: 10, color: C.red, marginTop: 8, lineHeight: 1.45 }}>
+                        <InfoOutlinedIcon style={{ fontSize: 12, verticalAlign: "middle", marginRight: 4 }} />
+                        Possible duplicate company fields found: {extraCompanyFields.map(f => f.name || f.title).join(", ")}. None were removed.
+                      </div>
+                    )}
+                  </div>
                   <FB label="Logo URL" hint="Custom logo URL for the banner (defaults to /logo-128.png)">
                     <TextInput value={meta.logoUrl} onChange={v => setM("logoUrl", v)} placeholder="https://example.com/logo.png" />
                   </FB>
@@ -1194,7 +1341,7 @@ export default function AdminFormBuilder() {
                       border: `1px solid ${showBanner ? "#6EE7B7" : C.border}`,
                       borderRadius: 8,
                       padding: "10px 12px",
-                      transition: "all .2s",
+                      transition: "background-color .2s, border-color .2s",
                     }}>
                       <ToggleSwitch checked={showBanner} onChange={setShowBanner} label={showBanner ? "Banner visible" : "Banner hidden"} />
                       <div style={{ fontSize: 10, color: C.textMuted, marginTop: 6, lineHeight: 1.5 }}>
@@ -1220,7 +1367,7 @@ export default function AdminFormBuilder() {
                             background: isPublic === opt.v ? C.purplePale : C.white,
                             color: isPublic === opt.v ? C.purple : C.textSecond,
                             fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                            transition: "all .13s",
+                            transition: "background-color .13s, border-color .13s, color .13s",
                           }}
                         >
                           <div style={{ fontSize: 12, fontWeight: 600 }}>{opt.label}</div>
@@ -1268,7 +1415,7 @@ export default function AdminFormBuilder() {
                             onClick={() => setViewingOld(null)}
                             style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontSize: 11 }}
                           >
-                            ← Back to current
+                            Back to current
                           </button>
                         </div>
                       )}
@@ -1296,11 +1443,12 @@ export default function AdminFormBuilder() {
                     {[
                       ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
                       ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
-                      ["Version", isEditing && !isDraft ? `${originalVersion} → ${proposedVersion}` : `v${meta.formVersion}${isDraft ? " (draft)" : ""}`],
-                      ["Status", isDraft ? <span style={{ color: C.amber }}><EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Draft</span> : isEditing ? <span style={{ color: C.green }}><CheckCircleIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Published</span> : "—"],
+                      ["Version", isEditing && !isDraft ? `${originalVersion} to ${proposedVersion}` : `v${meta.formVersion}${isDraft ? " (draft)" : ""}`],
+                      ["Status", isDraft ? <span style={{ color: C.amber }}><EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Draft</span> : isEditing ? <span style={{ color: C.green }}><CheckCircleIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Published</span> : "Not published"],
                       ["Route", meta.slug ? `/form/${meta.slug}` : <em style={{ color: C.amber }}>No slug</em>],
                       ["Layers", numLayers || "None"],
                       ["Banner", showBanner ? <><CheckCircleIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Visible</> : <><BlockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Hidden</>],
+                      ["Company", meta.companyChoiceEnabled ? <><CheckCircleIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Required radio</> : "Not required"],
                       ["Access", isPublic ? <><PublicIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Public</> : <><LockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Private</>],
                     ].map(([k, v]) => (
                       <div key={k as string} style={{ display: "flex", gap: 10, fontSize: 12 }}>
@@ -1386,7 +1534,7 @@ export default function AdminFormBuilder() {
               Delete &ldquo;{deleteConfirm.Title}&rdquo;?
             </div>
             <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
-              This will permanently remove this form and all related data — versions, audit logs, and approver records.
+              This will permanently remove this form and all related data: versions, audit logs, and approver records.
               <br /><br />
               <span style={{ color: C.amber }}>Submission data in the form&rsquo;s list will NOT be deleted.</span>
             </div>

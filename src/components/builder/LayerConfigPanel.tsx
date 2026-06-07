@@ -7,6 +7,8 @@ import LockIcon from "@mui/icons-material/Lock";
 import LinkIcon from "@mui/icons-material/Link";
 import DescriptionIcon from "@mui/icons-material/Description";
 import CloseIcon from "@mui/icons-material/Close";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import LayerCard from "./LayerCard";
 import EvalElementPicker from "./EvalElementPicker";
 import PublicLinkDisplay from "./PublicLinkDisplay";
@@ -213,6 +215,59 @@ export default function LayerConfigPanel({
   const branchSuggestions = branchSearchQ
     ? siteUsers.filter(u => u.email.toLowerCase().includes(branchSearchQ.toLowerCase()) || u.name.toLowerCase().includes(branchSearchQ.toLowerCase())).slice(0, 5)
     : siteUsers.slice(0, 5);
+
+  const renderWorkflowRow = (label: string, rowLayers: LayerConfigItem[]) => (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0 }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "stretch", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
+        <div style={{
+          minWidth: 58,
+          borderRadius: 8,
+          background: C.white,
+          border: `1px solid ${C.border}`,
+          padding: "6px 7px",
+          fontSize: 10,
+          fontWeight: 700,
+          color: C.textSecond,
+          textAlign: "center",
+        }}>
+          Submit
+        </div>
+        {rowLayers.map((layer, idx) => (
+          <div key={`${label}-${idx}`} style={{
+            minWidth: 82,
+            borderRadius: 8,
+            background: layer.type === "approval" ? C.purplePale : C.greenPale,
+            border: `1px solid ${layer.type === "approval" ? C.purpleMid : "#6EE7B7"}`,
+            padding: "6px 7px",
+            color: C.textPrimary,
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 800, color: layer.type === "approval" ? C.purple : C.green, textTransform: "uppercase", letterSpacing: 0 }}>
+              {layer.type}
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {layer.title || `Layer ${idx + 1}`}
+            </div>
+          </div>
+        ))}
+        <div style={{
+          minWidth: 62,
+          borderRadius: 8,
+          background: C.white,
+          border: `1px solid ${C.border}`,
+          padding: "6px 7px",
+          fontSize: 10,
+          fontWeight: 700,
+          color: C.green,
+          textAlign: "center",
+        }}>
+          Done
+        </div>
+      </div>
+    </div>
+  );
 
   // ── Render per-layer settings ──────────────────────────────────────────────
   const renderLayerSettings = (layer: LayerConfigItem, idx: number) => {
@@ -909,8 +964,30 @@ export default function LayerConfigPanel({
   // ── Main render ────────────────────────────────────────────────────────────
   return (
     <div style={{ animation: "fadeUp .15s ease" }}>
-      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
-        Configure approval and evaluation layers for this form.
+      <div style={{
+        background: C.offWhite,
+        border: `1px solid ${C.border}`,
+        borderRadius: 11,
+        padding: "11px 12px",
+        marginBottom: 12,
+        boxShadow: "0 8px 20px rgba(16,16,16,0.05)",
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <AccountTreeIcon style={{ fontSize: 16, color: C.purple, marginTop: 1 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: C.textPrimary, marginBottom: 2 }}>Workflow map</div>
+            <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
+              Expand a step below to edit assignee, auth mode, confirmation, and evaluation fields.
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>
+            <CheckCircleIcon style={{ fontSize: 13 }} />
+            {branchEnabled ? `${branches.length} branch${branches.length === 1 ? "" : "es"}` : `${layers.length} layer${layers.length === 1 ? "" : "s"}`}
+          </div>
+        </div>
+        {branchEnabled && branches.length > 0
+          ? branches.map((branch, bi) => renderWorkflowRow(branch.label || branch.name || `Branch ${bi + 1}`, branch.layers))
+          : renderWorkflowRow("Main sequence", layers)}
       </div>
 
       {/* Layer cards */}

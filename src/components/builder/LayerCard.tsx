@@ -58,11 +58,12 @@ export default function LayerCard({
     <div
       style={{
         border: `1px solid ${expanded ? C.purpleMid : C.border}`,
-        borderRadius: 10,
+        borderRadius: 12,
         background: expanded ? C.white : C.offWhite,
         marginBottom: 8,
         overflow: "hidden",
-        transition: "border-color .15s",
+        boxShadow: expanded ? "0 10px 24px rgba(16,16,16,0.07)" : "0 3px 10px rgba(16,16,16,0.04)",
+        transition: "border-color .15s, box-shadow .15s, background .15s",
       }}
     >
       {/* Header row */}
@@ -72,7 +73,7 @@ export default function LayerCard({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "9px 11px",
+          padding: "10px 11px",
           cursor: "pointer",
           userSelect: "none",
         }}
@@ -80,9 +81,9 @@ export default function LayerCard({
         {/* Layer number */}
         <div
           style={{
-            width: 26,
-            height: 26,
-            borderRadius: 7,
+            width: 30,
+            height: 30,
+            borderRadius: 8,
             flexShrink: 0,
             background: `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
             color: C.white,
@@ -140,10 +141,10 @@ export default function LayerCard({
             onClick={onMoveUp}
             disabled={index === 0 || actionsDisabled}
             style={{
-              width: 22,
-              height: 22,
+              width: 30,
+              height: 30,
               border: `1px solid ${C.border}`,
-              borderRadius: 5,
+              borderRadius: 8,
               background: C.white,
               color: index === 0 || actionsDisabled ? C.textMuted : C.textSecond,
               cursor: index === 0 || actionsDisabled ? "default" : "pointer",
@@ -159,10 +160,10 @@ export default function LayerCard({
             onClick={onMoveDown}
             disabled={index === total - 1 || actionsDisabled}
             style={{
-              width: 22,
-              height: 22,
+              width: 30,
+              height: 30,
               border: `1px solid ${C.border}`,
-              borderRadius: 5,
+              borderRadius: 8,
               background: C.white,
               color: index === total - 1 || actionsDisabled ? C.textMuted : C.textSecond,
               cursor: index === total - 1 || actionsDisabled ? "default" : "pointer",
@@ -180,10 +181,10 @@ export default function LayerCard({
             onMouseEnter={() => !actionsDisabled && setHoverDel(true)}
             onMouseLeave={() => !actionsDisabled && setHoverDel(false)}
             style={{
-              width: 22,
-              height: 22,
+              width: 30,
+              height: 30,
               border: "none",
-              borderRadius: 5,
+              borderRadius: 8,
               background: actionsDisabled ? C.offWhite : (hoverDel ? C.red : C.redPale),
               color: actionsDisabled ? C.textMuted : (hoverDel ? C.white : C.red),
               cursor: actionsDisabled ? "default" : "pointer",

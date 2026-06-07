@@ -60,6 +60,7 @@ import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import HeightIcon from "@mui/icons-material/Height";
 import HorizontalRuleIcon from "@mui/icons-material/HorizontalRule";
 import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 import EmailIcon from "@mui/icons-material/Email";
 import BoltIcon from "@mui/icons-material/Bolt";
 import LinkIcon from "@mui/icons-material/Link";
@@ -95,6 +96,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import PowerIcon from "@mui/icons-material/Power";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ChromeReaderModeIcon from "@mui/icons-material/ChromeReaderMode";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import BarChartIcon from "@mui/icons-material/BarChart";
@@ -132,7 +134,7 @@ function IconBtn({ icon, title, onClick, danger, disabled }: { icon: React.React
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
   return <label className="fb-toggle">
     <div onClick={() => onChange(!checked)} className="fb-toggle-track" style={{ background: checked ? C.purple : "#D1D5DB" }}>
-      <div className="fb-toggle-knob" style={{ left: checked ? 19 : 3, background: C.white }} />
+      <div className="fb-toggle-knob" style={{ left: checked ? 21 : 3, background: C.white }} />
     </div>
     {label && <span className="fb-toggle-label" style={{ color: C.textSecond }}>{label}</span>}
   </label>;
@@ -175,7 +177,7 @@ function FieldRefPicker({
   return (
     <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.borderLight}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-        <span style={{ fontSize: 9, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <span style={{ fontSize: 9, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0 }}>
           Field references
         </span>
         <div style={{ flex: 1 }} />
@@ -222,6 +224,48 @@ function PropRow({ label, children, span }: { label: string; children: React.Rea
   </div>;
 }
 
+interface CompanyChoiceConfig {
+  enabled: boolean;
+  choices: string[];
+  fieldName: string;
+  title: string;
+}
+
+const COMPANY_CHOICE_FIELD_ID = "pmw_company_choice_field";
+
+function toChoiceObjects(choices: string[]) {
+  return choices
+    .map(c => c.trim())
+    .filter(Boolean)
+    .map(c => ({ value: c, text: c }));
+}
+
+function choicesEqual(
+  current: FormBuilderField["choices"] | undefined,
+  next: { value: string; text: string }[]
+) {
+  const currentValues = (current || []).map(c => typeof c === "string" ? c : c.value);
+  const nextValues = next.map(c => c.value);
+  return currentValues.length === nextValues.length && currentValues.every((v, i) => v === nextValues[i]);
+}
+
+function createCompanyChoiceField(config: CompanyChoiceConfig): FormBuilderField {
+  return {
+    _id: COMPANY_CHOICE_FIELD_ID,
+    type: "radiogroup",
+    name: config.fieldName,
+    title: config.title,
+    isRequired: true,
+    startWithNewLine: true,
+    visible: true,
+    readOnly: false,
+    description: "Choose the company this form submission belongs to.",
+    choices: toChoiceObjects(config.choices),
+    colCount: 1,
+    requiredErrorText: "Please choose a company.",
+  };
+}
+
 // ── Visibility / EnableIf / Validation Editors ────────────────────────
 
 /** Build a simple expression editor for visibleIf / enableIf */
@@ -257,7 +301,7 @@ function ConditionEditor({ label, value, onChange, allFields }: { label: string;
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>{label}</span>
       <div style={{ flex: 1 }} />
       <Toggle checked={mode === "advanced"} onChange={v => setMode(v ? "advanced" : "simple")} label="Advanced" />
     </div>
@@ -312,7 +356,7 @@ function ValidationEditor({ field, onChange }: { field: FormBuilderField; onChan
   const removeValidator = (idx: number) => { const next = validators; next.splice(idx, 1); onChange({ validators: next }); };
   return <div>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Validators</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Validators</span>
       <div style={{ flex: 1 }} />
       <Select value="" onChange={v => { if (v) addValidator(v); }} options={[{ value: "", label: "+ Add validator..." }, ...VALIDATOR_TYPES.map(v => ({ value: v.value, label: v.label }))]} />
     </div>
@@ -389,7 +433,7 @@ function RulesSection({ rules, ruleType: _ruleType, title, icon, color, allField
   rules: { id: string; field: string; operator: string; value: string; connector: string; enabled: boolean }[];
   ruleType: "visibility" | "required" | "enable";
   title: string;
-  icon: string;
+  icon: React.ReactNode;
   color: string;
   allFields: FormBuilderField[];
   onChange: (rules: { id: string; field: string; operator: string; value: string; connector: string; enabled: boolean }[]) => void;
@@ -411,7 +455,7 @@ function RulesSection({ rules, ruleType: _ruleType, title, icon, color, allField
   return (
     <div style={{ marginBottom: 16, padding: 12, background: `${color}08`, borderRadius: 8, border: `1px solid ${color}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 14, display: "inline-flex", alignItems: "center", color }}>{icon}</span>
         <span style={{ fontSize: 12, fontWeight: 700, color, flex: 1 }}>{title}</span>
         <Toggle checked={rules.length > 0} onChange={v => { if (v && !rules.length) addRule(); else if (!v) onChange([]); }} label={rules.length > 0 ? "Active" : "Disabled"} />
       </div>
@@ -601,8 +645,8 @@ function LogicRulesEditor({ field, allFields, onChange }: {
       <ConditionEditor label="Enable (legacy)" value={field.enableIf || ""} onChange={v => onChange({ enableIf: v || undefined })} allFields={priorFields} />
       
       <div style={{ marginTop: 16 }}>
-        <RulesSection rules={visibilityRules} ruleType="visibility" title="Show/Hide Rules" icon="👁️" color={C.green} allFields={priorFields} onChange={updateVisibilityRules} />
-        <RulesSection rules={enableRules} ruleType="enable" title="Enable/Disable Rules" icon="🔓" color={C.purple} allFields={priorFields} onChange={updateEnableRules} />
+        <RulesSection rules={visibilityRules} ruleType="visibility" title="Show/Hide Rules" icon={<VisibilityIcon style={{ fontSize: 15 }} />} color={C.green} allFields={priorFields} onChange={updateVisibilityRules} />
+        <RulesSection rules={enableRules} ruleType="enable" title="Enable/Disable Rules" icon={<LockOpenIcon style={{ fontSize: 15 }} />} color={C.purple} allFields={priorFields} onChange={updateEnableRules} />
         <ValueMappingSection valueRule={field.valueMapping as { sourceField: string; transform: string } | undefined} allFields={allFields} onChange={v => onChange({ valueMapping: v })} />
         <CrossFieldValidationSection 
             validations={(field.crossFieldValidations || []) as { id: string; fieldA: string; operator: "equals" | "notEquals" | "greaterThan" | "lessThan" | "greaterOrEqual" | "lessOrEqual" | "before" | "after"; fieldB: string; errorMessage: string; enabled: boolean }[]} 
@@ -745,7 +789,7 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
       }
       onDrop(e, index);
     }}
-    className={`fb-field-card ${selected ? 'selected' : ''} ${err.length ? 'error' : ''} ${isPanel ? 'panel-card' : ''}`}
+    className={`fb-field-card ${selected ? 'selected' : 'default'} ${err.length ? 'error' : ''} ${isPanel ? 'panel-card' : ''}`}
     onClick={e => { e.stopPropagation(); onSelect(field._id); }}
     title={shortcuts}
     style={{ marginLeft: depth * 24 }}>
@@ -766,7 +810,7 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
           {field.visibleIf && <Pill color={C.green} bg={C.greenPale}>Conditional</Pill>}
           {field.enableIf && <Pill color={C.purpleLight} bg={C.purplePale}>Dyn.enable</Pill>}
           {spColLabel && <Pill color={C.textSecond} bg={C.offWhite}>{spColLabel}</Pill>}
-          {(field.type === "dynamicmatrix" || field.type === "tableinput") && <Pill color={C.amber} bg={C.amberPale}>→ Rich Text</Pill>}
+          {(field.type === "dynamicmatrix" || field.type === "tableinput") && <Pill color={C.amber} bg={C.amberPale}>Rich Text</Pill>}
           {isPanel && (field.elements?.length ? <Pill color={C.purple} bg={C.purplePale}>{field.elements.length} item{field.elements.length !== 1 ? 's' : ''}</Pill> : <Pill color={C.textMuted} bg={C.offWhite}>Empty</Pill>)}
         </div>
         <div className="fb-field-meta">
@@ -1231,7 +1275,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Matrix Columns</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Matrix Columns</span>
       <div style={{ flex: 1 }} />
       <button onClick={addCol} style={{ fontSize: 11, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>＋ Add column</button>
     </div>
@@ -1326,7 +1370,7 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Data Source</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Data Source</span>
       <div style={{ flex: 1 }} />
     </div>
     <div style={{ display: "flex", gap: 8 }}>
@@ -1403,7 +1447,7 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Filtered List Source</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Filtered List Source</span>
       <div style={{ flex: 1 }} />
       <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: C.textSecond, userSelect: "none" }}>
         <input type="checkbox" checked={enabled} onChange={toggle} style={{ width: 14, height: 14, accentColor: C.purple }} />
@@ -1438,7 +1482,7 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
           <span style={{ fontSize: 10, color: C.textMuted, whiteSpace: "nowrap" }}>Where</span>
           <select value={source?.filterColumn || ""} onChange={e => onChange({ ...source, filterColumn: (e.target as HTMLSelectElement).value || undefined })}
             style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", padding: "0 4px" }}>
-            <option value="">— select column —</option>
+            <option value="">Select column</option>
             {columns.map(c => <option key={c.title} value={c.title}>{c.title}</option>)}
           </select>
           <span style={{ fontSize: 10, color: C.textMuted }}>=</span>
@@ -1466,19 +1510,22 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
     <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
         <SettingsIcon style={{ fontSize: 16, color: C.purple }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>Form Settings</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>Display & Behavior</span>
       </div>
-      <div style={{ fontSize: 10, color: C.textMuted }}>SurveyJS form properties</div>
+      <div style={{ fontSize: 10, color: C.textMuted }}>SurveyJS rendering properties</div>
     </div>
     <div style={{ flex: 1, padding: "14px" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <PropRow label="Form title"><Input value={(surveySettings.title as string) || ""} onChange={v => onSurveySettingsChange?.({ ...surveySettings, title: v })} placeholder="Form title" /></PropRow>
-        <PropRow label="Show form title">
+        <div style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 10px", fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
+          Form identity, banner, access, and the managed Company selector live in Form Setup. These controls only change how SurveyJS displays the form.
+        </div>
+        <PropRow label="Display title"><Input value={(surveySettings.title as string) || ""} onChange={v => onSurveySettingsChange?.({ ...surveySettings, title: v })} placeholder="Display title" /></PropRow>
+        <PropRow label="Display title visibility">
           <Toggle checked={(surveySettings.titleLocation as string) !== "hidden"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, titleLocation: v ? ((surveySettings.titleLocation as string) === "hidden" ? "top" : surveySettings.titleLocation) : "hidden" })} label={(surveySettings.titleLocation as string) !== "hidden" ? "Visible" : "Hidden"} />
         </PropRow>
         <PropRow label="Form description"><Textarea value={(surveySettings.description as string) || ""} onChange={v => onSurveySettingsChange?.({ ...surveySettings, description: v })} rows={2} placeholder="Optional description" /></PropRow>
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Text Formatting</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0, marginBottom: 8 }}>Text Formatting</div>
           <PropRow label="Question titles">
             <Select value={(surveySettings.titleLocation as string) || "default"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, titleLocation: v })} options={[{ value: "default", label: "Default" }, { value: "hidden", label: "Hidden" }, { value: "top", label: "Top" }, { value: "bottom", label: "Bottom" }]} />
           </PropRow>
@@ -1490,7 +1537,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
           </PropRow>
         </div>
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Behavior</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0, marginBottom: 8 }}>Behavior</div>
           <PropRow label="Error mode">
             <Select value={(surveySettings.checkErrorsMode as string) || "onValueChanged"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, checkErrorsMode: v })} options={[{ value: "onValueChanged", label: "On value change" }, { value: "onComplete", label: "On complete" }, { value: "onNextPage", label: "On next page" }]} />
           </PropRow>
@@ -1545,7 +1592,7 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
         }} placeholder="Question label" /></PropRow>
         <PropRow label="Field name (SP column)" span>
           <Input value={field.name} onChange={v => onChange({ name: v.replace(/[^a-zA-Z0-9_]/g, "").replace(/\s+/g, "_") })} placeholder="camelCaseName (required)" />
-          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>Required — no spaces, becomes the SharePoint column name</div>
+          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>Required. No spaces, becomes the SharePoint column name.</div>
         </PropRow>
         <PropRow label="Description / hint" span><Input value={field.description || ""} onChange={v => onChange({ description: v })} placeholder="Optional helper text" /></PropRow>
         {!["html", "dynamicmatrix", "file", "formula", "ranking", "panel"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
@@ -1594,16 +1641,16 @@ function JsonPreview({ json, collapsed, onToggle }: { json: SurveyJson; collapse
   const text = useMemo(() => JSON.stringify(json, null, 2), [json]);
   const charCount = useMemo(() => JSON.stringify(json).length, [json]);
   const copy = () => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
-  return <div style={{ borderTop: `1px solid ${C.border}`, background: "#1F2937", height: collapsed ? 38 : 220, display: "flex", flexDirection: "column", overflow: "hidden", transition: "height 0.3s" }}>
+  return <div style={{ borderTop: `1px solid ${C.border}`, background: C.purpleDark, height: collapsed ? 38 : 220, display: "flex", flexDirection: "column", overflow: "hidden", transition: "height 220ms cubic-bezier(0.2, 0, 0, 1)" }}>
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 38, flexShrink: 0, cursor: "pointer" }} onClick={onToggle}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <CodeIcon style={{ fontSize: 14, color: "#9CA3AF" }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.06em" }}>SurveyJS JSON</span>
+        <CodeIcon style={{ fontSize: 14, color: "rgba(255,255,255,0.68)" }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.68)", textTransform: "uppercase", letterSpacing: 0 }}>SurveyJS JSON</span>
         <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{charCount} chars</span>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {!collapsed && <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 10, color: copied ? "#6EE7B7" : "#9CA3AF", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>{copied ? "Copied!" : "Copy JSON"}</button>}
-        {collapsed ? <ExpandMoreIcon style={{ fontSize: 16, color: "#9CA3AF" }} /> : <ExpandLessIcon style={{ fontSize: 16, color: "#9CA3AF" }} />}
+        {!collapsed && <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 10, color: copied ? "#6EE7B7" : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>{copied ? "Copied!" : "Copy JSON"}</button>}
+        {collapsed ? <ExpandMoreIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} /> : <ExpandLessIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} />}
       </div>
     </div>
     {!collapsed && <pre style={{ flex: 1, overflowY: "auto", margin: 0, padding: "0 14px 14px", fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.75)", lineHeight: 1.7 }}>{text}</pre>}
@@ -1780,14 +1827,14 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
     <div style={{ background: C.white, borderRadius: 16, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
       <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Live Form Preview</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>Live Form Preview</div>
           <div style={{ fontSize: 14, color: C.white, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>How users will see this form</div>
         </div>
         <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
       </div>
       {showBanner && <div style={{ borderBottom: `1px solid ${C.border}` }}>
         <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "16px 22px" }}>
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{isoStandards}</div>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandards}</div>
           <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 17, color: "#fff" }}>{formTitle}</div>
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1809,13 +1856,13 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
         padding: "20px 24px", maxHeight: "70vh", overflowY: "auto",
         backgroundColor: json.backgroundColor || "#FFFFFF",
         // SurveyJS v2 CSS custom properties for theming
-        ["--sjs-primary-backcolor" as string]: json.primaryColor || "#5B21B6",
+        ["--sjs-primary-backcolor" as string]: json.primaryColor || "#0078D4",
         ["--sjs-primary-backcolor-light" as string]: json.primaryColor ? `${json.primaryColor}33` : "#7C3AED33",
         ["--sjs-primary-backcolor-dark" as string]: json.primaryColor || "#3B0764",
         ["--sjs-general-backcolor" as string]: json.backgroundColor || "#FFFFFF",
         ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
-        ["--sjs-general-forecolor" as string]: json.textColor || "#1E1B4B",
-        ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1E1B4B",
+        ["--sjs-general-forecolor" as string]: json.textColor || "#1A1F2B",
+        ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1A1F2B",
         ["--sjs-font-family" as string]: APP_FONT_STACK,
         ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
         ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
@@ -1825,7 +1872,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
         ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
       } as React.CSSProperties}><style>{`.fb-preview-wrap .sd-container-modern>.sd-title{text-align:center!important}
 .fb-preview-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}`}</style><Survey key={fingerprintRef.current} model={model} /></div>
-      <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>Preview only — submissions are not saved</div>
+      <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>Preview only. Submissions are not saved.</div>
     </div>
   </div>;
 }
@@ -1842,9 +1889,10 @@ interface FormBuilderProps {
   isAdmin?: boolean;
   onClose?: () => void;
   readOnly?: boolean;
+  companyChoice?: CompanyChoiceConfig;
 }
 
-export default function FormBuilder({ initialJson, onChange, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false }: FormBuilderProps) {
+export default function FormBuilder({ initialJson, onChange, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false, companyChoice }: FormBuilderProps) {
   const [fields, setFields] = useState<FormBuilderField[]>(() => {
     if (!initialJson) return [];
     try { return buildQuestionTree(initialJson); } catch { return []; }
@@ -1876,9 +1924,9 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       textUpdateMode: initialJson.textUpdateMode || "onTyping",
       showProgressBar: !!initialJson.showProgressBar,
       showPageTitles: !!initialJson.showPageTitles,
-      primaryColor: initialJson.primaryColor || "#5B21B6",
+      primaryColor: initialJson.primaryColor || "#0078D4",
       backgroundColor: initialJson.backgroundColor || "#FFFFFF",
-      textColor: initialJson.textColor || "#1E1B4B",
+      textColor: initialJson.textColor || "#1A1F2B",
       errorColor: initialJson.errorColor || "#DC2626",
       fontFamily: APP_FONT_NAME,
       borderRadius: initialJson.borderRadius || "8px",
@@ -1956,9 +2004,9 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         textUpdateMode: initialJson.textUpdateMode || "onTyping",
         showProgressBar: !!initialJson.showProgressBar,
         showPageTitles: !!initialJson.showPageTitles,
-        primaryColor: initialJson.primaryColor || "#5B21B6",
+        primaryColor: initialJson.primaryColor || "#0078D4",
         backgroundColor: initialJson.backgroundColor || "#FFFFFF",
-        textColor: initialJson.textColor || "#1E1B4B",
+        textColor: initialJson.textColor || "#1A1F2B",
         errorColor: initialJson.errorColor || "#DC2626",
         fontFamily: APP_FONT_NAME,
         borderRadius: initialJson.borderRadius || "8px",
@@ -1975,9 +2023,9 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         textUpdateMode: "onTyping",
         showProgressBar: false,
         showPageTitles: false,
-        primaryColor: "#5B21B6",
+        primaryColor: "#0078D4",
         backgroundColor: "#FFFFFF",
-        textColor: "#1E1B4B",
+        textColor: "#1A1F2B",
         errorColor: "#DC2626",
         fontFamily: APP_FONT_NAME,
         borderRadius: "8px",
@@ -1985,6 +2033,38 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       });
     }
   }, [initialJson]);
+
+  const companyChoiceKey = companyChoice
+    ? `${companyChoice.enabled}|${companyChoice.fieldName}|${companyChoice.title}|${companyChoice.choices.join("\u001f")}`
+    : "off";
+
+  useEffect(() => {
+    if (!companyChoice?.enabled) return;
+    const config = companyChoice;
+    const desiredChoices = toChoiceObjects(companyChoice.choices);
+    setFields(current => {
+      const existing = flattenFieldTree(current).find(f => f.name === config.fieldName);
+      if (!existing) {
+        return [createCompanyChoiceField(config), ...current];
+      }
+
+      const patch: Partial<FormBuilderField> = {};
+      if (existing.type !== "radiogroup") patch.type = "radiogroup";
+      if (existing.title !== config.title) patch.title = config.title;
+      if (existing.description !== "Choose the company this form submission belongs to.") {
+        patch.description = "Choose the company this form submission belongs to.";
+      }
+      if (!existing.isRequired) patch.isRequired = true;
+      if (existing.readOnly) patch.readOnly = false;
+      if (existing.defaultValue !== undefined) patch.defaultValue = undefined;
+      if (existing.requiredErrorText !== "Please choose a company.") {
+        patch.requiredErrorText = "Please choose a company.";
+      }
+      if (!choicesEqual(existing.choices, desiredChoices)) patch.choices = desiredChoices;
+      if (Object.keys(patch).length === 0) return current;
+      return updateField(current, existing._id, patch);
+    });
+  }, [companyChoiceKey]);
 
   // Check scroll state for toolbar
   const checkScrollState = () => {
@@ -2423,7 +2503,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   <div style={{ fontSize: 11, color: C.textMuted }}>Export field names and types as CSV</div>
                 </button>
                 <button onClick={() => {
-                  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;}h1{color:#5B21B6;}label{display:block;margin:12px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:12px;border:1px solid #ddd;border-radius:4px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>` + (f.type === "textarea" ? `<textarea rows="3" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}"></textarea>` : f.type === "select" || f.type === "dropdown" ? `<select><option>Select...</option>${(f.choices || []).map((c: unknown) => `<option>${DOMPurify.sanitize(typeof c === "string" ? String(c) : String((c as { text: string }).text))}</option>`).join("")}</select>` : `<input type="${DOMPurify.sanitize(String(f.inputType ?? "text"))}" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}">`)).join("\n")}</body></html>`;
+                  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;}h1{color:#0078D4;}label{display:block;margin:12px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:12px;border:1px solid #ddd;border-radius:4px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>` + (f.type === "textarea" ? `<textarea rows="3" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}"></textarea>` : f.type === "select" || f.type === "dropdown" ? `<select><option>Select...</option>${(f.choices || []).map((c: unknown) => `<option>${DOMPurify.sanitize(typeof c === "string" ? String(c) : String((c as { text: string }).text))}</option>`).join("")}</select>` : `<input type="${DOMPurify.sanitize(String(f.inputType ?? "text"))}" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}">`)).join("\n")}</body></html>`;
                   const blob = new Blob([html], { type: "text/html" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `${surveySettings.title || "form"}.html`; a.click();
@@ -2433,7 +2513,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 </button>
                 <button onClick={() => {
                   // Simple PDF generation using window.print
-                  const printContent = `<html><head><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;}h1{color:#5B21B6;border-bottom:2px solid #5B21B6;padding-bottom:10px;}label{display:block;margin:16px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;}.field-list{margin-top:30px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<div class="field-list"><label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>${f.description ? `<small style="color:#666">${DOMPurify.sanitize(String(f.description))}</small><br/>` : ""}<div style="height:24px;border-bottom:1px solid #ccc;"></div></div>`).join("\n")}</body></html>`;
+                  const printContent = `<html><head><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;}h1{color:#0078D4;border-bottom:2px solid #0078D4;padding-bottom:10px;}label{display:block;margin:16px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;}.field-list{margin-top:30px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<div class="field-list"><label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>${f.description ? `<small style="color:#666">${DOMPurify.sanitize(String(f.description))}</small><br/>` : ""}<div style="height:24px;border-bottom:1px solid #ccc;"></div></div>`).join("\n")}</body></html>`;
                   const printWindow = window.open("", "_blank");
                   if (printWindow) { printWindow.document.write(printContent); printWindow.document.close(); printWindow.print(); }
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
@@ -2522,9 +2602,9 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Colors</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || "#5B21B6")} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
+                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || "#0078D4")} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
                   <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Background</label><input type="color" value={String(surveySettings.backgroundColor || "#FFFFFF")} onChange={(e) => setSurveySettings({ ...surveySettings, backgroundColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || "#1E1B4B")} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
+                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || "#1A1F2B")} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
                   <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Error Color</label><input type="color" value={String(surveySettings.errorColor || "#DC2626")} onChange={(e) => setSurveySettings({ ...surveySettings, errorColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
                 </div>
               </div>
