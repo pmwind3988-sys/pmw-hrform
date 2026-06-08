@@ -9,7 +9,7 @@ export const PDPA_CONTROLLER_NAME = "PMW International Berhad";
 export const PDPA_CONTACT_EMAIL =
   import.meta.env.VITE_HR_RECRUITMENT_EMAIL ||
   import.meta.env.VITE_EMAIL_FROM_ADDRESS ||
-  "hr@pmw.com.my";
+  "recruitment@pmw-group.com";
 
 export const PDPA_SUMMARY =
   "Your personal data will be processed for HR forms, recruitment, approvals, evaluation, record keeping, audit, and related legal or operational requirements.";
