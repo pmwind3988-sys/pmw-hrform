@@ -1330,7 +1330,7 @@ async function surveyQuestionColumnSpecs(
 
   for (const question of questions) {
     if (!question.type || !question.name) continue;
-    if (question.type === 'file' || question.type === 'imageupload') hasFileFields = true;
+    if (question.type === 'file' || question.type === 'imageupload' || question.type === 'signaturepad') hasFileFields = true;
 
     if (question.type === 'matrixdynamic' || question.type === 'tableinput' || question.type === 'dynamicmatrix') {
       columns.push(

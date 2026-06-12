@@ -1,8 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields, getListColumns } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields, getListColumns, listExistsGraph } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
-import { ensureUploadLibrary } from "./_utils/provisioning.js";
 
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
@@ -77,7 +76,7 @@ interface ApiSubmissionSchema {
 interface ApiUploadContext {
   token: string;
   listTitle: string;
-  docLibReady: boolean;
+  uploadLibraryByUse: Record<string, string | null>;
 }
 
 interface ApiUploadCandidate {
@@ -86,10 +85,19 @@ interface ApiUploadCandidate {
 }
 
 interface ApiDataUri {
-  mime: string;
   base64: string;
   ext: string;
   rawSize: number;
+}
+
+class PublicSubmissionError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = "PublicSubmissionError";
+    this.statusCode = statusCode;
+  }
 }
 
 function getRetentionUntil(from: Date = new Date()): string {
@@ -345,7 +353,39 @@ function parseDataUri(value: string): ApiDataUri | null {
   const base64 = match[2];
   const rawSize = Math.ceil((base64.length * 3) / 4);
   const ext = (mime.split("/").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "") || "bin";
-  return { mime, base64, ext, rawSize };
+  return { base64, ext, rawSize };
+}
+
+async function resolveExistingUploadLibrary(
+  context: ApiUploadContext,
+  use: "file" | "signature",
+): Promise<string> {
+  const cached = context.uploadLibraryByUse[use];
+  if (cached) return cached;
+  if (cached === null) {
+    throw new PublicSubmissionError(
+      "Upload storage is not provisioned for this public form. Please republish the form before trying again.",
+      409,
+    );
+  }
+
+  const perFormLibrary = `${context.listTitle} Files`;
+  const candidates = use === "signature"
+    ? [perFormLibrary, "Signature Images", "Documents", "Shared Documents"]
+    : [perFormLibrary, "Documents", "Shared Documents"];
+
+  for (const candidate of candidates) {
+    if (await listExistsGraph(context.token, candidate)) {
+      context.uploadLibraryByUse[use] = candidate;
+      return candidate;
+    }
+  }
+
+  context.uploadLibraryByUse[use] = null;
+  throw new PublicSubmissionError(
+    "Upload storage is not provisioned for this public form. Please republish the form before trying again.",
+    409,
+  );
 }
 
 async function uploadDataUri(
@@ -353,6 +393,7 @@ async function uploadDataUri(
   fieldName: string,
   candidate: ApiUploadCandidate,
   index: number,
+  use: "file" | "signature",
 ): Promise<{ url: string; fileName: string }> {
   const parsed = parseDataUri(candidate.content);
   if (!parsed) {
@@ -361,15 +402,13 @@ async function uploadDataUri(
   if (parsed.rawSize > MAX_UPLOAD_BYTES) {
     throw new Error(`Field "${fieldName}" upload exceeds the 10MB limit.`);
   }
-  if (!context.docLibReady) {
-    await ensureUploadLibrary(context.token, `${context.listTitle} Files`);
-    context.docLibReady = true;
-  }
+  const libraryName = await resolveExistingUploadLibrary(context, use);
+  const safeList = context.listTitle.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "form";
   const safeField = fieldName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "upload";
   const originalName = candidate.name ? candidate.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) : "";
-  const fileName = originalName || `${safeField}_${Date.now()}_${index}.${parsed.ext}`;
+  const fileName = originalName || `${safeList}_${safeField}_${Date.now()}_${index}.${parsed.ext}`;
   const binary = new Uint8Array(Buffer.from(parsed.base64, "base64"));
-  const url = await uploadFileToDrive(context.token, `${context.listTitle} Files`, fileName, binary);
+  const url = await uploadFileToDrive(context.token, libraryName, fileName, binary);
   return { url, fileName };
 }
 
@@ -385,7 +424,7 @@ async function coerceFieldValue(
     if (candidates.length > 0) {
       const uploads: string[] = [];
       for (let index = 0; index < candidates.length; index++) {
-        const uploaded = await uploadDataUri(context, spec.name, candidates[index], index);
+        const uploaded = await uploadDataUri(context, spec.name, candidates[index], index, "file");
         uploads.push(uploaded.url);
       }
       return uploads.length === 1 ? uploads[0] : JSON.stringify(uploads);
@@ -396,7 +435,7 @@ async function coerceFieldValue(
   if (spec.kind === "url") {
     const candidates = extractUploadCandidates(value);
     if (candidates.length > 0) {
-      const uploaded = await uploadDataUri(context, spec.name, candidates[0], 0);
+      const uploaded = await uploadDataUri(context, spec.name, candidates[0], 0, "signature");
       return { Url: uploaded.url, Description: uploaded.fileName };
     }
     if (value && typeof value === "object") {
@@ -455,7 +494,7 @@ async function buildSubmissionFields(
   formConfig: Record<string, unknown>,
   schema: ApiSubmissionSchema,
 ): Promise<Record<string, unknown>> {
-  const context: ApiUploadContext = { token, listTitle, docLibReady: false };
+  const context: ApiUploadContext = { token, listTitle, uploadLibraryByUse: {} };
   const fields: Record<string, unknown> = {
     SubmittedAt: new Date().toISOString(),
     FormVersion: valueToText(formConfig.CurrentVersion) || "1.0",
@@ -711,6 +750,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     return res.status(200).json({ success: true, id: parentId, childItemIds });
   } catch (err) {
+    if (err instanceof PublicSubmissionError) {
+      logWarn("api:submit-form", err.message, { listTitle });
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     logError("api:submit-form", "Failed to submit public form", err);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
