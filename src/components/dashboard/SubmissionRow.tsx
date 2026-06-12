@@ -1,6 +1,7 @@
 import {
   Box,
   Chip,
+  Stack,
   Typography,
   useMediaQuery,
   useTheme,
@@ -46,6 +47,12 @@ export default function SubmissionRow({
         year: "numeric",
       })
     : "N/A";
+  const submittedTime = item.submittedAt
+    ? new Date(item.submittedAt).toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
   const layerLabel =
     item.totalLayers > 1 && item.currentLayer !== undefined
       ? item.currentLayer > 0
@@ -64,7 +71,6 @@ export default function SubmissionRow({
     backgroundColor: editorial.blueWash,
     color: editorial.pmwBlueDark,
     border: `1px solid ${editorial.pmwBlueSoft}`,
-    fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
     fontWeight: 800,
     fontSize: "0.7rem",
     height: 24,
@@ -94,17 +100,17 @@ export default function SubmissionRow({
         onClick={handleOpen}
         onKeyDown={handleKeyDown}
         sx={{
-          backgroundColor: "#ffffff",
-          borderRadius: "12px",
+          backgroundColor: "rgba(255, 255, 255, 0.92)",
+          borderRadius: "8px",
           border: `1px solid ${editorial.border}`,
           p: 2,
           mb: 2,
           cursor: "pointer",
-          transition: "box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease",
-          boxShadow: "none",
+          transition: "box-shadow 0.2s ease, transform 0.2s ease",
+          boxShadow: "0 10px 28px rgba(0, 90, 158, 0.06)",
           "&:hover": {
-            borderColor: editorial.pmwBlueSoft,
             boxShadow: editorialShadow,
+            transform: "translateY(-1px)",
           },
           "&:active": {
             transform: "scale(0.995)",
@@ -121,9 +127,9 @@ export default function SubmissionRow({
               {item.title}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-              <Chip icon={<NumbersIcon />} label={item.formId} size="small" sx={identityChipSx} />
+              <Chip icon={<NumbersIcon />} label={`Ref ${item.submissionId}`} size="small" sx={identityChipSx} />
               <Typography variant="caption" sx={{ color: editorial.muted }}>
-                ID: {item.submissionId}
+                {submittedAt}
               </Typography>
             </Box>
           </Box>
@@ -151,9 +157,16 @@ export default function SubmissionRow({
             <Chip icon={<LayersIcon />} label={layerLabel} size="small" sx={layerChipSx} />
           )}
         </Box>
-        <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
-          {submittedAt} · {item.submittedByEmail}
-        </Typography>
+        <Stack spacing={0.25}>
+          <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
+            {meta.category}{submittedTime ? ` · ${submittedTime}` : ""}
+          </Typography>
+          {isAdmin && (
+            <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
+              Submitted by {item.submittedByEmail || "Unknown submitter"}
+            </Typography>
+          )}
+        </Stack>
       </Box>
     );
   }
@@ -167,11 +180,13 @@ export default function SubmissionRow({
       onKeyDown={handleKeyDown}
       sx={{
         display: "grid",
-        gridTemplateColumns: isAdmin ? "2fr 1.5fr 1fr 1fr 1fr 40px" : "2fr 1fr 1fr 1fr 40px",
+        gridTemplateColumns: isAdmin
+          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px"
+          : "minmax(260px, 2.2fr) minmax(180px, 1.25fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px",
         gap: 2,
         px: 2.5,
         py: 2,
-        backgroundColor: "#ffffff",
+        backgroundColor: "rgba(255, 255, 255, 0.92)",
         borderRadius: 0,
         borderBottom: `1px solid ${editorial.border}`,
         alignItems: "center",
@@ -180,7 +195,7 @@ export default function SubmissionRow({
         outline: "none",
         "&:hover": {
           backgroundColor: editorial.blueSoft,
-          boxShadow: "none",
+          boxShadow: "inset 3px 0 0 rgba(0, 120, 212, 0.55)",
         },
         "&:focus-visible": {
           backgroundColor: editorial.blueSoft,
@@ -190,13 +205,13 @@ export default function SubmissionRow({
     >
       {/* Submission */}
       <Box>
-        <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5 }}>
+        <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5, textWrap: "balance" }}>
           {item.title}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Chip icon={<NumbersIcon />} label={item.formId} size="small" sx={identityChipSx} />
+          <Chip icon={<NumbersIcon />} label={`Ref ${item.submissionId}`} size="small" sx={identityChipSx} />
           <Typography variant="caption" sx={{ color: editorial.muted }}>
-            {submittedAt}
+            Form {item.formId || "N/A"}
           </Typography>
         </Box>
       </Box>
@@ -213,17 +228,39 @@ export default function SubmissionRow({
             whiteSpace: "nowrap",
           }}
         >
-          {item.submittedByEmail}
+          {item.submittedByEmail || "Unknown submitter"}
         </Typography>
       )}
 
       {/* List */}
-      <ListBadge title={item.listTitle} color={meta.color} pale={meta.pale} />
+      <Box sx={{ minWidth: 0 }}>
+        <ListBadge title={item.listTitle} color={meta.color} pale={meta.pale} />
+        <Typography
+          variant="caption"
+          sx={{
+            color: editorial.softMuted,
+            display: "block",
+            mt: 0.5,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {meta.category}
+        </Typography>
+      </Box>
 
-      {/* Category */}
-      <Typography variant="body2" sx={{ color: editorial.muted }}>
-        {meta.category}
-      </Typography>
+      {/* Submitted */}
+      <Box>
+        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800 }}>
+          {submittedAt}
+        </Typography>
+        {submittedTime && (
+          <Typography variant="caption" sx={{ color: editorial.muted }}>
+            {submittedTime}
+          </Typography>
+        )}
+      </Box>
 
       {/* Status */}
       <Box>

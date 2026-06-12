@@ -52,6 +52,8 @@ export default function LayerCard({
   const assigneeLabel =
     layer.assignee.type === "field-reference"
       ? `Field: ${layer.assignee.value || "—"}`
+      : layer.assignee.type === "department-approver"
+        ? `Dept: ${layer.assignee.value || "—"} -> ${layer.assignee.roleValue || "HOD"}`
       : layer.assignee.value || "No assignee";
 
   return (

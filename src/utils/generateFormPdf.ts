@@ -134,7 +134,12 @@ export async function generateAndStorePdf(
     }
   }
 
-  const blob = await pdf(FormPdfDocument(data)).toBlob();
+  const blob = await Promise.race([
+    pdf(FormPdfDocument(data)).toBlob(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("PDF generation timed out")), 60_000)
+    ),
+  ]);
 
   // Upload to SharePoint Form PDFs library
   const pdfUrl = await uploadFormPdf(token, listTitle, responseItemId, blob);

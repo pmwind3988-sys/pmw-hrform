@@ -17,6 +17,7 @@ import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { rowsToHtml, getDynamicMatrixFields } from "../utils/DynamicMatrix";
+import { getSelectedCompany, splitCompanyLines } from "../utils/companySelection";
 import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
 
@@ -38,8 +39,11 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
     const rawSurvey = versionData.value?.[0]?.SurveyJSON;
     if (!rawSurvey) return;
 
-    const parsed = JSON.parse(rawSurvey);
+    const parsed = JSON.parse(rawSurvey) as Record<string, unknown>;
     const surveyContent = parsed.surveyJson || parsed;
+    const versionMeta = typeof parsed.meta === "object" && parsed.meta !== null && !Array.isArray(parsed.meta)
+      ? parsed.meta as Record<string, unknown>
+      : {};
 
     const respItem = await spGet(
       token,
@@ -75,7 +79,9 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
         formVersion,
         formStatus,
       },
-      logoUrl: "/logo-128.png",
+      companyInfo: splitCompanyLines(versionMeta.companies),
+      isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
+      logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
     });
   } catch (e) {
     console.warn("[loadPdfAndGenerate] failed:", e);
@@ -246,6 +252,13 @@ export default function EvaluationPage() {
 
         const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
         if (!data) { setError("Could not load evaluation data."); setLoading(false); return; }
+        const assignedEmail = String(data.responseFields[`L${displayLayerNumber}_Email`] || "").trim().toLowerCase();
+        const signedInEmail = (userEmail || "").trim().toLowerCase();
+        if (data.currentLayer?.authMode !== "public" && (!assignedEmail || assignedEmail !== signedInEmail)) {
+          setError("This approval layer is not assigned to your account.");
+          setLoading(false);
+          return;
+        }
         setResponseData(data.responseFields);
         setCurrentLayer(data.currentLayer || null);
         setPreviousResults(data.previousResults);
@@ -261,7 +274,7 @@ export default function EvaluationPage() {
       setLoading(false);
     };
     load();
-  }, [authState, isPublic, formSlug, responseId, displayLayerNumber, token]);
+  }, [authState, isPublic, formSlug, responseId, displayLayerNumber, token, userEmail]);
 
   // ── Submit action (365 mode) ──
   const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm") => {
@@ -440,6 +453,7 @@ export default function EvaluationPage() {
   const isEvaluation = currentLayer?.type === "evaluation";
   const isSignatureRequired = currentLayer?.type === "approval" && (currentLayer as unknown as Record<string, unknown>).confirmationType === "signature";
   const isCheckboxMode = currentLayer?.type === "approval" && (currentLayer as unknown as Record<string, unknown>).confirmationType === "checkbox";
+  const selectedCompany = getSelectedCompany(responseData);
 
   return (
     <div style={{ minHeight: "100vh", background: COLORS.bg, padding: "clamp(16px, 3vw, 32px) 16px" }}>
@@ -497,6 +511,7 @@ export default function EvaluationPage() {
             </div>
             <div style={{ fontSize: 13, color: COLORS.textSecond }}>
               <div>Form ID: {String(responseData.FormID || responseData.formId || "—")}</div>
+              {selectedCompany && <div>Company: {selectedCompany}</div>}
               <div>Submitted: {responseData.SubmittedAt ? new Date(String(responseData.SubmittedAt)).toLocaleDateString() : "—"}</div>
               <div>Version: {String(responseData.FormVersion || responseData.formVersion || "—")}</div>
             </div>

@@ -28,6 +28,46 @@ const C = {
   greenPale: "#D1FAE5",
 } as const;
 
+const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+
+function toAbsoluteSignatureUrl(url: string): string {
+  if (!url || url.startsWith("http") || url.startsWith("data:")) return url;
+  if (!url.startsWith("/")) return url;
+  try {
+    return `${new URL(SP_SITE_URL).origin}${url}`;
+  } catch {
+    return url;
+  }
+}
+
+function parseSignatureRecord(value: string): Record<string, unknown> | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function signatureValueToSrc(value: unknown): string {
+  if (typeof value === "string") {
+    const parsed = parseSignatureRecord(value);
+    if (parsed) return signatureValueToSrc(parsed);
+    return toAbsoluteSignatureUrl(value);
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return "";
+  const record = value as Record<string, unknown>;
+  for (const key of ["Url", "url", "serverRelativeUrl", "ServerRelativeUrl"]) {
+    const next = record[key];
+    if (typeof next === "string" && next.trim()) return toAbsoluteSignatureUrl(next.trim());
+  }
+  return "";
+}
+
 // ── Model ──────────────────────────────────────────────────────────────
 
 class SignatureQuestionModel extends Question {
@@ -311,9 +351,11 @@ function SignatureModal({
 function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [locked, setLocked] = useState(false);
-  const value = question.value as string | null | undefined;
+  const value = question.value as unknown;
+  const signatureSrc = signatureValueToSrc(value);
+  const readOnly = question.isReadOnly;
 
-  const hasSignature = !!value;
+  const hasSignature = !!signatureSrc;
 
   const handleSave = (dataUrl: string) => {
     question.value = dataUrl;
@@ -329,6 +371,27 @@ function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {
 
   // Empty state — click to sign
   if (!hasSignature) {
+    if (readOnly) {
+      return (
+        <div
+          style={{
+            width: "100%",
+            minHeight: 72,
+            border: `1px dashed ${C.border}`,
+            borderRadius: 12,
+            background: C.offWhite,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: C.textMuted,
+            fontSize: 12,
+          }}
+        >
+          No signature captured
+        </div>
+      );
+    }
+
     return (
       <div>
         <button
@@ -341,7 +404,7 @@ function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {
             cursor: "pointer", display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
             gap: 8, padding: "24px", fontFamily: "'DM Sans', sans-serif",
-            transition: "all .2s",
+            transition: "background-color .2s, border-color .2s",
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.borderColor = C.purple;
@@ -386,7 +449,7 @@ function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {
         }}
       >
         <img
-          src={value!}
+          src={signatureSrc}
           alt="Signature"
           style={{
             width: "100%", maxHeight: question.signatureHeight,
@@ -394,72 +457,73 @@ function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {
           }}
         />
 
-        {/* Overlay controls on hover */}
-        <div
-          style={{
-            position: "absolute", inset: 0,
-            background: "rgba(255,255,255,0.0)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            gap: 10, opacity: 0, transition: "all .2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = "1";
-            e.currentTarget.style.background = "rgba(255,255,255,0.85)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = "0";
-            e.currentTarget.style.background = "rgba(255,255,255,0.0)";
-          }}
-        >
-          {locked ? (
-            <button
-              onClick={() => setLocked(false)}
-              type="button"
-              style={{
-                height: 36, padding: "0 16px", borderRadius: 8,
-                border: `1px solid ${C.purpleMid}`, background: C.white,
-                color: C.purple, fontSize: 12, fontWeight: 600,
-                cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                display: "flex", alignItems: "center", gap: 6,
-              }}
-            >
-              <span>🔓</span> Unlock to Edit
-            </button>
-          ) : (
-            <>
+        {!readOnly && (
+          <div
+            style={{
+              position: "absolute", inset: 0,
+              background: "rgba(255,255,255,0.0)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 10, opacity: 0, transition: "opacity .2s, background-color .2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = "1";
+              e.currentTarget.style.background = "rgba(255,255,255,0.85)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = "0";
+              e.currentTarget.style.background = "rgba(255,255,255,0.0)";
+            }}
+          >
+            {locked ? (
               <button
-                onClick={() => setModalOpen(true)}
+                onClick={() => setLocked(false)}
                 type="button"
                 style={{
                   height: 36, padding: "0 16px", borderRadius: 8,
-                  border: "none", background: `linear-gradient(135deg,${C.purple},${C.purpleDark})`,
-                  color: C.white, fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${C.purpleMid}`, background: C.white,
+                  color: C.purple, fontSize: 12, fontWeight: 600,
                   cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
                   display: "flex", alignItems: "center", gap: 6,
                 }}
               >
-                <span>✏️</span> Edit
+                <span>🔓</span> Unlock to Edit
               </button>
-              <button
-                onClick={handleClear}
-                type="button"
-                style={{
-                  height: 36, padding: "0 16px", borderRadius: 8,
-                  border: `1px solid ${C.red}`, background: C.white,
-                  color: C.red, fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                  display: "flex", alignItems: "center", gap: 6,
-                }}
-              >
-                <span>🗑️</span> Clear
-              </button>
-            </>
-          )}
-        </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => setModalOpen(true)}
+                  type="button"
+                  style={{
+                    height: 36, padding: "0 16px", borderRadius: 8,
+                    border: "none", background: `linear-gradient(135deg,${C.purple},${C.purpleDark})`,
+                    color: C.white, fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  <span>✏️</span> Edit
+                </button>
+                <button
+                  onClick={handleClear}
+                  type="button"
+                  style={{
+                    height: 36, padding: "0 16px", borderRadius: 8,
+                    border: `1px solid ${C.red}`, background: C.white,
+                    color: C.red, fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  <span>🗑️</span> Clear
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Locked indicator */}
-      {locked && (
+      {locked && !readOnly && (
         <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
           <span style={{ fontSize: 10, color: C.green }}>🔒</span>
           <span style={{ fontSize: 10, color: C.textMuted }}>Signature locked — hover to unlock</span>
@@ -472,7 +536,7 @@ function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {
           height={question.signatureHeight}
           penColor={question.penColor}
           backgroundColor={question.backgroundColor}
-          existingDataUrl={value}
+          existingDataUrl={signatureSrc}
           onSave={handleSave}
           onCancel={() => setModalOpen(false)}
         />

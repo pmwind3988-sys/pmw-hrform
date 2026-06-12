@@ -27,6 +27,26 @@ export const ADMIN_PANEL_SETTINGS_COLUMNS: GraphColumnSpec[] = [
   { name: "UpdatedAt", displayName: "UpdatedAt", type: "dateTime" },
 ];
 
+function workflowColumns(layerCount: number): GraphColumnSpec[] {
+  const count = Math.max(layerCount, 1);
+  const columns: GraphColumnSpec[] = [
+    { name: "SelectedBranch", displayName: "SelectedBranch", type: "text" },
+    { name: "EvaluationData", displayName: "EvaluationData", type: "note" },
+    { name: "CurrentLayer", displayName: "CurrentLayer", type: "number" },
+    { name: "FormStatus", displayName: "FormStatus", type: "text" },
+  ];
+  for (let n = 1; n <= count; n++) {
+    columns.push(
+      { name: `L${n}_Status`, displayName: `L${n}_Status`, type: "text" },
+      { name: `L${n}_Email`, displayName: `L${n}_Email`, type: "text" },
+      { name: `L${n}_SignedAt`, displayName: `L${n}_SignedAt`, type: "dateTime" },
+      { name: `L${n}_Rejection`, displayName: `L${n}_Rejection`, type: "note" },
+      { name: `L${n}_Signature`, displayName: `L${n}_Signature`, type: "note" },
+    );
+  }
+  return columns;
+}
+
 export function makeGraphListSchema(
   displayName: string,
   columns: GraphColumnSpec[] = [],
@@ -41,6 +61,10 @@ export async function ensureGraphListSchema(token: string, schema: GraphListSche
 
 export async function ensurePdpaColumns(token: string, listDisplayName: string): Promise<void> {
   await ensureListColumns(token, listDisplayName, PDPA_COLUMNS);
+}
+
+export async function ensureWorkflowColumns(token: string, listDisplayName: string, layerCount: number): Promise<void> {
+  await ensureListColumns(token, listDisplayName, workflowColumns(layerCount));
 }
 
 export async function ensureAdminPanelSettingsList(token: string, listDisplayName: string): Promise<void> {

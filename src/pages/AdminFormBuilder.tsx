@@ -14,6 +14,8 @@ import AuditLog from "../components/builder/AuditLog";
 import ProvisionOverlay from "../components/builder/ProvisionOverlay";
 import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import { C } from "../components/builder/constants";
+import { validateLayerConfig } from "../components/builder/layerValidation";
+import type { LayerFieldOption } from "../components/builder/layerValidation";
 import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
@@ -74,6 +76,29 @@ const DEFAULT_COMPANIES = [
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
 type MetaTextKey = "formTitle" | "formId" | "formVersion" | "slug" | "isoStandards" | "companies" | "logoUrl";
+
+function getLayerFieldOptions(json: SurveyJson | null | undefined): LayerFieldOption[] {
+  if (!json) return [];
+  return flattenQuestions(json)
+    .map((field) => ({
+      name: field.name,
+      title: typeof field.title === "string" ? field.title : undefined,
+      type: field.type,
+      inputType: field.inputType,
+    }))
+    .filter((field) => !!field.name);
+}
+
+function getEffectiveLayerCount(config: LayerConfig | null, fallback: number): number {
+  if (!config) return fallback;
+  const branchCounts = (config.manualBranches ?? []).map((branch) => branch.layers.length);
+  return Math.max(config.layers.length, ...branchCounts, 0);
+}
+
+function firstLayerValidationMessage(errors: string[]): string {
+  if (errors.length <= 1) return errors[0] || "Layer configuration is invalid.";
+  return `${errors[0]} (+${errors.length - 1} more)`;
+}
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const G = `*{box-sizing:border-box;margin:0;padding:0;font-family:var(--pmw-font-main)!important}body{font-family:var(--pmw-font-main);background:${C.offWhite};color:${C.textPrimary}}
@@ -502,9 +527,9 @@ export default function AdminFormBuilder() {
     const version = "1.0";
     const userEmail = accounts[0]?.username || "admin";
     try {
-      const layerConfigToSave = layerConfig || (numLayers > 0 ? {
+      const layerConfigToSave: LayerConfig | null = layerConfig || (numLayers > 0 ? {
         version: "1.0" as const,
-        layers: layers.slice(0, numLayers).map((l, i): import("../types").LayerConfigItem => ({
+        layers: layers.slice(0, numLayers).map((l, i): LayerConfigItem => ({
           layerNumber: i + 1,
           type: "approval" as const,
           authMode: "365" as const,
@@ -514,9 +539,15 @@ export default function AdminFormBuilder() {
           allowRejectionReason: true,
         })),
       } : null);
+      const layerValidation = validateLayerConfig(layerConfigToSave, getLayerFieldOptions(usedJson));
+      if (layerValidation.errors.length > 0) {
+        showToast(firstLayerValidationMessage(layerValidation.errors), "err");
+        setSidebarTab("layers");
+        return;
+      }
       await upsertFormConfig(token, meta.formTitle.trim(), {
         formId: meta.formId.trim() || undefined,
-        numLayers: layerConfig ? layerConfig.layers.length : numLayers,
+        numLayers: getEffectiveLayerCount(layerConfigToSave, numLayers),
         slug: meta.slug,
         version,
         isPublished: false,
@@ -532,7 +563,7 @@ export default function AdminFormBuilder() {
         surveyJson: usedJson,
         meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
         changedBy: userEmail,
-        layerConfig: layerConfig,
+        layerConfig: layerConfigToSave,
       });
       setIsDraft(true);
       setIsEditing(true);
@@ -666,8 +697,25 @@ export default function AdminFormBuilder() {
     const version = isEditing && !isDraft ? proposedVersion : meta.formVersion;
     const title = meta.formTitle.trim();
     const userEmail = accounts[0]?.username || "admin";
-    // Derive effective numLayers from layerConfig if present
-    const effectiveNumLayers = layerConfig ? layerConfig.layers.length : numLayers;
+    const layerConfigToSave: LayerConfig | null = layerConfig || (numLayers > 0 ? {
+      version: "1.0" as const,
+      layers: layers.slice(0, numLayers).map((l, i): LayerConfigItem => ({
+        layerNumber: i + 1,
+        type: "approval" as const,
+        authMode: "365" as const,
+        assignee: { type: "user" as const, value: l.email },
+        title: `Layer ${i + 1}`,
+        confirmationType: "signature" as const,
+        allowRejectionReason: true,
+      })),
+    } : null);
+    const layerValidation = validateLayerConfig(layerConfigToSave, getLayerFieldOptions(usedJson));
+    if (layerValidation.errors.length > 0) {
+      showToast(firstLayerValidationMessage(layerValidation.errors), "err");
+      setSidebarTab("layers");
+      return;
+    }
+    const effectiveNumLayers = getEffectiveLayerCount(layerConfigToSave, numLayers);
     const activeLayers = layers.slice(0, effectiveNumLayers);
     setProvLogs([]);
     setProvOk(false);
@@ -689,19 +737,6 @@ export default function AdminFormBuilder() {
       });
 
       pLog(`Updating Form Config…`);
-      // Build LayerConfig JSON from UI state if not already set
-      const layerConfigToSave = layerConfig || (effectiveNumLayers > 0 ? {
-        version: "1.0" as const,
-        layers: activeLayers.map((l, i): LayerConfigItem => ({
-          layerNumber: i + 1,
-          type: "approval" as const,
-          authMode: "365" as const,
-          assignee: { type: "user" as const, value: l.email },
-          title: `Layer ${i + 1}`,
-          confirmationType: "signature" as const,
-          allowRejectionReason: true,
-        })),
-      } : null);
       await upsertFormConfig(token, title, {
         formId: meta.formId.trim(),
         numLayers: effectiveNumLayers,
@@ -739,7 +774,7 @@ export default function AdminFormBuilder() {
         surveyJson: usedJson,
         meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
         changedBy: userEmail,
-        layerConfig: layerConfig,
+        layerConfig: layerConfigToSave,
       });
       pLog(`Version saved`, "ok");
 
@@ -830,6 +865,7 @@ export default function AdminFormBuilder() {
       })
     : [];
   const extraCompanyFields = companyFieldCandidates.filter(q => q.name !== COMPANY_FIELD_NAME);
+  const layerFieldOptions = getLayerFieldOptions(surveyJson);
   const toastColor = toast?.type === "err" ? C.red : toast?.type === "ok" ? C.green : C.purple;
 
   return (
@@ -1055,7 +1091,7 @@ export default function AdminFormBuilder() {
             readOnly={!!viewingOld}
             token={tokenRef.current || undefined}
             showBanner={showBanner}
-            meta={{ isoStandards: meta.isoStandards, companies: meta.companies, formTitle: meta.formTitle, logoUrl: meta.logoUrl }}
+            meta={{ isoStandards: meta.isoStandards, companies: meta.companies, formTitle: meta.formTitle, logoUrl: meta.logoUrl, companyChoiceEnabled: meta.companyChoiceEnabled }}
             companyChoice={{
               enabled: meta.companyChoiceEnabled,
               choices: companyOptions,
@@ -1384,7 +1420,7 @@ export default function AdminFormBuilder() {
                   value={layerConfig}
                   onChange={setLayerConfig}
                   siteUsers={siteUsers}
-                  formFieldNames={surveyJson ? flattenQuestions(surveyJson).map(q => q.name) : []}
+                  formFields={layerFieldOptions}
                   slug={meta.slug}
                 />
               )}

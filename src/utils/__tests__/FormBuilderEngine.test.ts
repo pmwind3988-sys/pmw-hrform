@@ -5,6 +5,7 @@ import {
   createQuestion,
   flattenQuestions,
   buildQuestionTree,
+  buildSurveyJson,
   getSpColumnKind,
   findFieldById,
   findFieldLocation,
@@ -15,6 +16,7 @@ import {
   validateFields,
   duplicateField,
   reorderFields,
+  QUESTION_TYPES,
 } from '../FormBuilderEngine';
 import type { FormBuilderField, QuestionTypeDefinition, SurveyJson } from '../../types';
 
@@ -755,5 +757,26 @@ describe('duplicateField', () => {
   it('returns unchanged array when id not found', () => {
     const fields: FormBuilderField[] = [makeField({ _id: 'a' })];
     expect(duplicateField(fields, 'nonexistent')).toHaveLength(1);
+  });
+});
+
+// ── buildSurveyJson ──────────────────────────────────────────────────────────────
+
+describe('buildSurveyJson', () => {
+  it('maps nested dropdown builder props to SurveyJS and strips internal panel props', () => {
+    const panel = createQuestion(QUESTION_TYPES.find(t => t.type === 'panel')!);
+    const dropdown = createQuestion(QUESTION_TYPES.find(t => t.type === 'dropdown')!);
+    panel.elements = [dropdown];
+
+    const json = buildSurveyJson([panel]);
+    const panelEl = json.pages[0].elements[0] as Record<string, unknown>;
+    const dropdownEl = (panelEl.elements as Record<string, unknown>[])[0];
+
+    expect(panelEl.collapsible).toBeUndefined();
+    expect(dropdownEl.searchable).toBeUndefined();
+    expect(dropdownEl.clearable).toBeUndefined();
+    expect(dropdownEl.searchEnabled).toBe(false);
+    expect(dropdownEl.allowClear).toBe(false);
+    expect(dropdownEl.renderAs).toBe("select");
   });
 });

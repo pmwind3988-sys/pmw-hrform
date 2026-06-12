@@ -11,11 +11,12 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
-import type { LayerConfig } from "../types";
+import type { LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
+import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import IosShareIcon from "@mui/icons-material/IosShare";
@@ -26,6 +27,160 @@ import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SU
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const COMPANY_FIELD_NAME = "company";
+const COMPANY_FIELD_LABEL = "Company";
+const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
+
+type CompanyChoiceOption = { value: string; text: string };
+
+function companyLinesFromText(value: string): string[] {
+  return value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+}
+
+function companyChoiceFromUnknown(choice: unknown): CompanyChoiceOption | null {
+  if (typeof choice === "string") {
+    const trimmed = choice.trim();
+    return trimmed ? { value: trimmed, text: trimmed } : null;
+  }
+  if (!choice || typeof choice !== "object") return null;
+  const record = choice as Record<string, unknown>;
+  const value = String(record.value ?? record.text ?? "").trim();
+  const text = String(record.text ?? record.value ?? "").trim();
+  return value ? { value, text: text || value } : null;
+}
+
+function getCompanyChoiceOptions(choices: unknown, fallbackCompanyLines: string[]): CompanyChoiceOption[] {
+  const fromChoices = Array.isArray(choices)
+    ? choices.map(companyChoiceFromUnknown).filter((choice): choice is CompanyChoiceOption => Boolean(choice))
+    : [];
+  return fromChoices.length > 0 ? fromChoices : fallbackCompanyLines.map(value => ({ value, text: value }));
+}
+
+function findCompanyChoiceElement(
+  json: Record<string, unknown> | null | undefined,
+  meta: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  const enabledByMeta = meta?.companyChoiceEnabled === true;
+  const walk = (elements: Record<string, unknown>[]): Record<string, unknown> | null => {
+    for (const element of elements) {
+      if (
+        element.isManagedCompanyChoice === true ||
+        (enabledByMeta && element.name === COMPANY_FIELD_NAME && element.type === "radiogroup")
+      ) {
+        return element;
+      }
+      if (Array.isArray(element.elements)) {
+        const nested = walk(element.elements as Record<string, unknown>[]);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  };
+  const pages = (json?.pages as { elements?: Record<string, unknown>[] }[] | undefined) ?? [];
+  for (const page of pages) {
+    if (!Array.isArray(page.elements)) continue;
+    const found = walk(page.elements);
+    if (found) return found;
+  }
+  return null;
+}
+
+function stripFieldReference(value: string): string {
+  return value.replace(/^\$\{/, "").replace(/\}$/, "");
+}
+
+function submittedValueToString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["email", "Email", "value", "Value", "text", "Title"]) {
+      const next = record[key];
+      if (typeof next === "string" && next.trim()) return next.trim();
+    }
+  }
+  return "";
+}
+
+function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string, unknown>): string {
+  const rawEmail = layer.assignee.type === "user"
+    ? layer.assignee.value
+    : submittedValueToString(submittedData[stripFieldReference(layer.assignee.value)]);
+  const email = rawEmail.trim();
+  if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
+    const label = layer.title || `Layer ${layer.layerNumber}`;
+    throw new Error(`${label} needs a valid assignee email before this form can be submitted.`);
+  }
+  return email;
+}
+
+async function resolveDepartmentApproverEmail(
+  token: string,
+  layer: LayerConfigItem,
+  submittedData: Record<string, unknown>,
+): Promise<{ email: string; name: string }> {
+  if (layer.assignee.type !== "department-approver") {
+    return { email: resolveLayerEmail(layer, submittedData), name: "" };
+  }
+
+  const label = layer.title || `Layer ${layer.layerNumber}`;
+  const departmentField = layer.assignee.value.trim();
+  const department = submittedValueToString(submittedData[departmentField]);
+  if (!departmentField) {
+    throw new Error(`${label} needs a department field before this form can be submitted.`);
+  }
+  if (!department) {
+    throw new Error(`${label} needs a department value before this form can be submitted.`);
+  }
+
+  const config = getDepartmentApproverLookupConfig(layer.assignee);
+  const params = new URLSearchParams();
+  const filters = [`${config.departmentColumn} eq '${department.replace(/'/g, "''")}'`];
+  if (config.roleColumn && config.roleValue) {
+    filters.push(`${config.roleColumn} eq '${config.roleValue.replace(/'/g, "''")}'`);
+  }
+  params.set("$filter", filters.join(" and "));
+  params.set("$select", [config.departmentColumn, config.emailColumn, config.nameColumn].join(","));
+  params.set("$top", "2");
+
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(config.listName)}')/items?${params.toString()}`,
+  ) as { value?: Record<string, unknown>[] };
+  const matches = data.value ?? [];
+  if (matches.length === 0) {
+    throw new Error(`${label} could not find ${config.roleValue || "an approver"} for department "${department}".`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`${label} found more than one ${config.roleValue || "approver"} for department "${department}".`);
+  }
+
+  const email = submittedValueToString(matches[0][config.emailColumn]);
+  if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
+    throw new Error(`${label} found an invalid approver email for department "${department}".`);
+  }
+
+  return {
+    email,
+    name: submittedValueToString(matches[0][config.nameColumn]),
+  };
+}
+
+async function resolveLayerAssignee(
+  layer: LayerConfigItem,
+  submittedData: Record<string, unknown>,
+  token: string | null,
+): Promise<{ email: string; name: string }> {
+  if (layer.assignee.type === "department-approver") {
+    if (!token) {
+      throw new Error("Department approver lookup needs a SharePoint token or server-side submission.");
+    }
+    return resolveDepartmentApproverEmail(token, layer, submittedData);
+  }
+  return { email: resolveLayerEmail(layer, submittedData), name: "" };
+}
 const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
 
 // ── Register custom SurveyJS widgets and properties ────────────────────
@@ -72,12 +227,14 @@ const globalCss = (t: typeof LIGHT) => `
   .dfp-header{flex-wrap:nowrap}
   .dfp-survey-wrap .sd-container-modern,.dfp-survey-wrap .sd-root-modern{max-width:100%!important}
   .dfp-banner-logo img{max-height:48px!important}
+  .dfp-company-option span{text-wrap:pretty}
   @media(max-width:768px){
     .dfp-banner-logo{width:116px!important}
     .dfp-banner-row{flex-direction:column!important}
     .dfp-banner-logo{border-right:none!important;border-bottom:inherit;padding:10px 12px!important;width:100%!important;min-height:64px}
     .dfp-banner-logo img{max-height:40px!important}
     .dfp-banner-info{font-size:12px!important;padding:10px 12px!important}
+    .dfp-company-option{flex-basis:100%!important}
   }
   @media(max-width:640px){
     .dfp-header{padding:0 12px!important;min-height:48px!important}
@@ -128,6 +285,78 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
+function CompanySelector({
+  title,
+  options,
+  value,
+  error,
+  disabled,
+  onChange,
+  t,
+}: {
+  title: string;
+  options: CompanyChoiceOption[];
+  value: string;
+  error: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  t: typeof LIGHT;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>
+        {title}
+      </div>
+      <div className="dfp-company-options" role="radiogroup" aria-label={title} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {options.map(option => {
+          const checked = value === option.value;
+          return (
+            <label
+              key={option.value}
+              className="dfp-company-option"
+              style={{
+                minHeight: 40,
+                flex: "1 1 220px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: checked ? t.purplePale : t.cardBg,
+                boxShadow: checked
+                  ? `0 0 0 1px ${t.purpleMid}, 0 8px 20px rgba(16,16,16,0.06)`
+                  : `0 0 0 1px ${error ? t.red : t.border}`,
+                color: checked ? t.purple : t.textPrimary,
+                cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.6 : 1,
+                transition: "background-color .15s, box-shadow .15s, color .15s, opacity .15s",
+              }}
+            >
+              <input
+                type="radio"
+                name="pmw-company-choice"
+                value={option.value}
+                checked={checked}
+                disabled={disabled}
+                onChange={() => onChange(option.value)}
+                style={{ width: 16, height: 16, accentColor: t.purple, flexShrink: 0 }}
+              />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 800, lineHeight: 1.35 }}>
+                {option.text}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {error && (
+        <div role="alert" style={{ color: t.red, fontSize: 12, fontWeight: 800, lineHeight: 1.4 }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const SuccessScreen = ({ formTitle, onReset, t }: { formTitle: string; onReset: () => void; t: typeof LIGHT }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
@@ -169,6 +398,9 @@ export default function DynamicFormPage() {
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
+  const [isLastSurveyPage, setIsLastSurveyPage] = useState(true);
+  const [companyChoiceValue, setCompanyChoiceValue] = useState("");
+  const [companyChoiceError, setCompanyChoiceError] = useState("");
   const [resetKey, setResetKey] = useState(0);
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
@@ -209,7 +441,7 @@ export default function DynamicFormPage() {
           let cfgRaw: Record<string, unknown>;
           let ver: { surveyJson: unknown; meta: unknown } | null;
           if (pinVersion) {
-            const cfgRes = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
+            const cfgRes = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
             if (!cfgRes.ok) throw new Error(`Failed to load form config: ${cfgRes.status} ${cfgRes.statusText}`);
             cfgRaw = (await cfgRes.json()).value?.[0];
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
@@ -398,6 +630,7 @@ export default function DynamicFormPage() {
       const m = new Model(json);
       m.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless);
       m.showCompletedPage = false;
+      m.showCompleteButton = false;
       // Manually evaluate formula fields (stored as readOnly text with _expression)
       // Build expression map from the source JSON — SurveyJS does NOT preserve
       // custom JSON properties (_expression) on the question object in v2.5
@@ -474,17 +707,68 @@ export default function DynamicFormPage() {
 
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
 
+  const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
+  const showBanner = (formData?.meta?.showBanner as boolean) !== false;
+  const isoStandardsText = (formData?.meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
+  const companiesText = (formData?.meta?.companies as string) || "";
+  const companyLines = companyLinesFromText(companiesText);
+  const companySelector = findCompanyChoiceElement(enrichedSurveyJson || formData?.surveyJson, formData?.meta);
+  const companyChoiceEnabled = formData?.meta?.companyChoiceEnabled === true;
+  const companyOptions = getCompanyChoiceOptions(companySelector?.choices, companyLines);
+  const companyFieldName = String(companySelector?.name || (companyChoiceEnabled ? COMPANY_FIELD_NAME : ""));
+  const companyTitle = String(companySelector?.title || COMPANY_FIELD_LABEL);
+  const showCompanyChoice = companyChoiceEnabled && companyOptions.length > 0 && !!companyFieldName;
+  const showHeaderBanner = showBanner || showCompanyChoice;
+  const logoUrl = (formData?.meta?.logoUrl as string) || "";
+  const isPublicForm = formData?.formConfig?.IsPublic !== false;
+  const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
+
+  useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
+
+  useEffect(() => {
+    if (!showCompanyChoice || !survey || !companyFieldName) {
+      setCompanyChoiceValue("");
+      setCompanyChoiceError("");
+      return;
+    }
+    const current = submittedValueToString(survey.getValue(companyFieldName));
+    setCompanyChoiceValue(current);
+    const syncCompanyValue = (_sender: Model, options: { name: string; value: unknown }) => {
+      if (options.name !== companyFieldName) return;
+      setCompanyChoiceValue(submittedValueToString(options.value));
+      if (options.value) setCompanyChoiceError("");
+    };
+    survey.onValueChanged.add(syncCompanyValue);
+    return () => survey.onValueChanged.remove(syncCompanyValue);
+  }, [survey, showCompanyChoice, companyFieldName]);
+
   const onCompleting = useCallback((sender: { data: Record<string, unknown> }, options: { allowComplete: boolean }) => {
     if (!pdpaAccepted) {
       options.allowComplete = false;
       setPdpaConsentError("Please read and accept the Privacy Notice before submitting this form.");
+      document.querySelector(".dfp-pdpa-consent")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    if (showCompanyChoice) {
+      const selectedCompany = submittedValueToString(sender.data[companyFieldName] ?? companyChoiceValue);
+      if (!selectedCompany) {
+        options.allowComplete = false;
+        setPdpaConsentError("");
+        setCompanyChoiceError(COMPANY_CHOICE_REQUIRED_ERROR);
+        document.querySelector(".dfp-banner")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      sender.data[companyFieldName] = selectedCompany;
+      if (survey?.getValue(companyFieldName) !== selectedCompany) {
+        survey?.setValue(companyFieldName, selectedCompany);
+      }
+    }
     setPdpaConsentError("");
+    setCompanyChoiceError("");
     lastDataRef.current = { ...sender.data };
     options.allowComplete = false; // prevent survey auto-complete — we handle submission + success/error UI
     setSubmitStatus("loading");
-  }, [pdpaAccepted]);
+  }, [pdpaAccepted, showCompanyChoice, companyFieldName, companyChoiceValue, survey]);
   const doSubmitForm = useCallback(async () => {
     const raw = lastDataRef.current ?? {};
     const cfg = formData?.formConfig;
@@ -573,16 +857,20 @@ export default function DynamicFormPage() {
       if (rawLayerConfig && rawLayerConfig.trim()) {
         try { layerConfigParsed = JSON.parse(rawLayerConfig); } catch {}
       }
+      const hasManualBranches = (layerConfigParsed?.manualBranches?.length ?? 0) > 0;
+      const hasDepartmentApproverLayers = (layerConfigParsed?.layers ?? [])
+        .some((layer) => layer.assignee.type === "department-approver");
+      const deferDepartmentApproverLookupToApi = !token && hasDepartmentApproverLayers;
 
-      if (layerConfigParsed?.layers?.length) {
+      if (hasManualBranches) {
+        // Manual branch workflows start only after an HR Forms Owner chooses a branch.
+        resolvedLayerCount = 0;
+        activeLayers = [];
+      } else if (layerConfigParsed?.layers?.length) {
         resolvedLayerCount = layerConfigParsed.layers.length;
-        for (const layer of layerConfigParsed.layers) {
-          if (layer.assignee.type === "user") {
-            activeLayers.push({ email: layer.assignee.value, name: "" });
-          } else {
-            const fieldRef = layer.assignee.value.replace("${", "").replace("}", "");
-            const fieldVal = String(raw[fieldRef] ?? "");
-            activeLayers.push({ email: fieldVal, name: "" });
+        if (!deferDepartmentApproverLookupToApi) {
+          for (const layer of layerConfigParsed.layers) {
+            activeLayers.push(await resolveLayerAssignee(layer, raw, token));
           }
         }
       } else {
@@ -629,7 +917,7 @@ export default function DynamicFormPage() {
       body.RetentionUntil = getPdpaRetentionUntil(new Date(body.PDPAConsentAt as string));
 
       // Step 4: Write layer status columns
-      if (layerConfigParsed?.layers?.length) {
+      if (layerConfigParsed?.layers?.length && !deferDepartmentApproverLookupToApi) {
         // Enhanced path — use new constants
         for (let n = 1; n <= resolvedLayerCount; n++) {
           body[`L${n}_Status`] = SP_LAYER_STATUS.PENDING;
@@ -637,6 +925,14 @@ export default function DynamicFormPage() {
         }
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
         body.CurrentLayer = resolvedLayerCount > 0 ? 1 : 0;
+      } else if (layerConfigParsed?.layers?.length) {
+        body.FormStatus = SP_FORM_STATUS.SUBMITTED;
+        body.CurrentLayer = resolvedLayerCount > 0 ? 1 : 0;
+      } else if (hasManualBranches) {
+        // Branch-only workflow — admin assigns branch in Approvals before layers start
+        body.FormStatus = SP_FORM_STATUS.SUBMITTED;
+        body.Status = SP_FORM_STATUS.SUBMITTED;
+        body.CurrentLayer = 0;
       } else {
         // Legacy path — keep old behavior
         for (let n = 1; n <= resolvedLayerCount; n++) {
@@ -651,6 +947,14 @@ export default function DynamicFormPage() {
         submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
         body.SubmittedBy = submittedByEmail;
         await ensurePdpaColumns(token, cfg.Title as string);
+        if (hasManualBranches) {
+          const maxBranchLayers = Math.max(
+            1,
+            ...(layerConfigParsed?.manualBranches ?? []).map((b) => b.layers.length),
+          );
+          await ensureWorkflowColumns(token, cfg.Title as string, maxBranchLayers);
+          await new Promise((r) => setTimeout(r, 1500));
+        }
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
         let result: { Id?: number } | undefined;
         try {
@@ -808,7 +1112,9 @@ export default function DynamicFormPage() {
                 responseData: pdfData,
                 layerResults: buildPdfLayerResults(respItem),
                 meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
-                logoUrl: "/logo-128.png",
+                companyInfo: companyLines,
+                isoStandards: isoStandardsText,
+                logoUrl: logoUrl || "/logo-128.png",
               });
             }
           } catch (pdfErr) { console.warn("[DFP] PDF generation failed:", pdfErr); }
@@ -881,6 +1187,17 @@ export default function DynamicFormPage() {
     return () => { survey.onCompleting.remove(onCompleting); };
   }, [survey, onCompleting]);
 
+  useEffect(() => {
+    if (!survey) {
+      setIsLastSurveyPage(true);
+      return;
+    }
+    const syncPageState = () => setIsLastSurveyPage(survey.isLastPage);
+    syncPageState();
+    survey.onCurrentPageChanged.add(syncPageState);
+    return () => { survey.onCurrentPageChanged.remove(syncPageState); };
+  }, [survey]);
+
   // Run submission logic when onCompleting triggers the loading state
   useEffect(() => {
     if (submitStatus !== "loading") return;
@@ -910,14 +1227,11 @@ export default function DynamicFormPage() {
     setSubmitStatus(null);
     setPdpaAccepted(false);
     setPdpaConsentError("");
+    setCompanyChoiceValue("");
+    setCompanyChoiceError("");
     lastDataRef.current = null;
     setResetKey(k => k + 1);
   }, []);
-
-  const isPublicForm = formData?.formConfig?.IsPublic !== false;
-  const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
-
-  useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
 
   // Generate QR when modal opens
   useEffect(() => {
@@ -937,12 +1251,6 @@ export default function DynamicFormPage() {
       cancelled = true;
     };
   }, [showQr]);
-  const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
-  const showBanner = (formData?.meta?.showBanner as boolean) !== false;
-  const isoStandardsText = (formData?.meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
-  const companiesText = (formData?.meta?.companies as string) || "";
-  const companyLines = companiesText.split("\n").filter(Boolean);
-  const logoUrl = (formData?.meta?.logoUrl as string) || "";
 
   if (loading || (formData && !formData.surveyJson && !error)) return (
     <div style={{ minHeight: "100vh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
@@ -991,7 +1299,7 @@ export default function DynamicFormPage() {
         </div>
       </header>
 
-      {showBanner && (
+      {showHeaderBanner && (
         <div className="dfp-banner" style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
           <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "14px 20px" }}>
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandardsText}</div>
@@ -1002,7 +1310,21 @@ export default function DynamicFormPage() {
               <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 48, objectFit: "contain" }} />
             </div>
             <div className="dfp-banner-info" style={{ flex: 1, padding: "12px 16px", fontWeight: 700, fontSize: 13, color: t.textPrimary }}>
-              {companyLines.length > 0
+              {showCompanyChoice
+                ? <CompanySelector
+                    title={companyTitle}
+                    options={companyOptions}
+                    value={companyChoiceValue}
+                    error={companyChoiceError}
+                    disabled={!survey}
+                    onChange={value => {
+                      setCompanyChoiceValue(value);
+                      setCompanyChoiceError("");
+                      survey?.setValue(companyFieldName, value);
+                    }}
+                    t={t}
+                  />
+                : companyLines.length > 0
                 ? companyLines.map((line, i) => <div key={i} style={i > 0 ? { marginTop: 4 } : undefined}>{line}</div>)
                 : "PMW INTERNATIONAL BERHAD"}
             </div>
@@ -1022,32 +1344,56 @@ export default function DynamicFormPage() {
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
               </div>
             )}
-            <div style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginBottom: 18, boxShadow: t.shadow }}>
-              <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={pdpaAccepted}
-                  onChange={(e) => {
-                    setPdpaAccepted(e.target.checked);
-                    if (e.target.checked) setPdpaConsentError("");
-                  }}
-                  style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}
-                />
-                <span style={{ fontSize: 12, lineHeight: 1.7, color: t.textSecond }}>
-                  <strong style={{ color: t.textPrimary }}>{PDPA_CONSENT_LABEL}</strong><br />
-                  {PDPA_SUMMARY}{" "}
-                  <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: t.purple, fontWeight: 700 }}>
-                    View Privacy Notice
-                  </a>
-                </span>
-              </label>
-              {pdpaConsentError && <div style={{ color: t.red, fontSize: 12, fontWeight: 700, marginTop: 8 }}>{pdpaConsentError}</div>}
-            </div>
             {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
+            {survey && isLastSurveyPage && (
+              <>
+                <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>
+                  <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={pdpaAccepted}
+                      onChange={(e) => {
+                        setPdpaAccepted(e.target.checked);
+                        if (e.target.checked) setPdpaConsentError("");
+                      }}
+                      style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: 12, lineHeight: 1.7, color: t.textSecond }}>
+                      <strong style={{ color: t.textPrimary }}>{PDPA_CONSENT_LABEL}</strong><br />
+                      {PDPA_SUMMARY}{" "}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: t.purple, fontWeight: 700 }}>
+                        View Privacy Notice
+                      </a>
+                    </span>
+                  </label>
+                  {pdpaConsentError && <div style={{ color: t.red, fontSize: 12, fontWeight: 700, marginTop: 8 }}>{pdpaConsentError}</div>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => survey.tryComplete()}
+                  disabled={submitStatus === "loading"}
+                  style={{
+                    width: "100%",
+                    minHeight: 46,
+                    marginTop: 14,
+                    border: "none",
+                    borderRadius: 8,
+                    background: submitStatus === "loading" ? t.purpleMid : t.purple,
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 800,
+                    cursor: submitStatus === "loading" ? "wait" : "pointer",
+                    boxShadow: t.shadowFab,
+                  }}
+                >
+                  {submitStatus === "loading" ? "Submitting..." : "Submit"}
+                </button>
+              </>
+            )}
             {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 8, color: t.purple, fontSize: 13 }}><Spinner size={14} t={t} /> Submitting...</div>}
             {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, display: "flex", flexDirection: "column", gap: 8 }}>
               <div>X Submission failed. Your answers have been saved — review and try again.</div>
-              <button onClick={() => survey?.doComplete()} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry Submit</button>
+              <button onClick={() => survey?.tryComplete()} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry Submit</button>
             </div>}
           </div>
         )}

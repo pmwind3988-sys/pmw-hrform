@@ -1,121 +1,599 @@
 import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   Grid,
   IconButton,
+  Link as MuiLink,
   Paper,
   Stack,
   Typography,
   useMediaQuery,
   useTheme,
-  Chip,
 } from "@mui/material";
 import {
-  Close as CloseIcon,
-  Lock as LockIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
   AccessTime as AccessTimeIcon,
+  CalendarToday as CalendarIcon,
+  Cancel as CancelIcon,
+  CheckCircle as CheckCircleIcon,
+  Close as CloseIcon,
+  Description as DocumentIcon,
+  Edit as SignatureIcon,
+  Email as EmailIcon,
+  InsertDriveFile as FileIcon,
+  Lock as LockIcon,
+  OpenInNew as OpenInNewIcon,
+  Person as PersonIcon,
+  PictureAsPdf as PdfIcon,
+  VerifiedUser as ApprovalIcon,
 } from "@mui/icons-material";
+import type { ReactNode } from "react";
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
 import StatusBadge from "./StatusBadge";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
 
-const SKIP = new Set([
-  "Id", "_authorEmail", "AuthorId", "EditorId", "FormVersion", "FormStatus",
-  "TrainingNeedsHtml", "ContentsHtml", "EffectivenessHtml",
-  "HodSignature", "ApplicantSignature", "EmployeeSignature",
-  "L1_Status", "L1_Email", "L1_SignedAt", "L1_Rejection", "L1_Signature",
-  "L2_Status", "L2_Email", "L2_SignedAt", "L2_Rejection", "L2_Signature",
-  "L3_Status", "L3_Email", "L3_SignedAt", "L3_Rejection", "L3_Signature",
-  "odata.type", "odata.id", "odata.etag", "odata.editLink",
-  "FileSystemObjectType", "ServerRedirectedEmbedUri", "ServerRedirectedEmbedUrl",
-  "ContentTypeId", "OData__UIVersionString", "Attachments", "GUID",
-  "OData__ColorTag", "ComplianceAssetId",
-  "CurrentLayer", "EvaluationData", "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
+const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+
+const SYSTEM_FIELDS = new Set([
+  "Id",
+  "ID",
+  "_authorEmail",
+  "Author",
+  "AuthorId",
+  "Editor",
+  "EditorId",
+  "Created",
+  "Modified",
+  "Status",
+  "FormStatus",
+  "FormId",
+  "FormID",
+  "FormVersion",
+  "SubmittedAt",
+  "SubmittedBy",
+  "ContentType",
+  "ContentTypeId",
+  "RawJSON",
+  "Attachments",
+  "GUID",
+  "FileSystemObjectType",
+  "ServerRedirectedEmbedUri",
+  "ServerRedirectedEmbedUrl",
+  "OData__UIVersionString",
+  "OData__ColorTag",
+  "ComplianceAssetId",
+  "PermMask",
+  "CurrentLayer",
+  "CurrentApprovalLayer",
+  "EvaluationData",
+  "PDPAConsent",
+  "PDPANoticeVersion",
+  "PDPAConsentAt",
+  "RetentionUntil",
 ]);
 
 interface DetailModalProps {
   item: Submission | null;
+  isAdmin: boolean;
   onClose: () => void;
 }
 
-function formatFieldName(key: string): string {
-  return key
-    .replace(/([A-Z])/g, " $1")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim();
+interface LinkValue {
+  url: string;
+  label: string;
 }
 
-/** Detect ISO/SharePoint date strings and format them. */
-function formatDateValue(value: string): string | null {
-  // ISO 8601: "2024-01-15T10:30:00Z" or SharePoint variant
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z?$/i.test(value)) {
-    try {
-      return new Date(value).toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return null;
+type ApprovalCardLayer = ApprovalLayer & {
+  confirmedVia?: "signature" | "checkbox";
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseMaybeJson(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeMaybeJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const parsed = parseMaybeJson(value);
+  return parsed ?? value;
+}
+
+function toAbsoluteSharePointUrl(url: string): string {
+  if (!url || url.startsWith("http") || url.startsWith("data:") || url.startsWith("mailto:") || url.startsWith("tel:")) {
+    return url;
+  }
+  if (!url.startsWith("/")) return url;
+  try {
+    return `${new URL(SP_SITE_URL).origin}${url}`;
+  } catch {
+    return url;
+  }
+}
+
+function isUrlLike(value: string): boolean {
+  return /^(https?:\/\/|mailto:|tel:|\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/)/i.test(value.trim());
+}
+
+function filenameFromUrl(url: string): string {
+  if (url.startsWith("data:image/")) return "Signature image";
+  if (url.startsWith("mailto:")) return url.replace(/^mailto:/i, "");
+  if (url.startsWith("tel:")) return url.replace(/^tel:/i, "");
+  const withoutQuery = url.split(/[?#]/)[0] ?? url;
+  const last = withoutQuery.split("/").filter(Boolean).pop();
+  if (!last) return "Open link";
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    return last;
+  }
+}
+
+function recordText(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return "";
+}
+
+function linkFromValue(value: unknown): LinkValue | null {
+  const normalized = normalizeMaybeJson(value);
+  if (typeof normalized === "string") {
+    const trimmed = normalized.trim();
+    if (!isUrlLike(trimmed)) return null;
+    const url = toAbsoluteSharePointUrl(trimmed);
+    return { url, label: filenameFromUrl(url) };
+  }
+
+  if (!isRecord(normalized)) return null;
+
+  for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
+    const next = normalized[key];
+    if (typeof next === "string" && next.trim()) {
+      const url = toAbsoluteSharePointUrl(next.trim());
+      const label = recordText(normalized, ["Description", "description", "Name", "name", "FileName", "fileName", "Title", "title"]) || filenameFromUrl(url);
+      return { url, label };
     }
   }
+
+  const serverUrl = normalized.serverUrl || normalized.ServerUrl;
+  const relativeUrl = normalized.serverRelativeUrl || normalized.ServerRelativeUrl;
+  if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
+    const url = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
+    const label = recordText(normalized, ["Description", "description", "Name", "name", "Title", "title"]) || filenameFromUrl(url);
+    return { url, label };
+  }
+
   return null;
 }
 
-/**
- * Render any SharePoint field value as meaningful display text.
- * Handles: dates, user objects, lookup objects, booleans, arrays, HTML.
- */
-function formatFieldValue(value: unknown): string {
-  if (value === null || value === undefined) return "N/A";
+function collectLinks(value: unknown): LinkValue[] {
+  const normalized = normalizeMaybeJson(value);
+  if (Array.isArray(normalized)) {
+    return normalized.flatMap((entry) => collectLinks(entry));
+  }
+  const link = linkFromValue(normalized);
+  return link ? [link] : [];
+}
 
-  // Boolean
+function isSignatureField(key: string): boolean {
+  return /signature/i.test(key);
+}
+
+function isPdfField(key: string): boolean {
+  return /^pdfurl$/i.test(key) || (/pdf/i.test(key) && /(url|link|file|document)/i.test(key));
+}
+
+function signatureValueToSrc(value: unknown): string {
+  const normalized = normalizeMaybeJson(value);
+  if (typeof normalized === "string" && normalized.trim().startsWith("data:image/")) return normalized.trim();
+  return linkFromValue(normalized)?.url ?? "";
+}
+
+function hasDisplayValue(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (isRecord(value)) return Object.keys(value).length > 0;
+  return true;
+}
+
+function shouldSkipField(key: string, value: unknown): boolean {
+  if (SYSTEM_FIELDS.has(key)) return true;
+  if (key.startsWith("odata.") || key.startsWith("@odata.")) return true;
+  if (/^L\d+_/i.test(key)) return true;
+  if (/_Json$/i.test(key) || /^Json$/i.test(key)) return true;
+  if (isCompanyResponseKey(key)) return true;
+  if (isSignatureField(key) || isPdfField(key)) return true;
+  return !hasDisplayValue(value);
+}
+
+function formatFieldName(key: string): string {
+  const decoded = key
+    .replace(/_x0020_/gi, " ")
+    .replace(/_x002f_/gi, "/")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/\bUrl\b/gi, "Link")
+    .replace(/\bPdf\b/gi, "PDF")
+    .replace(/\bId\b/g, "ID")
+    .trim();
+
+  return decoded.replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatDateValue(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z?$/i.test(value)) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatPlainValue(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return "Not provided";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return String(value);
+  const trimmed = value.trim();
+  if (!trimmed) return "Not provided";
+  if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase() === "true" ? "Yes" : "No";
+  return formatDateValue(trimmed) ?? trimmed;
+}
 
-  // Array (multi-choice, multi-user)
-  if (Array.isArray(value)) {
-    return value.map((v) => formatFieldValue(v)).join(", ");
+function recordFriendlyText(record: Record<string, unknown>): string {
+  const email = recordText(record, ["Email", "email", "EMail"]);
+  const title = recordText(record, ["Title", "title", "DisplayName", "displayName", "Name", "name"]);
+  const value = recordText(record, ["Value", "value", "Label", "label", "Text", "text"]);
+
+  if (title && email && title.toLowerCase() !== email.toLowerCase()) return `${title} (${email})`;
+  if (email) return email;
+  if (title) return title;
+  if (value) return value;
+  return "";
+}
+
+function summarizeNestedValue(value: unknown): string {
+  const normalized = normalizeMaybeJson(value);
+  if (Array.isArray(normalized)) {
+    return normalized.map((entry) => summarizeNestedValue(entry)).filter(Boolean).join(", ") || "Not provided";
+  }
+  if (isRecord(normalized)) {
+    const friendlyText = recordFriendlyText(normalized);
+    if (friendlyText) return friendlyText;
+    return Object.entries(normalized)
+      .filter(([key, entry]) => hasDisplayValue(entry) && !key.startsWith("__") && !key.startsWith("odata."))
+      .slice(0, 4)
+      .map(([key, entry]) => `${formatFieldName(key)}: ${summarizeNestedValue(entry)}`)
+      .join(", ") || "Not provided";
+  }
+  if (typeof normalized === "string" || typeof normalized === "number" || typeof normalized === "boolean" || normalized === null || normalized === undefined) {
+    return formatPlainValue(normalized);
+  }
+  return "Not provided";
+}
+
+function isHtmlValue(key: string, value: unknown): value is string {
+  return typeof value === "string" && (/(Html|_Response)$/i.test(key) || /<[a-z][\s\S]*>/i.test(value));
+}
+
+function externalProps(url: string) {
+  if (url.startsWith("mailto:") || url.startsWith("tel:")) return {};
+  return { target: "_blank", rel: "noopener noreferrer" };
+}
+
+function ValueLink({ link }: { link: LinkValue }) {
+  return (
+    <MuiLink
+      href={link.url}
+      {...externalProps(link.url)}
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.5,
+        color: editorial.pmwBlueDark,
+        fontWeight: 800,
+        textDecorationThickness: "2px",
+        textUnderlineOffset: "3px",
+        overflowWrap: "anywhere",
+      }}
+    >
+      {link.label}
+      {!link.url.startsWith("mailto:") && !link.url.startsWith("tel:") && <OpenInNewIcon sx={{ fontSize: 14 }} />}
+    </MuiLink>
+  );
+}
+
+function FriendlyValue({ fieldKey, value, depth = 0 }: { fieldKey: string; value: unknown; depth?: number }): ReactNode {
+  const normalized = normalizeMaybeJson(value);
+  const links = collectLinks(normalized);
+
+  if (links.length === 1 && !Array.isArray(normalized)) return <ValueLink link={links[0]} />;
+  if (links.length > 1) {
+    return (
+      <Stack spacing={0.75}>
+        {links.map((link, index) => (
+          <ValueLink key={`${fieldKey}-${link.url}-${index}`} link={link} />
+        ))}
+      </Stack>
+    );
   }
 
-  // Object (user field, lookup field)
-  if (typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-
-    // User field: { Email, Title, Id }
-    if ("Email" in obj || "Title" in obj) {
-      return (obj.Email as string) || (obj.Title as string) || String(obj.Id || "Unknown");
+  if (typeof normalized === "string" || typeof normalized === "number" || typeof normalized === "boolean" || normalized === null || normalized === undefined) {
+    const text = formatPlainValue(normalized);
+    if (typeof normalized === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.trim())) {
+      return <ValueLink link={{ url: `mailto:${normalized.trim()}`, label: normalized.trim() }} />;
     }
-
-    // Lookup field: { Value, Id }
-    if ("Value" in obj) {
-      return String(obj.Value ?? "");
-    }
-
-    // Fallback: JSON (shouldn't normally reach here)
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return "N/A";
-    }
+    return <Typography variant="body2">{text}</Typography>;
   }
 
-  const str = String(value);
+  if (Array.isArray(normalized)) {
+    if (normalized.length === 0) return <Typography variant="body2">Not provided</Typography>;
+    return (
+      <Stack component="ul" spacing={0.75} sx={{ pl: 2.25, my: 0 }}>
+        {normalized.map((entry, index) => (
+          <Box component="li" key={`${fieldKey}-${index}`} sx={{ color: editorial.ink }}>
+            {depth > 1 ? (
+              <Typography variant="body2">{summarizeNestedValue(entry)}</Typography>
+            ) : (
+              <FriendlyValue fieldKey={`${fieldKey}-${index}`} value={entry} depth={depth + 1} />
+            )}
+          </Box>
+        ))}
+      </Stack>
+    );
+  }
 
-  // Date string
-  const formatted = formatDateValue(str);
-  if (formatted) return formatted;
+  if (isRecord(normalized)) {
+    const friendlyText = recordFriendlyText(normalized);
+    if (friendlyText) return <Typography variant="body2">{friendlyText}</Typography>;
 
-  return str;
+    const entries = Object.entries(normalized).filter(([key, entry]) => hasDisplayValue(entry) && !key.startsWith("__") && !key.startsWith("odata."));
+    if (entries.length === 0 || depth > 1) return <Typography variant="body2">Not provided</Typography>;
+
+    return (
+      <Stack spacing={1}>
+        {entries.slice(0, 8).map(([key, entry]) => (
+          <Box key={key} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "140px minmax(0, 1fr)" }, gap: 0.75 }}>
+            <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 800 }}>
+              {formatFieldName(key)}
+            </Typography>
+            <Box sx={{ minWidth: 0 }}>
+              <FriendlyValue fieldKey={`${fieldKey}-${key}`} value={entry} depth={depth + 1} />
+            </Box>
+          </Box>
+        ))}
+      </Stack>
+    );
+  }
+
+  return <Typography variant="body2">{summarizeNestedValue(normalized)}</Typography>;
+}
+
+function FieldCard({ fieldKey, value }: { fieldKey: string; value: unknown }) {
+  if (isHtmlValue(fieldKey, value)) {
+    return (
+      <Box>
+        <FieldLabel>{formatFieldName(fieldKey)}</FieldLabel>
+        <Box
+          sx={{
+            backgroundColor: "#ffffff",
+            border: editorialHairline,
+            borderRadius: "8px",
+            p: 2,
+            overflowX: "auto",
+            "& table": {
+              width: "100%",
+              borderCollapse: "collapse",
+            },
+            "& td, & th": {
+              border: editorialHairline,
+              padding: "10px 14px",
+              fontSize: "0.875rem",
+              verticalAlign: "top",
+            },
+            "& th": {
+              backgroundColor: editorial.blueSoft,
+              fontWeight: 800,
+            },
+            "& tr:nth-of-type(even)": {
+              backgroundColor: "rgba(0,0,0,0.02)",
+            },
+          }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
+        />
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <FieldLabel>{formatFieldName(fieldKey)}</FieldLabel>
+      <Box
+        sx={{
+          backgroundColor: "#ffffff",
+          border: editorialHairline,
+          borderRadius: "8px",
+          p: 2,
+          color: editorial.ink,
+          overflowWrap: "anywhere",
+          minHeight: 58,
+        }}
+      >
+        <FriendlyValue fieldKey={fieldKey} value={value} />
+      </Box>
+    </Box>
+  );
+}
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <Typography
+      variant="caption"
+      sx={{
+        textTransform: "uppercase",
+        letterSpacing: 0,
+        color: editorial.muted,
+        fontWeight: 800,
+        fontSize: "0.72rem",
+        display: "block",
+        mb: 0.75,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+function SectionTitle({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle?: string }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mb: 2 }}>
+      <Box
+        sx={{
+          width: 34,
+          height: 34,
+          borderRadius: "8px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: editorial.pmwBlueDark,
+          backgroundColor: editorial.blueWash,
+          border: `1px solid ${editorial.pmwBlueSoft}`,
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, color: editorial.ink, textWrap: "balance" }}>
+          {title}
+        </Typography>
+        {subtitle && (
+          <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
+            {subtitle}
+          </Typography>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        border: editorialHairline,
+        borderRadius: "8px",
+        p: 1.75,
+        backgroundColor: "#ffffff",
+        display: "grid",
+        gridTemplateColumns: "34px minmax(0, 1fr)",
+        gap: 1.25,
+        alignItems: "center",
+        minHeight: 74,
+      }}
+    >
+      <Box
+        sx={{
+          width: 34,
+          height: 34,
+          borderRadius: "8px",
+          backgroundColor: editorial.paperSoft,
+          color: editorial.pmwBlueDark,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 800, display: "block" }}>
+          {label}
+        </Typography>
+        <Typography
+          component="div"
+          variant="body2"
+          sx={{
+            color: editorial.ink,
+            fontWeight: 800,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {value}
+        </Typography>
+      </Box>
+    </Paper>
+  );
+}
+
+function DocumentLinkCard({ title, link, icon }: { title: string; link: LinkValue | null; icon: ReactNode }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        border: editorialHairline,
+        borderRadius: "8px",
+        p: 1.75,
+        backgroundColor: "#ffffff",
+        display: "grid",
+        gridTemplateColumns: "40px minmax(0, 1fr)",
+        gap: 1.25,
+        alignItems: "center",
+      }}
+    >
+      <Box
+        sx={{
+          width: 40,
+          height: 40,
+          borderRadius: "8px",
+          backgroundColor: link ? editorial.blueWash : editorial.paperSoft,
+          color: link ? editorial.pmwBlueDark : editorial.muted,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800 }}>
+          {title}
+        </Typography>
+        {link ? (
+          <ValueLink link={link} />
+        ) : (
+          <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
+            Not generated yet
+          </Typography>
+        )}
+      </Box>
+    </Paper>
+  );
 }
 
 function LayerProgression({
@@ -130,14 +608,9 @@ function LayerProgression({
   if (totalLayers <= 0) return null;
 
   return (
-    <Box sx={{ mb: 3 }}>
-      <Typography
-        variant="h6"
-        sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0, mb: 2 }}
-      >
-        Layer Progression
-      </Typography>
-      <Stack spacing={1.5}>
+    <Box>
+      <SectionTitle icon={<ApprovalIcon sx={{ fontSize: 18 }} />} title="Approval details" subtitle={`${totalLayers} workflow layer${totalLayers === 1 ? "" : "s"}`} />
+      <Stack spacing={1.25}>
         {Array.from({ length: totalLayers }, (_, i) => {
           const layerNum = i + 1;
           const enhanced = enhancedLayers?.[i];
@@ -165,7 +638,7 @@ function LayerProgression({
             borderColor = editorial.pmwPurple;
             bgColor = editorial.purpleWash;
             statusIcon = <AccessTimeIcon sx={{ fontSize: 16 }} />;
-            statusLabel = enhanced?.type === "evaluation" ? "Pending Evaluation" : "Pending Approval";
+            statusLabel = enhanced?.type === "evaluation" ? "Pending evaluation" : "Pending approval";
             iconColor = editorial.pmwPurpleDark;
           }
 
@@ -174,50 +647,58 @@ function LayerProgression({
               key={i}
               elevation={0}
               sx={{
-                border: `1px solid ${borderColor}`,
+                border: `1px solid ${borderColor}66`,
                 backgroundColor: bgColor,
-                borderRadius: "10px",
-                p: 2,
-                display: "flex",
-                alignItems: "center",
+                borderRadius: "8px",
+                p: 1.75,
+                display: "grid",
+                gridTemplateColumns: "32px minmax(0, 1fr) auto",
                 gap: 1.5,
+                alignItems: "center",
                 boxShadow: isActive ? `0 0 0 3px ${editorial.pmwPurpleSoft}` : "none",
               }}
             >
               <Box
                 sx={{
-                  width: 28,
-                  height: 28,
+                  width: 32,
+                  height: 32,
                   borderRadius: "8px",
                   backgroundColor: `${iconColor}14`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   color: iconColor,
-                  fontSize: 14,
-                  fontWeight: 700,
                   flexShrink: 0,
                 }}
               >
                 {statusIcon}
               </Box>
-              <Box sx={{ flex: 1 }}>
+              <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink }}>
                   Layer {layerNum}
                   {enhanced?.type === "evaluation" && (
                     <Typography component="span" variant="caption" sx={{ color: editorial.muted, ml: 1 }}>
-                      (Evaluation)
+                      Evaluation
                     </Typography>
                   )}
                 </Typography>
-                <Typography variant="caption" sx={{ color: iconColor, fontWeight: 500 }}>
+                <Typography variant="caption" sx={{ color: iconColor, fontWeight: 800 }}>
                   {statusLabel}
                 </Typography>
               </Box>
               {enhanced?.email && (
-                <Typography variant="caption" sx={{ color: editorial.muted, textAlign: "right" }}>
+                <MuiLink
+                  href={`mailto:${enhanced.email}`}
+                  sx={{
+                    color: editorial.muted,
+                    fontWeight: 700,
+                    fontSize: "0.75rem",
+                    overflowWrap: "anywhere",
+                    textAlign: "right",
+                  }}
+                >
                   {enhanced.email}
-                </Typography>
+                </MuiLink>
               )}
             </Paper>
           );
@@ -227,17 +708,12 @@ function LayerProgression({
   );
 }
 
-function ApprovalCard({
-  layer,
-  index,
-}: {
-  layer: ApprovalLayer | null;
-  index: number;
-}) {
+function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index: number }) {
   if (!layer) return null;
 
-  const isSigned = layer.status === "approved" || layer.status === "signed";
+  const isSigned = layer.status === "approved" || layer.status === "signed" || layer.status === "confirmed";
   const isRejected = layer.status === "rejected";
+  const signatureSrc = signatureValueToSrc(layer.signature);
 
   let borderColor: string = editorial.pmwPurple;
   let bgColor: string = editorial.purpleWash;
@@ -250,7 +726,7 @@ function ApprovalCard({
     bgColor = "rgba(16, 124, 16, 0.06)";
     iconColor = editorial.success;
     statusIcon = <CheckCircleIcon sx={{ fontSize: 20 }} />;
-    statusLabel = "Signed";
+    statusLabel = layer.confirmedVia === "checkbox" ? "Confirmed" : "Approved";
   } else if (isRejected) {
     borderColor = editorial.error;
     bgColor = "rgba(198, 40, 40, 0.06)";
@@ -263,13 +739,12 @@ function ApprovalCard({
     <Paper
       elevation={0}
       sx={{
-        border: `1px solid ${borderColor}33`,
+        border: `1px solid ${borderColor}55`,
         backgroundColor: bgColor,
-        borderRadius: "12px",
-        p: 2.5,
-        transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+        borderRadius: "8px",
+        p: 2,
+        transition: "box-shadow 0.2s ease",
         "&:hover": {
-          borderColor,
           boxShadow: "0 8px 20px rgba(16, 16, 16, 0.06)",
         },
       }}
@@ -279,7 +754,7 @@ function ApprovalCard({
           sx={{
             width: 36,
             height: 36,
-            borderRadius: "10px",
+            borderRadius: "8px",
             backgroundColor: `${iconColor}15`,
             display: "flex",
             alignItems: "center",
@@ -289,16 +764,21 @@ function ApprovalCard({
         >
           {statusIcon}
         </Box>
-        <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink }}>
-          Layer {index + 1}
-        </Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink }}>
+            Layer {index + 1}
+          </Typography>
+          <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
+            {layer.confirmedVia === "checkbox" ? "Checkbox confirmation" : "Signature approval"}
+          </Typography>
+        </Box>
         <Chip
           label={statusLabel}
           size="small"
           sx={{
             backgroundColor: `${iconColor}15`,
             color: iconColor,
-            fontWeight: 600,
+            fontWeight: 800,
             fontSize: "0.7rem",
             height: 24,
             ml: "auto",
@@ -306,77 +786,93 @@ function ApprovalCard({
         />
       </Box>
 
-      {layer.email && (
-        <Typography variant="body2" sx={{ color: editorial.muted, mb: 0.5 }}>
-          {layer.email}
-        </Typography>
-      )}
+      <Stack spacing={1}>
+        {layer.email && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+            <EmailIcon sx={{ fontSize: 16, color: editorial.muted }} />
+            <ValueLink link={{ url: `mailto:${layer.email}`, label: layer.email }} />
+          </Box>
+        )}
 
-      {layer.signedAt && (
-        <Typography variant="caption" sx={{ color: editorial.muted }}>
-          {new Date(layer.signedAt).toLocaleString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Typography>
-      )}
+        {layer.signedAt && (
+          <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
+            Completed {formatDateValue(layer.signedAt) ?? layer.signedAt}
+          </Typography>
+        )}
 
-      {layer.rejectionReason && (
-        <Typography
-          variant="body2"
-          sx={{ color: editorial.error, mt: 1, fontStyle: "italic" }}
-        >
-          Reason: {layer.rejectionReason}
-        </Typography>
-      )}
+        {layer.rejectionReason && (
+          <Typography variant="body2" sx={{ color: editorial.error, fontStyle: "italic" }}>
+            Reason: {layer.rejectionReason}
+          </Typography>
+        )}
 
-      {layer.signature && (
-        <Box
-          component="img"
-          src={layer.signature}
-          alt="Signature"
-          sx={{
-            maxHeight: 100,
-            mt: 1.5,
-            borderRadius: "8px",
-            border: editorialHairline,
-          }}
-        />
-      )}
+        {signatureSrc && (
+          <Box>
+            <FieldLabel>Signature</FieldLabel>
+            <Box
+              component="img"
+              src={signatureSrc}
+              alt={`Layer ${index + 1} signature`}
+              sx={{
+                display: "block",
+                maxHeight: 118,
+                maxWidth: "100%",
+                borderRadius: "8px",
+                border: "1px solid rgba(0, 0, 0, 0.1)",
+                backgroundColor: "#ffffff",
+                p: 1,
+              }}
+            />
+          </Box>
+        )}
+      </Stack>
     </Paper>
   );
 }
 
-export default function DetailModal({ item, onClose }: DetailModalProps) {
+export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const selectedCompany = getSelectedCompany(item?.submissionData);
+  const submissionData = item?.submissionData ?? {};
+  const entries = Object.entries(submissionData);
 
-  const htmlFields = ["TrainingNeedsHtml", "ContentsHtml", "EffectivenessHtml"];
+  const pdfLink = entries.find(([key, value]) => isPdfField(key) && collectLinks(value).length > 0);
+  const generatedPdf = pdfLink ? collectLinks(pdfLink[1])[0] : null;
 
-  const visibleFields = Object.entries(item?.submissionData ?? {}).filter(
-    ([key]) => !SKIP.has(key)
-  ) as [string, string | number | boolean | null][];
+  const documentGroups = entries
+    .filter(([key, value]) => !isPdfField(key) && !isSignatureField(key) && !SYSTEM_FIELDS.has(key) && collectLinks(value).length > 0)
+    .map(([key, value]) => ({
+      key,
+      title: formatFieldName(key),
+      links: collectLinks(value),
+    }));
+
+  const signatureFields = entries
+    .filter(([key, value]) => isSignatureField(key) && signatureValueToSrc(value))
+    .map(([key, value]) => ({ key, label: formatFieldName(key), src: signatureValueToSrc(value), link: linkFromValue(value) }));
+
+  const visibleFields = entries.filter(([key, value]) => shouldSkipField(key, value) === false && collectLinks(value).length === 0);
+  const submittedAt = item?.submittedAt ? formatDateValue(item.submittedAt) ?? item.submittedAt : "Not available";
 
   return (
     <Dialog
       open={item !== null}
       onClose={onClose}
       fullScreen={isMobile}
+      fullWidth
       maxWidth="lg"
       slotProps={{
         paper: {
           sx: {
-            borderRadius: isMobile ? 0 : "12px",
+            borderRadius: isMobile ? 0 : "8px",
             border: isMobile ? 0 : editorialHairline,
             overflow: "hidden",
-            animation: "fadeInUp 0.3s ease-out",
+            animation: "fadeInUp 0.26s ease-out",
             "@keyframes fadeInUp": {
               "0%": {
                 opacity: 0,
-                transform: "translateY(20px)",
+                transform: "translateY(14px)",
               },
               "100%": {
                 opacity: 1,
@@ -390,24 +886,38 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
         },
       }}
     >
-      {/* Header */}
       <DialogTitle
         sx={{
-          background: `linear-gradient(135deg, ${editorial.pmwBlue}, ${editorial.pmwPurpleDark})`,
-          color: "#ffffff",
-          py: 3,
-          px: 4,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          backgroundColor: "#ffffff",
+          color: editorial.ink,
+          py: { xs: 2, sm: 2.5 },
+          px: { xs: 2, sm: 3 },
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gap: 2,
+          alignItems: "start",
+          borderBottom: editorialHairline,
         }}
       >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: 0 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
+            <StatusBadge status={item?.formStatus ?? null} />
+            <Chip
+              label={isAdmin ? "Admin view" : "User view"}
+              size="small"
+              sx={{
+                backgroundColor: isAdmin ? editorial.purpleWash : editorial.blueWash,
+                color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
+                border: `1px solid ${isAdmin ? editorial.pmwPurpleSoft : editorial.pmwBlueSoft}`,
+                fontWeight: 800,
+              }}
+            />
+          </Stack>
+          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: 0, textWrap: "balance" }}>
             {item?.title}
           </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.5 }}>
-            Submission Details
+          <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.5, fontWeight: 700 }}>
+            {item?.listTitle} · Reference {item?.submissionId}
           </Typography>
         </Box>
         <IconButton
@@ -415,11 +925,13 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
           onClick={onClose}
           size="small"
           sx={{
-            color: "#ffffff",
-            backgroundColor: "rgba(255, 255, 255, 0.14)",
-            border: "1px solid rgba(255, 255, 255, 0.28)",
+            width: 40,
+            height: 40,
+            color: editorial.ink,
+            backgroundColor: editorial.paperSoft,
+            border: editorialHairline,
             "&:hover": {
-              backgroundColor: "rgba(255, 255, 255, 0.22)",
+              backgroundColor: editorial.blueWash,
             },
           }}
         >
@@ -427,279 +939,168 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
         </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ p: 4 }}>
+      <DialogContent sx={{ p: 0, backgroundColor: editorial.blueSoft }}>
         {item && (
-          <Stack spacing={4}>
-            {/* Meta strip */}
-            <Box
-              sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 2,
-                alignItems: "center",
-              }}
-            >
-              <StatusBadge status={item.formStatus} />
-              {item.submittedAt && (
-                <Chip
-                  label={`Submitted: ${new Date(item.submittedAt).toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}`}
-                  size="small"
-                  sx={{
-                    backgroundColor: editorial.blueSoft,
-                    color: editorial.pmwBlueDark,
-                    border: `1px solid ${editorial.pmwBlueSoft}`,
-                    fontWeight: 800,
-                  }}
-                />
-              )}
-              <Chip
-                label={`SP ID: ${item.id}`}
-                size="small"
-                sx={{
-                  backgroundColor: editorial.purpleWash,
-                  color: editorial.pmwPurpleDark,
-                  border: `1px solid ${editorial.pmwPurpleSoft}`,
-                  fontWeight: 800,
-                  fontFamily: "monospace",
-                }}
-              />
-              <Typography variant="body2" sx={{ color: editorial.muted, ml: "auto" }}>
-                {item.submittedByEmail}
-              </Typography>
+          <Stack spacing={3} sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box>
+              <SectionTitle icon={<DocumentIcon sx={{ fontSize: 18 }} />} title="Submission overview" />
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile icon={<DocumentIcon sx={{ fontSize: 18 }} />} label="Form" value={item.listTitle} />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile icon={<CalendarIcon sx={{ fontSize: 18 }} />} label="Submitted" value={submittedAt} />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile
+                    icon={<PersonIcon sx={{ fontSize: 18 }} />}
+                    label={isAdmin ? "Submitter" : "Account"}
+                    value={item.submittedByEmail || "Unknown"}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                  <InfoTile icon={<FileIcon sx={{ fontSize: 18 }} />} label={isAdmin ? "SharePoint item" : "Reference"} value={isAdmin ? item.id : item.submissionId} />
+                </Grid>
+                {selectedCompany && (
+                  <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                    <InfoTile icon={<ApprovalIcon sx={{ fontSize: 18 }} />} label="Company" value={selectedCompany} />
+                  </Grid>
+                )}
+              </Grid>
             </Box>
 
-            <Divider />
-
-            {/* Field grid */}
-            {visibleFields.length > 0 && (
-              <>
-                <Grid container spacing={3}>
-                  {visibleFields.map(([key, value]) => {
-                    if (htmlFields.includes(key) && typeof value === "string") {
-                      return (
-                        <Grid size={{ xs: 12 }} key={key}>
-                          <Box>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                textTransform: "uppercase",
-                                letterSpacing: 0,
-                                color: editorial.muted,
-                                fontWeight: 600,
-                                fontSize: "0.75rem",
-                                display: "block",
-                                mb: 1,
-                              }}
-                            >
-                              {formatFieldName(key)}
-                            </Typography>
-                            <Box
-                              sx={{
-                                backgroundColor: "#ffffff",
-                                border: editorialHairline,
-                                borderRadius: "12px",
-                                p: 2,
-                                "& table": {
-                                  width: "100%",
-                                  borderCollapse: "collapse",
-                                },
-                                "& td, & th": {
-                                  border: editorialHairline,
-                                  padding: "10px 14px",
-                                  fontSize: "0.875rem",
-                                },
-                                "& th": {
-                                  backgroundColor: editorial.blueSoft,
-                                  fontWeight: 600,
-                                },
-                                "& tr:nth-of-type(even)": {
-                                  backgroundColor: "rgba(0,0,0,0.02)",
-                                },
-                              }}
-                              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
-                            />
-                          </Box>
-                        </Grid>
-                      );
-                    }
-
-                    return (
-                      <Grid size={{ xs: 12, sm: 6 }} key={key}>
-                        <Box>
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              textTransform: "uppercase",
-                              letterSpacing: 0,
-                              color: editorial.muted,
-                              fontWeight: 600,
-                              fontSize: "0.75rem",
-                              display: "block",
-                              mb: 1,
-                            }}
-                          >
-                            {formatFieldName(key)}
-                          </Typography>
-                          <Box
-                            sx={{
-                              backgroundColor: "#ffffff",
-                              border: editorialHairline,
-                              borderRadius: "12px",
-                              p: 2,
-                              color: editorial.ink,
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            <Typography variant="body2">
-                              {formatFieldValue(value)}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Grid>
-                    );
-                  })}
+            <Box>
+              <SectionTitle icon={<PdfIcon sx={{ fontSize: 18 }} />} title="PDF details" />
+              <Grid container spacing={1.5}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <DocumentLinkCard title="Generated submission PDF" link={generatedPdf} icon={<PdfIcon sx={{ fontSize: 20 }} />} />
                 </Grid>
-                <Divider />
-              </>
-            )}
+                {documentGroups.flatMap((group) =>
+                  group.links.map((link, index) => (
+                    <Grid size={{ xs: 12, md: 6 }} key={`${group.key}-${link.url}-${index}`}>
+                      <DocumentLinkCard title={group.links.length > 1 ? `${group.title} ${index + 1}` : group.title} link={link} icon={<FileIcon sx={{ fontSize: 20 }} />} />
+                    </Grid>
+                  )),
+                )}
+              </Grid>
+            </Box>
 
-            {/* Signature images */}
-            {!!item.submissionData?.HodSignature && (
+            {visibleFields.length > 0 && (
               <Box>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    textTransform: "uppercase",
-                    letterSpacing: 0,
-                    color: editorial.muted,
-                    fontWeight: 600,
-                    fontSize: "0.75rem",
-                    display: "block",
-                    mb: 1,
-                  }}
-                >
-                  HOD Signature
-                </Typography>
-                <Box
-                  component="img"
-                  src={item.submissionData.HodSignature as string}
-                  alt="HOD Signature"
-                  sx={{
-                    maxHeight: 100,
-                    borderRadius: "8px",
-                    border: editorialHairline,
-                  }}
-                />
+                <SectionTitle icon={<FileIcon sx={{ fontSize: 18 }} />} title="Data preview" subtitle="Submitted answers rendered from SharePoint fields" />
+                <Grid container spacing={2}>
+                  {visibleFields.map(([key, value]) => (
+                    <Grid size={{ xs: 12, sm: isHtmlValue(key, value) ? 12 : 6 }} key={key}>
+                      <FieldCard fieldKey={key} value={value} />
+                    </Grid>
+                  ))}
+                </Grid>
               </Box>
             )}
 
-            {!!item.submissionData?.ApplicantSignature && (
+            {signatureFields.length > 0 && (
               <Box>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    textTransform: "uppercase",
-                    letterSpacing: 0,
-                    color: editorial.muted,
-                    fontWeight: 600,
-                    fontSize: "0.75rem",
-                    display: "block",
-                    mb: 1,
-                  }}
-                >
-                  Applicant Signature
-                </Typography>
-                <Box
-                  component="img"
-                  src={item.submissionData.ApplicantSignature as string}
-                  alt="Applicant Signature"
-                  sx={{
-                    maxHeight: 100,
-                    borderRadius: "8px",
-                    border: editorialHairline,
-                  }}
-                />
+                <SectionTitle icon={<SignatureIcon sx={{ fontSize: 18 }} />} title="Signatures" />
+                <Grid container spacing={2}>
+                  {signatureFields.map((signature) => (
+                    <Grid size={{ xs: 12, sm: 6 }} key={signature.key}>
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          border: editorialHairline,
+                          borderRadius: "8px",
+                          backgroundColor: "#ffffff",
+                          p: 2,
+                        }}
+                      >
+                        <FieldLabel>{signature.label}</FieldLabel>
+                        <Box
+                          component="img"
+                          src={signature.src}
+                          alt={signature.label}
+                          sx={{
+                            display: "block",
+                            maxHeight: 140,
+                            maxWidth: "100%",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(0, 0, 0, 0.1)",
+                            backgroundColor: "#ffffff",
+                            p: 1,
+                            mb: signature.link ? 1 : 0,
+                          }}
+                        />
+                        {signature.link && <ValueLink link={{ ...signature.link, label: "Open signature image" }} />}
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
               </Box>
             )}
 
-            {/* Layer Progression */}
-            {(item.totalLayers > 0) && (
-              <>
+            {item.totalLayers > 0 && (
+              <Box>
                 <LayerProgression
                   totalLayers={item.totalLayers}
                   currentLayer={item.currentLayer}
                   enhancedLayers={item.enhancedLayers}
                 />
-                <Divider sx={{ my: 2 }} />
 
-                {/* Enhanced layer results */}
                 {item.enhancedLayers && item.enhancedLayers.length > 0 && (
-                  <>
-                    <Typography
-                      variant="h6"
-                      sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0, mb: 2 }}
-                    >
-                      Layer Results
-                    </Typography>
-                    <Stack spacing={2}>
-                      {item.enhancedLayers.map((layer, i) => {
-                        if (!layer) return null;
-                        if (layer.type === "evaluation") {
-                          return (
-                            <EvaluationSummary
-                              key={i}
-                              result={layer}
-                              layerTitle={`Layer ${layer.layerNumber}`}
-                            />
-                          );
-                        }
+                  <Stack spacing={2} sx={{ mt: 2 }}>
+                    {item.enhancedLayers.map((layer, i) => {
+                      if (!layer) return null;
+                      if (layer.type === "evaluation") {
                         return (
-                          <ApprovalCard
+                          <EvaluationSummary
                             key={i}
-                            layer={{
-                              status: layer.status,
-                              outcome: layer.outcome,
-                              email: layer.email,
-                              signedAt: layer.signedAt,
-                              rejectionReason: layer.rejectionReason,
-                              signature: layer.signature,
-                            }}
-                            index={layer.layerNumber - 1}
+                            result={layer}
+                            layerTitle={`Layer ${layer.layerNumber}`}
                           />
                         );
-                      })}
-                    </Stack>
-                  </>
+                      }
+                      return (
+                        <ApprovalCard
+                          key={i}
+                          layer={{
+                            status: layer.status,
+                            outcome: layer.outcome,
+                            email: layer.email,
+                            signedAt: layer.signedAt,
+                            rejectionReason: layer.rejectionReason,
+                            signature: layer.signature,
+                            confirmedVia: layer.confirmedVia,
+                          }}
+                          index={layer.layerNumber - 1}
+                        />
+                      );
+                    })}
+                  </Stack>
                 )}
 
-                {/* Fallback for old-format layers */}
                 {(!item.enhancedLayers || item.enhancedLayers.length === 0) && item.layers && item.layers.length > 0 && (
-                  <>
-                    <Typography
-                      variant="h6"
-                      sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0 }}
-                    >
-                      Approval Chain
-                    </Typography>
-                    <Stack spacing={2}>
-                      {item.layers.map(
-                        (layer, i) => layer && <ApprovalCard key={i} layer={layer} index={i} />
-                      )}
-                    </Stack>
-                  </>
+                  <Stack spacing={2} sx={{ mt: 2 }}>
+                    {item.layers.map(
+                      (layer, i) => layer && <ApprovalCard key={i} layer={layer} index={i} />,
+                    )}
+                  </Stack>
                 )}
-              </>
+              </Box>
             )}
           </Stack>
         )}
       </DialogContent>
 
-      {/* Footer */}
-      <DialogActions sx={{ px: 4, py: 2.5, borderTop: editorialHairline, backgroundColor: editorial.blueSoft }}>
+      <DialogActions
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          borderTop: editorialHairline,
+          backgroundColor: "#ffffff",
+          display: "flex",
+          gap: 1.5,
+          flexWrap: "wrap",
+        }}
+      >
         <Box
           sx={{
             display: "flex",
@@ -707,18 +1108,34 @@ export default function DetailModal({ item, onClose }: DetailModalProps) {
             gap: 1,
             color: editorial.muted,
             fontSize: "0.8rem",
+            mr: "auto",
           }}
         >
           <LockIcon sx={{ fontSize: 16 }} />
-          Read-only view — submissions cannot be modified from the dashboard.
+          Read-only dashboard preview
         </Box>
+        {generatedPdf && (
+          <Button
+            component="a"
+            href={generatedPdf.url}
+            {...externalProps(generatedPdf.url)}
+            variant="outlined"
+            startIcon={<PdfIcon />}
+            sx={{
+              borderRadius: "8px",
+              fontWeight: 800,
+            }}
+          >
+            Open PDF
+          </Button>
+        )}
         <Button
           onClick={onClose}
           variant="contained"
           startIcon={<CloseIcon />}
           sx={{
             backgroundColor: editorial.pmwBlue,
-            borderRadius: "12px",
+            borderRadius: "8px",
             textTransform: "none",
             fontWeight: 800,
             px: 3,

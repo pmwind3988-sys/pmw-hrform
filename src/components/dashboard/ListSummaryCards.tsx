@@ -28,7 +28,7 @@ export default function ListSummaryCards({
   onEditForm,
 }: ListSummaryCardsProps) {
   return (
-    <Grid container spacing={2.5}>
+    <Grid container spacing={2}>
       {visibleLists.map((list) => {
         const meta = listMetaMap[list.title] ?? {
           icon: "📋",
@@ -36,52 +36,70 @@ export default function ListSummaryCards({
           pale: editorial.blueWash,
           category: "General",
         };
-        const count = submissions.filter((s) => s.listTitle === list.title).length;
-        const listApproved = submissions.filter(
-          (s) =>
-            s.listTitle === list.title &&
-            ["fullyapproved", "approved"].includes(
-              (s.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "")
-            )
-        ).length;
-        const listPending = submissions.filter(
-          (s) =>
-            s.listTitle === list.title &&
-            !["fullyapproved", "approved", "rejected"].includes(
-              (s.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "")
-            )
-        ).length;
-        const listRejected = submissions.filter(
-          (s) =>
-            s.listTitle === list.title &&
-            (s.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "").includes("reject")
-        ).length;
+        const listSubmissions = submissions.filter((s) => s.listTitle === list.title);
+        const count = listSubmissions.length;
+        let listApproved = 0;
+        let listPending = 0;
+        let listRejected = 0;
+
+        for (const submission of listSubmissions) {
+          const status = (submission.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "");
+          if (["fullyapproved", "approved"].includes(status)) {
+            listApproved++;
+          } else if (status.includes("reject")) {
+            listRejected++;
+          } else {
+            listPending++;
+          }
+        }
+
+        const approvedWidth = count > 0 ? `${(listApproved / count) * 100}%` : "0%";
+        const pendingWidth = count > 0 ? `${(listPending / count) * 100}%` : "0%";
+        const rejectedWidth = count > 0 ? `${(listRejected / count) * 100}%` : "0%";
+        const cardCaption = isAdmin ? "All visible submissions" : "Visible to you";
 
         return (
           <Grid size={{ xs: 12, sm: 6, lg: 3 }} key={list.id}>
             <Box
               sx={{
-                backgroundColor: "rgba(255, 255, 255, 0.92)",
-                borderRadius: "12px",
+                minHeight: 224,
+                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                borderRadius: "8px",
                 border: `1px solid ${editorial.border}`,
-                boxShadow: "none",
-                p: { xs: 2, sm: 2.5 },
-                pt: canUseFormBuilder ? { xs: 2.5, sm: 3 } : { xs: 2, sm: 2.5 },
+                boxShadow: "0 10px 28px rgba(0, 90, 158, 0.06)",
+                p: { xs: 1.75, sm: 2 },
+                pt: canUseFormBuilder ? { xs: 2.25, sm: 2.5 } : { xs: 1.75, sm: 2 },
                 position: "relative",
-                transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                transition: "box-shadow 0.2s ease, transform 0.2s ease",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  inset: "0 0 auto 0",
+                  height: 3,
+                  backgroundColor: meta.color,
+                },
                 "&:hover": {
                   boxShadow: editorialShadow,
-                  borderColor: editorial.pmwBlueSoft,
+                  transform: "translateY(-2px)",
+                },
+                "@media (prefers-reduced-motion: reduce)": {
+                  transition: "box-shadow 0.2s ease",
+                  "&:hover": {
+                    transform: "none",
+                  },
                 },
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, mb: 2 }}>
                 <Box
                   sx={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "12px",
-                    backgroundColor: editorial.blueWash,
+                    width: 44,
+                    height: 44,
+                    borderRadius: "8px",
+                    backgroundColor: meta.pale,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -90,15 +108,21 @@ export default function ListSummaryCards({
                 >
                   <DescriptionIcon sx={{ fontSize: 22, color: meta.color }} />
                 </Box>
-                <Box sx={{ flex: 1 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     variant="h6"
-                    sx={{ fontWeight: 800, color: editorial.ink, lineHeight: 1.2, mb: 0.25 }}
+                    sx={{
+                      fontWeight: 800,
+                      color: editorial.ink,
+                      lineHeight: 1.2,
+                      mb: 0.25,
+                      textWrap: "balance",
+                    }}
                   >
                     {list.title}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
-                    {meta.category}
+                  <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, display: "block" }}>
+                    {meta.category} · {cardCaption}
                   </Typography>
                 </Box>
                 {canUseFormBuilder && (
@@ -111,7 +135,9 @@ export default function ListSummaryCards({
                         position: "absolute",
                         top: 12,
                         right: 12,
-                        borderRadius: "10px",
+                        width: 40,
+                        height: 40,
+                        borderRadius: "8px",
                         backgroundColor: editorial.purpleWash,
                         color: editorial.pmwPurpleDark,
                         border: `1px solid ${editorial.pmwPurpleSoft}`,
@@ -135,23 +161,43 @@ export default function ListSummaryCards({
                 )}
               </Box>
 
-              <Typography
-                variant="h2"
-                sx={{
-                  fontWeight: 700,
-                  color: editorial.ink,
-                  letterSpacing: 0,
-                  textAlign: "center",
-                  fontSize: "2.25rem",
-                  mb: 1,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {count}
-              </Typography>
+              <Box sx={{ mt: "auto" }}>
+                <Typography
+                  variant="h2"
+                  sx={{
+                    fontWeight: 800,
+                    color: editorial.ink,
+                    letterSpacing: 0,
+                    fontSize: "2.4rem",
+                    mb: 0.5,
+                    lineHeight: 1,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {count}
+                </Typography>
+                <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 800 }}>
+                  {count === 1 ? "submission" : "submissions"}
+                </Typography>
+              </Box>
 
               {count > 0 ? (
-                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center", mb: canUseFormBuilder ? 2 : 0 }}>
+                <Box sx={{ mt: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      height: 7,
+                      overflow: "hidden",
+                      borderRadius: 999,
+                      backgroundColor: "rgba(16, 16, 16, 0.08)",
+                      mb: 1.5,
+                    }}
+                  >
+                    <Box sx={{ width: approvedWidth, backgroundColor: editorial.success }} />
+                    <Box sx={{ width: pendingWidth, backgroundColor: editorial.warning }} />
+                    <Box sx={{ width: rejectedWidth, backgroundColor: editorial.error }} />
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                   <Box
                     sx={{
                       display: "flex",
@@ -191,11 +237,12 @@ export default function ListSummaryCards({
                     <CancelIcon sx={{ fontSize: 14 }} />
                     {listRejected} rejected
                   </Box>
+                  </Box>
                 </Box>
               ) : (
                 <Typography
                   variant="body2"
-                  sx={{ color: editorial.muted, fontStyle: "italic", mb: canUseFormBuilder ? 2 : 0, textAlign: "center" }}
+                  sx={{ color: editorial.muted, fontStyle: "italic", mt: 2 }}
                 >
                   No submissions
                 </Typography>
@@ -206,18 +253,19 @@ export default function ListSummaryCards({
                   sx={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
+                    justifyContent: "flex-start",
                     gap: 0.5,
                     color: editorial.pmwBlueDark,
                     fontSize: "0.75rem",
                     fontWeight: 800,
+                    mt: 2,
                     transition: "transform 0.2s ease",
                     ".MuiBox-root:hover &": {
                       transform: "translateX(2px)",
                     },
                   }}
                 >
-                  View submissions
+                  Listed below
                   <ArrowForwardIcon sx={{ fontSize: 14 }} />
                 </Box>
               )}

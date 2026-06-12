@@ -474,7 +474,27 @@ const INTERNAL_FIELDS = [
   "_textCustomised",
   "variantKey",
   "_expression",
+  "isManagedCompanyChoice",
+  "managedPlacement",
 ];
+
+/** Map builder-only field props to SurveyJS-native equivalents before export. */
+function applySurveyJsChoiceProps(cleaned: Record<string, unknown>, fieldType: string) {
+  if (fieldType !== "dropdown") return;
+  if ("searchable" in cleaned) {
+    cleaned.searchEnabled = cleaned.searchable !== false;
+    delete cleaned.searchable;
+  }
+  if ("clearable" in cleaned) {
+    cleaned.allowClear = cleaned.clearable !== false;
+    delete cleaned.clearable;
+  }
+  // Native <select> avoids SurveyJS dropdownListModel, which crashes in React 19
+  // Strict Mode when the survey model is disposed and remounted.
+  if (cleaned.searchEnabled === false) {
+    cleaned.renderAs = "select";
+  }
+}
 
 /**
  * Map custom/non-native field types to SurveyJS-native equivalents.
@@ -649,7 +669,9 @@ export function buildSurveyJson(
           cleaned.state = "collapsed";
         }
         delete cleaned.collapsed;
+        delete cleaned.collapsible;
       }
+      applySurveyJsChoiceProps(cleaned, f.type);
       // Recursively emit nested elements for panels
       if (f.type === "panel" && Array.isArray(f.elements) && f.elements.length > 0) {
         cleaned.elements = buildElements(f.elements);

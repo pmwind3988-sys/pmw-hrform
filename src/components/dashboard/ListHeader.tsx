@@ -15,12 +15,14 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: isAdmin ? "2fr 1.5fr 1fr 1fr 1fr 40px" : "2fr 1fr 1fr 1fr 40px",
+        gridTemplateColumns: isAdmin
+          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px"
+          : "minmax(260px, 2.2fr) minmax(180px, 1.25fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px",
         gap: 2,
         px: 3,
         py: 1.5,
-        backgroundColor: editorial.paper,
-        borderRadius: "14px 14px 0 0",
+        backgroundColor: "rgba(255, 255, 255, 0.9)",
+        borderRadius: "8px 8px 0 0",
         border: `1px solid ${editorial.border}`,
         borderBottom: 0,
         alignItems: "center",
@@ -74,7 +76,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           fontSize: "0.7rem",
         }}
       >
-        Category
+        Submitted
       </Typography>
       <Typography
         variant="caption"

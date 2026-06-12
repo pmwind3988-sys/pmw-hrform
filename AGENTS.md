@@ -58,6 +58,12 @@ Serializer.addClass("widgetname", [...props], () => new QuestionModel(""), "ques
 ```
 Used by: `SignaturePad` (`src/utils/SignaturePad.tsx`) and `DynamicMatrix` (`src/utils/DynamicMatrix.tsx`).
 
+### Department Approver Lookup
+- Use the SharePoint list name `Department Approver Directory` for department-to-approver mappings.
+- Recommended columns: `Department` (single line text, exact form value), `ApproverEmail` (single line text), `ApproverName` (single line text), `ApproverRole` (choice/text; default layer role value is `HOD`).
+- Approval layer assignee type `department-approver` reads the submitted department field, filters the directory by exact `Department` and `ApproverRole`, then writes the resolved email into `L{n}_Email`.
+- This design avoids Microsoft Graph tenant user search and does not require `User.Read.All`.
+
 ### Auth & MSAL
 - Auth state machine in `App.tsx`: `checking → loading → ready/wrong_tenant/error` or `guest/choice`.
 - Auth decision persisted in `localStorage` (`pmw_hr_auth_decision`). Post-login redirect in `sessionStorage` (`pmw_post_login_redirect`).

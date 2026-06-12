@@ -1382,8 +1382,22 @@ function responseSystemColumnSpecs(options: ProvisionFormListOptions): SpColumnS
     ...(options.includePdpaColumns === false ? [] : PDPA_COLUMN_SPECS),
     ...(options.includePdfUrl === false ? [] : [PDF_URL_COLUMN_SPEC]),
     ...layerColumnSpecs(layerCount),
-    ...(numLayers > 0 ? ENHANCED_LAYER_COLUMNS : []),
+    ...(layerCount > 0 ? ENHANCED_LAYER_COLUMNS : []),
   ]);
+}
+
+/** Ensure workflow columns exist before branch selection or layer actions. */
+export async function ensureWorkflowColumns(
+  token: string,
+  listTitle: string,
+  layerCount: number,
+): Promise<EnsureColumnsResult> {
+  const count = Math.max(layerCount, 1);
+  return ensureColumns(token, listTitle, dedupeColumnSpecs([
+    SELECTED_BRANCH_COLUMN_SPEC,
+    ...ENHANCED_LAYER_COLUMNS,
+    ...layerColumnSpecs(count),
+  ]));
 }
 
 function logEnsuredColumns(
@@ -1746,16 +1760,18 @@ export async function triggerApprovalNotification(
 
   try {
     if (action === 'submit') {
-      // New submission — try Approvers list first, fall back to nextApproverEmail
-      let targetEmail = '';
-      try {
-        const approvers = await spGet(
-          token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}' and LayerNumber eq ${layer}&$select=ApproverEmail,ApproverName&$top=1`
-        ) as { value?: { ApproverEmail?: string; ApproverName?: string }[] };
-        targetEmail = approvers.value?.[0]?.ApproverEmail || nextApproverEmail || '';
-      } catch {
-        targetEmail = nextApproverEmail || '';
+      // New submission — prefer the caller's resolved layer email, then fall back to the legacy Approvers list.
+      let targetEmail = nextApproverEmail || '';
+      if (!targetEmail) {
+        try {
+          const approvers = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}' and LayerNumber eq ${layer}&$select=ApproverEmail,ApproverName&$top=1`
+          ) as { value?: { ApproverEmail?: string; ApproverName?: string }[] };
+          targetEmail = approvers.value?.[0]?.ApproverEmail || '';
+        } catch {
+          targetEmail = '';
+        }
       }
 
       if (targetEmail) {

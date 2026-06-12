@@ -20,6 +20,7 @@ import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
+import { getSelectedCompany } from "../../utils/companySelection";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -69,6 +70,27 @@ interface FormConfig {
   NumberOfApprovalLayer?: number;
 }
 
+const SYSTEM_FIELDS = new Set([
+  "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
+  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData",
+  "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
+  "Author", "Editor", "Created", "Modified", "ContentType", "PermMask", "PdfUrl",
+  "L1_Status", "L1_Email", "L1_SignedAt", "L1_Rejection", "L1_Signature",
+  "L2_Status", "L2_Email", "L2_SignedAt", "L2_Rejection", "L2_Signature",
+  "L3_Status", "L3_Email", "L3_SignedAt", "L3_Rejection", "L3_Signature",
+  "SelectedBranch",
+]);
+
+function extractResponseFields(item: Record<string, unknown>): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(item)) {
+    if (!SYSTEM_FIELDS.has(key) && value !== null && value !== undefined) {
+      data[key] = value;
+    }
+  }
+  return data;
+}
+
 export default function ResponseViewer() {
   const { formTitle } = useParams<{ formTitle: string }>();
   const { instance, accounts, inProgress } = useMsal();
@@ -82,6 +104,7 @@ export default function ResponseViewer() {
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [, setFormConfig] = useState<FormConfig | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionItem | null>(null);
+  const [selectedResponseData, setSelectedResponseData] = useState<Record<string, unknown> | null>(null);
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [matrixTables, setMatrixTables] = useState<Record<string, MatrixTableEntry>>({});
@@ -150,10 +173,17 @@ export default function ResponseViewer() {
     if (!token) return;
 
     setSelectedSubmission(item);
+    setSelectedResponseData(null);
     setSurveyJson(null);
     setMatrixTables({});
 
     try {
+      const fullItem = await spGet(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formTitle || "")}')/items(${item.Id})`
+      ) as Record<string, unknown>;
+      setSelectedResponseData(extractResponseFields(fullItem));
+
       const versionData = await spGet(
         token,
         `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(formTitle || "")}' and FormVersion eq '${encodeURIComponent(item.FormVersion)}'&$select=SurveyJSON&$top=1`
@@ -265,13 +295,18 @@ export default function ResponseViewer() {
           // Ignore parse errors
         }
       }
+      if (selectedResponseData) {
+        m.data = selectedResponseData;
+      }
       modelRef.current?.dispose();
       modelRef.current = m;
       return m;
     } catch {
       return null;
     }
-  }, [surveyJson, selectedSubmission?.RawJSON]);
+  }, [surveyJson, selectedSubmission?.RawJSON, selectedResponseData]);
+
+  const selectedCompany = getSelectedCompany(selectedResponseData, surveyJson);
 
   // Status badge color
   const getStatusColor = (status: string) => {
@@ -480,6 +515,11 @@ export default function ResponseViewer() {
                       <> • Layer: <strong>{selectedSubmission.CurrentLayer || selectedSubmission.CurrentApprovalLayer}</strong></>
                     )}
                   </div>
+                  {selectedCompany && (
+                    <div style={{ marginTop: 4, fontSize: 12, color: C.purple, fontWeight: 600 }}>
+                      Company: {selectedCompany}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ padding: 16, maxHeight: 500, overflow: "auto" }}>

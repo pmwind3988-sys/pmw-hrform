@@ -69,10 +69,31 @@ export type FormStatus =
   | "rejected"
   | "cancelled";
 
-export interface LayerAssignee {
-  type: "user" | "field-reference";
+export interface FixedUserLayerAssignee {
+  type: "user";
   value: string;
 }
+
+export interface FieldReferenceLayerAssignee {
+  type: "field-reference";
+  value: string;
+}
+
+export interface DepartmentApproverLayerAssignee {
+  type: "department-approver";
+  value: string;
+  listName?: string;
+  departmentColumn?: string;
+  emailColumn?: string;
+  nameColumn?: string;
+  roleColumn?: string;
+  roleValue?: string;
+}
+
+export type LayerAssignee =
+  | FixedUserLayerAssignee
+  | FieldReferenceLayerAssignee
+  | DepartmentApproverLayerAssignee;
 
 export interface BaseLayer {
   layerNumber: number;
@@ -250,6 +271,8 @@ export interface FormBuilderField {
   _enabIfOp?: string;
   _enabIfVal?: string;
   _textCustomised?: boolean;
+  isManagedCompanyChoice?: boolean;
+  managedPlacement?: string;
   // === LAYOUT TYPES ===
   // Page Break
   pageTitle?: string;

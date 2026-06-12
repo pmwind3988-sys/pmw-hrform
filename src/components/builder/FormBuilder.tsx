@@ -232,21 +232,16 @@ interface CompanyChoiceConfig {
 }
 
 const COMPANY_CHOICE_FIELD_ID = "pmw_company_choice_field";
+const COMPANY_CHOICE_DESCRIPTION = "Choose the company this form submission belongs to.";
+const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
 
-function toChoiceObjects(choices: string[]) {
+type CompanyChoiceOption = { value: string; text: string };
+
+function toChoiceObjects(choices: string[]): CompanyChoiceOption[] {
   return choices
     .map(c => c.trim())
     .filter(Boolean)
     .map(c => ({ value: c, text: c }));
-}
-
-function choicesEqual(
-  current: FormBuilderField["choices"] | undefined,
-  next: { value: string; text: string }[]
-) {
-  const currentValues = (current || []).map(c => typeof c === "string" ? c : c.value);
-  const nextValues = next.map(c => c.value);
-  return currentValues.length === nextValues.length && currentValues.every((v, i) => v === nextValues[i]);
 }
 
 function createCompanyChoiceField(config: CompanyChoiceConfig): FormBuilderField {
@@ -257,13 +252,190 @@ function createCompanyChoiceField(config: CompanyChoiceConfig): FormBuilderField
     title: config.title,
     isRequired: true,
     startWithNewLine: true,
-    visible: true,
+    visible: false,
     readOnly: false,
-    description: "Choose the company this form submission belongs to.",
+    description: COMPANY_CHOICE_DESCRIPTION,
     choices: toChoiceObjects(config.choices),
     colCount: 1,
-    requiredErrorText: "Please choose a company.",
+    requiredErrorText: COMPANY_CHOICE_REQUIRED_ERROR,
+    isManagedCompanyChoice: true,
+    managedPlacement: "banner",
   };
+}
+
+function isManagedCompanyChoice(field?: FormBuilderField | null) {
+  return !!field && (field.isManagedCompanyChoice === true || field._id === COMPANY_CHOICE_FIELD_ID);
+}
+
+function removeManagedCompanyChoiceFields(items: FormBuilderField[]): FormBuilderField[] {
+  const result: FormBuilderField[] = [];
+  for (const field of items) {
+    if (isManagedCompanyChoice(field)) continue;
+    if (field.type === "panel" && Array.isArray(field.elements)) {
+      result.push({ ...field, elements: removeManagedCompanyChoiceFields(field.elements) });
+    } else {
+      result.push(field);
+    }
+  }
+  return result;
+}
+
+function removeFieldsByIds(items: FormBuilderField[], ids: Set<string>): FormBuilderField[] {
+  const result: FormBuilderField[] = [];
+  for (const field of items) {
+    if (ids.has(field._id)) continue;
+    if (field.type === "panel" && Array.isArray(field.elements)) {
+      result.push({ ...field, elements: removeFieldsByIds(field.elements, ids) });
+    } else {
+      result.push(field);
+    }
+  }
+  return result;
+}
+
+function normalizeCompanyChoiceFields(items: FormBuilderField[], config: CompanyChoiceConfig): FormBuilderField[] {
+  const flat = flattenFieldTree(items);
+  const existing = flat.find(field =>
+    isManagedCompanyChoice(field) ||
+    (field.name === config.fieldName && field.type === "radiogroup")
+  );
+  const desiredChoices = toChoiceObjects(config.choices);
+  const managed: FormBuilderField = {
+    ...(existing || createCompanyChoiceField(config)),
+    _id: existing?._id || COMPANY_CHOICE_FIELD_ID,
+    type: "radiogroup",
+    name: config.fieldName,
+    title: config.title,
+    isRequired: true,
+    startWithNewLine: true,
+    visible: false,
+    readOnly: false,
+    description: COMPANY_CHOICE_DESCRIPTION,
+    choices: desiredChoices,
+    colCount: 1,
+    requiredErrorText: COMPANY_CHOICE_REQUIRED_ERROR,
+    defaultValue: undefined,
+    isManagedCompanyChoice: true,
+    managedPlacement: "banner",
+  };
+  const managedIds = new Set(
+    flat
+      .filter(field => isManagedCompanyChoice(field) || field._id === managed._id)
+      .map(field => field._id)
+  );
+  const withoutManaged = removeFieldsByIds(removeManagedCompanyChoiceFields(items), managedIds);
+  const normalized = [managed, ...withoutManaged];
+  return JSON.stringify(normalized) === JSON.stringify(items) ? items : normalized;
+}
+
+function choiceOptionFromUnknown(choice: unknown): CompanyChoiceOption | null {
+  if (typeof choice === "string") {
+    const trimmed = choice.trim();
+    return trimmed ? { value: trimmed, text: trimmed } : null;
+  }
+  if (!choice || typeof choice !== "object") return null;
+  const record = choice as Record<string, unknown>;
+  const value = String(record.value ?? record.text ?? "").trim();
+  const text = String(record.text ?? record.value ?? "").trim();
+  return value ? { value, text: text || value } : null;
+}
+
+function getCompanyChoiceOptions(
+  choices: FormBuilderField["choices"] | undefined,
+  fallbackCompanyLines: string[]
+): CompanyChoiceOption[] {
+  const fromChoices = (choices || [])
+    .map(choiceOptionFromUnknown)
+    .filter((choice): choice is CompanyChoiceOption => Boolean(choice));
+  if (fromChoices.length > 0) return fromChoices;
+  return fallbackCompanyLines.map(value => ({ value, text: value }));
+}
+
+function findCompanyChoiceElement(
+  json: SurveyJson,
+  meta?: Record<string, unknown>
+): Record<string, unknown> | null {
+  const enabledByMeta = meta?.companyChoiceEnabled === true;
+  const walk = (elements: Record<string, unknown>[]): Record<string, unknown> | null => {
+    for (const element of elements) {
+      if (
+        element.isManagedCompanyChoice === true ||
+        (enabledByMeta && element.name === "company" && element.type === "radiogroup")
+      ) {
+        return element;
+      }
+      if (Array.isArray(element.elements)) {
+        const nested = walk(element.elements as Record<string, unknown>[]);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  };
+  for (const page of json.pages ?? []) {
+    const found = walk(page.elements ?? []);
+    if (found) return found;
+  }
+  return null;
+}
+
+function PreviewCompanySelector({
+  title,
+  options,
+  value,
+  onChange,
+  compact,
+}: {
+  title: string;
+  options: CompanyChoiceOption[];
+  value: string;
+  onChange: (value: string) => void;
+  compact: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>
+        {title}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {options.map(option => {
+          const checked = value === option.value;
+          return (
+            <label
+              key={option.value}
+              style={{
+                minHeight: 40,
+                flex: compact ? "1 1 100%" : "1 1 220px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: checked ? C.purplePale : C.white,
+                boxShadow: checked
+                  ? `0 0 0 1px ${C.purpleMid}, 0 8px 20px rgba(16,16,16,0.06)`
+                  : `0 0 0 1px ${C.border}`,
+                color: checked ? C.purple : C.textPrimary,
+                cursor: "pointer",
+                transition: "background-color .15s, box-shadow .15s, color .15s",
+              }}
+            >
+              <input
+                type="radio"
+                name="preview-company-choice"
+                value={option.value}
+                checked={checked}
+                onChange={() => onChange(option.value)}
+                style={{ width: 16, height: 16, accentColor: C.purple, flexShrink: 0 }}
+              />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 800, lineHeight: 1.35 }}>
+                {option.text}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ── Visibility / EnableIf / Validation Editors ────────────────────────
@@ -773,11 +945,16 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
   const spColLabel = spColKind
     ? ({ 2: "Text", 3: "Multi-line", 4: "Date", 6: "Choice", 8: "Boolean", 9: "Number", 15: "MultiChoice" }[spColKind.FieldTypeKind] ?? spColKind.label)
     : null;
-  const shortcuts = selected ? "Del to remove, Ctrl+D to duplicate" : "";
+  const managedCompanyChoice = isManagedCompanyChoice(field);
+  const shortcuts = managedCompanyChoice
+    ? "Managed from Form Setup"
+    : selected
+      ? "Del to remove, Ctrl+D to duplicate"
+      : "";
   const isPanel = field.type === "panel";
 
   return <div
-    draggable
+    draggable={!managedCompanyChoice}
     onDragStart={e => onDragStart(e, index)}
     onDragOver={e => onDragOver(e, index)}
     onDrop={e => {
@@ -789,7 +966,7 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
       }
       onDrop(e, index);
     }}
-    className={`fb-field-card ${selected ? 'selected' : 'default'} ${err.length ? 'error' : ''} ${isPanel ? 'panel-card' : ''}`}
+    className={`fb-field-card ${selected ? 'selected' : 'default'} ${err.length ? 'error' : ''} ${isPanel ? 'panel-card' : ''} ${managedCompanyChoice ? 'managed-company-choice' : ''}`}
     onClick={e => { e.stopPropagation(); onSelect(field._id); }}
     title={shortcuts}
     style={{ marginLeft: depth * 24 }}>
@@ -800,9 +977,11 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
       <div className="fb-field-main">
         <div className="fb-field-header">
           <span className="fb-field-title-icon" style={{ display: "flex", alignItems: "center" }}>
-            {TYPE_ICONS[field.type]}
+            {managedCompanyChoice ? <CheckBoxIcon /> : TYPE_ICONS[field.type]}
           </span>
           <span className="fb-field-title-text">{field.title || "(no label)"}</span>
+          {managedCompanyChoice && <Pill color={C.purple} bg={C.purplePale}>Header selector</Pill>}
+          {managedCompanyChoice && <Pill color={C.textSecond} bg={C.offWhite}>Managed</Pill>}
           {field.isRequired && <Pill color={C.red} bg={C.redPale}>Required</Pill>}
           {field.readOnly && <Pill color={C.textMuted} bg={C.offWhite}>Read-only</Pill>}
           {field.startWithNewLine === false && <Pill color={C.amber} bg={C.amberPale}>Inline</Pill>}
@@ -821,10 +1000,10 @@ function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, on
         {err.map((e, i) => <div key={i} className="fb-field-error"><WarningAmberIcon style={{ fontSize: 12 }} />{e.msg}</div>)}
       </div>
       <div className="fb-field-actions" onClick={e => e.stopPropagation()}>
-        <IconBtn icon={<ArrowUpwardIcon style={{ fontSize: 14 }} />} title="Move up" onClick={() => onMoveUp()} disabled={isFirst} />
-        <IconBtn icon={<ArrowDownwardIcon style={{ fontSize: 14 }} />} title="Move down" onClick={() => onMoveDown()} disabled={isLast} />
-        <IconBtn icon={<ContentCopyIcon style={{ fontSize: 14 }} />} title="Duplicate (Ctrl+D)" onClick={() => onDuplicate(field)} />
-        <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title="Remove (Del)" onClick={() => onRemove(field._id)} danger />
+        <IconBtn icon={<ArrowUpwardIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Managed selector stays at the top" : "Move up"} onClick={() => onMoveUp()} disabled={managedCompanyChoice || isFirst} />
+        <IconBtn icon={<ArrowDownwardIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Managed selector stays at the top" : "Move down"} onClick={() => onMoveDown()} disabled={managedCompanyChoice || isLast} />
+        <IconBtn icon={<ContentCopyIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Managed selector cannot be duplicated" : "Duplicate (Ctrl+D)"} onClick={() => onDuplicate(field)} disabled={managedCompanyChoice} />
+        <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Turn off Company selector in Form Setup to remove it" : "Remove (Del)"} onClick={() => onRemove(field._id)} danger disabled={managedCompanyChoice} />
       </div>
     </div>
     {/* Render panel children */}
@@ -878,6 +1057,10 @@ function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const onDragStart = (e: React.DragEvent, i: number) => {
+    if (isManagedCompanyChoice(fields[i])) {
+      e.preventDefault();
+      return;
+    }
     dragIndexRef.current = i;
     setDraggingIndex(i);
     e.dataTransfer.effectAllowed = "move";
@@ -1553,6 +1736,37 @@ function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, sur
 
   if (!field) return <div style={{ padding: 20, textAlign: "center", color: C.textMuted, fontSize: 12 }}>Select a field to edit its properties</div>;
 
+  if (isManagedCompanyChoice(field)) {
+    const options = getCompanyChoiceOptions(field.choices, []);
+    return (
+      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <CheckBoxIcon style={{ fontSize: 16, color: C.purple }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>Managed Company Selector</span>
+          </div>
+          <div style={{ fontSize: 10, color: C.textMuted, fontFamily: "monospace" }}>{field.name}</div>
+        </div>
+        <div style={{ flex: 1, padding: 14 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 11px", fontSize: 11, color: C.textSecond, lineHeight: 1.55 }}>
+              This special layout item is shown as the company question in the form header. Its label and options are controlled by Form Setup, and it can only be removed by turning off the Company selector toggle.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Header choices</div>
+              {options.map(option => (
+                <div key={option.value} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 34, padding: "7px 9px", borderRadius: 8, background: C.white, boxShadow: `0 0 0 1px ${C.border}` }}>
+                  <CheckBoxIcon style={{ fontSize: 14, color: C.purple }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary }}>{option.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const td = QUESTION_TYPES.find(t => t.type === field.type) || QUESTION_TYPES[0];
   const hasChoices = ["dropdown", "radiogroup", "checkbox"].includes(field.type);
   const tabs = [
@@ -1657,170 +1871,175 @@ function JsonPreview({ json, collapsed, onToggle }: { json: SurveyJson; collapse
   </div>;
 }
 
+function createLivePreviewModel(json: SurveyJson, dataRef: { current: Record<string, unknown> }): Model | null {
+  try {
+    const m = new Model(json);
+    for (const [key, val] of Object.entries(dataRef.current)) {
+      if (m.getQuestionByName(key)) {
+        m.setValue(key, val);
+      }
+    }
+    m.onValueChanged.add((_, options) => {
+      dataRef.current[options.name] = options.value;
+    });
+
+    const ensureFormulaWritable = (els: Record<string, unknown>[]) => {
+      for (const el of els) {
+        if (el._expression && el.readOnly === true) {
+          el.readOnly = false;
+        }
+        let rawExpr = (el._expression as string) || (el.expression as string);
+        if (rawExpr) {
+          const normalized = rawExpr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
+          if (normalized !== rawExpr) {
+            if (el._expression) el._expression = normalized;
+            if (el.expression) el.expression = normalized;
+          }
+        }
+        if (el.elements) ensureFormulaWritable(el.elements as Record<string, unknown>[]);
+      }
+    };
+    for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
+      if (page.elements) ensureFormulaWritable(page.elements as Record<string, unknown>[]);
+    }
+
+    const exprMap = new Map<string, string>();
+    const walkJson = (els: Record<string, unknown>[]) => {
+      for (const el of els) {
+        const expr = (el._expression as string) || (el.expression as string);
+        if (expr) exprMap.set(el.name as string, expr);
+        if (el.elements) walkJson(el.elements as Record<string, unknown>[]);
+      }
+    };
+    for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
+      if (page.elements) walkJson(page.elements as Record<string, unknown>[]);
+    }
+
+    for (const q of m.getAllQuestions()) {
+      if (q.getType() === "expression") {
+        const rawExpr = (q as any).expression as string;
+        if (rawExpr) {
+          const normalized = rawExpr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
+          if (normalized !== rawExpr) {
+            (q as any).expression = normalized;
+          }
+        }
+      }
+    }
+
+    const recalcExpressions = () => {
+      for (const q of m.getAllQuestions()) {
+        let expr = exprMap.get(q.name);
+        if (!expr) continue;
+        expr = expr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
+        let compiled = expr;
+        const refs = [...new Set(expr.match(/\{([^}]+)\}/g) || [])];
+        for (const ref of refs) {
+          const name = ref.slice(1, -1);
+          const srcQ = m.getQuestionByName(name);
+          const val = srcQ ? (srcQ.value as number | undefined) : undefined;
+          compiled = compiled.split(ref).join(String(Number(val) || 0));
+        }
+        try {
+          const result = safeEvalArithmetic(compiled);
+          if (typeof result === "number" && isFinite(result)) {
+            if (q.value !== result) m.setValue(q.name, result);
+          }
+        } catch {
+          console.warn(`[Builder] Formula eval failed for "${q.name}"`);
+        }
+      }
+    };
+    m.onValueChanged.add(() => setTimeout(recalcExpressions, 0));
+    setTimeout(recalcExpressions, 0);
+
+    m.onValueChanged.add((_, options) => {
+      const q = m.getQuestionByName(options.name);
+      if (!q || q.getType() !== "text") return;
+      const mode = (q as Record<string, unknown>).autocapitalize as string | undefined;
+      if (!mode || mode === "none") return;
+      const val = options.value;
+      if (typeof val !== "string") return;
+      const transform = (v: string) => {
+        switch (mode) {
+          case "words": return v.replace(/\b\w/g, c => c.toUpperCase());
+          case "sentences": return v.replace(/(^\w|[.!?]\s+\w)/g, c => c.toUpperCase());
+          case "characters": return v.toUpperCase();
+          default: return v;
+        }
+      };
+      const next = transform(val);
+      if (next !== val) {
+        q.value = next;
+      }
+    });
+
+    m.onGetExpressionDisplayValue.add((_sender, options) => {
+      if (options.question && options.question.getType() === "expression" && (options.question as any).currency === "MYR") {
+        options.displayValue = "RM " + String(options.displayValue).replace(/^[^\d\s-]+/, "").trim();
+      }
+    });
+    if (json.labelPosition) {
+      m.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
+    }
+    return m;
+  } catch (e) {
+    console.error("Preview model error:", e);
+    return null;
+  }
+}
+
 // ── Live Preview Modal ────────────────────────────────────────────────
 function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" }: { json: SurveyJson; onClose: () => void; showBanner?: boolean; meta?: Record<string, unknown>; device?: "desktop" | "tablet" | "mobile" }) {
   const dataRef = useRef<Record<string, unknown>>({});
-  const modelRef = useRef<Model | null>(null);
-  const fingerprintRef = useRef("");
+  const [model, setModel] = useState<Model | null>(null);
+  const [surveyMountKey, setSurveyMountKey] = useState(0);
+  const [previewCompany, setPreviewCompany] = useState("");
+  const jsonFingerprint = JSON.stringify(json);
 
-  // Only recreate the SurveyJS model when the JSON structure actually changes.
-  // Using a stable ref prevents React re-renders from destroying the model
-  // instance, which was causing typed values to reset in the preview.
-  const currentFingerprint = JSON.stringify(json);
-  if (currentFingerprint !== fingerprintRef.current) {
-    fingerprintRef.current = currentFingerprint;
-    try {
-      modelRef.current?.dispose();
-      modelRef.current?.dispose();
-      const m = new Model(json);
-      // Restore preview data for questions that still exist
-      for (const [key, val] of Object.entries(dataRef.current)) {
-        if (m.getQuestionByName(key)) {
-          m.setValue(key, val);
-        }
-      }
-      // Track data changes so they survive JSON updates
-      m.onValueChanged.add((_, options) => {
-        dataRef.current[options.name] = options.value;
-      });
-      // Pre-process JSON to ensure old-format formula fields (type:text with _expression)
-      // have readOnly: false — SurveyJS blocks m.setValue() on readOnly questions.
-      const ensureFormulaWritable = (els: Record<string, unknown>[]) => {
-        for (const el of els) {
-          if (el._expression && el.readOnly === true) {
-            el.readOnly = false;
-          }
-          // Also normalize the expression on the JSON element itself so SurveyJS
-          // expression-type questions get the clean expression for native evaluation.
-          let rawExpr = (el._expression as string) || (el.expression as string);
-          if (rawExpr) {
-            const normalized = rawExpr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
-            if (normalized !== rawExpr) {
-              if (el._expression) el._expression = normalized;
-              if (el.expression) el.expression = normalized;
-            }
-          }
-          if (el.elements) ensureFormulaWritable(el.elements as Record<string, unknown>[]);
-        }
-      };
-      for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
-        if (page.elements) ensureFormulaWritable(page.elements as Record<string, unknown>[]);
-      }
+  // Create/dispose the Survey model in an effect so React Strict Mode remounts
+  // get a fresh model instead of reusing a disposed instance cached by useMemo.
+  useEffect(() => {
+    const nextModel = createLivePreviewModel(json, dataRef);
+    setModel(nextModel);
+    setSurveyMountKey(key => key + 1);
+    return () => {
+      nextModel?.dispose();
+      setModel(null);
+    };
+  }, [jsonFingerprint]);
 
-      // Manually evaluate formula fields (stored as readOnly text with _expression)
-      // Build expression map from the source JSON — SurveyJS does NOT preserve
-      // custom JSON properties (_expression) on the question object in v2.5
-      const exprMap = new Map<string, string>();
-      const walkJson = (els: Record<string, unknown>[]) => {
-        for (const el of els) {
-          // Check custom _expression first, then fall back to native expression property
-          // (native expression may exist on forms published before _expression was introduced)
-          const expr = (el._expression as string) || (el.expression as string);
-          if (expr) exprMap.set(el.name as string, expr);
-          if (el.elements) walkJson(el.elements as Record<string, unknown>[]);
-        }
-      };
-      for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
-        if (page.elements) walkJson(page.elements as Record<string, unknown>[]);
-      }
-
-      // Also normalize expression property on the question objects themselves.
-      // For expression-type questions, SurveyJS's native evaluation uses the raw
-      // expression property and will RE-EVALUATE (and override) after our
-      // m.setValue call — so we must ensure the question's expression is clean.
-      const normalizeQuestionExprs = () => {
-        for (const q of m.getAllQuestions()) {
-          if (q.getType() === "expression") {
-            const rawExpr = (q as any).expression as string;
-            if (rawExpr) {
-              const normalized = rawExpr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
-              if (normalized !== rawExpr) {
-                (q as any).expression = normalized;
-              }
-            }
-          }
-        }
-      };
-      normalizeQuestionExprs();
-
-      const recalcExpressions = () => {
-        for (const q of m.getAllQuestions()) {
-          let expr = exprMap.get(q.name);
-          if (!expr) continue;
-          // Normalize corrupted expressions (e.g. `++` → `+`) for existing published forms
-          // that may have been saved with the old buggy regex.
-          expr = expr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
-          let compiled = expr;
-          // Replace ALL occurrences of each field reference (split/join replaces globally)
-          const refs = [...new Set(expr.match(/\{([^}]+)\}/g) || [])];
-          for (const ref of refs) {
-            const name = ref.slice(1, -1);
-            const srcQ = m.getQuestionByName(name);
-            const val = srcQ ? (srcQ.value as number | undefined) : undefined;
-            compiled = compiled.split(ref).join(String(Number(val) || 0));
-          }
-          try {
-            const result = safeEvalArithmetic(compiled);
-            if (typeof result === "number" && isFinite(result)) {
-              if (q.value !== result) m.setValue(q.name, result);
-            }
-          } catch (e) {
-            console.warn(`[Builder] Formula eval failed for "${q.name}"`);
-          }
-        }
-      };
-      m.onValueChanged.add(() => setTimeout(recalcExpressions, 0));
-      setTimeout(recalcExpressions, 0);
-      // Autocapitalize hook
-      m.onValueChanged.add((_, options) => {
-        const q = m.getQuestionByName(options.name);
-        if (!q || q.getType() !== "text") return;
-        const mode = (q as Record<string, unknown>).autocapitalize as string | undefined;
-        if (!mode || mode === "none") return;
-        const val = options.value;
-        if (typeof val !== "string") return;
-        const transform = (v: string) => {
-          switch (mode) {
-            case "words": return v.replace(/\b\w/g, c => c.toUpperCase());
-            case "sentences": return v.replace(/(^\w|[.!?]\s+\w)/g, c => c.toUpperCase());
-            case "characters": return v.toUpperCase();
-            default: return v;
-          }
-        };
-        const next = transform(val);
-        if (next !== val) {
-          q.value = next;
-        }
-      });
-      // Customise currency display for MYR → show "RM" symbol
-      m.onGetExpressionDisplayValue.add((_sender, options) => {
-        if (options.question && options.question.getType() === "expression" && (options.question as any).currency === "MYR") {
-          options.displayValue = "RM " + String(options.displayValue).replace(/^[^\d\s-]+/, "").trim();
-        }
-      });
-      if (json.labelPosition) {
-        m.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
-      }
-      modelRef.current = m;
-    } catch (e) { console.error("Preview model error:", e); modelRef.current = null; }
-  }
-
-  useEffect(() => () => {
-    modelRef.current?.dispose();
-    modelRef.current = null;
-    fingerprintRef.current = "";
-  }, []);
-
-  const model = modelRef.current;
-  if (!model) return null;
   const formTitle = json?.title || "Form Preview";
   const isoStandards = (meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
   const companies = (meta?.companies as string) || "";
-  const companyLines = companies.split("\n").filter(Boolean);
+  const companyLines = companies.split("\n").map(line => line.trim()).filter(Boolean);
+  const companySelector = findCompanyChoiceElement(json, meta);
+  const companyOptions = getCompanyChoiceOptions(
+    companySelector?.choices as FormBuilderField["choices"] | undefined,
+    companyLines
+  );
+  const companyFieldName = String(companySelector?.name || "");
+  const companyTitle = String(companySelector?.title || "Company");
   const logoUrl = (meta?.logoUrl as string) || "";
   const deviceWidth = device === "desktop" ? 760 : device === "tablet" ? 500 : 340;
   const bannerLogoWidth = device === "desktop" ? 150 : device === "tablet" ? 132 : 104;
   const bannerLogoMaxHeight = device === "desktop" ? 48 : device === "tablet" ? 42 : 34;
+  const showHeaderBanner = showBanner || Boolean(companySelector);
+
+  useEffect(() => {
+    if (!model || !companyFieldName) return;
+    const current = model.getValue(companyFieldName);
+    setPreviewCompany(typeof current === "string" ? current : "");
+    const syncCompanyValue = (_sender: Model, options: { name: string; value: unknown }) => {
+      if (options.name === companyFieldName) {
+        setPreviewCompany(typeof options.value === "string" ? options.value : "");
+      }
+    };
+    model.onValueChanged.add(syncCompanyValue);
+    return () => model.onValueChanged.remove(syncCompanyValue);
+  }, [model, companyFieldName]);
+
+  if (!model) return null;
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
@@ -1832,7 +2051,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
         </div>
         <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
       </div>
-      {showBanner && <div style={{ borderBottom: `1px solid ${C.border}` }}>
+      {showHeaderBanner && <div style={{ borderBottom: `1px solid ${C.border}` }}>
         <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "16px 22px" }}>
           <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandards}</div>
           <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 17, color: "#fff" }}>{formTitle}</div>
@@ -1844,7 +2063,18 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
                 <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: bannerLogoMaxHeight, objectFit: "contain" }} />
               </td>
               <td style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13, color: C.textPrimary }}>
-                {companyLines.length > 0
+                {companySelector && companyOptions.length > 0
+                  ? <PreviewCompanySelector
+                      title={companyTitle}
+                      options={companyOptions}
+                      value={previewCompany}
+                      compact={device !== "desktop"}
+                      onChange={value => {
+                        model.setValue(companyFieldName, value);
+                        setPreviewCompany(value);
+                      }}
+                    />
+                  : companyLines.length > 0
                   ? companyLines.map((line, i) => <div key={i} style={i > 0 ? { marginTop: 4 } : undefined}>{line}</div>)
                   : "PMW INTERNATIONAL BERHAD"}
               </td>
@@ -1871,7 +2101,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
         ["--sjs-error-backcolor" as string]: json.errorColor ? `${json.errorColor}1A` : "#FEE2E2",
         ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
       } as React.CSSProperties}><style>{`.fb-preview-wrap .sd-container-modern>.sd-title{text-align:center!important}
-.fb-preview-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}`}</style><Survey key={fingerprintRef.current} model={model} /></div>
+.fb-preview-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}`}</style><Survey key={surveyMountKey} model={model} /></div>
       <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>Preview only. Submissions are not saved.</div>
     </div>
   </div>;
@@ -2039,31 +2269,13 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     : "off";
 
   useEffect(() => {
-    if (!companyChoice?.enabled) return;
+    if (!companyChoice?.enabled) {
+      setFields(current => removeManagedCompanyChoiceFields(current));
+      setSelectedId(null);
+      return;
+    }
     const config = companyChoice;
-    const desiredChoices = toChoiceObjects(companyChoice.choices);
-    setFields(current => {
-      const existing = flattenFieldTree(current).find(f => f.name === config.fieldName);
-      if (!existing) {
-        return [createCompanyChoiceField(config), ...current];
-      }
-
-      const patch: Partial<FormBuilderField> = {};
-      if (existing.type !== "radiogroup") patch.type = "radiogroup";
-      if (existing.title !== config.title) patch.title = config.title;
-      if (existing.description !== "Choose the company this form submission belongs to.") {
-        patch.description = "Choose the company this form submission belongs to.";
-      }
-      if (!existing.isRequired) patch.isRequired = true;
-      if (existing.readOnly) patch.readOnly = false;
-      if (existing.defaultValue !== undefined) patch.defaultValue = undefined;
-      if (existing.requiredErrorText !== "Please choose a company.") {
-        patch.requiredErrorText = "Please choose a company.";
-      }
-      if (!choicesEqual(existing.choices, desiredChoices)) patch.choices = desiredChoices;
-      if (Object.keys(patch).length === 0) return current;
-      return updateField(current, existing._id, patch);
-    });
+    setFields(current => normalizeCompanyChoiceFields(current, config));
   }, [companyChoiceKey]);
 
   // Check scroll state for toolbar
@@ -2174,11 +2386,15 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   fieldsRef.current = fields;
 
   // Push current state to history before making changes
+  const withManagedCompanyChoice = useCallback((newFields: FormBuilderField[]) => {
+    return companyChoice?.enabled ? normalizeCompanyChoiceFields(newFields, companyChoice) : removeManagedCompanyChoiceFields(newFields);
+  }, [companyChoiceKey]);
+
   const pushHistory = useCallback((newFields: FormBuilderField[]) => {
     setUndoStack(prev => [...prev, fieldsRef.current].slice(-MAX_HISTORY));
     setRedoStack([]);
-    setFields(newFields);
-  }, []);
+    setFields(withManagedCompanyChoice(newFields));
+  }, [withManagedCompanyChoice]);
 
   // Undo handler
   const handleUndo = useCallback(() => {
@@ -2186,8 +2402,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     const previousFields = undoStack[undoStack.length - 1];
     setRedoStack(prev => [...prev, fieldsRef.current]);
     setUndoStack(prev => prev.slice(0, -1));
-    setFields(previousFields);
-  }, [undoStack]);
+    setFields(withManagedCompanyChoice(previousFields));
+  }, [undoStack, withManagedCompanyChoice]);
 
   // Redo handler
   const handleRedo = useCallback(() => {
@@ -2195,8 +2411,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     const nextFields = redoStack[redoStack.length - 1];
     setUndoStack(prev => [...prev, fieldsRef.current]);
     setRedoStack(prev => prev.slice(0, -1));
-    setFields(nextFields);
-  }, [redoStack]);
+    setFields(withManagedCompanyChoice(nextFields));
+  }, [redoStack, withManagedCompanyChoice]);
 
   const selectedField = findFieldById(fields, selectedId || "") || null;
   // Stable ref for PropertyPanel fallback during state transitions
@@ -2219,11 +2435,14 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const handleChange = useCallback((id: string, patch: Partial<FormBuilderField>) => {
     pushHistory(updateField(fieldsRef.current, id, patch));
   }, [pushHistory]);
-  const handleRemove = useCallback((id: string) => { 
+  const handleRemove = useCallback((id: string) => {
+    const field = findFieldById(fieldsRef.current, id);
+    if (isManagedCompanyChoice(field)) return;
     pushHistory(removeFieldRecursive(fieldsRef.current, id));
     setSelectedId(c => c === id ? null : c); 
   }, [pushHistory]);
   const handleDuplicate = useCallback((field: FormBuilderField) => {
+    if (isManagedCompanyChoice(field)) return;
     const newFields = duplicateFieldRecursive(fieldsRef.current, field._id);
     pushHistory(newFields);
     // Find the duplicated copy and select it
@@ -2244,6 +2463,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     }
   }, [pushHistory]);
   const handleReorder = useCallback((from: number, to: number) => {
+    if (isManagedCompanyChoice(fieldsRef.current[from])) return;
+    if (companyChoice?.enabled && to <= 0) return;
     const newFields = [...fieldsRef.current];
     const [moved] = newFields.splice(from, 1);
     newFields.splice(to, 0, moved);
@@ -2252,11 +2473,16 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
 
   /** Recursive reorder for fields inside panels (via field IDs) */
   const handleRecursiveReorder = useCallback((fromId: string, toId: string) => {
+    const from = findFieldById(fieldsRef.current, fromId);
+    const to = findFieldById(fieldsRef.current, toId);
+    if (isManagedCompanyChoice(from) || isManagedCompanyChoice(to)) return;
     pushHistory(reorderFieldsRecursive(fieldsRef.current, fromId, toId));
-  }, [pushHistory]);
+  }, [pushHistory, companyChoice?.enabled]);
 
   /** Move a field out of a panel to the root canvas at a specific index */
   const handleMoveToRoot = useCallback((fieldId: string, atIndex: number) => {
+    const field = findFieldById(fieldsRef.current, fieldId);
+    if (isManagedCompanyChoice(field)) return;
     pushHistory(moveFieldToRoot(fieldsRef.current, fieldId, atIndex));
   }, [pushHistory]);
 
@@ -2274,6 +2500,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     // Moving an existing field into panel
     const dragId = e.dataTransfer.getData("field_id");
     if (dragId && dragId !== panelId) {
+      const field = findFieldById(fieldsRef.current, dragId);
+      if (isManagedCompanyChoice(field)) return;
       pushHistory(moveFieldIntoPanel(fieldsRef.current, dragId, panelId));
     }
   }, [pushHistory]);
@@ -2303,6 +2531,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       if (!selectedId) return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const selected = findFieldById(fields, selectedId);
+      if (isManagedCompanyChoice(selected)) return;
       if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); handleRemove(selectedId); }
       if (e.key === "d" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const f = findFieldById(fields, selectedId); if (f) handleDuplicate(f); }
     };

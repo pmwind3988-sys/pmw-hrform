@@ -10,13 +10,19 @@ import { Survey } from "survey-react-ui";
 import { FlatLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureSelectedBranchColumn } from "../../utils/formBuilderSP";
+import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
+import { registerSignaturePad } from "../../utils/SignaturePad";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
-import { SP_LAYER_STATUS } from "../../utils/statusConstants";
+import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
+import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
+import { formatLayerProgress, getActiveLayers, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
+import { getSelectedCompany, splitCompanyLines } from "../../utils/companySelection";
+import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
+import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig } from "../../types";
 import BlockIcon from "@mui/icons-material/Block";
 import LockIcon from "@mui/icons-material/Lock";
@@ -24,6 +30,8 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+registerSignaturePad();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Theme
 const C = {
@@ -99,6 +107,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
     if (!rawSurvey) return null;
     const parsed = JSON.parse(rawSurvey);
     const surveyContent = parsed.surveyJson || parsed;
+    const versionMeta = isRecord(parsed.meta) ? parsed.meta : {};
 
     // Load response data
     const respItem = await spGet(
@@ -136,7 +145,9 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
         formVersion,
         formStatus: "",
       },
-      logoUrl: "/logo-128.png",
+      companyInfo: splitCompanyLines(versionMeta.companies),
+      isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
+      logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
     };
   } catch {
     return null;
@@ -171,21 +182,221 @@ function formatDateTime(d: string | undefined | null): string {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toAbsoluteSharePointUrl(url: string): string {
+  if (!url || url.startsWith("http") || url.startsWith("data:")) return url;
+  if (!url.startsWith("/")) return url;
+  try {
+    return `${new URL(SP_SITE_URL).origin}${url}`;
+  } catch {
+    return url;
+  }
+}
+
+function valueToText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  if (isRecord(value)) {
+    for (const key of ["email", "Email", "value", "Value", "text", "Title"]) {
+      const next = value[key];
+      if (typeof next === "string" && next.trim()) return next.trim();
+    }
+  }
+  return "";
+}
+
+function parseMaybeJsonRecord(value: string): Record<string, unknown> | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractImageUrl(value: unknown): string {
+  if (typeof value === "string") {
+    const parsed = parseMaybeJsonRecord(value);
+    if (parsed) return extractImageUrl(parsed);
+    return toAbsoluteSharePointUrl(value);
+  }
+  if (!isRecord(value)) return "";
+  for (const key of ["Url", "url", "serverRelativeUrl", "ServerRelativeUrl"]) {
+    const next = value[key];
+    if (typeof next === "string" && next.trim()) return toAbsoluteSharePointUrl(next.trim());
+  }
+  const serverUrl = value.serverUrl || value.ServerUrl;
+  const relativeUrl = value.serverRelativeUrl || value.ServerRelativeUrl;
+  if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
+    return `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
+  }
+  return "";
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function normalizeDateInputValue(value: unknown, inputType: string): unknown {
+  const text = valueToText(value);
+  if (!text) return value;
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text;
+
+  if (inputType === "date") {
+    return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
+  }
+  if (inputType === "time") {
+    return `${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}`;
+  }
+  if (inputType === "datetime-local") {
+    return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}T${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}`;
+  }
+  return text;
+}
+
+function walkSurveyElements(surveyJson: unknown, visit: (element: Record<string, unknown>) => void): void {
+  const root = isRecord(surveyJson) && isRecord(surveyJson.surveyJson) ? surveyJson.surveyJson : surveyJson;
+  const pages = isRecord(root) && Array.isArray(root.pages) ? root.pages : [];
+  const walk = (elements: unknown): void => {
+    if (!Array.isArray(elements)) return;
+    for (const element of elements) {
+      if (!isRecord(element)) continue;
+      visit(element);
+      walk(element.elements);
+      walk(element.templateElements);
+    }
+  };
+  for (const page of pages) {
+    if (isRecord(page)) walk(page.elements);
+  }
+}
+
+function normalizeResponseDataForSurvey(
+  surveyJson: unknown,
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized = { ...data };
+  walkSurveyElements(surveyJson, (element) => {
+    const name = typeof element.name === "string" ? element.name : "";
+    if (!name || !(name in normalized)) return;
+    const type = typeof element.type === "string" ? element.type : "";
+    const inputType = typeof element.inputType === "string" ? element.inputType : "";
+
+    if (type === "signaturepad") {
+      normalized[name] = extractImageUrl(normalized[name]);
+      return;
+    }
+    if (type === "text" && ["date", "datetime-local", "time"].includes(inputType)) {
+      normalized[name] = normalizeDateInputValue(normalized[name], inputType);
+    }
+  });
+  return normalized;
+}
+
+function stripFieldReference(value: string): string {
+  return value.replace(/^\$\{/, "").replace(/\}$/, "");
+}
+
+async function resolveDepartmentApproverEmail(
+  token: string,
+  layer: LayerConfigItem,
+  submittedData: Record<string, unknown>,
+): Promise<{ email: string; name: string }> {
+  if (layer.assignee.type !== "department-approver") return { email: "", name: "" };
+
+  const layerLabel = layer.title || `Layer ${layer.layerNumber}`;
+  const departmentField = layer.assignee.value.trim();
+  const department = valueToText(submittedData[departmentField]);
+  if (!departmentField) {
+    throw new Error(`${layerLabel} needs a department field before the workflow can start.`);
+  }
+  if (!department) {
+    throw new Error(`${layerLabel} needs a department value before the workflow can start.`);
+  }
+
+  const config = getDepartmentApproverLookupConfig(layer.assignee);
+  const params = new URLSearchParams();
+  const filters = [`${config.departmentColumn} eq '${department.replace(/'/g, "''")}'`];
+  if (config.roleColumn && config.roleValue) {
+    filters.push(`${config.roleColumn} eq '${config.roleValue.replace(/'/g, "''")}'`);
+  }
+  params.set("$filter", filters.join(" and "));
+  params.set("$select", [config.departmentColumn, config.emailColumn, config.nameColumn].join(","));
+  params.set("$top", "2");
+
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(config.listName)}')/items?${params.toString()}`,
+  ) as { value?: Record<string, unknown>[] };
+  const matches = data.value ?? [];
+  if (matches.length === 0) {
+    throw new Error(`${layerLabel} could not find ${config.roleValue || "an approver"} for department "${department}".`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`${layerLabel} found more than one ${config.roleValue || "approver"} for department "${department}".`);
+  }
+
+  const email = valueToText(matches[0][config.emailColumn]);
+  if (!EMAIL_RE.test(email)) {
+    throw new Error(`${layerLabel} found an invalid approver email for department "${department}".`);
+  }
+  return {
+    email,
+    name: valueToText(matches[0][config.nameColumn]),
+  };
+}
+
+async function resolveLayerAssigneeEmail(
+  token: string,
+  layer: LayerConfigItem,
+  submittedData: Record<string, unknown>,
+): Promise<{ email: string; error?: string }> {
+  const layerLabel = layer.title || `Layer ${layer.layerNumber}`;
+  if (layer.assignee.type === "department-approver") {
+    try {
+      const resolved = await resolveDepartmentApproverEmail(token, layer, submittedData);
+      return { email: resolved.email };
+    } catch (error) {
+      return {
+        email: "",
+        error: error instanceof Error ? error.message : `${layerLabel} could not resolve the department approver.`,
+      };
+    }
+  }
+
+  const email = layer.assignee.type === "user"
+    ? layer.assignee.value.trim()
+    : valueToText(submittedData[stripFieldReference(layer.assignee.value)]);
+
+  if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
+    return {
+      email,
+      error: `${layerLabel} needs a valid assignee email before the workflow can start.`,
+    };
+  }
+
+  if (email && !EMAIL_RE.test(email)) {
+    return {
+      email,
+      error: `${layerLabel} resolved to "${email}", which is not a valid email address.`,
+    };
+  }
+
+  return { email };
+}
+
 /** Check if the current layer (based on selectedItem's CurrentLayer) already has a terminal status */
 function isCurrentLayerTerminal(item: PendingItem, completedLayers: Record<number, { status: string }>): boolean {
   const clNum = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || 1;
   const clStatus = completedLayers[clNum]?.status || "";
   return ["Confirmed", "Approved", "Rejected", "Cancelled", "Skipped"].includes(clStatus);
-}
-
-/** Get the active layer sequence, respecting manual branch selection */
-function getActiveLayers(layerConfig: { layers: LayerConfigItem[]; manualBranches?: ManualBranch[] } | null | undefined, selectedBranch?: string): LayerConfigItem[] {
-  if (!layerConfig) return [];
-  if (layerConfig.manualBranches?.length && selectedBranch) {
-    const branch = layerConfig.manualBranches.find(b => b.name === selectedBranch);
-    if (branch) return branch.layers;
-  }
-  return layerConfig.layers || [];
 }
 
 export default function ApprovalDashboard() {
@@ -215,7 +426,7 @@ export default function ApprovalDashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
   const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<number, "approval" | "evaluation">>({});
-  const formLayerConfigsRef = useRef<Record<string, { layers: LayerConfigItem[]; manualBranches?: ManualBranch[] }>>({});
+  const formLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
   const [needsBranchSelection, setNeedsBranchSelection] = useState(false);
   const [availableBranches, setAvailableBranches] = useState<ManualBranch[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
@@ -313,24 +524,21 @@ export default function ApprovalDashboard() {
         const forms = await getAllFormConfigs(token);
 
         // Build form layer config map for item type resolution
-        const formLayerConfigMap: Record<string, { layers: LayerConfigItem[]; manualBranches?: ManualBranch[] }> = {};
-        const formBranchMap: Record<string, ManualBranch[]> = {};
+        const formLayerConfigMap: Record<string, LayerConfigSource> = {};
         for (const form of forms ?? []) {
           try {
             const lc = form.LayerConfig ? JSON.parse(form.LayerConfig) : null;
             const layers: LayerConfigItem[] = lc?.layers ?? [];
             const branches: ManualBranch[] = (lc?.manualBranches ?? []) as ManualBranch[];
             formLayerConfigMap[form.Title] = { layers, manualBranches: branches };
-            formBranchMap[form.Title] = branches;
           } catch {
             formLayerConfigMap[form.Title] = { layers: [] };
-            formBranchMap[form.Title] = [];
           }
         }
         formLayerConfigsRef.current = formLayerConfigMap;
 
         // Load version-specific LayerConfig from Web Form Versions
-        const versionLayerMap: Record<string, { layers: LayerConfigItem[]; manualBranches?: ManualBranch[] }> = {};
+        const versionLayerMap: Record<string, LayerConfigSource> = {};
         try {
           const allVersions = await spGet(token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$select=FormTitle,FormVersion,SurveyJSON&$top=500`
@@ -356,11 +564,17 @@ export default function ApprovalDashboard() {
               const lc = JSON.parse(form.LayerConfig);
               hasEvalLayer = lc.layers?.some((l: { type: string }) => l.type === "evaluation") ?? false;
               hasBranches = (lc.manualBranches?.length ?? 0) > 0;
+              if (hasBranches && !hasEvalLayer) {
+                hasEvalLayer = (lc.manualBranches as ManualBranch[]).some(
+                  (b) => b.layers?.some((l) => l.type === "evaluation")
+                );
+              }
             } catch {
               /* Invalid LayerConfig JSON — treat as no layers */
             }
           }
-          if (!hasApprovalLayers && !hasEvalLayer) continue;
+          // Branch-only forms store layers under manualBranches, not the main sequence.
+          if (!hasApprovalLayers && !hasEvalLayer && !hasBranches) continue;
 
           const listName = form.Title;
           try {
@@ -473,20 +687,12 @@ export default function ApprovalDashboard() {
                 const versionKey = `${form.Title}__${item.FormVersion}`;
                 const versionLc = versionLayerMap[versionKey];
                 const baseLc = versionLc || formLayerConfigMap[form.Title];
-                let effectiveLayers: LayerConfigItem[] = [];
-                if (versionLc) {
-                  effectiveLayers = versionLc.layers || [];
-                } else if (baseLc) {
-                  effectiveLayers = baseLc.layers || [];
-                  const formBrs = formBranchMap[form.Title] || [];
-                  if (formBrs.length > 0 && item.SelectedBranch) {
-                    const branch = formBrs.find(b => b.name === item.SelectedBranch);
-                    if (branch) effectiveLayers = branch.layers;
-                  }
-                }
+                const effectiveLayers = getActiveLayers(baseLc, item.SelectedBranch);
+                const totalLayers = resolveTotalLayerCount(baseLc, item.SelectedBranch, form.NumberOfApprovalLayer);
+
                 // Set totalLayers on the item BEFORE pushing (spread creates a copy)
-                if (effectiveLayers.length > 0) {
-                  (item as unknown as Record<string, unknown>).totalLayers = effectiveLayers.length;
+                if (totalLayers > 0) {
+                  (item as unknown as Record<string, unknown>).totalLayers = totalLayers;
                 }
 
                 allItems.push({ ...item, Title: form.Title });
@@ -507,8 +713,7 @@ export default function ApprovalDashboard() {
                 setItemCurrentTypes((prev) => ({ ...prev, [item.Id]: itemType }));
               }
             }
-          } catch (e) {
-            console.warn(`[Approval] skipped "${form.Title}" — list error:`, (e as Error).message);
+          } catch {
           }
         }
 
@@ -595,10 +800,18 @@ export default function ApprovalDashboard() {
 
         const rawSurvey = versionData.value?.[0]?.SurveyJSON;
         let versionParsed: Record<string, unknown> | null = null;
+        let surveyContentForPreview: unknown = null;
         if (rawSurvey) {
           versionParsed = JSON.parse(rawSurvey) as Record<string, unknown>;
           const surveyContent = versionParsed.surveyJson || versionParsed;
-          setSurveyJson(surveyContent);
+          surveyContentForPreview = isRecord(surveyContent)
+            ? await enrichSurveyJsonChoices(surveyContent, {
+              getSharePointChoices: (list, column) => getSharePointChoices(list, column, token),
+              getFilteredListChoices: (list, valueColumn, filterColumn, filterValue) =>
+                getFilteredListChoices(list, valueColumn, token, filterColumn, filterValue),
+            })
+            : surveyContent;
+          setSurveyJson(surveyContentForPreview);
         }
 
         // Resolve LayerConfig: version-specific first, then current Master Form
@@ -634,7 +847,7 @@ export default function ApprovalDashboard() {
             else if (suffix === "signature") layerHistory[ln].signature = v as string;
           }
         }
-        setResponseData(data);
+        setResponseData(surveyContentForPreview ? normalizeResponseDataForSurvey(surveyContentForPreview, data) : data);
         setCompletedLayers(layerHistory);
 
         // ── Correct stale FormStatus for old items ────────────────────
@@ -743,7 +956,7 @@ export default function ApprovalDashboard() {
         }
       }
     } catch (e) {
-      console.error("[Approval] load details error:", e);
+      setError((e as Error).message);
     }
   }, [token, itemCurrentTypes]);
 
@@ -796,6 +1009,41 @@ export default function ApprovalDashboard() {
       };
       await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`, evalPatch);
 
+      let nextApproverEmail = "";
+      const nextLayerConfig = !isFinal && branchLayers
+        ? branchLayers.find(l => l.layerNumber === nextLayerNum)
+        : undefined;
+      if (nextLayerConfig) {
+        try {
+          const itemEmail = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})?$select=L${nextLayerNum}_Email`
+          ) as Record<string, unknown>;
+          nextApproverEmail = valueToText(itemEmail[`L${nextLayerNum}_Email`]);
+        } catch {
+          nextApproverEmail = "";
+        }
+        if (!nextApproverEmail) {
+          const submittedData = responseData ?? (await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`
+          ) as Record<string, unknown>);
+          const result = await resolveLayerAssigneeEmail(token, nextLayerConfig, submittedData);
+          if (result.error) throw new Error(result.error);
+          nextApproverEmail = result.email;
+          if (nextApproverEmail) {
+            await spPatch(
+              token,
+              `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`,
+              { [`L${nextLayerNum}_Email`]: nextApproverEmail },
+            );
+          }
+        }
+        if (nextLayerConfig.authMode === "365" && !EMAIL_RE.test(nextApproverEmail)) {
+          throw new Error(`Layer ${nextLayerNum} has no valid assignee email. Fix the workflow before advancing.`);
+        }
+      }
+
       let pdfUrl: string | undefined;
       try {
         const pdfData = await loadPdfData(selectedItem, token);
@@ -804,9 +1052,20 @@ export default function ApprovalDashboard() {
           const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
           pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
         }
-      } catch (pdfErr) {
-        console.warn("[Approval] PDF generation failed:", pdfErr);
+      } catch {
+        // Keep the workflow moving even if PDF generation is unavailable.
       }
+
+      await triggerApprovalNotification(token, {
+        formTitle: selectedItem.Title,
+        submittedBy: selectedItem.SubmittedBy,
+        responseItemId: selectedItem.Id,
+        layer: currLayerNum,
+        totalLayers,
+        action: "approve",
+        nextApproverEmail,
+        pdfUrl,
+      });
 
       // Update local state — advance CurrentLayer so item type re-computes correctly
       setPendingItems((prev) => prev.map((i) =>
@@ -817,11 +1076,8 @@ export default function ApprovalDashboard() {
       ));
 
       // If advancing to a new layer with a different type, update itemCurrentTypes
-      if (!isFinal && branchLayers) {
-        const nextLayerConfig = branchLayers.find(l => l.layerNumber === nextLayerNum);
-        if (nextLayerConfig) {
-          setItemCurrentTypes((prev) => ({ ...prev, [selectedItem.Id]: nextLayerConfig.type }));
-        }
+      if (nextLayerConfig) {
+        setItemCurrentTypes((prev) => ({ ...prev, [selectedItem.Id]: nextLayerConfig.type }));
       }
 
       setActionSuccess({
@@ -844,48 +1100,78 @@ export default function ApprovalDashboard() {
       const listName = selectedItem.Title;
       const respId = selectedItem.Id;
       const patchUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`;
-      try {
-        await spPatch(token, patchUrl, { SelectedBranch: branchName });
-      } catch (e: unknown) {
-        const msg = (e as Error).message || "";
-        if (msg.includes("does not exist") || msg.includes("not found")) {
-          await ensureSelectedBranchColumn(token, listName);
-          await spPatch(token, patchUrl, { SelectedBranch: branchName });
-        } else { throw e; }
-      }
-      const updatedItem = { ...selectedItem, SelectedBranch: branchName };
-      setPendingItems((prev) => prev.map((i) => i.Id === selectedItem.Id ? updatedItem : i));
-      setSelectedItem(updatedItem);
-      setNeedsBranchSelection(false);
-      let newLayerType: "approval" | "evaluation" = "approval";
-      let newEvalModel: Model | null = null;
-      if (formConfig?.LayerConfig) {
+
+      let bLayers: LayerConfigItem[] = [];
+      if (formConfig.LayerConfig) {
         try {
           const lc = JSON.parse(formConfig.LayerConfig);
-          const brs: ManualBranch[] = (lc.manualBranches || []) as ManualBranch[];
-          const branch = brs.find((b: ManualBranch) => b.name === branchName);
-          let bLayers: LayerConfigItem[] = lc.layers ?? [];
-          if (branch) bLayers = branch.layers;
-          const currLayerNum = Math.max(updatedItem.CurrentLayer || 0, updatedItem.CurrentApprovalLayer || 0) || 1;
-          const current = bLayers.find((l: LayerConfigItem) => l.layerNumber === currLayerNum);
-          if (current?.type === "evaluation") {
-            newLayerType = "evaluation";
-            const evalElements = (current as { surveyElements?: Record<string, unknown>[] }).surveyElements || [];
-            if (evalElements.length > 0) {
-              const evalJson = { pages: [{ name: "evaluation", elements: evalElements }], showNavigationButtons: false };
-              const m = new Model(evalJson as object);
-              m.applyTheme(FlatLightPanelless);
-              const checkValid = () => { setEvalValid(!m.hasErrors()); };
-              m.onValueChanged.add(checkValid);
-              setTimeout(checkValid, 0);
-              newEvalModel = m;
-            }
-          }
-        } catch { /* keep defaults */ }
+          const branch = (lc.manualBranches as ManualBranch[] | undefined)?.find((b) => b.name === branchName);
+          bLayers = branch?.layers ?? lc.layers ?? [];
+        } catch { /* keep empty */ }
       }
-      setCurrentLayerType(newLayerType);
-      setEvalSurveyModel((prev) => { prev?.dispose(); return newEvalModel; });
-      setItemCurrentTypes((prev) => ({ ...prev, [updatedItem.Id]: newLayerType }));
+      if (bLayers.length === 0) {
+        throw new Error("Selected branch has no approval or evaluation layers.");
+      }
+
+      const submittedData = responseData ?? (await spGet(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`
+      ) as Record<string, unknown>);
+      const resolvedEmails: Record<number, string> = {};
+      const assigneeErrors: string[] = [];
+      for (let n = 1; n <= bLayers.length; n++) {
+        const result = await resolveLayerAssigneeEmail(token, bLayers[n - 1], submittedData);
+        if (result.error) assigneeErrors.push(result.error);
+        if (result.email) resolvedEmails[n] = result.email;
+      }
+      if (assigneeErrors.length > 0) {
+        throw new Error(`Cannot start branch: ${assigneeErrors.join(" ")}`);
+      }
+
+      const patchBody: Record<string, unknown> = {
+        SelectedBranch: branchName,
+        FormStatus: SP_FORM_STATUS.IN_REVIEW,
+        Status: SP_FORM_STATUS.IN_REVIEW,
+        CurrentLayer: 1,
+        CurrentApprovalLayer: 1,
+      };
+      for (let n = 1; n <= bLayers.length; n++) {
+        patchBody[`L${n}_Status`] = SP_LAYER_STATUS.PENDING;
+        if (resolvedEmails[n]) {
+          patchBody[`L${n}_Email`] = resolvedEmails[n];
+        }
+      }
+
+      await ensureWorkflowColumns(token, listName, bLayers.length);
+      // SharePoint needs a moment after adding columns before they can be written
+      await new Promise((r) => setTimeout(r, 1500));
+      await spPatch(token, patchUrl, patchBody);
+
+      const firstApproverEmail = resolvedEmails[1] || "";
+      if (firstApproverEmail) {
+        await triggerApprovalNotification(token, {
+          formTitle: selectedItem.Title,
+          submittedBy: selectedItem.SubmittedBy,
+          responseItemId: selectedItem.Id,
+          layer: 1,
+          totalLayers: bLayers.length,
+          action: "submit",
+          nextApproverEmail: firstApproverEmail,
+          reviewLink: `${window.location.origin}/admin/approvals?form=${encodeURIComponent(listName)}&item=${respId}`,
+        });
+      }
+
+      const updatedItem: PendingItem = {
+        ...selectedItem,
+        SelectedBranch: branchName,
+        FormStatus: SP_FORM_STATUS.IN_REVIEW,
+        Status: SP_FORM_STATUS.IN_REVIEW,
+        CurrentLayer: 1,
+        CurrentApprovalLayer: 1,
+        L1_Status: SP_LAYER_STATUS.PENDING,
+      };
+      setPendingItems((prev) => prev.map((i) => i.Id === selectedItem.Id ? updatedItem : i));
+      await loadItemDetails(updatedItem);
     } catch (e) { setError((e as Error).message); }
     finally { setBranchLoading(false); }
   };
@@ -896,7 +1182,7 @@ export default function ApprovalDashboard() {
 
     setActionLoading(true);
     try {
-      const currentLayer = selectedItem.CurrentApprovalLayer || 1;
+      const currentLayer = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
       let branchLayers: LayerConfigItem[] | null = null;
       if (formConfig.LayerConfig) {
         try { const lc = JSON.parse(formConfig.LayerConfig); branchLayers = getActiveLayers(lc, selectedItem.SelectedBranch); } catch {
@@ -909,11 +1195,43 @@ export default function ApprovalDashboard() {
       // Get next approver email
       let nextApproverEmail = "";
       if (currentLayer < totalLayers) {
-        const approvers = await spGet(
-          token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(selectedItem.Title)}' and LayerNumber eq ${currentLayer + 1}&$select=ApproverEmail&$top=1`
-        ) as { value?: { ApproverEmail: string }[] };
-        nextApproverEmail = approvers.value?.[0]?.ApproverEmail || "";
+        const nextLayerNumber = currentLayer + 1;
+        try {
+          const itemEmail = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})?$select=L${nextLayerNumber}_Email`
+          ) as Record<string, unknown>;
+          nextApproverEmail = valueToText(itemEmail[`L${nextLayerNumber}_Email`]);
+        } catch {
+          nextApproverEmail = "";
+        }
+        if (!nextApproverEmail) {
+          const approvers = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('Approvers')/items?$filter=FormTitle eq '${encodeURIComponent(selectedItem.Title)}' and LayerNumber eq ${nextLayerNumber}&$select=ApproverEmail&$top=1`
+          ) as { value?: { ApproverEmail: string }[] };
+          nextApproverEmail = approvers.value?.[0]?.ApproverEmail || "";
+        }
+        const nextLayer = branchLayers?.find((layer) => layer.layerNumber === nextLayerNumber);
+        if (!nextApproverEmail && nextLayer?.assignee.type === "department-approver") {
+          const submittedData = responseData ?? (await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`
+          ) as Record<string, unknown>);
+          const result = await resolveLayerAssigneeEmail(token, nextLayer, submittedData);
+          if (result.error) throw new Error(result.error);
+          nextApproverEmail = result.email;
+          if (nextApproverEmail) {
+            await spPatch(
+              token,
+              `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
+              { [`L${nextLayerNumber}_Email`]: nextApproverEmail },
+            );
+          }
+        }
+        if (nextLayer?.authMode === "365" && !EMAIL_RE.test(nextApproverEmail)) {
+          throw new Error(`Layer ${nextLayerNumber} has no valid assignee email. Fix the workflow before advancing.`);
+        }
       }
 
       // Update status (legacy + enhanced columns)
@@ -944,8 +1262,8 @@ export default function ApprovalDashboard() {
             const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
             pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
           }
-        } catch (pdfErr) {
-          console.warn("[Approval] PDF generation failed:", pdfErr);
+        } catch {
+          // Keep the workflow moving even if PDF generation is unavailable.
         }
       }
 
@@ -993,8 +1311,8 @@ export default function ApprovalDashboard() {
           const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
           pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
         }
-      } catch (pdfErr) {
-        console.warn("[Approval] PDF generation failed:", pdfErr);
+      } catch {
+        // Keep the workflow moving even if PDF generation is unavailable.
       }
 
       const currentLayer = selectedItem.CurrentApprovalLayer || selectedItem.CurrentLayer || 1;
@@ -1053,6 +1371,8 @@ export default function ApprovalDashboard() {
       setPreviewModel(null);
     }
   }, [surveyJson, responseData]);
+
+  const selectedCompany = getSelectedCompany(responseData, surveyJson);
 
   if (loading || !adminChecked) {
     return (
@@ -1333,13 +1653,7 @@ export default function ApprovalDashboard() {
                           v{item.FormVersion || "Legacy"}
                         </div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>
-                          {(() => {
-                            // Try direct fields first, then infer from L1_Status
-                            const raw = item.CurrentLayer || item.CurrentApprovalLayer;
-                            const current = raw || (item.L1_Status && !["", "Pending"].includes(item.L1_Status) ? 2 : 1) || 1;
-                            const total = item.totalLayers || "?";
-                            return `Layer ${current} of ${total}`;
-                          })()}
+                          {formatLayerProgress(item)}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1390,6 +1704,11 @@ export default function ApprovalDashboard() {
                   <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
                     Form Version: {selectedItem.FormVersion || "Legacy"}
                   </div>
+                  {selectedCompany && (
+                    <div style={{ fontSize: 12, color: C.purple, marginTop: 2, fontWeight: 600 }}>
+                      Company: {selectedCompany}
+                    </div>
+                  )}
                   {selectedItem.SelectedBranch && (
                     <div style={{ fontSize: 12, color: C.purple, marginTop: 2, fontWeight: 500 }}>
                       Branch: {(() => { try {

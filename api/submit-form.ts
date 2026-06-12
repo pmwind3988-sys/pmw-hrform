@@ -1,15 +1,135 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
-import { ensurePdpaColumns, ensureUploadLibrary } from "./_utils/provisioning.js";
+import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
+import { ensurePdpaColumns, ensureUploadLibrary, ensureWorkflowColumns } from "./_utils/provisioning.js";
 
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LAYER_PENDING_STATUS = "Pending";
+const FORM_SUBMITTED_STATUS = "Submitted";
+
+interface ApiFixedUserLayerAssignee {
+  type: "user";
+  value: string;
+}
+
+interface ApiFieldReferenceLayerAssignee {
+  type: "field-reference";
+  value: string;
+}
+
+interface ApiDepartmentApproverLayerAssignee {
+  type: "department-approver";
+  value: string;
+  listName?: string;
+  departmentColumn?: string;
+  emailColumn?: string;
+  nameColumn?: string;
+  roleColumn?: string;
+  roleValue?: string;
+}
+
+type ApiLayerAssignee =
+  | ApiFixedUserLayerAssignee
+  | ApiFieldReferenceLayerAssignee
+  | ApiDepartmentApproverLayerAssignee;
+
+interface ApiLayerConfigItem {
+  layerNumber: number;
+  type: "approval" | "evaluation";
+  authMode: "365" | "public";
+  assignee: ApiLayerAssignee;
+  title?: string;
+}
+
+interface ApiLayerConfig {
+  layers?: ApiLayerConfigItem[];
+  manualBranches?: { layers?: ApiLayerConfigItem[] }[];
+}
 
 function getRetentionUntil(from: Date = new Date()): string {
   const retentionUntil = new Date(from);
   retentionUntil.setFullYear(retentionUntil.getFullYear() + PDPA_RETENTION_YEARS);
   return retentionUntil.toISOString();
+}
+
+function parseLayerConfig(value: unknown): ApiLayerConfig | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value) as ApiLayerConfig;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function stripFieldReference(value: string): string {
+  return value.replace(/^\$\{/, "").replace(/\}$/, "");
+}
+
+function valueToText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["email", "Email", "value", "Value", "text", "Title"]) {
+      const next = record[key];
+      if (typeof next === "string" && next.trim()) return next.trim();
+    }
+  }
+  return "";
+}
+
+async function resolveLayerAssignee(
+  token: string,
+  layer: ApiLayerConfigItem,
+  formBody: Record<string, unknown>,
+): Promise<{ email: string; name: string }> {
+  const label = layer.title || `Layer ${layer.layerNumber}`;
+  if (layer.assignee.type === "department-approver") {
+    return resolveDepartmentApproverFromList(token, layer.assignee, formBody, label);
+  }
+
+  const rawEmail = layer.assignee.type === "user"
+    ? layer.assignee.value
+    : valueToText(formBody[stripFieldReference(layer.assignee.value)]);
+  const email = rawEmail.trim();
+  if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
+    throw new Error(`${label} needs a valid assignee email before the workflow can start.`);
+  }
+  return { email, name: "" };
+}
+
+async function applyLayerConfigWorkflow(
+  token: string,
+  listTitle: string,
+  formBody: Record<string, unknown>,
+  layerConfig: ApiLayerConfig | null,
+): Promise<void> {
+  const manualBranches = layerConfig?.manualBranches ?? [];
+  if (manualBranches.length > 0) {
+    const maxBranchLayers = Math.max(1, ...manualBranches.map((branch) => branch.layers?.length ?? 0));
+    await ensureWorkflowColumns(token, listTitle, maxBranchLayers);
+    formBody.FormStatus = FORM_SUBMITTED_STATUS;
+    formBody.Status = FORM_SUBMITTED_STATUS;
+    formBody.CurrentLayer = 0;
+    return;
+  }
+
+  const layers = layerConfig?.layers ?? [];
+  if (layers.length === 0) return;
+
+  await ensureWorkflowColumns(token, listTitle, layers.length);
+  for (let index = 0; index < layers.length; index++) {
+    const layerNumber = index + 1;
+    const resolved = await resolveLayerAssignee(token, layers[index], formBody);
+    formBody[`L${layerNumber}_Status`] = LAYER_PENDING_STATUS;
+    formBody[`L${layerNumber}_Email`] = resolved.email;
+  }
+  formBody.FormStatus = FORM_SUBMITTED_STATUS;
+  formBody.CurrentLayer = 1;
 }
 
 interface ApiRequest {
@@ -78,6 +198,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     formBody.PDPANoticeVersion = pdpaNoticeVersion || PDPA_NOTICE_VERSION;
     formBody.PDPAConsentAt = consentedAt;
     formBody.RetentionUntil = retentionDate;
+
+    await applyLayerConfigWorkflow(token, listTitle, formBody, parseLayerConfig(formConfig.LayerConfig));
 
     // Upload file/image data to document library (server-side)
     const docLibName = `${listTitle} Files`;

@@ -12,6 +12,9 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import LayerCard from "./LayerCard";
 import EvalElementPicker from "./EvalElementPicker";
 import PublicLinkDisplay from "./PublicLinkDisplay";
+import { validateLayerConfig } from "./layerValidation";
+import { createDepartmentApproverAssignee, getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
+import type { LayerFieldOption } from "./layerValidation";
 import type {
   LayerConfig,
   LayerConfigItem,
@@ -20,22 +23,24 @@ import type {
   AuthMode,
   ConfirmationType,
   ManualBranch,
+  LayerAssignee,
+  DepartmentApproverLayerAssignee,
 } from "../../types";
 
 interface LayerConfigPanelProps {
   value: LayerConfig | null;
   onChange: (config: LayerConfig | null) => void;
   siteUsers: { email: string; name: string }[];
-  formFieldNames: string[];
+  formFields: LayerFieldOption[];
   slug: string;
 }
 
 const inp = {
   width: "100%",
-  height: 30,
+  height: 40,
   border: `1px solid ${C.border}`,
-  borderRadius: 7,
-  padding: "0 9px",
+  borderRadius: 8,
+  padding: "0 10px",
   fontSize: 12,
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   color: C.textPrimary,
@@ -45,7 +50,7 @@ const inp = {
 
 const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
   flex: 1,
-  height: 26,
+  minHeight: 40,
   border: `1px solid ${active ? C.purple : C.border}`,
   borderRadius: 6,
   background: active ? C.purplePale : C.white,
@@ -53,15 +58,212 @@ const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
   fontSize: 10,
   fontWeight: 600,
   cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: 1.2,
+  padding: "5px 7px",
+  minWidth: 0,
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-  transition: "all .1s",
+  transition: "background-color .12s, border-color .12s, color .12s, transform .12s",
 });
+
+const SECTION_CARD: React.CSSProperties = {
+  background: C.white,
+  border: `1px solid ${C.border}`,
+  borderRadius: 10,
+  padding: "10px 11px",
+  boxShadow: "0 1px 2px rgba(26,31,43,0.04)",
+};
+
+function ValidationGlyph({ tone }: { tone: "ok" | "warn" | "err" }) {
+  const color = tone === "err" ? C.red : tone === "warn" ? C.amber : C.green;
+  const path = tone === "ok" ? "M7 12.5l3 3L17 8" : "M12 7v6M12 16.5v.2";
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-label={tone === "ok" ? "Workflow valid" : "Workflow needs attention"} style={{ width: 20, height: 20, flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="1.8" opacity="0.35">
+        {tone !== "ok" && <animate attributeName="opacity" values="0.25;0.65;0.25" dur="1.8s" repeatCount="indefinite" />}
+      </circle>
+      <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="28" strokeDashoffset="28">
+        <animate attributeName="stroke-dashoffset" values="28;0" dur="0.45s" fill="freeze" />
+      </path>
+    </svg>
+  );
+}
+
+function WorkflowMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      background: C.white,
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      padding: "7px 8px",
+      minWidth: 0,
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function isEmailProducingField(field: LayerFieldOption | undefined): boolean {
+  if (!field) return false;
+  return field.type === "email" || field.inputType === "email";
+}
+
+function fieldOptionLabel(field: LayerFieldOption): string {
+  const title = field.title?.trim();
+  const base = title && title !== field.name ? `${title} (${field.name})` : field.name;
+  const tag = isEmailProducingField(field)
+      ? "Email"
+      : "Text";
+  return `${base} - ${tag}`;
+}
+
+function departmentFieldOptionLabel(field: LayerFieldOption): string {
+  const title = field.title?.trim();
+  const base = title && title !== field.name ? `${title} (${field.name})` : field.name;
+  const tag = field.type === "dropdown" || field.type === "radiogroup" ? "Choice" : "Field";
+  return `${base} - ${tag}`;
+}
+
+function toUserAssignee(assignee: LayerAssignee): LayerAssignee {
+  return { type: "user", value: assignee.type === "user" ? assignee.value : "" };
+}
+
+function toFieldReferenceAssignee(assignee: LayerAssignee): LayerAssignee {
+  return { type: "field-reference", value: assignee.type === "field-reference" ? assignee.value : "" };
+}
+
+function toDepartmentApproverAssignee(assignee: LayerAssignee): DepartmentApproverLayerAssignee {
+  return createDepartmentApproverAssignee(
+    assignee.type === "department-approver" ? assignee.value : "",
+    assignee.type === "department-approver" ? assignee : undefined,
+  );
+}
+
+function DepartmentLookupSettings({
+  assignee,
+  formFields,
+  onChange,
+}: {
+  assignee: DepartmentApproverLayerAssignee;
+  formFields: LayerFieldOption[];
+  onChange: (assignee: DepartmentApproverLayerAssignee) => void;
+}) {
+  const config = getDepartmentApproverLookupConfig(assignee);
+  const patch = (next: Partial<DepartmentApproverLayerAssignee>) => {
+    onChange({ ...assignee, ...next });
+  };
+
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      background: C.offWhite,
+      borderRadius: 8,
+      padding: "9px 10px",
+      boxShadow: "inset 0 0 0 1px rgba(26,31,43,0.06)",
+    }}>
+      <div>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, display: "block", marginBottom: 4 }}>
+          Department field
+        </label>
+        <select
+          value={assignee.value}
+          onChange={e => patch({ value: e.target.value })}
+          style={{ ...inp, height: 40 }}
+        >
+          <option value="">- Select department field -</option>
+          {formFields.map(field => (
+            <option key={field.name} value={field.name}>{departmentFieldOptionLabel(field)}</option>
+          ))}
+        </select>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+          List name
+          <input value={config.listName} onChange={e => patch({ listName: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+        </label>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+          Role value
+          <input value={config.roleValue} onChange={e => patch({ roleValue: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+        </label>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+          Department column
+          <input value={config.departmentColumn} onChange={e => patch({ departmentColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+        </label>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+          Email column
+          <input value={config.emailColumn} onChange={e => patch({ emailColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+        </label>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+          Name column
+          <input value={config.nameColumn} onChange={e => patch({ nameColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+        </label>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+          Role column
+          <input value={config.roleColumn} onChange={e => patch({ roleColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+        </label>
+      </div>
+      <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45 }}>
+        The submitted department must match the SharePoint directory value exactly.
+      </div>
+    </div>
+  );
+}
+
+function FieldReferenceHint({ field }: { field: LayerFieldOption | undefined }) {
+  if (!field || isEmailProducingField(field)) return null;
+  return (
+    <div style={{ fontSize: 10, color: C.amber, marginTop: 4, lineHeight: 1.45 }}>
+      This field must submit a valid email address before a Microsoft 365 layer can start.
+    </div>
+  );
+}
+
+function ValidationPanel({ errors, warnings }: { errors: string[]; warnings: string[] }) {
+  const tone = errors.length > 0 ? "err" : warnings.length > 0 ? "warn" : "ok";
+  const bg = tone === "err" ? C.redPale : tone === "warn" ? C.amberPale : C.greenPale;
+  const fg = tone === "err" ? C.red : tone === "warn" ? C.amber : C.green;
+  const title = tone === "err" ? "Workflow needs fixes" : tone === "warn" ? "Workflow has warnings" : "Workflow checks passed";
+  const items = errors.length > 0 ? errors : warnings;
+
+  return (
+    <div style={{
+      display: "flex",
+      gap: 9,
+      alignItems: "flex-start",
+      background: bg,
+      borderRadius: 10,
+      padding: "9px 10px",
+      marginBottom: 12,
+      boxShadow: "0 1px 2px rgba(26,31,43,0.05)",
+    }}>
+      <ValidationGlyph tone={tone} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: fg, fontSize: 11, fontWeight: 800, marginBottom: items.length ? 4 : 0 }}>{title}</div>
+        {items.slice(0, 4).map((item) => (
+          <div key={item} style={{ color: C.textSecond, fontSize: 10, lineHeight: 1.45 }}>{item}</div>
+        ))}
+        {items.length > 4 && (
+          <div style={{ color: C.textMuted, fontSize: 10, marginTop: 2 }}>+{items.length - 4} more</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function LayerConfigPanel({
   value,
   onChange,
   siteUsers,
-  formFieldNames,
+  formFields,
   slug,
 }: LayerConfigPanelProps) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
@@ -82,6 +284,9 @@ export default function LayerConfigPanel({
 
   const layers = value?.layers || [];
   const branches = value?.manualBranches || [];
+  const branchLayerCount = branches.reduce((count, branch) => count + branch.layers.length, 0);
+  const activeLayerCount = branchEnabled ? branchLayerCount : layers.length;
+  const validation = validateLayerConfig(value, formFields);
 
   // Close search dropdown on outside click
   useEffect(() => {
@@ -216,6 +421,101 @@ export default function LayerConfigPanel({
     ? siteUsers.filter(u => u.email.toLowerCase().includes(branchSearchQ.toLowerCase()) || u.name.toLowerCase().includes(branchSearchQ.toLowerCase())).slice(0, 5)
     : siteUsers.slice(0, 5);
 
+  const renderAssigneeEditor = (
+    layer: LayerConfigItem,
+    onAssigneeChange: (assignee: LayerAssignee) => void,
+    search: {
+      isOpen: boolean;
+      open: () => void;
+      close: () => void;
+      setQuery: (query: string) => void;
+      suggestions: { email: string; name: string }[];
+    },
+  ) => (
+    <div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+        Assignee
+      </label>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
+        <button onClick={() => onAssigneeChange(toUserAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "user")}>
+          Fixed user
+        </button>
+        <button onClick={() => onAssigneeChange(toFieldReferenceAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "field-reference")}>
+          Form field email
+        </button>
+        <button onClick={() => onAssigneeChange(toDepartmentApproverAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "department-approver")}>
+          Department HOD
+        </button>
+      </div>
+
+      {layer.assignee.type === "user" ? (
+        <div ref={searchRef} style={{ position: "relative" }}>
+          <input
+            value={layer.assignee.value}
+            onChange={e => {
+              onAssigneeChange({ type: "user", value: e.target.value });
+              search.setQuery(e.target.value);
+            }}
+            onFocus={search.open}
+            placeholder="email@company.com"
+            style={inp}
+          />
+          {search.isOpen && search.suggestions.length > 0 && (
+            <div style={{
+              position: "absolute",
+              top: "calc(100% + 3px)",
+              left: 0,
+              right: 0,
+              zIndex: 200,
+              background: C.white,
+              border: `1px solid ${C.border}`,
+              borderRadius: 9,
+              boxShadow: C.shadowMd,
+              overflow: "hidden",
+            }}>
+              {search.suggestions.map(u => (
+                <div
+                  key={u.email}
+                  onClick={() => {
+                    onAssigneeChange({ type: "user", value: u.email });
+                    search.close();
+                    search.setQuery("");
+                  }}
+                  style={{ padding: "7px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 500 }}>{u.name}</div>
+                  <div style={{ fontSize: 9, color: C.textMuted }}>{u.email}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : layer.assignee.type === "field-reference" ? (
+        <>
+          <select
+            value={layer.assignee.value}
+            onChange={e => onAssigneeChange({ type: "field-reference", value: e.target.value })}
+            style={{ ...inp, height: 40 }}
+          >
+            <option value="">- Select field -</option>
+            {formFields.map(field => (
+              <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>
+            ))}
+          </select>
+          <FieldReferenceHint field={formFields.find(field => field.name === layer.assignee.value)} />
+        </>
+      ) : (
+        <DepartmentLookupSettings
+          assignee={layer.assignee}
+          formFields={formFields}
+          onChange={onAssigneeChange}
+        />
+      )}
+    </div>
+  );
+
   const renderWorkflowRow = (label: string, rowLayers: LayerConfigItem[]) => (
     <div style={{ marginTop: 8 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0 }}>
@@ -347,83 +647,13 @@ export default function LayerConfigPanel({
           )}
         </div>
 
-        {/* Assignee */}
-        <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
-            Assignee
-          </label>
-          <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-            <button
-              onClick={() => patchLayer(idx, { assignee: { type: "user", value: layer.assignee.value } })}
-              style={TOGGLE_BTN(layer.assignee.type === "user")}
-            >
-              Static
-            </button>
-            <button
-              onClick={() => patchLayer(idx, { assignee: { type: "field-reference", value: layer.assignee.value } })}
-              style={TOGGLE_BTN(layer.assignee.type === "field-reference")}
-            >
-              From Field
-            </button>
-          </div>
-
-          {layer.assignee.type === "user" ? (
-            <div ref={searchRef} style={{ position: "relative" }}>
-              <input
-                value={layer.assignee.value}
-                onChange={e => {
-                  patchLayer(idx, { assignee: { type: "user", value: e.target.value } });
-                  setSearchQ(e.target.value);
-                }}
-                onFocus={() => setSearchOpen(idx)}
-                placeholder="email@company.com"
-                style={inp}
-              />
-              {searchOpen === idx && suggestions.length > 0 && (
-                <div style={{
-                  position: "absolute",
-                  top: "calc(100% + 3px)",
-                  left: 0,
-                  right: 0,
-                  zIndex: 200,
-                  background: C.white,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 9,
-                  boxShadow: C.shadowMd,
-                  overflow: "hidden",
-                }}>
-                  {suggestions.map(u => (
-                    <div
-                      key={u.email}
-                      onClick={() => {
-                        patchLayer(idx, { assignee: { type: "user", value: u.email } });
-                        setSearchOpen(null);
-                        setSearchQ("");
-                      }}
-                      style={{ padding: "6px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
-                      onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                    >
-                      <div style={{ fontSize: 11, fontWeight: 500 }}>{u.name}</div>
-                      <div style={{ fontSize: 9, color: C.textMuted }}>{u.email}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <select
-              value={layer.assignee.value}
-              onChange={e => patchLayer(idx, { assignee: { type: "field-reference", value: e.target.value } })}
-              style={{ ...inp, height: 30 }}
-            >
-              <option value="">— Select field —</option>
-              {formFieldNames.map(fn => (
-                <option key={fn} value={fn}>{fn}</option>
-              ))}
-            </select>
-          )}
-        </div>
+        {renderAssigneeEditor(layer, (assignee) => patchLayer(idx, { assignee }), {
+          isOpen: searchOpen === idx,
+          open: () => setSearchOpen(idx),
+          close: () => setSearchOpen(null),
+          setQuery: setSearchQ,
+          suggestions,
+        })}
 
         {/* Approval-specific: confirmation type */}
         {isApproval && (
@@ -620,83 +850,13 @@ export default function LayerConfigPanel({
           )}
         </div>
 
-        {/* Assignee */}
-        <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
-            Assignee
-          </label>
-          <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-            <button
-              onClick={() => patchBranchLayer(bi, li, { assignee: { type: "user", value: layer.assignee.value } })}
-              style={TOGGLE_BTN(layer.assignee.type === "user")}
-            >
-              Static
-            </button>
-            <button
-              onClick={() => patchBranchLayer(bi, li, { assignee: { type: "field-reference", value: layer.assignee.value } })}
-              style={TOGGLE_BTN(layer.assignee.type === "field-reference")}
-            >
-              From Field
-            </button>
-          </div>
-
-          {layer.assignee.type === "user" ? (
-            <div ref={searchRef} style={{ position: "relative" }}>
-              <input
-                value={layer.assignee.value}
-                onChange={e => {
-                  patchBranchLayer(bi, li, { assignee: { type: "user", value: e.target.value } });
-                  setBranchSearchQ(e.target.value);
-                }}
-                onFocus={() => setBranchSearchAt(`${bi}-${li}`)}
-                placeholder="email@company.com"
-                style={inp}
-              />
-              {branchSearchAt === `${bi}-${li}` && branchSuggestions.length > 0 && (
-                <div style={{
-                  position: "absolute",
-                  top: "calc(100% + 3px)",
-                  left: 0,
-                  right: 0,
-                  zIndex: 200,
-                  background: C.white,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 9,
-                  boxShadow: C.shadowMd,
-                  overflow: "hidden",
-                }}>
-                  {branchSuggestions.map(u => (
-                    <div
-                      key={u.email}
-                      onClick={() => {
-                        patchBranchLayer(bi, li, { assignee: { type: "user", value: u.email } });
-                        setBranchSearchAt(null);
-                        setBranchSearchQ("");
-                      }}
-                      style={{ padding: "6px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
-                      onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                    >
-                      <div style={{ fontSize: 11, fontWeight: 500 }}>{u.name}</div>
-                      <div style={{ fontSize: 9, color: C.textMuted }}>{u.email}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <select
-              value={layer.assignee.value}
-              onChange={e => patchBranchLayer(bi, li, { assignee: { type: "field-reference", value: e.target.value } })}
-              style={{ ...inp, height: 30 }}
-            >
-              <option value="">— Select field —</option>
-              {formFieldNames.map(fn => (
-                <option key={fn} value={fn}>{fn}</option>
-              ))}
-            </select>
-          )}
-        </div>
+        {renderAssigneeEditor(layer, (assignee) => patchBranchLayer(bi, li, { assignee }), {
+          isOpen: branchSearchAt === `${bi}-${li}`,
+          open: () => setBranchSearchAt(`${bi}-${li}`),
+          close: () => setBranchSearchAt(null),
+          setQuery: setBranchSearchQ,
+          suggestions: branchSuggestions,
+        })}
 
         {/* Approval-specific: confirmation type */}
         {isApproval && (
@@ -977,7 +1137,7 @@ export default function LayerConfigPanel({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: C.textPrimary, marginBottom: 2 }}>Workflow map</div>
             <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
-              Expand a step below to edit assignee, auth mode, confirmation, and evaluation fields.
+              Review paths, then expand a step below to edit assignee, auth mode, confirmation, and evaluation fields.
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>
@@ -985,10 +1145,17 @@ export default function LayerConfigPanel({
             {branchEnabled ? `${branches.length} branch${branches.length === 1 ? "" : "es"}` : `${layers.length} layer${layers.length === 1 ? "" : "s"}`}
           </div>
         </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, marginTop: 10 }}>
+          <WorkflowMetric label="Mode" value={branchEnabled ? "Branch" : "Linear"} />
+          <WorkflowMetric label="Paths" value={branchEnabled ? String(branches.length) : "1"} />
+          <WorkflowMetric label="Steps" value={String(activeLayerCount)} />
+        </div>
         {branchEnabled && branches.length > 0
           ? branches.map((branch, bi) => renderWorkflowRow(branch.label || branch.name || `Branch ${bi + 1}`, branch.layers))
           : renderWorkflowRow("Main sequence", layers)}
       </div>
+
+      <ValidationPanel errors={validation.errors} warnings={validation.warnings} />
 
       {/* Layer cards */}
       {layers.length === 0 && (
@@ -1045,11 +1212,21 @@ export default function LayerConfigPanel({
       </button>
 
       {/* Manual Branching */}
-      <div style={{ marginTop: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.textPrimary, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-          Manual Branching
+      <div style={{ ...SECTION_CARD, marginTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.textPrimary, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+              Approval branches
+            </div>
+            <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45 }}>
+              Use separate paths for managerial and non-managerial submissions.
+            </div>
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 800, color: branchEnabled ? C.green : C.textMuted, background: branchEnabled ? C.greenPale : C.offWhite, border: `1px solid ${branchEnabled ? C.green : C.border}`, borderRadius: 999, padding: "3px 7px", whiteSpace: "nowrap" }}>
+            {branchEnabled ? "On" : "Off"}
+          </span>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer" }}>
           <input type="checkbox" checked={branchEnabled}
             onChange={e => {
               setBranchEnabled(e.target.checked);
@@ -1066,12 +1243,12 @@ export default function LayerConfigPanel({
               }
             }}
             style={{ width: 16, height: 16, accentColor: C.purple }} />
-          <span style={{ fontSize: 11, color: C.textSecond }}>Enable manual branching</span>
+          <span style={{ fontSize: 11, color: C.textSecond, fontWeight: 650 }}>Enable branch-specific approval paths</span>
         </label>
         {branchEnabled && (
           <>
-            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 10 }}>
-              Branch layers override the main sequence. Define separate layer paths for different scenarios.
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
+              Branch layers override the main sequence. Each branch can still reference the same HOD or manager email field.
             </div>
             {branches.length === 0 && (
               <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "9px 11px", fontSize: 11, color: C.amber, marginBottom: 10 }}>

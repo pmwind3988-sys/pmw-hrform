@@ -2,6 +2,7 @@
  * FormPdfDocument.tsx — Corporate-style PDF for form submissions with approval/evaluation layers.
  */
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import { getSelectedCompany, isManagedCompanyQuestion } from "./companySelection";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -212,6 +213,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
   const pages = surveyJson?.pages ?? [];
   const title = surveyJson?.title || meta.formTitle;
   const badge = badgeStyle(meta.formStatus);
+  const selectedCompany = getSelectedCompany(responseData, surveyJson);
 
   return (
     <Document>
@@ -238,6 +240,9 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
           <View style={S.infoCell}><Text style={S.infoLabel}>Date Submitted</Text><Text style={S.infoValue}>{fmtDate(meta.submittedAt)}</Text></View>
           <View style={S.infoCell}><Text style={S.infoLabel}>Form</Text><Text style={S.infoValue}>{meta.formTitle}</Text></View>
           <View style={S.infoCell}><Text style={S.infoLabel}>Version</Text><Text style={S.infoValue}>v{meta.formVersion}</Text></View>
+          {selectedCompany && (
+            <View style={S.infoCell}><Text style={S.infoLabel}>Company</Text><Text style={S.infoValue}>{selectedCompany}</Text></View>
+          )}
         </View>
 
         {/* ═══ COMPANY INFO ═══ */}
@@ -254,7 +259,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
             <Text style={S.noData}>No form fields available.</Text>
           ) : (
             pages.map((page, pIdx) => {
-              const elements = flattenElements(page.elements || []).filter(el => !isLayoutType((el.type as string) || ""));
+              const elements = flattenElements(page.elements || []).filter(el => !isLayoutType((el.type as string) || "") && !isManagedCompanyQuestion(el));
               if (elements.length === 0) return null;
               return (
                 <View key={pIdx} wrap={false}>
