@@ -139,6 +139,26 @@ function stringifyValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function sanitizeRawJsonValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.trim().startsWith("data:") ? "[uploaded file omitted]" : value;
+  }
+  if (Array.isArray(value)) return value.map(sanitizeRawJsonValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, next]) => [key, sanitizeRawJsonValue(next)]),
+    );
+  }
+  return value;
+}
+
+function buildRawJson(value: Record<string, unknown>): string {
+  const json = JSON.stringify(sanitizeRawJsonValue(value));
+  return json.length > 250000
+    ? `${json.slice(0, 250000)}...[truncated]`
+    : json;
+}
+
 function stripFieldReference(value: string): string {
   return value.replace(/^\$\{/, "").replace(/\}$/, "");
 }
@@ -436,15 +456,15 @@ async function coerceFieldValue(
     const candidates = extractUploadCandidates(value);
     if (candidates.length > 0) {
       const uploaded = await uploadDataUri(context, spec.name, candidates[0], 0, "signature");
-      return { Url: uploaded.url, Description: uploaded.fileName };
+      return uploaded.url;
     }
     if (value && typeof value === "object") {
       const record = value as Record<string, unknown>;
       const url = valueToText(record.Url) || valueToText(record.url);
-      if (url) return { Url: url, Description: valueToText(record.Description) || valueToText(record.description) || spec.name };
+      if (url) return url;
     }
     const url = valueToText(value);
-    return url ? { Url: url, Description: spec.name } : undefined;
+    return url || undefined;
   }
 
   switch (spec.kind) {
@@ -500,6 +520,7 @@ async function buildSubmissionFields(
     FormVersion: valueToText(formConfig.CurrentVersion) || "1.0",
     FormID: valueToText(formConfig.FormID),
     SubmittedBy: "GUEST",
+    RawJSON: buildRawJson(incomingBody),
   };
 
   for (const spec of schema.fields) {
@@ -557,6 +578,110 @@ function mapToExistingColumns(
     mapped[columnKey] = value;
   }
   return mapped;
+}
+
+function isGraphItemCreatePayloadFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message;
+  return (message.includes("/items 400") && message.includes("invalidRequest"))
+    || (message.includes("/items 500") && message.includes("generalException"));
+}
+
+function isCoreSubmissionField(fieldName: string): boolean {
+  return fieldName === "SubmittedAt"
+    || fieldName === "SubmittedBy"
+    || fieldName === "FormVersion"
+    || fieldName === "FormID"
+    || fieldName === "RawJSON"
+    || fieldName === "PDPAConsent"
+    || fieldName === "PDPANoticeVersion"
+    || fieldName === "PDPAConsentAt"
+    || fieldName === "RetentionUntil"
+    || fieldName === "Status"
+    || fieldName === "FormStatus"
+    || fieldName === "CurrentLayer"
+    || fieldName === "CurrentApprovalLayer"
+    || /^L\d+_(Status|Email)$/.test(fieldName);
+}
+
+function graphFieldValueFallback(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(valueToText).filter(Boolean).join("; ");
+  if (value && typeof value === "object") {
+    return valueToText(value) || stringifyValue(value);
+  }
+  return value;
+}
+
+async function patchFieldWithFallback(
+  token: string,
+  listTitle: string,
+  itemId: string,
+  fieldName: string,
+  value: unknown,
+): Promise<boolean> {
+  try {
+    await updateListItemFields(token, listTitle, itemId, { [fieldName]: value });
+    return true;
+  } catch (firstError) {
+    const fallback = graphFieldValueFallback(value);
+    if (Object.is(fallback, value)) {
+      logWarn("api:submit-form", "Skipped field after Graph patch failure", {
+        listTitle,
+        fieldName,
+        errorMessage: firstError instanceof Error ? firstError.message.slice(0, 250) : String(firstError).slice(0, 250),
+      });
+      return false;
+    }
+    try {
+      await updateListItemFields(token, listTitle, itemId, { [fieldName]: fallback });
+      return true;
+    } catch (fallbackError) {
+      logWarn("api:submit-form", "Skipped field after Graph patch fallback failure", {
+        listTitle,
+        fieldName,
+        errorMessage: fallbackError instanceof Error ? fallbackError.message.slice(0, 250) : String(fallbackError).slice(0, 250),
+      });
+      return false;
+    }
+  }
+}
+
+async function createResponseItem(
+  token: string,
+  listTitle: string,
+  fields: Record<string, unknown>,
+): Promise<{ id: string }> {
+  try {
+    return await createListItem(token, listTitle, fields);
+  } catch (error) {
+    if (!isGraphItemCreatePayloadFailure(error)) throw error;
+
+    const coreFields = Object.fromEntries(
+      Object.entries(fields).filter(([fieldName]) => isCoreSubmissionField(fieldName)),
+    );
+    const optionalFields = Object.entries(fields).filter(([fieldName]) => !isCoreSubmissionField(fieldName));
+
+    logWarn("api:submit-form", "Full Graph item create failed; retrying core create then field patches", {
+      listTitle,
+      fieldCount: Object.keys(fields).length,
+      optionalFieldCount: optionalFields.length,
+    });
+
+    const result = await createListItem(token, listTitle, coreFields);
+    let patched = 0;
+    let skipped = 0;
+    for (const [fieldName, value] of optionalFields) {
+      if (await patchFieldWithFallback(token, listTitle, result.id, fieldName, value)) {
+        patched++;
+      } else {
+        skipped++;
+      }
+    }
+    if (skipped > 0) {
+      logWarn("api:submit-form", "Created response with skipped optional fields", { listTitle, itemId: result.id, patched, skipped });
+    }
+    return result;
+  }
 }
 
 async function resolveLayerAssignee(
@@ -684,7 +809,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const writableBody = mapToExistingColumns(submissionBody, resolveColumnKey, listTitle);
 
     // Submit to SharePoint list via Graph
-    const result = await createListItem(token, listTitle, writableBody);
+    const result = await createResponseItem(token, listTitle, writableBody);
     const parentId = result.id;
 
     // Create child list items for matrix fields
