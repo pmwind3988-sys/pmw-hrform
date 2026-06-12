@@ -505,6 +505,7 @@ export async function createDocLibrary(
     columns: [],
     list: { template: "documentLibrary" },
   })) as { id: string };
+  cachedListIds[displayName] = data.id;
   return data.id;
 }
 

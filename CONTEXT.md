@@ -27,3 +27,7 @@ _Avoid_: Tenant-wide user search, free-text manager name field, SharePoint Perso
 **Managed Company Selector**:
 A required, single-select company question controlled from Form Setup and presented in the form header. It represents the company the submission belongs to.
 _Avoid_: Company banner, duplicate Company field
+
+**Public Respondent**:
+A person who submits a public form without signing in to Microsoft 365.
+_Avoid_: Treating a Public Respondent as a tenant user or resolving tenant identity for them
