@@ -127,7 +127,7 @@ export async function graphPost(token: string, path: string, body: Record<string
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Graph POST ${res.status}: ${text}`);
+    throw new Error(`Graph POST ${path} ${res.status}: ${text}`);
   }
   return res.json();
 }

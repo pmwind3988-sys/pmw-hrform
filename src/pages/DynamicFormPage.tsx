@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { Model, Serializer } from "survey-core";
+import { FunctionFactory, Model, Serializer } from "survey-core";
 import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
@@ -185,6 +185,10 @@ const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-
 
 // ── Register custom SurveyJS widgets and properties ────────────────────
 registerSignaturePad();
+
+if (!FunctionFactory.Instance.hasFunction("now")) {
+  FunctionFactory.Instance.register("now", () => new Date());
+}
 
 if (!Serializer.findProperty("text", "autocapitalize")) {
   Serializer.addProperty("text", {

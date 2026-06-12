@@ -2,7 +2,7 @@ import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields, getListColumns } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
-import { ensurePdpaColumns, ensureUploadLibrary, ensureWorkflowColumns } from "./_utils/provisioning.js";
+import { ensureUploadLibrary } from "./_utils/provisioning.js";
 
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
@@ -542,14 +542,11 @@ async function resolveLayerAssignee(
 
 async function applyLayerConfigWorkflow(
   token: string,
-  listTitle: string,
   formBody: Record<string, unknown>,
   layerConfig: ApiLayerConfig | null,
 ): Promise<void> {
   const manualBranches = layerConfig?.manualBranches ?? [];
   if (manualBranches.length > 0) {
-    const maxBranchLayers = Math.max(1, ...manualBranches.map((branch) => branch.layers?.length ?? 0));
-    await ensureWorkflowColumns(token, listTitle, maxBranchLayers);
     formBody.FormStatus = FORM_SUBMITTED_STATUS;
     formBody.Status = FORM_SUBMITTED_STATUS;
     formBody.CurrentLayer = 0;
@@ -559,7 +556,6 @@ async function applyLayerConfigWorkflow(
   const layers = layerConfig?.layers ?? [];
   if (layers.length === 0) return;
 
-  await ensureWorkflowColumns(token, listTitle, layers.length);
   for (let index = 0; index < layers.length; index++) {
     const layerNumber = index + 1;
     const resolved = await resolveLayerAssignee(token, layers[index], formBody);
@@ -632,7 +628,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const schema = collectSubmissionSchema(surveyJson);
-    await ensurePdpaColumns(token, listTitle);
     const submissionBody = await buildSubmissionFields(token, listTitle, formBody, formConfig, schema);
     const consentedAt = typeof pdpaConsentedAt === "string" && !Number.isNaN(Date.parse(pdpaConsentedAt))
       ? pdpaConsentedAt
@@ -645,7 +640,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     submissionBody.PDPAConsentAt = consentedAt;
     submissionBody.RetentionUntil = retentionDate;
 
-    await applyLayerConfigWorkflow(token, listTitle, submissionBody, parseLayerConfig(formConfig.LayerConfig));
+    await applyLayerConfigWorkflow(token, submissionBody, parseLayerConfig(formConfig.LayerConfig));
     const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
     const writableBody = mapToExistingColumns(submissionBody, resolveColumnKey, listTitle);
 
