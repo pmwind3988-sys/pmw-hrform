@@ -15,6 +15,16 @@ interface ApiResponse {
   end(): void;
 }
 
+function resolveHrFormSender(): string {
+  return (
+    process.env.HR_FORM_EMAIL_FROM_ADDRESS ||
+    process.env.VITE_HR_FORM_EMAIL_FROM_ADDRESS ||
+    process.env.EMAIL_FROM_ADDRESS ||
+    process.env.VITE_EMAIL_FROM_ADDRESS ||
+    ""
+  );
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -41,11 +51,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(400).json({ error: "Missing required fields: to, subject, body" });
   }
 
-  // Sender: use EMAIL_FROM env var, or fall back to a placeholder that will fail gracefully
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS || process.env.VITE_EMAIL_FROM_ADDRESS || "";
+  const fromAddress = resolveHrFormSender();
   if (!fromAddress) {
     return res.status(500).json({
-      error: "EMAIL_FROM_ADDRESS not configured. Set this env var to a mail-enabled user (e.g. admin@tenant.onmicrosoft.com). " +
+      error: "HR_FORM_EMAIL_FROM_ADDRESS or EMAIL_FROM_ADDRESS not configured. Set it to a mail-enabled user. " +
         "The Azure AD app registration also needs the 'Mail.Send' application permission (granted by admin).",
     });
   }

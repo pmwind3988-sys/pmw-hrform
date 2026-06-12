@@ -36,6 +36,10 @@ The API functions need these env vars to authenticate with SharePoint via client
 | `VITE_SP_SITE_URL` | Your SharePoint site URL |
 | `SYSTEM_CLIENT_ID` | App registration Client ID (app-only) |
 | `SYSTEM_CLIENT_SECRET` | App registration Client Secret |
+| `API_SECRET_KEY` / `VITE_API_SECRET_KEY` | Shared API key for frontend-to-API calls |
+| `HR_FORM_EMAIL_FROM_ADDRESS` | Mail-enabled sender for HR form workflow and approval emails |
+| `JOB_APPLICATION_EMAIL_FROM_ADDRESS` | Mail-enabled sender for job application emails |
+| `HR_RECRUITMENT_EMAIL` | Recipient mailbox for job application notifications |
 
 ### Option A: Local `.env` file (fastest)
 
@@ -146,5 +150,10 @@ In Vercel Dashboard → Project Settings → Environment Variables, add:
 - `VITE_SP_SITE_URL`
 - `SYSTEM_CLIENT_ID`
 - `SYSTEM_CLIENT_SECRET`
+- `API_SECRET_KEY`
+- `VITE_API_SECRET_KEY`
+- `HR_FORM_EMAIL_FROM_ADDRESS`
+- `JOB_APPLICATION_EMAIL_FROM_ADDRESS`
+- `HR_RECRUITMENT_EMAIL`
 
-> **Do NOT** prefix them with `VITE_` or `NEXT_PUBLIC_` — those expose secrets to the browser. The frontend only needs `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, and `VITE_SP_SITE_URL`.
+> Keep system credentials and sender mailboxes server-only. The browser-required values are `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_SP_SITE_URL`, and `VITE_API_SECRET_KEY`.

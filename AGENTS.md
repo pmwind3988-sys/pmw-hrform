@@ -95,7 +95,7 @@ Builder:   AdminFormBuilder.tsx → raw token → src/utils/formBuilderSP.ts (st
   - `api/jobs-list.ts` — public: lists active jobs with live applicant counts (computed from "Job Applications" list)
   - `api/job-apply.ts` — creates application list item, updates count, sends email. **Blocking**: count update and email are mandatory; failure returns 500 with specific error. Duplicate check always runs; `forceApply` bypass only works when `submittedByEmail !== applicantEmail`.
   - `api/job-admin.ts` — admin: list/update/delete applications, CRUD for job listings. All IDs validated as numeric before Graph `$filter` usage.
-- **Email**: Uses Graph API `sendMail`. Requires `EMAIL_FROM_ADDRESS` (mail-enabled user) and `HR_RECRUITMENT_EMAIL` env vars. Azure AD app needs `Mail.Send` application permission (admin-granted).
+- **Email**: Uses Graph API `sendMail`. HR form workflow emails use `HR_FORM_EMAIL_FROM_ADDRESS`; job application emails use `JOB_APPLICATION_EMAIL_FROM_ADDRESS`; both fall back to `EMAIL_FROM_ADDRESS` for compatibility. Sender env vars must be mail-enabled users with `Mail.Send` application permission (admin-granted). Job application notifications also require `HR_RECRUITMENT_EMAIL`.
 - **Applicant count**: Computed live from "Job Applications" list grouped by `JobListingID`. Also stored as `Application_x0020_Count` on the job listing item.
 
 ### `queryListItemById` — Workaround for Filter-on-ID Issues
@@ -145,7 +145,9 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 | `API_SECRET_KEY` | Server-side API key for `X-Api-Key` auth | Should differ from `VITE_API_SECRET_KEY` |
 | `VITE_API_SECRET_KEY` | Client-side API key (compiled into bundle) | Must match `API_SECRET_KEY` for requests to work |
 | `HR_RECRUITMENT_EMAIL` / `VITE_HR_RECRUITMENT_EMAIL` | Recipient for job application HR emails | |
-| `EMAIL_FROM_ADDRESS` / `VITE_EMAIL_FROM_ADDRESS` | Sender for HR emails (mail-enabled user, needs `Mail.Send`) | |
+| `HR_FORM_EMAIL_FROM_ADDRESS` | Sender for HR form workflow/approval emails | Falls back to `EMAIL_FROM_ADDRESS`; mail-enabled user, needs `Mail.Send` |
+| `JOB_APPLICATION_EMAIL_FROM_ADDRESS` | Sender for job application/recruitment emails | Falls back to `EMAIL_FROM_ADDRESS`; mail-enabled user, needs `Mail.Send` |
+| `EMAIL_FROM_ADDRESS` | Legacy/shared fallback sender for Graph mail | Prefer the specific sender vars above; old `VITE_*` sender fallbacks still work but should not be used for new config |
 
 For Vercel deployment setup see `VERCEL_SETUP.md`.
 

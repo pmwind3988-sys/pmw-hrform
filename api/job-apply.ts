@@ -15,6 +15,16 @@ const HR_OWNER_GROUP = "_HR_ Forms Owners";
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
 
+function resolveJobApplicationSender(): string {
+  return (
+    process.env.JOB_APPLICATION_EMAIL_FROM_ADDRESS ||
+    process.env.VITE_JOB_APPLICATION_EMAIL_FROM_ADDRESS ||
+    process.env.EMAIL_FROM_ADDRESS ||
+    process.env.VITE_EMAIL_FROM_ADDRESS ||
+    ""
+  );
+}
+
 /**
  * Write a hyperlink value to a SharePoint "Hyperlink or Picture" column using
  * the SharePoint REST v1 API (_api/web/lists/...) with a FormDigest.
@@ -902,11 +912,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // ── Step 4: Send HR notification email ────────────────────────────────
     const hrEmail =
       process.env.HR_RECRUITMENT_EMAIL || process.env.VITE_HR_RECRUITMENT_EMAIL || "";
-    const fromAddress =
-      process.env.EMAIL_FROM_ADDRESS || process.env.VITE_EMAIL_FROM_ADDRESS || "";
+    const fromAddress = resolveJobApplicationSender();
 
     if (!hrEmail) throw new Error("HR_RECRUITMENT_EMAIL env var not set.");
-    if (!fromAddress) throw new Error("EMAIL_FROM_ADDRESS env var not set.");
+    if (!fromAddress) throw new Error("JOB_APPLICATION_EMAIL_FROM_ADDRESS or EMAIL_FROM_ADDRESS env var not set.");
 
     const eh = (s: string) => escapeHtml(s);
 

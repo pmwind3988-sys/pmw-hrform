@@ -2,6 +2,7 @@ import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, Eva
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
+const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
 
 export interface SpColumnSpec {
   n: string;
@@ -1662,7 +1663,10 @@ export async function sendSpEmail(_token: string, { to, subject, body }: EmailPa
 
   const response = await fetchWithTimeout(apiUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(API_KEY ? { 'X-Api-Key': API_KEY } : {}),
+    },
     body: JSON.stringify({ to, subject, body }),
   });
 
