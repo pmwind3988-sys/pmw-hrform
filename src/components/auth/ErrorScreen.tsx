@@ -4,24 +4,72 @@ import {
   Card,
   CardContent,
   Container,
+  CircularProgress,
   Stack,
   Typography,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
+import {
+  CheckCircleOutlined as CheckCircleOutlinedIcon,
+  ErrorOutlined as ErrorOutlinedIcon,
+  Login as LoginIcon,
+  Logout as LogoutIcon,
+  RadioButtonUnchecked as RadioButtonUncheckedIcon,
+  Refresh as RefreshIcon,
+} from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
+import type { LoadingStep, LoadingStepStatus } from "./LoadingScreen";
 
 interface ErrorScreenProps {
   errorMsg: string;
   onRetry: () => void;
   onSignOut?: () => void;
+  title?: string;
+  primaryActionLabel?: string;
+  primaryActionIcon?: "refresh" | "login";
+  recoverySteps?: LoadingStep[];
 }
 
-export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScreenProps) {
+function getStepColor(status: LoadingStepStatus): string {
+  if (status === "complete") return "#107C10";
+  if (status === "error") return "#DC2626";
+  if (status === "active") return "#0078D4";
+  return "#9CA3AF";
+}
+
+function StepIcon({ status }: { status: LoadingStepStatus }) {
+  const color = getStepColor(status);
+
+  if (status === "complete") {
+    return <CheckCircleOutlinedIcon sx={{ color, fontSize: 20 }} />;
+  }
+
+  if (status === "error") {
+    return <ErrorOutlinedIcon sx={{ color, fontSize: 20 }} />;
+  }
+
+  if (status === "active") {
+    return <CircularProgress size={18} thickness={5} sx={{ color }} />;
+  }
+
+  return <RadioButtonUncheckedIcon sx={{ color, fontSize: 20 }} />;
+}
+
+export default function ErrorScreen({
+  errorMsg,
+  onRetry,
+  onSignOut,
+  title = "Something went wrong",
+  primaryActionLabel = "Try again",
+  primaryActionIcon = "refresh",
+  recoverySteps,
+}: ErrorScreenProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const primaryIcon = primaryActionIcon === "login" ? <LoginIcon /> : <RefreshIcon />;
+  const hasRecoverySteps = Boolean(recoverySteps?.length);
 
   return (
     <Box
@@ -94,7 +142,7 @@ export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScree
             boxShadow: "0 4px 24px rgba(220,38,38,0.06)",
             backgroundColor: "rgba(255, 255, 255, 0.92)",
             backdropFilter: "blur(12px)",
-            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            transition: "box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             "&:hover": {
               boxShadow: "0 8px 40px rgba(220, 38, 38, 0.1), 0 2px 8px rgba(220, 38, 38, 0.06)",
             },
@@ -134,9 +182,10 @@ export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScree
                   letterSpacing: 0,
                   textAlign: "center",
                   fontSize: isMobile ? "1.75rem" : "2.25rem",
+                  textWrap: "balance",
                 }}
               >
-                Something went wrong
+                {title}
               </Typography>
 
               <Typography
@@ -147,16 +196,85 @@ export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScree
                   textAlign: "center",
                   wordBreak: "break-word",
                   maxWidth: 400,
+                  textWrap: "pretty",
                 }}
               >
                 {errorMsg}
               </Typography>
 
+              {hasRecoverySteps && (
+                <Stack
+                  component="ol"
+                  spacing={1}
+                  sx={{
+                    width: "100%",
+                    m: 0,
+                    p: 1,
+                    listStyle: "none",
+                    borderRadius: "8px",
+                    backgroundColor: "rgba(255, 255, 255, 0.8)",
+                    boxShadow: "0 12px 34px rgba(15, 23, 42, 0.08)",
+                  }}
+                >
+                  {recoverySteps?.map((step) => {
+                    const color = getStepColor(step.status);
+                    const isActive = step.status === "active";
+
+                    return (
+                      <Box
+                        component="li"
+                        key={step.label}
+                        aria-current={isActive ? "step" : undefined}
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "24px 1fr",
+                          gap: 1.25,
+                          alignItems: "start",
+                          px: 1.5,
+                          py: 1.25,
+                          borderRadius: "8px",
+                          backgroundColor: isActive ? "rgba(0, 120, 212, 0.08)" : "transparent",
+                        }}
+                      >
+                        <Box sx={{ minHeight: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <StepIcon status={step.status} />
+                        </Box>
+
+                        <Stack spacing={0.25}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: step.status === "pending" ? "#6B7280" : "#111827",
+                              fontWeight: isActive ? 700 : 600,
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {step.label}
+                          </Typography>
+                          {step.description && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color,
+                                lineHeight: 1.45,
+                                overflowWrap: "anywhere",
+                              }}
+                            >
+                              {step.description}
+                            </Typography>
+                          )}
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+
               <Button
                 variant="contained"
                 fullWidth
                 size="large"
-                startIcon={<RefreshIcon />}
+                startIcon={primaryIcon}
                 onClick={onRetry}
                 sx={{
                   backgroundColor: "#0078D4",
@@ -165,14 +283,17 @@ export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScree
                   fontSize: "1rem",
                   fontWeight: 500,
                   boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
-                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  transition: "background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.2, 0, 0, 1)",
                   "&:hover": {
                     backgroundColor: "#0068C4",
                     boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
                   },
+                  "&:active": {
+                    transform: "scale(0.96)",
+                  },
                 }}
               >
-                Try again
+                {primaryActionLabel}
               </Button>
 
               {onSignOut && (
@@ -190,11 +311,14 @@ export default function ErrorScreen({ errorMsg, onRetry, onSignOut }: ErrorScree
                     borderColor: "rgba(17, 24, 39, 0.15)",
                     color: "#6B7280",
                     borderWidth: "1.5px",
-                    transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                    transition: "border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.2, 0, 0, 1)",
                     "&:hover": {
                       borderColor: "#0078D4",
                       color: "#0078D4",
                       backgroundColor: "rgba(0, 120, 212, 0.04)",
+                    },
+                    "&:active": {
+                      transform: "scale(0.96)",
                     },
                   }}
                 >

@@ -24,6 +24,7 @@ const STALE_AUTH_ERROR_CODES = new Set([
 ]);
 
 const SILENT_TOKEN_TIMEOUT_MS = 20000;
+const AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY = "pmw_auth_timeout_relogin_attempted";
 let redirectStarted = false;
 
 function getErrorField(error: unknown, field: string): string {
@@ -53,6 +54,54 @@ export function isStaleAuthError(error: unknown): boolean {
     message.includes("no account") ||
     message.includes("token refresh")
   );
+}
+
+export function isAuthTimeoutError(error: unknown): boolean {
+  const errorCode = getErrorField(error, "errorCode") || getErrorField(error, "code");
+  const message = getErrorField(error, "message");
+
+  return (
+    errorCode === "monitor_window_timeout" ||
+    message.includes("silent token acquisition timed out") ||
+    message.includes("authentication is taking too long")
+  );
+}
+
+export function hasAuthTimeoutReloginAttempted(): boolean {
+  try {
+    return sessionStorage.getItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markAuthTimeoutReloginAttempted(): void {
+  try {
+    sessionStorage.setItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY, "1");
+  } catch {
+    // Storage can be restricted in private browsing.
+  }
+}
+
+export function clearAuthTimeoutReloginAttempt(): void {
+  try {
+    sessionStorage.removeItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY);
+  } catch {
+    // Storage can be restricted in private browsing.
+  }
+}
+
+function createAuthTimeoutReloginRequiredError(): Error {
+  const error = new Error("The automatic re-login did not finish. Please re-login to refresh your Microsoft 365 session.");
+  const authError = error as Error & { errorCode: string; code: string };
+  authError.errorCode = "auth_timeout_relogin_required";
+  authError.code = "auth_timeout_relogin_required";
+  return error;
+}
+
+export function isAuthTimeoutReloginRequiredError(error: unknown): boolean {
+  const errorCode = getErrorField(error, "errorCode") || getErrorField(error, "code");
+  return errorCode === "auth_timeout_relogin_required";
 }
 
 function preserveCurrentRoute(): void {
@@ -145,6 +194,12 @@ export async function acquireTokenSilentOrRedirect(
     return await withTimeout(instance.acquireTokenSilent(request), SILENT_TOKEN_TIMEOUT_MS);
   } catch (error) {
     if (isStaleAuthError(error)) {
+      if (isAuthTimeoutError(error)) {
+        if (hasAuthTimeoutReloginAttempted()) {
+          throw createAuthTimeoutReloginRequiredError();
+        }
+        markAuthTimeoutReloginAttempted();
+      }
       return startFreshReauthentication(instance, request.scopes, request.account);
     }
     throw error;

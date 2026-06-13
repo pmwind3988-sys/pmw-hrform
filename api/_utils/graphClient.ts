@@ -9,7 +9,13 @@ const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
-let cachedGraphToken: { value: string; expiresAt: number } | null = null;
+interface CachedAccessToken {
+  value: string;
+  expiresAt: number;
+}
+
+let cachedGraphToken: CachedAccessToken | null = null;
+let cachedSharePointToken: CachedAccessToken | null = null;
 
 // Extract hostname and server-relative path from SP_SITE_URL
 function parseSiteUrl(url: string): { hostname: string; path: string } {
@@ -23,27 +29,28 @@ function parseSiteUrl(url: string): { hostname: string; path: string } {
 
 // --- Token ---
 
-export async function getGraphToken(): Promise<string> {
+function getClientCredentialConfig(target: string): { tenantId: string; clientId: string; clientSecret: string } {
   const missing: string[] = [];
   if (!TENANT_ID) missing.push("VITE_AZURE_TENANT_ID (or AZURE_TENANT_ID)");
   if (!CLIENT_ID) missing.push("SYSTEM_CLIENT_ID (or VITE_AZURE_CLIENT_ID)");
   if (!CLIENT_SECRET) missing.push("SYSTEM_CLIENT_SECRET (or VITE_AZURE_CLIENT_SECRET)");
   if (missing.length > 0) {
     throw new Error(
-      `Missing required environment variables for Graph API: ${missing.join(", ")}. ` +
+      `Missing required environment variables for ${target}: ${missing.join(", ")}. ` +
       `If you recently updated .env.local, restart the dev server (vercel dev) to pick up changes.`
     );
   }
 
-  if (cachedGraphToken && cachedGraphToken.expiresAt - TOKEN_EXPIRY_BUFFER_MS > Date.now()) {
-    return cachedGraphToken.value;
-  }
+  return { tenantId: TENANT_ID, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET };
+}
 
-  const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+async function acquireClientCredentialsToken(scope: string, target: string): Promise<CachedAccessToken> {
+  const { tenantId, clientId, clientSecret } = getClientCredentialConfig(target);
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET,
-    scope: "https://graph.microsoft.com/.default",
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope,
     grant_type: "client_credentials",
   });
 
@@ -55,16 +62,35 @@ export async function getGraphToken(): Promise<string> {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Token acquisition failed: ${res.status} ${errText}`);
+    throw new Error(`${target} token acquisition failed: ${res.status} ${errText}`);
   }
 
   const data = (await res.json()) as { access_token: string; expires_in?: number };
   const expiresInMs = (Number(data.expires_in) || 3600) * 1000;
-  cachedGraphToken = {
+  return {
     value: data.access_token,
     expiresAt: Date.now() + expiresInMs,
   };
-  return data.access_token;
+}
+
+export async function getGraphToken(): Promise<string> {
+  if (cachedGraphToken && cachedGraphToken.expiresAt - TOKEN_EXPIRY_BUFFER_MS > Date.now()) {
+    return cachedGraphToken.value;
+  }
+
+  cachedGraphToken = await acquireClientCredentialsToken("https://graph.microsoft.com/.default", "Graph API");
+  return cachedGraphToken.value;
+}
+
+export async function getSharePointToken(): Promise<string> {
+  if (cachedSharePointToken && cachedSharePointToken.expiresAt - TOKEN_EXPIRY_BUFFER_MS > Date.now()) {
+    return cachedSharePointToken.value;
+  }
+  if (!SP_SITE_URL) throw new Error("SP_SITE_URL env var not set.");
+
+  const origin = new URL(SP_SITE_URL).origin;
+  cachedSharePointToken = await acquireClientCredentialsToken(`${origin}/.default`, "SharePoint REST API");
+  return cachedSharePointToken.value;
 }
 
 // --- Site / List cache ---

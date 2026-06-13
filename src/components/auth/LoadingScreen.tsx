@@ -8,19 +8,57 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import ErrorOutlinedIcon from "@mui/icons-material/ErrorOutlined";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
+
+export type LoadingStepStatus = "pending" | "active" | "complete" | "error";
+
+export interface LoadingStep {
+  label: string;
+  description?: string;
+  status: LoadingStepStatus;
+}
 
 interface LoadingScreenProps {
   userEmail?: string;
   progress?: number; // 0-100
   status?: string; // e.g. "Fetching submissions from 'Leave Form' (2/5)..."
+  steps?: LoadingStep[];
 }
 
-export default function LoadingScreen({ userEmail, progress, status }: LoadingScreenProps) {
+function getStepColor(status: LoadingStepStatus): string {
+  if (status === "complete") return "#107C10";
+  if (status === "error") return "#DC2626";
+  if (status === "active") return "#0078D4";
+  return "#9CA3AF";
+}
+
+function StepIcon({ status }: { status: LoadingStepStatus }) {
+  const color = getStepColor(status);
+
+  if (status === "complete") {
+    return <CheckCircleOutlinedIcon sx={{ color, fontSize: 20 }} />;
+  }
+
+  if (status === "error") {
+    return <ErrorOutlinedIcon sx={{ color, fontSize: 20 }} />;
+  }
+
+  if (status === "active") {
+    return <CircularProgress size={18} thickness={5} sx={{ color }} />;
+  }
+
+  return <RadioButtonUncheckedIcon sx={{ color, fontSize: 20 }} />;
+}
+
+export default function LoadingScreen({ userEmail, progress, status, steps }: LoadingScreenProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const hasProgress = typeof progress === "number" && progress > 0;
+  const hasSteps = Boolean(steps?.length);
 
   return (
     <Box
@@ -200,6 +238,75 @@ export default function LoadingScreen({ userEmail, progress, status }: LoadingSc
                 },
               }}
             />
+          )}
+
+          {hasSteps && (
+            <Stack
+              component="ol"
+              spacing={1}
+              sx={{
+                width: "100%",
+                maxWidth: 440,
+                m: 0,
+                p: 1,
+                listStyle: "none",
+                borderRadius: "12px",
+                backgroundColor: "rgba(255, 255, 255, 0.78)",
+                boxShadow: "0 16px 44px rgba(15, 23, 42, 0.08)",
+              }}
+            >
+              {steps?.map((step) => {
+                const color = getStepColor(step.status);
+                const isActive = step.status === "active";
+
+                return (
+                  <Box
+                    component="li"
+                    key={step.label}
+                    aria-current={isActive ? "step" : undefined}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "24px 1fr",
+                      gap: 1.25,
+                      alignItems: "start",
+                      px: 1.5,
+                      py: 1.25,
+                      borderRadius: "8px",
+                      backgroundColor: isActive ? "rgba(0, 120, 212, 0.08)" : "transparent",
+                    }}
+                  >
+                    <Box sx={{ minHeight: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <StepIcon status={step.status} />
+                    </Box>
+
+                    <Stack spacing={0.25}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: step.status === "pending" ? "#6B7280" : "#111827",
+                          fontWeight: isActive ? 700 : 600,
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {step.label}
+                      </Typography>
+                      {step.description && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color,
+                            lineHeight: 1.45,
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {step.description}
+                        </Typography>
+                      )}
+                    </Stack>
+                  </Box>
+                );
+              })}
+            </Stack>
           )}
 
           {userEmail && (

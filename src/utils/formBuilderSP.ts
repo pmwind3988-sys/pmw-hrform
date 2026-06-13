@@ -1793,7 +1793,7 @@ export async function triggerApprovalNotification(
               `Submission ID:${responseItemId}`,
               `Layer:${layer} of ${totalLayers}`,
             ],
-            link, linkLabel: 'Review and Approve',
+            link, linkLabel: 'Review',
           }),
         });
       }
@@ -1814,7 +1814,7 @@ export async function triggerApprovalNotification(
               `Submission ID:${responseItemId}`,
               `Current Layer:${layer + 1} of ${totalLayers}`,
             ],
-            link, linkLabel: 'Review and Approve',
+            link, linkLabel: 'Review',
             pdfUrl,
           }),
         });

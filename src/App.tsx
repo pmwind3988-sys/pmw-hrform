@@ -9,7 +9,14 @@ import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
 import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
-import { acquireAccessTokenSilentOrRedirect, startFreshReauthentication } from "./utils/authRecovery";
+import {
+  acquireAccessTokenSilentOrRedirect,
+  clearAuthTimeoutReloginAttempt,
+  hasAuthTimeoutReloginAttempted,
+  isAuthTimeoutReloginRequiredError,
+  markAuthTimeoutReloginAttempted,
+  startFreshReauthentication,
+} from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry } from "./types";
@@ -20,7 +27,7 @@ import ChoiceScreen from "./components/auth/ChoiceScreen";
 import GuestLanding from "./components/auth/GuestLanding";
 import WrongTenantScreen from "./components/auth/WrongTenantScreen";
 import RestrictedAccessScreen from "./components/auth/RestrictedAccessScreen";
-import LoadingScreen from "./components/auth/LoadingScreen";
+import LoadingScreen, { type LoadingStep } from "./components/auth/LoadingScreen";
 import ErrorScreen from "./components/auth/ErrorScreen";
 import AdminGuard from "./components/auth/AdminGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -37,6 +44,68 @@ const INTERNAL_EMAIL_DOMAINS = String(import.meta.env.VITE_INTERNAL_EMAIL_DOMAIN
   .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
   .filter(Boolean);
 type AuthProfileStatus = "unknown" | "loading" | "ready" | "restricted";
+const AUTH_LOAD_STEP_ORDER = [
+  "session",
+  "site",
+  "permissions",
+  "lists",
+  "submissions",
+  "finalizing",
+  "reauth",
+] as const;
+type AuthLoadStep = (typeof AUTH_LOAD_STEP_ORDER)[number];
+type AuthErrorMode = "generic" | "reauth";
+const AUTH_LOAD_STEP_TEXT: Record<AuthLoadStep, Pick<LoadingStep, "label" | "description">> = {
+  session: {
+    label: "Confirm Microsoft 365 session",
+    description: "Checking the signed-in account and token state.",
+  },
+  site: {
+    label: "Check SharePoint access",
+    description: "Confirming this account can reach the PMW HR Docs site.",
+  },
+  permissions: {
+    label: "Load portal permissions",
+    description: "Reading HR Forms Owner and Form Builder Superuser access.",
+  },
+  lists: {
+    label: "Discover form lists",
+    description: "Finding the form libraries this account can use.",
+  },
+  submissions: {
+    label: "Fetch dashboard submissions",
+    description: "Loading visible form responses and workflow status.",
+  },
+  finalizing: {
+    label: "Finish portal setup",
+    description: "Preparing the dashboard view.",
+  },
+  reauth: {
+    label: "Refresh Microsoft sign-in",
+    description: "Starting one fresh sign-in attempt after the timeout.",
+  },
+};
+
+function buildAuthLoadingSteps(activeStep: AuthLoadStep, errorStep: AuthLoadStep | null = null): LoadingStep[] {
+  const activeIndex = AUTH_LOAD_STEP_ORDER.indexOf(activeStep);
+
+  return AUTH_LOAD_STEP_ORDER.map((step, index) => {
+    let status: LoadingStep["status"] = "pending";
+
+    if (errorStep === step) {
+      status = "error";
+    } else if (index < activeIndex) {
+      status = "complete";
+    } else if (index === activeIndex) {
+      status = "active";
+    }
+
+    return {
+      ...AUTH_LOAD_STEP_TEXT[step],
+      status,
+    };
+  });
+}
 
 const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
 const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboard");
@@ -346,6 +415,9 @@ export default function App() {
   const [detailItem, setDetailItem] = useState<Submission | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadStatus, setLoadStatus] = useState("Initializing...");
+  const [authLoadStep, setAuthLoadStep] = useState<AuthLoadStep>("session");
+  const [authErrorMode, setAuthErrorMode] = useState<AuthErrorMode>("generic");
+  const [authErrorStep, setAuthErrorStep] = useState<AuthLoadStep | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -361,6 +433,7 @@ export default function App() {
   const authProfileAccountRef = useRef("");
   const authProfileLoadingRef = useRef(false);
   const postAuthRedirectRef = useRef(false);
+  const reauthRedirectInProgressRef = useRef(false);
   const authProfileReady = Boolean(accountKey) && authProfileStatus === "ready" && authProfileAccountRef.current === accountKey;
   const authProfileRestricted = Boolean(accountKey) && authProfileStatus === "restricted" && authProfileAccountRef.current === accountKey;
 
@@ -382,7 +455,11 @@ export default function App() {
     setLoadedConfig(null);
     setMissingConfigs([]);
     setDetailItem(null);
+    setAuthLoadStep("session");
+    setAuthErrorMode("generic");
+    setAuthErrorStep(null);
     authProfileLoadingRef.current = false;
+    reauthRedirectInProgressRef.current = false;
     postAuthRedirectRef.current = false;
   }, [accountKey]);
 
@@ -459,7 +536,8 @@ export default function App() {
 
   
   useEffect(() => {
-    if (pageState !== "loading" || !isAuthenticated || isPublicRoute || !activeAccount) return;
+    if (pageState !== "loading" || !isAuthenticated || isPublicRoute || !activeAccount || inProgress !== "none") return;
+    if (reauthRedirectInProgressRef.current) return;
     if (authProfileLoadingRef.current) return;
     if (authProfileReady) {
       setPageState("ready");
@@ -479,20 +557,36 @@ export default function App() {
     setAuthProfileStatus("loading");
     setLoadProgress(0);
     setLoadStatus("Initializing...");
+    setAuthLoadStep("session");
+    setAuthErrorMode("generic");
+    setAuthErrorStep(null);
     const spClient = createSpClient(instance, [account]);
     const finishProfileLoad = () => {
       authProfileLoadingRef.current = false;
       window.clearTimeout(reauthTimeoutId);
     };
+    const showReauthenticationError = (message: string) => {
+      finishProfileLoad();
+      setErrorMsg(message);
+      setAuthErrorMode("reauth");
+      setAuthErrorStep("reauth");
+      setAuthProfileStatus("unknown");
+      setPageState("error");
+    };
     const redirectToFreshSignIn = () => {
       window.clearTimeout(reauthTimeoutId);
-      setLoadStatus("Authentication is taking too long. Redirecting to sign in...");
+      setAuthLoadStep("reauth");
+      setLoadProgress((current) => Math.max(current, 85));
+      if (hasAuthTimeoutReloginAttempted()) {
+        showReauthenticationError("The automatic re-login did not finish before the session timed out again. Please re-login to refresh your Microsoft 365 session.");
+        return;
+      }
+
+      markAuthTimeoutReloginAttempted();
+      setLoadStatus("Authentication timed out. Starting a fresh Microsoft 365 sign-in...");
       void startFreshReauthentication(instance, loginRequest.scopes, account).catch((error: unknown) => {
         if (cancelled) return;
-        finishProfileLoad();
-        setErrorMsg(error instanceof Error ? error.message : "Could not restart sign-in.");
-        setAuthProfileStatus("unknown");
-        setPageState("error");
+        showReauthenticationError(error instanceof Error ? error.message : "Could not restart sign-in.");
       });
     };
     const reauthTimeoutId = window.setTimeout(() => {
@@ -503,6 +597,7 @@ export default function App() {
 
     async function fetchData() {
       try {
+        setAuthLoadStep(accountIsInternal ? "session" : "site");
         setLoadStatus(accountIsInternal ? "Preparing PMW account access..." : "Checking SharePoint site access...");
         setLoadProgress(10);
         if (!accountIsInternal) {
@@ -510,6 +605,7 @@ export default function App() {
           if (cancelled) return;
         }
 
+        setAuthLoadStep("permissions");
         setLoadStatus("Loading permissions and form configuration...");
         setLoadProgress(20);
         const [adminResult, builderSuperuserResult, config] = await Promise.all([
@@ -522,6 +618,7 @@ export default function App() {
 
         let allLists: DiscoveredList[];
         try {
+          setAuthLoadStep("lists");
           setLoadStatus("Discovering SharePoint form lists...");
           allLists = await spClient.discoverLists();
         } catch (error) {
@@ -562,6 +659,7 @@ export default function App() {
 
         // Step 5: Fetch submissions
         const totalLists = visible.length;
+        setAuthLoadStep("submissions");
         setLoadStatus(
           totalLists > 0
             ? `Fetching submissions from ${totalLists} list${totalLists !== 1 ? "s" : ""}...`
@@ -595,6 +693,7 @@ export default function App() {
         if (cancelled) return;
 
         // Step 6: Finalize
+        setAuthLoadStep("finalizing");
         setLoadStatus("Finalizing...");
         setLoadProgress(98);
 
@@ -616,12 +715,20 @@ export default function App() {
         setMissingConfigs(getMissingConfigs(visible, config.layerConfig));
         setLoadProgress(100);
         setLoadStatus("Ready.");
+        clearAuthTimeoutReloginAttempt();
+        setAuthErrorMode("generic");
+        setAuthErrorStep(null);
+        reauthRedirectInProgressRef.current = false;
         authProfileAccountRef.current = accountKey;
         finishProfileLoad();
         setAuthProfileStatus("ready");
         setPageState("ready");
       } catch (err: unknown) {
         if (cancelled) return;
+        if (isAuthTimeoutReloginRequiredError(err)) {
+          showReauthenticationError(err instanceof Error ? err.message : "Please re-login to refresh your Microsoft 365 session.");
+          return;
+        }
         if (isUnauthorizedError(err)) {
           redirectToFreshSignIn();
           return;
@@ -631,6 +738,8 @@ export default function App() {
           setErrorMsg("");
           if (accountIsInternal) {
             setErrorMsg("SharePoint returned 403 for this PMW account while loading portal data. Please confirm the account can open the PMW HR Docs SharePoint site and lists.");
+            setAuthErrorMode("generic");
+            setAuthErrorStep(null);
             setAuthProfileStatus("unknown");
             setPageState("error");
             return;
@@ -643,6 +752,8 @@ export default function App() {
         const message = err instanceof Error ? err.message : "Unknown error occurred";
         finishProfileLoad();
         setErrorMsg(message);
+        setAuthErrorMode("generic");
+        setAuthErrorStep(null);
         setAuthProfileStatus("unknown");
         setPageState("error");
       }
@@ -653,7 +764,7 @@ export default function App() {
       cancelled = true;
       finishProfileLoad();
     };
-  }, [pageState, isAuthenticated, isPublicRoute, authProfileReady, authProfileRestricted, instance, accountKey]);
+  }, [pageState, isAuthenticated, isPublicRoute, authProfileReady, authProfileRestricted, inProgress, instance, accountKey]);
 
   // Navigate to preserved route after successful login.
   useEffect(() => {
@@ -698,6 +809,8 @@ export default function App() {
     }
     
     setStoredAuthDecision("msal");
+    clearAuthTimeoutReloginAttempt();
+    reauthRedirectInProgressRef.current = false;
 
     // Preserve current route for post-login redirect
     try {
@@ -724,6 +837,8 @@ export default function App() {
   };
 
   const handleSwitchAccount = useCallback(() => {
+    clearAuthTimeoutReloginAttempt();
+    reauthRedirectInProgressRef.current = false;
     instance.logoutPopup().catch(() => {
       instance.logoutRedirect();
     });
@@ -734,17 +849,63 @@ export default function App() {
   }, [instance]);
 
   const handleSignOut = useCallback(() => {
+    clearAuthTimeoutReloginAttempt();
+    reauthRedirectInProgressRef.current = false;
     instance.logoutRedirect();
     clearStoredAuthDecision();
   }, [instance]);
 
   const handleForgetChoice = () => {
+    clearAuthTimeoutReloginAttempt();
+    reauthRedirectInProgressRef.current = false;
     clearStoredAuthDecision();
     setPageState("choice");
   };
 
-  const handleRestrictedRetry = () => {
+  const handleGenericRetry = () => {
+    reauthRedirectInProgressRef.current = false;
     setAuthProfileStatus("unknown");
+    setAuthErrorMode("generic");
+    setAuthErrorStep(null);
+    setAuthLoadStep("session");
+    setLoadProgress(0);
+    setLoadStatus("Initializing...");
+    setPageState("loading");
+  };
+
+  const handleRelogin = () => {
+    if (inProgress !== "none") {
+      setAuthLoadStep("reauth");
+      setLoadProgress((current) => Math.max(current, 85));
+      setLoadStatus("Microsoft 365 sign-in is already in progress...");
+      setPageState("loading");
+      return;
+    }
+
+    clearAuthTimeoutReloginAttempt();
+    reauthRedirectInProgressRef.current = true;
+    setAuthErrorMode("reauth");
+    setAuthErrorStep(null);
+    setAuthLoadStep("reauth");
+    setLoadProgress(90);
+    setLoadStatus("Opening Microsoft 365 sign-in...");
+    setPageState("loading");
+
+    void startFreshReauthentication(instance, loginRequest.scopes, activeAccount ?? undefined).catch((error: unknown) => {
+      reauthRedirectInProgressRef.current = false;
+      setErrorMsg(error instanceof Error ? error.message : "Could not restart sign-in.");
+      setAuthErrorStep("reauth");
+      setAuthProfileStatus("unknown");
+      setPageState("error");
+    });
+  };
+
+  const handleRestrictedRetry = () => {
+    reauthRedirectInProgressRef.current = false;
+    setAuthProfileStatus("unknown");
+    setAuthErrorMode("generic");
+    setAuthErrorStep(null);
+    setAuthLoadStep("session");
     setLoadProgress(0);
     setLoadStatus("Initializing...");
     setPageState("loading");
@@ -817,10 +978,20 @@ export default function App() {
   }
 
   if (!isPublicRoute && pageState === "error") {
+    const isReauthError = authErrorMode === "reauth";
+
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <ErrorScreen errorMsg={errorMsg} onRetry={() => setPageState("loading")} onSignOut={handleSignOut} />
+        <ErrorScreen
+          errorMsg={errorMsg}
+          onRetry={isReauthError ? handleRelogin : handleGenericRetry}
+          onSignOut={handleSignOut}
+          title={isReauthError ? "Re-login needed" : undefined}
+          primaryActionLabel={isReauthError ? "Re-login" : undefined}
+          primaryActionIcon={isReauthError ? "login" : undefined}
+          recoverySteps={isReauthError ? buildAuthLoadingSteps("reauth", authErrorStep ?? "reauth") : undefined}
+        />
       </ThemeProvider>
     );
   }
@@ -830,7 +1001,12 @@ export default function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <LoadingScreen userEmail={userEmail || undefined} progress={loadProgress} status={loadStatus} />
+        <LoadingScreen
+          userEmail={userEmail || undefined}
+          progress={loadProgress}
+          status={loadStatus}
+          steps={buildAuthLoadingSteps(authLoadStep)}
+        />
       </ThemeProvider>
     );
   }

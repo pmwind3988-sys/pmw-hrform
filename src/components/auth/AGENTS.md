@@ -13,7 +13,7 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 | `loading` | `LoadingScreen` | Animated progress bar while fetching data |
 | `restricted` | `RestrictedAccessScreen` | Signed-in account lacks SharePoint site access |
 | `wrong_tenant` | `WrongTenantScreen` | Tenant mismatch error with sign-out |
-| `error` | `ErrorScreen` | Generic error with "Try Again" button |
+| `error` | `ErrorScreen` | Generic error fallback; auth timeout recovery uses "Re-login" with visual recovery steps |
 | `ready` | `AdminGuard` | Route guard for admin pages (not an auth state screen) |
 
 ## WHERE TO LOOK
@@ -25,7 +25,7 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 | Loading indicator | `LoadingScreen.tsx` | `LinearProgress` with fade-in animation |
 | SharePoint access restriction | `RestrictedAccessScreen.tsx` | Shows site membership guidance with retry/switch/sign-out |
 | Wrong tenant | `WrongTenantScreen.tsx` | Identity mismatch — shows current vs expected tenant |
-| Error fallback | `ErrorScreen.tsx` | Catch-all error with retry callback |
+| Error fallback | `ErrorScreen.tsx` | Catch-all error with configurable retry/re-login callback and optional visual recovery steps |
 | Admin guard | `AdminGuard.tsx` | Wraps protected admin-style routes; shows "Access Denied" + 4s redirect to `/user/dashboard`. Builder routes pass a superuser restriction label. |
 
 ## Conventions

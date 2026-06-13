@@ -1,7 +1,8 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields, getListColumns, listExistsGraph } from "./_utils/graphClient.js";
+import { getGraphToken, getSharePointToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields, getListColumns, listExistsGraph } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
+import { patchHyperlinkViaSPRest, updateListItemViaSPRest } from "./_utils/sharepointRest.js";
 
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
@@ -77,6 +78,7 @@ interface ApiUploadContext {
   token: string;
   listTitle: string;
   uploadLibraryByUse: Record<string, string | null>;
+  uploadDataUri: ApiUploadDataUri;
 }
 
 interface ApiUploadCandidate {
@@ -89,6 +91,41 @@ interface ApiDataUri {
   ext: string;
   rawSize: number;
 }
+
+interface ApiUrlFieldPatch {
+  fieldName: string;
+  url: string;
+  description: string;
+}
+
+interface ApiSubmissionBuildResult {
+  fields: Record<string, unknown>;
+  urlFieldPatches: ApiUrlFieldPatch[];
+}
+
+type ApiUploadDataUri = (
+  context: ApiUploadContext,
+  fieldName: string,
+  candidate: ApiUploadCandidate,
+  index: number,
+  use: "file" | "signature",
+) => Promise<{ url: string; fileName: string }>;
+
+interface ApiBuildSubmissionOptions {
+  uploadDataUri?: ApiUploadDataUri;
+}
+
+interface ApiUrlFieldPatchDeps {
+  patchHyperlinkViaSPRest: typeof patchHyperlinkViaSPRest;
+  updateListItemViaSPRest: typeof updateListItemViaSPRest;
+  updateListItemFields: typeof updateListItemFields;
+}
+
+const DEFAULT_URL_FIELD_PATCH_DEPS: ApiUrlFieldPatchDeps = {
+  patchHyperlinkViaSPRest,
+  updateListItemViaSPRest,
+  updateListItemFields,
+};
 
 class PublicSubmissionError extends Error {
   statusCode: number;
@@ -391,7 +428,7 @@ async function resolveExistingUploadLibrary(
 
   const perFormLibrary = `${context.listTitle} Files`;
   const candidates = use === "signature"
-    ? [perFormLibrary, "Signature Images", "Documents", "Shared Documents"]
+    ? ["Signature Images", perFormLibrary, "Documents", "Shared Documents"]
     : [perFormLibrary, "Documents", "Shared Documents"];
 
   for (const candidate of candidates) {
@@ -444,7 +481,7 @@ async function coerceFieldValue(
     if (candidates.length > 0) {
       const uploads: string[] = [];
       for (let index = 0; index < candidates.length; index++) {
-        const uploaded = await uploadDataUri(context, spec.name, candidates[index], index, "file");
+        const uploaded = await context.uploadDataUri(context, spec.name, candidates[index], index, "file");
         uploads.push(uploaded.url);
       }
       return uploads.length === 1 ? uploads[0] : JSON.stringify(uploads);
@@ -453,18 +490,7 @@ async function coerceFieldValue(
   }
 
   if (spec.kind === "url") {
-    const candidates = extractUploadCandidates(value);
-    if (candidates.length > 0) {
-      const uploaded = await uploadDataUri(context, spec.name, candidates[0], 0, "signature");
-      return uploaded.url;
-    }
-    if (value && typeof value === "object") {
-      const record = value as Record<string, unknown>;
-      const url = valueToText(record.Url) || valueToText(record.url);
-      if (url) return url;
-    }
-    const url = valueToText(value);
-    return url || undefined;
+    return undefined;
   }
 
   switch (spec.kind) {
@@ -484,6 +510,45 @@ async function coerceFieldValue(
     default:
       return stringifyValue(valueToText(value) || value);
   }
+}
+
+async function coerceUrlFieldPatch(
+  context: ApiUploadContext,
+  spec: ApiFieldSpec,
+  value: unknown,
+): Promise<ApiUrlFieldPatch | null> {
+  if (value === undefined || value === null) return null;
+
+  const candidates = extractUploadCandidates(value);
+  if (candidates.length > 0) {
+    const uploaded = await context.uploadDataUri(context, spec.name, candidates[0], 0, "signature");
+    return {
+      fieldName: spec.name,
+      url: uploaded.url,
+      description: "Signature",
+    };
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const url = valueToText(record.Url) || valueToText(record.url);
+    if (url) {
+      return {
+        fieldName: spec.name,
+        url,
+        description: valueToText(record.Description) || "Signature",
+      };
+    }
+  }
+
+  const url = valueToText(value);
+  return url
+    ? {
+        fieldName: spec.name,
+        url,
+        description: "Signature",
+      }
+    : null;
 }
 
 function coerceMatrixCellValue(value: unknown, column: ApiMatrixColumn): unknown {
@@ -513,8 +578,14 @@ async function buildSubmissionFields(
   incomingBody: Record<string, unknown>,
   formConfig: Record<string, unknown>,
   schema: ApiSubmissionSchema,
-): Promise<Record<string, unknown>> {
-  const context: ApiUploadContext = { token, listTitle, uploadLibraryByUse: {} };
+  options: ApiBuildSubmissionOptions = {},
+): Promise<ApiSubmissionBuildResult> {
+  const context: ApiUploadContext = {
+    token,
+    listTitle,
+    uploadLibraryByUse: {},
+    uploadDataUri: options.uploadDataUri ?? uploadDataUri,
+  };
   const fields: Record<string, unknown> = {
     SubmittedAt: new Date().toISOString(),
     FormVersion: valueToText(formConfig.CurrentVersion) || "1.0",
@@ -522,9 +593,15 @@ async function buildSubmissionFields(
     SubmittedBy: "GUEST",
     RawJSON: buildRawJson(incomingBody),
   };
+  const urlFieldPatches: ApiUrlFieldPatch[] = [];
 
   for (const spec of schema.fields) {
     if (!(spec.name in incomingBody)) continue;
+    if (spec.kind === "url") {
+      const patch = await coerceUrlFieldPatch(context, spec, incomingBody[spec.name]);
+      if (patch) urlFieldPatches.push(patch);
+      continue;
+    }
     const coerced = await coerceFieldValue(context, spec, incomingBody[spec.name]);
     if (coerced !== undefined) fields[spec.name] = coerced;
   }
@@ -547,7 +624,7 @@ async function buildSubmissionFields(
     if (json) fields[`${matrix.name}_Json`] = json;
   }
 
-  return fields;
+  return { fields, urlFieldPatches };
 }
 
 async function getColumnKeyResolver(
@@ -684,6 +761,95 @@ async function createResponseItem(
   }
 }
 
+async function patchUrlFieldWithFallback(
+  graphToken: string,
+  sharePointToken: string | null,
+  listTitle: string,
+  itemId: string,
+  fieldName: string,
+  url: string,
+  description: string,
+  deps: ApiUrlFieldPatchDeps = DEFAULT_URL_FIELD_PATCH_DEPS,
+): Promise<void> {
+  if (sharePointToken) {
+    try {
+      await deps.patchHyperlinkViaSPRest(sharePointToken, listTitle, itemId, fieldName, url, description);
+      return;
+    } catch (firstError) {
+      logWarn("api:submit-form", "SP REST FieldUrlValue update failed", {
+        listTitle,
+        fieldName,
+        errorMessage: firstError instanceof Error ? firstError.message.slice(0, 250) : String(firstError).slice(0, 250),
+      });
+    }
+
+    try {
+      await deps.updateListItemViaSPRest(sharePointToken, listTitle, itemId, { [fieldName]: url });
+      return;
+    } catch (fallbackError) {
+      logWarn("api:submit-form", "SP REST text URL update failed", {
+        listTitle,
+        fieldName,
+        errorMessage: fallbackError instanceof Error ? fallbackError.message.slice(0, 250) : String(fallbackError).slice(0, 250),
+      });
+    }
+  }
+
+  try {
+    await deps.updateListItemFields(graphToken, listTitle, itemId, { [fieldName]: url });
+  } catch (graphError) {
+    logWarn("api:submit-form", "Graph URL field update failed", {
+      listTitle,
+      fieldName,
+      errorMessage: graphError instanceof Error ? graphError.message.slice(0, 250) : String(graphError).slice(0, 250),
+    });
+    throw new PublicSubmissionError("Could not save signature image. Please try again.", 500);
+  }
+}
+
+async function applyUrlFieldPatches(
+  graphToken: string,
+  listTitle: string,
+  itemId: string,
+  patches: ApiUrlFieldPatch[],
+  resolveColumnKey: (fieldName: string) => string | null,
+): Promise<void> {
+  if (patches.length === 0) return;
+
+  let sharePointToken: string | null = null;
+  try {
+    sharePointToken = await getSharePointToken();
+  } catch (tokenError) {
+    logWarn("api:submit-form", "SharePoint REST token unavailable; using Graph URL field patch fallback", {
+      listTitle,
+      errorMessage: tokenError instanceof Error ? tokenError.message.slice(0, 250) : String(tokenError).slice(0, 250),
+    });
+  }
+
+  for (const patch of patches) {
+    const columnKey = resolveColumnKey(patch.fieldName);
+    if (!columnKey) {
+      logWarn("api:submit-form", "Signature field missing from response list schema", {
+        listTitle,
+        fieldName: patch.fieldName,
+      });
+      throw new PublicSubmissionError(
+        "The public form signature field is not provisioned. Please republish the form before trying again.",
+        409,
+      );
+    }
+    await patchUrlFieldWithFallback(
+      graphToken,
+      sharePointToken,
+      listTitle,
+      itemId,
+      columnKey,
+      patch.url,
+      patch.description,
+    );
+  }
+}
+
 async function resolveLayerAssignee(
   token: string,
   layer: ApiLayerConfigItem,
@@ -792,7 +958,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const schema = collectSubmissionSchema(surveyJson);
-    const submissionBody = await buildSubmissionFields(token, listTitle, formBody, formConfig, schema);
+    const submission = await buildSubmissionFields(token, listTitle, formBody, formConfig, schema);
+    const submissionBody = submission.fields;
     const consentedAt = typeof pdpaConsentedAt === "string" && !Number.isNaN(Date.parse(pdpaConsentedAt))
       ? pdpaConsentedAt
       : new Date().toISOString();
@@ -811,6 +978,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // Submit to SharePoint list via Graph
     const result = await createResponseItem(token, listTitle, writableBody);
     const parentId = result.id;
+    await applyUrlFieldPatches(token, listTitle, parentId, submission.urlFieldPatches, resolveColumnKey);
 
     // Create child list items for matrix fields
     const childItemIds: Record<string, number[]> = {};
@@ -883,3 +1051,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
 }
+
+export const __test__ = {
+  buildSubmissionFields,
+  collectSubmissionSchema,
+  patchUrlFieldWithFallback,
+};
