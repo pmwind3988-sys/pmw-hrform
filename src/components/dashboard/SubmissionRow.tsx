@@ -1,18 +1,22 @@
 import {
   Box,
   Chip,
+  CircularProgress,
+  IconButton,
   Stack,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
 import {
   ChevronRight as ChevronRightIcon,
+  DeleteOutlined as DeleteIcon,
   LayersOutlined as LayersIcon,
   NumbersOutlined as NumbersIcon,
   VisibilityOutlined as ViewIcon,
 } from "@mui/icons-material";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
@@ -21,14 +25,20 @@ import { editorial, editorialShadow } from "../../theme/editorial";
 interface SubmissionRowProps {
   item: Submission;
   onView: (item: Submission) => void;
+  onDelete?: (item: Submission) => void;
   isAdmin: boolean;
+  canDelete?: boolean;
+  isDeleting?: boolean;
   listMetaMap: Record<string, ListMetaEntry>;
 }
 
 export default function SubmissionRow({
   item,
   onView,
+  onDelete,
   isAdmin,
+  canDelete = false,
+  isDeleting = false,
   listMetaMap,
 }: SubmissionRowProps) {
   const theme = useTheme();
@@ -60,6 +70,10 @@ export default function SubmissionRow({
         : `${item.totalLayers} layers`
       : null;
   const handleOpen = () => onView(item);
+  const handleDelete = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    onDelete?.(item);
+  };
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -133,22 +147,53 @@ export default function SubmissionRow({
               </Typography>
             </Box>
           </Box>
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: "10px",
-              border: `1px solid ${editorial.pmwBlueSoft}`,
-              backgroundColor: editorial.blueWash,
-              color: editorial.pmwBlueDark,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <ViewIcon sx={{ fontSize: 18 }} />
-          </Box>
+          <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+            {canDelete && (
+              <Tooltip title="Delete submission and managed files">
+                <span onClick={(event) => event.stopPropagation()}>
+                  <IconButton
+                    aria-label={`Delete submission ${item.title}`}
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    size="small"
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "8px",
+                      border: `1px solid rgba(198, 40, 40, 0.2)`,
+                      backgroundColor: "rgba(198, 40, 40, 0.08)",
+                      color: editorial.error,
+                      transition: "background-color 0.18s ease, transform 0.18s ease",
+                      "&:hover": {
+                        backgroundColor: "rgba(198, 40, 40, 0.14)",
+                      },
+                      "&:active": {
+                        transform: "scale(0.96)",
+                      },
+                    }}
+                  >
+                    {isDeleting ? <CircularProgress size={18} color="inherit" /> : <DeleteIcon sx={{ fontSize: 18 }} />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: "8px",
+                border: `1px solid ${editorial.pmwBlueSoft}`,
+                backgroundColor: editorial.blueWash,
+                color: editorial.pmwBlueDark,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <ViewIcon sx={{ fontSize: 18 }} />
+            </Box>
+          </Stack>
         </Box>
         <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
           <ListBadge title={item.listTitle} color={meta.color} pale={meta.pale} />
@@ -181,7 +226,7 @@ export default function SubmissionRow({
       sx={{
         display: "grid",
         gridTemplateColumns: isAdmin
-          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px"
+          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 88px"
           : "minmax(260px, 2.2fr) minmax(180px, 1.25fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px",
         gap: 2,
         px: 2.5,
@@ -270,17 +315,46 @@ export default function SubmissionRow({
         )}
       </Box>
 
-      {/* Chevron */}
-      <ChevronRightIcon
-        sx={{
-          color: editorial.pmwBlueDark,
-          fontSize: 20,
-          transition: "transform 0.2s ease",
-          ".MuiBox-root:hover &": {
-            transform: "translateX(4px)",
-          },
-        }}
-      />
+      {/* Actions */}
+      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end", alignItems: "center" }}>
+        {canDelete && (
+          <Tooltip title="Delete submission and managed files">
+            <span onClick={(event) => event.stopPropagation()}>
+              <IconButton
+                aria-label={`Delete submission ${item.title}`}
+                onClick={handleDelete}
+                disabled={isDeleting}
+                size="small"
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "8px",
+                  color: editorial.error,
+                  transition: "background-color 0.18s ease, transform 0.18s ease",
+                  "&:hover": {
+                    backgroundColor: "rgba(198, 40, 40, 0.1)",
+                  },
+                  "&:active": {
+                    transform: "scale(0.96)",
+                  },
+                }}
+              >
+                {isDeleting ? <CircularProgress size={18} color="inherit" /> : <DeleteIcon sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+        <ChevronRightIcon
+          sx={{
+            color: editorial.pmwBlueDark,
+            fontSize: 20,
+            transition: "transform 0.2s ease",
+            ".MuiBox-root:hover &": {
+              transform: "translateX(4px)",
+            },
+          }}
+        />
+      </Stack>
     </Box>
   );
 }

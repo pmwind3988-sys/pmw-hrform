@@ -129,7 +129,7 @@ function buildColumnBody(spec: SpColumnSpec): Record<string, unknown> {
     body.RichText = !!spec.rt;
   }
   if (spec.k === 11) {
-    body.DisplayFormat = 2; // 2 = Image (0=Hyperlink, 1=Text)
+    body.DisplayFormat = 0; // URL link. Public submissions store a shortcut to the uploaded signature file.
   }
   if ((spec.k === 6 || spec.k === 15) && spec.choices && spec.choices.length > 0) {
     body.Choices = { results: spec.choices };
@@ -158,6 +158,29 @@ async function createColumn(token: string, listTitle: string, spec: SpColumnSpec
     throw new Error(`addColumn "${spec.n}" ${response.status}: ${text}`);
   }
   rememberColumn(listTitle, spec.n);
+}
+
+async function repairUrlColumnDisplayFormat(token: string, listTitle: string, fieldName: string): Promise<void> {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields/getbyinternalnameortitle('${encodeURIComponent(fieldName)}')`;
+  const response = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json;odata=nometadata',
+      'Content-Type': 'application/json;odata=verbose',
+      'X-HTTP-Method': 'MERGE',
+      'IF-MATCH': '*',
+      'X-RequestDigest': await getDigest(token),
+    },
+    body: JSON.stringify({
+      __metadata: { type: 'SP.FieldUrl' },
+      DisplayFormat: 0,
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`repairUrlColumn "${fieldName}" ${response.status}: ${text}`);
+  }
 }
 
 /** Escape single quotes for OData filter string values to prevent injection */
@@ -579,6 +602,9 @@ export async function ensureColumns(
   for (const column of columns) {
     const normalized = normalizeColumnName(column.n);
     if (existingColumns.has(normalized)) {
+      if (column.k === SP_FIELD_KIND.image) {
+        await repairUrlColumnDisplayFormat(token, listTitle, column.n);
+      }
       result.existing.push(column.n);
       continue;
     }
@@ -793,6 +819,61 @@ export async function spPatch(token: string, url: string, body: unknown): Promis
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`PATCH ${response.status}: ${text}`);
+  }
+}
+
+async function getListEntityTypeFullName(token: string, listTitle: string): Promise<string> {
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')?$select=ListItemEntityTypeFullName`,
+  ) as { ListItemEntityTypeFullName?: string };
+  if (!data.ListItemEntityTypeFullName) {
+    throw new Error(`Could not resolve SharePoint entity type for "${listTitle}".`);
+  }
+  return data.ListItemEntityTypeFullName;
+}
+
+export function toAbsoluteSharePointUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed || /^https?:\/\//i.test(trimmed) || !SP_SITE_URL) return trimmed;
+  const site = new URL(SP_SITE_URL);
+  if (trimmed.startsWith("/")) return `${site.origin}${trimmed}`;
+  return `${SP_SITE_URL}/${trimmed.replace(/^\/+/, "")}`;
+}
+
+export async function spPatchUrlField(
+  token: string,
+  listTitle: string,
+  itemId: string | number,
+  fieldName: string,
+  url: string,
+  description = "",
+): Promise<void> {
+  const digest = await getDigest(token);
+  const entityType = await getListEntityTypeFullName(token, listTitle);
+  const absoluteUrl = toAbsoluteSharePointUrl(url);
+  const response = await fetchWithTimeout(`${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${itemId})`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json;odata=verbose',
+      'Content-Type': 'application/json;odata=verbose',
+      'X-RequestDigest': digest,
+      'IF-MATCH': '*',
+      'X-HTTP-Method': 'MERGE',
+    },
+    body: JSON.stringify({
+      __metadata: { type: entityType },
+      [fieldName]: {
+        __metadata: { type: 'SP.FieldUrlValue' },
+        Url: absoluteUrl,
+        Description: description || absoluteUrl,
+      },
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`PATCH URL field ${response.status}: ${text}`);
   }
 }
 

@@ -1,8 +1,32 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, getSharePointToken, queryListItems, createListItem, uploadFileToDrive, updateListItemFields, getListColumns, listExistsGraph } from "./_utils/graphClient.js";
+import {
+  getGraphToken,
+  getSharePointToken,
+  queryListItems,
+  createListItem,
+  updateListItemFields,
+  getListColumns,
+  listExistsGraph,
+  ensureDocLibrary as ensureGraphDocLibrary,
+  uploadFileToDriveItem,
+  deleteListItem,
+  deleteDocLibraryFile,
+} from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
-import { patchHyperlinkViaSPRest, updateListItemViaSPRest } from "./_utils/sharepointRest.js";
+import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
+
+// ─── Why SP REST is used for Image / Hyperlink columns ────────────────────────
+// Graph can create the response item and upload files, but it is unreliable for
+// updating SharePoint URL-backed fields such as Hyperlink/Picture/Image columns.
+//
+// SharePoint REST expects the field value object, not the primitive
+// "url, description" string:
+//
+//   { "Signature": { "__metadata": { "type": "SP.FieldUrlValue" },
+//                    "Url": "https://…/signature.png",
+//                    "Description": "Signature" } }
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
@@ -79,6 +103,8 @@ interface ApiUploadContext {
   listTitle: string;
   uploadLibraryByUse: Record<string, string | null>;
   uploadDataUri: ApiUploadDataUri;
+  uploadLibraryDeps: ApiUploadLibraryDeps;
+  uploadedFiles: ApiUploadedFile[];
 }
 
 interface ApiUploadCandidate {
@@ -96,11 +122,29 @@ interface ApiUrlFieldPatch {
   fieldName: string;
   url: string;
   description: string;
+  graphValue: string;
+}
+
+interface ApiUploadedFile {
+  libraryName: string;
+  driveItemId: string;
+  url: string;
 }
 
 interface ApiSubmissionBuildResult {
   fields: Record<string, unknown>;
   urlFieldPatches: ApiUrlFieldPatch[];
+  uploadedFiles: ApiUploadedFile[];
+}
+
+interface ApiCreateResponseItemResult {
+  id: string;
+  usedFallback: boolean;
+}
+
+interface ApiCreatedListItemRef {
+  listTitle: string;
+  itemId: string;
 }
 
 type ApiUploadDataUri = (
@@ -113,18 +157,39 @@ type ApiUploadDataUri = (
 
 interface ApiBuildSubmissionOptions {
   uploadDataUri?: ApiUploadDataUri;
+  uploadLibraryDeps?: ApiUploadLibraryDeps;
+}
+
+interface ApiUploadLibraryDeps {
+  listExistsGraph: typeof listExistsGraph;
+  ensureDocLibrary: typeof ensureGraphDocLibrary;
+}
+
+interface ApiCreateResponseItemDeps {
+  createListItem: typeof createListItem;
+  updateListItemFields: typeof updateListItemFields;
+  deleteListItem: typeof deleteListItem;
 }
 
 interface ApiUrlFieldPatchDeps {
+  getSharePointToken: typeof getSharePointToken;
   patchHyperlinkViaSPRest: typeof patchHyperlinkViaSPRest;
-  updateListItemViaSPRest: typeof updateListItemViaSPRest;
-  updateListItemFields: typeof updateListItemFields;
 }
 
-const DEFAULT_URL_FIELD_PATCH_DEPS: ApiUrlFieldPatchDeps = {
-  patchHyperlinkViaSPRest,
-  updateListItemViaSPRest,
+const DEFAULT_UPLOAD_LIBRARY_DEPS: ApiUploadLibraryDeps = {
+  listExistsGraph,
+  ensureDocLibrary: ensureGraphDocLibrary,
+};
+
+const DEFAULT_CREATE_RESPONSE_ITEM_DEPS: ApiCreateResponseItemDeps = {
+  createListItem,
   updateListItemFields,
+  deleteListItem,
+};
+
+const DEFAULT_URL_FIELD_PATCH_DEPS: ApiUrlFieldPatchDeps = {
+  getSharePointToken,
+  patchHyperlinkViaSPRest,
 };
 
 class PublicSubmissionError extends Error {
@@ -165,7 +230,7 @@ function parseJsonRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = parseJsonValue(value);
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? parsed as Record<string, unknown>
+    ? (parsed as Record<string, unknown>)
     : null;
 }
 
@@ -191,9 +256,7 @@ function sanitizeRawJsonValue(value: unknown): unknown {
 
 function buildRawJson(value: Record<string, unknown>): string {
   const json = JSON.stringify(sanitizeRawJsonValue(value));
-  return json.length > 250000
-    ? `${json.slice(0, 250000)}...[truncated]`
-    : json;
+  return json.length > 250000 ? `${json.slice(0, 250000)}...[truncated]` : json;
 }
 
 function stripFieldReference(value: string): string {
@@ -261,19 +324,8 @@ function isMatrixType(type: string): boolean {
 
 function isLayoutOrDisplayOnlyType(type: string): boolean {
   return [
-    "alert",
-    "chartdisplay",
-    "columns",
-    "countdown",
-    "datatable",
-    "divider",
-    "html",
-    "image",
-    "pagebreak",
-    "panel",
-    "repeater",
-    "spacer",
-    "videoembed",
+    "alert", "chartdisplay", "columns", "countdown", "datatable", "divider",
+    "html", "image", "pagebreak", "panel", "repeater", "spacer", "videoembed",
   ].includes(type);
 }
 
@@ -375,7 +427,7 @@ async function getPublishedSurveyJson(
   const parsed = parseJsonRecord(row?.SurveyJSON);
   const surveyJson = parsed?.surveyJson ?? parsed;
   return surveyJson && typeof surveyJson === "object" && !Array.isArray(surveyJson)
-    ? surveyJson as Record<string, unknown>
+    ? (surveyJson as Record<string, unknown>)
     : null;
 }
 
@@ -427,12 +479,26 @@ async function resolveExistingUploadLibrary(
   }
 
   const perFormLibrary = `${context.listTitle} Files`;
-  const candidates = use === "signature"
-    ? ["Signature Images", perFormLibrary, "Documents", "Shared Documents"]
-    : [perFormLibrary, "Documents", "Shared Documents"];
+  const deps = context.uploadLibraryDeps;
 
+  if (use === "signature") {
+    try {
+      const libraryName = await deps.ensureDocLibrary(context.token, "Signature Images");
+      if (libraryName) {
+        context.uploadLibraryByUse[use] = "Signature Images";
+        return "Signature Images";
+      }
+    } catch (ensureError) {
+      logWarn("api:submit-form", "System signature image library ensure failed; trying existing upload libraries", {
+        listTitle: context.listTitle,
+        errorMessage: ensureError instanceof Error ? ensureError.message.slice(0, 250) : String(ensureError).slice(0, 250),
+      });
+    }
+  }
+
+  const candidates = [perFormLibrary, "Documents", "Shared Documents"];
   for (const candidate of candidates) {
-    if (await listExistsGraph(context.token, candidate)) {
+    if (await deps.listExistsGraph(context.token, candidate)) {
       context.uploadLibraryByUse[use] = candidate;
       return candidate;
     }
@@ -465,8 +531,11 @@ async function uploadDataUri(
   const originalName = candidate.name ? candidate.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) : "";
   const fileName = originalName || `${safeList}_${safeField}_${Date.now()}_${index}.${parsed.ext}`;
   const binary = new Uint8Array(Buffer.from(parsed.base64, "base64"));
-  const url = await uploadFileToDrive(context.token, libraryName, fileName, binary);
-  return { url, fileName };
+  const uploaded = await uploadFileToDriveItem(context.token, libraryName, fileName, binary);
+  if (uploaded.id) {
+    context.uploadedFiles.push({ libraryName, driveItemId: uploaded.id, url: uploaded.webUrl });
+  }
+  return { url: uploaded.webUrl, fileName };
 }
 
 async function coerceFieldValue(
@@ -489,6 +558,8 @@ async function coerceFieldValue(
     return stringifyValue(valueToText(value) || value);
   }
 
+  // "url" kind (signaturepad) is handled separately in coerceUrlFieldPatch —
+  // return undefined here so it doesn't end up in the main fields payload.
   if (spec.kind === "url") {
     return undefined;
   }
@@ -512,6 +583,15 @@ async function coerceFieldValue(
   }
 }
 
+function errorMessage(error: unknown, maxLength = 250): string {
+  return error instanceof Error ? error.message.slice(0, maxLength) : String(error).slice(0, maxLength);
+}
+
+function graphUrlFieldValue(url: string, description: string): string {
+  const label = description.trim() || url;
+  return `${url}, ${label}`;
+}
+
 async function coerceUrlFieldPatch(
   context: ApiUploadContext,
   spec: ApiFieldSpec,
@@ -526,6 +606,7 @@ async function coerceUrlFieldPatch(
       fieldName: spec.name,
       url: uploaded.url,
       description: "Signature",
+      graphValue: graphUrlFieldValue(uploaded.url, "Signature"),
     };
   }
 
@@ -537,18 +618,19 @@ async function coerceUrlFieldPatch(
         fieldName: spec.name,
         url,
         description: valueToText(record.Description) || "Signature",
+        graphValue: graphUrlFieldValue(url, valueToText(record.Description) || "Signature"),
       };
     }
   }
 
   const url = valueToText(value);
-  return url
-    ? {
-        fieldName: spec.name,
-        url,
-        description: "Signature",
-      }
-    : null;
+  if (!url) return null;
+  return {
+    fieldName: spec.name,
+    url,
+    description: "Signature",
+    graphValue: graphUrlFieldValue(url, "Signature"),
+  };
 }
 
 function coerceMatrixCellValue(value: unknown, column: ApiMatrixColumn): unknown {
@@ -585,21 +667,29 @@ async function buildSubmissionFields(
     listTitle,
     uploadLibraryByUse: {},
     uploadDataUri: options.uploadDataUri ?? uploadDataUri,
+    uploadLibraryDeps: options.uploadLibraryDeps ?? DEFAULT_UPLOAD_LIBRARY_DEPS,
+    uploadedFiles: [],
   };
   const fields: Record<string, unknown> = {
     SubmittedAt: new Date().toISOString(),
     FormVersion: valueToText(formConfig.CurrentVersion) || "1.0",
     FormID: valueToText(formConfig.FormID),
     SubmittedBy: "GUEST",
-    RawJSON: buildRawJson(incomingBody),
   };
+  const rawJsonBody: Record<string, unknown> = { ...incomingBody };
   const urlFieldPatches: ApiUrlFieldPatch[] = [];
 
   for (const spec of schema.fields) {
     if (!(spec.name in incomingBody)) continue;
     if (spec.kind === "url") {
       const patch = await coerceUrlFieldPatch(context, spec, incomingBody[spec.name]);
-      if (patch) urlFieldPatches.push(patch);
+      if (patch) {
+        urlFieldPatches.push(patch);
+        // ── Image column fields are excluded from the Graph create payload ──
+        // They are written after item creation via SharePoint REST FieldUrlValue.
+        // graphValue is retained on the patch for RawJSON reference only.
+        rawJsonBody[spec.name] = patch.url;
+      }
       continue;
     }
     const coerced = await coerceFieldValue(context, spec, incomingBody[spec.name]);
@@ -608,15 +698,18 @@ async function buildSubmissionFields(
 
   for (const matrix of schema.matrices) {
     const rawMatrix = incomingBody[matrix.name];
-    const rawMatrixRecord = rawMatrix && typeof rawMatrix === "object" && !Array.isArray(rawMatrix)
-      ? rawMatrix as Record<string, unknown>
-      : null;
-    const html = valueToText(incomingBody[`${matrix.name}_Response`])
-      || valueToText(incomingBody[`${matrix.name}_Html`])
-      || valueToText(rawMatrixRecord?.html);
-    const json = valueToText(incomingBody[`${matrix.name}_Json`])
-      || valueToText(rawMatrixRecord?.json)
-      || (Array.isArray(rawMatrixRecord?.rows) ? JSON.stringify(rawMatrixRecord.rows) : "");
+    const rawMatrixRecord =
+      rawMatrix && typeof rawMatrix === "object" && !Array.isArray(rawMatrix)
+        ? (rawMatrix as Record<string, unknown>)
+        : null;
+    const html =
+      valueToText(incomingBody[`${matrix.name}_Response`]) ||
+      valueToText(incomingBody[`${matrix.name}_Html`]) ||
+      valueToText(rawMatrixRecord?.html);
+    const json =
+      valueToText(incomingBody[`${matrix.name}_Json`]) ||
+      valueToText(rawMatrixRecord?.json) ||
+      (Array.isArray(rawMatrixRecord?.rows) ? JSON.stringify(rawMatrixRecord.rows) : "");
     if (html) {
       fields[`${matrix.name}_Response`] = html;
       fields[`${matrix.name}_Html`] = html;
@@ -624,7 +717,9 @@ async function buildSubmissionFields(
     if (json) fields[`${matrix.name}_Json`] = json;
   }
 
-  return { fields, urlFieldPatches };
+  fields.RawJSON = buildRawJson(rawJsonBody);
+
+  return { fields, urlFieldPatches, uploadedFiles: context.uploadedFiles };
 }
 
 async function getColumnKeyResolver(
@@ -649,36 +744,54 @@ function mapToExistingColumns(
   for (const [fieldName, value] of Object.entries(fields)) {
     const columnKey = resolveColumnKey(fieldName);
     if (!columnKey) {
-      logWarn("api:submit-form", "Skipping field missing from response list schema", { listTitle, fieldName });
-      continue;
+      logWarn("api:submit-form", "Submitted field missing from response list schema", { listTitle, fieldName });
+      throw new PublicSubmissionError(
+        `The public form field "${fieldName}" is not provisioned. Please republish the form before trying again.`,
+        409,
+      );
     }
     mapped[columnKey] = value;
   }
   return mapped;
 }
 
+function omitUrlPatchFields(
+  fields: Record<string, unknown>,
+  patches: ApiUrlFieldPatch[],
+): Record<string, unknown> {
+  if (patches.length === 0) return fields;
+  const urlFieldNames = new Set(patches.map((patch) => patch.fieldName.toLowerCase()));
+  return Object.fromEntries(
+    Object.entries(fields).filter(([fieldName]) => !urlFieldNames.has(fieldName.toLowerCase())),
+  );
+}
+
 function isGraphItemCreatePayloadFailure(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const message = error.message;
-  return (message.includes("/items 400") && message.includes("invalidRequest"))
-    || (message.includes("/items 500") && message.includes("generalException"));
+  return (
+    (message.includes("/items 400") && message.includes("invalidRequest")) ||
+    (message.includes("/items 500") && message.includes("generalException"))
+  );
 }
 
 function isCoreSubmissionField(fieldName: string): boolean {
-  return fieldName === "SubmittedAt"
-    || fieldName === "SubmittedBy"
-    || fieldName === "FormVersion"
-    || fieldName === "FormID"
-    || fieldName === "RawJSON"
-    || fieldName === "PDPAConsent"
-    || fieldName === "PDPANoticeVersion"
-    || fieldName === "PDPAConsentAt"
-    || fieldName === "RetentionUntil"
-    || fieldName === "Status"
-    || fieldName === "FormStatus"
-    || fieldName === "CurrentLayer"
-    || fieldName === "CurrentApprovalLayer"
-    || /^L\d+_(Status|Email)$/.test(fieldName);
+  return (
+    fieldName === "SubmittedAt" ||
+    fieldName === "SubmittedBy" ||
+    fieldName === "FormVersion" ||
+    fieldName === "FormID" ||
+    fieldName === "RawJSON" ||
+    fieldName === "PDPAConsent" ||
+    fieldName === "PDPANoticeVersion" ||
+    fieldName === "PDPAConsentAt" ||
+    fieldName === "RetentionUntil" ||
+    fieldName === "Status" ||
+    fieldName === "FormStatus" ||
+    fieldName === "CurrentLayer" ||
+    fieldName === "CurrentApprovalLayer" ||
+    /^L\d+_(Status|Email)$/.test(fieldName)
+  );
 }
 
 function graphFieldValueFallback(value: unknown): unknown {
@@ -695,30 +808,32 @@ async function patchFieldWithFallback(
   itemId: string,
   fieldName: string,
   value: unknown,
-): Promise<boolean> {
+  deps: Pick<ApiCreateResponseItemDeps, "updateListItemFields"> = DEFAULT_CREATE_RESPONSE_ITEM_DEPS,
+): Promise<void> {
   try {
-    await updateListItemFields(token, listTitle, itemId, { [fieldName]: value });
-    return true;
+    await deps.updateListItemFields(token, listTitle, itemId, { [fieldName]: value });
+    return;
   } catch (firstError) {
     const fallback = graphFieldValueFallback(value);
     if (Object.is(fallback, value)) {
-      logWarn("api:submit-form", "Skipped field after Graph patch failure", {
+      logWarn("api:submit-form", "Required field Graph patch failed", {
         listTitle,
         fieldName,
         errorMessage: firstError instanceof Error ? firstError.message.slice(0, 250) : String(firstError).slice(0, 250),
       });
-      return false;
+      throw new PublicSubmissionError(`Could not save submitted field "${fieldName}". Please try again.`, 500);
     }
     try {
-      await updateListItemFields(token, listTitle, itemId, { [fieldName]: fallback });
-      return true;
+      await deps.updateListItemFields(token, listTitle, itemId, { [fieldName]: fallback });
+      return;
     } catch (fallbackError) {
-      logWarn("api:submit-form", "Skipped field after Graph patch fallback failure", {
+      logWarn("api:submit-form", "Required field Graph patch fallback failed", {
         listTitle,
         fieldName,
-        errorMessage: fallbackError instanceof Error ? fallbackError.message.slice(0, 250) : String(fallbackError).slice(0, 250),
+        errorMessage:
+          fallbackError instanceof Error ? fallbackError.message.slice(0, 250) : String(fallbackError).slice(0, 250),
       });
-      return false;
+      throw new PublicSubmissionError(`Could not save submitted field "${fieldName}". Please try again.`, 500);
     }
   }
 }
@@ -727,9 +842,11 @@ async function createResponseItem(
   token: string,
   listTitle: string,
   fields: Record<string, unknown>,
-): Promise<{ id: string }> {
+  deps: ApiCreateResponseItemDeps = DEFAULT_CREATE_RESPONSE_ITEM_DEPS,
+): Promise<ApiCreateResponseItemResult> {
   try {
-    return await createListItem(token, listTitle, fields);
+    const result = await deps.createListItem(token, listTitle, fields);
+    return { ...result, usedFallback: false };
   } catch (error) {
     if (!isGraphItemCreatePayloadFailure(error)) throw error;
 
@@ -744,89 +861,40 @@ async function createResponseItem(
       optionalFieldCount: optionalFields.length,
     });
 
-    const result = await createListItem(token, listTitle, coreFields);
+    const result = await deps.createListItem(token, listTitle, coreFields);
     let patched = 0;
-    let skipped = 0;
-    for (const [fieldName, value] of optionalFields) {
-      if (await patchFieldWithFallback(token, listTitle, result.id, fieldName, value)) {
+    try {
+      for (const [fieldName, value] of optionalFields) {
+        await patchFieldWithFallback(token, listTitle, result.id, fieldName, value, deps);
         patched++;
-      } else {
-        skipped++;
       }
+    } catch (patchError) {
+      try {
+        await deps.deleteListItem(token, listTitle, result.id);
+      } catch (deleteError) {
+        logWarn("api:submit-form", "Failed to delete partial response after field patch failure", {
+          listTitle,
+          itemId: result.id,
+          patched,
+          errorMessage: errorMessage(deleteError),
+        });
+      }
+      throw patchError;
     }
-    if (skipped > 0) {
-      logWarn("api:submit-form", "Created response with skipped optional fields", { listTitle, itemId: result.id, patched, skipped });
-    }
-    return result;
-  }
-}
-
-async function patchUrlFieldWithFallback(
-  graphToken: string,
-  sharePointToken: string | null,
-  listTitle: string,
-  itemId: string,
-  fieldName: string,
-  url: string,
-  description: string,
-  deps: ApiUrlFieldPatchDeps = DEFAULT_URL_FIELD_PATCH_DEPS,
-): Promise<void> {
-  if (sharePointToken) {
-    try {
-      await deps.patchHyperlinkViaSPRest(sharePointToken, listTitle, itemId, fieldName, url, description);
-      return;
-    } catch (firstError) {
-      logWarn("api:submit-form", "SP REST FieldUrlValue update failed", {
-        listTitle,
-        fieldName,
-        errorMessage: firstError instanceof Error ? firstError.message.slice(0, 250) : String(firstError).slice(0, 250),
-      });
-    }
-
-    try {
-      await deps.updateListItemViaSPRest(sharePointToken, listTitle, itemId, { [fieldName]: url });
-      return;
-    } catch (fallbackError) {
-      logWarn("api:submit-form", "SP REST text URL update failed", {
-        listTitle,
-        fieldName,
-        errorMessage: fallbackError instanceof Error ? fallbackError.message.slice(0, 250) : String(fallbackError).slice(0, 250),
-      });
-    }
-  }
-
-  try {
-    await deps.updateListItemFields(graphToken, listTitle, itemId, { [fieldName]: url });
-  } catch (graphError) {
-    logWarn("api:submit-form", "Graph URL field update failed", {
-      listTitle,
-      fieldName,
-      errorMessage: graphError instanceof Error ? graphError.message.slice(0, 250) : String(graphError).slice(0, 250),
-    });
-    throw new PublicSubmissionError("Could not save signature image. Please try again.", 500);
+    return { ...result, usedFallback: true };
   }
 }
 
 async function applyUrlFieldPatches(
-  graphToken: string,
   listTitle: string,
   itemId: string,
   patches: ApiUrlFieldPatch[],
   resolveColumnKey: (fieldName: string) => string | null,
+  deps: ApiUrlFieldPatchDeps = DEFAULT_URL_FIELD_PATCH_DEPS,
 ): Promise<void> {
   if (patches.length === 0) return;
 
-  let sharePointToken: string | null = null;
-  try {
-    sharePointToken = await getSharePointToken();
-  } catch (tokenError) {
-    logWarn("api:submit-form", "SharePoint REST token unavailable; using Graph URL field patch fallback", {
-      listTitle,
-      errorMessage: tokenError instanceof Error ? tokenError.message.slice(0, 250) : String(tokenError).slice(0, 250),
-    });
-  }
-
-  for (const patch of patches) {
+  const resolvedPatches = patches.map((patch) => {
     const columnKey = resolveColumnKey(patch.fieldName);
     if (!columnKey) {
       logWarn("api:submit-form", "Signature field missing from response list schema", {
@@ -834,20 +902,82 @@ async function applyUrlFieldPatches(
         fieldName: patch.fieldName,
       });
       throw new PublicSubmissionError(
-        "The public form signature field is not provisioned. Please republish the form before trying again.",
+        `The public form signature field "${patch.fieldName}" is not provisioned. Please republish the form before trying again.`,
         409,
       );
     }
-    await patchUrlFieldWithFallback(
-      graphToken,
-      sharePointToken,
+    return { patch, columnKey };
+  });
+
+  let sharePointToken: string;
+  try {
+    sharePointToken = await deps.getSharePointToken();
+  } catch (tokenError) {
+    logWarn("api:submit-form", "SharePoint REST token unavailable for URL field patch", {
       listTitle,
-      itemId,
-      columnKey,
-      patch.url,
-      patch.description,
-    );
+      errorMessage: errorMessage(tokenError),
+    });
+    throw new PublicSubmissionError("Could not authenticate to save signature image. Please try again.", 500);
   }
+
+  for (const { patch, columnKey } of resolvedPatches) {
+    try {
+      await deps.patchHyperlinkViaSPRest(sharePointToken, listTitle, itemId, columnKey, patch.url, patch.description);
+    } catch (patchError) {
+      logWarn("api:submit-form", "SharePoint REST FieldUrlValue update failed", {
+        listTitle,
+        fieldName: patch.fieldName,
+        errorMessage: errorMessage(patchError),
+      });
+      throw new PublicSubmissionError(`Could not save uploaded image link to "${patch.fieldName}". Please try again.`, 500);
+    }
+  }
+}
+
+async function cleanupUploadedFiles(token: string, uploadedFiles: ApiUploadedFile[]): Promise<void> {
+  for (const uploaded of uploadedFiles) {
+    try {
+      await deleteDocLibraryFile(token, uploaded.libraryName, uploaded.driveItemId);
+    } catch (deleteError) {
+      logWarn("api:submit-form", "Failed to delete uploaded file after public submission failure", {
+        libraryName: uploaded.libraryName,
+        driveItemId: uploaded.driveItemId,
+        errorMessage: errorMessage(deleteError),
+      });
+    }
+  }
+}
+
+async function cleanupPartialSubmission(
+  token: string,
+  listTitle: string,
+  parentId: string,
+  uploadedFiles: ApiUploadedFile[],
+  childItemRefs: ApiCreatedListItemRef[],
+): Promise<void> {
+  for (const child of [...childItemRefs].reverse()) {
+    try {
+      await deleteListItem(token, child.listTitle, child.itemId);
+    } catch (deleteError) {
+      logWarn("api:submit-form", "Failed to delete matrix child item after public submission failure", {
+        listTitle: child.listTitle,
+        itemId: child.itemId,
+        errorMessage: errorMessage(deleteError),
+      });
+    }
+  }
+
+  try {
+    await deleteListItem(token, listTitle, parentId);
+  } catch (deleteError) {
+    logWarn("api:submit-form", "Failed to delete partial response after public submission failure", {
+      listTitle,
+      itemId: parentId,
+      errorMessage: errorMessage(deleteError),
+    });
+  }
+
+  await cleanupUploadedFiles(token, uploadedFiles);
 }
 
 async function resolveLayerAssignee(
@@ -860,9 +990,10 @@ async function resolveLayerAssignee(
     return resolveDepartmentApproverFromList(token, layer.assignee, formBody, label);
   }
 
-  const rawEmail = layer.assignee.type === "user"
-    ? layer.assignee.value
-    : valueToText(formBody[stripFieldReference(layer.assignee.value)]);
+  const rawEmail =
+    layer.assignee.type === "user"
+      ? layer.assignee.value
+      : valueToText(formBody[stripFieldReference(layer.assignee.value)]);
   const email = rawEmail.trim();
   if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
     throw new Error(`${label} needs a valid assignee email before the workflow can start.`);
@@ -918,7 +1049,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { listTitle, body: formBody, matrixData, pdpaConsent, pdpaNoticeVersion, pdpaConsentedAt, retentionUntil } = req.body as {
+  const {
+    listTitle,
+    body: formBody,
+    matrixData,
+    pdpaConsent,
+    pdpaNoticeVersion,
+    pdpaConsentedAt,
+    retentionUntil,
+  } = req.body as {
     listTitle?: string;
     body?: Record<string, unknown>;
     matrixData?: Record<string, { rows: Record<string, unknown>[]; columns: ApiMatrixColumn[] }>;
@@ -927,6 +1066,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     pdpaConsentedAt?: string;
     retentionUntil?: string;
   };
+
   if (!listTitle || typeof listTitle !== "string") {
     return res.status(400).json({ error: "Missing or invalid listTitle" });
   }
@@ -937,10 +1077,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(400).json({ error: "PDPA consent is required before submitting this form." });
   }
 
+  let tokenForCleanup = "";
+  let uploadedFilesForCleanup: ApiUploadedFile[] = [];
+  let cleanupHandled = false;
+
   try {
     const token = await getGraphToken();
+    tokenForCleanup = token;
 
-    // Verify the form exists and is public
     const masterItems = await queryListItems(token, "Master Form", { top: 500 });
     const formConfig = masterItems.find((i) => i.fields.Title === listTitle)?.fields;
 
@@ -959,90 +1103,117 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const schema = collectSubmissionSchema(surveyJson);
     const submission = await buildSubmissionFields(token, listTitle, formBody, formConfig, schema);
+    uploadedFilesForCleanup = submission.uploadedFiles;
     const submissionBody = submission.fields;
-    const consentedAt = typeof pdpaConsentedAt === "string" && !Number.isNaN(Date.parse(pdpaConsentedAt))
-      ? pdpaConsentedAt
-      : new Date().toISOString();
-    const retentionDate = typeof retentionUntil === "string" && !Number.isNaN(Date.parse(retentionUntil))
-      ? retentionUntil
-      : getRetentionUntil(new Date(consentedAt));
+
+    const consentedAt =
+      typeof pdpaConsentedAt === "string" && !Number.isNaN(Date.parse(pdpaConsentedAt))
+        ? pdpaConsentedAt
+        : new Date().toISOString();
+    const retentionDate =
+      typeof retentionUntil === "string" && !Number.isNaN(Date.parse(retentionUntil))
+        ? retentionUntil
+        : getRetentionUntil(new Date(consentedAt));
+
     submissionBody.PDPAConsent = "Accepted";
     submissionBody.PDPANoticeVersion = pdpaNoticeVersion || PDPA_NOTICE_VERSION;
     submissionBody.PDPAConsentAt = consentedAt;
     submissionBody.RetentionUntil = retentionDate;
 
     await applyLayerConfigWorkflow(token, submissionBody, parseLayerConfig(formConfig.LayerConfig));
-    const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
-    const writableBody = mapToExistingColumns(submissionBody, resolveColumnKey, listTitle);
 
-    // Submit to SharePoint list via Graph
+    const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
+
+    // Image column fields (urlFieldPatches) are excluded from the Graph create
+    // payload — they have never been writable via Graph PATCH on Image columns.
+    const createBody = omitUrlPatchFields(submissionBody, submission.urlFieldPatches);
+    const writableBody = mapToExistingColumns(createBody, resolveColumnKey, listTitle);
+
     const result = await createResponseItem(token, listTitle, writableBody);
     const parentId = result.id;
-    await applyUrlFieldPatches(token, listTitle, parentId, submission.urlFieldPatches, resolveColumnKey);
 
-    // Create child list items for matrix fields
-    const childItemIds: Record<string, number[]> = {};
-    if (matrixData && parentId) {
-      const matrixSpecs = new Map(schema.matrices.map((matrix) => [matrix.name, matrix]));
-      for (const [fieldName, data] of Object.entries(matrixData)) {
-        const matrixSpec = matrixSpecs.get(fieldName);
-        if (!matrixSpec) {
-          logWarn("api:submit-form", "Skipping matrix data not present in published schema", { listTitle, fieldName });
-          continue;
-        }
-        const childListDisplayName = `${listTitle} Matrix ${fieldName.replace(/[^a-zA-Z0-9_ -]/g, '').trim()}`;
-        const rows = data.rows;
-        const columns = matrixSpec.columns;
-        if (!Array.isArray(rows) || rows.length === 0) continue;
+    let childItemIds: Record<string, number[]> = {};
+    const childItemRefs: ApiCreatedListItemRef[] = [];
+    try {
+      // ── Write Image/Hyperlink columns via SharePoint REST AFTER item creation ──
+      await applyUrlFieldPatches(listTitle, parentId, submission.urlFieldPatches, resolveColumnKey);
 
-        const childIds: number[] = [];
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          const fields: Record<string, unknown> = {
-            ParentResponseId: Number(parentId),
-            RowIndex: i,
-          };
-          for (const col of columns) {
-            if (col.name && row[col.name] !== undefined) {
-              const value = coerceMatrixCellValue(row[col.name], col);
-              if (value !== undefined) fields[col.name] = value;
+      if (matrixData && parentId) {
+        const matrixSpecs = new Map(schema.matrices.map((matrix) => [matrix.name, matrix]));
+        for (const [fieldName, data] of Object.entries(matrixData)) {
+          const matrixSpec = matrixSpecs.get(fieldName);
+          if (!matrixSpec) {
+            logWarn("api:submit-form", "Matrix data missing from published schema", { listTitle, fieldName });
+            throw new PublicSubmissionError(
+              `The public form matrix field "${fieldName}" is not provisioned. Please republish the form before trying again.`,
+              409,
+            );
+          }
+          const childListDisplayName = `${listTitle} Matrix ${fieldName.replace(/[^a-zA-Z0-9_ -]/g, "").trim()}`;
+          const rows = data.rows;
+          const columns = matrixSpec.columns;
+          if (!Array.isArray(rows) || rows.length === 0) continue;
+
+          const childIds: number[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const fields: Record<string, unknown> = {
+              ParentResponseId: Number(parentId),
+              RowIndex: i,
+            };
+            for (const col of columns) {
+              if (col.name && row[col.name] !== undefined) {
+                const value = coerceMatrixCellValue(row[col.name], col);
+                if (value !== undefined) fields[col.name] = value;
+              }
+            }
+            try {
+              const item = await createListItem(token, childListDisplayName, fields);
+              if (item.id) {
+                childIds.push(Number(item.id));
+                childItemRefs.push({ listTitle: childListDisplayName, itemId: item.id });
+              }
+            } catch (e) {
+              logWarn("api:submit-form", "Matrix child item write failed", {
+                fieldName,
+                rowIndex: i,
+                errorMessage: e instanceof Error ? e.message : String(e),
+              });
+              throw new PublicSubmissionError(`Could not save matrix field "${fieldName}". Please try again.`, 500);
             }
           }
-          try {
-            const item = await createListItem(token, childListDisplayName, fields);
-            if (item.id) childIds.push(Number(item.id));
-          } catch (e) {
-            logWarn("api:submit-form", "Matrix child item write failed", {
-              fieldName,
-              rowIndex: i,
-              errorMessage: e instanceof Error ? e.message : String(e),
-            });
+          if (childIds.length > 0) {
+            childItemIds[fieldName] = childIds;
           }
         }
-        if (childIds.length > 0) {
-          childItemIds[fieldName] = childIds;
-        }
-      }
 
-      // If matrix child items were created, PATCH the parent item with RowIds
-      if (Object.keys(childItemIds).length > 0) {
-        const updateFields: Record<string, string> = {};
-        for (const [fieldName, ids] of Object.entries(childItemIds)) {
-          updateFields[`${fieldName}_RowIds`] = JSON.stringify(ids);
-        }
-        try {
-          await updateListItemFields(token, listTitle, parentId, updateFields);
-        } catch (e) {
-          logWarn("api:submit-form", "Failed to update parent with matrix row ids", {
-            parentId,
-            errorMessage: e instanceof Error ? e.message : String(e),
-          });
+        if (Object.keys(childItemIds).length > 0) {
+          const updateFields: Record<string, string> = {};
+          for (const [fieldName, ids] of Object.entries(childItemIds)) {
+            updateFields[`${fieldName}_RowIds`] = JSON.stringify(ids);
+          }
+          try {
+            await updateListItemFields(token, listTitle, parentId, updateFields);
+          } catch (e) {
+            logWarn("api:submit-form", "Failed to update parent with matrix row ids", {
+              parentId,
+              errorMessage: e instanceof Error ? e.message : String(e),
+            });
+            throw new PublicSubmissionError("Could not save matrix row references. Please try again.", 500);
+          }
         }
       }
+    } catch (postCreateError) {
+      cleanupHandled = true;
+      await cleanupPartialSubmission(token, listTitle, parentId, submission.uploadedFiles, childItemRefs);
+      throw postCreateError;
     }
 
     return res.status(200).json({ success: true, id: parentId, childItemIds });
   } catch (err) {
+    if (!cleanupHandled && tokenForCleanup && uploadedFilesForCleanup.length > 0) {
+      await cleanupUploadedFiles(tokenForCleanup, uploadedFilesForCleanup);
+    }
     if (err instanceof PublicSubmissionError) {
       logWarn("api:submit-form", err.message, { listTitle });
       return res.status(err.statusCode).json({ error: err.message });
@@ -1053,7 +1224,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 }
 
 export const __test__ = {
+  applyUrlFieldPatches,
   buildSubmissionFields,
   collectSubmissionSchema,
-  patchUrlFieldWithFallback,
+  createResponseItem,
+  graphUrlFieldValue,
+  omitUrlPatchFields,
+  resolveExistingUploadLibrary,
 };

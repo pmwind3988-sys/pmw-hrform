@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Box, Chip, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from "@mui/material";
 import {
   AdminPanelSettingsOutlined as AdminIcon,
+  DeleteForeverOutlined as DeleteForeverIcon,
   PersonOutlined as PersonIcon,
   SpaceDashboardOutlined as DashboardIcon,
+  WarningAmberOutlined as WarningIcon,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useDashboard } from "../contexts/DashboardContext";
@@ -18,7 +20,7 @@ import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { fetchCareersPortalData } from "../utils/careersService";
-import type { CareerPortalCard } from "../types";
+import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial } from "../theme/editorial";
 
 function DashboardCareerCarousel() {
@@ -94,13 +96,47 @@ export default function AdminHomePage() {
     onSwitchAccount,
     onOpenBuilder,
     onEditForm,
+    onHardDeleteSubmission,
   } = useDashboard();
+  const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<"idle" | "deleting">("idle");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteResult, setDeleteResult] = useState<HardDeleteSubmissionResult | null>(null);
   const workspaceLabel = isAdmin ? "Admin workspace" : "Employee workspace";
+  const canHardDeleteSubmission = isAdmin || canUseFormBuilder;
   const dashboardSubtitle = isAdmin
     ? canUseFormBuilder
       ? "Manage HR forms, review submissions, monitor approval workflows, and maintain form configurations."
       : "Review submissions, monitor approval workflows, and manage HR portal operations."
     : "Submit HR forms, track approval status, and access your submission history.";
+
+  const openDeleteDialog = (item: Submission) => {
+    setDeleteTarget(item);
+    setDeleteError("");
+    setDeleteResult(null);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleteStatus === "deleting") return;
+    setDeleteTarget(null);
+    setDeleteError("");
+  };
+
+  const confirmHardDelete = async () => {
+    if (!deleteTarget) return;
+
+    setDeleteStatus("deleting");
+    setDeleteError("");
+    try {
+      const result = await onHardDeleteSubmission(deleteTarget);
+      setDeleteResult(result);
+      setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Failed to delete submission.");
+    } finally {
+      setDeleteStatus("idle");
+    }
+  };
 
   return (
     <Box
@@ -297,6 +333,31 @@ export default function AdminHomePage() {
           />
         </Box>
 
+        {deleteResult && (
+          <Alert
+            severity={deleteResult.warnings.length > 0 ? "warning" : "success"}
+            icon={<DeleteForeverIcon />}
+            onClose={() => setDeleteResult(null)}
+            sx={{
+              mb: 2,
+              borderRadius: "8px",
+              border: `1px solid ${deleteResult.warnings.length > 0 ? "rgba(177, 92, 0, 0.22)" : "rgba(16, 124, 16, 0.22)"}`,
+              "& .MuiAlert-message": {
+                width: "100%",
+              },
+            }}
+          >
+            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+              Submission deleted. Removed {deleteResult.deletedFiles} managed file{deleteResult.deletedFiles === 1 ? "" : "s"} and {deleteResult.deletedMatrixRows} matrix row{deleteResult.deletedMatrixRows === 1 ? "" : "s"}.
+            </Typography>
+            {deleteResult.warnings.length > 0 && (
+              <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: editorial.muted }}>
+                Cleanup warnings: {deleteResult.warnings.slice(0, 2).join(" ")}
+              </Typography>
+            )}
+          </Alert>
+        )}
+
         {sortedSubmissions.length > 0 ? (
           <>
             <ListHeader isAdmin={isAdmin} />
@@ -306,7 +367,10 @@ export default function AdminHomePage() {
                   key={`${item.listTitle}-${item.id}`}
                   item={item}
                   onView={setDetailItem}
+                  onDelete={openDeleteDialog}
                   isAdmin={isAdmin}
+                  canDelete={canHardDeleteSubmission}
+                  isDeleting={deleteStatus === "deleting" && deleteTarget?.listTitle === item.listTitle && deleteTarget.id === item.id}
                   listMetaMap={listMetaMap}
                 />
               ))}
@@ -318,6 +382,82 @@ export default function AdminHomePage() {
       </Box>
 
       <DetailModal item={detailItem} isAdmin={isAdmin} onClose={() => setDetailItem(null)} />
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={closeDeleteDialog}
+        fullWidth
+        maxWidth="sm"
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: "8px",
+              border: `1px solid rgba(198, 40, 40, 0.18)`,
+              boxShadow: "0 18px 48px rgba(16, 16, 16, 0.18)",
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: "flex", gap: 1.5, alignItems: "center", pb: 1 }}>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(198, 40, 40, 0.08)",
+              color: editorial.error,
+              flexShrink: 0,
+            }}
+          >
+            <WarningIcon sx={{ fontSize: 22 }} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, textWrap: "balance" }}>
+              Permanently delete submission?
+            </Typography>
+            <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700 }}>
+              {deleteTarget?.listTitle} · Reference {deleteTarget?.submissionId}
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Alert severity="error" sx={{ borderRadius: "8px", mb: 2 }}>
+            This removes the SharePoint item, generated PDFs, signature images, uploaded files stored in app-managed libraries, and matrix child rows. This action cannot be undone.
+          </Alert>
+          {deleteError && (
+            <Alert severity="error" sx={{ borderRadius: "8px" }}>
+              {deleteError}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+          <Button onClick={closeDeleteDialog} disabled={deleteStatus === "deleting"} sx={{ borderRadius: "8px", minHeight: 40 }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={deleteStatus === "deleting" ? <CircularProgress size={16} color="inherit" /> : <DeleteForeverIcon />}
+            onClick={confirmHardDelete}
+            disabled={deleteStatus === "deleting"}
+            sx={{
+              borderRadius: "8px",
+              minHeight: 40,
+              fontWeight: 800,
+              textTransform: "none",
+              transition: "background-color 0.18s ease, transform 0.18s ease",
+              "&:active": {
+                transform: "scale(0.96)",
+              },
+            }}
+          >
+            Delete permanently
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

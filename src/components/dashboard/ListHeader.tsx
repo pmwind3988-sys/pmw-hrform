@@ -16,7 +16,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
       sx={{
         display: "grid",
         gridTemplateColumns: isAdmin
-          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px"
+          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 88px"
           : "minmax(260px, 2.2fr) minmax(180px, 1.25fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px",
         gap: 2,
         px: 3,
@@ -90,7 +90,23 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
       >
         Status
       </Typography>
-      <Box />
+      {isAdmin ? (
+        <Typography
+          variant="caption"
+          sx={{
+            textTransform: "uppercase",
+            letterSpacing: 0,
+            color: editorial.muted,
+            fontWeight: 600,
+            fontSize: "0.7rem",
+            textAlign: "right",
+          }}
+        >
+          Actions
+        </Typography>
+      ) : (
+        <Box />
+      )}
     </Box>
   );
 }

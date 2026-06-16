@@ -37,6 +37,13 @@ export interface Submission {
   layerConfig?: LayerConfig | null;
 }
 
+export interface HardDeleteSubmissionResult {
+  deletedItem: boolean;
+  deletedFiles: number;
+  deletedMatrixRows: number;
+  warnings: string[];
+}
+
 export interface ApprovalLayer {
   status: string;
   outcome: string | undefined;
@@ -227,6 +234,7 @@ export interface SharePointClient {
   addColumn(listTitle: string, internalName: string, fieldTypeKind: number, isMultiLine?: boolean): Promise<void>;
   upsertListItem(listTitle: string, filterExpr: string, body: Record<string, unknown>): Promise<{ updated: boolean; id: string }>;
   deleteListItemsWhere(listTitle: string, filterExpr: string): Promise<number>;
+  hardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult>;
   getSiteUsers(): Promise<{ email: string; name: string }[]>;
 }
 

@@ -34,6 +34,26 @@ async function getSpDigest(token: string): Promise<string> {
   return data.FormDigestValue;
 }
 
+async function getOptionalSpDigest(token: string): Promise<string | null> {
+  try {
+    return await getSpDigest(token);
+  } catch {
+    return null;
+  }
+}
+
+function mergeHeaders(token: string, digest: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json;odata=nometadata",
+    "Content-Type": "application/json;odata=verbose",
+    "X-HTTP-Method": "MERGE",
+    "IF-MATCH": "*",
+  };
+  if (digest) headers["X-RequestDigest"] = digest;
+  return headers;
+}
+
 async function spGet<T>(token: string, path: string, label: string): Promise<T> {
   const res = await fetch(`${requireSpSiteUrl()}${path}`, {
     headers: {
@@ -64,18 +84,11 @@ export async function patchHyperlinkViaSPRest(
   url: string,
   description = "",
 ): Promise<void> {
-  const digest = await getSpDigest(token);
+  const digest = await getOptionalSpDigest(token);
   const entityType = await getListEntityType(token, listName);
   const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/items(${numericItemId})`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json;odata=nometadata",
-      "Content-Type": "application/json;odata=verbose",
-      "X-HTTP-Method": "MERGE",
-      "IF-MATCH": "*",
-      "X-RequestDigest": digest,
-    },
+    headers: mergeHeaders(token, digest),
     body: JSON.stringify({
       __metadata: { type: entityType },
       [fieldName]: {
@@ -97,18 +110,11 @@ export async function updateListItemViaSPRest(
   itemId: string,
   fields: Record<string, unknown>,
 ): Promise<void> {
-  const digest = await getSpDigest(token);
+  const digest = await getOptionalSpDigest(token);
   const entityType = await getListEntityType(token, listName);
   const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/items(${itemId})`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json;odata=nometadata",
-      "Content-Type": "application/json;odata=verbose",
-      "X-HTTP-Method": "MERGE",
-      "IF-MATCH": "*",
-      "X-RequestDigest": digest,
-    },
+    headers: mergeHeaders(token, digest),
     body: JSON.stringify({ __metadata: { type: entityType }, ...fields }),
   });
   if (!res.ok) {

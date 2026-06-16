@@ -1,7 +1,9 @@
 ﻿import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
 import type {
   DiscoveredList,
+  HardDeleteSubmissionResult,
   SharePointClient,
+  Submission,
 } from "../types";
 import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
 
@@ -26,6 +28,128 @@ export function isSharePointForbiddenError(error: unknown): boolean {
 
 function createSharePointHttpError(action: string, response: Response): SharePointHttpError {
   return new SharePointHttpError(action, response);
+}
+
+function escapeODataString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function getStringRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function collectUrlCandidates(value: unknown, target: Set<string>): void {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    if (/^(https?:\/\/|\/)/i.test(trimmed)) {
+      target.add(trimmed);
+      return;
+    }
+
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        collectUrlCandidates(JSON.parse(trimmed) as unknown, target);
+      } catch {
+        /* Plain text field, not a JSON encoded upload value. */
+      }
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectUrlCandidates(item, target);
+    return;
+  }
+
+  const record = getStringRecord(value);
+  if (!record) return;
+
+  for (const key of ["Url", "url", "ServerRelativeUrl", "serverRelativeUrl", "webUrl"]) {
+    collectUrlCandidates(record[key], target);
+  }
+  for (const nextValue of Object.values(record)) {
+    collectUrlCandidates(nextValue, target);
+  }
+}
+
+function getMatrixFieldNames(submissionData: Record<string, unknown>): string[] {
+  const names = new Set<string>();
+  for (const key of Object.keys(submissionData)) {
+    const match = key.match(/^(.+)_(?:Response|Html|Json|RowIds)$/);
+    if (match?.[1]) names.add(match[1]);
+  }
+  return [...names];
+}
+
+function safeMatrixFieldName(fieldName: string): string {
+  return fieldName.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
+}
+
+function normalizeServerRelativeUrl(value: string, siteUrl: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const site = new URL(siteUrl);
+      const url = new URL(trimmed);
+      if (url.origin.toLowerCase() !== site.origin.toLowerCase()) return null;
+      return decodeURIComponent(url.pathname);
+    }
+
+    if (trimmed.startsWith("/")) {
+      return decodeURIComponent(trimmed.split("?")[0]);
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function isManagedSubmissionFile(serverRelativeUrl: string, listTitle: string): boolean {
+  const normalized = serverRelativeUrl.replace(/\\/g, "/").toLowerCase();
+  const managedLibraries = [
+    "form pdfs",
+    "signature images",
+    `${listTitle} files`.toLowerCase(),
+  ];
+
+  return managedLibraries.some((library) => normalized.includes(`/${library}/`));
+}
+
+function collectManagedFileUrls(item: Submission, siteUrl: string): string[] {
+  const candidates = new Set<string>();
+  collectUrlCandidates(item.submissionData, candidates);
+
+  for (const layer of item.layers) {
+    collectUrlCandidates(layer?.signature, candidates);
+  }
+
+  for (const layer of item.enhancedLayers ?? []) {
+    collectUrlCandidates(getStringRecord(layer)?.signature, candidates);
+  }
+
+  const urls = new Set<string>();
+  for (const candidate of candidates) {
+    const serverRelativeUrl = normalizeServerRelativeUrl(candidate, siteUrl);
+    if (serverRelativeUrl && isManagedSubmissionFile(serverRelativeUrl, item.listTitle)) {
+      urls.add(serverRelativeUrl);
+    }
+  }
+  return [...urls];
+}
+
+function getErrorSummary(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function encodeServerRelativePathParam(serverRelativeUrl: string): string {
+  return encodeURIComponent(escapeODataString(serverRelativeUrl)).replace(/%2F/gi, "/");
 }
 
 function getAccountClaims(account: AccountInfo | undefined): Record<string, unknown> {
@@ -620,6 +744,102 @@ export function createSpClient(
     return deleted;
   }
 
+  async function deleteListItemById(
+    listTitle: string,
+    itemId: string
+  ): Promise<void> {
+    const token = await acquireToken();
+    const digest = await getDigest(token);
+    const response = await fetchWithTimeout(
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(escapeODataString(listTitle))}')/items(${encodeURIComponent(itemId)})`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "X-RequestDigest": digest,
+          "X-HTTP-Method": "DELETE",
+          "If-Match": "*",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete submission item: ${response.status}`);
+    }
+  }
+
+  async function deleteFileByServerRelativeUrl(
+    token: string,
+    serverRelativeUrl: string
+  ): Promise<boolean> {
+    const digest = await getDigest(token);
+    const encodedPath = encodeServerRelativePathParam(serverRelativeUrl);
+    const response = await fetchWithTimeout(
+      `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodedPath}')`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json;odata=nometadata",
+          Authorization: `Bearer ${token}`,
+          "X-RequestDigest": digest,
+          "X-HTTP-Method": "DELETE",
+          "If-Match": "*",
+        },
+      }
+    );
+
+    if (response.ok) return true;
+    if (response.status === 404) return false;
+    throw new Error(`Failed to delete file ${serverRelativeUrl}: ${response.status}`);
+  }
+
+  async function hardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
+    const itemId = Number(item.id);
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+      throw new Error("Submission item id is missing or invalid.");
+    }
+
+    const token = await acquireToken();
+    const warnings: string[] = [];
+    let deletedMatrixRows = 0;
+    let deletedFiles = 0;
+
+    for (const fieldName of getMatrixFieldNames(item.submissionData)) {
+      const matrixFieldName = safeMatrixFieldName(fieldName);
+      if (!matrixFieldName) continue;
+
+      const childListName = `${item.listTitle} Matrix ${matrixFieldName}`;
+      try {
+        deletedMatrixRows += await deleteListItemsWhere(childListName, `ParentResponseId eq ${itemId}`);
+      } catch (error) {
+        warnings.push(`Matrix rows in "${childListName}" were not fully deleted: ${getErrorSummary(error)}`);
+      }
+    }
+
+    for (const fileUrl of collectManagedFileUrls(item, SP_SITE_URL)) {
+      try {
+        const deleted = await deleteFileByServerRelativeUrl(token, fileUrl);
+        if (deleted) {
+          deletedFiles += 1;
+        } else {
+          warnings.push(`File was already missing: ${fileUrl}`);
+        }
+      } catch (error) {
+        warnings.push(getErrorSummary(error));
+      }
+    }
+
+    await deleteListItemById(item.listTitle, item.id);
+
+    return {
+      deletedItem: true,
+      deletedFiles,
+      deletedMatrixRows,
+      warnings,
+    };
+  }
+
   async function getSiteUsers(): Promise<{ email: string; name: string }[]> {
     const token = await acquireToken();
 
@@ -664,6 +884,7 @@ export function createSpClient(
     addColumn,
     upsertListItem,
     deleteListItemsWhere,
+    hardDeleteSubmission,
     getSiteUsers,
   };
 }

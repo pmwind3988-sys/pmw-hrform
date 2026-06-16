@@ -31,3 +31,7 @@ _Avoid_: Company banner, duplicate Company field
 **Public Respondent**:
 A person who submits a public form without signing in to Microsoft 365.
 _Avoid_: Treating a Public Respondent as a tenant user or resolving tenant identity for them
+
+**Public Submission Signature Link**:
+The response-list value that points from a Public Respondent's signature field to the stored signature image. The signature is incomplete unless this link is saved on the submitted response.
+_Avoid_: Treating an uploaded signature image by itself as a saved response signature

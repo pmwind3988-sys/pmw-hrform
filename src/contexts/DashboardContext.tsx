@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { Submission, DiscoveredList, ListMetaEntry } from "../types";
+import type { Submission, DiscoveredList, ListMetaEntry, HardDeleteSubmissionResult } from "../types";
 
 export interface DashboardContextValue {
   userEmail: string;
@@ -27,6 +27,7 @@ export interface DashboardContextValue {
   onSwitchAccount: () => void;
   onOpenBuilder: () => void;
   onEditForm: (listTitle: string) => void;
+  onHardDeleteSubmission: (item: Submission) => Promise<HardDeleteSubmissionResult>;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);

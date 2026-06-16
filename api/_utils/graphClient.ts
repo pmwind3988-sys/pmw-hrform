@@ -1,3 +1,6 @@
+import { createHash, createSign, randomUUID, X509Certificate } from "node:crypto";
+import forge from "node-forge";
+
 // Microsoft Graph client for serverless API (Sites.Selected compatible)
 // Uses client credentials flow with Graph API scope
 
@@ -5,6 +8,8 @@ const TENANT_ID = process.env.VITE_AZURE_TENANT_ID || process.env.AZURE_TENANT_I
 const CLIENT_ID = process.env.SYSTEM_CLIENT_ID || process.env.VITE_AZURE_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.SYSTEM_CLIENT_SECRET || process.env.VITE_AZURE_CLIENT_SECRET || "";
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
+const SHAREPOINT_CERT_PFX_BASE64 = process.env.SHAREPOINT_CERT_PFX_BASE64 || "";
+const SHAREPOINT_CERT_PASSWORD = process.env.SHAREPOINT_CERT_PASSWORD || "";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
@@ -29,11 +34,10 @@ function parseSiteUrl(url: string): { hostname: string; path: string } {
 
 // --- Token ---
 
-function getClientCredentialConfig(target: string): { tenantId: string; clientId: string; clientSecret: string } {
+function getClientConfig(target: string): { tenantId: string; clientId: string } {
   const missing: string[] = [];
   if (!TENANT_ID) missing.push("VITE_AZURE_TENANT_ID (or AZURE_TENANT_ID)");
   if (!CLIENT_ID) missing.push("SYSTEM_CLIENT_ID (or VITE_AZURE_CLIENT_ID)");
-  if (!CLIENT_SECRET) missing.push("SYSTEM_CLIENT_SECRET (or VITE_AZURE_CLIENT_SECRET)");
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables for ${target}: ${missing.join(", ")}. ` +
@@ -41,11 +45,23 @@ function getClientCredentialConfig(target: string): { tenantId: string; clientId
     );
   }
 
-  return { tenantId: TENANT_ID, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET };
+  return { tenantId: TENANT_ID, clientId: CLIENT_ID };
+}
+
+function getClientSecretConfig(target: string): { tenantId: string; clientId: string; clientSecret: string } {
+  const { tenantId, clientId } = getClientConfig(target);
+  if (!CLIENT_SECRET) {
+    throw new Error(
+      `Missing required environment variables for ${target}: SYSTEM_CLIENT_SECRET (or VITE_AZURE_CLIENT_SECRET). ` +
+      `If you recently updated .env.local, restart the dev server (vercel dev) to pick up changes.`
+    );
+  }
+
+  return { tenantId, clientId, clientSecret: CLIENT_SECRET };
 }
 
 async function acquireClientCredentialsToken(scope: string, target: string): Promise<CachedAccessToken> {
-  const { tenantId, clientId, clientSecret } = getClientCredentialConfig(target);
+  const { tenantId, clientId, clientSecret } = getClientSecretConfig(target);
   const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
     client_id: clientId,
@@ -73,6 +89,129 @@ async function acquireClientCredentialsToken(scope: string, target: string): Pro
   };
 }
 
+function base64UrlEncode(value: Buffer | string): string {
+  return Buffer.from(value).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+interface SharePointCertificateMaterial {
+  privateKeyPem: string;
+  certificatePem: string;
+}
+
+function getBagsByType(p12: forge.pkcs12.Pkcs12Pfx, bagType: string): forge.pkcs12.Bag[] {
+  return p12.getBags({ bagType })[bagType] ?? [];
+}
+
+function extractCertificateMaterialFromPfx(target: string): SharePointCertificateMaterial {
+  if (!SHAREPOINT_CERT_PFX_BASE64 || !SHAREPOINT_CERT_PASSWORD) {
+    const missing = [];
+    if (!SHAREPOINT_CERT_PFX_BASE64) missing.push("SHAREPOINT_CERT_PFX_BASE64");
+    if (!SHAREPOINT_CERT_PASSWORD) missing.push("SHAREPOINT_CERT_PASSWORD");
+    throw new Error(
+      `Missing required certificate environment variables for ${target}: ${missing.join(", ")}. ` +
+      `If you recently updated Vercel env vars or .env.local, restart vercel dev or redeploy.`
+    );
+  }
+
+  try {
+    const der = forge.util.decode64(SHAREPOINT_CERT_PFX_BASE64.trim());
+    const asn1 = forge.asn1.fromDer(der);
+    const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, false, SHAREPOINT_CERT_PASSWORD);
+    const keyBags = [
+      ...getBagsByType(p12, forge.pki.oids.pkcs8ShroudedKeyBag),
+      ...getBagsByType(p12, forge.pki.oids.keyBag),
+    ];
+    const certBags = getBagsByType(p12, forge.pki.oids.certBag);
+    const privateKey = keyBags.find((bag) => bag.key)?.key;
+    const certificate = certBags.find((bag) => bag.cert)?.cert;
+
+    if (!privateKey || !certificate) {
+      throw new Error("PFX did not contain both a private key and certificate.");
+    }
+
+    return {
+      privateKeyPem: forge.pki.privateKeyToPem(privateKey),
+      certificatePem: forge.pki.certificateToPem(certificate),
+    };
+  } catch (error) {
+    throw new Error(
+      `${target} certificate PFX could not be read. Check SHAREPOINT_CERT_PFX_BASE64 and SHAREPOINT_CERT_PASSWORD. ` +
+      `${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+function getSharePointCertificateConfig(target: string): {
+  tenantId: string;
+  clientId: string;
+  privateKeyPem: string;
+  certificatePem: string;
+} {
+  const { tenantId, clientId } = getClientConfig(target);
+  const { privateKeyPem, certificatePem } = extractCertificateMaterialFromPfx(target);
+
+  return { tenantId, clientId, privateKeyPem, certificatePem };
+}
+
+function createClientCertificateAssertion(
+  tokenUrl: string,
+  clientId: string,
+  privateKeyPem: string,
+  certificatePem: string,
+): string {
+  const certificate = new X509Certificate(certificatePem);
+  const thumbprint = base64UrlEncode(createHash("sha1").update(certificate.raw).digest());
+  const now = Math.floor(Date.now() / 1000);
+  const header = {
+    alg: "RS256",
+    typ: "JWT",
+    x5t: thumbprint,
+  };
+  const payload = {
+    aud: tokenUrl,
+    exp: now + 600,
+    iss: clientId,
+    jti: randomUUID(),
+    nbf: now,
+    sub: clientId,
+  };
+  const signingInput = `${base64UrlEncode(JSON.stringify(header))}.${base64UrlEncode(JSON.stringify(payload))}`;
+  const signer = createSign("RSA-SHA256");
+  signer.update(signingInput);
+  signer.end();
+  return `${signingInput}.${base64UrlEncode(signer.sign(privateKeyPem))}`;
+}
+
+async function acquireCertificateClientCredentialsToken(scope: string, target: string): Promise<CachedAccessToken> {
+  const { tenantId, clientId, privateKeyPem, certificatePem } = getSharePointCertificateConfig(target);
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+    client_assertion: createClientCertificateAssertion(tokenUrl, clientId, privateKeyPem, certificatePem),
+    scope,
+    grant_type: "client_credentials",
+  });
+
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`${target} certificate token acquisition failed: ${res.status} ${errText}`);
+  }
+
+  const data = (await res.json()) as { access_token: string; expires_in?: number };
+  const expiresInMs = (Number(data.expires_in) || 3600) * 1000;
+  return {
+    value: data.access_token,
+    expiresAt: Date.now() + expiresInMs,
+  };
+}
+
 export async function getGraphToken(): Promise<string> {
   if (cachedGraphToken && cachedGraphToken.expiresAt - TOKEN_EXPIRY_BUFFER_MS > Date.now()) {
     return cachedGraphToken.value;
@@ -89,7 +228,7 @@ export async function getSharePointToken(): Promise<string> {
   if (!SP_SITE_URL) throw new Error("SP_SITE_URL env var not set.");
 
   const origin = new URL(SP_SITE_URL).origin;
-  cachedSharePointToken = await acquireClientCredentialsToken(`${origin}/.default`, "SharePoint REST API");
+  cachedSharePointToken = await acquireCertificateClientCredentialsToken(`${origin}/.default`, "SharePoint REST API");
   return cachedSharePointToken.value;
 }
 
@@ -587,16 +726,21 @@ export async function ensureListSchema(
   await ensureListColumns(token, displayName, columns);
 }
 
+export interface UploadedDriveItem {
+  id: string;
+  webUrl: string;
+}
+
 /**
  * Uploads binary content to a SharePoint document library via Graph API drive endpoint.
- * Returns the web URL of the uploaded file.
+ * Returns the Drive item id and web URL of the uploaded file.
  */
-export async function uploadFileToDrive(
+export async function uploadFileToDriveItem(
   token: string,
   listDisplayName: string,
   fileName: string,
   content: Uint8Array,
-): Promise<string> {
+): Promise<UploadedDriveItem> {
   const siteId = await getSiteId(token);
   const listId = await getListId(token, listDisplayName);
   const encodedName = encodeURIComponent(fileName);
@@ -618,8 +762,25 @@ export async function uploadFileToDrive(
     throw new Error(`Graph PUT file ${res.status}: ${text}`);
   }
 
-  const data = (await res.json()) as { webUrl?: string; "@microsoft.graph.downloadUrl"?: string };
-  return data.webUrl || data["@microsoft.graph.downloadUrl"] || "";
+  const data = (await res.json()) as { id?: string; webUrl?: string; "@microsoft.graph.downloadUrl"?: string };
+  return {
+    id: data.id || "",
+    webUrl: data.webUrl || data["@microsoft.graph.downloadUrl"] || "",
+  };
+}
+
+/**
+ * Uploads binary content to a SharePoint document library via Graph API drive endpoint.
+ * Returns the web URL of the uploaded file.
+ */
+export async function uploadFileToDrive(
+  token: string,
+  listDisplayName: string,
+  fileName: string,
+  content: Uint8Array,
+): Promise<string> {
+  const uploaded = await uploadFileToDriveItem(token, listDisplayName, fileName, content);
+  return uploaded.webUrl;
 }
 
 /**

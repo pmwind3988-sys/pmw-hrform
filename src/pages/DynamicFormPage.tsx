@@ -11,7 +11,7 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
@@ -102,6 +102,43 @@ function submittedValueToString(value: unknown): string {
     }
   }
   return "";
+}
+
+interface UploadCandidate {
+  content: string;
+  name?: string;
+}
+
+interface UrlFieldPatch {
+  fieldName: string;
+  url: string;
+  description: string;
+}
+
+function uploadCandidateFromValue(value: unknown): UploadCandidate | null {
+  if (typeof value === "string" && value.trim().startsWith("data:")) {
+    return { content: value.trim() };
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const content = record.content ?? record.data ?? record.fileContent;
+    if (typeof content === "string" && content.trim().startsWith("data:")) {
+      return {
+        content: content.trim(),
+        name: submittedValueToString(record.name) || submittedValueToString(record.fileName) || undefined,
+      };
+    }
+  }
+  return null;
+}
+
+function uploadFileName(fieldName: string, candidate: UploadCandidate, index?: number): string {
+  const originalName = candidate.name?.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+  if (originalName) return originalName;
+  const mimeMatch = candidate.content.match(/^data:([\w/+-]+);/);
+  const ext = (mimeMatch ? mimeMatch[1].split('/').pop() || 'bin' : 'bin').replace(/[^a-zA-Z0-9]/g, '') || 'bin';
+  const suffix = index === undefined ? "" : `_${index}`;
+  return `${fieldName}_${Date.now()}${suffix}.${ext}`;
 }
 
 function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string, unknown>): string {
@@ -784,9 +821,11 @@ export default function DynamicFormPage() {
       const formId = String(cfg.FormID || "");
 
       // Step 1: Upload file/image/signature fields to document libraries
+      const urlFieldPatches: UrlFieldPatch[] = [];
       if (token) {
-        // Detect file/image field names from survey JSON
+        // Detect file/image/signature field names from survey JSON
         const fileFieldNames = new Set<string>();
+        const signatureFieldNames = new Set<string>();
         const surveyData = formData?.surveyJson;
         if (surveyData) {
           const pages = (surveyData as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
@@ -795,6 +834,9 @@ export default function DynamicFormPage() {
               for (const el of els) {
                 if ((el.type === 'file' || el.type === 'imageupload') && el.name) {
                   fileFieldNames.add(el.name as string);
+                }
+                if (el.type === 'signaturepad' && el.name) {
+                  signatureFieldNames.add(el.name as string);
                 }
                 if (el.elements) walk(el.elements as Record<string, unknown>[]);
               }
@@ -807,44 +849,41 @@ export default function DynamicFormPage() {
 
         for (const [k, v] of Object.entries(raw)) {
           // Handle base64 data values: signatures → Signature Images, file fields → per-form doc lib
-          if (typeof v === "string" && v.startsWith("data:")) {
+          const candidate = uploadCandidateFromValue(v);
+          if (candidate) {
             try {
-              const isSignature = v.startsWith("data:image/") && !fileFieldNames.has(k);
+              const isSignature = signatureFieldNames.has(k) || (candidate.content.startsWith("data:image/") && !fileFieldNames.has(k));
               if (isSignature) {
-                const imageUrl = await uploadSignatureImage(token, formId, "submission", v);
-                raw[k] = { Url: imageUrl, Description: "Signature" };
+                const imageUrl = toAbsoluteSharePointUrl(await uploadSignatureImage(token, formId, "submission", candidate.content));
+                raw[k] = imageUrl;
+                urlFieldPatches.push({ fieldName: k, url: imageUrl, description: "Signature" });
               } else {
                 if (!docLibName) {
                   docLibName = await ensureDocLibrary(token, cfg.Title as string);
                 }
-                const mimeMatch = v.match(/^data:([\w/+-]+);/);
-                const ext = mimeMatch ? mimeMatch[1].split('/').pop() || 'bin' : 'bin';
-                const safeExt = ext.replace(/[^a-zA-Z0-9]/g, '');
-                const fileName = `${k}_${Date.now()}.${safeExt}`;
-                const fileUrl = await uploadFileToDocLib(token, docLibName, fileName, v);
-                raw[k] = { Url: fileUrl, Description: fileName };
+                const fileName = uploadFileName(k, candidate);
+                const fileUrl = toAbsoluteSharePointUrl(await uploadFileToDocLib(token, docLibName, fileName, candidate.content));
+                raw[k] = fileUrl;
               }
             } catch (e) {
-              console.warn("[DFP] file upload failed for", k, (e as Error).message);
+              throw new Error(`Could not upload "${k}": ${e instanceof Error ? e.message : String(e)}`);
             }
           }
           // Handle multi-file arrays (SurveyJS file question with allowMultiple)
           if (Array.isArray(v)) {
-            const urls: { Url: string; Description: string }[] = [];
+            const urls: string[] = [];
             for (const item of v) {
-              if (typeof item === "string" && item.startsWith("data:")) {
+              const itemCandidate = uploadCandidateFromValue(item);
+              if (itemCandidate) {
                 try {
                   if (!docLibName) {
                     docLibName = await ensureDocLibrary(token, cfg.Title as string);
                   }
-                  const mimeMatch = item.match(/^data:([\w/+-]+);/);
-                  const ext = mimeMatch ? mimeMatch[1].split('/').pop() || 'bin' : 'bin';
-                  const safeExt = ext.replace(/[^a-zA-Z0-9]/g, '');
-                  const fileName = `${k}_${Date.now()}_${urls.length}.${safeExt}`;
-                  const fileUrl = await uploadFileToDocLib(token, docLibName, fileName, item);
-                  urls.push({ Url: fileUrl, Description: fileName });
+                  const fileName = uploadFileName(k, itemCandidate, urls.length);
+                  const fileUrl = toAbsoluteSharePointUrl(await uploadFileToDocLib(token, docLibName, fileName, itemCandidate.content));
+                  urls.push(fileUrl);
                 } catch (e) {
-                  console.warn("[DFP] multi-file upload failed for", k, (e as Error).message);
+                  throw new Error(`Could not upload "${k}": ${e instanceof Error ? e.message : String(e)}`);
                 }
               }
             }
@@ -897,7 +936,9 @@ export default function DynamicFormPage() {
 
       // Step 3: Build body (keep existing logic)
       const body: Record<string, unknown> = {};
+      const urlFieldPatchNames = new Set(urlFieldPatches.map((patch) => patch.fieldName));
       for (const [k, v] of Object.entries(raw)) {
+        if (urlFieldPatchNames.has(k)) continue;
         if (v && typeof v === "object" && (v as Record<string, unknown>).html && (v as Record<string, unknown>).json) {
           body[`${k}_Response`] = (v as Record<string, unknown>).html;
           body[`${k}_Json`] = typeof (v as Record<string, unknown>).json === "string" ? (v as Record<string, unknown>).json : JSON.stringify((v as Record<string, unknown>).json);
@@ -984,6 +1025,22 @@ export default function DynamicFormPage() {
             result = await spPost(token, listUrl, body) as { Id?: number };
           } else {
             throw submitErr;
+          }
+        }
+
+        if (result?.Id && urlFieldPatches.length > 0) {
+          for (const patch of urlFieldPatches) {
+            try {
+              await spPatchUrlField(token, cfg.Title as string, result.Id, patch.fieldName, patch.url, patch.description);
+            } catch (urlPatchErr) {
+              try {
+                await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`, {
+                  [patch.fieldName]: patch.url,
+                });
+              } catch {
+                throw new Error(`Could not save uploaded image link for "${patch.fieldName}": ${urlPatchErr instanceof Error ? urlPatchErr.message : String(urlPatchErr)}`);
+              }
+            }
           }
         }
 

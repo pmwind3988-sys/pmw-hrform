@@ -6,6 +6,50 @@ const SIGNATURE_DATA_URI = 'data:image/png;base64,aGVsbG8=';
 const SIGNATURE_URL = 'https://pmwgroupcom.sharepoint.com/sites/PMWHRDocs/Signature%20Images/signature.png';
 
 describe('public form signature submission', () => {
+  it('ensures signature image storage with the system app before uploading public signatures', async () => {
+    const deps = {
+      listExistsGraph: vi.fn(async () => false),
+      ensureDocLibrary: vi.fn(async () => 'Signature Images'),
+    };
+    const context = {
+      token: 'system-token',
+      listTitle: 'Leave Application',
+      uploadLibraryByUse: {} as Record<string, string | null>,
+      uploadDataUri: vi.fn(async () => ({ url: SIGNATURE_URL, fileName: 'signature.png' })),
+      uploadLibraryDeps: deps,
+      uploadedFiles: [],
+    };
+
+    await expect(__test__.resolveExistingUploadLibrary(context, 'signature')).resolves.toBe('Signature Images');
+
+    expect(deps.ensureDocLibrary).toHaveBeenCalledWith('system-token', 'Signature Images');
+    expect(deps.listExistsGraph).not.toHaveBeenCalled();
+    expect(context.uploadLibraryByUse.signature).toBe('Signature Images');
+  });
+
+  it('falls back to the per-form public upload library if the global signature library cannot be ensured', async () => {
+    const deps = {
+      listExistsGraph: vi.fn(async (_token: string, displayName: string) => displayName === 'Leave Application Files'),
+      ensureDocLibrary: vi.fn(async () => {
+        throw new Error('library creation denied');
+      }),
+    };
+    const context = {
+      token: 'system-token',
+      listTitle: 'Leave Application',
+      uploadLibraryByUse: {} as Record<string, string | null>,
+      uploadDataUri: vi.fn(async () => ({ url: SIGNATURE_URL, fileName: 'signature.png' })),
+      uploadLibraryDeps: deps,
+      uploadedFiles: [],
+    };
+
+    await expect(__test__.resolveExistingUploadLibrary(context, 'signature')).resolves.toBe('Leave Application Files');
+
+    expect(deps.ensureDocLibrary).toHaveBeenCalledWith('system-token', 'Signature Images');
+    expect(deps.listExistsGraph).toHaveBeenCalledWith('system-token', 'Leave Application Files');
+    expect(context.uploadLibraryByUse.signature).toBe('Leave Application Files');
+  });
+
   it('uploads signaturepad data and defers the SharePoint URL field write', async () => {
     const schema = __test__.collectSubmissionSchema({
       pages: [
@@ -39,12 +83,16 @@ describe('public form signature submission', () => {
 
     expect(result.fields.EmployeeName).toBe('Avery');
     expect(result.fields.EmployeeSignature).toBeUndefined();
-    expect(result.fields.RawJSON).toContain('[uploaded file omitted]');
+    expect(JSON.parse(String(result.fields.RawJSON))).toMatchObject({
+      EmployeeName: 'Avery',
+      EmployeeSignature: SIGNATURE_URL,
+    });
     expect(result.urlFieldPatches).toEqual([
       {
         fieldName: 'EmployeeSignature',
         url: SIGNATURE_URL,
         description: 'Signature',
+        graphValue: `${SIGNATURE_URL}, Signature`,
       },
     ]);
     expect(uploadDataUri).toHaveBeenCalledTimes(1);
@@ -52,79 +100,103 @@ describe('public form signature submission', () => {
     expect(uploadCalls[0]?.[4]).toBe('signature');
   });
 
-  it('falls back to Graph field patch when SharePoint REST URL patching fails', async () => {
+  it('patches signature URL fields through SharePoint REST FieldUrlValue', async () => {
     const deps = {
-      patchHyperlinkViaSPRest: vi.fn(async () => {
-        throw new Error('SP REST hyperlink rejected');
-      }),
-      updateListItemViaSPRest: vi.fn(async () => {
-        throw new Error('SP REST text rejected');
-      }),
-      updateListItemFields: vi.fn(async () => undefined),
+      getSharePointToken: vi.fn(async () => 'sharepoint-token'),
+      patchHyperlinkViaSPRest: vi.fn(async () => undefined),
     };
 
     await expect(
-      __test__.patchUrlFieldWithFallback(
-        'graph-token',
-        'sharepoint-token',
-        'Leave Application',
+      __test__.applyUrlFieldPatches(
+        'Training Requisition Form',
         '42',
-        'EmployeeSignature',
-        SIGNATURE_URL,
-        'Signature',
+        [{
+          fieldName: 'applicantSignature',
+          url: SIGNATURE_URL,
+          description: 'Signature',
+          graphValue: `${SIGNATURE_URL}, Signature`,
+        }],
+        (fieldName) => fieldName === 'applicantSignature' ? 'Applicant_x0020_Signature' : null,
         deps,
       ),
     ).resolves.toBeUndefined();
 
+    expect(deps.getSharePointToken).toHaveBeenCalledTimes(1);
     expect(deps.patchHyperlinkViaSPRest).toHaveBeenCalledWith(
       'sharepoint-token',
-      'Leave Application',
+      'Training Requisition Form',
       '42',
-      'EmployeeSignature',
+      'Applicant_x0020_Signature',
       SIGNATURE_URL,
       'Signature',
     );
-    expect(deps.updateListItemViaSPRest).toHaveBeenCalledWith(
-      'sharepoint-token',
-      'Leave Application',
-      '42',
-      { EmployeeSignature: SIGNATURE_URL },
-    );
-    expect(deps.updateListItemFields).toHaveBeenCalledWith(
-      'graph-token',
-      'Leave Application',
-      '42',
-      { EmployeeSignature: SIGNATURE_URL },
-    );
   });
 
-  it('uses Graph field patch when no SharePoint REST token is available', async () => {
+  it('fails submission when SharePoint REST rejects the actual signature field patch', async () => {
     const deps = {
-      patchHyperlinkViaSPRest: vi.fn(async () => undefined),
-      updateListItemViaSPRest: vi.fn(async () => undefined),
-      updateListItemFields: vi.fn(async () => undefined),
+      getSharePointToken: vi.fn(async () => 'sharepoint-token'),
+      patchHyperlinkViaSPRest: vi.fn(async () => {
+        throw new Error('SP REST FieldUrlValue rejected');
+      }),
     };
 
     await expect(
-      __test__.patchUrlFieldWithFallback(
-        'graph-token',
-        null,
-        'Leave Application',
+      __test__.applyUrlFieldPatches(
+        'Training Requisition Form',
         '42',
-        'EmployeeSignature',
-        SIGNATURE_URL,
-        'Signature',
+        [{
+          fieldName: 'applicantSignature',
+          url: SIGNATURE_URL,
+          description: 'Signature',
+          graphValue: `${SIGNATURE_URL}, Signature`,
+        }],
+        () => 'applicantSignature',
         deps,
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('Could not save uploaded image link to "applicantSignature"');
+  });
 
-    expect(deps.patchHyperlinkViaSPRest).not.toHaveBeenCalled();
-    expect(deps.updateListItemViaSPRest).not.toHaveBeenCalled();
-    expect(deps.updateListItemFields).toHaveBeenCalledWith(
-      'graph-token',
-      'Leave Application',
-      '42',
-      { EmployeeSignature: SIGNATURE_URL },
-    );
+  it('deletes the core-created response when any submitted field patch fails', async () => {
+    const deps = {
+      createListItem: vi.fn()
+        .mockRejectedValueOnce(new Error('Graph POST /items 400: {"error":{"code":"invalidRequest"}}'))
+        .mockResolvedValueOnce({ id: '29' }),
+      updateListItemFields: vi.fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('Graph PATCH fields 400: invalidRequest')),
+      deleteListItem: vi.fn(async () => undefined),
+    };
+
+    await expect(
+      __test__.createResponseItem(
+        'graph-token',
+        'Training Requisition Form',
+        {
+          SubmittedAt: '2026-06-16T07:25:00.000Z',
+          SubmittedBy: 'GUEST',
+          applicantName: 'Avery',
+          applicantSignature: `${SIGNATURE_URL}, Signature`,
+        },
+        deps,
+      ),
+    ).rejects.toThrow('Could not save submitted field "applicantSignature"');
+
+    expect(deps.deleteListItem).toHaveBeenCalledWith('graph-token', 'Training Requisition Form', '29');
+  });
+
+  it('fails submission when the published response list has no matching signature column', async () => {
+    await expect(
+      __test__.applyUrlFieldPatches(
+        'Training Requisition Form',
+        '42',
+        [{
+          fieldName: 'applicantSignature',
+          url: SIGNATURE_URL,
+          description: 'Signature',
+          graphValue: `${SIGNATURE_URL}, Signature`,
+        }],
+        () => null,
+      ),
+    ).rejects.toThrow('The public form signature field "applicantSignature" is not provisioned');
   });
 });

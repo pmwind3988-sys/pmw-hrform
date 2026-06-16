@@ -19,7 +19,7 @@ import {
 } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
-import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry } from "./types";
+import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
 
 // Auth screens
@@ -952,6 +952,29 @@ export default function App() {
 
   const hasFilters = !!(search || listFilter || statusFilter !== "all" || submitterFilter);
 
+  async function handleHardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
+    if (!isAdmin && !canUseFormBuilder) {
+      throw new Error("Only HR Forms Owners or form builder superusers can delete submissions.");
+    }
+
+    const account = activeAccount ?? accounts[0] ?? null;
+    if (!account) {
+      throw new Error("No signed-in account is available for SharePoint deletion.");
+    }
+
+    const spClient = createSpClient(instance, [account]);
+    const result = await spClient.hardDeleteSubmission(item);
+
+    setSubmissions((current) =>
+      current.filter((submission) => !(submission.listTitle === item.listTitle && submission.id === item.id))
+    );
+    setDetailItem((current) =>
+      current?.listTitle === item.listTitle && current.id === item.id ? null : current
+    );
+
+    return result;
+  }
+
   // ---- Render ----
 
   if (!isPublicRoute && pageState === "wrong_tenant") {
@@ -1060,6 +1083,7 @@ export default function App() {
         onSwitchAccount={handleSwitchAccount}
         onOpenBuilder={() => navigate("/admin/builder")}
         onEditForm={(listTitle: string) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
+        onHardDeleteSubmission={handleHardDeleteSubmission}
       >
         <LazyRoute load={loadAdminHomePage} fallback={<LoadingScreen status="Loading dashboard..." />} />
       </DashboardProvider>
