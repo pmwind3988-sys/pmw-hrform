@@ -19,8 +19,9 @@ import {
 } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
-import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult } from "./types";
+import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
+import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -85,6 +86,156 @@ const AUTH_LOAD_STEP_TEXT: Record<AuthLoadStep, Pick<LoadingStep, "label" | "des
     description: "Starting one fresh sign-in attempt after the timeout.",
   },
 };
+
+const DETAIL_PASSTHROUGH_FIELDS = new Set([
+  "Created",
+  "Modified",
+  "PDPAConsent",
+  "PDPANoticeVersion",
+  "PDPAConsentAt",
+  "RetentionUntil",
+]);
+
+const SUBMITTER_NAME_FIELD_KEYS = new Set([
+  "applicant",
+  "applicantname",
+  "employee",
+  "employeename",
+  "fullname",
+  "name",
+  "personname",
+  "requester",
+  "requestername",
+  "requestor",
+  "requestorname",
+  "staff",
+  "staffname",
+  "submittedbyname",
+  "submittedname",
+  "submittername",
+]);
+
+const SUBMITTER_IDENTITY_FIELD_KEYS = new Set([
+  "submittedby",
+  "submittedbyemail",
+  "submitter",
+  "submitteremail",
+]);
+
+function normalizeFieldKey(key: string): string {
+  return key
+    .replace(/_x[0-9a-f]{4}_/gi, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+}
+
+function findDisplayTextByKey(raw: Record<string, unknown>, keys: Set<string>): string {
+  for (const [key, value] of Object.entries(raw)) {
+    if (!keys.has(normalizeFieldKey(key))) continue;
+    const text = coerceFieldDisplayText(value);
+    if (!isPlaceholderDisplayValue(text)) return text;
+  }
+  return "";
+}
+
+function cleanIdentityText(value: string): string {
+  const trimmed = value.trim();
+  const lastPipeSegment = trimmed.includes("|") ? trimmed.split("|").pop() ?? trimmed : trimmed;
+  return lastPipeSegment.replace(/^mailto:/i, "").trim();
+}
+
+function isEmailLike(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanIdentityText(value));
+}
+
+function resolveSubmittedByEmail(raw: Record<string, unknown>): string {
+  const candidates = [
+    raw.submittedByEmail,
+    raw.SubmittedBy,
+    raw.Submitted_x0020_By,
+  ];
+
+  for (const candidate of candidates) {
+    const text = cleanIdentityText(coerceFieldDisplayText(candidate));
+    if (!isPlaceholderDisplayValue(text) && isEmailLike(text)) return text;
+  }
+
+  return "";
+}
+
+function resolveCreatedByEmail(raw: Record<string, unknown>): string {
+  const author = raw.Author as Record<string, unknown> | undefined;
+  const email = cleanIdentityText(coerceFieldDisplayText(raw._authorEmail ?? author?.EMail ?? author?.Email));
+  return !isPlaceholderDisplayValue(email) && isEmailLike(email) ? email : "";
+}
+
+function resolveSubmitterName(raw: Record<string, unknown>): string {
+  const directName = findDisplayTextByKey(raw, SUBMITTER_NAME_FIELD_KEYS);
+  if (!isPlaceholderDisplayValue(directName)) return cleanIdentityText(directName);
+
+  const identityName = findDisplayTextByKey(raw, SUBMITTER_IDENTITY_FIELD_KEYS);
+  if (!isPlaceholderDisplayValue(identityName) && !isEmailLike(identityName)) {
+    return cleanIdentityText(identityName);
+  }
+
+  return "";
+}
+
+function resolveCreatedByName(raw: Record<string, unknown>): string {
+  const author = raw.Author as Record<string, unknown> | undefined;
+  const authorName = coerceFieldDisplayText(author?.Title ?? author?.Name ?? author?.DisplayName);
+  if (!isPlaceholderDisplayValue(authorName)) return cleanIdentityText(authorName);
+
+  const authorEmail = cleanIdentityText(coerceFieldDisplayText(raw._authorEmail ?? author?.EMail ?? author?.Email));
+  if (!isPlaceholderDisplayValue(authorEmail)) return authorEmail;
+
+  return "";
+}
+
+function resolveSubmissionTitle(rawTitle: unknown, submitterName: string, submittedByEmail: string, createdByName: string, createdByEmail: string): string {
+  const title = coerceFieldDisplayText(rawTitle);
+  if (!isPlaceholderDisplayValue(title)) return title;
+
+  if (!isPlaceholderDisplayValue(submitterName)) return submitterName;
+  if (!isPlaceholderDisplayValue(submittedByEmail)) return submittedByEmail;
+  if (!isPlaceholderDisplayValue(createdByName)) return createdByName;
+  if (!isPlaceholderDisplayValue(createdByEmail)) return createdByEmail;
+  return "Untitled";
+}
+
+function resolveSelectedBranch(raw: Record<string, unknown>): string {
+  return (
+    coerceFieldDisplayText(raw.SelectedBranch) ||
+    coerceFieldDisplayText(raw.Selected_x0020_Branch) ||
+    coerceFieldDisplayText(raw.selectedBranch)
+  );
+}
+
+function getActiveLayerConfig(cfg: LayerConfig | null, selectedBranch: string): LayerConfigItem[] {
+  const manualBranches = cfg?.manualBranches ?? [];
+  if (manualBranches.length > 0) {
+    const normalizedBranch = selectedBranch.trim().toLowerCase();
+    if (!normalizedBranch) return [];
+    return (
+      manualBranches.find((branch) =>
+        [branch.name, branch.label].some((candidate) => candidate.trim().toLowerCase() === normalizedBranch)
+      )?.layers ?? []
+    );
+  }
+
+  return cfg?.layers ?? [];
+}
+
+function resolveSubmissionSurveyJson(
+  listTitle: string,
+  formVersion: string,
+  surveyJsonByFormVersion?: Record<string, Record<string, SurveyJson | null>>,
+): SurveyJson | null {
+  const formVersions = surveyJsonByFormVersion?.[listTitle];
+  if (!formVersions) return null;
+
+  return formVersions[formVersion] ?? Object.values(formVersions).find((surveyJson): surveyJson is SurveyJson => surveyJson !== null) ?? null;
+}
 
 function buildAuthLoadingSteps(activeStep: AuthLoadStep, errorStep: AuthLoadStep | null = null): LoadingStep[] {
   const activeIndex = AUTH_LOAD_STEP_ORDER.indexOf(activeStep);
@@ -236,27 +387,34 @@ function mapSubmission(
   raw: Record<string, unknown>,
   listTitle: string,
   listMetaMap: Record<string, ListMetaEntry>,
-  layerConfigs?: Record<string, LayerConfig | null>
+  layerConfigs?: Record<string, LayerConfig | null>,
+  surveyJsonByFormVersion?: Record<string, Record<string, SurveyJson | null>>,
 ): Submission {
   const id = String(raw.Id || "");
-  const title = String(raw.Title || "Untitled");
-  const formId = String(raw.FormId || "");
-  const formVersion = String(raw.FormVersion || "1");
+  const formId =
+    coerceFieldDisplayText(raw.FormID) ||
+    coerceFieldDisplayText(raw.FormId) ||
+    coerceFieldDisplayText(raw.formId);
+  const formVersion = coerceFieldDisplayText(raw.FormVersion) || "1";
   const formStatus = raw.FormStatus ? String(raw.FormStatus) : null;
-  const submittedByEmail = String(
-    raw._authorEmail ||
-      (raw.Author as Record<string, unknown> | undefined)?.Email ||
-      raw.submittedByEmail ||
-      ""
-  );
+  const submittedByEmail = resolveSubmittedByEmail(raw);
+  const submitterName = resolveSubmitterName(raw);
+  const createdByName = resolveCreatedByName(raw);
+  const createdByEmail = resolveCreatedByEmail(raw);
+  const title = resolveSubmissionTitle(raw.Title, submitterName, submittedByEmail, createdByName, createdByEmail);
   const submittedAt = raw.SubmittedAt ? String(raw.SubmittedAt) : null;
-  const currentLayer = raw.CurrentLayer ? Number(raw.CurrentLayer) : 0;
+  const currentLayer = raw.CurrentLayer !== undefined && raw.CurrentLayer !== null && raw.CurrentLayer !== ""
+    ? Number(raw.CurrentLayer) || 0
+    : 0;
+  const selectedBranch = resolveSelectedBranch(raw);
+  const surveyJson = resolveSubmissionSurveyJson(listTitle, formVersion, surveyJsonByFormVersion);
 
   const cfg = layerConfigs?.[listTitle] ?? null;
-  const layersConfig = cfg?.layers ?? [];
+  const layersConfig = getActiveLayerConfig(cfg, selectedBranch);
+  const hasManualBranches = (cfg?.manualBranches?.length ?? 0) > 0;
 
   let totalLayers = layersConfig.length;
-  if (!totalLayers) {
+  if (!totalLayers && !hasManualBranches) {
     totalLayers = 1;
     if (raw.L2_Email) totalLayers = 2;
     if (raw.L3_Email) totalLayers = 3;
@@ -343,24 +501,31 @@ function mapSubmission(
   // Filter internal fields
   const submissionData: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
-    if (
+    const isDashboardInternalField =
       key.startsWith("odata.") ||
       /^L[1-9]_/.test(key) ||
       key === "FormStatus" ||
       key === "CurrentLayer" ||
       key === "EvaluationData" ||
       key === "FormId" ||
+      key === "FormID" ||
       key === "FormVersion" ||
       key === "Title" ||
       key === "Id" ||
       key === "_authorEmail" ||
+      key === "Author" ||
       key === "SubmittedAt" ||
+      key === "SubmittedBy" ||
+      key === "Submitted_x0020_By" ||
+      key === "SelectedBranch" ||
+      key === "Selected_x0020_Branch" ||
       key === "PDPAConsent" ||
       key === "PDPANoticeVersion" ||
       key === "PDPAConsentAt" ||
       key === "RetentionUntil" ||
-      key === "AuthorId"
-    ) {
+      key === "AuthorId";
+
+    if (isDashboardInternalField && !DETAIL_PASSTHROUGH_FIELDS.has(key)) {
       continue;
     }
     submissionData[key] = value;
@@ -374,6 +539,9 @@ function mapSubmission(
     formVersion,
     title,
     submittedByEmail,
+    submitterName,
+    createdByName,
+    createdByEmail,
     submittedAt,
     formStatus,
     totalLayers,
@@ -381,8 +549,10 @@ function mapSubmission(
     meta: listMetaMap[listTitle] ?? generateMeta(listTitle),
     submissionData,
     currentLayer,
+    selectedBranch,
     enhancedLayers: enhancedLayers.length > 0 ? enhancedLayers : undefined,
     layerConfig: cfg,
+    surveyJson,
   };
 }
 
@@ -679,7 +849,7 @@ export default function App() {
                 orderby: "Created desc",
                 top: adminResult ? 5000 : 1000,
               });
-              return items.map((item) => mapSubmission(item, list.title, listMetaMap, config.layerConfigs));
+              return items.map((item) => mapSubmission(item, list.title, listMetaMap, config.layerConfigs, config.surveyJsonByFormVersion));
             } catch {
               return [] as Submission[];
             } finally {
@@ -704,6 +874,7 @@ export default function App() {
           finalSubmissions = finalSubmissions.filter((s) => {
             // User's own submissions
             if (s.submittedByEmail.toLowerCase() === lowerEmail) return true;
+            if (s.createdByEmail?.toLowerCase() === lowerEmail) return true;
             // Submissions where user is a layer assignee
             const assignees = assigneeVisibilityMap[s.listTitle];
             if (assignees?.has(lowerEmail)) return true;
@@ -925,8 +1096,16 @@ export default function App() {
     }
     if (listFilter && item.listTitle !== listFilter) return false;
     if (statusFilter !== "all" && normalizeStatus(item.formStatus) !== statusFilter.toLowerCase()) return false;
-    if (submitterFilter && !item.submittedByEmail.toLowerCase().includes(submitterFilter.toLowerCase()))
-      return false;
+    if (submitterFilter) {
+      const submitterLower = submitterFilter.toLowerCase();
+      const submitterCandidates = [
+        item.submittedByEmail,
+        item.submitterName ?? "",
+        item.createdByName ?? "",
+        item.createdByEmail ?? "",
+      ];
+      if (!submitterCandidates.some((candidate) => candidate.toLowerCase().includes(submitterLower))) return false;
+    }
     return true;
   });
 

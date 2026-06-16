@@ -12,6 +12,8 @@ const fadeInUp = keyframes`
   }
 `;
 
+const alertSurfaceShadow = "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)";
+
 const theme = createTheme({
   palette: {
     primary: {
@@ -310,6 +312,68 @@ const theme = createTheme({
         },
       },
     },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          border: "1px solid transparent",
+          borderRadius: "8px",
+          boxShadow: alertSurfaceShadow,
+          fontWeight: 800,
+          opacity: 1,
+          "&.MuiAlert-standardSuccess, &.MuiAlert-outlinedSuccess": {
+            backgroundColor: "#F1FAF1",
+            borderColor: "rgba(16, 124, 16, 0.38)",
+            color: editorial.ink,
+          },
+          "&.MuiAlert-standardWarning, &.MuiAlert-outlinedWarning": {
+            backgroundColor: "#FFF3E0",
+            borderColor: "rgba(177, 92, 0, 0.4)",
+            color: editorial.ink,
+          },
+          "&.MuiAlert-standardError, &.MuiAlert-outlinedError": {
+            backgroundColor: "#FFF1F1",
+            borderColor: "rgba(198, 40, 40, 0.4)",
+            color: editorial.ink,
+          },
+          "&.MuiAlert-standardInfo, &.MuiAlert-outlinedInfo": {
+            backgroundColor: editorial.blueSoft,
+            borderColor: editorial.pmwBlueSoft,
+            color: editorial.ink,
+          },
+          "&.MuiAlert-filledSuccess": {
+            backgroundColor: editorial.success,
+            color: editorial.white,
+          },
+          "&.MuiAlert-filledWarning": {
+            backgroundColor: editorial.warning,
+            color: editorial.black,
+          },
+          "&.MuiAlert-filledError": {
+            backgroundColor: editorial.error,
+            color: editorial.white,
+          },
+          "&.MuiAlert-filledInfo": {
+            backgroundColor: editorial.pmwBlue,
+            color: editorial.white,
+          },
+        },
+        message: {
+          color: "inherit",
+          fontWeight: 800,
+          lineHeight: 1.5,
+          padding: "8px 0",
+        },
+        icon: {
+          alignItems: "center",
+          opacity: 1,
+        },
+        action: {
+          alignItems: "center",
+          color: "inherit",
+          paddingTop: 0,
+        },
+      },
+    },
     MuiSnackbar: {
       styleOverrides: {
         root: {
@@ -319,7 +383,7 @@ const theme = createTheme({
             backgroundColor: editorial.white,
             border: `1px solid ${editorial.pmwBlueSoft}`,
             borderRadius: "8px",
-            boxShadow: "0 10px 28px rgba(0, 90, 158, 0.14)",
+            boxShadow: alertSurfaceShadow,
             color: editorial.ink,
             fontWeight: 800,
             opacity: 1,

@@ -25,13 +25,16 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
         icon={<WarningIcon />}
         sx={{
           borderRadius: "12px",
-          border: `1px solid ${editorial.yellowSoft}`,
-          backgroundColor: "rgba(255, 248, 184, 0.45)",
+          border: "1px solid rgba(177, 92, 0, 0.38)",
+          backgroundColor: "#FFF3E0",
+          boxShadow: "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)",
+          color: editorial.ink,
           "& .MuiAlert-message": {
             width: "100%",
           },
           "& .MuiAlert-icon": {
             color: editorial.warning,
+            opacity: 1,
           },
         }}
         action={
@@ -52,10 +55,10 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
           </IconButton>
         }
       >
-        <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.warning, mb: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 900, color: editorial.ink, mb: 0.5 }}>
           Lists missing configuration
         </Typography>
-        <Typography variant="body2" sx={{ color: editorial.muted, mb: 1 }}>
+        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
           The following lists are not yet configured in the Documents config library:
         </Typography>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>

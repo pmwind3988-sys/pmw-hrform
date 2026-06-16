@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -24,6 +25,7 @@ import {
   Description as DocumentIcon,
   Edit as SignatureIcon,
   Email as EmailIcon,
+  InfoOutlined as InfoIcon,
   InsertDriveFile as FileIcon,
   Lock as LockIcon,
   OpenInNew as OpenInNewIcon,
@@ -31,13 +33,28 @@ import {
   PictureAsPdf as PdfIcon,
   VerifiedUser as ApprovalIcon,
 } from "@mui/icons-material";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useMsal } from "@azure/msal-react";
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
 import StatusBadge from "./StatusBadge";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
+import { loginRequest } from "../../auth/msalConfig";
+import {
+  buildFormSubmissionSections,
+  type FormSubmissionField,
+  type FormSubmissionSection,
+} from "../../utils/formSubmissionLayout";
+import {
+  formatDashboardDateTime,
+  getSubmittedByDisplayName,
+  getFormReference,
+  getSubmissionDisplayTitle,
+  isPlaceholderDisplayValue,
+  isBranchDecisionPending,
+} from "../../utils/submissionDisplay";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -58,6 +75,9 @@ const SYSTEM_FIELDS = new Set([
   "FormVersion",
   "SubmittedAt",
   "SubmittedBy",
+  "Submitted_x0020_By",
+  "SelectedBranch",
+  "Selected_x0020_Branch",
   "ContentType",
   "ContentTypeId",
   "RawJSON",
@@ -79,6 +99,26 @@ const SYSTEM_FIELDS = new Set([
   "RetentionUntil",
 ]);
 
+const SUPPORTING_DETAIL_LABELS: Record<string, string> = {
+  Created: "Created",
+  Modified: "Modified",
+  PDPAConsent: "PDPA consent",
+  PDPANoticeVersion: "PDPA notice version",
+  PDPAConsentAt: "PDPA consent at",
+  RetentionUntil: "Retention until",
+};
+
+const SUPPORTING_DETAIL_ORDER = [
+  "formVersion",
+  "selectedBranch",
+  "Created",
+  "Modified",
+  "PDPAConsent",
+  "PDPANoticeVersion",
+  "PDPAConsentAt",
+  "RetentionUntil",
+] as const;
+
 interface DetailModalProps {
   item: Submission | null;
   isAdmin: boolean;
@@ -88,6 +128,20 @@ interface DetailModalProps {
 interface LinkValue {
   url: string;
   label: string;
+}
+
+interface SupportingDetail {
+  key: string;
+  label: string;
+  value: unknown;
+}
+
+interface SignatureField {
+  key: string;
+  label: string;
+  value: unknown;
+  src: string;
+  link: LinkValue | null;
 }
 
 type ApprovalCardLayer = ApprovalLayer & {
@@ -126,6 +180,54 @@ function toAbsoluteSharePointUrl(url: string): string {
   }
 }
 
+function escapeODataString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function encodeServerRelativePathParam(serverRelativeUrl: string): string {
+  return encodeURIComponent(escapeODataString(serverRelativeUrl)).replace(/%2F/gi, "/");
+}
+
+function sharePointServerRelativePath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:") || trimmed.startsWith("mailto:") || trimmed.startsWith("tel:")) return "";
+
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const siteUrl = new URL(SP_SITE_URL);
+      const imageUrl = new URL(trimmed);
+      if (siteUrl.origin.toLowerCase() !== imageUrl.origin.toLowerCase()) return "";
+      return decodeURIComponent(imageUrl.pathname);
+    }
+  } catch {
+    return "";
+  }
+
+  return trimmed.startsWith("/") ? decodeURIComponent(trimmed.split(/[?#]/)[0] ?? trimmed) : "";
+}
+
+function sharePointFileValueUrl(value: string): string {
+  const serverRelativePath = sharePointServerRelativePath(value);
+  if (!serverRelativePath) return "";
+  return `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodeServerRelativePathParam(serverRelativePath)}')/$value`;
+}
+
+function extractImageSrcFromHtml(value: string): string {
+  const match = value.match(/<img\b[^>]*\bsrc=(["'])(.*?)\1/i);
+  return match?.[2]?.trim() ?? "";
+}
+
+function splitSharePointUrlFieldValue(value: string): { url: string; label: string } | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return null;
+  const separatorIndex = trimmed.search(/,\s+/);
+  if (separatorIndex === -1) return null;
+
+  const url = trimmed.slice(0, separatorIndex).trim();
+  const label = trimmed.slice(separatorIndex + 1).replace(/^,?\s*/, "").trim();
+  return isUrlLike(url) ? { url, label } : null;
+}
+
 function isUrlLike(value: string): boolean {
   return /^(https?:\/\/|mailto:|tel:|\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/)/i.test(value.trim());
 }
@@ -157,9 +259,12 @@ function linkFromValue(value: unknown): LinkValue | null {
   const normalized = normalizeMaybeJson(value);
   if (typeof normalized === "string") {
     const trimmed = normalized.trim();
-    if (!isUrlLike(trimmed)) return null;
-    const url = toAbsoluteSharePointUrl(trimmed);
-    return { url, label: filenameFromUrl(url) };
+    const htmlImageSrc = extractImageSrcFromHtml(trimmed);
+    const urlFieldValue = splitSharePointUrlFieldValue(trimmed);
+    const rawUrl = htmlImageSrc || urlFieldValue?.url || trimmed;
+    if (!isUrlLike(rawUrl) && !rawUrl.startsWith("data:image/")) return null;
+    const url = toAbsoluteSharePointUrl(rawUrl);
+    return { url, label: urlFieldValue?.label || filenameFromUrl(url) };
   }
 
   if (!isRecord(normalized)) return null;
@@ -225,6 +330,97 @@ function shouldSkipField(key: string, value: unknown): boolean {
   return !hasDisplayValue(value);
 }
 
+function hasSupportingDetailValue(value: unknown): boolean {
+  if (!hasDisplayValue(value)) return false;
+  if (typeof value === "string") return !isPlaceholderDisplayValue(value);
+  return true;
+}
+
+function addSupportingDetail(
+  details: Map<string, SupportingDetail>,
+  key: string,
+  label: string,
+  value: unknown,
+): void {
+  if (!hasSupportingDetailValue(value)) return;
+  details.set(key, { key, label, value });
+}
+
+function sortSupportingDetails(details: SupportingDetail[]): SupportingDetail[] {
+  return details.sort((a, b) => {
+    const aIndex = SUPPORTING_DETAIL_ORDER.indexOf(a.key as (typeof SUPPORTING_DETAIL_ORDER)[number]);
+    const bIndex = SUPPORTING_DETAIL_ORDER.indexOf(b.key as (typeof SUPPORTING_DETAIL_ORDER)[number]);
+    const normalizedA = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+    const normalizedB = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+    return normalizedA === normalizedB ? a.label.localeCompare(b.label) : normalizedA - normalizedB;
+  });
+}
+
+function buildSupportingDetails(
+  item: Submission,
+  entries: [string, unknown][],
+  renderedSignatureKeys: Set<string>,
+): SupportingDetail[] {
+  const details = new Map<string, SupportingDetail>();
+
+  addSupportingDetail(details, "formVersion", "Form version", item.formVersion);
+  addSupportingDetail(details, "selectedBranch", "Selected branch", item.selectedBranch);
+
+  for (const [key, value] of entries) {
+    const label = SUPPORTING_DETAIL_LABELS[key];
+    if (label) {
+      addSupportingDetail(details, key, label, value);
+      continue;
+    }
+
+    if (isSignatureField(key) && !renderedSignatureKeys.has(key)) {
+      addSupportingDetail(details, key, formatFieldName(key), value);
+    }
+  }
+
+  return sortSupportingDetails([...details.values()]);
+}
+
+function textRecordValue(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function collectSurveyFieldKeysByType(surveyJson: unknown, targetTypes: Set<string>): Set<string> {
+  const keys = new Set<string>();
+  const root = isRecord(surveyJson) && isRecord(surveyJson.surveyJson) ? surveyJson.surveyJson : surveyJson;
+  const pages = isRecord(root) && Array.isArray(root.pages) ? root.pages.filter(isRecord) : [];
+  const childKeys = ["elements", "templateElements", "questions"] as const;
+
+  const visit = (element: Record<string, unknown>) => {
+    const type = textRecordValue(element, "type").toLowerCase();
+    const name = textRecordValue(element, "name");
+    if (name && targetTypes.has(type)) keys.add(name);
+
+    for (const childKey of childKeys) {
+      const children = element[childKey];
+      if (Array.isArray(children)) children.filter(isRecord).forEach(visit);
+    }
+
+    if (type !== "dynamicmatrix" && type !== "matrixdynamic" && type !== "tableinput") {
+      const columns = element.columns;
+      if (Array.isArray(columns)) {
+        for (const column of columns.filter(isRecord)) {
+          const columnElements = column.elements;
+          if (Array.isArray(columnElements)) columnElements.filter(isRecord).forEach(visit);
+        }
+      }
+    }
+  };
+
+  for (const page of pages) {
+    const elements = page.elements;
+    if (Array.isArray(elements)) elements.filter(isRecord).forEach(visit);
+  }
+
+  return keys;
+}
+
 function formatFieldName(key: string): string {
   const decoded = key
     .replace(/_x0020_/gi, " ")
@@ -241,15 +437,8 @@ function formatFieldName(key: string): string {
 
 function formatDateValue(value: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z?$/i.test(value)) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const formatted = formatDashboardDateTime(value, "");
+  return formatted || null;
 }
 
 function formatPlainValue(value: string | number | boolean | null | undefined): string {
@@ -391,11 +580,11 @@ function FriendlyValue({ fieldKey, value, depth = 0 }: { fieldKey: string; value
   return <Typography variant="body2">{summarizeNestedValue(normalized)}</Typography>;
 }
 
-function FieldCard({ fieldKey, value }: { fieldKey: string; value: unknown }) {
+function FieldCard({ fieldKey, label, value }: { fieldKey: string; label?: string; value: unknown }) {
   if (isHtmlValue(fieldKey, value)) {
     return (
       <Box>
-        <FieldLabel>{formatFieldName(fieldKey)}</FieldLabel>
+        <FieldLabel>{label ?? formatFieldName(fieldKey)}</FieldLabel>
         <Box
           sx={{
             backgroundColor: "#ffffff",
@@ -429,7 +618,7 @@ function FieldCard({ fieldKey, value }: { fieldKey: string; value: unknown }) {
 
   return (
     <Box>
-      <FieldLabel>{formatFieldName(fieldKey)}</FieldLabel>
+      <FieldLabel>{label ?? formatFieldName(fieldKey)}</FieldLabel>
       <Box
         sx={{
           backgroundColor: "#ffffff",
@@ -444,6 +633,224 @@ function FieldCard({ fieldKey, value }: { fieldKey: string; value: unknown }) {
         <FriendlyValue fieldKey={fieldKey} value={value} />
       </Box>
     </Box>
+  );
+}
+
+function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
+  const columns = field.matrixColumns?.length
+    ? field.matrixColumns
+    : Object.keys(field.matrixRows?.[0] ?? {}).map((key) => ({ name: key, title: formatFieldName(key) }));
+  const rows = field.matrixRows ?? [];
+
+  if (rows.length === 0 || columns.length === 0) {
+    return <FieldCard fieldKey={field.key} label={field.label} value={field.value} />;
+  }
+
+  return (
+    <Box>
+      <FieldLabel>{field.label}</FieldLabel>
+      <Box
+        sx={{
+          backgroundColor: "#ffffff",
+          border: editorialHairline,
+          borderRadius: "8px",
+          overflowX: "auto",
+        }}
+      >
+        <Box
+          component="table"
+          sx={{
+            width: "100%",
+            borderCollapse: "collapse",
+            minWidth: 420,
+            "& th": {
+              backgroundColor: editorial.blueSoft,
+              color: editorial.ink,
+              fontSize: "0.75rem",
+              fontWeight: 900,
+              textAlign: "left",
+              p: 1.25,
+              borderBottom: editorialHairline,
+            },
+            "& td": {
+              color: editorial.ink,
+              fontSize: "0.875rem",
+              p: 1.25,
+              borderBottom: editorialHairline,
+              verticalAlign: "top",
+            },
+            "& tr:last-of-type td": {
+              borderBottom: 0,
+            },
+          }}
+        >
+          <Box component="thead">
+            <Box component="tr">
+              {columns.map((column) => (
+                <Box component="th" key={column.name}>
+                  {column.title || formatFieldName(column.name)}
+                </Box>
+              ))}
+            </Box>
+          </Box>
+          <Box component="tbody">
+            {rows.map((row, rowIndex) => (
+              <Box component="tr" key={`${field.key}-${rowIndex}`}>
+                {columns.map((column) => (
+                  <Box component="td" key={`${field.key}-${rowIndex}-${column.name}`}>
+                    <FriendlyValue fieldKey={`${field.key}-${rowIndex}-${column.name}`} value={row[column.name]} />
+                  </Box>
+                ))}
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function DataPreviewSections({ sections }: { sections: FormSubmissionSection[] }) {
+  return (
+    <Stack spacing={2.5}>
+      {sections.map((section) => (
+        <Box key={section.id}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: editorial.ink,
+              fontWeight: 900,
+              mb: 1.25,
+              textWrap: "balance",
+            }}
+          >
+            {section.title}
+          </Typography>
+          <Grid container spacing={2}>
+            {section.fields.map((field) => (
+              <Grid size={{ xs: 12, sm: isHtmlValue(field.key, field.value) || field.kind === "matrix" ? 12 : 6 }} key={field.key}>
+                {field.kind === "matrix" ? (
+                  <MatrixFieldCard field={field} />
+                ) : (
+                  <FieldCard fieldKey={field.key} label={field.label} value={field.value} />
+                )}
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function SupportingDetailsGrid({ details }: { details: SupportingDetail[] }) {
+  return (
+    <Grid container spacing={2}>
+      {details.map((detail) => (
+        <Grid size={{ xs: 12, sm: 6 }} key={detail.key}>
+          <FieldCard fieldKey={detail.key} label={detail.label} value={detail.value} />
+        </Grid>
+      ))}
+    </Grid>
+  );
+}
+
+function useAuthenticatedImageSrc(src: string): { imageSrc: string; isLoading: boolean } {
+  const { instance, accounts } = useMsal();
+  const [imageSrc, setImageSrc] = useState(src);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+    const fileValueUrl = src ? sharePointFileValueUrl(src) : "";
+    const account = instance.getActiveAccount() ?? accounts[0];
+
+    setImageSrc(src);
+    setIsLoading(false);
+
+    if (!src || src.startsWith("data:image/") || !fileValueUrl || !account) {
+      return () => undefined;
+    }
+
+    setIsLoading(true);
+
+    void instance.acquireTokenSilent({ ...loginRequest, account })
+      .then(async (tokenResponse) => {
+        const response = await fetch(fileValueUrl, {
+          headers: {
+            Authorization: `Bearer ${tokenResponse.accessToken}`,
+          },
+        });
+        if (!response.ok) throw new Error(`Signature image fetch failed: ${response.status}`);
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setImageSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setImageSrc(src);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [accounts, instance, src]);
+
+  return { imageSrc, isLoading };
+}
+
+function SignatureCard({ signature }: { signature: SignatureField }) {
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const { imageSrc, isLoading } = useAuthenticatedImageSrc(signature.src);
+  const shouldShowPreview = Boolean(imageSrc) && !previewFailed;
+
+  useEffect(() => {
+    setPreviewFailed(false);
+  }, [imageSrc]);
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        border: editorialHairline,
+        borderRadius: "8px",
+        backgroundColor: "#ffffff",
+        p: 2,
+      }}
+    >
+      <FieldLabel>{signature.label}</FieldLabel>
+      {shouldShowPreview ? (
+        <Box
+          component="img"
+          src={imageSrc}
+          alt={signature.label}
+          onError={() => {
+            if (!isLoading) setPreviewFailed(true);
+          }}
+          sx={{
+            display: "block",
+            maxHeight: 140,
+            maxWidth: "100%",
+            borderRadius: "8px",
+            border: "1px solid rgba(0, 0, 0, 0.1)",
+            backgroundColor: "#ffffff",
+            p: 1,
+            mb: signature.link ? 1 : 0,
+          }}
+        />
+      ) : (
+        <FieldCard fieldKey={signature.key} label={signature.label} value={signature.value} />
+      )}
+      {signature.link && (
+        <Box sx={{ mt: shouldShowPreview ? 0 : 1 }}>
+          <ValueLink link={{ ...signature.link, label: "Open signature file" }} />
+        </Box>
+      )}
+    </Paper>
   );
 }
 
@@ -833,15 +1240,16 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
 export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const selectedCompany = getSelectedCompany(item?.submissionData);
+  const selectedCompany = getSelectedCompany(item?.submissionData, item?.surveyJson);
   const submissionData = item?.submissionData ?? {};
   const entries = Object.entries(submissionData);
+  const signatureFieldKeys = item ? collectSurveyFieldKeysByType(item.surveyJson, new Set(["signaturepad"])) : new Set<string>();
 
   const pdfLink = entries.find(([key, value]) => isPdfField(key) && collectLinks(value).length > 0);
   const generatedPdf = pdfLink ? collectLinks(pdfLink[1])[0] : null;
 
   const documentGroups = entries
-    .filter(([key, value]) => !isPdfField(key) && !isSignatureField(key) && !SYSTEM_FIELDS.has(key) && collectLinks(value).length > 0)
+    .filter(([key, value]) => !isPdfField(key) && !isSignatureField(key) && !signatureFieldKeys.has(key) && !SYSTEM_FIELDS.has(key) && collectLinks(value).length > 0)
     .map(([key, value]) => ({
       key,
       title: formatFieldName(key),
@@ -849,11 +1257,29 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
     }));
 
   const signatureFields = entries
-    .filter(([key, value]) => isSignatureField(key) && signatureValueToSrc(value))
-    .map(([key, value]) => ({ key, label: formatFieldName(key), src: signatureValueToSrc(value), link: linkFromValue(value) }));
+    .filter(([key, value]) => (isSignatureField(key) || signatureFieldKeys.has(key)) && hasDisplayValue(value))
+    .map(([key, value]) => ({
+      key,
+      label: formatFieldName(key),
+      value,
+      src: signatureValueToSrc(value),
+      link: linkFromValue(value),
+    }));
+  const renderedSignatureKeys = new Set(signatureFields.map((signature) => signature.key));
 
-  const visibleFields = entries.filter(([key, value]) => shouldSkipField(key, value) === false && collectLinks(value).length === 0);
-  const submittedAt = item?.submittedAt ? formatDateValue(item.submittedAt) ?? item.submittedAt : "Not available";
+  const formSections = item
+    ? buildFormSubmissionSections(item.surveyJson, submissionData, {
+        fallbackSectionTitle: "Submitted answers",
+        formatFallbackLabel: formatFieldName,
+        shouldIncludeField: (key, value) => shouldSkipField(key, value) === false && collectLinks(value).length === 0,
+      })
+    : [];
+  const supportingDetails = item ? buildSupportingDetails(item, entries, renderedSignatureKeys) : [];
+  const displayTitle = item ? getSubmissionDisplayTitle(item) : "";
+  const submitterDisplay = item ? getSubmittedByDisplayName(item) : "Unknown submitter";
+  const formReference = item ? getFormReference(item) : "Not available";
+  const branchDecisionPending = item ? isBranchDecisionPending(item) : false;
+  const submittedAt = formatDashboardDateTime(item?.submittedAt, "Not available");
 
   return (
     <Dialog
@@ -912,9 +1338,25 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                 fontWeight: 800,
               }}
             />
+            {branchDecisionPending && (
+              <Chip
+                icon={<InfoIcon />}
+                label="Branch decision pending"
+                size="small"
+                sx={{
+                  backgroundColor: editorial.blueWash,
+                  color: editorial.pmwBlueDark,
+                  border: `1px solid ${editorial.pmwBlueSoft}`,
+                  fontWeight: 800,
+                  "& .MuiChip-icon": {
+                    color: editorial.pmwBlueDark,
+                  },
+                }}
+              />
+            )}
           </Stack>
           <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: 0, textWrap: "balance" }}>
-            {item?.title}
+            {displayTitle}
           </Typography>
           <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.5, fontWeight: 700 }}>
             {item?.listTitle} · Reference {item?.submissionId}
@@ -946,7 +1388,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
               <SectionTitle icon={<DocumentIcon sx={{ fontSize: 18 }} />} title="Submission overview" />
               <Grid container spacing={1.5}>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon={<DocumentIcon sx={{ fontSize: 18 }} />} label="Form" value={item.listTitle} />
+                  <InfoTile icon={<DocumentIcon sx={{ fontSize: 18 }} />} label="Form ID" value={formReference} />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <InfoTile icon={<CalendarIcon sx={{ fontSize: 18 }} />} label="Submitted" value={submittedAt} />
@@ -955,7 +1397,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                   <InfoTile
                     icon={<PersonIcon sx={{ fontSize: 18 }} />}
                     label={isAdmin ? "Submitter" : "Account"}
-                    value={item.submittedByEmail || "Unknown"}
+                    value={submitterDisplay}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -967,6 +1409,32 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                   </Grid>
                 )}
               </Grid>
+              {branchDecisionPending && (
+                <Alert
+                  severity="info"
+                  icon={<InfoIcon fontSize="small" />}
+                  sx={{
+                    mt: 1.5,
+                    borderRadius: "8px",
+                    border: `1px solid ${editorial.pmwBlueSoft}`,
+                    backgroundColor: "#ffffff",
+                    color: editorial.ink,
+                    "& .MuiAlert-message": {
+                      width: "100%",
+                    },
+                    "& .MuiAlert-icon": {
+                      color: editorial.pmwBlueDark,
+                    },
+                  }}
+                >
+                  <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 900 }}>
+                    FYI: Branch still needs to be decided
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: editorial.muted, display: "block", fontWeight: 700 }}>
+                    An HR Forms Owner needs to choose the branch before approval or evaluation starts.
+                  </Typography>
+                </Alert>
+              )}
             </Box>
 
             <Box>
@@ -985,16 +1453,17 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
               </Grid>
             </Box>
 
-            {visibleFields.length > 0 && (
+            {formSections.length > 0 && (
               <Box>
-                <SectionTitle icon={<FileIcon sx={{ fontSize: 18 }} />} title="Data preview" subtitle="Submitted answers rendered from SharePoint fields" />
-                <Grid container spacing={2}>
-                  {visibleFields.map(([key, value]) => (
-                    <Grid size={{ xs: 12, sm: isHtmlValue(key, value) ? 12 : 6 }} key={key}>
-                      <FieldCard fieldKey={key} value={value} />
-                    </Grid>
-                  ))}
-                </Grid>
+                <SectionTitle icon={<FileIcon sx={{ fontSize: 18 }} />} title="Data preview" subtitle="Grouped by the published form layout" />
+                <DataPreviewSections sections={formSections} />
+              </Box>
+            )}
+
+            {supportingDetails.length > 0 && (
+              <Box>
+                <SectionTitle icon={<InfoIcon sx={{ fontSize: 18 }} />} title="Submission details" subtitle="Compliance and record fields" />
+                <SupportingDetailsGrid details={supportingDetails} />
               </Box>
             )}
 
@@ -1004,33 +1473,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                 <Grid container spacing={2}>
                   {signatureFields.map((signature) => (
                     <Grid size={{ xs: 12, sm: 6 }} key={signature.key}>
-                      <Paper
-                        elevation={0}
-                        sx={{
-                          border: editorialHairline,
-                          borderRadius: "8px",
-                          backgroundColor: "#ffffff",
-                          p: 2,
-                        }}
-                      >
-                        <FieldLabel>{signature.label}</FieldLabel>
-                        <Box
-                          component="img"
-                          src={signature.src}
-                          alt={signature.label}
-                          sx={{
-                            display: "block",
-                            maxHeight: 140,
-                            maxWidth: "100%",
-                            borderRadius: "8px",
-                            border: "1px solid rgba(0, 0, 0, 0.1)",
-                            backgroundColor: "#ffffff",
-                            p: 1,
-                            mb: signature.link ? 1 : 0,
-                          }}
-                        />
-                        {signature.link && <ValueLink link={{ ...signature.link, label: "Open signature image" }} />}
-                      </Paper>
+                      <SignatureCard signature={signature} />
                     </Grid>
                   ))}
                 </Grid>

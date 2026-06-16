@@ -23,6 +23,9 @@ export interface Submission {
   formVersion: string;
   title: string;
   submittedByEmail: string;
+  submitterName?: string;
+  createdByName?: string;
+  createdByEmail?: string;
   submittedAt: string | null;
   formStatus: string | null;
   totalLayers: number;
@@ -31,10 +34,14 @@ export interface Submission {
   submissionData: Record<string, unknown>;
   /** Enhanced layer system: active layer number (0 = none/draft) */
   currentLayer?: number;
+  /** Manual branch workflow: selected branch key/label when a branch has been chosen */
+  selectedBranch?: string;
   /** Enhanced layer system: per-layer results with typed ApprovalLayerResult / EvaluationLayerResult */
   enhancedLayers?: (ApprovalLayerResult | EvaluationLayerResult | null)[];
   /** Enhanced layer system: raw layer config for this form (loaded from Master Form) */
   layerConfig?: LayerConfig | null;
+  /** Published form schema for ordering submitted answers in dashboard/PDF views */
+  surveyJson?: SurveyJson | null;
 }
 
 export interface HardDeleteSubmissionResult {
@@ -210,6 +217,7 @@ export interface LoadedConfig {
   listMetaMap: Record<string, ListMetaEntry>;
   allowedTitles: Set<string>;
   layerConfigs?: Record<string, LayerConfig | null>;
+  surveyJsonByFormVersion?: Record<string, Record<string, SurveyJson | null>>;
 }
 
 // Status config for badges

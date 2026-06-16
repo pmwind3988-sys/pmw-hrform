@@ -1,4 +1,4 @@
-import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient, LayerConfig } from "../types";
+import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient, LayerConfig, SurveyJson } from "../types";
 
 const ADMIN_GROUP = "_HR_ Forms Owners";
 const FORM_BUILDER_SUPERUSER_GROUP = "superuser";
@@ -94,6 +94,7 @@ export async function loadConfig(
   const listMetaMap: Record<string, ListMetaEntry> = {};
   const allowedTitles = new Set<string>();
   const layerConfigs: Record<string, LayerConfig | null> = {};
+  const surveyJsonByFormVersion: Record<string, Record<string, SurveyJson | null>> = {};
 
   try {
     const configItems = await spClient.queryList("Master Form", {
@@ -141,12 +142,43 @@ export async function loadConfig(
     // Master Form list may not exist yet
   }
 
+  try {
+    const versionItems = await spClient.queryList("Web Form Versions", {
+      select: ["FormTitle", "FormVersion", "SurveyJSON"],
+      top: 5000,
+    });
+
+    for (const item of versionItems) {
+      const formTitle = String(item.FormTitle || "");
+      const formVersion = String(item.FormVersion || "");
+      const rawSurveyJson = item.SurveyJSON;
+      if (!formTitle || !formVersion || typeof rawSurveyJson !== "string" || !rawSurveyJson.trim()) continue;
+
+      let parsedSurveyJson: SurveyJson | null = null;
+      try {
+        const parsed = JSON.parse(rawSurveyJson) as { surveyJson?: unknown; pages?: unknown };
+        const candidate = parsed.surveyJson ?? parsed;
+        if (candidate && typeof candidate === "object" && !Array.isArray(candidate) && Array.isArray((candidate as { pages?: unknown }).pages)) {
+          parsedSurveyJson = candidate as SurveyJson;
+        }
+      } catch {
+        parsedSurveyJson = null;
+      }
+
+      if (!surveyJsonByFormVersion[formTitle]) surveyJsonByFormVersion[formTitle] = {};
+      surveyJsonByFormVersion[formTitle][formVersion] = parsedSurveyJson;
+    }
+  } catch {
+    // Web Form Versions list may not exist yet
+  }
+
   return {
     layerConfig,
     formIdMap,
     listMetaMap,
     allowedTitles,
     layerConfigs,
+    surveyJsonByFormVersion,
   };
 }
 

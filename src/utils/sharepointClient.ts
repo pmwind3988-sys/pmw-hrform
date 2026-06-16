@@ -303,7 +303,7 @@ function buildSelect(columns: string[]): string {
   return [...cols].join(",");
 }
 
-const AUTHOR_SELECT = ["Author/Id", "Author/EMail"] as const;
+const AUTHOR_SELECT = ["Author/Id", "Author/EMail", "Author/Title"] as const;
 
 function getAuthorEmail(item: Record<string, unknown>): string {
   const author = item.Author as Record<string, unknown> | undefined;

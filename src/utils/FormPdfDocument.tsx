@@ -2,7 +2,9 @@
  * FormPdfDocument.tsx — Corporate-style PDF for form submissions with approval/evaluation layers.
  */
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
-import { getSelectedCompany, isManagedCompanyQuestion } from "./companySelection";
+import { getSelectedCompany } from "./companySelection";
+import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
+import { formatDashboardDateTime } from "./submissionDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -146,15 +148,14 @@ const S = StyleSheet.create({
   matrixDataCell: { paddingHorizontal: 4, paddingVertical: 2.5, borderRightWidth: 0.3, borderRightColor: C.borderLight },
   matrixDataText: { fontSize: 6.5, color: C.text },
   matrixFieldLabel: { fontSize: 7.5, fontWeight: "bold", color: C.secondary, marginBottom: 3, marginTop: 2 },
+  formSection: { marginBottom: 8 },
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function fmtDate(d: string | undefined | null): string {
   if (!d) return "—";
-  try {
-    return new Date(d).toLocaleString("en-MY", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  } catch { return d; }
+  return formatDashboardDateTime(d, "N/A");
 }
 
 function fmtVal(v: unknown): string {
@@ -178,19 +179,6 @@ function badgeStyle(status?: string) {
   return { bg: C.grayBg, text: C.grayText, border: C.borderLight, label: (status || "SUBMITTED").toUpperCase() };
 }
 
-function isLayoutType(t: string) {
-  return ["html", "image", "panel", "spacer", "divider", "pagebreak", "columns", "videeembed", "alert", "countdown", "datatable", "chartdisplay"].includes(t);
-}
-
-function flattenElements(elements: Record<string, unknown>[]): Record<string, unknown>[] {
-  const r: Record<string, unknown>[] = [];
-  for (const el of elements) {
-    if (el.type === "panel" && Array.isArray(el.elements)) r.push(...flattenElements(el.elements as Record<string, unknown>[]));
-    else r.push(el);
-  }
-  return r;
-}
-
 // ── Layer row component ───────────────────────────────────────────────────
 
 function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
@@ -209,8 +197,43 @@ function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
 
 // ── Main Document ─────────────────────────────────────────────────────────
 
+function renderMatrixField(field: FormSubmissionField) {
+  const rows = field.matrixRows ?? [];
+  const columns = field.matrixColumns?.length
+    ? field.matrixColumns
+    : Object.keys(rows[0] ?? {}).map((key) => ({ name: key, title: key }));
+  if (rows.length === 0 || columns.length === 0) return null;
+
+  const colPct = `${Math.max(10, Math.floor(100 / columns.length))}%`;
+  return (
+    <View style={S.matrixSection} wrap={false}>
+      <Text style={S.matrixFieldLabel}>{field.label}</Text>
+      <View style={S.matrixTable}>
+        <View style={S.matrixHeaderRow}>
+          {columns.map((column, index) => (
+            <View key={column.name} style={[S.matrixHeaderCell, { width: colPct }, index === columns.length - 1 ? { borderRightWidth: 0 } : {}]}>
+              <Text style={S.matrixHeaderText}>{column.title || column.name}</Text>
+            </View>
+          ))}
+        </View>
+        {rows.map((row, rowIndex) => (
+          <View key={`${field.key}-${rowIndex}`} style={[S.matrixDataRow, rowIndex % 2 === 1 ? S.matrixDataRowAlt : {}]}>
+            {columns.map((column, columnIndex) => (
+              <View key={`${field.key}-${rowIndex}-${column.name}`} style={[S.matrixDataCell, { width: colPct }, columnIndex === columns.length - 1 ? { borderRightWidth: 0 } : {}]}>
+                <Text style={S.matrixDataText}>{fmtVal(row[column.name])}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, companyInfo, isoStandards, logoUrl }: PdfFormData) {
-  const pages = surveyJson?.pages ?? [];
+  const formSections = buildFormSubmissionSections(surveyJson, responseData, {
+    fallbackSectionTitle: "Submitted answers",
+  });
   const title = surveyJson?.title || meta.formTitle;
   const badge = badgeStyle(meta.formStatus);
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
@@ -255,42 +278,42 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
         {/* ═══ FORM FIELDS ═══ */}
         <View style={{ marginBottom: 24 }}>
           <Text style={S.sectionLabel}>FORM DATA</Text>
-          {pages.length === 0 || pages.every(p => !p.elements?.length) ? (
+          {formSections.length === 0 ? (
             <Text style={S.noData}>No form fields available.</Text>
           ) : (
-            pages.map((page, pIdx) => {
-              const elements = flattenElements(page.elements || []).filter(el => !isLayoutType((el.type as string) || "") && !isManagedCompanyQuestion(el));
-              if (elements.length === 0) return null;
-              return (
-                <View key={pIdx} wrap={false}>
-                  {pages.length > 1 && <Text style={S.subSectionLabel}>{page.name || `Page ${pIdx + 1}`}</Text>}
-                  {elements.map((el, fIdx) => {
-                    const name = el.name as string;
-                    const label = (el.title as string) || name;
-                    const value = name ? responseData[name] : undefined;
-                    return (
-                      <View key={fIdx} style={[S.fieldRow, fIdx % 2 === 1 ? S.fieldRowAlt : {}]} wrap={false}>
-                        <Text style={S.fieldLabel}>{label}</Text>
-                        <Text style={S.fieldValue}>{fmtVal(value)}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              );
-            })
+            formSections.map((section) => (
+              <View key={section.id} style={S.formSection}>
+                <Text style={S.subSectionLabel}>{section.title}</Text>
+                {section.fields.map((field, fieldIndex) => {
+                  if (field.kind === "matrix") {
+                    return <View key={field.key}>{renderMatrixField(field)}</View>;
+                  }
+                  return (
+                    <View key={field.key} style={[S.fieldRow, fieldIndex % 2 === 1 ? S.fieldRowAlt : {}]} wrap={false}>
+                      <Text style={S.fieldLabel}>{field.label}</Text>
+                      <Text style={S.fieldValue}>{fmtVal(field.value)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ))
           )}
         </View>
 
         {/* ═══ MATRIX TABLES (dynamicmatrix child rows) ═══ */}
-        {(() => {
+        {false && (() => {
           // Gather all _childRows entries in responseData
           const matrixEntries: { fieldName: string; columns: { name: string; title: string }[]; rows: Record<string, unknown>[] }[] = [];
           for (const key of Object.keys(responseData)) {
             if (!key.endsWith("_childRows")) continue;
             const fieldName = key.slice(0, -"_childRows".length);
-            const data = responseData[key] as { columns?: { name: string; title: string }[]; rows?: Record<string, unknown>[] } | undefined;
-            if (data?.columns && data?.rows && data.rows.length > 0) {
-              matrixEntries.push({ fieldName, columns: data.columns, rows: data.rows });
+            const data = responseData[key] as { columns?: { name: string; title: string }[]; rows?: Record<string, unknown>[] };
+            const rawColumns = data.columns;
+            const rawRows = data.rows;
+            const columns: { name: string; title: string }[] = rawColumns ?? [];
+            const rows: Record<string, unknown>[] = rawRows ?? [];
+            if (rows.length > 0) {
+              matrixEntries.push({ fieldName, columns, rows });
             }
           }
           if (matrixEntries.length === 0) return null;

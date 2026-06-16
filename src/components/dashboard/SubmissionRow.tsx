@@ -21,6 +21,13 @@ import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
 import { editorial, editorialShadow } from "../../theme/editorial";
+import {
+  formatDashboardDate,
+  formatDashboardTime,
+  getSubmittedByDisplayName,
+  getFormReference,
+  getSubmissionDisplayTitle,
+} from "../../utils/submissionDisplay";
 
 interface SubmissionRowProps {
   item: Submission;
@@ -50,19 +57,11 @@ export default function SubmissionRow({
     category: "General",
   };
 
-  const submittedAt = item.submittedAt
-    ? new Date(item.submittedAt).toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-    : "N/A";
-  const submittedTime = item.submittedAt
-    ? new Date(item.submittedAt).toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "";
+  const displayTitle = getSubmissionDisplayTitle(item);
+  const submitterDisplay = getSubmittedByDisplayName(item);
+  const formReference = getFormReference(item);
+  const submittedAt = formatDashboardDate(item.submittedAt);
+  const submittedTime = formatDashboardTime(item.submittedAt);
   const layerLabel =
     item.totalLayers > 1 && item.currentLayer !== undefined
       ? item.currentLayer > 0
@@ -110,7 +109,7 @@ export default function SubmissionRow({
       <Box
         role="button"
         tabIndex={0}
-        aria-label={`View submission ${item.title}`}
+        aria-label={`View submission ${displayTitle}`}
         onClick={handleOpen}
         onKeyDown={handleKeyDown}
         sx={{
@@ -138,7 +137,7 @@ export default function SubmissionRow({
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
           <Box sx={{ flex: 1 }}>
             <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5 }}>
-              {item.title}
+              {displayTitle}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
               <Chip icon={<NumbersIcon />} label={`Ref ${item.submissionId}`} size="small" sx={identityChipSx} />
@@ -152,7 +151,7 @@ export default function SubmissionRow({
               <Tooltip title="Delete submission and managed files">
                 <span onClick={(event) => event.stopPropagation()}>
                   <IconButton
-                    aria-label={`Delete submission ${item.title}`}
+                    aria-label={`Delete submission ${displayTitle}`}
                     onClick={handleDelete}
                     disabled={isDeleting}
                     size="small"
@@ -208,7 +207,7 @@ export default function SubmissionRow({
           </Typography>
           {isAdmin && (
             <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
-              Submitted by {item.submittedByEmail || "Unknown submitter"}
+              Submitted by {submitterDisplay}
             </Typography>
           )}
         </Stack>
@@ -220,7 +219,7 @@ export default function SubmissionRow({
     <Box
       role="button"
       tabIndex={0}
-      aria-label={`View submission ${item.title}`}
+      aria-label={`View submission ${displayTitle}`}
       onClick={handleOpen}
       onKeyDown={handleKeyDown}
       sx={{
@@ -251,12 +250,12 @@ export default function SubmissionRow({
       {/* Submission */}
       <Box>
         <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5, textWrap: "balance" }}>
-          {item.title}
+          {displayTitle}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <Chip icon={<NumbersIcon />} label={`Ref ${item.submissionId}`} size="small" sx={identityChipSx} />
           <Typography variant="caption" sx={{ color: editorial.muted }}>
-            Form {item.formId || "N/A"}
+            Form {formReference}
           </Typography>
         </Box>
       </Box>
@@ -273,7 +272,7 @@ export default function SubmissionRow({
             whiteSpace: "nowrap",
           }}
         >
-          {item.submittedByEmail || "Unknown submitter"}
+          {submitterDisplay}
         </Typography>
       )}
 
@@ -321,7 +320,7 @@ export default function SubmissionRow({
           <Tooltip title="Delete submission and managed files">
             <span onClick={(event) => event.stopPropagation()}>
               <IconButton
-                aria-label={`Delete submission ${item.title}`}
+                aria-label={`Delete submission ${displayTitle}`}
                 onClick={handleDelete}
                 disabled={isDeleting}
                 size="small"

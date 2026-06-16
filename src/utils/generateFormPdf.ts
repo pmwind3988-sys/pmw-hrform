@@ -66,6 +66,14 @@ export function buildPdfLayerResults(
 function findMatrixFields(surveyJson: PdfFormData["surveyJson"]): { name: string; columns: MatrixColumnDef[] }[] {
   const result: { name: string; columns: MatrixColumnDef[] }[] = [];
   const pages = surveyJson?.pages ?? [];
+  const childKeys = ["elements", "templateElements", "questions"] as const;
+
+  const asElementArray = (value: unknown): Record<string, unknown>[] => {
+    return Array.isArray(value)
+      ? value.filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null && !Array.isArray(entry))
+      : [];
+  };
+
   const walkElements = (els: Record<string, unknown>[]) => {
     for (const el of els) {
       const t = el.type as string | undefined;
@@ -74,8 +82,17 @@ function findMatrixFields(surveyJson: PdfFormData["surveyJson"]): { name: string
         const cols = (el.columns as MatrixColumnDef[]) || [];
         if (name && cols.length > 0) result.push({ name, columns: cols });
       }
-      if (el.elements && Array.isArray(el.elements)) {
-        walkElements(el.elements as Record<string, unknown>[]);
+
+      for (const childKey of childKeys) {
+        const children = asElementArray(el[childKey]);
+        if (children.length > 0) walkElements(children);
+      }
+
+      if (t !== "dynamicmatrix" && t !== "matrixdynamic" && t !== "tableinput") {
+        for (const column of asElementArray(el.columns)) {
+          const columnElements = asElementArray(column.elements);
+          if (columnElements.length > 0) walkElements(columnElements);
+        }
       }
     }
   };

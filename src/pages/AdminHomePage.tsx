@@ -341,17 +341,24 @@ export default function AdminHomePage() {
             sx={{
               mb: 2,
               borderRadius: "8px",
-              border: `1px solid ${deleteResult.warnings.length > 0 ? "rgba(177, 92, 0, 0.22)" : "rgba(16, 124, 16, 0.22)"}`,
+              backgroundColor: deleteResult.warnings.length > 0 ? "#FFF3E0" : "#F1FAF1",
+              border: `1px solid ${deleteResult.warnings.length > 0 ? "rgba(177, 92, 0, 0.42)" : "rgba(16, 124, 16, 0.42)"}`,
+              boxShadow: "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)",
+              color: editorial.ink,
               "& .MuiAlert-message": {
                 width: "100%",
               },
+              "& .MuiAlert-icon": {
+                color: deleteResult.warnings.length > 0 ? editorial.warning : editorial.success,
+                opacity: 1,
+              },
             }}
           >
-            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+            <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>
               Submission deleted. Removed {deleteResult.deletedFiles} managed file{deleteResult.deletedFiles === 1 ? "" : "s"} and {deleteResult.deletedMatrixRows} matrix row{deleteResult.deletedMatrixRows === 1 ? "" : "s"}.
             </Typography>
             {deleteResult.warnings.length > 0 && (
-              <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: editorial.muted }}>
+              <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: editorial.warning, fontWeight: 800, lineHeight: 1.5 }}>
                 Cleanup warnings: {deleteResult.warnings.slice(0, 2).join(" ")}
               </Typography>
             )}
