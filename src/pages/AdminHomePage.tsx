@@ -164,6 +164,8 @@ export default function AdminHomePage() {
         onLogout={onSignOut}
         onSwitch={onSwitchAccount}
         onOpenBuilder={onOpenBuilder}
+        submissions={submissions}
+        onViewSubmission={setDetailItem}
       />
 
       <Box

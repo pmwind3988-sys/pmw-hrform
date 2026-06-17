@@ -479,6 +479,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           applicantEmail: String(readField(item.fields, applicationColumns.applicantEmail, "ApplicantEmail", "Applicant_x0020_Email") || ""),
           status: String(readField(item.fields, applicationColumns.status, "Status") || ""),
           submittedAt: String(readField(item.fields, null, "Created") || readField(item.fields, applicationColumns.submittedAt, "SubmittedAt", "Submitted_x0020_At") || ""),
+          modifiedAt: String(readField(item.fields, null, "Modified") || ""),
           submissionRef: String(readField(item.fields, applicationColumns.submissionRef, "SubmissionRef", "Submission_x0020_Ref") || ""),
           applicantPhone: String(readField(item.fields, applicationColumns.applicantPhone, "ApplicantPhone", "Applicant_x0020_Phone") || ""),
           coverLetterUrl: supportingDocuments[0]?.url || coverLetterUrl,

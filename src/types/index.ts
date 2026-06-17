@@ -27,6 +27,7 @@ export interface Submission {
   createdByName?: string;
   createdByEmail?: string;
   submittedAt: string | null;
+  modifiedAt?: string | null;
   formStatus: string | null;
   totalLayers: number;
   layers: (ApprovalLayer | null)[];
@@ -957,6 +958,7 @@ export interface JobApplication {
   coverLetterUrl: string;
   status: string;
   submittedAt: string;
+  modifiedAt?: string;
   submissionRef: string;
   customAnswers?: Record<string, unknown>;
   supportingDocuments?: JobDocumentLink[];
@@ -1009,6 +1011,7 @@ export interface JobAdminApplication {
   applicantPhone?: string;
   status: string;
   submittedAt: string;
+  modifiedAt?: string;
   submissionRef: string;
   coverLetterUrl?: string;
   resumeUrl?: string;

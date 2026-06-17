@@ -32,6 +32,8 @@ import Logo from "../Logo";
 import BackgroundPicker from "./BackgroundPicker";
 import { useDashboardBackground } from "../../hooks/useDashboardBackground";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import type { Submission } from "../../types";
+import NotificationCenter from "./NotificationCenter";
 
 interface HeaderProps {
   userEmail: string;
@@ -40,6 +42,8 @@ interface HeaderProps {
   onLogout: () => void;
   onSwitch: () => void;
   onOpenBuilder?: () => void;
+  submissions: Submission[];
+  onViewSubmission: (item: Submission) => void;
 }
 
 export default function Header({
@@ -49,6 +53,8 @@ export default function Header({
   onLogout,
   onSwitch,
   onOpenBuilder,
+  submissions,
+  onViewSubmission,
 }: HeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -186,6 +192,13 @@ export default function Header({
 
         {isCompact ? (
           <>
+            <NotificationCenter
+              userEmail={userEmail}
+              isAdmin={isAdmin}
+              submissions={submissions}
+              onViewSubmission={onViewSubmission}
+              compact
+            />
             {/* ── Mobile: Single hamburger menu ── */}
             <IconButton
               onClick={handleMainMenuOpen}
@@ -311,6 +324,13 @@ export default function Header({
             </Button>
 
             <RoleBadge isAdmin={isAdmin} />
+
+            <NotificationCenter
+              userEmail={userEmail}
+              isAdmin={isAdmin}
+              submissions={submissions}
+              onViewSubmission={onViewSubmission}
+            />
 
             <IconButton
               onClick={handleProfileOpen}

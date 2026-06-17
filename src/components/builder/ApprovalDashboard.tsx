@@ -23,15 +23,17 @@ import { getSelectedCompany, splitCompanyLines } from "../../utils/companySelect
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
-import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig } from "../../types";
+import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission } from "../../types";
 import BlockIcon from "@mui/icons-material/Block";
 import LockIcon from "@mui/icons-material/Lock";
 import DescriptionIcon from "@mui/icons-material/Description";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
+import DeleteIcon from "@mui/icons-material/Delete";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SUBMISSIONS_PER_PAGE = 12;
 
 // Theme
 const C = {
@@ -70,6 +72,10 @@ interface PendingItem {
   EvaluationData?: string;
   SelectedBranch?: string;
   totalLayers?: number;
+}
+
+function getPendingItemKey(item: Pick<PendingItem, "Title" | "Id">): string {
+  return `${item.Title}::${item.Id}`;
 }
 
 interface FormConfig {
@@ -417,19 +423,23 @@ export default function ApprovalDashboard() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [previewModel, setPreviewModel] = useState<Model | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected" | "evaluated">("all");
+  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected" | "evaluated">("pending");
   const [titleFilter, setTitleFilter] = useState("");
   const [submitterFilter, setSubmitterFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [viewMode, setViewMode] = useState<"all" | "pending" | "approvals" | "evaluations">("all");
+  const [viewMode, setViewMode] = useState<"approvals" | "evaluations">("approvals");
+  const [listPage, setListPage] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
-  const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<number, "approval" | "evaluation">>({});
+  const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<string, "approval" | "evaluation">>({});
   const formLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
   const [needsBranchSelection, setNeedsBranchSelection] = useState(false);
   const [availableBranches, setAvailableBranches] = useState<ManualBranch[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PendingItem | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
   const [evalSurveyModel, setEvalSurveyModel] = useState<Model | null>(null);
   const [evalValid, setEvalValid] = useState(true);
@@ -441,18 +451,8 @@ export default function ApprovalDashboard() {
   const [completedLayers, setCompletedLayers] = useState<Record<number, { status: string; email?: string; signedAt?: string; rejection?: string; signature?: string; type?: string }>>({});
 
 
-  const filteredItems = useMemo(() => {
+  const baseFilteredItems = useMemo(() => {
     let items = pendingItems;
-
-    if (statusFilter === "pending") {
-      items = items.filter(i => getItemStatus(i) === "pending");
-    } else if (statusFilter === "approved") {
-      items = items.filter(i => getItemStatus(i) === "approved");
-    } else if (statusFilter === "rejected") {
-      items = items.filter(i => getItemStatus(i) === "rejected");
-    } else if (statusFilter === "evaluated") {
-      items = items.filter(i => itemCurrentTypes[i.Id] === "evaluation" && getItemStatus(i) !== "pending");
-    }
 
     if (titleFilter.trim()) {
       const q = titleFilter.trim().toLowerCase();
@@ -475,16 +475,46 @@ export default function ApprovalDashboard() {
       items = items.filter(i => i.SubmittedAt && new Date(i.SubmittedAt) <= to);
     }
 
-    if (viewMode === "pending") {
+    return [...items].sort((a, b) => {
+      const bTime = b.SubmittedAt ? new Date(b.SubmittedAt).getTime() : 0;
+      const aTime = a.SubmittedAt ? new Date(a.SubmittedAt).getTime() : 0;
+      if (bTime !== aTime) return bTime - aTime;
+      return b.Id - a.Id;
+    });
+  }, [pendingItems, titleFilter, submitterFilter, dateFrom, dateTo]);
+
+  const categoryItems = useMemo(() => {
+    return baseFilteredItems.filter(i =>
+      viewMode === "evaluations" ? itemCurrentTypes[getPendingItemKey(i)] === "evaluation" : itemCurrentTypes[getPendingItemKey(i)] !== "evaluation"
+    );
+  }, [baseFilteredItems, itemCurrentTypes, viewMode]);
+
+  const filteredItems = useMemo(() => {
+    let items = categoryItems;
+
+    if (statusFilter === "pending") {
       items = items.filter(i => getItemStatus(i) === "pending");
-    } else if (viewMode === "approvals") {
-      items = items.filter(i => itemCurrentTypes[i.Id] === "approval");
-    } else if (viewMode === "evaluations") {
-      items = items.filter(i => itemCurrentTypes[i.Id] === "evaluation");
+    } else if (statusFilter === "approved") {
+      items = items.filter(i => getItemStatus(i) === "approved");
+    } else if (statusFilter === "rejected") {
+      items = items.filter(i => getItemStatus(i) === "rejected");
+    } else if (statusFilter === "evaluated") {
+      items = items.filter(i => getItemStatus(i) !== "pending");
     }
 
     return items;
-  }, [pendingItems, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo, viewMode, itemCurrentTypes]);
+  }, [categoryItems, statusFilter]);
+
+  const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
+  const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [viewMode, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (listPage > totalListPages) setListPage(totalListPages);
+  }, [listPage, totalListPages]);
 
   // Admin access check (defense-in-depth backup for AdminGuard route wrapper)
   useEffect(() => {
@@ -710,7 +740,7 @@ export default function ApprovalDashboard() {
                   const current = effectiveLayers.find(l => l.layerNumber === curr);
                   if (current?.type === "evaluation") itemType = "evaluation";
                 }
-                setItemCurrentTypes((prev) => ({ ...prev, [item.Id]: itemType }));
+                setItemCurrentTypes((prev) => ({ ...prev, [getPendingItemKey(item)]: itemType }));
               }
             }
           } catch {
@@ -776,8 +806,9 @@ export default function ApprovalDashboard() {
         } catch { setNeedsBranchSelection(false); }
       } else { setNeedsBranchSelection(false); setAvailableBranches([]); }
 
-      // Determine current layer type (approval vs evaluation)
-      if (cfg && !pendingBranch) {
+      // Load submitted form details before any workflow decision. Branch selection needs
+      // the same read-only context as approval/evaluation actions.
+      if (cfg) {
         // Resolve FormVersion
         let formVersion = item.FormVersion;
         if (!formVersion) {
@@ -895,11 +926,18 @@ export default function ApprovalDashboard() {
           }
         }
 
+        if (pendingBranch) {
+          setCurrentLayerType(null);
+          setEvalSurveyModel(null);
+          return;
+        }
+
+        // Determine current layer type (approval vs evaluation)
         // Determine current layer number
         const currLayerNum = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || 1;
 
         // Determine layer type from globally computed itemCurrentTypes (version-aware + branch-aware)
-        const detectedType = itemCurrentTypes[item.Id];
+        const detectedType = itemCurrentTypes[getPendingItemKey(item)];
         if (detectedType === "evaluation") {
           setCurrentLayerType("evaluation");
           // Load evaluation form elements by targeting current layer in all available config sources
@@ -1077,7 +1115,7 @@ export default function ApprovalDashboard() {
 
       // If advancing to a new layer with a different type, update itemCurrentTypes
       if (nextLayerConfig) {
-        setItemCurrentTypes((prev) => ({ ...prev, [selectedItem.Id]: nextLayerConfig.type }));
+        setItemCurrentTypes((prev) => ({ ...prev, [getPendingItemKey(selectedItem)]: nextLayerConfig.type }));
       }
 
       setActionSuccess({
@@ -1174,6 +1212,85 @@ export default function ApprovalDashboard() {
       await loadItemDetails(updatedItem);
     } catch (e) { setError((e as Error).message); }
     finally { setBranchLoading(false); }
+  };
+
+  const handleDeleteSubmission = async () => {
+    if (!token || !deleteTarget) return;
+
+    setDeleteLoading(true);
+    setError("");
+    try {
+      const rawItem = await spGet(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(deleteTarget.Title)}')/items(${deleteTarget.Id})`
+      ) as Record<string, unknown>;
+
+      const submissionData: Record<string, unknown> = {};
+      const layerNumbers = new Set<number>();
+      for (const [key, value] of Object.entries(rawItem)) {
+        if (!SYSTEM_FIELDS.has(key) && value !== null && value !== undefined) {
+          submissionData[key] = value;
+        }
+        const layerMatch = key.match(/^L(\d+)_(Status|Email|SignedAt|Rejection|Signature)$/);
+        if (layerMatch) layerNumbers.add(parseInt(layerMatch[1], 10));
+      }
+      const totalLayers = deleteTarget.totalLayers || Math.max(deleteTarget.CurrentLayer || 0, deleteTarget.CurrentApprovalLayer || 0, layerNumbers.size);
+      for (let n = 1; n <= totalLayers; n++) layerNumbers.add(n);
+
+      const layers: Submission["layers"] = Array.from(layerNumbers)
+        .sort((a, b) => a - b)
+        .map((layerNumber) => ({
+          status: valueToText(rawItem[`L${layerNumber}_Status`]),
+          outcome: undefined,
+          email: valueToText(rawItem[`L${layerNumber}_Email`]) || null,
+          signedAt: valueToText(rawItem[`L${layerNumber}_SignedAt`]) || null,
+          rejectionReason: valueToText(rawItem[`L${layerNumber}_Rejection`]) || null,
+          signature: valueToText(rawItem[`L${layerNumber}_Signature`]) || null,
+        }));
+
+      const client = createSpClient(instance, accounts);
+      const result = await client.hardDeleteSubmission({
+        id: String(deleteTarget.Id),
+        submissionId: String(deleteTarget.Id),
+        listTitle: deleteTarget.Title,
+        formId: valueToText(rawItem.FormID),
+        formVersion: deleteTarget.FormVersion || valueToText(rawItem.FormVersion),
+        title: deleteTarget.Title,
+        submittedByEmail: deleteTarget.SubmittedBy || valueToText(rawItem.SubmittedBy),
+        submittedAt: deleteTarget.SubmittedAt || valueToText(rawItem.SubmittedAt) || null,
+        formStatus: deleteTarget.FormStatus || deleteTarget.Status || valueToText(rawItem.FormStatus) || null,
+        totalLayers,
+        layers,
+        meta: { icon: "", color: "", pale: "", category: "" },
+        submissionData,
+        currentLayer: deleteTarget.CurrentLayer,
+        selectedBranch: deleteTarget.SelectedBranch,
+      });
+
+      setPendingItems((prev) => prev.filter((item) => !(item.Id === deleteTarget.Id && item.Title === deleteTarget.Title)));
+      setItemCurrentTypes((prev) => {
+        const next = { ...prev };
+        delete next[getPendingItemKey(deleteTarget)];
+        return next;
+      });
+      if (selectedItem?.Id === deleteTarget.Id && selectedItem.Title === deleteTarget.Title) {
+        setSelectedItem(null);
+        setSurveyJson(null);
+        setResponseData(null);
+        setPreviewModel(null);
+        setEvalSurveyModel(null);
+        setCompletedLayers({});
+      }
+      setDeleteTarget(null);
+      setDeleteConfirmText("");
+      if (result.warnings.length > 0) {
+        setError(`Submission deleted. Cleanup warnings: ${result.warnings.join(" ")}`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   // Handle approve
@@ -1435,19 +1552,16 @@ export default function ApprovalDashboard() {
           </div>
         )}
 
-        {/* Top filter: All | Pending | Approvals | Evaluations */}
+        {/* Category tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {(["all", "pending", "approvals", "evaluations"] as const).map((mode) => {
-            const modeCount = mode === "all" ? pendingItems.length
-              : mode === "pending"
-                ? pendingItems.filter(i => getItemStatus(i) === "pending").length
-                : mode === "approvals"
-                  ? pendingItems.filter(i => itemCurrentTypes[i.Id] === "approval").length
-                  : pendingItems.filter(i => itemCurrentTypes[i.Id] === "evaluation").length;
+          {(["approvals", "evaluations"] as const).map((mode) => {
+            const modeCount = baseFilteredItems.filter(i =>
+              mode === "evaluations" ? itemCurrentTypes[getPendingItemKey(i)] === "evaluation" : itemCurrentTypes[getPendingItemKey(i)] !== "evaluation"
+            ).length;
             return (
               <button
                 key={mode}
-                onClick={() => { setViewMode(mode); setStatusFilter("all"); }}
+                onClick={() => { setViewMode(mode); setStatusFilter("pending"); }}
                 style={{
                   padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
                   fontSize: 13, fontWeight: 600,
@@ -1456,50 +1570,41 @@ export default function ApprovalDashboard() {
                   boxShadow: viewMode === mode ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
                 }}
               >
-                {mode === "all" ? "All" : mode.charAt(0).toUpperCase() + mode.slice(1)} ({modeCount})
+                {mode === "approvals" ? "Approvals" : "Evaluations"} ({modeCount})
               </button>
             );
           })}
         </div>
 
-        {/* Status sub-filter — under Approvals shows Approved/Rejected, under Evaluations shows Evaluated */}
-        {viewMode !== "pending" ? (
-          (() => {
-            const statusOpts: ("all" | "pending" | "approved" | "rejected" | "evaluated")[] =
-              viewMode === "evaluations"
-                ? ["all", "pending", "evaluated"]
-                : ["all", "pending", "approved", "rejected"];
+        {/* Status tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          {(viewMode === "evaluations"
+            ? (["pending", "evaluated"] as const)
+            : (["pending", "approved", "rejected"] as const)
+          ).map((tab) => {
+            const count = categoryItems.filter((item) => {
+              if (tab === "pending") return getItemStatus(item) === "pending";
+              if (tab === "approved") return getItemStatus(item) === "approved";
+              if (tab === "rejected") return getItemStatus(item) === "rejected";
+              return getItemStatus(item) !== "pending";
+            }).length;
             return (
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                {statusOpts.map((tab) => {
-                  let count = 0;
-                  if (tab === "all") count = pendingItems.length;
-                  else if (tab === "pending") count = pendingItems.filter(i => getItemStatus(i) === "pending").length;
-                  else if (tab === "approved") count = pendingItems.filter(i => getItemStatus(i) === "approved").length;
-                  else if (tab === "rejected") count = pendingItems.filter(i => getItemStatus(i) === "rejected").length;
-                  else if (tab === "evaluated") count = pendingItems.filter(i => itemCurrentTypes[i.Id] === "evaluation" && getItemStatus(i) !== "pending").length;
-                  return (
-                    <button
-                      key={tab}
-                      onClick={() => setStatusFilter(tab)}
-                      style={{
-                        padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
-                        fontSize: 12, fontWeight: 600,
-                        background: statusFilter === tab ? C.purple : "#fff",
-                        color: statusFilter === tab ? "#fff" : C.textSecond,
-                        boxShadow: statusFilter === tab ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      {tab === "evaluated" ? "Evaluated" : tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
-                    </button>
-                  );
-                })}
-              </div>
+              <button
+                key={tab}
+                onClick={() => setStatusFilter(tab)}
+                style={{
+                  padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
+                  fontSize: 12, fontWeight: 600,
+                  background: statusFilter === tab ? C.purple : "#fff",
+                  color: statusFilter === tab ? "#fff" : C.textSecond,
+                  boxShadow: statusFilter === tab ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
+                }}
+              >
+                {tab === "evaluated" ? "Evaluated" : tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
+              </button>
             );
-          })()
-        ) : (
-          <div style={{ marginBottom: 16 }} />
-        )}
+          })}
+        </div>
 
         {/* Filters */}
         <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
@@ -1621,26 +1726,103 @@ export default function ApprovalDashboard() {
           </div>
         )}
 
+        {deleteTarget && (
+          <div
+            style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.42)", zIndex: 1000,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+            onClick={() => { if (!deleteLoading) { setDeleteTarget(null); setDeleteConfirmText(""); } }}
+          >
+            <div
+              style={{
+                background: C.cardBg, borderRadius: 14, padding: 24, width: 460, maxWidth: "90vw",
+                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.redPale, color: C.red, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <DeleteIcon style={{ fontSize: 18 }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary }}>Delete Submission Permanently</div>
+                  <div style={{ fontSize: 12, color: C.textSecond }}>This removes the submission item and related managed files where possible.</div>
+                </div>
+              </div>
+              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, margin: "14px 0", fontSize: 12, color: C.textSecond }}>
+                <div style={{ fontWeight: 700, color: C.textPrimary }}>{deleteTarget.Title}</div>
+                <div>Submitted by {deleteTarget.SubmittedBy || "Unknown"} on {formatDateTime(deleteTarget.SubmittedAt)}</div>
+                <div>Item ID: {deleteTarget.Id}</div>
+              </div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>
+                Type DELETE to confirm
+              </label>
+              <input
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                disabled={deleteLoading}
+                autoFocus
+                style={{
+                  width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8,
+                  border: `1px solid ${C.border}`, fontSize: 13, color: C.textPrimary, outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}
+                  disabled={deleteLoading}
+                  style={{
+                    padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
+                    background: "#fff", color: C.textSecond, fontSize: 13, fontWeight: 600,
+                    cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.6 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteSubmission}
+                  disabled={deleteConfirmText !== "DELETE" || deleteLoading}
+                  style={{
+                    padding: "9px 18px", borderRadius: 8, border: "none",
+                    background: deleteConfirmText === "DELETE" && !deleteLoading ? C.red : C.border,
+                    color: deleteConfirmText === "DELETE" && !deleteLoading ? "#fff" : C.textMuted,
+                    fontSize: 13, fontWeight: 600,
+                    cursor: deleteConfirmText === "DELETE" && !deleteLoading ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {deleteLoading ? "Deleting..." : "Delete permanently"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Items + Detail Grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
           {/* Items List */}
           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
-              <span style={{ fontWeight: 600, color: C.purple }}>{statusFilter === "all" ? "All" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} Submissions ({filteredItems.length})</span>
+            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span style={{ fontWeight: 600, color: C.purple }}>
+                {viewMode === "approvals" ? "Approval" : "Evaluation"} {statusFilter === "evaluated" ? "Evaluated" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} ({filteredItems.length})
+              </span>
+              <span style={{ fontSize: 11, color: C.textSecond }}>
+                Newest first
+              </span>
             </div>
             <div style={{ maxHeight: 600, overflow: "auto" }}>
               {filteredItems.length === 0 ? (
                 <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions</div>
               ) : (
-                filteredItems.map((item) => (
+                pagedItems.map((item) => (
                   <div
-                    key={item.Id}
+                    key={getPendingItemKey(item)}
                     onClick={() => loadItemDetails(item)}
                     style={{
                       padding: 16,
                       borderBottom: `1px solid ${C.border}`,
                       cursor: "pointer",
-                      background: selectedItem?.Id === item.Id ? C.purplePale : "transparent",
+                      background: selectedItem?.Id === item.Id && selectedItem.Title === item.Title ? C.purplePale : "transparent",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1682,12 +1864,61 @@ export default function ApprovalDashboard() {
                         >
                           {getItemDisplayStatus(item)}
                         </span>
+                        <button
+                          title="Delete submission permanently"
+                          aria-label={`Delete ${item.Title} submission ${item.Id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget(item);
+                            setDeleteConfirmText("");
+                          }}
+                          disabled={deleteLoading}
+                          style={{
+                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.redPale}`,
+                            background: "#fff", color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.55 : 1,
+                          }}
+                        >
+                          <DeleteIcon style={{ fontSize: 15 }} />
+                        </button>
                       </div>
                     </div>
                   </div>
                 ))
               )}
             </div>
+            {filteredItems.length > SUBMISSIONS_PER_PAGE && (
+              <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <div style={{ fontSize: 12, color: C.textSecond }}>
+                  Showing {(listPage - 1) * SUBMISSIONS_PER_PAGE + 1}-{Math.min(listPage * SUBMISSIONS_PER_PAGE, filteredItems.length)} of {filteredItems.length}
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button
+                    onClick={() => setListPage((page) => Math.max(1, page - 1))}
+                    disabled={listPage <= 1}
+                    style={{
+                      padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                      background: "#fff", color: listPage <= 1 ? C.textMuted : C.textSecond,
+                      fontSize: 12, fontWeight: 600, cursor: listPage <= 1 ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: 12, color: C.textSecond }}>Page {listPage} of {totalListPages}</span>
+                  <button
+                    onClick={() => setListPage((page) => Math.min(totalListPages, page + 1))}
+                    disabled={listPage >= totalListPages}
+                    style={{
+                      padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                      background: "#fff", color: listPage >= totalListPages ? C.textMuted : C.textSecond,
+                      fontSize: 12, fontWeight: 600, cursor: listPage >= totalListPages ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Detail Panel */}
@@ -1721,24 +1952,38 @@ export default function ApprovalDashboard() {
                 </div>
 
                 {needsBranchSelection && getItemStatus(selectedItem) === "pending" ? (
-                  <div style={{ padding: 24, textAlign: "center" }}>
-                    <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>⑂</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Select Branch</div>
-                    <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 20, maxWidth: 320, margin: "0 auto 20px" }}>
-                      This submission needs a branch assignment before the approval/evaluation flow can begin.
+                  <>
+                    <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
+                        Submitted Form Details
+                      </div>
+                      {previewModel ? (
+                        <div className="approval-survey-preview">
+                          <Survey model={previewModel} />
+                        </div>
+                      ) : (
+                        <div style={{ color: C.textMuted }}>Loading form preview...</div>
+                      )}
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 260, margin: "0 auto" }}>
-                      {availableBranches.map((branch) => (
-                        <button key={branch.name} onClick={() => handleSelectBranch(branch.name)} disabled={branchLoading}
-                          style={{ padding: "12px 16px", borderRadius: 10, border: `1.5px solid ${C.purpleMid}`, background: C.cardBg, cursor: branchLoading ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, color: C.purple, fontFamily: "inherit", opacity: branchLoading ? 0.6 : 1 }}
-                          onMouseEnter={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.background = C.purplePale; }}}
-                          onMouseLeave={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purpleMid; e.currentTarget.style.background = C.cardBg; }}}>
-                          {branch.label || branch.name}
-                        </button>
-                      ))}
+                    <div style={{ padding: 24, textAlign: "center", borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>⑂</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Select Branch</div>
+                      <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 20, maxWidth: 360, margin: "0 auto 20px" }}>
+                        Review the submitted form details, then assign the branch that should handle this approval/evaluation flow.
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 260, margin: "0 auto" }}>
+                        {availableBranches.map((branch) => (
+                          <button key={branch.name} onClick={() => handleSelectBranch(branch.name)} disabled={branchLoading}
+                            style={{ padding: "12px 16px", borderRadius: 10, border: `1.5px solid ${C.purpleMid}`, background: C.cardBg, cursor: branchLoading ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, color: C.purple, fontFamily: "inherit", opacity: branchLoading ? 0.6 : 1 }}
+                            onMouseEnter={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.background = C.purplePale; }}}
+                            onMouseLeave={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purpleMid; e.currentTarget.style.background = C.cardBg; }}}>
+                            {branch.label || branch.name}
+                          </button>
+                        ))}
+                      </div>
+                      {branchLoading && <div style={{ marginTop: 12, fontSize: 11, color: C.textMuted }}>Saving branch selection...</div>}
                     </div>
-                    {branchLoading && <div style={{ marginTop: 12, fontSize: 11, color: C.textMuted }}>Saving branch selection...</div>}
-                  </div>
+                  </>
                 ) : (
                   <>
                 <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>

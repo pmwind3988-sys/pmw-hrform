@@ -403,6 +403,7 @@ function mapSubmission(
   const createdByEmail = resolveCreatedByEmail(raw);
   const title = resolveSubmissionTitle(raw.Title, submitterName, submittedByEmail, createdByName, createdByEmail);
   const submittedAt = raw.SubmittedAt ? String(raw.SubmittedAt) : null;
+  const modifiedAt = raw.Modified ? String(raw.Modified) : null;
   const currentLayer = raw.CurrentLayer !== undefined && raw.CurrentLayer !== null && raw.CurrentLayer !== ""
     ? Number(raw.CurrentLayer) || 0
     : 0;
@@ -515,6 +516,7 @@ function mapSubmission(
       key === "_authorEmail" ||
       key === "Author" ||
       key === "SubmittedAt" ||
+      key === "Modified" ||
       key === "SubmittedBy" ||
       key === "Submitted_x0020_By" ||
       key === "SelectedBranch" ||
@@ -543,6 +545,7 @@ function mapSubmission(
     createdByName,
     createdByEmail,
     submittedAt,
+    modifiedAt,
     formStatus,
     totalLayers,
     layers: layers.filter(Boolean) as ApprovalLayer[],
