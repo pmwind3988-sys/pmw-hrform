@@ -18,6 +18,7 @@ import { SP_STATIC } from "../../utils/spConfig";
 import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
+import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
 import { formatLayerProgress, getActiveLayers, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany, splitCompanyLines } from "../../utils/companySelection";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
@@ -134,7 +135,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
 
     const data: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(respItem)) {
-      if (!SYSTEM_FIELDS.has(k) && v !== null && v !== undefined) {
+      if (!SYSTEM_FIELDS.has(k) && !/^L\d+_/.test(k) && v !== null && v !== undefined) {
         data[k] = v;
       }
     }
@@ -861,7 +862,7 @@ export default function ApprovalDashboard() {
         const data: Record<string, unknown> = {};
         const layerHistory: Record<number, { status: string; email?: string; signedAt?: string; rejection?: string; signature?: string; type?: string }> = {};
         for (const [k, v] of Object.entries(respItem)) {
-          if (!SYSTEM_FIELDS.has(k) && v !== null && v !== undefined) {
+          if (!SYSTEM_FIELDS.has(k) && !/^L\d+_/.test(k) && v !== null && v !== undefined) {
             data[k] = v;
           }
           // Extract L{n}_Status, L{n}_Email, etc. for layer history display
@@ -1083,15 +1084,17 @@ export default function ApprovalDashboard() {
       }
 
       let pdfUrl: string | undefined;
-      try {
-        const pdfData = await loadPdfData(selectedItem, token);
-        if (pdfData) {
-          pdfData.meta.formStatus = isFinal ? "completed" : "in_review";
-          const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
-          pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
+      if (isFinal) {
+        try {
+          const pdfData = await loadPdfData(selectedItem, token);
+          if (pdfData) {
+            pdfData.meta.formStatus = "completed";
+            const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
+            pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
+          }
+        } catch {
+          // Keep the workflow moving even if PDF generation is unavailable.
         }
-      } catch {
-        // Keep the workflow moving even if PDF generation is unavailable.
       }
 
       await triggerApprovalNotification(token, {
@@ -1356,9 +1359,9 @@ export default function ApprovalDashboard() {
       const newStatus = isFinal ? "Approved" : `Approved Layer ${currentLayer}`;
       const patchBody: Record<string, unknown> = {
         Status: newStatus,
-        CurrentApprovalLayer: currentLayer + 1,
-        CurrentLayer: currentLayer + 1, // Keep in sync
-        FormStatus: isFinal ? "Approved" : "In Review",
+        CurrentApprovalLayer: isFinal ? currentLayer : currentLayer + 1,
+        CurrentLayer: isFinal ? currentLayer : currentLayer + 1, // Keep in sync
+        FormStatus: isFinal ? "Completed" : "In Review",
       };
       // Also update enhanced L{n}_Status so the PDF reflects the correct status
       patchBody[`L${currentLayer}_Status`] = SP_LAYER_STATUS.APPROVED;
@@ -1375,7 +1378,7 @@ export default function ApprovalDashboard() {
         try {
           const pdfData = await loadPdfData(selectedItem, token);
           if (pdfData) {
-            pdfData.meta.formStatus = "approved";
+            pdfData.meta.formStatus = "completed";
             const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
             pdfUrl = await generateAndStorePdf(token, selectedItem.Title, selectedItem.Id, pdfData);
           }
@@ -1397,10 +1400,10 @@ export default function ApprovalDashboard() {
       });
 
       // Update local list (keep item with new status instead of removing)
-      const itemFormStatus = isFinal ? "Approved" : "In Review";
+      const itemFormStatus = isFinal ? "Completed" : "In Review";
       setPendingItems((prev) => prev.map((i) =>
         i.Id === selectedItem.Id
-          ? { ...i, Status: newStatus, FormStatus: itemFormStatus, L1_Status: i.L1_Status || SP_LAYER_STATUS.APPROVED, PdfUrl: pdfUrl || i.PdfUrl }
+          ? { ...i, Status: newStatus, FormStatus: itemFormStatus, CurrentLayer: isFinal ? currentLayer : currentLayer + 1, CurrentApprovalLayer: isFinal ? currentLayer : currentLayer + 1, L1_Status: i.L1_Status || SP_LAYER_STATUS.APPROVED, PdfUrl: pdfUrl || i.PdfUrl }
           : i
       ));
       setSelectedItem(null);
@@ -1419,7 +1422,21 @@ export default function ApprovalDashboard() {
     try {
       const listName = selectedItem.Title; // list is named after form title
 
-      // Generate PDF before notification so we can include the link in the email
+      const currentLayer = selectedItem.CurrentApprovalLayer || selectedItem.CurrentLayer || 1;
+      let branchLayers: LayerConfigItem[] | null = null;
+      if (formConfig.LayerConfig) {
+        try { const lc = JSON.parse(formConfig.LayerConfig); branchLayers = getActiveLayers(lc, selectedItem.SelectedBranch); } catch {
+          /* Invalid JSON — keep null */
+        }
+      }
+      const totalLayers = branchLayers?.length || formConfig.NumberOfApprovalLayer || selectedItem.totalLayers || currentLayer;
+      await spPatch(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
+        buildRejectedWorkflowPatch(currentLayer, totalLayers, new Date().toISOString(), reason),
+      );
+
+      // Generate PDF after writing all terminal layer statuses so the chain is accurate.
       let pdfUrl: string | undefined;
       try {
         const pdfData = await loadPdfData(selectedItem, token);
@@ -1432,25 +1449,12 @@ export default function ApprovalDashboard() {
         // Keep the workflow moving even if PDF generation is unavailable.
       }
 
-      const currentLayer = selectedItem.CurrentApprovalLayer || selectedItem.CurrentLayer || 1;
-      await spPatch(
-        token,
-        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
-        {
-          Status: "Rejected",
-          FormStatus: "Rejected",
-          [`L${currentLayer}_Status`]: SP_LAYER_STATUS.REJECTED,
-          [`L${currentLayer}_SignedAt`]: new Date().toISOString(),
-          [`L${currentLayer}_Rejection`]: reason,
-        }
-      );
-
       await triggerApprovalNotification(token, {
         formTitle: selectedItem.Title,
         submittedBy: selectedItem.SubmittedBy,
         responseItemId: selectedItem.Id,
-        layer: selectedItem.CurrentApprovalLayer || 1,
-        totalLayers: formConfig.NumberOfApprovalLayer || 1,
+        layer: currentLayer,
+        totalLayers,
         action: "reject",
         pdfUrl,
       });
@@ -1458,7 +1462,7 @@ export default function ApprovalDashboard() {
       // Update local list (keep item with new status)
       setPendingItems((prev) => prev.map((i) =>
         i.Id === selectedItem.Id
-          ? { ...i, Status: "Rejected", FormStatus: "Rejected", PdfUrl: pdfUrl || i.PdfUrl }
+          ? { ...i, Status: "Rejected", FormStatus: "Rejected", CurrentLayer: currentLayer, CurrentApprovalLayer: currentLayer, PdfUrl: pdfUrl || i.PdfUrl }
           : i
       ));
       setSelectedItem(null);

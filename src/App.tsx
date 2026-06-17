@@ -22,6 +22,7 @@ import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision }
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
+import { isRejectedStatus } from "./utils/workflowStatus";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -335,7 +336,7 @@ function isUnauthorizedError(error: unknown): boolean {
 function normalizeStatus(status: string | null): string {
   if (!status) return "pending";
   const normalized = status.toLowerCase().replace(/[\s_-]/g, "");
-  if (normalized === "fullyapproved") return "fullyapproved";
+  if (normalized === "fullyapproved" || normalized === "completed") return "fullyapproved";
   if (normalized === "approved") return "approved";
   if (normalized.includes("reject")) return "rejected";
   if (normalized.includes("progress") || normalized.includes("review")) return "inprogress";
@@ -434,13 +435,14 @@ function mapSubmission(
       const rejectionVal = raw[`L${n}_Rejection`] ? String(raw[`L${n}_Rejection`]) : null;
       const signatureVal = raw[`L${n}_Signature`] ? String(raw[`L${n}_Signature`]) : null;
       const canonicalStatus = normalizeLayerStatus(statusVal);
+      const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
 
       layers.push({
         status: statusVal || "pending",
         outcome: canonicalStatus === "approved" ? "approved" : canonicalStatus === "rejected" ? "rejected" : undefined,
         email: emailVal,
         signedAt: signedAtVal,
-        rejectionReason: rejectionVal,
+        rejectionReason: rejectionDisplay,
         signature: signatureVal,
       });
 
@@ -462,7 +464,7 @@ function mapSubmission(
           email: emailVal,
           confirmedAt: evalData?.confirmedAt ?? null,
           fields: evalData?.fields ?? {},
-          notes: evalData?.notes,
+          notes: evalData?.notes ?? (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal ?? undefined : undefined),
         });
       } else {
         enhancedLayers.push({
@@ -472,7 +474,7 @@ function mapSubmission(
           outcome: canonicalStatus === "approved" ? "approved" : canonicalStatus === "rejected" ? "rejected" : undefined,
           email: emailVal,
           signedAt: signedAtVal,
-          rejectionReason: rejectionVal,
+          rejectionReason: rejectionDisplay,
           signature: signatureVal,
           confirmedVia: (lc as ApprovalLayerConfig).confirmationType ?? "signature",
         });
@@ -486,13 +488,15 @@ function mapSubmission(
       const signedAtVal = raw[`L${i}_SignedAt`] ? String(raw[`L${i}_SignedAt`]) : null;
       const rejectionVal = raw[`L${i}_Rejection`] ? String(raw[`L${i}_Rejection`]) : null;
       const signatureVal = raw[`L${i}_Signature`] ? String(raw[`L${i}_Signature`]) : null;
+      const canonicalStatus = normalizeLayerStatus(statusVal);
+      const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
       if (statusVal || emailVal) {
         layers.push({
           status: statusVal || "pending",
-          outcome: statusVal === "approved" ? "approved" : statusVal === "rejected" ? "rejected" : undefined,
+          outcome: canonicalStatus === "approved" ? "approved" : canonicalStatus === "rejected" ? "rejected" : undefined,
           email: emailVal,
           signedAt: signedAtVal,
-          rejectionReason: rejectionVal,
+          rejectionReason: rejectionDisplay,
           signature: signatureVal,
         });
       }

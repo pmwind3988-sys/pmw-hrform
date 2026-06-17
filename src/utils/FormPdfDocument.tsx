@@ -4,8 +4,6 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
-import { formatDashboardDateTime } from "./submissionDisplay";
-
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export interface PdfFormData {
@@ -76,7 +74,7 @@ const C = {
 // ── Styles ────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
-  page: { padding: 32, fontFamily: "Helvetica", fontSize: 8.5, color: C.text },
+  page: { padding: 32, fontFamily: "Helvetica", fontSize: 8.5, color: C.text, lineHeight: 1.25 },
   // Header
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, paddingBottom: 12, borderBottomWidth: 2.5, borderBottomColor: C.primary },
   logoBox: { width: 90, height: 42 },
@@ -86,9 +84,9 @@ const S = StyleSheet.create({
   docRef: { fontSize: 7, color: C.muted },
   // Info grid
   infoGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 10 },
-  infoCell: { width: "50%", marginBottom: 2 },
+  infoCell: { width: "50%", marginBottom: 4, paddingRight: 8 },
   infoLabel: { fontSize: 6, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6 },
-  infoValue: { fontSize: 8, color: C.text, marginTop: 1 },
+  infoValue: { fontSize: 8, color: C.text, marginTop: 1, lineHeight: 1.25 },
   // Company block
   companyBox: { backgroundColor: C.bg, padding: 7, marginBottom: 10 },
   companyLine: { fontSize: 6.5, color: C.muted, marginBottom: 1 },
@@ -100,36 +98,39 @@ const S = StyleSheet.create({
   subSectionLabel: { fontSize: 7.5, fontWeight: "bold", color: C.primary, marginBottom: 3, marginTop: 6 },
 
   // ── Layer table ──
-  layerRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: C.borderLight, paddingVertical: 3 },
+  layerRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: C.borderLight, paddingVertical: 3, alignItems: "flex-start" },
   layerHeader: { backgroundColor: C.primary },
   layerHeaderText: { color: C.white, fontSize: 6, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 0.4, paddingHorizontal: 3, paddingVertical: 2.5 },
-  layerCell: { paddingHorizontal: 3, fontSize: 6.5, color: C.text },
+  layerCell: { paddingHorizontal: 3, fontSize: 6.5, color: C.text, lineHeight: 1.25 },
   colNum: { width: "6%" },
-  colType: { width: "10%" },
-  colStatus: { width: "12%" },
-  colEmail: { width: "22%" },
-  colTime: { width: "18%" },
-  colReason: { width: "32%" },
+  colType: { width: "12%" },
+  colStatus: { width: "13%" },
+  colEmail: { width: "21%" },
+  colTime: { width: "20%" },
+  colReason: { width: "28%" },
 
   // ── Signature block ──
-  sigBlock: { flexDirection: "row", alignItems: "center", marginTop: 3, marginBottom: 3, padding: 6, backgroundColor: C.bgAlt, borderWidth: 0.5, borderColor: C.borderLight },
+  sigBlock: { flexDirection: "row", alignItems: "center", marginTop: 3, marginBottom: 4, padding: 7, backgroundColor: C.bgAlt, borderWidth: 0.5, borderColor: C.borderLight },
   sigLine: { flex: 1 },
   sigLabel: { fontSize: 5.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 },
   sigName: { fontSize: 8, fontWeight: "bold", color: C.text, marginTop: 1 },
   sigDetail: { fontSize: 5.5, color: C.muted, marginTop: 1 },
-  sigImageBox: { width: 70, height: 26, marginLeft: "auto", justifyContent: "center", alignItems: "flex-end" },
-  sigImage: { maxWidth: 70, maxHeight: 26, objectFit: "contain" },
+  sigImageBox: { width: 92, minHeight: 34, marginLeft: "auto", justifyContent: "center", alignItems: "flex-end" },
+  sigImage: { maxWidth: 92, maxHeight: 34, objectFit: "contain" },
 
   // ── Field rows ──
-  fieldRow: { flexDirection: "row", paddingVertical: 2.5, paddingHorizontal: 4, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
+  fieldRow: { flexDirection: "row", paddingVertical: 3, paddingHorizontal: 4, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
   fieldRowAlt: { backgroundColor: C.bgAlt },
-  fieldLabel: { width: "38%", fontSize: 7, color: C.muted, paddingRight: 4 },
-  fieldValue: { width: "62%", fontSize: 7, color: C.text },
+  fieldLabel: { width: "34%", fontSize: 7, color: C.muted, paddingRight: 6, lineHeight: 1.3 },
+  fieldValue: { width: "66%", fontSize: 7, color: C.text, lineHeight: 1.3 },
+  imageGrid: { width: "66%", flexDirection: "row", flexWrap: "wrap" },
+  imageTile: { width: "45%", minHeight: 64, borderWidth: 0.5, borderColor: C.borderLight, backgroundColor: C.white, padding: 4, marginRight: 6, marginBottom: 5, justifyContent: "center", alignItems: "center" },
+  imagePreview: { maxWidth: "100%", maxHeight: 76, objectFit: "contain" },
 
   // ── Eval fields sub-table ──
-  evalSubRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 6, borderBottomWidth: 0.3, borderBottomColor: C.borderLight },
-  evalSubLabel: { width: "40%", fontSize: 6, color: C.muted },
-  evalSubValue: { width: "60%", fontSize: 6, color: C.text },
+  evalSubRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 6, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
+  evalSubLabel: { width: "34%", fontSize: 6, color: C.muted, paddingRight: 5, lineHeight: 1.25 },
+  evalSubValue: { width: "66%", fontSize: 6, color: C.text, lineHeight: 1.25 },
 
   // ── No data ──
   noData: { fontSize: 7, color: C.muted, fontStyle: "italic", textAlign: "center", paddingVertical: 10 },
@@ -155,7 +156,16 @@ const S = StyleSheet.create({
 
 function fmtDate(d: string | undefined | null): string {
   if (!d) return "—";
-  return formatDashboardDateTime(d, "N/A");
+  const parsed = new Date(d);
+  if (Number.isNaN(parsed.getTime())) return "N/A";
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const year = parsed.getFullYear();
+  let hour = parsed.getHours();
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+  const period = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${day}/${month}/${year} ${hour}:${minute} ${period}`;
 }
 
 function fmtVal(v: unknown): string {
@@ -168,6 +178,68 @@ function fmtVal(v: unknown): string {
     return JSON.stringify(v);
   }
   return String(v);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseMaybeJson(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isImageSource(value: string): boolean {
+  const trimmed = value.trim();
+  return /^data:image\//i.test(trimmed) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(trimmed);
+}
+
+function extractImageSrcFromHtml(value: string): string {
+  const match = value.match(/<img\b[^>]*\bsrc=(["'])(.*?)\1/i);
+  return match?.[2]?.trim() ?? "";
+}
+
+function splitSharePointUrlFieldValue(value: string): string {
+  const trimmed = value.trim();
+  const separatorIndex = trimmed.search(/,\s+/);
+  if (separatorIndex === -1) return trimmed;
+  return trimmed.slice(0, separatorIndex).trim();
+}
+
+function collectImageSources(value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+  if (Array.isArray(value)) return value.flatMap(collectImageSources);
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const parsed = parseMaybeJson(trimmed);
+    if (parsed !== null) return collectImageSources(parsed);
+    const htmlSrc = extractImageSrcFromHtml(trimmed);
+    const candidate = splitSharePointUrlFieldValue(htmlSrc || trimmed);
+    return isImageSource(candidate) ? [candidate] : [];
+  }
+
+  if (!isRecord(value)) return [];
+
+  const directKeys = ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"];
+  for (const key of directKeys) {
+    const next = value[key];
+    if (typeof next === "string" && isImageSource(next)) return [next];
+  }
+
+  const serverUrl = value.serverUrl || value.ServerUrl;
+  const relativeUrl = value.serverRelativeUrl || value.ServerRelativeUrl;
+  if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
+    const url = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
+    return isImageSource(url) ? [url] : [];
+  }
+
+  return [];
 }
 
 function badgeStyle(status?: string) {
@@ -183,6 +255,8 @@ function badgeStyle(status?: string) {
 
 function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
   const badge = badgeStyle(layer.status);
+  const rejectedAtLayer = layer.status.toLowerCase().includes("rejected at layer") ? layer.status : "";
+  const remarks = layer.rejection || rejectedAtLayer || (layer.type === "evaluation" ? "Confirmed" : "");
   return (
     <View style={S.layerRow}>
       <Text style={[S.layerCell, S.colNum]}>{layer.layerNumber}</Text>
@@ -190,7 +264,7 @@ function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
       <Text style={[S.layerCell, S.colStatus, { color: badge.text }]}>{badge.label}</Text>
       <Text style={[S.layerCell, S.colEmail]}>{layer.email || "—"}</Text>
       <Text style={[S.layerCell, S.colTime]}>{fmtDate(layer.signedAt)}</Text>
-      <Text style={[S.layerCell, S.colReason]}>{layer.rejection || (layer.type === "evaluation" ? "Confirmed" : "")}</Text>
+      <Text style={[S.layerCell, S.colReason]}>{remarks}</Text>
     </View>
   );
 }
@@ -230,9 +304,23 @@ function renderMatrixField(field: FormSubmissionField) {
   );
 }
 
+function renderImageSources(sources: string[]) {
+  if (sources.length === 0) return null;
+  return (
+    <View style={S.imageGrid}>
+      {sources.map((src, index) => (
+        <View key={`${src}-${index}`} style={S.imageTile} wrap={false}>
+          <Image style={S.imagePreview} src={src} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, companyInfo, isoStandards, logoUrl }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Submitted answers",
+    includeAdditionalFields: false,
   });
   const title = surveyJson?.title || meta.formTitle;
   const badge = badgeStyle(meta.formStatus);
@@ -288,10 +376,11 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
                   if (field.kind === "matrix") {
                     return <View key={field.key}>{renderMatrixField(field)}</View>;
                   }
+                  const imageSources = collectImageSources(field.value);
                   return (
                     <View key={field.key} style={[S.fieldRow, fieldIndex % 2 === 1 ? S.fieldRowAlt : {}]} wrap={false}>
                       <Text style={S.fieldLabel}>{field.label}</Text>
-                      <Text style={S.fieldValue}>{fmtVal(field.value)}</Text>
+                      {imageSources.length > 0 ? renderImageSources(imageSources) : <Text style={S.fieldValue}>{fmtVal(field.value)}</Text>}
                     </View>
                   );
                 })}
@@ -386,9 +475,9 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
               return (
                 <View key={i} style={S.sigBlock}>
                   <View style={S.sigLine}>
-                    <Text style={S.sigLabel}>Layer {layer.layerNumber} — {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
-                    <Text style={S.sigName}>{layer.email || "—"} — <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
-                    <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}{layer.rejection ? ` — Reason: ${layer.rejection}` : ""}</Text>
+                    <Text style={S.sigLabel}>Layer {layer.layerNumber} - {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
+                    <Text style={S.sigName}>{layer.email || "—"} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
+                    <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}{layer.rejection ? ` - Reason: ${layer.rejection}` : ""}</Text>
                   </View>
                   <View style={S.sigImageBox}>
                     <Image style={S.sigImage} src={layer.signature} />
@@ -408,13 +497,16 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
               if (!fields || Object.keys(fields).length === 0) return null;
               return (
                 <View key={i} style={{ marginBottom: 6 }}>
-                  <Text style={S.subSectionLabel}>Layer {layer.layerNumber} — {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
-                  {Object.entries(fields).map(([k, v], fi) => (
-                    <View key={fi} style={S.evalSubRow}>
-                      <Text style={S.evalSubLabel}>{k}</Text>
-                      <Text style={S.evalSubValue}>{fmtVal(v)}</Text>
-                    </View>
-                  ))}
+                  <Text style={S.subSectionLabel}>Layer {layer.layerNumber} - {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
+                  {Object.entries(fields).map(([k, v], fi) => {
+                    const imageSources = collectImageSources(v);
+                    return (
+                      <View key={fi} style={S.evalSubRow}>
+                        <Text style={S.evalSubLabel}>{k}</Text>
+                        {imageSources.length > 0 ? renderImageSources(imageSources) : <Text style={S.evalSubValue}>{fmtVal(v)}</Text>}
+                      </View>
+                    );
+                  })}
                 </View>
               );
             })}
@@ -430,7 +522,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ FOOTER ═══ */}
         <View style={S.footer} fixed>
-          <Text>Generated {new Date().toLocaleDateString("en-MY", { year: "numeric", month: "long", day: "numeric" })}</Text>
+          <Text>Generated {fmtDate(new Date().toISOString())}</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

@@ -16,6 +16,10 @@ interface ApiResponse {
   end(): void;
 }
 
+function rejectedAtLayerStatus(layerNumber: number): string {
+  return `Rejected at Layer ${layerNumber}`;
+}
+
 async function handleGet(req: ApiRequest, res: ApiResponse) {
   const { token } = req.query as { token?: string };
   if (!token || typeof token !== "string") {
@@ -216,15 +220,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const totalLayers = layerConfigParsed.layers.length;
       if (layerNumber < totalLayers) {
         updates.CurrentLayer = (layerNumber as number) + 1;
+        updates.CurrentApprovalLayer = (layerNumber as number) + 1;
+        updates.FormStatus = "In Review";
       } else {
         updates.FormStatus = "Completed";
-        updates.CurrentLayer = 0;
+        updates.CurrentLayer = layerNumber;
+        updates.CurrentApprovalLayer = layerNumber;
       }
     } else if (action === "reject") {
       updates[`L${layerNumber}_Status`] = "Rejected";
       updates[`L${layerNumber}_SignedAt`] = now;
       if (rejection) updates[`L${layerNumber}_Rejection`] = rejection;
       updates.FormStatus = "Rejected";
+      updates.Status = "Rejected";
+      updates.CurrentLayer = layerNumber;
+      updates.CurrentApprovalLayer = layerNumber;
+      for (let n = layerNumber + 1; n <= layerConfigParsed.layers.length; n++) {
+        updates[`L${n}_Status`] = rejectedAtLayerStatus(layerNumber);
+      }
     }
 
     // 4. Update the response item

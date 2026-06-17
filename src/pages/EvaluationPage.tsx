@@ -7,9 +7,10 @@ import { useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 
-import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, readMatrixChildItems } from "../utils/formBuilderSP";
+import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS } from "../utils/statusConstants";
+import { buildRejectedWorkflowPatch } from "../utils/workflowStatus";
 import type { LayerConfigItem, EvaluationDataEntry } from "../types";
 import DOMPurify from "dompurify";
 import EvaluationSummary from "../components/builder/EvaluationSummary";
@@ -62,7 +63,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
 
     const data: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(respItem)) {
-      if (!SYSTEM_FIELDS.has(k) && v !== null && v !== undefined) {
+      if (!SYSTEM_FIELDS.has(k) && !/^L\d+_/.test(k) && v !== null && v !== undefined) {
         data[k] = v;
       }
     }
@@ -83,8 +84,8 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
     });
-  } catch (e) {
-    console.warn("[loadPdfAndGenerate] failed:", e);
+  } catch {
+    /* PDF generation is best-effort after the workflow state is persisted. */
   }
 }
 
@@ -148,6 +149,7 @@ export default function EvaluationPage() {
 
   const [responseData, setResponseData] = useState<Record<string, unknown> | null>(null);
   const [currentLayer, setCurrentLayer] = useState<LayerConfigItem | null>(null);
+  const [totalLayers, setTotalLayers] = useState(0);
   const [previousResults, setPreviousResults] = useState<Record<string, unknown>[]>([]);
   const [formTitle, setFormTitle] = useState("");
 
@@ -209,6 +211,7 @@ export default function EvaluationPage() {
             assignee: { type: "user" as const, value: "" },
             title: json.data.layerTitle,
           } as LayerConfigItem);
+          setTotalLayers(Number(json.data.totalLayers) || 0);
 
           // Build previous results from the filtered fields
           const prev: Record<string, unknown>[] = [];
@@ -261,6 +264,7 @@ export default function EvaluationPage() {
         }
         setResponseData(data.responseFields);
         setCurrentLayer(data.currentLayer || null);
+        setTotalLayers(data.layerConfig.length || displayLayerNumber);
         setPreviousResults(data.previousResults);
 
         // Load matrix child list data for dynamicmatrix fields
@@ -284,28 +288,14 @@ export default function EvaluationPage() {
       const listTitle = formTitle; // list is named after form title
       const respId = parseInt(responseId || "0", 10);
       const now = new Date().toISOString();
+      const effectiveTotalLayers = totalLayers || displayLayerNumber;
+      const isFinal = displayLayerNumber >= effectiveTotalLayers;
+      const nextLayerNumber = displayLayerNumber + 1;
+      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
 
       if (action === "reject") {
-        await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
-          status: SP_LAYER_STATUS.REJECTED,
-          signedAt: now,
-          rejection: rejectionReason,
-        });
-        // Update FormStatus
-        const formStatusUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
-        await fetch(formStatusUrl, {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json;odata=nometadata",
-            "X-RequestDigest": await (await fetch(`${SP_SITE_URL}/_api/contextinfo`, {
-              method: "POST", headers: { Authorization: `Bearer ${token}` },
-            })).json().then((d: { FormDigestValue: string }) => d.FormDigestValue),
-          },
-          body: JSON.stringify({ FormStatus: "Rejected" }),
-        });
-        // Generate PDF on rejection
-        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected").catch(e => console.warn("[EvalPage] PDF failed:", e));
+        await spPatch(token, itemUrl, buildRejectedWorkflowPatch(displayLayerNumber, effectiveTotalLayers, now, rejectionReason));
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
       } else if (action === "confirm" && currentLayer?.type === "evaluation") {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
           confirmerEmail: userEmail,
@@ -318,24 +308,38 @@ export default function EvaluationPage() {
           signedAt: now,
           signature: signatureData || undefined,
         });
-        // Generate PDF on evaluation confirmed
-        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "confirmed").catch(e => console.warn("[EvalPage] PDF failed:", e));
+        await spPatch(token, itemUrl, {
+          Status: isFinal ? "Completed" : "In Review",
+          FormStatus: isFinal ? "Completed" : "In Review",
+          CurrentLayer: isFinal ? displayLayerNumber : nextLayerNumber,
+          CurrentApprovalLayer: isFinal ? displayLayerNumber : nextLayerNumber,
+        });
+        if (isFinal) {
+          await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
+        }
       } else if (action === "approve") {
         await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
           status: SP_LAYER_STATUS.APPROVED,
           signedAt: now,
           signature: signatureData || undefined,
         });
-        // Generate PDF on approval
-        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "approved").catch(e => console.warn("[EvalPage] PDF failed:", e));
+        await spPatch(token, itemUrl, {
+          Status: isFinal ? "Approved" : `Approved Layer ${displayLayerNumber}`,
+          FormStatus: isFinal ? "Completed" : "In Review",
+          CurrentLayer: isFinal ? displayLayerNumber : nextLayerNumber,
+          CurrentApprovalLayer: isFinal ? displayLayerNumber : nextLayerNumber,
+        });
+        if (isFinal) {
+          await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
+        }
       }
 
       setActionState("success");
     } catch (e) {
-      console.error("[EvalPage] submit error:", e);
+      setError(e instanceof Error ? e.message : "Failed to submit this decision.");
       setActionState("error");
     }
-  }, [token, userEmail, formTitle, responseId, displayLayerNumber, rejectionReason, evaluationFields, signatureData, currentLayer, accounts]);
+  }, [token, userEmail, formTitle, responseId, displayLayerNumber, rejectionReason, evaluationFields, signatureData, currentLayer, accounts, totalLayers]);
 
   /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
   const loadMatrixChildData = async (

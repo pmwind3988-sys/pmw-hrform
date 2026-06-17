@@ -1028,6 +1028,12 @@ function LayerProgression({
           let statusIcon = <AccessTimeIcon sx={{ fontSize: 16 }} />;
           let statusLabel = "Waiting";
           let iconColor: string = editorial.muted;
+          const propagatedRejection =
+            enhanced?.status === "rejected" && enhanced.type === "approval" && enhanced.rejectionReason?.toLowerCase().includes("rejected at layer")
+              ? enhanced.rejectionReason
+              : enhanced?.status === "rejected" && enhanced.type === "evaluation" && enhanced.notes?.toLowerCase().includes("rejected at layer")
+                ? enhanced.notes
+                : "";
 
           if (enhanced?.status === "approved" || enhanced?.status === "confirmed") {
             borderColor = editorial.success;
@@ -1039,7 +1045,7 @@ function LayerProgression({
             borderColor = editorial.error;
             bgColor = "rgba(198, 40, 40, 0.06)";
             statusIcon = <CancelIcon sx={{ fontSize: 16 }} />;
-            statusLabel = "Rejected";
+            statusLabel = propagatedRejection || "Rejected";
             iconColor = editorial.error;
           } else if (isActive) {
             borderColor = editorial.pmwPurple;

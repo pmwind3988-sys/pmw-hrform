@@ -110,6 +110,184 @@ function sanitizeMatrixFieldName(fieldName: string): string {
   return fieldName.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseMaybeJson(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isImageSource(value: string): boolean {
+  const trimmed = value.trim();
+  return /^data:image\//i.test(trimmed) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(trimmed);
+}
+
+function extractImageSrcFromHtml(value: string): string {
+  const match = value.match(/<img\b[^>]*\bsrc=(["'])(.*?)\1/i);
+  return match?.[2]?.trim() ?? "";
+}
+
+function splitSharePointUrlFieldValue(value: string): string {
+  const trimmed = value.trim();
+  const separatorIndex = trimmed.search(/,\s+/);
+  if (separatorIndex === -1) return trimmed;
+  return trimmed.slice(0, separatorIndex).trim();
+}
+
+function toAbsoluteSharePointUrl(url: string): string {
+  if (!url || url.startsWith("http") || url.startsWith("data:")) return url;
+  if (!/^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(url)) return url;
+  try {
+    return `${new URL(SP_SITE_URL).origin}${url}`;
+  } catch {
+    return url;
+  }
+}
+
+function escapeODataString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function encodeServerRelativePathParam(serverRelativeUrl: string): string {
+  return encodeURIComponent(escapeODataString(serverRelativeUrl)).replace(/%2F/gi, "/");
+}
+
+function sharePointServerRelativePath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return "";
+  const isSharePointRelativePath = /^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(trimmed);
+
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const siteUrl = new URL(SP_SITE_URL);
+      const imageUrl = new URL(trimmed);
+      if (siteUrl.origin.toLowerCase() !== imageUrl.origin.toLowerCase()) return "";
+      if (!/^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(imageUrl.pathname)) return "";
+      return decodeURIComponent(imageUrl.pathname);
+    }
+  } catch {
+    return "";
+  }
+
+  return isSharePointRelativePath ? decodeURIComponent(trimmed.split(/[?#]/)[0] ?? trimmed) : "";
+}
+
+function sharePointFileValueUrl(value: string): string {
+  const serverRelativePath = sharePointServerRelativePath(value);
+  if (!serverRelativePath) return "";
+  return `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodeServerRelativePathParam(serverRelativePath)}')/$value`;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image blob"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function imageSourceToDataUrl(token: string, source: string, cache: Map<string, string>): Promise<string> {
+  const trimmed = source.trim();
+  if (!trimmed || trimmed.startsWith("data:image/")) return trimmed;
+  const absolute = toAbsoluteSharePointUrl(trimmed);
+  const cached = cache.get(absolute);
+  if (cached) return cached;
+
+  const spFileUrl = sharePointFileValueUrl(absolute);
+  const requestUrl = spFileUrl || absolute;
+  try {
+    const response = await fetch(requestUrl, {
+      headers: spFileUrl ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!response.ok) return absolute;
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) return absolute;
+    const dataUrl = await blobToDataUrl(blob);
+    cache.set(absolute, dataUrl);
+    return dataUrl;
+  } catch {
+    return absolute;
+  }
+}
+
+function imageSourceFromString(value: string): string {
+  const trimmed = value.trim();
+  const parsed = parseMaybeJson(trimmed);
+  if (parsed !== null) return "";
+  const htmlSrc = extractImageSrcFromHtml(trimmed);
+  const candidate = splitSharePointUrlFieldValue(htmlSrc || trimmed);
+  return isImageSource(candidate) ? candidate : "";
+}
+
+async function hydrateImageValue(token: string, value: unknown, cache: Map<string, string>): Promise<unknown> {
+  if (typeof value === "string") {
+    const parsed = parseMaybeJson(value);
+    if (parsed !== null) return hydrateImageValue(token, parsed, cache);
+    const source = imageSourceFromString(value);
+    return source ? imageSourceToDataUrl(token, source, cache) : value;
+  }
+
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((entry) => hydrateImageValue(token, entry, cache)));
+  }
+
+  if (!isRecord(value)) return value;
+
+  const next: Record<string, unknown> = { ...value };
+  for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
+    const raw = next[key];
+    if (typeof raw === "string" && isImageSource(raw)) {
+      next[key] = await imageSourceToDataUrl(token, raw, cache);
+    }
+  }
+
+  const serverUrl = next.serverUrl || next.ServerUrl;
+  const relativeUrl = next.serverRelativeUrl || next.ServerRelativeUrl;
+  if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
+    const combined = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
+    if (isImageSource(combined)) {
+      next.url = await imageSourceToDataUrl(token, combined, cache);
+    }
+  }
+
+  return next;
+}
+
+async function hydratePdfImages(token: string, data: PdfFormData): Promise<void> {
+  const cache = new Map<string, string>();
+  const entries = await Promise.all(
+    Object.entries(data.responseData).map(async ([key, value]) => [key, await hydrateImageValue(token, value, cache)] as const),
+  );
+  data.responseData = Object.fromEntries(entries);
+
+  if (data.layerResults) {
+    for (const layer of data.layerResults) {
+      if (layer.signature) {
+        const hydratedSignature = await hydrateImageValue(token, layer.signature, cache);
+        layer.signature = typeof hydratedSignature === "string" ? hydratedSignature : layer.signature;
+      }
+      if (layer.evaluationFields) {
+        const hydratedFields = await Promise.all(
+          Object.entries(layer.evaluationFields).map(async ([key, value]) => [key, await hydrateImageValue(token, value, cache)] as const),
+        );
+        layer.evaluationFields = Object.fromEntries(hydratedFields);
+      }
+    }
+  }
+
+  if (data.logoUrl && isImageSource(data.logoUrl)) {
+    data.logoUrl = await imageSourceToDataUrl(token, data.logoUrl, cache);
+  }
+}
+
 // ── PDF generation + storage ───────────────────────────────────────────────
 
 export async function generateAndStorePdf(
@@ -150,6 +328,8 @@ export async function generateAndStorePdf(
       // Silently skip if child list read fails (list may not exist yet)
     }
   }
+
+  await hydratePdfImages(token, data);
 
   const blob = await Promise.race([
     pdf(FormPdfDocument(data)).toBlob(),

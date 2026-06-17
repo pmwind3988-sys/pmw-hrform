@@ -44,6 +44,7 @@ type NotificationKind = "branch" | "submission" | "form-status" | "job";
 
 interface NotificationItem {
   id: string;
+  legacyIds?: string[];
   kind: NotificationKind;
   group: string;
   title: string;
@@ -83,6 +84,11 @@ function readStorageSet(key: string): Set<string> {
 
 function writeStorageSet(key: string, value: Set<string>) {
   localStorage.setItem(key, JSON.stringify([...value].slice(-400)));
+}
+
+function hasStoredNotificationId(ids: Set<string>, item: NotificationItem): boolean {
+  if (ids.has(item.id)) return true;
+  return item.legacyIds?.some((legacyId) => ids.has(legacyId)) ?? false;
 }
 
 function normalizeStatusText(value: string | null | undefined): string {
@@ -140,7 +146,8 @@ function buildSubmissionNotifications(submissions: Submission[], isAdmin: boolea
     const timestamp = submission.modifiedAt || submission.submittedAt || "";
     if (isAdmin && hasUnsetBranch(submission)) {
       items.push({
-        id: `branch:${submission.listTitle}:${submission.id}:${timestamp}`,
+        id: `branch:${submission.listTitle}:${submission.id}`,
+        legacyIds: [`branch:${submission.listTitle}:${submission.id}:${timestamp}`],
         kind: "branch",
         group: "Branch assignment needed",
         title: submission.title || submission.listTitle,
@@ -154,7 +161,8 @@ function buildSubmissionNotifications(submissions: Submission[], isAdmin: boolea
     if (isAdmin) {
       const category = submission.meta?.category || "Forms";
       items.push({
-        id: `submission:${submission.listTitle}:${submission.id}:${timestamp}`,
+        id: `submission:${submission.listTitle}:${submission.id}`,
+        legacyIds: [`submission:${submission.listTitle}:${submission.id}:${timestamp}`],
         kind: "submission",
         group: `New submissions · ${category}`,
         title: submission.title || submission.listTitle,
@@ -167,12 +175,14 @@ function buildSubmissionNotifications(submissions: Submission[], isAdmin: boolea
     }
 
     if (submission.submittedByEmail.toLowerCase() === lowerEmail) {
+      const status = normalizeStatusText(submission.formStatus);
       items.push({
-        id: `form-status:${submission.listTitle}:${submission.id}:${normalizeStatusText(submission.formStatus)}:${timestamp}`,
+        id: `form-status:${submission.listTitle}:${submission.id}:${statusKey(status)}`,
+        legacyIds: [`form-status:${submission.listTitle}:${submission.id}:${status}:${timestamp}`],
         kind: "form-status",
         group: "Form status updates",
         title: submission.title || submission.listTitle,
-        description: `Your ${submission.listTitle} item is now ${normalizeStatusText(submission.formStatus)}.`,
+        description: `Your ${submission.listTitle} item is now ${status}.`,
         meta: `Ref ${submission.submissionId}`,
         timestamp,
         submission,
@@ -190,7 +200,8 @@ function buildJobNotifications(applications: JobAdminApplication[], isAdmin: boo
       const status = normalizeStatusText(application.status);
       const timestamp = application.modifiedAt || application.submittedAt || "";
       return {
-        id: `job:${application.id}:${status}:${timestamp}`,
+        id: `job:${application.id}:${statusKey(status)}`,
+        legacyIds: [`job:${application.id}:${status}:${timestamp}`],
         kind: "job" as const,
         group: isAdmin ? "Job applications" : "Job application updates",
         title: application.jobTitle || "Job application",
@@ -250,9 +261,9 @@ export default function NotificationCenter({
     ...buildSubmissionNotifications(submissions, isAdmin, userEmail),
     ...buildJobNotifications(applications, isAdmin),
   ]);
-  const notifications = allNotifications.filter((item) => !clearedIds.has(item.id));
-  const unreadCount = notifications.filter((item) => !readIds.has(item.id)).length;
-  const clearableReadCount = notifications.filter((item) => readIds.has(item.id)).length;
+  const notifications = allNotifications.filter((item) => !hasStoredNotificationId(clearedIds, item));
+  const unreadCount = notifications.filter((item) => !hasStoredNotificationId(readIds, item)).length;
+  const clearableReadCount = notifications.filter((item) => hasStoredNotificationId(readIds, item)).length;
   const totalPages = Math.max(1, Math.ceil(notifications.length / ITEMS_PER_PAGE));
   const currentPage = Math.min(page, totalPages - 1);
   const pageStart = currentPage * ITEMS_PER_PAGE;
@@ -301,22 +312,22 @@ export default function NotificationCenter({
     void loadJobNotifications();
   }, [instance, accounts, isAdmin, userEmail]);
 
-  function markRead(ids: string[]) {
+  function markRead(items: NotificationItem[]) {
     setReadIds((current) => {
       const next = new Set(current);
-      ids.forEach((id) => next.add(id));
+      items.forEach((item) => next.add(item.id));
       writeStorageSet(readStorageKey, next);
       return next;
     });
   }
 
-  function clearRead(ids: string[]) {
-    const clearableIds = ids.filter((id) => readIds.has(id));
-    if (clearableIds.length === 0) return;
+  function clearRead(items: NotificationItem[]) {
+    const clearableItems = items.filter((item) => hasStoredNotificationId(readIds, item));
+    if (clearableItems.length === 0) return;
 
     setClearedIds((current) => {
       const next = new Set(current);
-      clearableIds.forEach((id) => next.add(id));
+      clearableItems.forEach((item) => next.add(item.id));
       writeStorageSet(clearedStorageKey, next);
       return next;
     });
@@ -331,21 +342,21 @@ export default function NotificationCenter({
   }
 
   function handleMarkAllRead() {
-    markRead(notifications.map((item) => item.id));
+    markRead(notifications);
   }
 
   function handleClearRead() {
-    clearRead(notifications.map((item) => item.id));
+    clearRead(notifications);
   }
 
   function handleClearItem(event: MouseEvent<HTMLButtonElement>, item: NotificationItem) {
     event.stopPropagation();
-    if (!readIds.has(item.id)) return;
-    clearRead([item.id]);
+    if (!hasStoredNotificationId(readIds, item)) return;
+    clearRead([item]);
   }
 
   function handleNotificationClick(item: NotificationItem) {
-    markRead([item.id]);
+    markRead([item]);
     if (item.submission) {
       handleClose();
       onViewSubmission(item.submission);
@@ -519,7 +530,7 @@ export default function NotificationCenter({
                 </Stack>
                 <Stack spacing={0.75} sx={{ px: 1 }}>
                   {group.items.map((item) => {
-                    const unread = !readIds.has(item.id);
+                    const unread = !hasStoredNotificationId(readIds, item);
                     const tone = toneForKind(item.kind);
                     return (
                       <Box

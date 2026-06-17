@@ -14,7 +14,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
 
   for (const s of submissions) {
     const status = (s.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "");
-    if (status === "fullyapproved" || status === "approved") {
+    if (status === "fullyapproved" || status === "approved" || status === "completed") {
       approved++;
     } else if (status.includes("reject")) {
       rejected++;
