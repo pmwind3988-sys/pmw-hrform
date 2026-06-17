@@ -11,7 +11,7 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
@@ -31,6 +31,34 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
 const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
+
+const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer"]);
+
+function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
+  return (
+    OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS.has(fieldName) ||
+    fieldName.endsWith("_Response") ||
+    fieldName.endsWith("_Json") ||
+    fieldName.endsWith("_RowIds")
+  );
+}
+
+function mapBodyToSharePointColumnKeys(
+  body: Record<string, unknown>,
+  resolveColumnKey: (fieldName: string) => string | null,
+  listTitle: string,
+): Record<string, unknown> {
+  const mapped: Record<string, unknown> = {};
+  for (const [fieldName, value] of Object.entries(body)) {
+    const columnKey = resolveColumnKey(fieldName);
+    if (!columnKey) {
+      if (isOptionalSignedInSubmissionColumn(fieldName)) continue;
+      throw new Error(`The form field "${fieldName}" is not provisioned in "${listTitle}". Please republish the form before trying again.`);
+    }
+    mapped[columnKey] = value;
+  }
+  return mapped;
+}
 
 type CompanyChoiceOption = { value: string; text: string };
 
@@ -1005,28 +1033,39 @@ export default function DynamicFormPage() {
           await new Promise((r) => setTimeout(r, 1500));
         }
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
+        const resolveColumnKey = await getSharePointColumnKeyResolver(token, cfg.Title as string);
         let result: { Id?: number } | undefined;
         try {
-          result = await spPost(token, listUrl, body) as { Id?: number };
+          result = await spPost(
+            token,
+            listUrl,
+            mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string),
+          ) as { Id?: number };
         } catch (submitErr) {
           const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
           // If the response list is missing enhanced layer columns (pre-provisioning),
           // retry without FormStatus / CurrentLayer
           if ((msg.includes('FormStatus') || msg.includes('CurrentLayer')) && body.FormStatus !== undefined) {
-            console.warn("[DFP] retrying without FormStatus/CurrentLayer (missing columns)");
             delete body.FormStatus;
             delete body.CurrentLayer;
-            result = await spPost(token, listUrl, body) as { Id?: number };
+            result = await spPost(
+              token,
+              listUrl,
+              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string),
+            ) as { Id?: number };
           } else if (msg.includes('_Response') || msg.includes('_Json')) {
             // Retry without _Response/_Json columns (matrix fields published before
             // dynamicmatrix column provisioning was added)
-            console.warn("[DFP] retrying without _Response/_Json columns (missing matrix columns)");
             for (const key of Object.keys(body)) {
               if (key.endsWith('_Response') || key.endsWith('_Json')) {
                 delete body[key];
               }
             }
-            result = await spPost(token, listUrl, body) as { Id?: number };
+            result = await spPost(
+              token,
+              listUrl,
+              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string),
+            ) as { Id?: number };
           } else {
             throw submitErr;
           }
@@ -1034,12 +1073,16 @@ export default function DynamicFormPage() {
 
         if (result?.Id && urlFieldPatches.length > 0) {
           for (const patch of urlFieldPatches) {
+            const patchFieldName = resolveColumnKey(patch.fieldName);
+            if (!patchFieldName) {
+              throw new Error(`The form field "${patch.fieldName}" is not provisioned in "${cfg.Title as string}". Please republish the form before trying again.`);
+            }
             try {
-              await spPatchUrlField(token, cfg.Title as string, result.Id, patch.fieldName, patch.url, patch.description);
+              await spPatchUrlField(token, cfg.Title as string, result.Id, patchFieldName, patch.url, patch.description);
             } catch (urlPatchErr) {
               try {
                 await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`, {
-                  [patch.fieldName]: patch.url,
+                  [patchFieldName]: patch.url,
                 });
               } catch {
                 throw new Error(`Could not save uploaded image link for "${patch.fieldName}": ${urlPatchErr instanceof Error ? urlPatchErr.message : String(urlPatchErr)}`);
@@ -1079,10 +1122,17 @@ export default function DynamicFormPage() {
             }
             // PATCH parent item with RowIds (if any matrix data was written)
             if (Object.keys(matrixUpdateBody).length > 0) {
-              await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`, matrixUpdateBody);
+              const mappedMatrixUpdateBody = mapBodyToSharePointColumnKeys(
+                matrixUpdateBody,
+                resolveColumnKey,
+                cfg.Title as string,
+              );
+              if (Object.keys(mappedMatrixUpdateBody).length > 0) {
+                await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`, mappedMatrixUpdateBody);
+              }
             }
           } catch (e) {
-            console.warn("[DFP] matrix child list write failed:", (e as Error).message);
+            void e;
           }
         }
 

@@ -20,7 +20,7 @@ export interface SpListSchema {
   columns?: SpColumnSpec[];
 }
 
-interface ExistingFieldInfo {
+export interface ExistingFieldInfo {
   Title?: string;
   InternalName?: string;
   StaticName?: string;
@@ -115,6 +115,31 @@ async function getExistingColumnNames(token: string, listTitle: string): Promise
   }
   columnCache.set(key, names);
   return names;
+}
+
+export function createSharePointColumnKeyResolver(
+  fields: ExistingFieldInfo[],
+): (fieldName: string) => string | null {
+  const byName = new Map<string, string>();
+  for (const field of fields) {
+    const entityKey = field.EntityPropertyName || field.InternalName || field.StaticName || field.Title;
+    if (!entityKey) continue;
+    for (const name of [field.Title, field.InternalName, field.StaticName, field.EntityPropertyName]) {
+      if (name) byName.set(normalizeColumnName(name), entityKey);
+    }
+  }
+  return (fieldName: string) => byName.get(normalizeColumnName(fieldName)) ?? null;
+}
+
+export async function getSharePointColumnKeyResolver(
+  token: string,
+  listTitle: string,
+): Promise<(fieldName: string) => string | null> {
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields?$select=Title,InternalName,StaticName,EntityPropertyName&$top=5000`,
+  ) as { value?: ExistingFieldInfo[] };
+  return createSharePointColumnKeyResolver(data.value || []);
 }
 
 function buildColumnBody(spec: SpColumnSpec): Record<string, unknown> {
