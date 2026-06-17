@@ -22,7 +22,6 @@ export interface PdfFormData {
   };
   /** Layer results: each entry is one layer's data */
   layerResults?: PdfLayerResult[];
-  companyInfo?: string[];
   isoStandards?: string;
   logoUrl?: string;
 }
@@ -317,7 +316,7 @@ function renderImageSources(sources: string[]) {
   );
 }
 
-export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, companyInfo, isoStandards, logoUrl }: PdfFormData) {
+export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Submitted answers",
     includeAdditionalFields: false,
@@ -355,13 +354,6 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
             <View style={S.infoCell}><Text style={S.infoLabel}>Company</Text><Text style={S.infoValue}>{selectedCompany}</Text></View>
           )}
         </View>
-
-        {/* ═══ COMPANY INFO ═══ */}
-        {companyInfo && companyInfo.length > 0 && (
-          <View style={S.companyBox}>
-            {companyInfo.map((l, i) => <Text key={i} style={S.companyLine}>{l}</Text>)}
-          </View>
-        )}
 
         {/* ═══ FORM FIELDS ═══ */}
         <View style={{ marginBottom: 24 }}>
