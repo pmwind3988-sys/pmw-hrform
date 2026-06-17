@@ -1011,20 +1011,22 @@ async function applyLayerConfigWorkflow(
     formBody.FormStatus = FORM_SUBMITTED_STATUS;
     formBody.Status = FORM_SUBMITTED_STATUS;
     formBody.CurrentLayer = 0;
+    formBody.CurrentApprovalLayer = 0;
     return;
   }
 
   const layers = layerConfig?.layers ?? [];
   if (layers.length === 0) return;
 
-  for (let index = 0; index < layers.length; index++) {
-    const layerNumber = index + 1;
-    const resolved = await resolveLayerAssignee(token, layers[index], formBody);
+  for (const layer of layers) {
+    const layerNumber = layer.layerNumber;
+    const resolved = await resolveLayerAssignee(token, layer, formBody);
     formBody[`L${layerNumber}_Status`] = LAYER_PENDING_STATUS;
     formBody[`L${layerNumber}_Email`] = resolved.email;
   }
   formBody.FormStatus = FORM_SUBMITTED_STATUS;
-  formBody.CurrentLayer = 1;
+  formBody.CurrentLayer = layers[0]?.layerNumber ?? 1;
+  formBody.CurrentApprovalLayer = formBody.CurrentLayer;
 }
 
 interface ApiRequest {

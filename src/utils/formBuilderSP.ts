@@ -1767,6 +1767,8 @@ interface ApprovalNotificationParams {
   totalLayers: number;
   action?: 'submit' | 'approve' | 'reject';
   nextApproverEmail?: string;
+  nextLayerType?: 'approval' | 'evaluation';
+  nextLayerNumber?: number;
   reviewLink?: string;
   pdfUrl?: string;
 }
@@ -1841,7 +1843,10 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, reviewLink, pdfUrl } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl } = params;
+  const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation' : 'approval';
+  const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approval';
+  const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
 
   try {
     if (action === 'submit') {
@@ -1866,7 +1871,7 @@ export async function triggerApprovalNotification(
           subject: `[Action Required] New ${formTitle} submission by ${submittedBy}`,
           body: emailBody({
             title: `New Submission: ${formTitle}`,
-            subtitle: `A new form submission requires your review and approval.`,
+            subtitle: `A new form submission requires your ${nextActionVerb}.`,
             statusColor: '#1E40AF', statusLabel: 'ACTION REQUIRED', statusBg: '#DBEAFE',
             details: [
               `Form:${formTitle}`,
@@ -1884,16 +1889,16 @@ export async function triggerApprovalNotification(
         // Notify next layer approver
         await sendSpEmail(token, {
           to: nextApproverEmail,
-          subject: `[Action Required] ${formTitle} — pending your approval (Layer ${layer + 1})`,
+          subject: `[Action Required] ${formTitle} — pending your ${nextActionNoun} (Layer ${displayNextLayerNumber})`,
           body: emailBody({
-            title: `Approval Needed: ${formTitle} (Layer ${layer + 1})`,
-            subtitle: `This submission has been approved at Layer ${layer} and now requires your review.`,
-            statusColor: '#92400E', statusLabel: 'PENDING YOUR APPROVAL', statusBg: '#FEF3C7',
+            title: `${nextLayerType === 'evaluation' ? 'Evaluation' : 'Approval'} Needed: ${formTitle} (Layer ${displayNextLayerNumber})`,
+            subtitle: `This submission has completed Layer ${layer} and now requires your ${nextActionVerb}.`,
+            statusColor: '#92400E', statusLabel: nextLayerType === 'evaluation' ? 'PENDING YOUR REVIEW' : 'PENDING YOUR APPROVAL', statusBg: '#FEF3C7',
             details: [
               `Form:${formTitle}`,
               `Submitted by:${submittedBy}`,
               `Submission ID:${responseItemId}`,
-              `Current Layer:${layer + 1} of ${totalLayers}`,
+              `Current Layer:${displayNextLayerNumber} of ${totalLayers}`,
             ],
             link, linkLabel: 'Review',
             pdfUrl,
@@ -1967,7 +1972,15 @@ export async function getLayerResponseData(
     if (rawLayerConfig) {
       try {
         const parsed = JSON.parse(rawLayerConfig);
-        layerConfig = parsed.layers || [];
+        const selectedBranch = typeof item.SelectedBranch === 'string' ? item.SelectedBranch.trim().toLowerCase() : '';
+        if (selectedBranch && Array.isArray(parsed.manualBranches)) {
+          const branch = parsed.manualBranches.find((b: { name?: string; label?: string; layers?: LayerConfigItem[] }) =>
+            [b.name, b.label].some((candidate) => typeof candidate === 'string' && candidate.trim().toLowerCase() === selectedBranch)
+          );
+          layerConfig = branch?.layers || parsed.layers || [];
+        } else {
+          layerConfig = parsed.layers || [];
+        }
       } catch {}
     }
 

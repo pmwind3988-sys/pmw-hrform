@@ -34,14 +34,18 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     let foundToken: Record<string, unknown> | null = null;
     let foundFormTitle = "";
     let foundLayerNumber = 0;
-    let layerConfig: { layers: Record<string, unknown>[] } | null = null;
+    let layerConfig: { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null = null;
 
     for (const form of masterItems) {
       const rawLayerConfig = form.fields.LayerConfig as string | undefined;
       if (!rawLayerConfig) continue;
       try {
-        const parsed = JSON.parse(rawLayerConfig) as { layers: Record<string, unknown>[] };
-        for (const layer of parsed.layers) {
+        const parsed = JSON.parse(rawLayerConfig) as { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] };
+        const searchableLayers = [
+          ...(parsed.layers ?? []),
+          ...((parsed.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
+        ];
+        for (const layer of searchableLayers) {
           if (layer.publicToken === token) {
             foundToken = layer;
             foundFormTitle = form.fields.Title as string;
@@ -70,6 +74,16 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     // Filter fields based on layer visibility
     const visibleFields: Record<string, unknown> = {};
     const allFields = responseItem.fields || {};
+    const selectedBranch = typeof allFields.SelectedBranch === "string" ? allFields.SelectedBranch.trim().toLowerCase() : "";
+    const activeLayers = (() => {
+      if (selectedBranch && layerConfig?.manualBranches?.length) {
+        const branch = layerConfig.manualBranches.find((b) =>
+          [b.name, b.label].some((candidate) => typeof candidate === "string" && candidate.trim().toLowerCase() === selectedBranch)
+        );
+        if (branch?.layers?.length) return branch.layers;
+      }
+      return layerConfig?.layers ?? [];
+    })();
 
     // Include submission metadata always
     for (const key of ["Title", "SubmittedBy", "SubmittedAt", "FormVersion", "FormID"]) {
@@ -77,8 +91,8 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     }
 
     // Include previous layer results (layers < current layer)
-    if (layerConfig) {
-      for (const layer of layerConfig.layers) {
+    if (activeLayers.length > 0) {
+      for (const layer of activeLayers) {
         const n = layer.layerNumber as number;
         if (n < foundLayerNumber) {
           visibleFields[`L${n}_Status`] = allFields[`L${n}_Status`];
@@ -98,7 +112,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         try {
           const allEval = JSON.parse(rawEvalData) as Record<string, unknown>;
           const visibleEval: Record<string, unknown> = {};
-          for (const layer of layerConfig.layers) {
+          for (const layer of activeLayers) {
             const n = layer.layerNumber as number;
             if (n < foundLayerNumber && allEval[String(n)]) {
               visibleEval[String(n)] = allEval[String(n)];
@@ -114,7 +128,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       data: {
         formTitle: foundFormTitle,
         layerNumber: foundLayerNumber,
-        totalLayers: layerConfig?.layers?.length || 0,
+        totalLayers: activeLayers.length || 0,
         layerType: foundToken.type || "approval",
         layerTitle: foundToken.title || "",
         fields: visibleFields,
@@ -165,7 +179,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (!formConfig) return res.status(404).json({ error: "Form not found" });
 
     // Parse LayerConfig
-    let layerConfigParsed: { layers: Record<string, unknown>[] } | null = null;
+    let layerConfigParsed: { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null = null;
     const rawLayerConfig = formConfig.LayerConfig as string | undefined;
     if (rawLayerConfig) {
       try { layerConfigParsed = JSON.parse(rawLayerConfig); } catch { /* invalid JSON, fall through */ }
@@ -173,13 +187,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (!layerConfigParsed?.layers) return res.status(400).json({ error: "Form has no layer config" });
 
     // Find the layer by number
-    const layer = layerConfigParsed.layers.find((l) => l.layerNumber === layerNumber) as Record<string, unknown> | undefined;
+    const searchableLayers = [
+      ...(layerConfigParsed.layers ?? []),
+      ...((layerConfigParsed.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
+    ];
+    const layer = searchableLayers.find((l) => l.layerNumber === layerNumber && l.publicToken === token) as Record<string, unknown> | undefined;
     if (!layer) return res.status(404).json({ error: `Layer ${layerNumber} not found in config` });
 
     // Validate the token
-    if (layer.publicToken !== token) {
-      return res.status(403).json({ error: "Invalid token" });
-    }
     if (layer.tokenExpiresAt && new Date(layer.tokenExpiresAt as string) < new Date()) {
       return res.status(403).json({ error: "Token has expired" });
     }
@@ -188,6 +203,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const responseListName = `${formTitle} Responses`;
     const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
+    const selectedBranch = typeof responseItem.fields.SelectedBranch === "string" ? responseItem.fields.SelectedBranch.trim().toLowerCase() : "";
+    const activeLayers = (() => {
+      if (selectedBranch && layerConfigParsed?.manualBranches?.length) {
+        const branch = layerConfigParsed.manualBranches.find((b) =>
+          [b.name, b.label].some((candidate) => typeof candidate === "string" && candidate.trim().toLowerCase() === selectedBranch)
+        );
+        if (branch?.layers?.length) return branch.layers;
+      }
+      return layerConfigParsed?.layers ?? [];
+    })();
 
     // 3. Build update payload based on action
     const updates: Record<string, unknown> = {};
@@ -217,10 +242,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
 
       // Advance to next layer or complete
-      const totalLayers = layerConfigParsed.layers.length;
-      if (layerNumber < totalLayers) {
-        updates.CurrentLayer = (layerNumber as number) + 1;
-        updates.CurrentApprovalLayer = (layerNumber as number) + 1;
+      const sortedLayers = [...activeLayers].sort((a, b) => Number(a.layerNumber) - Number(b.layerNumber));
+      const currentIndex = sortedLayers.findIndex((candidate) => candidate.layerNumber === layerNumber);
+      const nextLayer = currentIndex >= 0 ? sortedLayers[currentIndex + 1] : sortedLayers.find((candidate) => Number(candidate.layerNumber) > layerNumber);
+      if (nextLayer) {
+        updates.CurrentLayer = nextLayer.layerNumber;
+        updates.CurrentApprovalLayer = nextLayer.layerNumber;
         updates.FormStatus = "In Review";
       } else {
         updates.FormStatus = "Completed";
@@ -235,7 +262,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       updates.Status = "Rejected";
       updates.CurrentLayer = layerNumber;
       updates.CurrentApprovalLayer = layerNumber;
-      for (let n = layerNumber + 1; n <= layerConfigParsed.layers.length; n++) {
+      for (const futureLayer of activeLayers) {
+        const n = Number(futureLayer.layerNumber);
+        if (n <= layerNumber) continue;
         updates[`L${n}_Status`] = rejectedAtLayerStatus(layerNumber);
       }
     }

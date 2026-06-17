@@ -73,14 +73,14 @@ const C = {
 // ── Styles ────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
-  page: { padding: 32, fontFamily: "Helvetica", fontSize: 8.5, color: C.text, lineHeight: 1.25 },
+  page: { paddingTop: 32, paddingHorizontal: 32, paddingBottom: 54, fontFamily: "Helvetica", fontSize: 8.5, color: C.text, lineHeight: 1.25 },
   // Header
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, paddingBottom: 12, borderBottomWidth: 2.5, borderBottomColor: C.primary },
-  logoBox: { width: 90, height: 42 },
+  header: { flexDirection: "row", alignItems: "flex-start", marginBottom: 14, paddingBottom: 12, borderBottomWidth: 2.5, borderBottomColor: C.primary },
+  logoBox: { width: 90, height: 42, marginRight: 18, flexShrink: 0 },
   logo: { width: 90, height: 42, objectFit: "contain" },
-  headerRight: { flex: 1, alignItems: "flex-end" },
-  docTitle: { fontSize: 18, fontWeight: "heavy", color: C.primary, marginBottom: 1 },
-  docRef: { fontSize: 7, color: C.muted },
+  headerRight: { flexGrow: 1, flexShrink: 1, alignItems: "flex-end" },
+  docTitle: { fontSize: 15, fontWeight: "heavy", color: C.primary, marginBottom: 3, textAlign: "right", lineHeight: 1.12 },
+  docRef: { fontSize: 6.5, color: C.muted, textAlign: "right", lineHeight: 1.2 },
   // Info grid
   infoGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 10 },
   infoCell: { width: "50%", marginBottom: 4, paddingRight: 8 },
@@ -94,10 +94,13 @@ const S = StyleSheet.create({
 
   // ── Section headings ──
   sectionLabel: { fontSize: 7.5, fontWeight: "heavy", color: C.text, marginBottom: 5, paddingBottom: 2, borderBottomWidth: 1.5, borderBottomColor: C.primary },
+  pageSection: { marginBottom: 24 },
+  approvalPageSection: { marginBottom: 18 },
+  tableBlock: { borderWidth: 0.5, borderColor: C.borderLight, marginTop: 2 },
   subSectionLabel: { fontSize: 7.5, fontWeight: "bold", color: C.primary, marginBottom: 3, marginTop: 6 },
 
   // ── Layer table ──
-  layerRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: C.borderLight, paddingVertical: 3, alignItems: "flex-start" },
+  layerRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: C.borderLight, paddingVertical: 3.5, alignItems: "flex-start" },
   layerHeader: { backgroundColor: C.primary },
   layerHeaderText: { color: C.white, fontSize: 6, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 0.4, paddingHorizontal: 3, paddingVertical: 2.5 },
   layerCell: { paddingHorizontal: 3, fontSize: 6.5, color: C.text, lineHeight: 1.25 },
@@ -135,7 +138,7 @@ const S = StyleSheet.create({
   noData: { fontSize: 7, color: C.muted, fontStyle: "italic", textAlign: "center", paddingVertical: 10 },
 
   // ── Footer ──
-  footer: { position: "absolute", bottom: 20, left: 32, right: 32, flexDirection: "row", justifyContent: "space-between", paddingTop: 5, borderTopWidth: 0.5, borderTopColor: C.borderLight, fontSize: 5.5, color: C.muted },
+  footer: { position: "absolute", bottom: 22, left: 32, right: 32, flexDirection: "row", justifyContent: "space-between", paddingTop: 5, borderTopWidth: 0.5, borderTopColor: C.borderLight, fontSize: 6, color: C.muted },
 
   // ── Matrix table ──
   matrixSection: { marginBottom: 16 },
@@ -257,7 +260,7 @@ function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
   const rejectedAtLayer = layer.status.toLowerCase().includes("rejected at layer") ? layer.status : "";
   const remarks = layer.rejection || rejectedAtLayer || (layer.type === "evaluation" ? "Confirmed" : "");
   return (
-    <View style={S.layerRow}>
+    <View style={S.layerRow} wrap={false}>
       <Text style={[S.layerCell, S.colNum]}>{layer.layerNumber}</Text>
       <Text style={[S.layerCell, S.colType]}>{layer.type === "evaluation" ? "Eval" : "Approval"}</Text>
       <Text style={[S.layerCell, S.colStatus, { color: badge.text }]}>{badge.label}</Text>
@@ -356,7 +359,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
         </View>
 
         {/* ═══ FORM FIELDS ═══ */}
-        <View style={{ marginBottom: 24 }}>
+        <View style={S.pageSection}>
           <Text style={S.sectionLabel}>FORM DATA</Text>
           {formSections.length === 0 ? (
             <Text style={S.noData}>No form fields available.</Text>
@@ -366,7 +369,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
                 <Text style={S.subSectionLabel}>{section.title}</Text>
                 {section.fields.map((field, fieldIndex) => {
                   if (field.kind === "matrix") {
-                    return <View key={field.key}>{renderMatrixField(field)}</View>;
+                    return <View key={field.key} wrap={false}>{renderMatrixField(field)}</View>;
                   }
                   const imageSources = collectImageSources(field.value);
                   return (
@@ -442,30 +445,32 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ LAYER APPROVAL TABLE ═══ */}
         {layerResults && layerResults.length > 0 && (
-          <View style={{ marginBottom: 24 }}>
+          <View break style={S.approvalPageSection}>
             <Text style={S.sectionLabel}>APPROVAL / EVALUATION CHAIN</Text>
-            <View style={[S.layerRow, S.layerHeader]}>
-              <Text style={[S.layerHeaderText, S.colNum]}>#</Text>
-              <Text style={[S.layerHeaderText, S.colType]}>Type</Text>
-              <Text style={[S.layerHeaderText, S.colStatus]}>Status</Text>
-              <Text style={[S.layerHeaderText, S.colEmail]}>Assignee</Text>
-              <Text style={[S.layerHeaderText, S.colTime]}>Date/Time</Text>
-              <Text style={[S.layerHeaderText, S.colReason]}>Remarks</Text>
+            <View style={S.tableBlock} wrap={false}>
+              <View style={[S.layerRow, S.layerHeader]} wrap={false}>
+                <Text style={[S.layerHeaderText, S.colNum]}>#</Text>
+                <Text style={[S.layerHeaderText, S.colType]}>Type</Text>
+                <Text style={[S.layerHeaderText, S.colStatus]}>Status</Text>
+                <Text style={[S.layerHeaderText, S.colEmail]}>Assignee</Text>
+                <Text style={[S.layerHeaderText, S.colTime]}>Date/Time</Text>
+                <Text style={[S.layerHeaderText, S.colReason]}>Remarks</Text>
+              </View>
+              {layerResults.map((layer, i) => (
+                <LayerRow key={i} layer={layer} isLast={i === layerResults.length - 1} />
+              ))}
             </View>
-            {layerResults.map((layer, i) => (
-              <LayerRow key={i} layer={layer} isLast={i === layerResults.length - 1} />
-            ))}
           </View>
         )}
 
         {/* ═══ SIGNATURE BLOCKS (only shown when at least one layer has a signature) ═══ */}
         {layerResults && layerResults.filter(l => l.signature).length > 0 && (
-          <View style={{ marginBottom: 24 }}>
+          <View style={S.approvalPageSection}>
             <Text style={S.sectionLabel}>SIGNATURES</Text>
             {layerResults.filter(l => l.signature).map((layer, i) => {
               const badge = badgeStyle(layer.status);
               return (
-                <View key={i} style={S.sigBlock}>
+                <View key={i} style={S.sigBlock} wrap={false}>
                   <View style={S.sigLine}>
                     <Text style={S.sigLabel}>Layer {layer.layerNumber} - {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
                     <Text style={S.sigName}>{layer.email || "—"} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
@@ -482,18 +487,18 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ EVALUATION FIELDS (per layer) ═══ */}
         {layerResults && layerResults.filter(l => l.type === "evaluation" && l.evaluationFields && Object.keys(l.evaluationFields).length > 0).length > 0 && (
-          <View style={{ marginBottom: 24 }}>
+          <View style={S.approvalPageSection}>
             <Text style={S.sectionLabel}>EVALUATION DETAILS</Text>
             {layerResults.filter(l => l.type === "evaluation").map((layer, i) => {
               const fields = layer.evaluationFields;
               if (!fields || Object.keys(fields).length === 0) return null;
               return (
-                <View key={i} style={{ marginBottom: 6 }}>
+                <View key={i} style={{ marginBottom: 6 }} wrap={false}>
                   <Text style={S.subSectionLabel}>Layer {layer.layerNumber} - {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
                   {Object.entries(fields).map(([k, v], fi) => {
                     const imageSources = collectImageSources(v);
                     return (
-                      <View key={fi} style={S.evalSubRow}>
+                      <View key={fi} style={S.evalSubRow} wrap={false}>
                         <Text style={S.evalSubLabel}>{k}</Text>
                         {imageSources.length > 0 ? renderImageSources(imageSources) : <Text style={S.evalSubValue}>{fmtVal(v)}</Text>}
                       </View>

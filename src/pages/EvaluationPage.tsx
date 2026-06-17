@@ -7,7 +7,7 @@ import { useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 
-import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems } from "../utils/formBuilderSP";
+import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS } from "../utils/statusConstants";
 import { buildRejectedWorkflowPatch } from "../utils/workflowStatus";
@@ -18,7 +18,7 @@ import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { rowsToHtml, getDynamicMatrixFields } from "../utils/DynamicMatrix";
-import { getSelectedCompany, splitCompanyLines } from "../utils/companySelection";
+import { getSelectedCompany } from "../utils/companySelection";
 import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
 
@@ -80,7 +80,6 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
         formVersion,
         formStatus,
       },
-      companyInfo: splitCompanyLines(versionMeta.companies),
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
     });
@@ -130,6 +129,13 @@ const btnOutline: React.CSSProperties = {
   color: COLORS.red,
 };
 
+function valueToText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  return "";
+}
+
 // ── Component ──
 export default function EvaluationPage() {
   const { token: routeToken, formSlug, responseId, layerNumber } = useParams<{
@@ -149,6 +155,7 @@ export default function EvaluationPage() {
 
   const [responseData, setResponseData] = useState<Record<string, unknown> | null>(null);
   const [currentLayer, setCurrentLayer] = useState<LayerConfigItem | null>(null);
+  const [layerSequence, setLayerSequence] = useState<LayerConfigItem[]>([]);
   const [totalLayers, setTotalLayers] = useState(0);
   const [previousResults, setPreviousResults] = useState<Record<string, unknown>[]>([]);
   const [formTitle, setFormTitle] = useState("");
@@ -264,6 +271,7 @@ export default function EvaluationPage() {
         }
         setResponseData(data.responseFields);
         setCurrentLayer(data.currentLayer || null);
+        setLayerSequence(data.layerConfig);
         setTotalLayers(data.layerConfig.length || displayLayerNumber);
         setPreviousResults(data.previousResults);
 
@@ -289,8 +297,13 @@ export default function EvaluationPage() {
       const respId = parseInt(responseId || "0", 10);
       const now = new Date().toISOString();
       const effectiveTotalLayers = totalLayers || displayLayerNumber;
-      const isFinal = displayLayerNumber >= effectiveTotalLayers;
-      const nextLayerNumber = displayLayerNumber + 1;
+      const sortedLayers = [...layerSequence].sort((a, b) => a.layerNumber - b.layerNumber);
+      const currentLayerIndex = sortedLayers.findIndex((layer) => layer.layerNumber === displayLayerNumber);
+      const nextLayer = currentLayerIndex >= 0
+        ? sortedLayers[currentLayerIndex + 1]
+        : sortedLayers.find((layer) => layer.layerNumber > displayLayerNumber);
+      const isFinal = !nextLayer && displayLayerNumber >= effectiveTotalLayers;
+      const nextLayerNumber = nextLayer?.layerNumber ?? displayLayerNumber + 1;
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
 
       if (action === "reject") {
@@ -334,12 +347,25 @@ export default function EvaluationPage() {
         }
       }
 
+      const nextApproverEmail = !isFinal ? valueToText(responseData?.[`L${nextLayerNumber}_Email`]) : "";
+      await triggerApprovalNotification(token, {
+        formTitle,
+        submittedBy: valueToText(responseData?.SubmittedBy) || userEmail,
+        responseItemId: respId,
+        layer: displayLayerNumber,
+        totalLayers: effectiveTotalLayers,
+        action: action === "reject" ? "reject" : "approve",
+        ...(nextApproverEmail ? { nextApproverEmail } : {}),
+        ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
+        ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
+      });
+
       setActionState("success");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to submit this decision.");
       setActionState("error");
     }
-  }, [token, userEmail, formTitle, responseId, displayLayerNumber, rejectionReason, evaluationFields, signatureData, currentLayer, accounts, totalLayers]);
+  }, [token, userEmail, formTitle, responseId, displayLayerNumber, rejectionReason, evaluationFields, signatureData, currentLayer, accounts, totalLayers, layerSequence, responseData]);
 
   /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
   const loadMatrixChildData = async (

@@ -19,8 +19,8 @@ import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
-import { formatLayerProgress, getActiveLayers, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
-import { getSelectedCompany, splitCompanyLines } from "../../utils/companySelection";
+import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
+import { getSelectedCompany } from "../../utils/companySelection";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
@@ -152,7 +152,6 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
         formVersion,
         formStatus: "",
       },
-      companyInfo: splitCompanyLines(versionMeta.companies),
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
     };
@@ -311,6 +310,10 @@ function stripFieldReference(value: string): string {
   return value.replace(/^\$\{/, "").replace(/\}$/, "");
 }
 
+function normalizeEmailAddress(value: unknown): string {
+  return valueToText(value).toLowerCase();
+}
+
 async function resolveDepartmentApproverEmail(
   token: string,
   layer: LayerConfigItem,
@@ -399,6 +402,16 @@ async function resolveLayerAssigneeEmail(
   return { email };
 }
 
+function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {
+  if (!layers?.length) return undefined;
+  const sorted = [...layers].sort((a, b) => a.layerNumber - b.layerNumber);
+  const currentIndex = sorted.findIndex((layer) => layer.layerNumber === currentLayerNumber);
+  if (currentIndex === -1) {
+    return sorted.find((layer) => layer.layerNumber > currentLayerNumber);
+  }
+  return sorted[currentIndex + 1];
+}
+
 /** Check if the current layer (based on selectedItem's CurrentLayer) already has a terminal status */
 function isCurrentLayerTerminal(item: PendingItem, completedLayers: Record<number, { status: string }>): boolean {
   const clNum = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || 1;
@@ -432,6 +445,7 @@ export default function ApprovalDashboard() {
   const [viewMode, setViewMode] = useState<"approvals" | "evaluations">("approvals");
   const [listPage, setListPage] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperuser, setIsSuperuser] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
   const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<string, "approval" | "evaluation">>({});
   const formLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
@@ -450,6 +464,12 @@ export default function ApprovalDashboard() {
     pdfUrl?: string;
   } | null>(null);
   const [completedLayers, setCompletedLayers] = useState<Record<number, { status: string; email?: string; signedAt?: string; rejection?: string; signature?: string; type?: string }>>({});
+  const [selectedLayerAccess, setSelectedLayerAccess] = useState<{
+    allowed: boolean;
+    assignedEmail: string;
+    currentLayerNumber: number;
+    override: boolean;
+  } | null>(null);
 
 
   const baseFilteredItems = useMemo(() => {
@@ -522,13 +542,19 @@ export default function ApprovalDashboard() {
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) return;
 
-    createSpClient(instance, accounts).isGroupMember(SP_STATIC.adminGroup)
-      .then((admin) => {
+    const client = createSpClient(instance, accounts);
+    Promise.all([
+      client.isGroupMember(SP_STATIC.adminGroup),
+      client.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
+    ])
+      .then(([admin, superuser]) => {
         setIsAdmin(admin);
+        setIsSuperuser(superuser);
         setAdminChecked(true);
       })
       .catch(() => {
         setIsAdmin(false);
+        setIsSuperuser(false);
         setAdminChecked(true);
       });
   }, [isAuthenticated, inProgress, instance, accounts]);
@@ -586,6 +612,7 @@ export default function ApprovalDashboard() {
         } catch { /* version list may not exist */ }
 
         const allItems: PendingItem[] = [];
+        const nextItemTypes: Record<string, "approval" | "evaluation"> = {};
         for (const form of forms ?? []) {
           const hasApprovalLayers = (form.NumberOfApprovalLayer ?? 0) > 0;
           let hasEvalLayer = false;
@@ -718,7 +745,6 @@ export default function ApprovalDashboard() {
                 const versionKey = `${form.Title}__${item.FormVersion}`;
                 const versionLc = versionLayerMap[versionKey];
                 const baseLc = versionLc || formLayerConfigMap[form.Title];
-                const effectiveLayers = getActiveLayers(baseLc, item.SelectedBranch);
                 const totalLayers = resolveTotalLayerCount(baseLc, item.SelectedBranch, form.NumberOfApprovalLayer);
 
                 // Set totalLayers on the item BEFORE pushing (spread creates a copy)
@@ -728,20 +754,8 @@ export default function ApprovalDashboard() {
 
                 allItems.push({ ...item, Title: form.Title });
 
-                // Compute item type
-                let itemType: "approval" | "evaluation" = "approval";
-                if (effectiveLayers.length > 0) {
-                  let curr = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0);
-                  // Only advance past L1 if it was successfully completed (Approved/Confirmed),
-                  // NOT if it was Rejected/Cancelled — rejection is terminal
-                  if (curr <= 1 && effectiveLayers.length > 1 && item.L1_Status && ["Approved", "Confirmed"].includes(item.L1_Status)) {
-                    curr = 2;
-                  }
-                  if (curr < 1) curr = 1;
-                  const current = effectiveLayers.find(l => l.layerNumber === curr);
-                  if (current?.type === "evaluation") itemType = "evaluation";
-                }
-                setItemCurrentTypes((prev) => ({ ...prev, [getPendingItemKey(item)]: itemType }));
+                const current = resolveCurrentLayer(baseLc, item).currentLayer;
+                nextItemTypes[getPendingItemKey({ ...item, Title: form.Title })] = current?.type === "evaluation" ? "evaluation" : "approval";
               }
             }
           } catch {
@@ -749,6 +763,7 @@ export default function ApprovalDashboard() {
         }
 
         setPendingItems(allItems);
+        setItemCurrentTypes(nextItemTypes);
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -782,6 +797,7 @@ export default function ApprovalDashboard() {
     setEvalSurveyModel(null);
     setEvalValid(true);
     setCompletedLayers({});
+    setSelectedLayerAccess(null);
 
     try {
       // Get form config
@@ -790,10 +806,11 @@ export default function ApprovalDashboard() {
 
       // Determine if manual branch selection is needed
       let pendingBranch = false;
+      let masterLayerCfg: { layers?: LayerConfigItem[]; manualBranches?: ManualBranch[] } | null = null;
       if (cfg?.LayerConfig) {
         try {
-          const lc = JSON.parse(cfg.LayerConfig);
-          const lcBranches = (lc.manualBranches || []) as ManualBranch[];
+          masterLayerCfg = JSON.parse(cfg.LayerConfig) as { layers?: LayerConfigItem[]; manualBranches?: ManualBranch[] };
+          const lcBranches = (masterLayerCfg.manualBranches || []) as ManualBranch[];
           if (lcBranches.length > 0 && !item.SelectedBranch) {
             pendingBranch = true;
             setNeedsBranchSelection(true);
@@ -857,6 +874,21 @@ export default function ApprovalDashboard() {
           token,
           `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`
         ) as Record<string, unknown>;
+        const detailItem: PendingItem = {
+          ...item,
+          CurrentLayer: Number(respItem.CurrentLayer) || item.CurrentLayer || 0,
+          CurrentApprovalLayer: Number(respItem.CurrentApprovalLayer) || item.CurrentApprovalLayer || 0,
+          SelectedBranch: valueToText(respItem.SelectedBranch) || item.SelectedBranch,
+          L1_Status: valueToText(respItem.L1_Status) || item.L1_Status,
+          FormStatus: valueToText(respItem.FormStatus) || item.FormStatus,
+          Status: valueToText(respItem.Status) || item.Status,
+        };
+        setSelectedItem(detailItem);
+        if (masterLayerCfg?.manualBranches?.length && detailItem.SelectedBranch && pendingBranch) {
+          pendingBranch = false;
+          setNeedsBranchSelection(false);
+          setAvailableBranches([]);
+        }
 
         // Filter out system columns, keep only survey question data
         const data: Record<string, unknown> = {};
@@ -882,17 +914,30 @@ export default function ApprovalDashboard() {
         setResponseData(surveyContentForPreview ? normalizeResponseDataForSurvey(surveyContentForPreview, data) : data);
         setCompletedLayers(layerHistory);
 
+        const activeConfig = versionLayerCfg || masterLayerCfg || formLayerConfigsRef.current[item.Title];
+        const currentResolution = resolveCurrentLayer(activeConfig, detailItem);
+        const currentLayerNumber = currentResolution.currentLayerNumber;
+        const assignedEmail = normalizeEmailAddress(respItem[`L${currentLayerNumber}_Email`]);
+        const signedInEmail = normalizeEmailAddress(accounts[0]?.username);
+        const override = isSuperuser;
+        setSelectedLayerAccess({
+          allowed: override || (!!assignedEmail && assignedEmail === signedInEmail),
+          assignedEmail,
+          currentLayerNumber,
+          override,
+        });
+
         // ── Correct stale FormStatus for old items ────────────────────
         // Before the evaluation-persistence fix, handleEvaluationSubmit never updated
         // FormStatus on SP. Detect this case and correct it.
-        const rawFormStatus = (item.FormStatus || item.Status || "") as string;
+        const rawFormStatus = (detailItem.FormStatus || detailItem.Status || "") as string;
         if (rawFormStatus === "In Review" || rawFormStatus === "Submitted" || !rawFormStatus) {
           const formLc = formLayerConfigsRef.current[item.Title];
           if (formLc) {
             let activeLayers = formLc.layers || [];
-            if (formLc.manualBranches?.length && item.SelectedBranch) {
-              const branch = formLc.manualBranches.find(b => b.name === item.SelectedBranch);
-              if (branch) activeLayers = branch.layers;
+            if (formLc.manualBranches?.length && detailItem.SelectedBranch) {
+              const branch = getActiveLayers(formLc, detailItem.SelectedBranch);
+              if (branch.length) activeLayers = branch;
             }
             const totalLayers = activeLayers.length;
             if (totalLayers > 0) {
@@ -933,50 +978,9 @@ export default function ApprovalDashboard() {
           return;
         }
 
-        // Determine current layer type (approval vs evaluation)
-        // Determine current layer number
-        const currLayerNum = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || 1;
-
-        // Determine layer type from globally computed itemCurrentTypes (version-aware + branch-aware)
-        const detectedType = itemCurrentTypes[getPendingItemKey(item)];
-        if (detectedType === "evaluation") {
+        if (currentResolution.currentLayer?.type === "evaluation") {
           setCurrentLayerType("evaluation");
-          // Load evaluation form elements by targeting current layer in all available config sources
-          const evalElements = ((): Record<string, unknown>[] => {
-            // Collect all layer config sources (deduplicated)
-            const allConfs: ({ layers?: LayerConfigItem[]; manualBranches?: ManualBranch[] } | null)[] = [];
-            // Priority: version-specific > Master Form (direct fetch) > pre-loaded ref
-            if (versionLayerCfg) allConfs.push(versionLayerCfg);
-            if (versionParsed?.layerConfig) {
-              const vl = versionParsed.layerConfig as { layers?: LayerConfigItem[]; manualBranches?: ManualBranch[] };
-              if (!allConfs.some(c => c === vl)) allConfs.push(vl);
-            }
-            if (cfg?.LayerConfig) {
-              try { allConfs.push(JSON.parse(cfg.LayerConfig) as { layers?: LayerConfigItem[]; manualBranches?: ManualBranch[] }); } catch {
-                /* Invalid JSON — skip */
-              }
-            }
-            const refCfg = formLayerConfigsRef.current[item.Title];
-            if (refCfg && !allConfs.some(c => c === refCfg)) allConfs.push(refCfg);
-            // If branching, use branch layers instead of main layers
-            const findBranchLayers = (src: { layers?: LayerConfigItem[]; manualBranches?: ManualBranch[] }): LayerConfigItem[] => {
-              if (src.manualBranches?.length && item.SelectedBranch) {
-                const branch = src.manualBranches.find(b => b.name === item.SelectedBranch);
-                if (branch) return branch.layers;
-              }
-              return src.layers || [];
-            };
-            for (const conf of allConfs) {
-              if (!conf) continue;
-              const checkLayers = findBranchLayers(conf);
-              const current = checkLayers.find(l => l.layerNumber === currLayerNum);
-              if (current?.type === "evaluation") {
-                const el = (current as EvaluationLayerConfig).surveyElements;
-                if (el?.length) return el;
-              }
-            }
-            return [];
-          })();
+          const evalElements = (currentResolution.currentLayer as EvaluationLayerConfig).surveyElements || [];
           if (evalElements.length > 0) {
             const evalJson = { pages: [{ name: "evaluation", elements: evalElements }], showNavigationButtons: false };
             const m = new Model(evalJson as object);
@@ -997,11 +1001,15 @@ export default function ApprovalDashboard() {
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [token, itemCurrentTypes]);
+  }, [token, accounts, isSuperuser]);
 
   // Handle evaluation submit
   const handleEvaluationSubmit = async () => {
     if (!token || !selectedItem || !formConfig) return;
+    if (selectedLayerAccess && !selectedLayerAccess.allowed) {
+      setError("This item is locked because the current layer is assigned to another approver.");
+      return;
+    }
     // Validate required fields before submitting
     if (evalSurveyModel) {
       const valid = evalSurveyModel.validate();
@@ -1023,7 +1031,9 @@ export default function ApprovalDashboard() {
         }
       }
       const totalLayers = branchLayers?.length || formConfig.NumberOfApprovalLayer || 0;
-      const isFinal = currLayerNum >= totalLayers;
+      const nextLayerConfig = getNextWorkflowLayer(branchLayers, currLayerNum);
+      const nextLayerNum = nextLayerConfig?.layerNumber ?? currLayerNum + 1;
+      const isFinal = !nextLayerConfig && currLayerNum >= totalLayers;
 
       const fields = evalSurveyModel ? evalSurveyModel.data as Record<string, unknown> : {};
 
@@ -1039,7 +1049,6 @@ export default function ApprovalDashboard() {
       });
 
       // Patch FormStatus, CurrentLayer, Status to SP so the change persists on refresh
-      const nextLayerNum = currLayerNum + 1;
       const evalPatch: Record<string, unknown> = {
         Status: isFinal ? "Completed" : "In Review",
         FormStatus: isFinal ? "Completed" : "In Review",
@@ -1049,9 +1058,6 @@ export default function ApprovalDashboard() {
       await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`, evalPatch);
 
       let nextApproverEmail = "";
-      const nextLayerConfig = !isFinal && branchLayers
-        ? branchLayers.find(l => l.layerNumber === nextLayerNum)
-        : undefined;
       if (nextLayerConfig) {
         try {
           const itemEmail = await spGet(
@@ -1105,6 +1111,8 @@ export default function ApprovalDashboard() {
         totalLayers,
         action: "approve",
         nextApproverEmail,
+        ...(nextLayerConfig?.type ? { nextLayerType: nextLayerConfig.type } : {}),
+        ...(nextLayerConfig?.layerNumber ? { nextLayerNumber: nextLayerConfig.layerNumber } : {}),
         pdfUrl,
       });
 
@@ -1160,44 +1168,47 @@ export default function ApprovalDashboard() {
       ) as Record<string, unknown>);
       const resolvedEmails: Record<number, string> = {};
       const assigneeErrors: string[] = [];
-      for (let n = 1; n <= bLayers.length; n++) {
-        const result = await resolveLayerAssigneeEmail(token, bLayers[n - 1], submittedData);
+      for (const layer of bLayers) {
+        const result = await resolveLayerAssigneeEmail(token, layer, submittedData);
         if (result.error) assigneeErrors.push(result.error);
-        if (result.email) resolvedEmails[n] = result.email;
+        if (result.email) resolvedEmails[layer.layerNumber] = result.email;
       }
       if (assigneeErrors.length > 0) {
         throw new Error(`Cannot start branch: ${assigneeErrors.join(" ")}`);
       }
+      const firstLayerNumber = bLayers[0]?.layerNumber ?? 1;
+      const maxLayerNumber = Math.max(...bLayers.map((layer) => layer.layerNumber), firstLayerNumber);
 
       const patchBody: Record<string, unknown> = {
         SelectedBranch: branchName,
         FormStatus: SP_FORM_STATUS.IN_REVIEW,
         Status: SP_FORM_STATUS.IN_REVIEW,
-        CurrentLayer: 1,
-        CurrentApprovalLayer: 1,
+        CurrentLayer: firstLayerNumber,
+        CurrentApprovalLayer: firstLayerNumber,
       };
-      for (let n = 1; n <= bLayers.length; n++) {
-        patchBody[`L${n}_Status`] = SP_LAYER_STATUS.PENDING;
-        if (resolvedEmails[n]) {
-          patchBody[`L${n}_Email`] = resolvedEmails[n];
+      for (const layer of bLayers) {
+        patchBody[`L${layer.layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
+        if (resolvedEmails[layer.layerNumber]) {
+          patchBody[`L${layer.layerNumber}_Email`] = resolvedEmails[layer.layerNumber];
         }
       }
 
-      await ensureWorkflowColumns(token, listName, bLayers.length);
+      await ensureWorkflowColumns(token, listName, maxLayerNumber);
       // SharePoint needs a moment after adding columns before they can be written
       await new Promise((r) => setTimeout(r, 1500));
       await spPatch(token, patchUrl, patchBody);
 
-      const firstApproverEmail = resolvedEmails[1] || "";
+      const firstApproverEmail = resolvedEmails[firstLayerNumber] || "";
       if (firstApproverEmail) {
         await triggerApprovalNotification(token, {
           formTitle: selectedItem.Title,
           submittedBy: selectedItem.SubmittedBy,
           responseItemId: selectedItem.Id,
-          layer: 1,
+          layer: firstLayerNumber,
           totalLayers: bLayers.length,
           action: "submit",
           nextApproverEmail: firstApproverEmail,
+          ...(bLayers[0]?.type ? { nextLayerType: bLayers[0].type } : {}),
           reviewLink: `${window.location.origin}/admin/approvals?form=${encodeURIComponent(listName)}&item=${respId}`,
         });
       }
@@ -1207,9 +1218,9 @@ export default function ApprovalDashboard() {
         SelectedBranch: branchName,
         FormStatus: SP_FORM_STATUS.IN_REVIEW,
         Status: SP_FORM_STATUS.IN_REVIEW,
-        CurrentLayer: 1,
-        CurrentApprovalLayer: 1,
-        L1_Status: SP_LAYER_STATUS.PENDING,
+        CurrentLayer: firstLayerNumber,
+        CurrentApprovalLayer: firstLayerNumber,
+        L1_Status: firstLayerNumber === 1 ? SP_LAYER_STATUS.PENDING : selectedItem.L1_Status,
       };
       setPendingItems((prev) => prev.map((i) => i.Id === selectedItem.Id ? updatedItem : i));
       await loadItemDetails(updatedItem);
@@ -1299,6 +1310,10 @@ export default function ApprovalDashboard() {
   // Handle approve
   const handleApprove = async () => {
     if (!token || !selectedItem || !formConfig) return;
+    if (selectedLayerAccess && !selectedLayerAccess.allowed) {
+      setError("This item is locked because the current layer is assigned to another approver.");
+      return;
+    }
 
     setActionLoading(true);
     try {
@@ -1311,11 +1326,13 @@ export default function ApprovalDashboard() {
       }
       const totalLayers = branchLayers?.length || formConfig.NumberOfApprovalLayer || 1;
       const listName = selectedItem.Title; // list is named after form title
+      const nextLayer = getNextWorkflowLayer(branchLayers, currentLayer);
+      const nextLayerNumber = nextLayer?.layerNumber ?? currentLayer + 1;
+      const isFinal = !nextLayer && currentLayer >= totalLayers;
 
       // Get next approver email
       let nextApproverEmail = "";
-      if (currentLayer < totalLayers) {
-        const nextLayerNumber = currentLayer + 1;
+      if (!isFinal) {
         try {
           const itemEmail = await spGet(
             token,
@@ -1332,8 +1349,7 @@ export default function ApprovalDashboard() {
           ) as { value?: { ApproverEmail: string }[] };
           nextApproverEmail = approvers.value?.[0]?.ApproverEmail || "";
         }
-        const nextLayer = branchLayers?.find((layer) => layer.layerNumber === nextLayerNumber);
-        if (!nextApproverEmail && nextLayer?.assignee.type === "department-approver") {
+        if (!nextApproverEmail && nextLayer) {
           const submittedData = responseData ?? (await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`
@@ -1355,12 +1371,11 @@ export default function ApprovalDashboard() {
       }
 
       // Update status (legacy + enhanced columns)
-      const isFinal = currentLayer >= totalLayers;
       const newStatus = isFinal ? "Approved" : `Approved Layer ${currentLayer}`;
       const patchBody: Record<string, unknown> = {
         Status: newStatus,
-        CurrentApprovalLayer: isFinal ? currentLayer : currentLayer + 1,
-        CurrentLayer: isFinal ? currentLayer : currentLayer + 1, // Keep in sync
+        CurrentApprovalLayer: isFinal ? currentLayer : nextLayerNumber,
+        CurrentLayer: isFinal ? currentLayer : nextLayerNumber, // Keep in sync
         FormStatus: isFinal ? "Completed" : "In Review",
       };
       // Also update enhanced L{n}_Status so the PDF reflects the correct status
@@ -1396,6 +1411,8 @@ export default function ApprovalDashboard() {
         totalLayers,
         action: "approve",
         nextApproverEmail,
+        ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
+        ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
         pdfUrl,
       });
 
@@ -1403,7 +1420,7 @@ export default function ApprovalDashboard() {
       const itemFormStatus = isFinal ? "Completed" : "In Review";
       setPendingItems((prev) => prev.map((i) =>
         i.Id === selectedItem.Id
-          ? { ...i, Status: newStatus, FormStatus: itemFormStatus, CurrentLayer: isFinal ? currentLayer : currentLayer + 1, CurrentApprovalLayer: isFinal ? currentLayer : currentLayer + 1, L1_Status: i.L1_Status || SP_LAYER_STATUS.APPROVED, PdfUrl: pdfUrl || i.PdfUrl }
+          ? { ...i, Status: newStatus, FormStatus: itemFormStatus, CurrentLayer: isFinal ? currentLayer : nextLayerNumber, CurrentApprovalLayer: isFinal ? currentLayer : nextLayerNumber, L1_Status: i.L1_Status || SP_LAYER_STATUS.APPROVED, PdfUrl: pdfUrl || i.PdfUrl }
           : i
       ));
       setSelectedItem(null);
@@ -1417,6 +1434,10 @@ export default function ApprovalDashboard() {
   // Handle reject
   const handleReject = async (reason: string) => {
     if (!token || !selectedItem || !formConfig) return;
+    if (selectedLayerAccess && !selectedLayerAccess.allowed) {
+      setError("This item is locked because the current layer is assigned to another approver.");
+      return;
+    }
 
     setActionLoading(true);
     try {
@@ -1494,6 +1515,7 @@ export default function ApprovalDashboard() {
   }, [surveyJson, responseData]);
 
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
+  const selectedItemLocked = !!selectedItem && !needsBranchSelection && selectedLayerAccess?.allowed === false;
 
   if (loading || !adminChecked) {
     return (
@@ -1948,7 +1970,10 @@ export default function ApprovalDashboard() {
                     <div style={{ fontSize: 12, color: C.purple, marginTop: 2, fontWeight: 500 }}>
                       Branch: {(() => { try {
                         const lc = formConfig?.LayerConfig ? JSON.parse(formConfig.LayerConfig) : null;
-                        const branch = lc?.manualBranches?.find((b: ManualBranch) => b.name === selectedItem.SelectedBranch);
+                        const selectedBranchKey = selectedItem.SelectedBranch.trim().toLowerCase();
+                        const branch = lc?.manualBranches?.find((b: ManualBranch) =>
+                          [b.name, b.label].some((candidate) => candidate.trim().toLowerCase() === selectedBranchKey)
+                        );
                         return branch?.label || selectedItem.SelectedBranch;
                       } catch { return selectedItem.SelectedBranch; }})()}
                     </div>
@@ -1988,6 +2013,18 @@ export default function ApprovalDashboard() {
                       {branchLoading && <div style={{ marginTop: 12, fontSize: 11, color: C.textMuted }}>Saving branch selection...</div>}
                     </div>
                   </>
+                ) : (
+                  <>
+                {selectedItemLocked ? (
+                  <div style={{ padding: 32, textAlign: "center" }}>
+                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.amberPale, color: C.amber, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+                      <LockIcon style={{ fontSize: 24 }} />
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>Item Locked</div>
+                    <div style={{ fontSize: 12, color: C.textSecond, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
+                      This layer is assigned to {selectedLayerAccess?.assignedEmail || "another approver"}. Only that assignee can review or act on it unless a superuser overrides access.
+                    </div>
+                  </div>
                 ) : (
                   <>
                 <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>
@@ -2087,6 +2124,8 @@ export default function ApprovalDashboard() {
                     </div>
                   )}
                 </div>
+                  </>
+                )}
                   </>
                 )}
               </>

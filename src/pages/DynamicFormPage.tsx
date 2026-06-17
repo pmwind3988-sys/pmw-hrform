@@ -964,20 +964,24 @@ export default function DynamicFormPage() {
       // Step 4: Write layer status columns
       if (layerConfigParsed?.layers?.length && !deferDepartmentApproverLookupToApi) {
         // Enhanced path — use new constants
-        for (let n = 1; n <= resolvedLayerCount; n++) {
-          body[`L${n}_Status`] = SP_LAYER_STATUS.PENDING;
-          body[`L${n}_Email`] = activeLayers[n - 1]?.email ?? "";
+        for (let index = 0; index < layerConfigParsed.layers.length; index++) {
+          const layerNumber = layerConfigParsed.layers[index].layerNumber;
+          body[`L${layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
+          body[`L${layerNumber}_Email`] = activeLayers[index]?.email ?? "";
         }
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
-        body.CurrentLayer = resolvedLayerCount > 0 ? 1 : 0;
+        body.CurrentLayer = layerConfigParsed.layers[0]?.layerNumber ?? 0;
+        body.CurrentApprovalLayer = body.CurrentLayer;
       } else if (layerConfigParsed?.layers?.length) {
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
-        body.CurrentLayer = resolvedLayerCount > 0 ? 1 : 0;
+        body.CurrentLayer = layerConfigParsed.layers[0]?.layerNumber ?? 0;
+        body.CurrentApprovalLayer = body.CurrentLayer;
       } else if (hasManualBranches) {
         // Branch-only workflow — admin assigns branch in Approvals before layers start
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
         body.Status = SP_FORM_STATUS.SUBMITTED;
         body.CurrentLayer = 0;
+        body.CurrentApprovalLayer = 0;
       } else {
         // Legacy path — keep old behavior
         for (let n = 1; n <= resolvedLayerCount; n++) {
@@ -1100,6 +1104,7 @@ export default function DynamicFormPage() {
               totalLayers: resolvedLayerCount,
               action: "submit",
               nextApproverEmail: layer1Email,
+              nextLayerType: layerConfigParsed.layers[0].type,
               reviewLink,
             }).catch((e: unknown) => console.warn("[DFP] notification skipped:", e instanceof Error ? e.message : String(e)));
           } else if (resolvedLayerCount > 0) {
@@ -1111,6 +1116,7 @@ export default function DynamicFormPage() {
               totalLayers: resolvedLayerCount,
               action: "submit",
               ...(layer1Email ? { nextApproverEmail: layer1Email } : {}),
+              ...(layerConfigParsed?.layers?.[0]?.type ? { nextLayerType: layerConfigParsed.layers[0].type } : {}),
             }).catch((e: unknown) => console.warn("[DFP] notification skipped:", e instanceof Error ? e.message : String(e)));
           }
         }
@@ -1173,7 +1179,6 @@ export default function DynamicFormPage() {
                 responseData: pdfData,
                 layerResults: buildPdfLayerResults(respItem),
                 meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
-                companyInfo: companyLines,
                 isoStandards: isoStandardsText,
                 logoUrl: logoUrl || "/logo-128.png",
               });
