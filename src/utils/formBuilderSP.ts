@@ -1168,8 +1168,8 @@ export async function logEvent(
       AfterJSON: params.after ? JSON.stringify(params.after) : '',
       EventAt: new Date().toISOString(),
     });
-  } catch (e) {
-    console.warn('[SP] logEvent failed:', (e as Error).message);
+  } catch {
+    // Audit logging is best-effort and should not block builder actions.
   }
 }
 
@@ -1805,59 +1805,91 @@ const SP_ORIGIN = (() => { try { return new URL(SP_SITE_URL).origin; } catch { r
 function makePdfLink(pdfUrl: string | undefined): string {
   if (!pdfUrl) return '';
   const absoluteUrl = pdfUrl.startsWith('http') ? pdfUrl : `${SP_ORIGIN}${pdfUrl}`;
-  return `<a href="${absoluteUrl}" style="display:inline-block;background:#0078D4;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;margin-top:4px">📄 View PDF Document</a>`;
+  return `<a href="${escapeHtml(absoluteUrl)}" style="display:inline-block;background:#FFFFFF;color:#0078D4;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;border:1px solid #B4D5F0">View PDF record</a>`;
+}
+
+interface EmailDetail {
+  label: string;
+  value: string | number;
 }
 
 function emailBody(params: {
   title: string;
   subtitle: string;
+  preheader: string;
   statusColor: string;
   statusLabel: string;
   statusBg: string;
-  details: string[];
+  statusBorder: string;
+  details: EmailDetail[];
   link?: string;
   linkLabel?: string;
   pdfUrl?: string;
+  note?: string;
 }): string {
-  const detailsRows = params.details.map(d => `<tr><td style="padding:3px 0;font-size:13px;color:#6B7280;width:110px;vertical-align:top">${d.split(':')[0]}:</td><td style="padding:3px 0;font-size:13px;color:#1F2937;font-weight:500">${d.split(':').slice(1).join(':')}</td></tr>`).join('');
-  const linkHtml = params.link ? `<div style="margin-top:16px"><a href="${params.link}" style="display:inline-block;background:#0078D4;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">${params.linkLabel || 'Review'}</a></div>` : '';
-  const pdfHtml = params.pdfUrl ? `<div style="margin-top:12px">${makePdfLink(params.pdfUrl)}</div>` : '';
+  const detailsRows = params.details
+    .filter((detail) => String(detail.value).trim())
+    .map((detail) => `<tr>
+      <td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">${escapeHtml(detail.label)}</td>
+      <td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(String(detail.value))}</td>
+    </tr>`)
+    .join('');
+  const linkHtml = params.link
+    ? `<a href="${escapeHtml(params.link)}" style="display:inline-block;background:#0078D4;color:#FFFFFF;padding:12px 18px;border-radius:8px;text-decoration:none;font-size:14px;line-height:20px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.08)">${escapeHtml(params.linkLabel || 'Open request')}</a>`
+    : '';
+  const pdfHtml = params.pdfUrl ? makePdfLink(params.pdfUrl) : '';
+  const actionsHtml = linkHtml || pdfHtml
+    ? `<tr><td style="padding:20px 0 4px">
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          ${linkHtml ? `<td style="padding-right:10px">${linkHtml}</td>` : ''}
+          ${pdfHtml ? `<td>${pdfHtml}</td>` : ''}
+        </tr></table>
+      </td></tr>`
+    : '';
+  const noteHtml = params.note
+    ? `<tr><td style="padding:12px 0 0;font-size:12px;line-height:18px;color:#6B7280">${escapeHtml(params.note)}</td></tr>`
+    : '';
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#F3F4F6;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#F3F4F6"><tr><td align="center" style="padding:32px 16px">
-<table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
-
-<!-- Header bar -->
-<tr><td style="background:#0078D4;padding:20px 28px">
-<table width="100%" cellpadding="0" cellspacing="0"><tr>
-<td><span style="color:#fff;font-size:20px;font-weight:700">PMW HR Form</span></td>
-</tr></table>
-</td></tr>
-
-<!-- Body -->
-<tr><td style="padding:28px 28px 24px">
-
-<!-- Status badge -->
-<table cellpadding="0" cellspacing="0" style="display:inline-block;background:${params.statusBg};border-radius:20px;padding:4px 14px;margin-bottom:14px"><tr><td style="font-size:12px;font-weight:700;color:${params.statusColor};text-transform:uppercase;letter-spacing:0.5px">${params.statusLabel}</td></tr></table>
-
-<h2 style="margin:0 0 4px;font-size:18px;color:#1F2937">${params.title}</h2>
-<p style="margin:0 0 16px;font-size:13px;color:#6B7280">${params.subtitle}</p>
-
-<!-- Details table -->
-<table width="100%" cellpadding="0" cellspacing="0">${detailsRows}</table>
-
-${linkHtml}
-${pdfHtml}
-
-</td></tr>
-
-<!-- Footer -->
-<tr><td style="padding:16px 28px;border-top:1px solid #E5E7EB;font-size:11px;color:#9CA3AF;text-align:center">
-This is an automated message from PMW HR Form. Please do not reply.
-</td></tr>
-
-</table></td></tr></table></body></html>`;
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F3F6FA;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(params.preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FA">
+  <tr>
+    <td align="center" style="padding:32px 16px">
+      <table role="presentation" width="584" cellpadding="0" cellspacing="0" style="width:100%;max-width:584px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,0.06),0 10px 30px rgba(17,24,39,0.08)">
+        <tr>
+          <td style="padding:22px 28px;background:#FFFFFF;border-bottom:1px solid #E5EAF1">
+            <div style="font-size:12px;line-height:16px;color:#6B7280;font-weight:700;text-transform:uppercase;letter-spacing:0.08em">PMW HR Form</div>
+            <div style="margin-top:4px;font-size:13px;line-height:18px;color:#4B5563">Automated workflow notification</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:${params.statusBg};border:1px solid ${params.statusBorder};border-radius:999px">
+              <tr><td style="padding:6px 12px;font-size:11px;line-height:14px;font-weight:800;color:${params.statusColor};text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(params.statusLabel)}</td></tr>
+            </table>
+            <h1 style="margin:0 0 8px;font-size:22px;line-height:28px;color:#111827;font-weight:750">${escapeHtml(params.title)}</h1>
+            <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#4B5563">${escapeHtml(params.subtitle)}</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
+              ${detailsRows}
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              ${actionsHtml}
+              ${noteHtml}
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#6B7280">
+            This is an automated notification. For full details, attachments, comments, and audit history, open the request in PMW HR Form.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body></html>`;
 }
 
 /**
@@ -1869,9 +1901,13 @@ export async function triggerApprovalNotification(
   params: ApprovalNotificationParams
 ): Promise<void> {
   const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl } = params;
-  const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation' : 'approval';
-  const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approval';
+  const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
+  const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
+  const workflowStage = `Layer ${displayNextLayerNumber} of ${totalLayers}`;
+  const submissionId = `#${responseItemId}`;
+  const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
+  const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   try {
     if (action === 'submit') {
@@ -1890,82 +1926,106 @@ export async function triggerApprovalNotification(
       }
 
       if (targetEmail) {
-        const link = reviewLink || `${window.location.origin}/admin/approvals?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
         await sendSpEmail(token, {
           to: targetEmail,
-          subject: `[Action Required] New ${formTitle} submission by ${submittedBy}`,
+          subject: `Action required: ${formTitle} needs your ${nextActionNoun}`,
           body: emailBody({
-            title: `New Submission: ${formTitle}`,
-            subtitle: `A new form submission requires your ${nextActionVerb}.`,
-            statusColor: '#1E40AF', statusLabel: 'ACTION REQUIRED', statusBg: '#DBEAFE',
+            title: `${formTitle} needs your ${nextActionNoun}`,
+            subtitle: `A new submission is waiting for you to ${nextActionVerb}. Review the request details and record your decision in PMW HR Form.`,
+            preheader: `${formTitle} ${submissionId} is waiting for ${nextActionNoun}.`,
+            statusColor: '#1E40AF',
+            statusLabel: 'Action required',
+            statusBg: '#EFF6FF',
+            statusBorder: '#BFDBFE',
             details: [
-              `Form:${formTitle}`,
-              `Submitted by:${submittedBy}`,
-              `Submission ID:${responseItemId}`,
-              `Layer:${layer} of ${totalLayers}`,
+              { label: 'Form', value: formTitle },
+              { label: 'Submission ID', value: submissionId },
+              { label: 'Submitted by', value: submittedBy },
+              { label: 'Workflow stage', value: `Layer ${layer} of ${totalLayers}` },
+              { label: 'Current status', value: 'Submitted' },
             ],
-            link, linkLabel: 'Review',
+            link: requestLink,
+            linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
+            note: 'Please complete this step when you have enough context to make the decision.',
           }),
         });
       }
     } else if (action === 'approve') {
-      const link = reviewLink || `${window.location.origin}/admin/approvals?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
       if (layer < totalLayers && nextApproverEmail) {
         // Notify next layer approver
         await sendSpEmail(token, {
           to: nextApproverEmail,
-          subject: `[Action Required] ${formTitle} — pending your ${nextActionNoun} (Layer ${displayNextLayerNumber})`,
+          subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}`,
           body: emailBody({
-            title: `${nextLayerType === 'evaluation' ? 'Evaluation' : 'Approval'} Needed: ${formTitle} (Layer ${displayNextLayerNumber})`,
-            subtitle: `This submission has completed Layer ${layer} and now requires your ${nextActionVerb}.`,
-            statusColor: '#92400E', statusLabel: nextLayerType === 'evaluation' ? 'PENDING YOUR REVIEW' : 'PENDING YOUR APPROVAL', statusBg: '#FEF3C7',
+            title: `${formTitle} is ready for your ${nextActionNoun}`,
+            subtitle: `The previous workflow step has been completed. This request now needs you to ${nextActionVerb} Layer ${displayNextLayerNumber}.`,
+            preheader: `${formTitle} ${submissionId} has advanced to ${workflowStage}.`,
+            statusColor: '#92400E',
+            statusLabel: nextLayerType === 'evaluation' ? 'Pending review' : 'Pending approval',
+            statusBg: '#FFFBEB',
+            statusBorder: '#FDE68A',
             details: [
-              `Form:${formTitle}`,
-              `Submitted by:${submittedBy}`,
-              `Submission ID:${responseItemId}`,
-              `Current Layer:${displayNextLayerNumber} of ${totalLayers}`,
+              { label: 'Form', value: formTitle },
+              { label: 'Submission ID', value: submissionId },
+              { label: 'Submitted by', value: submittedBy },
+              { label: 'Completed step', value: `Layer ${layer} of ${totalLayers}` },
+              { label: 'Current step', value: workflowStage },
             ],
-            link, linkLabel: 'Review',
+            link: requestLink,
+            linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
             pdfUrl,
+            note: 'Only the assigned reviewer or an authorized superuser should act on this workflow step.',
           }),
         });
-      } else if (layer === totalLayers) {
+      } else if (layer === totalLayers && isEmailAddress(submittedBy)) {
         // Final approval - notify submitter
         await sendSpEmail(token, {
           to: submittedBy,
-          subject: `[Approved] Your ${formTitle} submission has been approved`,
+          subject: `Status update: ${formTitle} approved`,
           body: emailBody({
-            title: `Submission Approved: ${formTitle}`,
-            subtitle: 'All approval layers have been completed successfully.',
-            statusColor: '#065F46', statusLabel: 'APPROVED', statusBg: '#D1FAE5',
+            title: `${formTitle} has been approved`,
+            subtitle: 'All required workflow steps have been completed. No further action is needed from you at this time.',
+            preheader: `${formTitle} ${submissionId} has been approved.`,
+            statusColor: '#065F46',
+            statusLabel: 'Approved',
+            statusBg: '#ECFDF5',
+            statusBorder: '#A7F3D0',
             details: [
-              `Form:${formTitle}`,
-              `Submission ID:${responseItemId}`,
-              `Total Layers:${totalLayers}`,
+              { label: 'Form', value: formTitle },
+              { label: 'Submission ID', value: submissionId },
+              { label: 'Final status', value: 'Approved' },
+              { label: 'Completed layers', value: totalLayers },
             ],
             pdfUrl,
+            note: 'Keep the PDF record for reference if your department process requires it.',
           }),
         });
       }
-    } else if (action === 'reject') {
+    } else if (action === 'reject' && isEmailAddress(submittedBy)) {
       // Notify submitter of rejection
       await sendSpEmail(token, {
         to: submittedBy,
-        subject: `[Rejected] Your ${formTitle} submission was not approved`,
+        subject: `Status update: ${formTitle} not approved`,
         body: emailBody({
-          title: `Submission Rejected: ${formTitle}`,
-          subtitle: 'Your form submission was not approved. Details below.',
-          statusColor: '#991B1B', statusLabel: 'REJECTED', statusBg: '#FEE2E2',
+          title: `${formTitle} was not approved`,
+          subtitle: 'The workflow has been closed at the current step. Open the request record to review the outcome details and any recorded reason.',
+          preheader: `${formTitle} ${submissionId} was not approved.`,
+          statusColor: '#991B1B',
+          statusLabel: 'Not approved',
+          statusBg: '#FEF2F2',
+          statusBorder: '#FECACA',
           details: [
-            `Form:${formTitle}`,
-            `Submission ID:${responseItemId}`,
+            { label: 'Form', value: formTitle },
+            { label: 'Submission ID', value: submissionId },
+            { label: 'Final status', value: 'Not approved' },
+            { label: 'Closed at', value: `Layer ${layer} of ${totalLayers}` },
           ],
           pdfUrl,
+          note: 'Contact the reviewing department if you need clarification before submitting a new request.',
         }),
       });
     }
-  } catch (e) {
-    console.warn('[triggerApprovalNotification] failed:', (e as Error).message);
+  } catch {
     // Don't throw - email failures shouldn't block the workflow
   }
 }

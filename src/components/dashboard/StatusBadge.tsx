@@ -55,7 +55,7 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       sx={{
         backgroundColor: cfg.bg,
         color: cfg.color,
-        border: `1px solid ${cfg.dot}33`,
+        boxShadow: `inset 0 0 0 1px ${cfg.dot}33`,
         fontWeight: 800,
         fontSize: "0.75rem",
       }}

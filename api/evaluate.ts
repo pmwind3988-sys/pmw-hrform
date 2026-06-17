@@ -1,6 +1,8 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, queryListItemById, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, updateListItemFields } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
+
+const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -18,6 +20,202 @@ interface ApiResponse {
 
 function rejectedAtLayerStatus(layerNumber: number): string {
   return `Rejected at Layer ${layerNumber}`;
+}
+
+const SYSTEM_FIELDS = new Set([
+  "id", "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
+  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData",
+  "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
+  "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
+  "SelectedBranch",
+]);
+
+function isWorkflowField(key: string): boolean {
+  return SYSTEM_FIELDS.has(key) || /^L\d+_/.test(key);
+}
+
+function isTerminalLayerStatus(value: unknown): boolean {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[\s_-]/g, "");
+  return ["approved", "confirmed", "rejected", "skipped", "cancelled"].includes(normalized) || normalized.includes("reject");
+}
+
+function isTerminalFormStatus(value: unknown): boolean {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[\s_-]/g, "");
+  return ["completed", "rejected", "cancelled", "fullyapproved"].includes(normalized);
+}
+
+function parseSurveyJson(raw: unknown): unknown {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return parsed.surveyJson || parsed;
+  } catch {
+    return null;
+  }
+}
+
+function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: Record<string, unknown> } {
+  if (typeof raw !== "string" || !raw.trim()) return { surveyJson: null, meta: {} };
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      surveyJson: parsed.surveyJson || parsed,
+      meta: isRecord(parsed.meta) ? parsed.meta : {},
+    };
+  } catch {
+    return { surveyJson: null, meta: {} };
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function collectMediaFieldNames(surveyJson: unknown): Set<string> {
+  const names = new Set<string>();
+  const root = isRecord(surveyJson) && isRecord(surveyJson.surveyJson) ? surveyJson.surveyJson : surveyJson;
+  const walk = (elements: unknown): void => {
+    if (!Array.isArray(elements)) return;
+    for (const element of elements) {
+      if (!isRecord(element)) continue;
+      const type = typeof element.type === "string" ? element.type : "";
+      const name = typeof element.name === "string" ? element.name : "";
+      if (name && ["signaturepad", "imageupload", "file"].includes(type)) names.add(name);
+      walk(element.elements);
+      walk(element.templateElements);
+    }
+  };
+  if (isRecord(root) && Array.isArray(root.pages)) {
+    for (const page of root.pages) {
+      if (isRecord(page)) walk(page.elements);
+    }
+  }
+  return names;
+}
+
+function normalizeMaybeJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed || !/^[{[]/.test(trimmed)) return value;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+function toAbsoluteSharePointUrl(value: string): string {
+  if (!value || value.startsWith("http") || value.startsWith("data:")) return value;
+  if (!value.startsWith("/")) return value;
+  try {
+    return `${new URL(SP_SITE_URL).origin}${value}`;
+  } catch {
+    return value;
+  }
+}
+
+function extractImageSrcFromHtml(value: string): string {
+  return value.match(/<img\b[^>]*\bsrc=(["'])(.*?)\1/i)?.[2]?.trim() ?? "";
+}
+
+function splitSharePointUrlFieldValue(value: string): string {
+  const separatorIndex = value.search(/,\s+/);
+  return separatorIndex === -1 ? value : value.slice(0, separatorIndex).trim();
+}
+
+function linkFromRecord(record: Record<string, unknown>): string {
+  for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
+    const next = record[key];
+    if (typeof next === "string" && next.trim()) return toAbsoluteSharePointUrl(next.trim());
+  }
+  const serverUrl = record.serverUrl || record.ServerUrl;
+  const relativeUrl = record.serverRelativeUrl || record.ServerRelativeUrl;
+  if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
+    return `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
+  }
+  return "";
+}
+
+function mediaSourcesFromValue(value: unknown): string[] {
+  const normalized = normalizeMaybeJson(value);
+  if (Array.isArray(normalized)) return normalized.flatMap(mediaSourcesFromValue);
+  if (isRecord(normalized)) {
+    const link = linkFromRecord(normalized);
+    return link ? [link] : [];
+  }
+  if (typeof normalized !== "string") return [];
+  const trimmed = normalized.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("data:image/")) return [trimmed];
+  const htmlSrc = extractImageSrcFromHtml(trimmed);
+  const candidate = splitSharePointUrlFieldValue(htmlSrc || trimmed);
+  if (/^(https?:\/\/|\/)/i.test(candidate)) return [toAbsoluteSharePointUrl(candidate)];
+  return [];
+}
+
+function encodeServerRelativePathParam(serverRelativeUrl: string): string {
+  return encodeURIComponent(serverRelativeUrl.replace(/'/g, "''")).replace(/%2F/gi, "/");
+}
+
+function serverRelativePath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return "";
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const siteUrl = new URL(SP_SITE_URL);
+      const mediaUrl = new URL(trimmed);
+      if (siteUrl.origin.toLowerCase() !== mediaUrl.origin.toLowerCase()) return "";
+      return decodeURIComponent(mediaUrl.pathname);
+    }
+  } catch {
+    return "";
+  }
+  return trimmed.startsWith("/") ? decodeURIComponent(trimmed.split(/[?#]/)[0] ?? trimmed) : "";
+}
+
+function sharePointFileValueUrl(value: string): string {
+  const serverPath = serverRelativePath(value);
+  if (!serverPath) return "";
+  return `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodeServerRelativePathParam(serverPath)}')/$value`;
+}
+
+async function sourceToDataUrl(token: string, source: string): Promise<string> {
+  if (source.startsWith("data:image/")) return source;
+  const requestUrl = sharePointFileValueUrl(source) || source;
+  const response = await fetch(requestUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) throw new Error(`Media fetch failed: ${response.status}`);
+  const contentType = response.headers.get("content-type") || "application/octet-stream";
+  if (!contentType.startsWith("image/")) return source;
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
+async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, unknown>): Promise<Record<string, string | string[]>> {
+  const mediaFields = collectMediaFieldNames(surveyJson);
+  if (mediaFields.size === 0) return {};
+  let spToken = "";
+  const result: Record<string, string | string[]> = {};
+
+  for (const fieldName of mediaFields) {
+    const sources = mediaSourcesFromValue(fields[fieldName]);
+    if (sources.length === 0) continue;
+    const converted: string[] = [];
+    for (const source of sources) {
+      try {
+        if (!spToken) spToken = await getSharePointToken();
+        converted.push(await sourceToDataUrl(spToken, source));
+      } catch {
+        converted.push(source);
+      }
+    }
+    result[fieldName] = converted.length === 1 ? converted[0] : converted;
+  }
+
+  return result;
 }
 
 async function handleGet(req: ApiRequest, res: ApiResponse) {
@@ -84,10 +282,26 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       }
       return layerConfig?.layers ?? [];
     })();
+    const previousLayerSummaries = activeLayers
+      .filter((layer) => Number(layer.layerNumber) < foundLayerNumber)
+      .map((layer) => ({
+        layerNumber: layer.layerNumber,
+        type: layer.type,
+        title: typeof layer.title === "string" ? layer.title : "",
+        description: typeof layer.description === "string" ? layer.description : "",
+        surveyElements: Array.isArray(layer.surveyElements) ? layer.surveyElements : [],
+      }));
 
     // Include submission metadata always
-    for (const key of ["Title", "SubmittedBy", "SubmittedAt", "FormVersion", "FormID"]) {
+    for (const key of ["Title", "SubmittedBy", "SubmittedAt", "FormVersion", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
       if (allFields[key] !== undefined) visibleFields[key] = allFields[key];
+    }
+
+    // Include submitted form fields, but not workflow/system columns.
+    for (const [key, value] of Object.entries(allFields)) {
+      if (!isWorkflowField(key) && value !== null && value !== undefined) {
+        visibleFields[key] = value;
+      }
     }
 
     // Include previous layer results (layers < current layer)
@@ -123,6 +337,20 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    let surveyJson: unknown = null;
+    let versionMeta: Record<string, unknown> = {};
+    const formVersion = String(allFields.FormVersion || "");
+    if (formVersion) {
+      const versionItems = await queryListItems(graphToken, "Web Form Versions", { top: 500 });
+      const versionRow = versionItems.find(
+        (item) => item.fields.FormTitle === foundFormTitle && item.fields.FormVersion === formVersion
+      )?.fields;
+      const parsedVersion = parseVersionPayload(versionRow?.SurveyJSON);
+      surveyJson = parsedVersion.surveyJson || parseSurveyJson(versionRow?.SurveyJSON);
+      versionMeta = parsedVersion.meta;
+    }
+    const mediaSrcByField = await buildMediaSrcByField(surveyJson, visibleFields);
+
     return res.status(200).json({
       success: true,
       data: {
@@ -131,6 +359,16 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         totalLayers: activeLayers.length || 0,
         layerType: foundToken.type || "approval",
         layerTitle: foundToken.title || "",
+        layerDescription: foundToken.description || "",
+        layerStatus: allFields[`L${foundLayerNumber}_Status`] || "",
+        formStatus: allFields.FormStatus || allFields.Status || "",
+        surveyElements: Array.isArray(foundToken.surveyElements) ? foundToken.surveyElements : [],
+        previousLayerSummaries,
+        confirmationLabel: foundToken.confirmationLabel || "",
+        confirmationType: foundToken.confirmationType || "",
+        surveyJson,
+        logoUrl: typeof versionMeta.logoUrl === "string" ? versionMeta.logoUrl : "",
+        mediaSrcByField,
         fields: visibleFields,
       },
     });
@@ -203,6 +441,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const responseListName = `${formTitle} Responses`;
     const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
+    const latestCurrentLayer = Number(responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer || 0);
+    const latestLayerStatus = responseItem.fields[`L${layerNumber}_Status`];
+    if (isTerminalFormStatus(responseItem.fields.FormStatus || responseItem.fields.Status) || isTerminalLayerStatus(latestLayerStatus)) {
+      return res.status(409).json({ error: "This layer has already been completed and cannot be submitted again." });
+    }
+    if (latestCurrentLayer && latestCurrentLayer !== layerNumber) {
+      return res.status(409).json({ error: "This evaluation link is no longer active for the current workflow layer." });
+    }
+
     const selectedBranch = typeof responseItem.fields.SelectedBranch === "string" ? responseItem.fields.SelectedBranch.trim().toLowerCase() : "";
     const activeLayers = (() => {
       if (selectedBranch && layerConfigParsed?.manualBranches?.length) {

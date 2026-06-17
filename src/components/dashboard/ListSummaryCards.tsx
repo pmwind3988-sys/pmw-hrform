@@ -8,7 +8,7 @@ import {
   Edit as EditIcon,
 } from "@mui/icons-material";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
-import { editorial, editorialShadow } from "../../theme/editorial";
+import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
 
 interface ListSummaryCardsProps {
   submissions: Submission[];
@@ -44,7 +44,7 @@ export default function ListSummaryCards({
 
         for (const submission of listSubmissions) {
           const status = (submission.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "");
-          if (["fullyapproved", "approved"].includes(status)) {
+          if (["fullyapproved", "approved", "completed"].includes(status)) {
             listApproved++;
           } else if (status.includes("reject")) {
             listRejected++;
@@ -63,10 +63,9 @@ export default function ListSummaryCards({
             <Box
               sx={{
                 minHeight: 224,
-                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                backgroundColor: "rgba(255, 255, 255, 0.94)",
                 borderRadius: "8px",
-                border: `1px solid ${editorial.border}`,
-                boxShadow: "0 10px 28px rgba(0, 90, 158, 0.06)",
+                boxShadow: editorialShadow,
                 p: { xs: 1.75, sm: 2 },
                 pt: canUseFormBuilder ? { xs: 2.25, sm: 2.5 } : { xs: 1.75, sm: 2 },
                 position: "relative",
@@ -82,7 +81,7 @@ export default function ListSummaryCards({
                   backgroundColor: meta.color,
                 },
                 "&:hover": {
-                  boxShadow: editorialShadow,
+                  boxShadow: editorialShadowHover,
                   transform: "translateY(-2px)",
                 },
                 "@media (prefers-reduced-motion: reduce)": {
@@ -103,7 +102,7 @@ export default function ListSummaryCards({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    border: `1px solid ${editorial.border}`,
+                    boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.06)",
                   }}
                 >
                   <DescriptionIcon sx={{ fontSize: 22, color: meta.color }} />
@@ -140,11 +139,11 @@ export default function ListSummaryCards({
                         borderRadius: "8px",
                         backgroundColor: editorial.purpleWash,
                         color: editorial.pmwPurpleDark,
-                        border: `1px solid ${editorial.pmwPurpleSoft}`,
-                        transition: "background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease",
+                        boxShadow: `inset 0 0 0 1px ${editorial.pmwPurpleSoft}`,
+                        transition: "background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease",
                         "&:hover": {
                           backgroundColor: editorial.pmwPurpleSoft,
-                          borderColor: editorial.pmwPurple,
+                          boxShadow: `inset 0 0 0 1px ${editorial.pmwPurple}`,
                         },
                         "&:active": {
                           transform: "scale(0.96)",

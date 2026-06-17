@@ -23,7 +23,7 @@ import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { fetchCareersPortalData } from "../utils/careersService";
 import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
-import { editorial } from "../theme/editorial";
+import { editorial, editorialShadow } from "../theme/editorial";
 
 type ExportDatePreset = "all" | "today" | "week" | "month" | "custom";
 
@@ -320,7 +320,7 @@ export default function AdminHomePage() {
       sx={{
         minHeight: "100vh",
         background:
-          "var(--app-bg, linear-gradient(180deg, #F4FAFE 0%, #F9FBFE 42%, #FFFFFF 100%))",
+          "var(--app-bg, linear-gradient(180deg, #F6FAFD 0%, #F8FAFC 48%, #FFFFFF 100%))",
         color: editorial.ink,
         WebkitFontSmoothing: "antialiased",
         position: "relative",
@@ -330,7 +330,7 @@ export default function AdminHomePage() {
           inset: 0,
           pointerEvents: "none",
           background:
-            "linear-gradient(90deg, rgba(0, 120, 212, 0.07) 0%, rgba(255,255,255,0) 34%, rgba(98, 100, 167, 0.06) 100%)",
+            "linear-gradient(90deg, rgba(0, 120, 212, 0.045) 0%, rgba(255,255,255,0) 42%, rgba(98, 100, 167, 0.04) 100%)",
         },
       }}
     >
@@ -429,9 +429,8 @@ export default function AdminHomePage() {
               py: 1.25,
               borderRadius: "8px",
               color: editorial.muted,
-              backgroundColor: "rgba(255, 255, 255, 0.78)",
-              border: `1px solid ${editorial.border}`,
-              boxShadow: "0 10px 28px rgba(0, 90, 158, 0.08)",
+              backgroundColor: "rgba(255, 255, 255, 0.9)",
+              boxShadow: editorialShadow,
             }}
           >
             <Box
@@ -444,6 +443,7 @@ export default function AdminHomePage() {
                 justifyContent: "center",
                 backgroundColor: isAdmin ? editorial.purpleWash : editorial.blueWash,
                 color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
+                boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.06)",
               }}
             >
               {isAdmin ? <AdminIcon sx={{ fontSize: 20 }} /> : <PersonIcon sx={{ fontSize: 20 }} />}
@@ -506,47 +506,13 @@ export default function AdminHomePage() {
             submitterFilter={submitterFilter}
             setSubmitterFilter={setSubmitterFilter}
             isAdmin={isAdmin}
+            canExportSubmissions={canExportSubmissions}
+            onOpenExport={() => setExportOpen(true)}
             visibleLists={visibleLists}
             total={submissions.length}
             filtered={sortedSubmissions.length}
           />
         </Box>
-
-        {canExportSubmissions && (
-          <Box
-            sx={{
-              mb: 2,
-              display: "flex",
-              justifyContent: "flex-end",
-            }}
-          >
-            <Button
-              variant="outlined"
-              startIcon={<FileDownloadIcon />}
-              onClick={() => setExportOpen(true)}
-              sx={{
-                minHeight: 40,
-                borderRadius: "8px",
-                px: 1.5,
-                color: editorial.pmwBlueDark,
-                borderColor: editorial.pmwBlueSoft,
-                backgroundColor: "rgba(255, 255, 255, 0.86)",
-                fontWeight: 800,
-                textTransform: "none",
-                transition: "background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease",
-                "&:hover": {
-                  backgroundColor: editorial.blueWash,
-                  borderColor: editorial.pmwBlue,
-                },
-                "&:active": {
-                  transform: "scale(0.96)",
-                },
-              }}
-            >
-              Export submissions
-            </Button>
-          </Box>
-        )}
 
         {deleteResult && (
           <Alert
@@ -614,13 +580,13 @@ export default function AdminHomePage() {
           paper: {
             sx: {
               borderRadius: "8px",
-              border: `1px solid ${editorial.border}`,
-              boxShadow: "0 18px 48px rgba(16, 16, 16, 0.18)",
+              boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 18px 48px rgba(16, 16, 16, 0.18)",
+              overflow: "hidden",
             },
           },
         }}
       >
-        <DialogTitle sx={{ display: "flex", gap: 1.5, alignItems: "center", pb: 1 }}>
+        <DialogTitle sx={{ display: "flex", gap: 1.5, alignItems: "center", px: 3, py: 2.5, backgroundColor: editorial.paperSoft }}>
           <Box
             sx={{
               width: 40,
@@ -640,12 +606,12 @@ export default function AdminHomePage() {
             <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, textWrap: "balance" }}>
               Export dashboard submissions
             </Typography>
-            <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700 }}>
+            <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700, textWrap: "pretty" }}>
               CSV opens in Excel and includes submitted form fields.
             </Typography>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
+        <DialogContent sx={{ px: 3, py: 2.5 }}>
           <Box
             sx={{
               display: "grid",
@@ -659,7 +625,7 @@ export default function AdminHomePage() {
                 value={exportDatePreset}
                 label="Date range"
                 onChange={(event) => setExportDatePreset(event.target.value as ExportDatePreset)}
-                sx={{ borderRadius: "8px" }}
+                sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
               >
                 <MenuItem value="all">All dates</MenuItem>
                 <MenuItem value="today">Today</MenuItem>
@@ -675,7 +641,7 @@ export default function AdminHomePage() {
                 value={exportListFilter}
                 label="Form"
                 onChange={(event) => setExportListFilter(event.target.value)}
-                sx={{ borderRadius: "8px" }}
+                sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
               >
                 <MenuItem value="">All forms</MenuItem>
                 {visibleLists.map((list) => (
@@ -695,7 +661,7 @@ export default function AdminHomePage() {
                   value={exportCustomFrom}
                   onChange={(event) => setExportCustomFrom(event.target.value)}
                   slotProps={{ inputLabel: { shrink: true } }}
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px" } }}
+                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: editorial.paperSoft } }}
                 />
                 <TextField
                   label="To"
@@ -704,7 +670,7 @@ export default function AdminHomePage() {
                   value={exportCustomTo}
                   onChange={(event) => setExportCustomTo(event.target.value)}
                   slotProps={{ inputLabel: { shrink: true } }}
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px" } }}
+                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: editorial.paperSoft } }}
                 />
               </>
             )}
@@ -715,7 +681,7 @@ export default function AdminHomePage() {
                 value={exportCategoryFilter}
                 label="Category"
                 onChange={(event) => setExportCategoryFilter(event.target.value)}
-                sx={{ borderRadius: "8px" }}
+                sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
               >
                 <MenuItem value="">All categories</MenuItem>
                 {categoryOptions.map((category) => (
@@ -732,7 +698,7 @@ export default function AdminHomePage() {
               size="small"
               value={exportSubmitterFilter}
               onChange={(event) => setExportSubmitterFilter(event.target.value)}
-              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px" } }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: editorial.paperSoft } }}
             />
           </Box>
 
@@ -743,16 +709,30 @@ export default function AdminHomePage() {
               borderRadius: "8px",
               backgroundColor: exportRows.length > 0 ? editorial.blueWash : editorial.yellowSoft,
               color: exportRows.length > 0 ? editorial.pmwBlueDark : editorial.warning,
+              boxShadow: `inset 0 0 0 1px ${exportRows.length > 0 ? editorial.pmwBlueSoft : "rgba(177, 92, 0, 0.28)"}`,
               "& .MuiAlert-icon": {
                 color: exportRows.length > 0 ? editorial.pmwBlueDark : editorial.warning,
+              },
+              "& .MuiAlert-message": {
+                fontVariantNumeric: "tabular-nums",
+                fontWeight: 800,
               },
             }}
           >
             {exportRows.length} submission{exportRows.length === 1 ? "" : "s"} match these export filters.
           </Alert>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={() => setExportOpen(false)} sx={{ borderRadius: "8px", minHeight: 40 }}>
+        <DialogActions sx={{ px: 3, py: 2, gap: 1, backgroundColor: editorial.paperSoft }}>
+          <Button
+            onClick={() => setExportOpen(false)}
+            sx={{
+              borderRadius: "8px",
+              minHeight: 40,
+              px: 2,
+              textTransform: "none",
+              fontWeight: 800,
+            }}
+          >
             Cancel
           </Button>
           <Button

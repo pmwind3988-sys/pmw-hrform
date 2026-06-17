@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRejectedWorkflowPatch,
   rejectedAtLayerStatus,
+  resolveWorkflowDisplayState,
   shouldGenerateTerminalPdf,
 } from "./workflowStatus";
 
@@ -26,5 +27,47 @@ describe("workflowStatus", () => {
     expect(shouldGenerateTerminalPdf({ formStatus: "Completed", totalLayers: 3 })).toBe(true);
     expect(shouldGenerateTerminalPdf({ formStatus: "In Review", totalLayers: 3, layerStatuses: ["Approved", "Rejected at Layer 2"] })).toBe(true);
     expect(shouldGenerateTerminalPdf({ formStatus: "In Review", totalLayers: 3, layerStatuses: ["Approved", "Pending"] })).toBe(false);
+  });
+
+  it("moves dashboard display past a stale current layer when later layers are complete", () => {
+    expect(
+      resolveWorkflowDisplayState({
+        formStatus: "In Review",
+        currentLayer: 1,
+        totalLayers: 2,
+        layerStatuses: ["Approved", "Approved"],
+      }),
+    ).toEqual({
+      formStatus: "Completed",
+      currentLayer: 2,
+    });
+  });
+
+  it("shows final rejection when current layer was not advanced after the first approval", () => {
+    expect(
+      resolveWorkflowDisplayState({
+        formStatus: "In Review",
+        currentLayer: 1,
+        totalLayers: 2,
+        layerStatuses: ["Approved", "Rejected"],
+      }),
+    ).toEqual({
+      formStatus: "Rejected",
+      currentLayer: 2,
+    });
+  });
+
+  it("keeps the rejected layer current when rejection happens before later propagated statuses", () => {
+    expect(
+      resolveWorkflowDisplayState({
+        formStatus: "Rejected",
+        currentLayer: 1,
+        totalLayers: 2,
+        layerStatuses: ["Rejected", "Rejected at Layer 1"],
+      }),
+    ).toEqual({
+      formStatus: "Rejected",
+      currentLayer: 1,
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { SP_FORM_STATUS, SP_LAYER_STATUS } from "./statusConstants";
+import { deriveFormStatus, formStatusLabel, normalizeLayerStatus, SP_FORM_STATUS, SP_LAYER_STATUS } from "./statusConstants";
 
 export function rejectedAtLayerStatus(layerNumber: number): string {
   return `Rejected at Layer ${layerNumber}`;
@@ -22,6 +22,65 @@ export function isTerminalLayerStatus(status: string | null | undefined): boolea
     normalized === "cancelled" ||
     normalized.includes("reject")
   );
+}
+
+function normalizeLayerNumber(value: number | null | undefined, totalLayers: number): number {
+  if (!Number.isFinite(value) || !value || totalLayers <= 0) return 0;
+  return Math.min(totalLayers, Math.max(1, Math.trunc(value)));
+}
+
+function hasLayerStatusEvidence(status: string | null | undefined): boolean {
+  return typeof status === "string" && status.trim().length > 0;
+}
+
+export function resolveWorkflowDisplayState(args: {
+  formStatus?: string | null;
+  currentLayer?: number | null;
+  totalLayers: number;
+  layerStatuses: (string | null | undefined)[];
+}): { formStatus: string | null; currentLayer: number } {
+  const totalLayers = Math.max(0, Math.trunc(args.totalLayers));
+  if (totalLayers <= 0) {
+    return {
+      formStatus: args.formStatus ?? null,
+      currentLayer: 0,
+    };
+  }
+
+  const layerStatuses = Array.from({ length: totalLayers }, (_, index) => args.layerStatuses[index]);
+  const rawCurrentLayer = normalizeLayerNumber(args.currentLayer, totalLayers);
+  const currentLayerStatus = rawCurrentLayer > 0 ? layerStatuses[rawCurrentLayer - 1] : undefined;
+  let currentLayer = rawCurrentLayer || 1;
+
+  if (rawCurrentLayer > 0 && isRejectedStatus(currentLayerStatus)) {
+    currentLayer = rawCurrentLayer;
+  } else if (rawCurrentLayer > 0 && !isTerminalLayerStatus(currentLayerStatus)) {
+    currentLayer = rawCurrentLayer;
+  } else {
+    const nextOpenIndex = layerStatuses.findIndex((status, index) =>
+      index + 1 > rawCurrentLayer && !isTerminalLayerStatus(status)
+    );
+    if (nextOpenIndex >= 0) {
+      currentLayer = nextOpenIndex + 1;
+    } else {
+      const lastTerminalIndex = layerStatuses.reduce((lastIndex, status, index) =>
+        hasLayerStatusEvidence(status) && isTerminalLayerStatus(status) ? index : lastIndex,
+      -1);
+      currentLayer = lastTerminalIndex >= 0 ? lastTerminalIndex + 1 : currentLayer;
+    }
+  }
+
+  const hasAnyLayerStatus = layerStatuses.some(hasLayerStatusEvidence);
+  let formStatus = args.formStatus ?? null;
+  if (isRejectedStatus(formStatus)) {
+    formStatus = SP_FORM_STATUS.REJECTED;
+  } else if (isCompletedFormStatus(formStatus)) {
+    formStatus = SP_FORM_STATUS.COMPLETED;
+  } else if (hasAnyLayerStatus) {
+    formStatus = formStatusLabel(deriveFormStatus(layerStatuses.map(normalizeLayerStatus)));
+  }
+
+  return { formStatus, currentLayer };
 }
 
 export function buildRejectedWorkflowPatch(

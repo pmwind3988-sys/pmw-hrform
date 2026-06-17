@@ -1021,7 +1021,13 @@ function LayerProgression({
         {Array.from({ length: totalLayers }, (_, i) => {
           const layerNum = i + 1;
           const enhanced = enhancedLayers?.[i];
-          const isActive = currentLayer === layerNum;
+          const isTerminal =
+            enhanced?.status === "approved" ||
+            enhanced?.status === "confirmed" ||
+            enhanced?.status === "rejected" ||
+            enhanced?.status === "skipped" ||
+            enhanced?.status === "cancelled";
+          const isActive = currentLayer === layerNum && !isTerminal;
 
           let borderColor: string = editorial.border;
           let bgColor: string = editorial.paperSoft;
@@ -1231,7 +1237,8 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
                 maxHeight: 118,
                 maxWidth: "100%",
                 borderRadius: "8px",
-                border: "1px solid rgba(0, 0, 0, 0.1)",
+                outline: "1px solid rgba(0, 0, 0, 0.1)",
+                outlineOffset: "-1px",
                 backgroundColor: "#ffffff",
                 p: 1,
               }}

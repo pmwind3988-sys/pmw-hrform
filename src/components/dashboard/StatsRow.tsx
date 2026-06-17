@@ -1,7 +1,7 @@
 import { Box, Grid, Typography } from "@mui/material";
 import { Description as DescriptionIcon, CheckCircle as CheckCircleIcon, AccessTime as AccessTimeIcon, Cancel as CancelIcon } from "@mui/icons-material";
 import type { Submission } from "../../types";
-import { editorial } from "../../theme/editorial";
+import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
 
 interface StatsRowProps {
   submissions: Submission[];
@@ -25,6 +25,8 @@ export default function StatsRow({ submissions }: StatsRowProps) {
 
   const total = submissions.length;
   const percent = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
+  const submissionLabel = (value: number, label: string) =>
+    `${value} ${label} submission${value === 1 ? "" : "s"}`;
 
   const stats = [
     {
@@ -40,7 +42,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
     {
       label: "Approved",
       value: approved,
-      helper: `${percent(approved)}% completed`,
+      helper: submissionLabel(approved, "approved"),
       progress: percent(approved),
       icon: <CheckCircleIcon sx={{ fontSize: 24 }} />,
       bg: "rgba(16, 124, 16, 0.08)",
@@ -50,7 +52,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
     {
       label: "Pending",
       value: pending,
-      helper: `${percent(pending)}% awaiting action`,
+      helper: submissionLabel(pending, "pending"),
       progress: percent(pending),
       icon: <AccessTimeIcon sx={{ fontSize: 24 }} />,
       bg: editorial.yellowSoft,
@@ -60,7 +62,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
     {
       label: "Rejected",
       value: rejected,
-      helper: `${percent(rejected)}% rejected`,
+      helper: submissionLabel(rejected, "rejected"),
       progress: percent(rejected),
       icon: <CancelIcon sx={{ fontSize: 24 }} />,
       bg: "rgba(198, 40, 40, 0.08)",
@@ -76,15 +78,14 @@ export default function StatsRow({ submissions }: StatsRowProps) {
           <Box
             sx={{
               minHeight: 154,
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
+              backgroundColor: "rgba(255, 255, 255, 0.94)",
               borderRadius: "8px",
               p: { xs: 1.5, sm: 2 },
               display: "grid",
               gridTemplateRows: "auto 1fr auto",
               gap: 1.5,
               transition: "box-shadow 0.2s ease, transform 0.2s ease",
-              border: `1px solid ${editorial.border}`,
-              boxShadow: "0 10px 28px rgba(0, 90, 158, 0.06)",
+              boxShadow: editorialShadow,
               cursor: "default",
               position: "relative",
               overflow: "hidden",
@@ -96,7 +97,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 backgroundColor: stat.accent,
               },
               "&:hover": {
-                boxShadow: "0 14px 34px rgba(0, 90, 158, 0.12)",
+                boxShadow: editorialShadowHover,
                 transform: "translateY(-2px)",
               },
               "@media (prefers-reduced-motion: reduce)": {
@@ -131,7 +132,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                   alignItems: "center",
                   justifyContent: "center",
                   color: stat.color,
-                  border: `1px solid ${stat.accent}40`,
+                  boxShadow: `inset 0 0 0 1px ${stat.accent}26`,
                   flexShrink: 0,
                 }}
               >

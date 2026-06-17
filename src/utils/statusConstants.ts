@@ -84,6 +84,8 @@ export function normalizeLayerStatus(raw: string | null | undefined): LayerStatu
   if (mapped === SP_FORM_STATUS.COMPLETED) return "approved";
   if (mapped === SP_LAYER_STATUS.PENDING) return "pending";
   const lower = raw.toLowerCase().replace(/[\s_-]/g, "");
+  if (lower.includes("pending") || lower.includes("waiting")) return "pending";
+  if (lower === "approved" || lower.includes("fullyapproved") || lower.includes("approve")) return "approved";
   if (lower === "confirmed") return "confirmed";
   if (lower === "inprogress" || lower.includes("progress") || lower.includes("review")) return "in_progress";
   if (lower.includes("skip")) return "skipped";

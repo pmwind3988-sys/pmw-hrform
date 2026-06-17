@@ -1227,7 +1227,7 @@ export default function DynamicFormPage() {
               await generateAndStorePdf(token, cfg.Title as string, result.Id, {
                 surveyJson: surveyContent as PdfFormData["surveyJson"],
                 responseData: pdfData,
-                layerResults: buildPdfLayerResults(respItem),
+                layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
                 meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
                 isoStandards: isoStandardsText,
                 logoUrl: logoUrl || "/logo-128.png",

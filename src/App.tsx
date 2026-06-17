@@ -22,7 +22,7 @@ import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision }
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
-import { isRejectedStatus } from "./utils/workflowStatus";
+import { isRejectedStatus, resolveWorkflowDisplayState } from "./utils/workflowStatus";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -397,7 +397,7 @@ function mapSubmission(
     coerceFieldDisplayText(raw.FormId) ||
     coerceFieldDisplayText(raw.formId);
   const formVersion = coerceFieldDisplayText(raw.FormVersion) || "1";
-  const formStatus = raw.FormStatus ? String(raw.FormStatus) : null;
+  let formStatus = raw.FormStatus ? String(raw.FormStatus) : null;
   const submittedByEmail = resolveSubmittedByEmail(raw);
   const submitterName = resolveSubmitterName(raw);
   const createdByName = resolveCreatedByName(raw);
@@ -405,8 +405,11 @@ function mapSubmission(
   const title = resolveSubmissionTitle(raw.Title, submitterName, submittedByEmail, createdByName, createdByEmail);
   const submittedAt = raw.SubmittedAt ? String(raw.SubmittedAt) : null;
   const modifiedAt = raw.Modified ? String(raw.Modified) : null;
-  const currentLayer = raw.CurrentLayer !== undefined && raw.CurrentLayer !== null && raw.CurrentLayer !== ""
-    ? Number(raw.CurrentLayer) || 0
+  const rawCurrentLayerValue = raw.CurrentLayer !== undefined && raw.CurrentLayer !== null && raw.CurrentLayer !== ""
+    ? raw.CurrentLayer
+    : raw.CurrentApprovalLayer;
+  let currentLayer = rawCurrentLayerValue !== undefined && rawCurrentLayerValue !== null && rawCurrentLayerValue !== ""
+    ? Number(rawCurrentLayerValue) || 0
     : 0;
   const selectedBranch = resolveSelectedBranch(raw);
   const surveyJson = resolveSubmissionSurveyJson(listTitle, formVersion, surveyJsonByFormVersion);
@@ -424,6 +427,7 @@ function mapSubmission(
 
   const layers: (ApprovalLayer | null)[] = [];
   const enhancedLayers: (ApprovalLayerResult | EvaluationLayerResult | null)[] = [];
+  const layerStatusValues: (string | null)[] = [];
 
   if (layersConfig.length > 0) {
     for (let i = 0; i < layersConfig.length; i++) {
@@ -436,9 +440,10 @@ function mapSubmission(
       const signatureVal = raw[`L${n}_Signature`] ? String(raw[`L${n}_Signature`]) : null;
       const canonicalStatus = normalizeLayerStatus(statusVal);
       const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
+      layerStatusValues[i] = statusVal;
 
       layers.push({
-        status: statusVal || "pending",
+        status: canonicalStatus,
         outcome: canonicalStatus === "approved" ? "approved" : canonicalStatus === "rejected" ? "rejected" : undefined,
         email: emailVal,
         signedAt: signedAtVal,
@@ -490,9 +495,13 @@ function mapSubmission(
       const signatureVal = raw[`L${i}_Signature`] ? String(raw[`L${i}_Signature`]) : null;
       const canonicalStatus = normalizeLayerStatus(statusVal);
       const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
+      layerStatusValues[i - 1] = statusVal;
+      if (i > totalLayers && (statusVal || emailVal || signedAtVal || rejectionVal || signatureVal)) {
+        totalLayers = i;
+      }
       if (statusVal || emailVal) {
         layers.push({
-          status: statusVal || "pending",
+          status: canonicalStatus,
           outcome: canonicalStatus === "approved" ? "approved" : canonicalStatus === "rejected" ? "rejected" : undefined,
           email: emailVal,
           signedAt: signedAtVal,
@@ -502,6 +511,15 @@ function mapSubmission(
       }
     }
   }
+
+  const displayState = resolveWorkflowDisplayState({
+    formStatus,
+    currentLayer,
+    totalLayers,
+    layerStatuses: layerStatusValues,
+  });
+  formStatus = displayState.formStatus;
+  currentLayer = displayState.currentLayer;
 
   // Filter internal fields
   const submissionData: Record<string, unknown> = {};
@@ -1297,6 +1315,18 @@ export default function App() {
                   <LazyRoute load={loadDynamicFormPage} fallback={<LoadingScreen status="Loading form..." />} />
                 </Box>
               </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/admin/submissions"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                    <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading submissions..." />} />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
             }
           />
           <Route

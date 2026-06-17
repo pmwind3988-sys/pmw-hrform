@@ -20,7 +20,7 @@ import type { KeyboardEvent, MouseEvent } from "react";
 import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
-import { editorial, editorialShadow } from "../../theme/editorial";
+import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
 import {
   formatDashboardDate,
   formatDashboardTime,
@@ -62,10 +62,16 @@ export default function SubmissionRow({
   const formReference = getFormReference(item);
   const submittedAt = formatDashboardDate(item.submittedAt);
   const submittedTime = formatDashboardTime(item.submittedAt);
+  const statusKey = (item.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "");
+  const layerOutcomeLabel = statusKey.includes("reject")
+    ? "rejected"
+    : statusKey === "fullyapproved" || statusKey === "completed" || statusKey === "approved"
+      ? "complete"
+      : "";
   const layerLabel =
     item.totalLayers > 1 && item.currentLayer !== undefined
       ? item.currentLayer > 0
-        ? `Layer ${item.currentLayer}/${item.totalLayers}`
+        ? `Layer ${item.currentLayer}/${item.totalLayers}${layerOutcomeLabel ? ` ${layerOutcomeLabel}` : ""}`
         : `${item.totalLayers} layers`
       : null;
   const handleOpen = () => onView(item);
@@ -113,16 +119,15 @@ export default function SubmissionRow({
         onClick={handleOpen}
         onKeyDown={handleKeyDown}
         sx={{
-          backgroundColor: "rgba(255, 255, 255, 0.92)",
+          backgroundColor: "rgba(255, 255, 255, 0.94)",
           borderRadius: "8px",
-          border: `1px solid ${editorial.border}`,
+          boxShadow: editorialShadow,
           p: 2,
           mb: 2,
           cursor: "pointer",
           transition: "box-shadow 0.2s ease, transform 0.2s ease",
-          boxShadow: "0 10px 28px rgba(0, 90, 158, 0.06)",
           "&:hover": {
-            boxShadow: editorialShadow,
+            boxShadow: editorialShadowHover,
             transform: "translateY(-1px)",
           },
           "&:active": {
@@ -235,11 +240,12 @@ export default function SubmissionRow({
         borderBottom: `1px solid ${editorial.border}`,
         alignItems: "center",
         cursor: "pointer",
-        transition: "background-color 0.2s ease, box-shadow 0.2s ease",
+        transition: "background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
         outline: "none",
         "&:hover": {
-          backgroundColor: editorial.blueSoft,
-          boxShadow: "inset 3px 0 0 rgba(0, 120, 212, 0.55)",
+          backgroundColor: "#ffffff",
+          boxShadow: "inset 3px 0 0 rgba(0, 120, 212, 0.55), 0 8px 22px rgba(0, 90, 158, 0.08)",
+          transform: "translateY(-1px)",
         },
         "&:focus-visible": {
           backgroundColor: editorial.blueSoft,

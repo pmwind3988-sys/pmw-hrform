@@ -1,6 +1,6 @@
 /**
  * ApprovalDashboard.tsx — Admin view for pending form approvals
- * Route: /admin/approvals
+ * Route: /admin/submissions (legacy alias: /admin/approvals)
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
@@ -19,12 +19,14 @@ import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
+import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany } from "../../utils/companySelection";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
+import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
-import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission } from "../../types";
+import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission, FormBuilderField } from "../../types";
 import BlockIcon from "@mui/icons-material/Block";
 import LockIcon from "@mui/icons-material/Lock";
 import DescriptionIcon from "@mui/icons-material/Description";
@@ -144,7 +146,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
     return {
       surveyJson: surveyContent as PdfFormData["surveyJson"],
       responseData: data,
-      layerResults: buildPdfLayerResults(respItem),
+      layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
       meta: {
         submittedBy: item.SubmittedBy || "",
         submittedAt: item.SubmittedAt || "",
@@ -306,6 +308,20 @@ function normalizeResponseDataForSurvey(
   return normalized;
 }
 
+function buildEvaluationSurveyJson(elements: Record<string, unknown>[]): Record<string, unknown> {
+  const mapped = buildSurveyJson(elements as unknown as FormBuilderField[], {
+    title: "Evaluation",
+    titleLocation: "hidden",
+    showQuestionNumbers: "off",
+  }) as unknown as Record<string, unknown>;
+  return {
+    ...mapped,
+    showNavigationButtons: false,
+    showQuestionNumbers: "off",
+    titleLocation: "hidden",
+  };
+}
+
 function stripFieldReference(value: string): string {
   return value.replace(/^\$\{/, "").replace(/\}$/, "");
 }
@@ -419,11 +435,33 @@ function isCurrentLayerTerminal(item: PendingItem, completedLayers: Record<numbe
   return ["Confirmed", "Approved", "Rejected", "Cancelled", "Skipped"].includes(clStatus);
 }
 
+function isTerminalWorkflowStatus(status: unknown): boolean {
+  const normalized = valueToText(status).toLowerCase().replace(/[\s_-]/g, "");
+  return ["approved", "confirmed", "rejected", "cancelled", "skipped", "completed", "fullyapproved"].includes(normalized) || normalized.includes("reject");
+}
+
+async function assertSubmissionLayerCanAct(token: string, item: PendingItem, layerNumber: number): Promise<Record<string, unknown>> {
+  const latest = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=Id,Status,FormStatus,CurrentLayer,CurrentApprovalLayer,L${layerNumber}_Status`
+  ) as Record<string, unknown>;
+  const latestCurrentLayer = Number(latest.CurrentLayer || latest.CurrentApprovalLayer || 0);
+
+  if (isTerminalWorkflowStatus(latest.FormStatus || latest.Status) || isTerminalWorkflowStatus(latest[`L${layerNumber}_Status`])) {
+    throw new Error("This layer has already been completed. Refresh submissions to see the latest status.");
+  }
+  if (latestCurrentLayer && latestCurrentLayer !== layerNumber) {
+    throw new Error("This submission has moved to another layer and cannot be acted on here.");
+  }
+
+  return latest;
+}
+
 export default function ApprovalDashboard() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
-  useEffect(() => { document.title = "Approvals — PMW HR Form"; }, []);
+  useEffect(() => { document.title = "Submissions — PMW HR Form"; }, []);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -436,7 +474,6 @@ export default function ApprovalDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [previewModel, setPreviewModel] = useState<Model | null>(null);
   const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected" | "evaluated">("pending");
   const [titleFilter, setTitleFilter] = useState("");
   const [submitterFilter, setSubmitterFilter] = useState("");
@@ -982,8 +1019,7 @@ export default function ApprovalDashboard() {
           setCurrentLayerType("evaluation");
           const evalElements = (currentResolution.currentLayer as EvaluationLayerConfig).surveyElements || [];
           if (evalElements.length > 0) {
-            const evalJson = { pages: [{ name: "evaluation", elements: evalElements }], showNavigationButtons: false };
-            const m = new Model(evalJson as object);
+            const m = new Model(buildEvaluationSurveyJson(evalElements) as object);
             m.applyTheme(FlatLightPanelless);
             const checkValid = () => { setEvalValid(!m.hasErrors()); };
             m.onValueChanged.add(checkValid);
@@ -1021,6 +1057,7 @@ export default function ApprovalDashboard() {
       const listName = selectedItem.Title;
       const respId = selectedItem.Id;
       const currLayerNum = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
+      await assertSubmissionLayerCanAct(token, selectedItem, currLayerNum);
       const now = new Date().toISOString();
 
       // Compute total layers from config (same pattern as handleApprove)
@@ -1209,7 +1246,7 @@ export default function ApprovalDashboard() {
           action: "submit",
           nextApproverEmail: firstApproverEmail,
           ...(bLayers[0]?.type ? { nextLayerType: bLayers[0].type } : {}),
-          reviewLink: `${window.location.origin}/admin/approvals?form=${encodeURIComponent(listName)}&item=${respId}`,
+          reviewLink: `${window.location.origin}/admin/submissions?form=${encodeURIComponent(listName)}&item=${respId}`,
         });
       }
 
@@ -1291,7 +1328,6 @@ export default function ApprovalDashboard() {
         setSelectedItem(null);
         setSurveyJson(null);
         setResponseData(null);
-        setPreviewModel(null);
         setEvalSurveyModel(null);
         setCompletedLayers({});
       }
@@ -1318,6 +1354,7 @@ export default function ApprovalDashboard() {
     setActionLoading(true);
     try {
       const currentLayer = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
+      await assertSubmissionLayerCanAct(token, selectedItem, currentLayer);
       let branchLayers: LayerConfigItem[] | null = null;
       if (formConfig.LayerConfig) {
         try { const lc = JSON.parse(formConfig.LayerConfig); branchLayers = getActiveLayers(lc, selectedItem.SelectedBranch); } catch {
@@ -1444,6 +1481,7 @@ export default function ApprovalDashboard() {
       const listName = selectedItem.Title; // list is named after form title
 
       const currentLayer = selectedItem.CurrentApprovalLayer || selectedItem.CurrentLayer || 1;
+      await assertSubmissionLayerCanAct(token, selectedItem, currentLayer);
       let branchLayers: LayerConfigItem[] | null = null;
       if (formConfig.LayerConfig) {
         try { const lc = JSON.parse(formConfig.LayerConfig); branchLayers = getActiveLayers(lc, selectedItem.SelectedBranch); } catch {
@@ -1493,26 +1531,6 @@ export default function ApprovalDashboard() {
       setActionLoading(false);
     }
   };
-
-  // Build preview model when survey JSON + response data are available
-  useEffect(() => {
-    if (!surveyJson) {
-      setPreviewModel(null);
-      return;
-    }
-    try {
-      const m = new Model(surveyJson as object);
-      m.applyTheme(FlatLightPanelless);
-      m.mode = "display";
-      if (responseData) {
-        m.data = responseData;
-      }
-      setPreviewModel((prev) => { prev?.dispose(); return m; });
-      return () => { m.dispose(); };
-    } catch {
-      setPreviewModel(null);
-    }
-  }, [surveyJson, responseData]);
 
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
   const selectedItemLocked = !!selectedItem && !needsBranchSelection && selectedLayerAccess?.allowed === false;
@@ -1568,8 +1586,8 @@ export default function ApprovalDashboard() {
         </div>
 
         <header style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Approvals</h1>
-          <p style={{ color: C.textSecond, marginTop: 4 }}>Review and manage all form submissions</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
+          <p style={{ color: C.textSecond, marginTop: 4 }}>Review submissions, approvals, and evaluation layers</p>
         </header>
 
         {error && (
@@ -1986,13 +2004,13 @@ export default function ApprovalDashboard() {
                       <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
                         Submitted Form Details
                       </div>
-                      {previewModel ? (
-                        <div className="approval-survey-preview">
-                          <Survey model={previewModel} />
-                        </div>
-                      ) : (
-                        <div style={{ color: C.textMuted }}>Loading form preview...</div>
-                      )}
+                      <ReadOnlySubmissionPreview
+                        surveyJson={surveyJson}
+                        data={responseData}
+                        accessToken={token}
+                        fallbackData={responseData ?? undefined}
+                        compact
+                      />
                     </div>
                     <div style={{ padding: 24, textAlign: "center", borderTop: `1px solid ${C.border}` }}>
                       <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>⑂</div>
@@ -2028,13 +2046,13 @@ export default function ApprovalDashboard() {
                 ) : (
                   <>
                 <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>
-                  {previewModel ? (
-                    <div className="approval-survey-preview">
-                      <Survey model={previewModel} />
-                    </div>
-                  ) : (
-                    <div style={{ color: C.textMuted }}>Loading form preview...</div>
-                  )}
+                  <ReadOnlySubmissionPreview
+                    surveyJson={surveyJson}
+                    data={responseData}
+                    accessToken={token}
+                    fallbackData={responseData ?? undefined}
+                    compact
+                  />
                 </div>
 
                 {/* Layer History: show completed layers for context */}

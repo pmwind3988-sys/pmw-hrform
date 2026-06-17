@@ -11,6 +11,72 @@ const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // ── Layer data extraction ──────────────────────────────────────────────────
 
+function parseLayerConfig(layerConfig: unknown): Record<string, unknown> | null {
+  if (typeof layerConfig === "string" && layerConfig.trim()) {
+    try {
+      const parsed = JSON.parse(layerConfig) as unknown;
+      return isRecord(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return isRecord(layerConfig) ? layerConfig : null;
+}
+
+function layerNumberFromValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function branchMatches(branch: Record<string, unknown>, selectedBranch: string): boolean {
+  const selected = selectedBranch.trim().toLowerCase();
+  if (!selected) return false;
+  return [branch.name, branch.label].some((value) => typeof value === "string" && value.trim().toLowerCase() === selected);
+}
+
+function layerSequenceFromConfig(layerConfig: unknown, selectedBranchRaw: unknown): Record<string, unknown>[] {
+  const parsed = parseLayerConfig(layerConfig);
+  if (!parsed) return [];
+
+  const selectedBranch = typeof selectedBranchRaw === "string" ? selectedBranchRaw : "";
+  const manualBranches = Array.isArray(parsed.manualBranches) ? parsed.manualBranches.filter(isRecord) : [];
+  const selectedManualBranch = manualBranches.find((branch) => branchMatches(branch, selectedBranch));
+  if (selectedManualBranch && Array.isArray(selectedManualBranch.layers)) {
+    return selectedManualBranch.layers.filter(isRecord);
+  }
+
+  const layers = Array.isArray(parsed.layers) ? parsed.layers.filter(isRecord) : [];
+  const byLayerNumber = new Map<number, Record<string, unknown>>();
+  for (const layer of layers) {
+    const layerNumber = layerNumberFromValue(layer.layerNumber);
+    if (layerNumber !== null) byLayerNumber.set(layerNumber, layer);
+  }
+  for (const branch of manualBranches) {
+    if (!Array.isArray(branch.layers)) continue;
+    for (const layer of branch.layers.filter(isRecord)) {
+      const layerNumber = layerNumberFromValue(layer.layerNumber);
+      if (layerNumber !== null && !byLayerNumber.has(layerNumber)) byLayerNumber.set(layerNumber, layer);
+    }
+  }
+
+  return [...byLayerNumber.values()].sort((a, b) => (layerNumberFromValue(a.layerNumber) ?? 0) - (layerNumberFromValue(b.layerNumber) ?? 0));
+}
+
+function evaluationElementsByLayer(layerConfig: unknown, selectedBranch: unknown): Map<number, Record<string, unknown>[]> {
+  const result = new Map<number, Record<string, unknown>[]>();
+  for (const layer of layerSequenceFromConfig(layerConfig, selectedBranch)) {
+    if (layer.type !== "evaluation") continue;
+    const layerNumber = layerNumberFromValue(layer.layerNumber);
+    if (layerNumber === null || !Array.isArray(layer.surveyElements)) continue;
+    result.set(layerNumber, layer.surveyElements.filter(isRecord));
+  }
+  return result;
+}
+
 /**
  * Build layer results array from the raw response item fields.
  * Reads L{n}_Status, L{n}_Email, L{n}_SignedAt, L{n}_Rejection, L{n}_Signature
@@ -18,9 +84,11 @@ const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
  */
 export function buildPdfLayerResults(
   rawResponse: Record<string, unknown>,
-  maxLayerCount = 10
+  maxLayerCount = 10,
+  layerConfig?: unknown,
 ): PdfLayerResult[] {
   const results: PdfLayerResult[] = [];
+  const evalElementsByLayer = evaluationElementsByLayer(layerConfig, rawResponse.SelectedBranch);
 
   // Parse EvaluationData JSON if present
   let evalData: Record<number, Record<string, unknown>> = {};
@@ -34,7 +102,8 @@ export function buildPdfLayerResults(
     if (!status) continue; // No more layers
 
     // Determine type — evaluation layers have entries in EvaluationData
-    const isEval = !!evalData[n];
+    const evaluationSurveyElements = evalElementsByLayer.get(n);
+    const isEval = !!evalData[n] || !!evaluationSurveyElements;
 
     const entry: PdfLayerResult = {
       layerNumber: n,
@@ -50,8 +119,11 @@ export function buildPdfLayerResults(
     if (isEval && evalData[n]) {
       const ed = evalData[n] as Record<string, unknown>;
       entry.evaluationFields = ed.fields as Record<string, unknown> || {};
+      entry.evaluationSurveyElements = evaluationSurveyElements;
       entry.confirmerEmail = ed.confirmerEmail as string || "";
       entry.confirmerName = ed.confirmerName as string || "";
+    } else if (isEval) {
+      entry.evaluationSurveyElements = evaluationSurveyElements;
     }
 
     results.push(entry);

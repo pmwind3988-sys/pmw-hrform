@@ -4,6 +4,7 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
+import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export interface PdfFormData {
@@ -36,6 +37,8 @@ export interface PdfLayerResult {
   signature?: string;
   /** For evaluation layers: submitted field values */
   evaluationFields?: Record<string, unknown>;
+  /** Evaluation SurveyJS elements used to render labels and field-aware values */
+  evaluationSurveyElements?: Record<string, unknown>[];
   /** For evaluation layers: confirmer name/email */
   confirmerEmail?: string;
   confirmerName?: string;
@@ -128,6 +131,12 @@ const S = StyleSheet.create({
   imageGrid: { width: "66%", flexDirection: "row", flexWrap: "wrap" },
   imageTile: { width: "45%", minHeight: 64, borderWidth: 0.5, borderColor: C.borderLight, backgroundColor: C.white, padding: 4, marginRight: 6, marginBottom: 5, justifyContent: "center", alignItems: "center" },
   imagePreview: { maxWidth: "100%", maxHeight: 76, objectFit: "contain" },
+  measureBox: { width: "66%" },
+  measureValue: { fontSize: 7, fontWeight: "bold", color: C.text, marginBottom: 3 },
+  measureTrack: { height: 5, backgroundColor: C.borderLight, borderRadius: 2.5, marginBottom: 3 },
+  measureFill: { height: 5, backgroundColor: C.primary, borderRadius: 2.5 },
+  measureScale: { flexDirection: "row", justifyContent: "space-between" },
+  measureScaleText: { fontSize: 5.5, color: C.muted },
 
   // ── Eval fields sub-table ──
   evalSubRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 6, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
@@ -158,28 +167,21 @@ const S = StyleSheet.create({
 
 function fmtDate(d: string | undefined | null): string {
   if (!d) return "—";
-  const parsed = new Date(d);
-  if (Number.isNaN(parsed.getTime())) return "N/A";
-  const day = String(parsed.getDate()).padStart(2, "0");
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const year = parsed.getFullYear();
-  let hour = parsed.getHours();
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-  const period = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12 || 12;
-  return `${day}/${month}/${year} ${hour}:${minute} ${period}`;
+  const formatted = formatPdfDateTimeValue(d, true);
+  return formatted === d ? "N/A" : formatted;
 }
 
-function fmtVal(v: unknown): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "boolean") return v ? "Yes" : "No";
-  if (Array.isArray(v)) return v.join(", ");
-  if (typeof v === "object") {
-    const o = v as Record<string, unknown>;
-    if (o.Url) return o.Description ? `${o.Description}` : String(o.Url);
-    return JSON.stringify(v);
-  }
-  return String(v);
+function fmtVal(v: unknown, field: Partial<FormSubmissionField> = {}): string {
+  return formatPdfFieldValue(v, field);
+}
+
+function fallbackPdfLabel(key: string): string {
+  const decoded = key.replace(/_x([0-9a-fA-F]{4})_/g, (_match, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+  return decoded
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim() || key;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -275,7 +277,7 @@ function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
 
 function renderMatrixField(field: FormSubmissionField) {
   const rows = field.matrixRows ?? [];
-  const columns = field.matrixColumns?.length
+  const columns: NonNullable<FormSubmissionField["matrixColumns"]> = field.matrixColumns?.length
     ? field.matrixColumns
     : Object.keys(rows[0] ?? {}).map((key) => ({ name: key, title: key }));
   if (rows.length === 0 || columns.length === 0) return null;
@@ -296,7 +298,7 @@ function renderMatrixField(field: FormSubmissionField) {
           <View key={`${field.key}-${rowIndex}`} style={[S.matrixDataRow, rowIndex % 2 === 1 ? S.matrixDataRowAlt : {}]}>
             {columns.map((column, columnIndex) => (
               <View key={`${field.key}-${rowIndex}-${column.name}`} style={[S.matrixDataCell, { width: colPct }, columnIndex === columns.length - 1 ? { borderRightWidth: 0 } : {}]}>
-                <Text style={S.matrixDataText}>{fmtVal(row[column.name])}</Text>
+                <Text style={S.matrixDataText}>{fmtVal(row[column.name], { type: column.cellType, inputType: column.cellType, choices: column.choices })}</Text>
               </View>
             ))}
           </View>
@@ -304,6 +306,50 @@ function renderMatrixField(field: FormSubmissionField) {
       </View>
     </View>
   );
+}
+
+function shouldRenderMeasure(field: FormSubmissionField): boolean {
+  if (field.type === "rating") return true;
+  if (field.inputType !== "number") return false;
+  return typeof field.min === "number" && typeof field.max === "number" && field.max > field.min;
+}
+
+function renderMeasureValue(field: FormSubmissionField) {
+  const measure = getPdfMeasureContext(field, field.value);
+  if (!measure) return null;
+  return (
+    <View style={S.measureBox}>
+      <Text style={S.measureValue}>{measure.valueLabel}</Text>
+      <View style={S.measureTrack}>
+        <View style={[S.measureFill, { width: `${measure.percent}%` }]} />
+      </View>
+      <View style={S.measureScale}>
+        <Text style={S.measureScaleText}>{measure.minLabel}</Text>
+        <Text style={S.measureScaleText}>{measure.maxLabel}</Text>
+      </View>
+    </View>
+  );
+}
+
+function evaluationFieldsForLayer(layer: PdfLayerResult): FormSubmissionField[] {
+  const fields = layer.evaluationFields;
+  if (!fields || Object.keys(fields).length === 0) return [];
+  const elements = layer.evaluationSurveyElements ?? [];
+  if (elements.length > 0) {
+    return buildFormSubmissionSections({ pages: [{ name: "Evaluation", elements }] }, fields, {
+      fallbackSectionTitle: "Evaluation",
+      formatFallbackLabel: fallbackPdfLabel,
+      includeAdditionalFields: true,
+    }).flatMap((section) => section.fields);
+  }
+
+  return Object.entries(fields).map(([key, value]) => ({
+    key,
+    label: fallbackPdfLabel(key),
+    type: "",
+    value,
+    kind: "field",
+  }));
 }
 
 function renderImageSources(sources: string[]) {
@@ -372,10 +418,11 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
                     return <View key={field.key} wrap={false}>{renderMatrixField(field)}</View>;
                   }
                   const imageSources = collectImageSources(field.value);
+                  const measureValue = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
                   return (
                     <View key={field.key} style={[S.fieldRow, fieldIndex % 2 === 1 ? S.fieldRowAlt : {}]} wrap={false}>
                       <Text style={S.fieldLabel}>{field.label}</Text>
-                      {imageSources.length > 0 ? renderImageSources(imageSources) : <Text style={S.fieldValue}>{fmtVal(field.value)}</Text>}
+                      {imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.fieldValue}>{fmtVal(field.value, field)}</Text>}
                     </View>
                   );
                 })}
@@ -490,17 +537,18 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
           <View style={S.approvalPageSection}>
             <Text style={S.sectionLabel}>EVALUATION DETAILS</Text>
             {layerResults.filter(l => l.type === "evaluation").map((layer, i) => {
-              const fields = layer.evaluationFields;
-              if (!fields || Object.keys(fields).length === 0) return null;
+              const fields = evaluationFieldsForLayer(layer);
+              if (fields.length === 0) return null;
               return (
                 <View key={i} style={{ marginBottom: 6 }} wrap={false}>
                   <Text style={S.subSectionLabel}>Layer {layer.layerNumber} - {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
-                  {Object.entries(fields).map(([k, v], fi) => {
-                    const imageSources = collectImageSources(v);
+                  {fields.map((field, fi) => {
+                    const imageSources = collectImageSources(field.value);
+                    const measureValue = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
                     return (
                       <View key={fi} style={S.evalSubRow} wrap={false}>
-                        <Text style={S.evalSubLabel}>{k}</Text>
-                        {imageSources.length > 0 ? renderImageSources(imageSources) : <Text style={S.evalSubValue}>{fmtVal(v)}</Text>}
+                        <Text style={S.evalSubLabel}>{field.label}</Text>
+                        {imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.evalSubValue}>{fmtVal(field.value, field)}</Text>}
                       </View>
                     );
                   })}

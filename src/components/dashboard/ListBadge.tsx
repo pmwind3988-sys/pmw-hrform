@@ -16,7 +16,7 @@ export default function ListBadge({ title, color, pale }: ListBadgeProps) {
       sx={{
         backgroundColor: pale,
         color,
-        border: `1px solid ${color}`,
+        boxShadow: `inset 0 0 0 1px ${color}33`,
         fontWeight: 800,
         fontSize: "0.75rem",
         textTransform: "none",
