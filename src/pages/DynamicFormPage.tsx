@@ -24,6 +24,7 @@ import Logo from "../components/Logo";
 import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
+import { PREFILLED_QR_PARAM, applyPrefilledQrToSurveyJson, decodePrefilledQrPayload } from "../utils/prefilledQr";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -452,6 +453,7 @@ export default function DynamicFormPage() {
   const { formId } = useParams<{ formId: string }>();
   const [searchParams] = useSearchParams();
   const pinVersion = searchParams.get("version");
+  const prefilledQrPayload = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -670,11 +672,11 @@ export default function DynamicFormPage() {
       }
 
       await Promise.all(pending);
-      setEnrichedSurveyJson(clone);
+      setEnrichedSurveyJson(applyPrefilledQrToSurveyJson(clone, prefilledQrPayload));
     }
 
-    enrich().catch(() => setEnrichedSurveyJson(withAppFont(baseJson)));
-  }, [formData]);
+    enrich().catch(() => setEnrichedSurveyJson(applyPrefilledQrToSurveyJson(withAppFont(baseJson), prefilledQrPayload)));
+  }, [formData, prefilledQrPayload]);
 
   const survey = useMemo(() => {
     const json = enrichedSurveyJson;
@@ -1432,8 +1434,9 @@ export default function DynamicFormPage() {
                     options={companyOptions}
                     value={companyChoiceValue}
                     error={companyChoiceError}
-                    disabled={!survey}
+                    disabled={!survey || prefilledQrPayload?.locked.includes(companyFieldName) === true}
                     onChange={value => {
+                      if (prefilledQrPayload?.locked.includes(companyFieldName)) return;
                       setCompanyChoiceValue(value);
                       setCompanyChoiceError("");
                       survey?.setValue(companyFieldName, value);

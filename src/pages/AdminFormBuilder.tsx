@@ -13,6 +13,7 @@ import VersionHistory from "../components/builder/VersionHistory";
 import AuditLog from "../components/builder/AuditLog";
 import ProvisionOverlay from "../components/builder/ProvisionOverlay";
 import LayerConfigPanel from "../components/builder/LayerConfigPanel";
+import PrefilledQrPanel from "../components/builder/PrefilledQrPanel";
 import { C } from "../components/builder/constants";
 import { validateLayerConfig } from "../components/builder/layerValidation";
 import type { LayerFieldOption } from "../components/builder/layerValidation";
@@ -1538,6 +1539,11 @@ export default function AdminFormBuilder() {
                   >
                     {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to publish</> : isDraft ? <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish (make live)</> : <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish to SharePoint</>}
                   </button>
+                  <PrefilledQrPanel
+                    surveyJson={surveyJson}
+                    slug={meta.slug}
+                    canGenerate={isEditing && !isDraft && !!meta.slug && !viewingOld}
+                  />
                 </div>
               )}
             </div>
