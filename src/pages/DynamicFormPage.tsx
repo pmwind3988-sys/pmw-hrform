@@ -24,7 +24,7 @@ import Logo from "../components/Logo";
 import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
-import { PREFILLED_QR_PARAM, applyPrefilledQrToSurveyJson, decodePrefilledQrPayload } from "../utils/prefilledQr";
+import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -597,8 +597,10 @@ export default function DynamicFormPage() {
     if (!baseJson) { setEnrichedSurveyJson(null); return; }
 
     const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Inter" });
+    const applyPrefill = (json: Record<string, unknown>): Record<string, unknown> =>
+      cloneAndApplyPrefilledQr(withAppFont(json), prefilledQrPayload);
     const tokenRaw = tokenRef.current;
-    if (!tokenRaw) { setEnrichedSurveyJson(withAppFont(baseJson)); return; }
+    if (!tokenRaw) { setEnrichedSurveyJson(applyPrefill(baseJson)); return; }
     const token = tokenRaw; // narrowed to string
 
     const clone = withAppFont(JSON.parse(JSON.stringify(baseJson)) as Record<string, unknown>);
@@ -672,10 +674,10 @@ export default function DynamicFormPage() {
       }
 
       await Promise.all(pending);
-      setEnrichedSurveyJson(applyPrefilledQrToSurveyJson(clone, prefilledQrPayload));
+      setEnrichedSurveyJson(cloneAndApplyPrefilledQr(clone, prefilledQrPayload));
     }
 
-    enrich().catch(() => setEnrichedSurveyJson(applyPrefilledQrToSurveyJson(withAppFont(baseJson), prefilledQrPayload)));
+    enrich().catch(() => setEnrichedSurveyJson(applyPrefill(baseJson)));
   }, [formData, prefilledQrPayload]);
 
   const survey = useMemo(() => {

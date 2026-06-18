@@ -50,9 +50,9 @@ export default function Logo({ size = 64, alt = "PMW Logo", sx }: LogoProps) {
         display: "block",
         imageRendering: "-webkit-optimize-contrast",
         transform: "translateZ(0)",
-        willChange: "transform",
         backfaceVisibility: "hidden",
         WebkitBackfaceVisibility: "hidden",
+        outline: "none",
         ...((sx as Record<string, unknown>) || {}),
       }}
     />

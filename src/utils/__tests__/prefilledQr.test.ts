@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyPrefilledQrToSurveyJson,
+  cloneAndApplyPrefilledQr,
   decodePrefilledQrPayload,
   encodePrefilledQrPayload,
   getPrefillEligibleFields,
@@ -67,6 +68,31 @@ describe("prefilled QR payloads", () => {
     expect(fields.find(field => field.name === "qty")).toMatchObject({
       defaultValue: 2,
       readOnly: true,
+    });
+  });
+
+  it("clones before applying QR values so public no-token rendering still gets prefilled without mutating source config", () => {
+    const json = makeSurveyJson() as unknown as Record<string, unknown>;
+    const patched = cloneAndApplyPrefilledQr(
+      { ...json, fontFamily: "Inter" },
+      {
+        v: 1,
+        values: { employeeName: "Aina", department: "HR" },
+        locked: ["employeeName"],
+      },
+    );
+
+    const originalFields = flattenQuestions(json as unknown as SurveyJson);
+    const patchedFields = flattenQuestions(patched as unknown as SurveyJson);
+
+    expect(originalFields.find(field => field.name === "employeeName")?.defaultValue).toBeUndefined();
+    expect(patchedFields.find(field => field.name === "employeeName")).toMatchObject({
+      defaultValue: "Aina",
+      readOnly: true,
+      enableIf: "false",
+    });
+    expect(patchedFields.find(field => field.name === "department")).toMatchObject({
+      defaultValue: "HR",
     });
   });
 

@@ -150,9 +150,16 @@ const theme = createTheme({
           minHeight: "100vh",
           background: "var(--app-bg, linear-gradient(180deg, #EAF5FC 0%, #F7FAFD 48%, #FFFFFF 100%))",
           color: editorial.ink,
+          textRendering: "optimizeLegibility",
         },
         "#root": {
           minHeight: "100vh",
+        },
+        "h1, h2, h3, h4, h5, h6": {
+          textWrap: "balance",
+        },
+        "p, li, figcaption, blockquote": {
+          textWrap: "pretty",
         },
         "::selection": {
           background: editorial.pmwBlueSoft,
@@ -160,6 +167,9 @@ const theme = createTheme({
         },
         img: {
           maxWidth: "100%",
+          height: "auto",
+          outline: "1px solid rgba(0, 0, 0, 0.1)",
+          outlineOffset: "-1px",
         },
       },
     },
@@ -453,6 +463,8 @@ const theme = createTheme({
         root: {
           transition: "background-color 0.2s ease, color 0.2s ease, transform 0.2s ease",
           borderRadius: 8,
+          minWidth: 40,
+          minHeight: 40,
           "&:hover": {
             backgroundColor: editorial.blueWash,
           },
@@ -475,6 +487,7 @@ const theme = createTheme({
         },
         body: {
           borderBottom: editorialHairline,
+          fontVariantNumeric: "tabular-nums",
         },
       },
     },

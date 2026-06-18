@@ -99,6 +99,11 @@ export function applyPrefilledQrToSurveyJson(json: Record<string, unknown>, payl
   return json;
 }
 
+export function cloneAndApplyPrefilledQr(json: Record<string, unknown>, payload: PrefilledQrPayload | null): Record<string, unknown> {
+  const clone = JSON.parse(JSON.stringify(json)) as Record<string, unknown>;
+  return applyPrefilledQrToSurveyJson(clone, payload);
+}
+
 export function getPrefillEligibleFields(json: SurveyJson | null | undefined, flatten: (json: SurveyJson) => FormBuilderField[]): FormBuilderField[] {
   if (!json) return [];
   return flatten(json).filter(field => {

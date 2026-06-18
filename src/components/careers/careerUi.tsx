@@ -7,19 +7,20 @@ import { editorial, editorialHairline, editorialShadow } from "../../theme/edito
 export const careerPageSx = {
   minHeight: "100vh",
   background: "var(--app-bg, linear-gradient(180deg, #EAF5FC 0%, #F7FAFD 48%, #FFFFFF 100%))",
+  WebkitFontSmoothing: "antialiased",
+  MozOsxFontSmoothing: "grayscale",
 } satisfies SxProps<Theme>;
 
 export const careerContentSx = {
   maxWidth: 1440,
   mx: "auto",
-  px: { xs: 1.5, sm: 3, md: 4 },
-  py: { xs: 2, sm: 3 },
+  px: { xs: 2, sm: 3, md: 4 },
+  py: { xs: 2.5, sm: 3.5, md: 4 },
 } satisfies SxProps<Theme>;
 
 export const careerPanelSx = {
   borderRadius: "12px",
-  border: editorialHairline,
-  boxShadow: "none",
+  boxShadow: editorialShadow,
   backgroundColor: "rgba(255,255,255,0.92)",
   backgroundImage: "none",
 } satisfies SxProps<Theme>;
@@ -72,6 +73,9 @@ export const careerIconButtonSx = {
 export const careerTableShellSx = {
   ...careerPanelSx,
   overflowX: "auto",
+  "& .MuiTableCell-root": {
+    fontVariantNumeric: "tabular-nums",
+  },
   "& .MuiTableRow-root": {
     transition: "background-color 0.18s ease",
   },

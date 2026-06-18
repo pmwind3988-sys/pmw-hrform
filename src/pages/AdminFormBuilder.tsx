@@ -420,6 +420,7 @@ export default function AdminFormBuilder() {
       const loaded = (data.surveyJson || data) as SurveyJson;
       const loadedMeta = (data.meta as Record<string, unknown>) || {};
       setInitialJson(loaded);
+      setSurveyJson(loaded);
       prevSurveyRef.current = loaded;
       setViewingOld(null);
       setMeta({

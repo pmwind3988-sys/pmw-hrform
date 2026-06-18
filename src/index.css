@@ -33,6 +33,7 @@ body {
   font-family: var(--pmw-font-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   background: var(--app-bg, var(--app-bg-fallback));
   color: var(--pmw-ink);
 }
@@ -53,6 +54,37 @@ svg,
 canvas,
 video {
   max-width: 100%;
+}
+
+img {
+  height: auto;
+  outline: 1px solid rgba(0, 0, 0, 0.1);
+  outline-offset: -1px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-wrap: balance;
+}
+
+p,
+li,
+figcaption,
+blockquote {
+  text-wrap: pretty;
+}
+
+button,
+[role="button"],
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
 }
 
 a {
