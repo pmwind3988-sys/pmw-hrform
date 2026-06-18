@@ -1168,7 +1168,7 @@ export default function ApprovalDashboard() {
 
       setActionSuccess({
         type: "confirmed",
-        message: "Evaluation submitted successfully!" + (isFinal ? " Form completed." : ""),
+        message: isFinal ? "The evaluation was submitted and the form is complete." : "The evaluation was submitted.",
         pdfUrl,
       });
     } catch (e) {
@@ -1534,6 +1534,13 @@ export default function ApprovalDashboard() {
 
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
   const selectedItemLocked = !!selectedItem && !needsBranchSelection && selectedLayerAccess?.allowed === false;
+  const actionSuccessTitle = actionSuccess
+    ? actionSuccess.type === "rejected"
+      ? "Submission rejected"
+      : actionSuccess.type === "approved"
+        ? "Approval recorded"
+        : "Evaluation submitted"
+    : "";
 
   if (loading || !adminChecked) {
     return (
@@ -2161,8 +2168,8 @@ export default function ApprovalDashboard() {
               {actionSuccess.type === "rejected" ? <CloseIcon style={{ fontSize: 36 }} /> : <CheckIcon style={{ fontSize: 36 }} />}
             </span>
             </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: actionSuccess.type === "rejected" ? C.red : C.green }}>{actionSuccess.message}</div>
-            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8 }}>{actionSuccess.message}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: actionSuccess.type === "rejected" ? C.red : C.green }}>{actionSuccessTitle}</div>
+            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, fontWeight: 500 }}>{actionSuccess.message}</div>
             {actionSuccess.pdfUrl && (
               <a href={actionSuccess.pdfUrl.startsWith("http") ? actionSuccess.pdfUrl : `${new URL(SP_SITE_URL).origin}${actionSuccess.pdfUrl}`}
                 target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>

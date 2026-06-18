@@ -119,8 +119,8 @@ function SuccessView({
       <Typography variant="h3" sx={{ fontWeight: 800, color: editorial.ink, mb: 1, textWrap: "balance" }}>
         Application submitted
       </Typography>
-      <Typography variant="body1" sx={{ color: editorial.muted, mb: 3 }}>
-        Your application has been received successfully.
+      <Typography variant="body1" sx={{ color: editorial.muted, mb: 3, fontWeight: 600 }}>
+        Your application has been received.
       </Typography>
       <Paper
         variant="outlined"
@@ -785,7 +785,7 @@ export default function JobApplyPage() {
       if (msg.includes("already applied")) {
         setDuplicateBlocked(true);
       }
-      setSubmitError(getCareerErrorMessage(err, msg || "Submission failed. Please try again."));
+      setSubmitError(getCareerErrorMessage(err, msg || "Application could not be submitted. Please try again."));
     } finally {
       setSubmitting(false);
     }

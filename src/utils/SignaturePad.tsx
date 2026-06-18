@@ -6,7 +6,7 @@
  *
  * Pattern follows DynamicMatrix.tsx: Serializer.addClass → ElementFactory → ReactQuestionFactory.
  */
-import { useState, useRef, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ElementFactory, Question, Serializer } from "survey-core";
 import { ReactQuestionFactory } from "survey-react-ui";
 
@@ -108,16 +108,18 @@ class SignatureQuestionModel extends Question {
 
 // ── Canvas Drawing Helpers ─────────────────────────────────────────────
 
-function getCoordinates(
-  e: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>,
+function getPointerCoordinates(
+  e: React.PointerEvent<HTMLElement>,
   canvas: HTMLCanvasElement,
 ): { x: number; y: number } | null {
   const rect = canvas.getBoundingClientRect();
-  if ("touches" in e) {
-    if (e.touches.length === 0) return null;
-    return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-  }
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  if (rect.width === 0 || rect.height === 0) return null;
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY,
+  };
 }
 
 // ── Signature Modal ────────────────────────────────────────────────────
@@ -144,12 +146,43 @@ function SignatureModal({
   const [penColor, setPenColor] = useState(initialColor);
   const [hasContent, setHasContent] = useState(false);
 
-  // Load existing signature if editing
-  const loadExisting = useCallback(() => {
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    const previousWidth = document.body.style.width;
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = previousWidth;
+      document.body.style.overflow = previousOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !existingDataUrl) return;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = penColor;
+
+    if (!existingDataUrl) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setHasContent(false);
+      return;
+    }
+
     const img = new Image();
     img.onload = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -157,22 +190,18 @@ function SignatureModal({
       setHasContent(true);
     };
     img.src = existingDataUrl;
-  }, [existingDataUrl]);
+  }, [existingDataUrl, height, width]);
 
-  // Initialize canvas on mount
-  const initCanvas = useCallback((node: HTMLCanvasElement | null) => {
-    (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = node;
-    if (!node) return;
-    const ctx = node.getContext("2d");
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = penColor;
-    if (existingDataUrl) {
-      loadExisting();
-    }
-  }, [penColor, existingDataUrl, loadExisting]);
+  }, [penColor]);
 
   // Update stroke color when penColor changes
   const updatePenColor = (color: string) => {
@@ -183,25 +212,31 @@ function SignatureModal({
     if (ctx) ctx.strokeStyle = color;
   };
 
-  const startDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const startDraw = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const coords = getCoordinates(e, canvas);
+    const coords = getPointerCoordinates(e, canvas);
     if (!coords) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     isDrawing.current = true;
+    canvas.setPointerCapture(e.pointerId);
     ctx.beginPath();
     ctx.moveTo(coords.x, coords.y);
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (!isDrawing.current) return;
+    if (e.pointerType === "mouse" && e.buttons === 0) {
+      isDrawing.current = false;
+      return;
+    }
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const coords = getCoordinates(e, canvas);
+    const coords = getPointerCoordinates(e, canvas);
     if (!coords) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -210,7 +245,10 @@ function SignatureModal({
     setHasContent(true);
   };
 
-  const stopDraw = () => {
+  const stopDraw = (e?: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e?.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
     isDrawing.current = false;
   };
 
@@ -240,6 +278,7 @@ function SignatureModal({
         background: "rgba(17,24,39,0.55)", backdropFilter: "blur(3px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "20px", animation: "fadeUp 0.2s ease",
+        overscrollBehavior: "contain",
       }}
     >
       <div
@@ -281,20 +320,28 @@ function SignatureModal({
             border: `2px solid ${C.purpleMid}`, borderRadius: 10,
             overflow: "hidden", background: backgroundColor,
             display: "flex", justifyContent: "center",
+            touchAction: "none",
+            overscrollBehavior: "contain",
           }}
         >
           <canvas
-            ref={initCanvas}
+            ref={canvasRef}
             width={width}
             height={height}
-            onMouseDown={startDraw}
-            onMouseMove={draw}
-            onMouseUp={stopDraw}
-            onMouseLeave={stopDraw}
-            onTouchStart={startDraw}
-            onTouchMove={draw}
-            onTouchEnd={stopDraw}
-            style={{ display: "block", cursor: "crosshair", maxWidth: "100%" }}
+            onPointerDown={startDraw}
+            onPointerMove={draw}
+            onPointerUp={stopDraw}
+            onPointerCancel={stopDraw}
+            onLostPointerCapture={() => { isDrawing.current = false; }}
+            style={{
+              display: "block",
+              cursor: "crosshair",
+              width: "100%",
+              maxWidth: width,
+              height: "auto",
+              touchAction: "none",
+              userSelect: "none",
+            }}
           />
         </div>
 

@@ -62,7 +62,7 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
         }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(167,139,250,.2)" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.purpleMid, display: "flex", alignItems: "center", gap: 6 }}>
-              {success ? <><CheckIcon style={{ fontSize: 16 }} /> Done</> : error ? <><CloseIcon style={{ fontSize: 16 }} /> Failed</> : <><WarningAmberIcon style={{ fontSize: 16 }} /> Publishing…</>}
+              {success ? <><CheckIcon style={{ fontSize: 16 }} /> Published</> : error ? <><CloseIcon style={{ fontSize: 16 }} /> Could not publish</> : <><WarningAmberIcon style={{ fontSize: 16 }} /> Publishing...</>}
             </div>
           </div>
           <div style={{
@@ -115,7 +115,7 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
                   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                 }}
               >
-                {success ? "Done →" : "Close"}
+                {success ? "Done" : "Close"}
               </button>
             </div>
           )}

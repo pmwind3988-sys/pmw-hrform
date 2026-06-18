@@ -615,10 +615,10 @@ export default function AdminCareerPortalCardsPage() {
       const saveCard = async () => {
         if (editCard) {
           await updateCareerPortalCard(editCard.id, card, { accessToken });
-          return "Card updated";
+          return "Card updated.";
         }
         await createCareerPortalCard(card, { accessToken });
-        return "Card added";
+        return "Card added.";
       };
 
       let successMessage: string;
@@ -643,7 +643,7 @@ export default function AdminCareerPortalCardsPage() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     if (deleteConfirm.isSystemDefault) {
-      setSnackbar({ message: "System default cards cannot be deleted", severity: "error" });
+      setSnackbar({ message: "System default cards cannot be deleted.", severity: "error" });
       setDeleteConfirm(null);
       return;
     }
@@ -651,7 +651,7 @@ export default function AdminCareerPortalCardsPage() {
     try {
       const accessToken = await getAdminAccessToken();
       await deleteCareerPortalCard(deleteConfirm.id, { accessToken });
-      setSnackbar({ message: "Card deleted", severity: "success" });
+      setSnackbar({ message: "Card deleted.", severity: "success" });
       setDeleteConfirm(null);
       await load();
     } catch (err) {
@@ -956,7 +956,7 @@ export default function AdminCareerPortalCardsPage() {
         <Alert
           severity={snackbar?.severity || "success"}
           onClose={() => setSnackbar(null)}
-          sx={{ borderRadius: "8px", boxShadow: "0 8px 24px rgba(17,24,39,0.16)" }}
+          sx={{ borderRadius: "8px", boxShadow: "0 8px 24px rgba(17,24,39,0.16)", fontWeight: 700 }}
         >
           {snackbar?.message}
         </Alert>

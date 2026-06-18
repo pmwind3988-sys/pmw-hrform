@@ -298,7 +298,7 @@ export default function AdminHomePage() {
       setDeleteResult(result);
       setDeleteTarget(null);
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete submission.");
+      setDeleteError(error instanceof Error ? error.message : "Could not delete submission.");
     } finally {
       setDeleteStatus("idle");
     }
@@ -535,11 +535,11 @@ export default function AdminHomePage() {
               },
             }}
           >
-            <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>
+            <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
               Submission deleted. Removed {deleteResult.deletedFiles} managed file{deleteResult.deletedFiles === 1 ? "" : "s"} and {deleteResult.deletedMatrixRows} matrix row{deleteResult.deletedMatrixRows === 1 ? "" : "s"}.
             </Typography>
             {deleteResult.warnings.length > 0 && (
-              <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: editorial.warning, fontWeight: 800, lineHeight: 1.5 }}>
+              <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: editorial.warning, fontWeight: 700, lineHeight: 1.5 }}>
                 Cleanup warnings: {deleteResult.warnings.slice(0, 2).join(" ")}
               </Typography>
             )}
@@ -797,11 +797,11 @@ export default function AdminHomePage() {
           </Box>
         </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
-          <Alert severity="error" sx={{ borderRadius: "8px", mb: 2 }}>
-            This removes the SharePoint item, generated PDFs, signature images, uploaded files stored in app-managed libraries, and matrix child rows. This action cannot be undone.
-          </Alert>
+            <Alert severity="error" sx={{ borderRadius: "8px", mb: 2, fontWeight: 700 }}>
+              This removes the SharePoint item, generated PDFs, signature images, uploaded files stored in app-managed libraries, and matrix child rows. This action cannot be undone.
+            </Alert>
           {deleteError && (
-            <Alert severity="error" sx={{ borderRadius: "8px" }}>
+            <Alert severity="error" sx={{ borderRadius: "8px", fontWeight: 700 }}>
               {deleteError}
             </Alert>
           )}

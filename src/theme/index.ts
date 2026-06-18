@@ -328,7 +328,7 @@ const theme = createTheme({
           border: "1px solid transparent",
           borderRadius: "8px",
           boxShadow: alertSurfaceShadow,
-          fontWeight: 800,
+          fontWeight: 700,
           opacity: 1,
           "&.MuiAlert-standardSuccess, &.MuiAlert-outlinedSuccess": {
             backgroundColor: "#F1FAF1",
@@ -369,7 +369,7 @@ const theme = createTheme({
         },
         message: {
           color: "inherit",
-          fontWeight: 800,
+          fontWeight: 700,
           lineHeight: 1.5,
           padding: "8px 0",
         },
@@ -395,12 +395,12 @@ const theme = createTheme({
             borderRadius: "8px",
             boxShadow: alertSurfaceShadow,
             color: editorial.ink,
-            fontWeight: 800,
+            fontWeight: 700,
             opacity: 1,
           },
           "& .MuiAlert-message": {
             color: editorial.ink,
-            fontWeight: 800,
+            fontWeight: 700,
             lineHeight: 1.45,
             padding: "8px 0",
           },

@@ -270,7 +270,7 @@ export default function AdminFormBuilder() {
 
   useEffect(() => {
     if (accessDenied) {
-      showToast("Access denied. Redirecting to dashboard. You need Form Builder Superuser permissions.", "err");
+      showToast("Access denied. You need Form Builder Superuser permissions. Redirecting to dashboard.", "err");
       setAccessDenied(false);
     }
   }, [accessDenied, showToast]);
@@ -409,12 +409,12 @@ export default function AdminFormBuilder() {
       if (!token) return;
       const c = typeof cfg === "object" ? cfg : await getFormConfig(token, cfg);
       if (!c) {
-        showToast(`Form not found.`, "err");
+        showToast("Form not found.", "err");
         return;
       }
       const data = await getFormVersion(token, c.Title as string, c.CurrentVersion as string || "1.0");
       if (!data) {
-        showToast(`Version data not found.`, "err");
+        showToast("Version data not found.", "err");
         return;
       }
       const loaded = (data.surveyJson || data) as SurveyJson;
@@ -470,7 +470,7 @@ export default function AdminFormBuilder() {
       }).catch(() => { setLogLoading(false); });
     } catch (e) {
       console.warn("[AFB] loadForEdit error:", e);
-      showToast(`Failed to load form: ${(e as Error).message}`, "err");
+      showToast(`Could not load form: ${(e as Error).message}`, "err");
     }
   }, [showToast]);
 
@@ -512,7 +512,7 @@ export default function AdminFormBuilder() {
 
   const handleSaveDraft = useCallback(async () => {
     if (!meta.formTitle.trim()) {
-      showToast("Form title required.", "err");
+      showToast("Form title is required.", "err");
       setSidebarTab("meta");
       return;
     }
@@ -523,9 +523,9 @@ export default function AdminFormBuilder() {
       return;
     }
     const token = tokenRef.current;
-    if (!token) { showToast("Auth unavailable.", "err"); return; }
+    if (!token) { showToast("Authentication is unavailable. Please refresh and try again.", "err"); return; }
     const usedJson = surveyJson;
-    if (!usedJson) { showToast("No fields yet.", "err"); return; }
+    if (!usedJson) { showToast("Add at least one field before saving.", "err"); return; }
     const version = "1.0";
     const userEmail = accounts[0]?.username || "admin";
     try {
@@ -575,7 +575,7 @@ export default function AdminFormBuilder() {
       showToast(`Draft saved for "${meta.formTitle}".`, "ok");
       refreshLib();
     } catch (e) {
-      showToast(`Save draft failed: ${(e as Error).message}`, "err");
+      showToast(`Could not save draft: ${(e as Error).message}`, "err");
     }
   }, [meta, surveyJson, numLayers, layers, slugError, isPublic, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib]);
 
@@ -597,7 +597,7 @@ export default function AdminFormBuilder() {
         deleteConfirm.Id || "",
       );
       showToast(
-        `Deleted "${deleteConfirm.Title}". ${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed.`,
+        `Form deleted. Removed "${deleteConfirm.Title}" with ${result.versionsDeleted} version${result.versionsDeleted === 1 ? "" : "s"}, ${result.logEntriesDeleted} log entr${result.logEntriesDeleted === 1 ? "y" : "ies"}, and ${result.approversDeleted} approver${result.approversDeleted === 1 ? "" : "s"}.`,
         "ok"
       );
       if (meta.formTitle === deleteConfirm.Title) {
@@ -605,7 +605,7 @@ export default function AdminFormBuilder() {
       }
       refreshLib();
     } catch (e) {
-      showToast(`Delete failed: ${(e as Error).message}`, "err");
+      showToast(`Could not delete form: ${(e as Error).message}`, "err");
     } finally {
       setDeleting(false);
       setDeleteConfirm(null);
@@ -627,7 +627,7 @@ export default function AdminFormBuilder() {
       }
       parts.push(`${result.versionsDeleted} versions, ${result.logEntriesDeleted} log entries, ${result.approversDeleted} approvers removed`);
       showToast(
-        `Hard-deleted "${hardDeleteConfirm.Title}". ${parts.join("; ")}.`,
+        `Form and submission data deleted. Removed "${hardDeleteConfirm.Title}"; ${parts.join("; ")}.`,
         "ok"
       );
       if (meta.formTitle === hardDeleteConfirm.Title) {
@@ -635,7 +635,7 @@ export default function AdminFormBuilder() {
       }
       refreshLib();
     } catch (e) {
-      showToast(`Hard delete failed: ${(e as Error).message}`, "err");
+      showToast(`Could not permanently delete form: ${(e as Error).message}`, "err");
     } finally {
       setDeleting(false);
       setHardDeleteConfirm(null);
@@ -652,7 +652,7 @@ export default function AdminFormBuilder() {
       setViewingOld({ version: ver, json: (data.surveyJson || data) as SurveyJson });
       setSidebarTab("version");
     } catch (e) {
-      showToast(`Failed: ${(e as Error).message}`, "err");
+      showToast(`Could not load version: ${(e as Error).message}`, "err");
     }
   };
 
@@ -785,7 +785,7 @@ export default function AdminFormBuilder() {
           formTitle: title,
           eventType: "FORM_CREATED",
           changedBy: userEmail,
-          summary: `Created. Route: /form/${meta.slug}`,
+          summary: `Created form at /form/${meta.slug}`,
           before: null,
           after: { slug: meta.slug, version },
         });
@@ -828,7 +828,7 @@ export default function AdminFormBuilder() {
       refreshLib();
       getFormVersionHistory(token, title).then(setVersionHistory);
     } catch (e) {
-      pLog(`Error: ${(e as Error).message}`, "err");
+      pLog(`Could not publish: ${(e as Error).message}`, "err");
       setProvErr(true);
     }
   }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, proposedVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast]);
@@ -885,7 +885,7 @@ export default function AdminFormBuilder() {
           borderRadius: 8,
           border: `1px solid ${toastColor}`,
           fontSize: 13,
-          fontWeight: 800,
+          fontWeight: 700,
           lineHeight: 1.45,
           boxShadow: "0 10px 28px rgba(26,31,43,0.16)",
           animation: "fadeUp .2s ease",

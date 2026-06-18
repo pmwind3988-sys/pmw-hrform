@@ -870,7 +870,7 @@ export default function AdminJobManagePage() {
         );
         if (result.success) {
           setSnackbar({
-            message: result.warning || "Opportunity updated",
+            message: result.warning || "Opportunity updated.",
             severity: result.warning ? "warning" : "success",
           });
         }
@@ -878,7 +878,7 @@ export default function AdminJobManagePage() {
         const result = await createJobListing({ ...data, customFields }, { accessToken });
         if (result.success) {
           setSnackbar({
-            message: (result as { warning?: string }).warning || "Opportunity created",
+            message: (result as { warning?: string }).warning || "Opportunity created.",
             severity: (result as { warning?: string }).warning ? "warning" : "success",
           });
         }
@@ -887,7 +887,7 @@ export default function AdminJobManagePage() {
       void load();
     } catch (err) {
       setSnackbar({
-        message: getCareerErrorMessage(err, "Operation failed."),
+        message: getCareerErrorMessage(err, "Could not save opportunity."),
         severity: "error",
       });
     }
@@ -899,7 +899,7 @@ export default function AdminJobManagePage() {
       const accessToken = await getAdminAccessToken();
       const result = await updateJobListing(job.id, { status: "Closed" }, { accessToken });
       if (result.success) {
-        setSnackbar({ message: "Opportunity closed", severity: "success" });
+        setSnackbar({ message: "Opportunity closed.", severity: "success" });
         void load();
       }
     } catch (err) {
@@ -918,7 +918,7 @@ export default function AdminJobManagePage() {
       const accessToken = await getAdminAccessToken();
       const result = await deleteJobListing(job.id, { accessToken });
       if (result.success) {
-        setSnackbar({ message: "Opportunity permanently deleted", severity: "success" });
+        setSnackbar({ message: "Opportunity permanently deleted.", severity: "success" });
         setDeleteConfirmJob(null);
         void load();
       }
@@ -1328,7 +1328,7 @@ export default function AdminJobManagePage() {
             onClose={() => setSnackbar(null)}
             sx={{
               borderRadius: "8px",
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: "0.9rem",
               boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
               color: "#111827",

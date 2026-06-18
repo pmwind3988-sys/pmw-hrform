@@ -341,7 +341,7 @@ export default function AdminJobsPage() {
           setApplications((prev) =>
             prev.map((app) => (app.id === applicationId ? { ...app, status: newStatus } : app)),
           );
-          setSnackbar({ message: "Status updated successfully", severity: "success" });
+          setSnackbar({ message: "Application status updated.", severity: "success" });
         }
       } catch (err) {
         setSnackbar({
@@ -446,7 +446,7 @@ export default function AdminJobsPage() {
       const accessToken = await getAdminAccessToken();
       const result = await deleteApplications([...selectedIds], { accessToken });
       const appText = `Deleted ${result.deleted} application${result.deleted !== 1 ? "s" : ""}`;
-      const fileText = `deleted ${result.deletedFiles ?? 0} attached document${(result.deletedFiles ?? 0) !== 1 ? "s" : ""}`;
+      const fileText = `${result.deletedFiles ?? 0} attached document${(result.deletedFiles ?? 0) !== 1 ? "s" : ""}`;
       const msg = `${appText} and ${fileText}`;
       const warnings = [...(result.errors ?? []), ...(result.fileWarnings ?? [])];
       if (warnings.length > 0) {
@@ -1135,7 +1135,7 @@ export default function AdminJobsPage() {
               onClose={() => setSnackbar(null)}
               sx={{
                 borderRadius: "8px",
-                fontWeight: 600,
+                fontWeight: 700,
                 fontSize: "0.9rem",
                 boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
                 color: "#111827",
