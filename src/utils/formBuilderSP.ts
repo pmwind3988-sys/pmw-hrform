@@ -208,6 +208,45 @@ async function repairUrlColumnDisplayFormat(token: string, listTitle: string, fi
   }
 }
 
+async function setColumnIndexed(token: string, listTitle: string, fieldName: string): Promise<void> {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields/getbyinternalnameortitle('${encodeURIComponent(fieldName)}')`;
+  const response = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json;odata=nometadata',
+      'Content-Type': 'application/json;odata=verbose',
+      'X-HTTP-Method': 'MERGE',
+      'IF-MATCH': '*',
+      'X-RequestDigest': await getDigest(token),
+    },
+    body: JSON.stringify({
+      __metadata: { type: 'SP.Field' },
+      Indexed: true,
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`indexColumn "${fieldName}" ${response.status}: ${text}`);
+  }
+}
+
+async function ensureIndexedColumns(
+  token: string,
+  listTitle: string,
+  fieldNames: string[],
+  onLog: (msg: string, type: string) => void = () => {},
+): Promise<void> {
+  for (const fieldName of fieldNames) {
+    try {
+      await setColumnIndexed(token, listTitle, fieldName);
+      onLog(`  indexed: ${fieldName}`, 'ok');
+    } catch (e) {
+      onLog(`  index skipped: ${fieldName} (${(e as Error).message})`, 'warn');
+    }
+  }
+}
+
 /** Escape single quotes for OData filter string values to prevent injection */
 function sanitizeODataValue(val: string): string {
   return val.replace(/'/g, "''");
@@ -751,6 +790,7 @@ export async function ensureListSchema(
     const status = result.created.includes(column.n) ? 'created' : 'exists';
     onLog?.(`  ${status}: ${column.n}`, 'ok');
   }
+  await ensureIndexedColumns(token, schema.title, LIST_INDEXES[schema.title] ?? [], onLog);
   return result;
 }
 
@@ -1236,6 +1276,15 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
   [CAREER_PORTAL_CARD_LIST]: { t: 100, desc: 'Career portal carousel cards', cols: CAREER_PORTAL_CARD_COLUMN_SPECS },
 };
 
+const LIST_INDEXES: Record<string, string[]> = {
+  'Master Form': ['Title', 'Slug', 'FormID', 'CurrentVersion'],
+  'Approvers': ['FormTitle', 'LayerNumber', 'ApproverEmail'],
+  'Web Form Versions': ['FormTitle', 'FormSlug', 'FormVersion', 'PublishedAt'],
+  'Form Builder Log': ['FormTitle', 'EventType', 'ChangedBy', 'EventAt'],
+  'AdminPanelSettings': ['BackgroundId', 'UpdatedAt'],
+  [CAREER_PORTAL_CARD_LIST]: ['Status', 'SortOrder', 'TargetType', 'TargetValue'],
+};
+
 async function ensureListExists(token: string, listTitle: string): Promise<void> {
   const schema = LIST_SCHEMAS[listTitle];
   if (!schema) {
@@ -1312,6 +1361,13 @@ export interface MatrixColumnDef {
   multiSelect?: boolean;
 }
 
+export interface MatrixChildParentSnapshot {
+  formTitle?: string;
+  formVersion?: string;
+  submittedAt?: string;
+  submittedBy?: string;
+}
+
 interface ProvisionFormListOptions {
   formTitle?: string;
   numLayers?: number;
@@ -1335,6 +1391,19 @@ const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'EvaluationData', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
   { n: 'FormStatus', k: SP_FIELD_KIND.text },
+];
+
+const RESPONSE_INDEXED_COLUMNS = [
+  'SubmittedAt',
+  'FormVersion',
+  'FormID',
+  'SubmittedBy',
+  'Status',
+  'CurrentApprovalLayer',
+  'CurrentLayer',
+  'FormStatus',
+  'RetentionUntil',
+  'SelectedBranch',
 ];
 
 function dedupeColumnSpecs(columns: SpColumnSpec[]): SpColumnSpec[] {
@@ -1500,11 +1569,13 @@ export async function ensureWorkflowColumns(
   layerCount: number,
 ): Promise<EnsureColumnsResult> {
   const count = Math.max(layerCount, 1);
-  return ensureColumns(token, listTitle, dedupeColumnSpecs([
+  const result = await ensureColumns(token, listTitle, dedupeColumnSpecs([
     SELECTED_BRANCH_COLUMN_SPEC,
     ...ENHANCED_LAYER_COLUMNS,
     ...layerColumnSpecs(count),
   ]));
+  await ensureIndexedColumns(token, listTitle, ['SelectedBranch', 'CurrentLayer', 'FormStatus']);
+  return result;
 }
 
 function logEnsuredColumns(
@@ -1545,6 +1616,7 @@ export async function provisionFormList(
   const systemColumns = responseSystemColumnSpecs(options);
   const systemResult = await ensureColumns(token, listTitle, systemColumns);
   logEnsuredColumns(systemColumns, systemResult, onLog);
+  await ensureIndexedColumns(token, listTitle, RESPONSE_INDEXED_COLUMNS, onLog);
 
   if (!surveyJson || typeof surveyJson !== 'object') {
     onLog('No survey JSON, skipped field columns', 'warn');
@@ -1593,6 +1665,10 @@ export async function ensureMatrixChildList(
   const columnSpecs = dedupeColumnSpecs([
     { n: 'ParentResponseId', k: 9 },
     { n: 'RowIndex', k: 9 },
+    { n: 'ParentFormTitle', k: SP_FIELD_KIND.text },
+    { n: 'ParentFormVersion', k: SP_FIELD_KIND.text },
+    { n: 'ParentSubmittedAt', k: SP_FIELD_KIND.dateTime },
+    { n: 'ParentSubmittedBy', k: SP_FIELD_KIND.text },
     ...columns.filter((col) => col.name).map(matrixColumnSpec),
   ]);
 
@@ -1607,6 +1683,13 @@ export async function ensureMatrixChildList(
 
   const ensured = await ensureColumns(token, listName, columnSpecs);
   logEnsuredColumns(columnSpecs, ensured, onLog);
+  await ensureIndexedColumns(token, listName, [
+    'ParentResponseId',
+    'ParentFormTitle',
+    'ParentFormVersion',
+    'ParentSubmittedAt',
+    'ParentSubmittedBy',
+  ], onLog);
 
   // Fetch list ID
   try {
@@ -1627,7 +1710,8 @@ export async function writeMatrixChildItems(
   listName: string,
   parentResponseId: number,
   rows: Record<string, unknown>[],
-  columns: MatrixColumnDef[]
+  columns: MatrixColumnDef[],
+  parentSnapshot: MatrixChildParentSnapshot = {},
 ): Promise<number[]> {
   const createdIds: number[] = [];
 
@@ -1637,6 +1721,10 @@ export async function writeMatrixChildItems(
       ParentResponseId: parentResponseId,
       RowIndex: i,
     };
+    if (parentSnapshot.formTitle) body.ParentFormTitle = parentSnapshot.formTitle;
+    if (parentSnapshot.formVersion) body.ParentFormVersion = parentSnapshot.formVersion;
+    if (parentSnapshot.submittedAt) body.ParentSubmittedAt = parentSnapshot.submittedAt;
+    if (parentSnapshot.submittedBy) body.ParentSubmittedBy = parentSnapshot.submittedBy;
 
     // Map row values to column names
     for (const col of columns) {

@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItems, getListColumnChoices, getListColumnValues } from "./_utils/graphClient.js";
+import { getGraphToken, queryMasterFormBySlug, queryWebFormVersion, getListColumnChoices, getListColumnValues } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 
 // Minimal Vercel request/response types
@@ -172,8 +172,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const token = await getGraphToken();
 
     // 1. Get form config from Master Form
-    const masterItems = await queryListItems(token, "Master Form", { top: 500 });
-    const formConfig = masterItems.find((i) => i.fields.Slug === slug)?.fields;
+    const formConfig = (await queryMasterFormBySlug(token, slug))?.fields;
 
     if (!formConfig) {
       return res.status(404).json({ error: `Form "${slug}" not found.` });
@@ -184,10 +183,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // 2. Get version data from Web Form Versions
     const targetVersion = pinVersion || (formConfig.CurrentVersion as string) || "1.0";
-    const versionItems = await queryListItems(token, "Web Form Versions", { top: 500 });
-    const row = versionItems.find(
-      (i) => i.fields.FormTitle === formConfig.Title && i.fields.FormVersion === targetVersion
-    )?.fields;
+    const row = (await queryWebFormVersion(token, String(formConfig.Title || ""), targetVersion))?.fields;
 
     if (!row && pinVersion) {
       return res.status(404).json({ error: `Version ${pinVersion} not found.` });

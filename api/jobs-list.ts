@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, getListColumns, queryListItems } from "./_utils/graphClient.js";
+import { getGraphToken, getListColumns, graphFieldEquals, queryListItems } from "./_utils/graphClient.js";
 import { listCareerPortalCards } from "./_utils/careerPortalCards.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -58,8 +58,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
-    const [items, portalCards, companyColumn] = await Promise.all([
-      queryListItems(token, "Internal Job Listing", { top: 500 }),
+    const [rawItems, portalCards, companyColumn] = await Promise.all([
+      queryListItems(token, "Internal Job Listing", {
+        filter: graphFieldEquals("Status", "New"),
+        preferNonIndexed: true,
+        top: 100,
+      }).catch(async (e) => {
+        logWarn("api:jobs-list", "Filtered job listing query failed; falling back to limited local filter", {
+          errorMessage: e instanceof Error ? e.message : String(e),
+        });
+        const fallbackItems = await queryListItems(token, "Internal Job Listing", { top: 500 });
+        return fallbackItems.filter((item) => String(item.fields.Status || "").toLowerCase() === "new");
+      }),
       listCareerPortalCards(token, { activeOnly: true }).catch((e) => {
         logWarn("api:jobs-list", "Failed to load career portal cards", {
           errorMessage: e instanceof Error ? e.message : String(e),
@@ -69,11 +79,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       resolveCompanyColumn(token),
     ]);
 
-    const jobs = items
-      .filter((item) => {
-        const status = String(item.fields.Status || "").toLowerCase();
-        return status === "new";
-      })
+    const jobs = rawItems
       .map((item) => {
         const itemId = String(item.id || item.fields.Id || "");
         let customFields: Record<string, unknown>[] | undefined;

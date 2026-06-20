@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
@@ -341,10 +341,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     let versionMeta: Record<string, unknown> = {};
     const formVersion = String(allFields.FormVersion || "");
     if (formVersion) {
-      const versionItems = await queryListItems(graphToken, "Web Form Versions", { top: 500 });
-      const versionRow = versionItems.find(
-        (item) => item.fields.FormTitle === foundFormTitle && item.fields.FormVersion === formVersion
-      )?.fields;
+      const versionRow = (await queryWebFormVersion(graphToken, foundFormTitle, formVersion))?.fields;
       const parsedVersion = parseVersionPayload(versionRow?.SurveyJSON);
       surveyJson = parsedVersion.surveyJson || parseSurveyJson(versionRow?.SurveyJSON);
       versionMeta = parsedVersion.meta;
@@ -412,8 +409,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const graphToken = await getGraphToken();
 
     // 1. Load Master Form to find the layer config + validate token
-    const masterItems = await queryListItems(graphToken, "Master Form", { top: 500 });
-    const formConfig = masterItems.find((i) => i.fields.Title === formTitle)?.fields;
+    const formConfig = (await queryMasterFormByTitle(graphToken, formTitle))?.fields;
     if (!formConfig) return res.status(404).json({ error: "Form not found" });
 
     // Parse LayerConfig

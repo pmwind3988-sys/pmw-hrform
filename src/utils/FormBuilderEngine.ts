@@ -1009,8 +1009,21 @@ export function buildQuestionTree(json: SurveyJson): FormBuilderField[] {
         // Map formula fields saved as text+_expression back to "formula" for the builder
         // Check _expression (new format) first, then native expression (old format)
         const exprVal = (el as Record<string, unknown>)._expression || (el as Record<string, unknown>).expression || "";
-        const fieldSrc = el.type === "expression" || (el.type === "text" && exprVal)
+        let fieldSrc = el.type === "expression" || (el.type === "text" && exprVal)
           ? { ...el, type: "formula", expression: exprVal } : el;
+        if (fieldSrc.type === "matrixdynamic") {
+          const savedColumns = Array.isArray(fieldSrc.columns)
+            ? fieldSrc.columns
+            : Array.isArray(fieldSrc.tableConfigColumns)
+              ? fieldSrc.tableConfigColumns
+              : [];
+          fieldSrc = {
+            ...fieldSrc,
+            type: "dynamicmatrix",
+            columns: savedColumns,
+            tableConfigColumns: savedColumns,
+          };
+        }
         const field = { ...fieldSrc, _id: (fieldSrc._id as string) || generateFieldId() } as unknown as FormBuilderField;
         result.push(field);
       }

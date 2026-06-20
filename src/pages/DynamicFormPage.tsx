@@ -1120,7 +1120,12 @@ export default function DynamicFormPage() {
               if (!Array.isArray(rows) || rows.length === 0) continue;
               const childList = await ensureMatrixChildList(token, cfg.Title as string, mf.name, mf.columns, () => {});
               if (childList) {
-                const ids = await writeMatrixChildItems(token, childList.listName, result.Id, rows, mf.columns);
+                const ids = await writeMatrixChildItems(token, childList.listName, result.Id, rows, mf.columns, {
+                  formTitle: cfg.Title as string,
+                  formVersion: String(body.FormVersion || ""),
+                  submittedAt: String(body.SubmittedAt || ""),
+                  submittedBy: String(body.SubmittedBy || ""),
+                });
                 matrixUpdateBody[`${mf.name}_RowIds`] = JSON.stringify(ids);
               }
             }

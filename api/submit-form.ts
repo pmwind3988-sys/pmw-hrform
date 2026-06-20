@@ -2,12 +2,14 @@ import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import {
   getGraphToken,
   getSharePointToken,
-  queryListItems,
+  queryMasterFormByTitle,
+  queryWebFormVersion,
   createListItem,
   updateListItemFields,
   getListColumns,
   listExistsGraph,
   ensureDocLibrary as ensureGraphDocLibrary,
+  ensureListColumns,
   uploadFileToDriveItem,
   deleteListItem,
   deleteDocLibraryFile,
@@ -420,10 +422,7 @@ async function getPublishedSurveyJson(
   const targetVersion = valueToText(formConfig.CurrentVersion) || "1.0";
   if (!formTitle) return null;
 
-  const versionItems = await queryListItems(token, "Web Form Versions", { top: 500 });
-  const row = versionItems.find(
-    (item) => item.fields.FormTitle === formTitle && item.fields.FormVersion === targetVersion,
-  )?.fields;
+  const row = (await queryWebFormVersion(token, formTitle, targetVersion))?.fields;
   const parsed = parseJsonRecord(row?.SurveyJSON);
   const surveyJson = parsed?.surveyJson ?? parsed;
   return surveyJson && typeof surveyJson === "object" && !Array.isArray(surveyJson)
@@ -1087,8 +1086,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const token = await getGraphToken();
     tokenForCleanup = token;
 
-    const masterItems = await queryListItems(token, "Master Form", { top: 500 });
-    const formConfig = masterItems.find((i) => i.fields.Title === listTitle)?.fields;
+    const formConfig = (await queryMasterFormByTitle(token, listTitle))?.fields;
 
     if (!formConfig) {
       return res.status(404).json({ error: "Form not found" });
@@ -1156,6 +1154,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const columns = matrixSpec.columns;
           if (!Array.isArray(rows) || rows.length === 0) continue;
 
+          let canWriteParentSnapshot = true;
+          try {
+            await ensureListColumns(token, childListDisplayName, [
+              { name: "ParentFormTitle", displayName: "ParentFormTitle", type: "text" },
+              { name: "ParentFormVersion", displayName: "ParentFormVersion", type: "text" },
+              { name: "ParentSubmittedAt", displayName: "ParentSubmittedAt", type: "dateTime" },
+              { name: "ParentSubmittedBy", displayName: "ParentSubmittedBy", type: "text" },
+            ]);
+          } catch (e) {
+            canWriteParentSnapshot = false;
+            logWarn("api:submit-form", "Matrix child parent snapshot columns unavailable", {
+              listTitle: childListDisplayName,
+              errorMessage: e instanceof Error ? e.message : String(e),
+            });
+          }
+
           const childIds: number[] = [];
           for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -1163,6 +1177,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               ParentResponseId: Number(parentId),
               RowIndex: i,
             };
+            if (canWriteParentSnapshot) {
+              fields.ParentFormTitle = listTitle;
+              fields.ParentFormVersion = valueToText(submissionBody.FormVersion);
+              fields.ParentSubmittedAt = valueToText(submissionBody.SubmittedAt);
+              fields.ParentSubmittedBy = valueToText(submissionBody.SubmittedBy);
+            }
             for (const col of columns) {
               if (col.name && row[col.name] !== undefined) {
                 const value = coerceMatrixCellValue(row[col.name], col);

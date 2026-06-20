@@ -290,6 +290,29 @@ describe('buildQuestionTree', () => {
     const tree = buildQuestionTree(json);
     expect(tree).toHaveLength(2);
   });
+
+  it('rehydrates saved dynamic matrix fields with column editor settings', () => {
+    const field = makeField({
+      type: 'dynamicmatrix',
+      name: 'allowances',
+      title: 'Allowances',
+      columns: [
+        { name: 'type', title: 'Type', cellType: 'dropdown', choices: ['Travel', 'Meal'] },
+        { name: 'amount', title: 'Amount', cellType: 'number' },
+      ],
+      tableConfigColumns: [
+        { name: 'type', title: 'Type', cellType: 'dropdown', choices: ['Travel', 'Meal'] },
+        { name: 'amount', title: 'Amount', cellType: 'number' },
+      ],
+    });
+
+    const savedJson = buildSurveyJson([field]);
+    const tree = buildQuestionTree(savedJson);
+
+    expect(tree[0].type).toBe('dynamicmatrix');
+    expect(tree[0].columns).toEqual(field.columns);
+    expect(tree[0].tableConfigColumns).toEqual(field.columns);
+  });
 });
 
 // ── getSpColumnKind ──────────────────────────────────────────────────────────────

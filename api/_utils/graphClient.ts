@@ -312,6 +312,14 @@ export interface GraphColumnSpec {
   type: GraphColumnType;
 }
 
+export function escapeGraphODataString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+export function graphFieldEquals(columnName: string, value: string): string {
+  return `fields/${columnName} eq '${escapeGraphODataString(value)}'`;
+}
+
 export async function queryListItems(
   token: string,
   listDisplayName: string,
@@ -358,6 +366,38 @@ export async function queryListItems(
     id: item.id,
     fields: item.fields || {},
   }));
+}
+
+export async function queryListItemByFields(
+  token: string,
+  listDisplayName: string,
+  fields: Record<string, string>,
+): Promise<GraphListItem | null> {
+  const filters = Object.entries(fields).map(([columnName, value]) => graphFieldEquals(columnName, value));
+  const items = await queryListItems(token, listDisplayName, {
+    filter: filters.join(" and "),
+    top: 1,
+  });
+  return items[0] ?? null;
+}
+
+export function queryMasterFormByTitle(token: string, title: string): Promise<GraphListItem | null> {
+  return queryListItemByFields(token, "Master Form", { Title: title });
+}
+
+export function queryMasterFormBySlug(token: string, slug: string): Promise<GraphListItem | null> {
+  return queryListItemByFields(token, "Master Form", { Slug: slug });
+}
+
+export function queryWebFormVersion(
+  token: string,
+  formTitle: string,
+  formVersion: string,
+): Promise<GraphListItem | null> {
+  return queryListItemByFields(token, "Web Form Versions", {
+    FormTitle: formTitle,
+    FormVersion: formVersion,
+  });
 }
 
 /**
