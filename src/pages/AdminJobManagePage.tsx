@@ -436,6 +436,7 @@ function JobFormDialog({
   initial,
   companyChoices,
   departmentChoices,
+  locationChoices,
   employmentTypeChoices,
 }: {
   open: boolean;
@@ -444,6 +445,7 @@ function JobFormDialog({
   initial: EditableJob | null;
   companyChoices: string[];
   departmentChoices: string[];
+  locationChoices: string[];
   employmentTypeChoices: string[];
 }) {
   const isEdit = !!initial;
@@ -460,6 +462,16 @@ function JobFormDialog({
   const companyOptions = company && !companyChoices.includes(company)
     ? [company, ...companyChoices]
     : companyChoices;
+  const departmentOptions = department && !departmentChoices.includes(department)
+    ? [department, ...departmentChoices]
+    : departmentChoices;
+  const locationOptions = location && !locationChoices.includes(location)
+    ? [location, ...locationChoices]
+    : locationChoices;
+  const employmentTypeBaseOptions = employmentTypeChoices.length > 0 ? employmentTypeChoices : EMPLOYMENT_TYPES;
+  const employmentTypeOptions = employmentType && !employmentTypeBaseOptions.includes(employmentType)
+    ? [employmentType, ...employmentTypeBaseOptions]
+    : employmentTypeBaseOptions;
 
   useEffect(() => {
     if (open && initial) {
@@ -473,12 +485,22 @@ function JobFormDialog({
       setStatus(initial.status);
       setCustomFields(initial.customFields);
     } else if (open) {
-      setTitle(""); setJobDescription(""); setDepartment(""); setLocation("");
+      setTitle(""); setJobDescription("");
       setCompany("");
-      setEmploymentType(""); setClosingDate(""); setStatus("New");
+      setDepartment("");
+      setLocation("");
+      setEmploymentType("");
+      setClosingDate(""); setStatus("New");
       setCustomFields([]);
     }
   }, [open, initial]);
+
+  useEffect(() => {
+    if (!open || initial) return;
+    setDepartment((value) => value || departmentChoices[0] || "");
+    setLocation((value) => value || locationChoices[0] || "");
+    setEmploymentType((value) => value || employmentTypeBaseOptions[0] || "");
+  }, [open, initial, departmentChoices, locationChoices, employmentTypeBaseOptions]);
 
   const handleSave = async () => {
     if (!title.trim()) return;
@@ -531,15 +553,23 @@ function JobFormDialog({
             <FormControl fullWidth size="small">
               <InputLabel>Department</InputLabel>
               <Select value={department} label="Department" onChange={(e) => setDepartment(e.target.value)} sx={{ borderRadius: "8px" }}>
-                {departmentChoices.length > 0
-                  ? departmentChoices.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)
+                {departmentOptions.length > 0
+                  ? departmentOptions.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)
                   : <MenuItem value="">No choices loaded</MenuItem>
                 }
               </Select>
             </FormControl>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
+            <FormControl fullWidth size="small">
+              <InputLabel>Location</InputLabel>
+              <Select value={location} label="Location" onChange={(e) => setLocation(e.target.value)} sx={{ borderRadius: "8px" }}>
+                {locationOptions.length > 0
+                  ? locationOptions.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)
+                  : <MenuItem value="">No choices loaded</MenuItem>
+                }
+              </Select>
+            </FormControl>
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
@@ -551,7 +581,7 @@ function JobFormDialog({
             <FormControl fullWidth size="small">
               <InputLabel>Employment Type</InputLabel>
               <Select value={employmentType} label="Employment Type" onChange={(e) => setEmploymentType(e.target.value)} sx={{ borderRadius: "8px" }}>
-                {(employmentTypeChoices.length > 0 ? employmentTypeChoices : EMPLOYMENT_TYPES).map((t) => (
+                {employmentTypeOptions.map((t) => (
                   <MenuItem key={t} value={t}>{t}</MenuItem>
                 ))}
               </Select>
@@ -659,6 +689,7 @@ export default function AdminJobManagePage() {
   const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" | "warning" } | null>(null);
   const [companyChoices, setCompanyChoices] = useState<string[]>([]);
   const [departmentChoices, setDepartmentChoices] = useState<string[]>([]);
+  const [locationChoices, setLocationChoices] = useState<string[]>([]);
   const [employmentTypeChoices, setEmploymentTypeChoices] = useState<string[]>([]);
   const [closingJobId, setClosingJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
@@ -682,49 +713,6 @@ export default function AdminJobManagePage() {
     });
   }, [instance, accounts]);
 
-  /** Create the CustomFields column on the job list via SharePoint REST (client-side token). */
-  async function ensureCustomFieldsColumn(): Promise<boolean> {
-    try {
-      const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-      const token = await getAdminAccessToken();
-
-      // Get request digest
-      const digestResp = await fetch(`${SP_SITE_URL}/_api/contextinfo`, {
-        method: "POST",
-        headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` },
-      });
-      if (!digestResp.ok) return false;
-      const digestData = await digestResp.json();
-      const digest: string = digestData.FormDigestValue;
-
-      // Try to add the CustomFields Note column — 400 likely means column already exists
-      const resp = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Internal Job Listing')/fields`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json;odata=nometadata",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json;odata=verbose",
-          "X-RequestDigest": digest,
-        },
-        body: JSON.stringify({
-          __metadata: { type: "SP.FieldMultiLineText" },
-          FieldTypeKind: 3,
-          Title: "CustomFields",
-          StaticName: "CustomFields",
-        }),
-      });
-      if (!resp.ok) {
-        const text = await resp.text();
-        // Column already exists — not an error
-        if (text.toLowerCase().includes("duplicate") || text.toLowerCase().includes("already exists")) return true;
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -745,17 +733,20 @@ export default function AdminJobManagePage() {
     async function loadChoices() {
       try {
         const accessToken = await getAdminAccessToken();
-        const [company, dept, emp] = await Promise.all([
+        const [company, dept, location, emp] = await Promise.all([
           fetchColumnChoices("Internal Job Listing", "Company", { accessToken }),
           fetchColumnChoices("Internal Job Listing", "Department", { accessToken }),
+          fetchColumnChoices("Internal Job Listing", "Location", { accessToken }),
           fetchColumnChoices("Internal Job Listing", "Employment Type", { accessToken }),
         ]);
         setCompanyChoices(company);
         setDepartmentChoices(dept);
+        setLocationChoices(location);
         setEmploymentTypeChoices(emp);
       } catch {
         setCompanyChoices([]);
         setDepartmentChoices([]);
+        setLocationChoices([]);
         setEmploymentTypeChoices([]);
       }
     }
@@ -855,11 +846,6 @@ export default function AdminJobManagePage() {
   ) => {
     try {
       const accessToken = await getAdminAccessToken();
-      // If custom fields are present, ensure the column exists first
-      const hasCustom = Array.isArray(customFields) && customFields.length > 0;
-      if (hasCustom) {
-        await ensureCustomFieldsColumn();
-      }
 
       if (editJob) {
         // Update existing
@@ -1255,6 +1241,7 @@ export default function AdminJobManagePage() {
         initial={editJob}
         companyChoices={companyChoices}
         departmentChoices={departmentChoices}
+        locationChoices={locationChoices}
         employmentTypeChoices={employmentTypeChoices}
       />
 

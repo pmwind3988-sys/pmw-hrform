@@ -23,7 +23,6 @@ import {
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   createListItemViaSPRest,
-  ensureTextFieldViaSPRest,
   getListFieldsViaSPRest,
   resolveLookupItemIdViaSPRest,
   updateListItemViaSPRest,
@@ -130,17 +129,26 @@ async function resolveSpRestColumnMap(token: string, listName: string): Promise<
   return map;
 }
 
+function findMappedColumn(source: Record<string, string>, candidate: string): string | null {
+  if (source[candidate]) return source[candidate];
+  const normalizedCandidate = candidate.toLowerCase();
+  const match = Object.entries(source).find(([key]) => key.toLowerCase() === normalizedCandidate);
+  return match?.[1] ?? null;
+}
+
 function findColumn(map: ColumnMap, ...candidates: string[]): string | null {
   for (const candidate of candidates) {
-    if (map.byDisplay[candidate]) return map.byDisplay[candidate];
-    if (map.byInternal[candidate]) return map.byInternal[candidate];
+    const internalMatch = findMappedColumn(map.byInternal, candidate);
+    if (internalMatch) return internalMatch;
+    const displayMatch = findMappedColumn(map.byDisplay, candidate);
+    if (displayMatch) return displayMatch;
   }
   return null;
 }
 
 function findCompatibleColumn(map: ColumnMap, candidates: string[], acceptedKinds: Set<number>): string | null {
   for (const candidate of candidates) {
-    const columnName = map.byDisplay[candidate] || map.byInternal[candidate];
+    const columnName = findMappedColumn(map.byInternal, candidate) || findMappedColumn(map.byDisplay, candidate);
     if (!columnName) continue;
     const fieldType = map.fieldTypes?.[columnName];
     if (fieldType === undefined || acceptedKinds.has(fieldType)) return columnName;
@@ -156,14 +164,14 @@ export function resolveJobListingColumns(map: ColumnMap): JobListingColumns {
     department: findColumn(map, "Department"),
     location: findCompatibleColumn(
       map,
-      ["Job Location", "JobLocation", "Job_x0020_Location", "Location"],
+      ["Location", "Job Location", "JobLocation", "Job_x0020_Location"],
       TEXT_COMPATIBLE_FIELD_KINDS,
     ),
     employmentType: findColumn(map, "Employment Type", "EmploymentType", "Employment_x0020_Type"),
     closingDate: findColumn(map, "Closing Date", "ClosingDate", "Closing_x0020_Date"),
     status: findColumn(map, "Status"),
     applicationCount: findColumn(map, "Application Count", "ApplicationCount", "Application_x0020_Count"),
-    customFields: findColumn(map, "Custom Fields", "CustomFields", "Custom_x0020_Fields"),
+    customFields: findColumn(map, "CustomFields", "Custom Fields", "Custom_x0020_Fields"),
   };
 }
 
@@ -176,16 +184,7 @@ async function resolveJobListingWriteColumns(
   const warnings: string[] = [];
 
   if (needsLocation && !jobColumns.location) {
-    try {
-      await ensureTextFieldViaSPRest(delegatedToken, JOB_LIST, "JobLocation", "Job Location");
-      jobColumnMap = await resolveSpRestColumnMap(delegatedToken, JOB_LIST);
-      jobColumns = resolveJobListingColumns(jobColumnMap);
-    } catch (err) {
-      warnings.push("Job Location text column could not be created");
-      logWarn("api:job-admin", "Failed to ensure job location text column", {
-        errorMessage: err instanceof Error ? err.message : String(err),
-      });
-    }
+    warnings.push("Location column not available");
   }
 
   return { jobColumnMap, jobColumns, warnings };
@@ -410,6 +409,66 @@ export async function setSharePointRestField(
 
   fields[columnName] = value;
   return true;
+}
+
+export async function buildJobListingCreateFields(
+  delegatedToken: string,
+  jobColumnMap: ColumnMap,
+  jobColumns: JobListingColumns,
+  rawBody: Record<string, unknown>,
+): Promise<{ fields: Record<string, unknown>; warnings: string[] }> {
+  const fields: Record<string, unknown> = {
+    [jobColumns.title]: String(rawBody.title || ""),
+  };
+  const warnings: string[] = [];
+
+  async function addCreateField(
+    label: string,
+    columnName: string | null,
+    value: unknown,
+    unavailableWarning = `${label} column not available`,
+  ): Promise<void> {
+    const didSet = await setSharePointRestField(delegatedToken, fields, jobColumnMap, columnName, value);
+    if (!didSet) warnings.push(unavailableWarning);
+  }
+
+  if (hasCreateValue(rawBody.company)) {
+    await addCreateField(
+      "Company",
+      jobColumns.company,
+      rawBody.company,
+      "Company column not available or lookup value not found",
+    );
+  }
+  if (hasCreateValue(rawBody.jobDescription)) {
+    await addCreateField("Job Description", jobColumns.jobDescription, rawBody.jobDescription);
+  }
+  if (hasCreateValue(rawBody.department)) {
+    await addCreateField("Department", jobColumns.department, rawBody.department);
+  }
+  if (hasCreateValue(rawBody.location)) {
+    await addCreateField("Location", jobColumns.location, rawBody.location);
+  }
+  if (hasCreateValue(rawBody.employmentType)) {
+    await addCreateField("Employment Type", jobColumns.employmentType, rawBody.employmentType);
+  }
+  if (hasCreateValue(rawBody.closingDate)) {
+    await addCreateField("Closing Date", jobColumns.closingDate, rawBody.closingDate);
+  }
+  await addCreateField("Status", jobColumns.status, "New");
+  await addCreateField("Application Count", jobColumns.applicationCount, 0);
+
+  const customFields = rawBody.customFields;
+  if (Array.isArray(customFields) && customFields.length > 0) {
+    await addCreateField(
+      "CustomFields",
+      jobColumns.customFields,
+      JSON.stringify(customFields),
+      "CustomFields column not available",
+    );
+  }
+
+  return { fields, warnings };
 }
 
 function hasCreateValue(value: unknown): boolean {
@@ -785,71 +844,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           jobColumns,
           warnings: columnWarnings,
         } = await resolveJobListingWriteColumns(delegatedToken, hasCreateValue(rawBody.location));
-        const warningParts: string[] = [...columnWarnings];
-        const fields: Record<string, unknown> = {
-          [jobColumns.title]: title,
-        };
-        const fieldPatches: Array<{ label: string; fields: Record<string, unknown> }> = [];
-
-        async function addFieldPatch(
-          label: string,
-          columnName: string | null,
-          value: unknown,
-          unavailableWarning = `${label} column not available`,
-        ): Promise<void> {
-          const patchFields: Record<string, unknown> = {};
-          const didSet = await setSharePointRestField(delegatedToken, patchFields, jobColumnMap, columnName, value);
-          if (!didSet) {
-            warningParts.push(unavailableWarning);
-            return;
-          }
-          fieldPatches.push({ label, fields: patchFields });
-        }
-
-        if (hasCreateValue(rawBody.company)) {
-          await addFieldPatch(
-            "Company",
-            jobColumns.company,
-            rawBody.company,
-            "Company column not available or lookup value not found",
-          );
-        }
-        if (hasCreateValue(rawBody.jobDescription)) {
-          await addFieldPatch("Job Description", jobColumns.jobDescription, rawBody.jobDescription);
-        }
-        if (hasCreateValue(rawBody.department)) {
-          await addFieldPatch("Department", jobColumns.department, rawBody.department);
-        }
-        if (hasCreateValue(rawBody.location)) {
-          await addFieldPatch("Location", jobColumns.location, rawBody.location);
-        }
-        if (hasCreateValue(rawBody.employmentType)) {
-          await addFieldPatch("Employment Type", jobColumns.employmentType, rawBody.employmentType);
-        }
-        if (hasCreateValue(rawBody.closingDate)) {
-          await addFieldPatch("Closing Date", jobColumns.closingDate, rawBody.closingDate);
-        }
-        await addFieldPatch("Status", jobColumns.status, "New");
-
-        // Only include CustomFields if there's data AND the column exists
-        if (hasCustomFields) {
-          await addFieldPatch("CustomFields", jobColumns.customFields, JSON.stringify(customFields), "CustomFields column not available");
-        }
+        const createFields = await buildJobListingCreateFields(
+          delegatedToken,
+          jobColumnMap,
+          jobColumns,
+          rawBody,
+        );
+        const warningParts: string[] = [...columnWarnings, ...createFields.warnings];
+        const fields = createFields.fields;
 
         try {
           const result = await createListItemViaSPRest(delegatedToken, JOB_LIST, fields);
-          for (const patch of fieldPatches) {
-            try {
-              await updateListItemViaSPRest(delegatedToken, JOB_LIST, result.id, patch.fields);
-            } catch (err) {
-              warningParts.push(`${patch.label} could not be saved`);
-              logWarn("api:job-admin", "Failed to patch job listing field after create", {
-                jobId: result.id,
-                fieldLabel: patch.label,
-                errorMessage: err instanceof Error ? err.message : String(err),
-              });
-            }
-          }
           return res.status(200).json({
             success: true,
             jobId: result.id,
@@ -866,6 +871,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           if (jobColumns.company && jobColumns.company in fields && isColumnNotRecognized(msg, jobColumns.company)) {
             delete fields[jobColumns.company];
             retryWarnings.push("Company column not available");
+          }
+          if (jobColumns.applicationCount && jobColumns.applicationCount in fields && isColumnNotRecognized(msg, jobColumns.applicationCount)) {
+            delete fields[jobColumns.applicationCount];
+            retryWarnings.push("Application Count column not available");
           }
           if (retryWarnings.length > 0) {
             const result = await createListItemViaSPRest(delegatedToken, JOB_LIST, fields);

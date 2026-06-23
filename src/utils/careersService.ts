@@ -92,6 +92,17 @@ export async function fetchJobs(): Promise<JobListing[]> {
   return data.jobs;
 }
 
+export async function fetchJob(jobId: string): Promise<JobListing | null> {
+  const response = await fetch(`/api/jobs-list?jobId=${encodeURIComponent(jobId)}`, { headers: apiHeaders() });
+
+  if (!response.ok) {
+    throw await readApiError(response, "Failed to fetch job");
+  }
+
+  const data: JobsListResponse = (await response.json()) as JobsListResponse;
+  return data.jobs[0] ?? null;
+}
+
 export async function fetchCareersPortalData(): Promise<{ jobs: JobListing[]; portalCards: CareerPortalCard[] }> {
   const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
 

@@ -39,13 +39,14 @@ import {
 import { useReactiveForm, required, email, phone } from "../hooks/useReactiveForm";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useMsal } from "@azure/msal-react";
-import { fetchJobs, submitApplication, ensureJobApplicationColumns, fetchMyApplications } from "../utils/careersService";
+import { fetchJob, submitApplication, ensureJobApplicationColumns, fetchMyApplications } from "../utils/careersService";
 import type { JobListing, CustomFieldDefinition } from "../types";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import { CareerErrorState, careerActionButtonSx, careerPageSx, careerPanelSx, getCareerErrorMessage } from "../components/careers/careerUi";
 import { editorial } from "../theme/editorial";
+import { isJobApplicationSubmitDisabled } from "./jobApplySubmitState";
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 interface FormValues extends Record<string, unknown> {
@@ -533,9 +534,8 @@ export default function JobApplyPage() {
       setJobLoading(true);
       setJobLoadError(null);
       try {
-        const jobs = await fetchJobs();
-        const found = jobs.find((j) => j.id === jobId);
-        if (!cancelled) setJob(found || null);
+        const found = jobId ? await fetchJob(jobId) : null;
+        if (!cancelled) setJob(found);
       } catch (err) {
         if (!cancelled) {
           setJob(null);
@@ -1348,7 +1348,11 @@ export default function JobApplyPage() {
                     variant="contained"
                     fullWidth
                     startIcon={submitting ? undefined : <Send />}
-                    disabled={submitting || duplicateChecking || !form.valid || !pdpaAccepted || (alreadyApplied && !adminOverrideMode)}
+                    disabled={isJobApplicationSubmitDisabled({
+                      submitting,
+                      alreadyApplied,
+                      adminOverrideMode,
+                    })}
                     sx={{
                       ...careerActionButtonSx,
                       borderRadius: "8px",
