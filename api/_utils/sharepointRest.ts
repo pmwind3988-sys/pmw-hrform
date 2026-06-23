@@ -1,6 +1,5 @@
-const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
-
 function requireSpSiteUrl(): string {
+  const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
   if (!SP_SITE_URL) throw new Error("SP_SITE_URL env var not set.");
   return SP_SITE_URL;
 }
@@ -11,6 +10,19 @@ function escapeODataString(value: string): string {
 
 function spListEndpoint(listName: string): string {
   return `/_api/web/lists/getbytitle('${encodeURIComponent(escapeODataString(listName))}')`;
+}
+
+function spListGuidEndpoint(listGuid: string): string {
+  const normalized = listGuid.replace(/[{}]/g, "");
+  return `/_api/web/lists(guid'${escapeODataString(normalized)}')`;
+}
+
+export interface SpRestField {
+  internalName: string;
+  title: string;
+  fieldTypeKind: number;
+  lookupList?: string;
+  lookupField?: string;
 }
 
 async function readJsonOrThrow<T>(res: Response, label: string): Promise<T> {
@@ -102,6 +114,56 @@ export async function createListItemViaSPRest(
   const id = data.Id ?? data.ID ?? data.id;
   if (!id) throw new Error("SharePoint did not return the created item ID.");
   return { id: String(id) };
+}
+
+export async function getListFieldsViaSPRest(token: string, listName: string): Promise<SpRestField[]> {
+  const data = await spGet<{
+    value?: Array<{
+      InternalName?: string;
+      Title?: string;
+      FieldTypeKind?: number;
+      LookupList?: string;
+      LookupField?: string;
+    }>;
+  }>(
+    token,
+    `${spListEndpoint(listName)}/fields?$select=InternalName,Title,FieldTypeKind,LookupList,LookupField`,
+    `SP REST fields ${listName}`,
+  );
+
+  return (data.value || [])
+    .filter((field) => field.InternalName && field.Title && typeof field.FieldTypeKind === "number")
+    .map((field) => ({
+      internalName: String(field.InternalName),
+      title: String(field.Title),
+      fieldTypeKind: Number(field.FieldTypeKind),
+      lookupList: field.LookupList ? String(field.LookupList) : undefined,
+      lookupField: field.LookupField ? String(field.LookupField) : undefined,
+    }));
+}
+
+export async function resolveLookupItemIdViaSPRest(
+  token: string,
+  lookupList: string,
+  lookupField: string,
+  value: string,
+): Promise<number | null> {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const params = new URLSearchParams({
+    "$select": `Id,${lookupField}`,
+    "$filter": `${lookupField} eq '${escapeODataString(trimmed)}'`,
+    "$top": "1",
+  });
+  const data = await spGet<{ value?: Array<{ Id?: number; ID?: number }> }>(
+    token,
+    `${spListGuidEndpoint(lookupList)}/items?${params.toString()}`,
+    "SP REST lookup item",
+  );
+  const item = data.value?.[0];
+  const id = item?.Id ?? item?.ID;
+  return typeof id === "number" && Number.isFinite(id) ? id : null;
 }
 
 export async function patchHyperlinkViaSPRest(

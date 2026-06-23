@@ -21,7 +21,11 @@ import {
   type CareerPortalCardInput,
 } from "./_utils/careerPortalCards.js";
 import { logError, logWarn } from "./_utils/logger.js";
-import { createListItemViaSPRest } from "./_utils/sharepointRest.js";
+import {
+  createListItemViaSPRest,
+  getListFieldsViaSPRest,
+  resolveLookupItemIdViaSPRest,
+} from "./_utils/sharepointRest.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -63,6 +67,8 @@ interface DelegatedUser {
 interface ColumnMap {
   byDisplay: Record<string, string>;
   byInternal: Record<string, string>;
+  fieldTypes?: Record<string, number>;
+  lookupFields?: Record<string, { lookupList: string; lookupField: string }>;
 }
 
 interface ApplicationColumns {
@@ -96,10 +102,27 @@ interface JobListingColumns {
 
 async function resolveColumnMap(token: string, listName: string): Promise<ColumnMap> {
   const columns = await getListColumns(token, listName);
-  const map: ColumnMap = { byDisplay: {}, byInternal: {} };
+  const map: ColumnMap = { byDisplay: {}, byInternal: {}, fieldTypes: {}, lookupFields: {} };
   for (const column of columns) {
     map.byDisplay[column.displayName] = column.name;
     map.byInternal[column.name] = column.name;
+  }
+  return map;
+}
+
+async function resolveSpRestColumnMap(token: string, listName: string): Promise<ColumnMap> {
+  const columns = await getListFieldsViaSPRest(token, listName);
+  const map: ColumnMap = { byDisplay: {}, byInternal: {}, fieldTypes: {}, lookupFields: {} };
+  for (const column of columns) {
+    map.byDisplay[column.title] = column.internalName;
+    map.byInternal[column.internalName] = column.internalName;
+    map.fieldTypes![column.internalName] = column.fieldTypeKind;
+    if (column.fieldTypeKind === 7 && column.lookupList && column.lookupField) {
+      map.lookupFields![column.internalName] = {
+        lookupList: column.lookupList,
+        lookupField: column.lookupField,
+      };
+    }
   }
   return map;
 }
@@ -291,6 +314,61 @@ function setResolvedField(
   value: unknown,
 ): boolean {
   if (!columnName) return false;
+  fields[columnName] = value;
+  return true;
+}
+
+function toUrlFieldValue(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const url = String(record.Url || record.url || "").trim();
+    if (!url) return null;
+    return {
+      __metadata: { type: "SP.FieldUrlValue" },
+      Url: url,
+      Description: String(record.Description || record.description || url),
+    };
+  }
+
+  if (typeof value !== "string" || !value.trim()) return null;
+  return {
+    __metadata: { type: "SP.FieldUrlValue" },
+    Url: value.trim(),
+    Description: value.trim(),
+  };
+}
+
+export async function setSharePointRestField(
+  token: string,
+  fields: Record<string, unknown>,
+  columns: ColumnMap,
+  columnName: string | null,
+  value: unknown,
+): Promise<boolean> {
+  if (!columnName) return false;
+  const fieldType = columns.fieldTypes?.[columnName];
+
+  if (fieldType === 7) {
+    const lookupConfig = columns.lookupFields?.[columnName];
+    if (!lookupConfig) return false;
+    const lookupId = await resolveLookupItemIdViaSPRest(
+      token,
+      lookupConfig.lookupList,
+      lookupConfig.lookupField,
+      String(value || ""),
+    );
+    if (!lookupId) return false;
+    fields[`${columnName}Id`] = lookupId;
+    return true;
+  }
+
+  if (fieldType === 11) {
+    const urlValue = toUrlFieldValue(value);
+    if (!urlValue) return false;
+    fields[columnName] = urlValue;
+    return true;
+  }
+
   fields[columnName] = value;
   return true;
 }
@@ -663,24 +741,46 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
         const customFields = rawBody.customFields;
         const hasCustomFields = Array.isArray(customFields) && customFields.length > 0;
-        const jobColumns = resolveJobListingColumns(await resolveColumnMap(token, JOB_LIST));
+        const jobColumnMap = await resolveSpRestColumnMap(delegatedToken, JOB_LIST);
+        const jobColumns = resolveJobListingColumns(jobColumnMap);
         const warningParts: string[] = [];
         const fields: Record<string, unknown> = {
           [jobColumns.title]: title,
         };
-        if (hasCreateValue(rawBody.company) && !setResolvedField(fields, jobColumns.company, rawBody.company)) {
-          warningParts.push("Company column not available");
+        if (
+          hasCreateValue(rawBody.company) &&
+          !(await setSharePointRestField(delegatedToken, fields, jobColumnMap, jobColumns.company, rawBody.company))
+        ) {
+          warningParts.push("Company column not available or lookup value not found");
         }
-        if (hasCreateValue(rawBody.jobDescription)) setResolvedField(fields, jobColumns.jobDescription, rawBody.jobDescription);
-        if (hasCreateValue(rawBody.department)) setResolvedField(fields, jobColumns.department, rawBody.department);
-        if (hasCreateValue(rawBody.location)) setResolvedField(fields, jobColumns.location, rawBody.location);
-        if (hasCreateValue(rawBody.employmentType)) setResolvedField(fields, jobColumns.employmentType, rawBody.employmentType);
-        if (hasCreateValue(rawBody.closingDate)) setResolvedField(fields, jobColumns.closingDate, rawBody.closingDate);
-        setResolvedField(fields, jobColumns.status, "New");
+        if (hasCreateValue(rawBody.jobDescription)) {
+          await setSharePointRestField(delegatedToken, fields, jobColumnMap, jobColumns.jobDescription, rawBody.jobDescription);
+        }
+        if (hasCreateValue(rawBody.department)) {
+          await setSharePointRestField(delegatedToken, fields, jobColumnMap, jobColumns.department, rawBody.department);
+        }
+        if (hasCreateValue(rawBody.location)) {
+          await setSharePointRestField(delegatedToken, fields, jobColumnMap, jobColumns.location, rawBody.location);
+        }
+        if (hasCreateValue(rawBody.employmentType)) {
+          await setSharePointRestField(delegatedToken, fields, jobColumnMap, jobColumns.employmentType, rawBody.employmentType);
+        }
+        if (hasCreateValue(rawBody.closingDate)) {
+          await setSharePointRestField(delegatedToken, fields, jobColumnMap, jobColumns.closingDate, rawBody.closingDate);
+        }
+        await setSharePointRestField(delegatedToken, fields, jobColumnMap, jobColumns.status, "New");
 
         // Only include CustomFields if there's data AND the column exists
         if (hasCustomFields) {
-          if (!setResolvedField(fields, jobColumns.customFields, JSON.stringify(customFields))) {
+          if (
+            !(await setSharePointRestField(
+              delegatedToken,
+              fields,
+              jobColumnMap,
+              jobColumns.customFields,
+              JSON.stringify(customFields),
+            ))
+          ) {
             warningParts.push("CustomFields column not available");
           }
         }
