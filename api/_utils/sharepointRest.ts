@@ -54,6 +54,16 @@ function mergeHeaders(token: string, digest: string | null): Record<string, stri
   return headers;
 }
 
+function createHeaders(token: string, digest: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json;odata=nometadata",
+    "Content-Type": "application/json;odata=verbose",
+  };
+  if (digest) headers["X-RequestDigest"] = digest;
+  return headers;
+}
+
 async function spGet<T>(token: string, path: string, label: string): Promise<T> {
   const res = await fetch(`${requireSpSiteUrl()}${path}`, {
     headers: {
@@ -74,6 +84,24 @@ async function getListEntityType(token: string, listName: string): Promise<strin
     throw new Error(`Could not resolve SharePoint entity type for "${listName}".`);
   }
   return data.ListItemEntityTypeFullName;
+}
+
+export async function createListItemViaSPRest(
+  token: string,
+  listName: string,
+  fields: Record<string, unknown>,
+): Promise<{ id: string }> {
+  const digest = await getOptionalSpDigest(token);
+  const entityType = await getListEntityType(token, listName);
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/items`, {
+    method: "POST",
+    headers: createHeaders(token, digest),
+    body: JSON.stringify({ __metadata: { type: entityType }, ...fields }),
+  });
+  const data = await readJsonOrThrow<{ Id?: number; ID?: number; id?: number }>(res, "SP REST create item");
+  const id = data.Id ?? data.ID ?? data.id;
+  if (!id) throw new Error("SharePoint did not return the created item ID.");
+  return { id: String(id) };
 }
 
 export async function patchHyperlinkViaSPRest(

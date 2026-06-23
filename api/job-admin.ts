@@ -3,7 +3,6 @@ import {
   getGraphToken,
   queryListItems,
   queryListItemById,
-  createListItem,
   updateListItemFields,
   deleteListItem,
   getListColumns,
@@ -22,6 +21,7 @@ import {
   type CareerPortalCardInput,
 } from "./_utils/careerPortalCards.js";
 import { logError, logWarn } from "./_utils/logger.js";
+import { createListItemViaSPRest } from "./_utils/sharepointRest.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -686,7 +686,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
 
         try {
-          const result = await createListItem(token, JOB_LIST, fields);
+          const result = await createListItemViaSPRest(delegatedToken, JOB_LIST, fields);
           return res.status(200).json({
             success: true,
             jobId: result.id,
@@ -705,7 +705,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             retryWarnings.push("Company column not available");
           }
           if (retryWarnings.length > 0) {
-            const result = await createListItem(token, JOB_LIST, fields);
+            const result = await createListItemViaSPRest(delegatedToken, JOB_LIST, fields);
             return res.status(200).json({
               success: true,
               jobId: result.id,
