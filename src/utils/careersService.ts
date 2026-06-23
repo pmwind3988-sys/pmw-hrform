@@ -243,7 +243,7 @@ export async function fetchAdminJobs(options: AdminApiOptions): Promise<JobListi
 export async function createJobListing(
   data: Record<string, unknown>,
   options: AdminApiOptions,
-): Promise<{ success: boolean; jobId: string }> {
+): Promise<{ success: boolean; jobId: string; warning?: string }> {
   const response = await fetch("/api/job-admin", {
     method: "POST",
     headers: delegatedHeaders(options),
@@ -254,7 +254,7 @@ export async function createJobListing(
     throw await readApiError(response, "Failed to create job listing");
   }
 
-  return (await response.json()) as { success: boolean; jobId: string };
+  return (await response.json()) as { success: boolean; jobId: string; warning?: string };
 }
 
 export async function updateJobListing(

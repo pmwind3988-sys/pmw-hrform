@@ -81,6 +81,19 @@ interface ApplicationColumns {
   customAnswers: string | null;
 }
 
+interface JobListingColumns {
+  title: string;
+  company: string | null;
+  jobDescription: string | null;
+  department: string | null;
+  location: string | null;
+  employmentType: string | null;
+  closingDate: string | null;
+  status: string | null;
+  applicationCount: string | null;
+  customFields: string | null;
+}
+
 async function resolveColumnMap(token: string, listName: string): Promise<ColumnMap> {
   const columns = await getListColumns(token, listName);
   const map: ColumnMap = { byDisplay: {}, byInternal: {} };
@@ -97,6 +110,21 @@ function findColumn(map: ColumnMap, ...candidates: string[]): string | null {
     if (map.byInternal[candidate]) return map.byInternal[candidate];
   }
   return null;
+}
+
+function resolveJobListingColumns(map: ColumnMap): JobListingColumns {
+  return {
+    title: findColumn(map, "Title") || "Title",
+    company: findColumn(map, "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company"),
+    jobDescription: findColumn(map, "Job Description", "JobDescription", "Job_x0020_Description"),
+    department: findColumn(map, "Department"),
+    location: findColumn(map, "Location"),
+    employmentType: findColumn(map, "Employment Type", "EmploymentType", "Employment_x0020_Type"),
+    closingDate: findColumn(map, "Closing Date", "ClosingDate", "Closing_x0020_Date"),
+    status: findColumn(map, "Status"),
+    applicationCount: findColumn(map, "Application Count", "ApplicationCount", "Application_x0020_Count"),
+    customFields: findColumn(map, "Custom Fields", "CustomFields", "Custom_x0020_Fields"),
+  };
 }
 
 function resolveApplicationColumns(map: ColumnMap): ApplicationColumns {
@@ -257,6 +285,21 @@ function jobCompany(fields: Record<string, unknown>, columnName: string | null =
   return textField(fields, ...candidates);
 }
 
+function setResolvedField(
+  fields: Record<string, unknown>,
+  columnName: string | null,
+  value: unknown,
+): boolean {
+  if (!columnName) return false;
+  fields[columnName] = value;
+  return true;
+}
+
+function hasCreateValue(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  return typeof value !== "string" || value.trim() !== "";
+}
+
 function isColumnNotRecognized(message: string, columnName: string): boolean {
   const lowerMessage = message.toLowerCase();
   return (
@@ -347,10 +390,11 @@ async function isDelegatedAdmin(accessToken: string, user: DelegatedUser): Promi
 
 async function getApplicationCountsByJob(token: string): Promise<Record<string, number>> {
   const allApps = await queryListItems(token, APPLICATION_LIST, { top: 999 });
+  const applicationColumns = resolveApplicationColumns(await resolveColumnMap(token, APPLICATION_LIST));
   const appCountByJob: Record<string, number> = {};
   for (const app of allApps) {
-    if (isDeletedApplication(app.fields)) continue;
-    const jobId = getApplicationJobId(app.fields);
+    if (isDeletedApplication(app.fields, applicationColumns.status)) continue;
+    const jobId = getApplicationJobId(app.fields, applicationColumns.jobListingId);
     if (jobId) appCountByJob[jobId] = (appCountByJob[jobId] || 0) + 1;
   }
   return appCountByJob;
@@ -589,11 +633,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         // Sync Application Count from the remaining application list items.
         try {
           const liveCounts = await getApplicationCountsByJob(token);
+          const jobColumns = resolveJobListingColumns(await resolveColumnMap(token, JOB_LIST));
           for (const jobId of affectedJobIds) {
             if (!/^\d+$/.test(String(jobId))) continue;
-            await updateListItemFields(token, JOB_LIST, jobId, {
-              Application_x0020_Count: liveCounts[jobId] ?? 0,
-            });
+            if (!jobColumns.applicationCount) continue;
+            await updateListItemFields(token, JOB_LIST, jobId, { [jobColumns.applicationCount]: liveCounts[jobId] ?? 0 });
           }
         } catch (e) {
           logWarn("api:job-admin", "Failed to sync application counts after delete", {
@@ -619,47 +663,54 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
         const customFields = rawBody.customFields;
         const hasCustomFields = Array.isArray(customFields) && customFields.length > 0;
-        let companyColumn: string | null = "Company";
-        try {
-          companyColumn = findColumn(await resolveColumnMap(token, JOB_LIST), "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company");
-        } catch { /* use default internal name */ }
+        const jobColumns = resolveJobListingColumns(await resolveColumnMap(token, JOB_LIST));
+        const warningParts: string[] = [];
         const fields: Record<string, unknown> = {
-          Title: title,
-          Job_x0020_Description: rawBody.jobDescription || "",
-          Department: rawBody.department || "",
-          Location: rawBody.location || "",
-          Employment_x0020_Type: rawBody.employmentType || "",
-          Closing_x0020_Date: rawBody.closingDate || null,
-          Status: "New",
-          Application_x0020_Count: 0,
+          [jobColumns.title]: title,
         };
-        if (rawBody.company !== undefined && companyColumn) {
-          fields[companyColumn] = rawBody.company || "";
+        if (hasCreateValue(rawBody.company) && !setResolvedField(fields, jobColumns.company, rawBody.company)) {
+          warningParts.push("Company column not available");
         }
+        if (hasCreateValue(rawBody.jobDescription)) setResolvedField(fields, jobColumns.jobDescription, rawBody.jobDescription);
+        if (hasCreateValue(rawBody.department)) setResolvedField(fields, jobColumns.department, rawBody.department);
+        if (hasCreateValue(rawBody.location)) setResolvedField(fields, jobColumns.location, rawBody.location);
+        if (hasCreateValue(rawBody.employmentType)) setResolvedField(fields, jobColumns.employmentType, rawBody.employmentType);
+        if (hasCreateValue(rawBody.closingDate)) setResolvedField(fields, jobColumns.closingDate, rawBody.closingDate);
+        setResolvedField(fields, jobColumns.status, "New");
 
         // Only include CustomFields if there's data AND the column exists
         if (hasCustomFields) {
-          fields.CustomFields = JSON.stringify(customFields);
+          if (!setResolvedField(fields, jobColumns.customFields, JSON.stringify(customFields))) {
+            warningParts.push("CustomFields column not available");
+          }
         }
 
         try {
           const result = await createListItem(token, JOB_LIST, fields);
-          return res.status(200).json({ success: true, jobId: result.id });
+          return res.status(200).json({
+            success: true,
+            jobId: result.id,
+            ...(warningParts.length > 0 ? { warning: warningParts.join("; ") } : {}),
+          });
         } catch (err) {
           const msg = (err as Error).message;
-          const warningParts: string[] = [];
+          const retryWarnings: string[] = [];
           // If CustomFields column doesn't exist on the list, retry without it
-          if (hasCustomFields && msg.includes("CustomFields") && msg.includes("not recognized")) {
-            delete fields.CustomFields;
-            warningParts.push("CustomFields column not available");
+          if (hasCustomFields && jobColumns.customFields && isColumnNotRecognized(msg, jobColumns.customFields)) {
+            delete fields[jobColumns.customFields];
+            retryWarnings.push("CustomFields column not available");
           }
-          if (companyColumn && companyColumn in fields && isColumnNotRecognized(msg, companyColumn)) {
-            delete fields[companyColumn];
-            warningParts.push("Company column not available");
+          if (jobColumns.company && jobColumns.company in fields && isColumnNotRecognized(msg, jobColumns.company)) {
+            delete fields[jobColumns.company];
+            retryWarnings.push("Company column not available");
           }
-          if (warningParts.length > 0) {
+          if (retryWarnings.length > 0) {
             const result = await createListItem(token, JOB_LIST, fields);
-            return res.status(200).json({ success: true, jobId: result.id, warning: warningParts.join("; ") });
+            return res.status(200).json({
+              success: true,
+              jobId: result.id,
+              warning: [...warningParts, ...retryWarnings].join("; "),
+            });
           }
           throw err; // Re-throw for the outer catch
         }
@@ -668,29 +719,27 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // List all job listings (admin view)
       if (action === "list-jobs") {
         const items = await queryListItems(token, JOB_LIST, { top: 999 });
-        let companyColumn: string | null = null;
-        try {
-          companyColumn = findColumn(await resolveColumnMap(token, JOB_LIST), "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company");
-        } catch { /* use known fallback names */ }
+        const jobColumns = resolveJobListingColumns(await resolveColumnMap(token, JOB_LIST));
 
         const jobs = items.map((item) => {
           const itemId = String(item.id || "");
           let customFields: Record<string, unknown>[] | undefined;
-          const raw = item.fields.CustomFields;
+          const raw = readField(item.fields, jobColumns.customFields, "CustomFields", "Custom_x0020_Fields");
           if (raw && typeof raw === "string") {
             try { customFields = JSON.parse(raw) as Record<string, unknown>[]; } catch { /* ignore */ }
           }
+          const closingDate = readField(item.fields, jobColumns.closingDate, "Closing_x0020_Date");
           return {
             id: itemId,
-            title: String(item.fields.Title || ""),
-            company: jobCompany(item.fields, companyColumn),
-            jobDescription: String(item.fields.Job_x0020_Description || ""),
-            department: String(item.fields.Department || ""),
-            location: String(item.fields.Location || ""),
-            employmentType: String(item.fields.Employment_x0020_Type || ""),
-            closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date).split("T")[0] : null,
-            status: String(item.fields.Status || "New"),
-            applicationCount: numberField(item.fields.Application_x0020_Count),
+            title: String(readField(item.fields, jobColumns.title, "Title") || ""),
+            company: jobCompany(item.fields, jobColumns.company),
+            jobDescription: String(readField(item.fields, jobColumns.jobDescription, "Job_x0020_Description") || ""),
+            department: String(readField(item.fields, jobColumns.department, "Department") || ""),
+            location: String(readField(item.fields, jobColumns.location, "Location") || ""),
+            employmentType: String(readField(item.fields, jobColumns.employmentType, "Employment_x0020_Type") || ""),
+            closingDate: closingDate ? String(closingDate).split("T")[0] : null,
+            status: String(readField(item.fields, jobColumns.status, "Status") || "New"),
+            applicationCount: numberField(readField(item.fields, jobColumns.applicationCount, "Application_x0020_Count")),
             created: String(item.fields.Created || ""),
             customFields,
           };
@@ -709,42 +758,43 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
 
         const updateFields: Record<string, unknown> = {};
-        let companyColumn: string | null = "Company";
-        try {
-          companyColumn = findColumn(await resolveColumnMap(token, JOB_LIST), "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company");
-        } catch { /* use default internal name */ }
-        if (rawBody.title !== undefined) updateFields.Title = rawBody.title;
-        if (rawBody.company !== undefined && companyColumn) updateFields[companyColumn] = rawBody.company;
-        if (rawBody.jobDescription !== undefined) updateFields.Job_x0020_Description = rawBody.jobDescription;
-        if (rawBody.department !== undefined) updateFields.Department = rawBody.department;
-        if (rawBody.location !== undefined) updateFields.Location = rawBody.location;
-        if (rawBody.employmentType !== undefined) updateFields.Employment_x0020_Type = rawBody.employmentType;
-        if (rawBody.closingDate !== undefined) updateFields.Closing_x0020_Date = rawBody.closingDate;
-        if (rawBody.status !== undefined) updateFields.Status = rawBody.status;
-        if (rawBody.customFields !== undefined) {
-          updateFields.CustomFields = JSON.stringify(rawBody.customFields);
+        const jobColumns = resolveJobListingColumns(await resolveColumnMap(token, JOB_LIST));
+        const warningParts: string[] = [];
+        if (rawBody.title !== undefined) updateFields[jobColumns.title] = rawBody.title;
+        if (rawBody.company !== undefined && !setResolvedField(updateFields, jobColumns.company, rawBody.company)) {
+          warningParts.push("Company column not available");
+        }
+        if (rawBody.jobDescription !== undefined) setResolvedField(updateFields, jobColumns.jobDescription, rawBody.jobDescription);
+        if (rawBody.department !== undefined) setResolvedField(updateFields, jobColumns.department, rawBody.department);
+        if (rawBody.location !== undefined) setResolvedField(updateFields, jobColumns.location, rawBody.location);
+        if (rawBody.employmentType !== undefined) setResolvedField(updateFields, jobColumns.employmentType, rawBody.employmentType);
+        if (rawBody.closingDate !== undefined) setResolvedField(updateFields, jobColumns.closingDate, rawBody.closingDate);
+        if (rawBody.status !== undefined) setResolvedField(updateFields, jobColumns.status, rawBody.status);
+        if (rawBody.customFields !== undefined && !setResolvedField(updateFields, jobColumns.customFields, JSON.stringify(rawBody.customFields))) {
+          warningParts.push("CustomFields column not available");
         }
 
-        const hasCustomFields = "CustomFields" in updateFields;
-        const hasCompany = Boolean(companyColumn && companyColumn in updateFields);
+        const hasCustomFields = Boolean(jobColumns.customFields && jobColumns.customFields in updateFields);
+        const hasCompany = Boolean(jobColumns.company && jobColumns.company in updateFields);
         let warning: string | undefined;
         try {
           await updateListItemFields(token, JOB_LIST, jobId, updateFields);
         } catch (err) {
           const msg = (err as Error).message;
-          const warningParts: string[] = [];
-          if (hasCustomFields && msg.includes("CustomFields") && msg.includes("not recognized")) {
-            delete updateFields.CustomFields;
-            warningParts.push("CustomFields column not available");
+          const retryWarnings: string[] = [];
+          if (hasCustomFields && jobColumns.customFields && isColumnNotRecognized(msg, jobColumns.customFields)) {
+            delete updateFields[jobColumns.customFields];
+            retryWarnings.push("CustomFields column not available");
           }
-          if (hasCompany && companyColumn && isColumnNotRecognized(msg, companyColumn)) {
-            delete updateFields[companyColumn];
-            warningParts.push("Company column not available");
+          if (hasCompany && jobColumns.company && isColumnNotRecognized(msg, jobColumns.company)) {
+            delete updateFields[jobColumns.company];
+            retryWarnings.push("Company column not available");
           }
-          if (warningParts.length === 0) throw err;
+          if (retryWarnings.length === 0) throw err;
           await updateListItemFields(token, JOB_LIST, jobId, updateFields);
-          warning = warningParts.join("; ");
+          warning = [...warningParts, ...retryWarnings].join("; ");
         }
+        if (!warning && warningParts.length > 0) warning = warningParts.join("; ");
         return res.status(200).json({ success: true, ...(warning ? { warning } : {}) });
       }
 
