@@ -112,9 +112,9 @@ function findColumn(map: ColumnMap, ...candidates: string[]): string | null {
   return null;
 }
 
-function resolveJobListingColumns(map: ColumnMap): JobListingColumns {
+export function resolveJobListingColumns(map: ColumnMap): JobListingColumns {
   return {
-    title: findColumn(map, "Title") || "Title",
+    title: "Title",
     company: findColumn(map, "Company", "Company Name", "Company_x0020_Name", "JobCompany", "Job Company", "Job_x0020_Company"),
     jobDescription: findColumn(map, "Job Description", "JobDescription", "Job_x0020_Description"),
     department: findColumn(map, "Department"),
