@@ -94,7 +94,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           company: textField(item.fields, ...(companyColumn ? [companyColumn] : []), "Company", "Company_x0020_Name", "JobCompany", "Job_x0020_Company"),
           jobDescription: String(item.fields.Job_x0020_Description || ""),
           department: String(item.fields.Department || ""),
-          location: String(item.fields.Location || ""),
+          location: textField(item.fields, "JobLocation", "Job_x0020_Location", "Location"),
           employmentType: String(item.fields.Employment_x0020_Type || ""),
           closingDate: item.fields.Closing_x0020_Date ? String(item.fields.Closing_x0020_Date) : null,
           status: String(item.fields.Status || "New"),

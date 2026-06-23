@@ -22,6 +22,25 @@ describe("resolveJobListingColumns", () => {
     expect(columns.title).toBe("Title");
   });
 
+  it("prefers the text Job Location column over an object-backed SharePoint Location column", () => {
+    const columns = resolveJobListingColumns({
+      byDisplay: {
+        Location: "Location",
+        "Job Location": "JobLocation",
+      },
+      byInternal: {
+        Location: "Location",
+        JobLocation: "JobLocation",
+      },
+      fieldTypes: {
+        Location: 31,
+        JobLocation: 2,
+      },
+    });
+
+    expect(columns.location).toBe("JobLocation");
+  });
+
   it("writes SharePoint lookup fields with the LookupId suffix", async () => {
     vi.resetModules();
     vi.stubEnv("SP_SITE_URL", "https://pmwgroupcom.sharepoint.com/sites/PMWHRDocs");

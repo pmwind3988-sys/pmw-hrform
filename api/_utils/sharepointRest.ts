@@ -142,6 +142,34 @@ export async function getListFieldsViaSPRest(token: string, listName: string): P
     }));
 }
 
+export async function ensureTextFieldViaSPRest(
+  token: string,
+  listName: string,
+  internalName: string,
+  title: string,
+): Promise<void> {
+  const existing = await getListFieldsViaSPRest(token, listName);
+  if (existing.some((field) => field.internalName === internalName || field.title === title)) return;
+
+  const digest = await getSpDigest(token);
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/fields`, {
+    method: "POST",
+    headers: createHeaders(token, digest),
+    body: JSON.stringify({
+      __metadata: { type: "SP.Field" },
+      FieldTypeKind: 2,
+      Title: title,
+      StaticName: internalName,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes("duplicate") || lowerText.includes("already exists")) return;
+    throw new Error(`SP REST create text field ${res.status}: ${text.slice(0, 300)}`);
+  }
+}
+
 export async function resolveLookupItemIdViaSPRest(
   token: string,
   lookupList: string,
