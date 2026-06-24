@@ -502,8 +502,8 @@ export default function DynamicFormPage() {
             const r = await instance.acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
             token = r.accessToken;
             tokenRef.current = token;
-          } catch (silentErr) {
-            console.error("[DFP] acquireTokenSilent failed:", silentErr);
+          } catch {
+            // Guest/public loading remains available when silent authentication fails.
           }
         }
 
@@ -741,8 +741,8 @@ export default function DynamicFormPage() {
             if (typeof result === "number" && isFinite(result)) {
               if (q.value !== result) m.setValue(q.name, result);
             }
-          } catch (e) {
-            console.warn(`[DFP] Formula eval failed for "${q.name}"`);
+          } catch {
+            // Leave the prior calculated value in place when an expression is invalid.
           }
         }
       };
@@ -775,7 +775,7 @@ export default function DynamicFormPage() {
         }
       });
       return m;
-    } catch (e) { console.error("[DFP] Model error:", e); return null; }
+    } catch { return null; }
   }, [enrichedSurveyJson, resetKey]);
 
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
@@ -1165,7 +1165,7 @@ export default function DynamicFormPage() {
               nextApproverEmail: layer1Email,
               nextLayerType: layerConfigParsed.layers[0].type,
               reviewLink,
-            }).catch((e: unknown) => console.warn("[DFP] notification skipped:", e instanceof Error ? e.message : String(e)));
+            });
           } else if (resolvedLayerCount > 0) {
             await triggerApprovalNotification(token, {
               formTitle: cfg.Title as string,
@@ -1176,7 +1176,7 @@ export default function DynamicFormPage() {
               action: "submit",
               ...(layer1Email ? { nextApproverEmail: layer1Email } : {}),
               ...(layerConfigParsed?.layers?.[0]?.type ? { nextLayerType: layerConfigParsed.layers[0].type } : {}),
-            }).catch((e: unknown) => console.warn("[DFP] notification skipped:", e instanceof Error ? e.message : String(e)));
+            });
           }
         }
 
@@ -1197,7 +1197,7 @@ export default function DynamicFormPage() {
                 token,
                 `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`
               ) as Record<string, unknown>;
-              const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
+              const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowEmailLog','PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
               const pdfData: Record<string, unknown> = {};
               for (const [k, v] of Object.entries(respItem)) {
                 if (SYSTEM_FIELDS.has(k) || v === null || v === undefined) continue;
@@ -1242,7 +1242,9 @@ export default function DynamicFormPage() {
                 logoUrl: logoUrl || "/logo-128.png",
               });
             }
-          } catch (pdfErr) { console.warn("[DFP] PDF generation failed:", pdfErr); }
+          } catch {
+            // Submission remains successful when optional PDF generation is unavailable.
+          }
         }
       } else {
         submittedByEmail = "GUEST";
@@ -1329,8 +1331,7 @@ export default function DynamicFormPage() {
     let cancelled = false;
     doSubmitForm()
       .then(() => { if (!cancelled) setSubmitStatus("success"); })
-      .catch((e: unknown) => {
-        console.error("[DFP] Submit failed:", e instanceof Error ? e.message : String(e));
+      .catch(() => {
         if (!cancelled) setSubmitStatus("error");
       });
     return () => { cancelled = true; };

@@ -17,6 +17,11 @@ import {
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
+import {
+  buildWorkflowActionEmail,
+  deliverWorkflowEmail,
+  getApplicationBaseUrl,
+} from "./_utils/workflowEmail.js";
 
 // ─── Why SP REST is used for Image / Hyperlink columns ────────────────────────
 // Graph can create the response item and upload files, but it is unreliable for
@@ -69,6 +74,7 @@ interface ApiLayerConfigItem {
   authMode: "365" | "public";
   assignee: ApiLayerAssignee;
   title?: string;
+  publicToken?: string;
 }
 
 interface ApiLayerConfig {
@@ -1120,7 +1126,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     submissionBody.PDPAConsentAt = consentedAt;
     submissionBody.RetentionUntil = retentionDate;
 
-    await applyLayerConfigWorkflow(token, submissionBody, parseLayerConfig(formConfig.LayerConfig));
+    const parsedLayerConfig = parseLayerConfig(formConfig.LayerConfig);
+    await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig);
 
     const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
 
@@ -1229,6 +1236,45 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       cleanupHandled = true;
       await cleanupPartialSubmission(token, listTitle, parentId, submission.uploadedFiles, childItemRefs);
       throw postCreateError;
+    }
+
+    const firstLayer = parsedLayerConfig?.layers?.[0];
+    if (firstLayer) {
+      const recipient = valueToText(submissionBody[`L${firstLayer.layerNumber}_Email`]);
+      if (EMAIL_RE.test(recipient)) {
+        const appBaseUrl = getApplicationBaseUrl();
+        const formSlug = valueToText(formConfig.Slug);
+        const reviewLink = firstLayer.authMode === "public" && firstLayer.publicToken
+          ? `${appBaseUrl}/eval/${encodeURIComponent(firstLayer.publicToken)}?item=${encodeURIComponent(parentId)}`
+          : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${encodeURIComponent(parentId)}/${firstLayer.layerNumber}`;
+        try {
+          await deliverWorkflowEmail(
+            token,
+            buildWorkflowActionEmail({
+              formTitle: listTitle,
+              submittedBy: valueToText(submissionBody.SubmittedBy) || "Public respondent",
+              responseItemId: parentId,
+              layer: firstLayer.layerNumber,
+              totalLayers: parsedLayerConfig?.layers?.length ?? 1,
+              recipient,
+              layerType: firstLayer.type,
+              reviewLink,
+            }),
+            {
+              listTitle,
+              responseItemId: parentId,
+              layer: firstLayer.layerNumber,
+            },
+          );
+        } catch (emailError) {
+          logWarn("api:submit-form", "Initial workflow email delivery failed", {
+            listTitle,
+            itemId: parentId,
+            layer: firstLayer.layerNumber,
+            errorMessage: emailError instanceof Error ? emailError.message : String(emailError),
+          });
+        }
+      }
     }
 
     return res.status(200).json({ success: true, id: parentId, childItemIds });

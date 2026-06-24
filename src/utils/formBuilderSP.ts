@@ -1389,6 +1389,7 @@ const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
 
 const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'EvaluationData', k: SP_FIELD_KIND.note, ml: true },
+  { n: 'WorkflowEmailLog', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
   { n: 'FormStatus', k: SP_FIELD_KIND.text },
 ];
@@ -1845,12 +1846,17 @@ interface EmailParams {
   to: string | string[];
   subject: string;
   body: string;
+  workflow?: {
+    listTitle: string;
+    responseItemId: number;
+    layer: number;
+  };
 }
 
 /**
  * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
  */
-export async function sendSpEmail(_token: string, { to, subject, body }: EmailParams): Promise<void> {
+export async function sendSpEmail(_token: string, { to, subject, body, workflow }: EmailParams): Promise<void> {
   // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
@@ -1861,7 +1867,7 @@ export async function sendSpEmail(_token: string, { to, subject, body }: EmailPa
       'Content-Type': 'application/json',
       ...(API_KEY ? { 'X-Api-Key': API_KEY } : {}),
     },
-    body: JSON.stringify({ to, subject, body }),
+    body: JSON.stringify({ to, subject, body, workflow }),
   });
 
   if (!response.ok) {
@@ -1884,6 +1890,8 @@ interface ApprovalNotificationParams {
   nextLayerNumber?: number;
   reviewLink?: string;
   pdfUrl?: string;
+  responseListTitle?: string;
+  throwOnEmailError?: boolean;
 }
 
 // ── Styled email HTML template ────────────────────────────────────────────
@@ -1988,7 +1996,7 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false } = params;
   const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
   const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
@@ -2017,6 +2025,11 @@ export async function triggerApprovalNotification(
         await sendSpEmail(token, {
           to: targetEmail,
           subject: `Action required: ${formTitle} needs your ${nextActionNoun}`,
+          workflow: {
+            listTitle: responseListTitle,
+            responseItemId,
+            layer,
+          },
           body: emailBody({
             title: `${formTitle} needs your ${nextActionNoun}`,
             subtitle: `A new submission is waiting for you to ${nextActionVerb}. Review the request details and record your decision in PMW HR Form.`,
@@ -2044,6 +2057,11 @@ export async function triggerApprovalNotification(
         await sendSpEmail(token, {
           to: nextApproverEmail,
           subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}`,
+          workflow: {
+            listTitle: responseListTitle,
+            responseItemId,
+            layer: displayNextLayerNumber,
+          },
           body: emailBody({
             title: `${formTitle} is ready for your ${nextActionNoun}`,
             subtitle: `The previous workflow step has been completed. This request now needs you to ${nextActionVerb} Layer ${displayNextLayerNumber}.`,
@@ -2113,7 +2131,8 @@ export async function triggerApprovalNotification(
         }),
       });
     }
-  } catch {
+  } catch (error) {
+    if (throwOnEmailError) throw error;
     // Don't throw - email failures shouldn't block the workflow
   }
 }

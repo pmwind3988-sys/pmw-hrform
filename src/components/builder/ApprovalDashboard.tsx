@@ -23,6 +23,7 @@ import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany } from "../../utils/companySelection";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
+import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
@@ -33,6 +34,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ReplayIcon from "@mui/icons-material/Replay";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -73,6 +75,7 @@ interface PendingItem {
   L1_Status?: string;
   PdfUrl?: string;
   EvaluationData?: string;
+  WorkflowEmailLog?: string;
   SelectedBranch?: string;
   totalLayers?: number;
 }
@@ -126,7 +129,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
 
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
-      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
+      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowEmailLog',
       'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -486,12 +489,15 @@ export default function ApprovalDashboard() {
   const [adminChecked, setAdminChecked] = useState(false);
   const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<string, "approval" | "evaluation">>({});
   const formLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
+  const itemLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
   const [needsBranchSelection, setNeedsBranchSelection] = useState(false);
   const [availableBranches, setAvailableBranches] = useState<ManualBranch[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PendingItem | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [resendingItemKey, setResendingItemKey] = useState("");
+  const [emailNotice, setEmailNotice] = useState("");
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
   const [evalSurveyModel, setEvalSurveyModel] = useState<Model | null>(null);
   const [evalValid, setEvalValid] = useState(true);
@@ -650,6 +656,7 @@ export default function ApprovalDashboard() {
 
         const allItems: PendingItem[] = [];
         const nextItemTypes: Record<string, "approval" | "evaluation"> = {};
+        const nextItemLayerConfigs: Record<string, LayerConfigSource> = {};
         for (const form of forms ?? []) {
           const hasApprovalLayers = (form.NumberOfApprovalLayer ?? 0) > 0;
           let hasEvalLayer = false;
@@ -676,6 +683,24 @@ export default function ApprovalDashboard() {
             const items = await (async () => {
               // Query tiers: try progressively fewer custom columns.
               // SharePoint returns 400 if ANY selected column doesn't exist on the list.
+              const attachWorkflowEmailLogs = async (itemsToUpdate: PendingItem[]): Promise<void> => {
+                try {
+                  const emailData = await spGet(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,WorkflowEmailLog&$orderby=Created desc&$top=100`
+                  ) as { value?: { Id: number; WorkflowEmailLog?: string }[] };
+                  const emailMap = new Map(
+                    (emailData.value ?? [])
+                      .filter((current) => !!current.WorkflowEmailLog)
+                      .map((current) => [current.Id, current.WorkflowEmailLog as string]),
+                  );
+                  for (const current of itemsToUpdate) {
+                    const workflowEmailLog = emailMap.get(current.Id);
+                    if (workflowEmailLog) current.WorkflowEmailLog = workflowEmailLog;
+                  }
+                } catch {
+                  // Column may not exist on older lists until the first delivery attempt.
+                }
+              };
 
               // Tier 1: core columns only (no CurrentLayer/SelectedBranch — may not exist on older lists)
               const tier1 = await (async () => {
@@ -717,6 +742,7 @@ export default function ApprovalDashboard() {
                     }
                   }
                 } catch { /* column may not exist */ }
+                await attachWorkflowEmailLogs(tier1.value || []);
                 // SelectedBranch (only if the form has manual branches)
                 if (hasBranches) {
                   try {
@@ -745,7 +771,10 @@ export default function ApprovalDashboard() {
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
-              if (tier2) return tier2;
+              if (tier2) {
+                await attachWorkflowEmailLogs(tier2.value || []);
+                return tier2;
+              }
 
               // Tier 3: without FormStatus too
               const tier3 = await (async () => {
@@ -755,25 +784,27 @@ export default function ApprovalDashboard() {
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
-              if (tier3) return {
-                value: (tier3.value || []).map((item: PendingItem) => ({
+              if (tier3) {
+                const tier3Items = (tier3.value || []).map((item: PendingItem) => ({
                   ...item, FormStatus: '', CurrentLayer: 0, L1_Status: '',
-                })) as PendingItem[],
-              };
+                })) as PendingItem[];
+                await attachWorkflowEmailLogs(tier3Items);
+                return { value: tier3Items };
+              }
 
               // Tier 4: without Status too (ancient list)
               const basic = await spGet(token,
                 `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,Author/Name,Created&$expand=Author&$orderby=Created desc&$top=100`
               ) as { value?: Array<{ Id: number; Title?: string; Author?: { Name?: string }; Created?: string }> };
 
-              return {
-                value: (basic.value || []).map((item) => ({
+              const basicItems = (basic.value || []).map((item) => ({
                   Id: item.Id, Title: form.Title,
                   SubmittedBy: item.Author?.Name || '',
                   SubmittedAt: item.Created || '',
                   FormVersion: '', FormStatus: '', Status: '', CurrentLayer: 0, L1_Status: '',
-                })) as PendingItem[],
-              };
+                })) as PendingItem[];
+              await attachWorkflowEmailLogs(basicItems);
+              return { value: basicItems };
             })();
 
             if (items.value) {
@@ -792,7 +823,9 @@ export default function ApprovalDashboard() {
                 allItems.push({ ...item, Title: form.Title });
 
                 const current = resolveCurrentLayer(baseLc, item).currentLayer;
-                nextItemTypes[getPendingItemKey({ ...item, Title: form.Title })] = current?.type === "evaluation" ? "evaluation" : "approval";
+                const itemKey = getPendingItemKey({ ...item, Title: form.Title });
+                nextItemTypes[itemKey] = current?.type === "evaluation" ? "evaluation" : "approval";
+                if (baseLc) nextItemLayerConfigs[itemKey] = baseLc;
               }
             }
           } catch {
@@ -801,6 +834,7 @@ export default function ApprovalDashboard() {
 
         setPendingItems(allItems);
         setItemCurrentTypes(nextItemTypes);
+        itemLayerConfigsRef.current = nextItemLayerConfigs;
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -815,6 +849,7 @@ export default function ApprovalDashboard() {
   const SYSTEM_FIELDS = new Set([
     'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
     'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
+    'WorkflowEmailLog',
     'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
     'Author','Editor','Created','Modified','ContentType','PermMask',
     'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -919,6 +954,7 @@ export default function ApprovalDashboard() {
           L1_Status: valueToText(respItem.L1_Status) || item.L1_Status,
           FormStatus: valueToText(respItem.FormStatus) || item.FormStatus,
           Status: valueToText(respItem.Status) || item.Status,
+          WorkflowEmailLog: valueToText(respItem.WorkflowEmailLog) || item.WorkflowEmailLog,
         };
         setSelectedItem(detailItem);
         if (masterLayerCfg?.manualBranches?.length && detailItem.SelectedBranch && pendingBranch) {
@@ -1265,6 +1301,84 @@ export default function ApprovalDashboard() {
     finally { setBranchLoading(false); }
   };
 
+  const handleForceResend = async (item: PendingItem) => {
+    if (!token || (!isAdmin && !isSuperuser)) return;
+    const itemKey = getPendingItemKey(item);
+    setResendingItemKey(itemKey);
+    setEmailNotice("");
+    setError("");
+    try {
+      const rawItem = await spGet(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`
+      ) as Record<string, unknown>;
+      const currentLayerNumber = Number(rawItem.CurrentLayer || rawItem.CurrentApprovalLayer || item.CurrentLayer || item.CurrentApprovalLayer || 0);
+      const configSource = itemLayerConfigsRef.current[itemKey] || formLayerConfigsRef.current[item.Title];
+      const activeLayers = getActiveLayers(configSource, valueToText(rawItem.SelectedBranch) || item.SelectedBranch);
+      const currentLayer = activeLayers.find((layer) => layer.layerNumber === currentLayerNumber);
+      if (!currentLayer) throw new Error(`Layer ${currentLayerNumber} is not available in the workflow configuration.`);
+
+      let recipient = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
+      if (!EMAIL_RE.test(recipient)) {
+        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
+        if (resolved.error) throw new Error(resolved.error);
+        recipient = resolved.email;
+        if (recipient) {
+          await spPatch(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`,
+            { [`L${currentLayerNumber}_Email`]: recipient },
+          );
+        }
+      }
+      if (!EMAIL_RE.test(recipient)) {
+        throw new Error(`Layer ${currentLayerNumber} has no valid evaluator email.`);
+      }
+
+      const cfg = await getFormConfigByTitle(token, item.Title) as FormConfig | null;
+      const publicToken = currentLayer.publicToken || "";
+      const formSlug = valueToText(cfg?.Slug);
+      const reviewLink = currentLayer.authMode === "public" && publicToken
+        ? `${window.location.origin}/eval/${encodeURIComponent(publicToken)}?item=${item.Id}`
+        : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${item.Id}/${currentLayerNumber}`;
+
+      await triggerApprovalNotification(token, {
+        formTitle: item.Title,
+        submittedBy: item.SubmittedBy,
+        responseItemId: item.Id,
+        layer: currentLayerNumber,
+        totalLayers: activeLayers.length || item.totalLayers || currentLayerNumber,
+        action: "submit",
+        nextApproverEmail: recipient,
+        nextLayerType: currentLayer.type,
+        reviewLink,
+        responseListTitle: item.Title,
+        throwOnEmailError: true,
+      });
+
+      const refreshed = await spGet(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=WorkflowEmailLog`
+      ) as { WorkflowEmailLog?: string };
+      const workflowEmailLog = valueToText(refreshed.WorkflowEmailLog);
+      setPendingItems((previous) => previous.map((current) =>
+        getPendingItemKey(current) === itemKey
+          ? { ...current, WorkflowEmailLog: workflowEmailLog }
+          : current
+      ));
+      setSelectedItem((current) =>
+        current && getPendingItemKey(current) === itemKey
+          ? { ...current, WorkflowEmailLog: workflowEmailLog }
+          : current
+      );
+      setEmailNotice(`Evaluator email sent again to ${recipient}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not resend the evaluator email.");
+    } finally {
+      setResendingItemKey("");
+    }
+  };
+
   const handleDeleteSubmission = async () => {
     if (!token || !deleteTarget) return;
 
@@ -1602,6 +1716,11 @@ export default function ApprovalDashboard() {
             {error}
           </div>
         )}
+        {emailNotice && (
+          <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: 12, color: "#065F46", marginBottom: 16 }}>
+            {emailNotice}
+          </div>
+        )}
 
         {/* Category tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -1865,7 +1984,12 @@ export default function ApprovalDashboard() {
               {filteredItems.length === 0 ? (
                 <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions</div>
               ) : (
-                pagedItems.map((item) => (
+                pagedItems.map((item) => {
+                  const itemKey = getPendingItemKey(item);
+                  const currentLayerNumber = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || 1;
+                  const emailStatus = getWorkflowEmailStatus(item.WorkflowEmailLog, currentLayerNumber);
+                  const isEvaluationItem = itemCurrentTypes[itemKey] === "evaluation";
+                  return (
                   <div
                     key={getPendingItemKey(item)}
                     onClick={() => loadItemDetails(item)}
@@ -1888,6 +2012,24 @@ export default function ApprovalDashboard() {
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>
                           {formatLayerProgress(item)}
                         </div>
+                        {isEvaluationItem && (
+                          <div
+                            title={emailStatus.status === "not_sent"
+                              ? "No evaluator email delivery has been recorded."
+                              : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
+                            style={{
+                              display: "inline-flex", alignItems: "center", marginTop: 6,
+                              fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+                              background: emailStatus.status === "sent" ? C.greenPale
+                                : emailStatus.status === "failed" ? C.redPale : "#F3F4F6",
+                              color: emailStatus.status === "sent" ? "#065F46"
+                                : emailStatus.status === "failed" ? "#991B1B" : C.textSecond,
+                            }}
+                          >
+                            {emailStatus.status === "sent" ? "Evaluator email sent"
+                              : emailStatus.status === "failed" ? "Evaluator email failed" : "Evaluator email not sent"}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         {item.PdfUrl && (
@@ -1932,10 +2074,30 @@ export default function ApprovalDashboard() {
                         >
                           <DeleteIcon style={{ fontSize: 15 }} />
                         </button>
+                        {isEvaluationItem && (isAdmin || isSuperuser) && (
+                          <button
+                            title="Force resend evaluator email"
+                            aria-label={`Force resend evaluator email for ${item.Title} submission ${item.Id}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleForceResend(item);
+                            }}
+                            disabled={resendingItemKey === itemKey}
+                            style={{
+                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
+                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              cursor: resendingItemKey === itemKey ? "not-allowed" : "pointer",
+                              opacity: resendingItemKey === itemKey ? 0.55 : 1,
+                            }}
+                          >
+                            <ReplayIcon style={{ fontSize: 15 }} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
             {filteredItems.length > SUBMISSIONS_PER_PAGE && (

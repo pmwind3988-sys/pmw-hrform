@@ -1,6 +1,11 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
+import {
+  deliverWorkflowEmail,
+  sendGraphEmail,
+  type WorkflowEmailContext,
+} from "./_utils/workflowEmail.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -15,16 +20,6 @@ interface ApiResponse {
   end(): void;
 }
 
-function resolveHrFormSender(): string {
-  return (
-    process.env.HR_FORM_EMAIL_FROM_ADDRESS ||
-    process.env.VITE_HR_FORM_EMAIL_FROM_ADDRESS ||
-    process.env.EMAIL_FROM_ADDRESS ||
-    process.env.VITE_EMAIL_FROM_ADDRESS ||
-    ""
-  );
-}
-
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -34,7 +29,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { to, subject, body } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow } = req.body as Record<string, unknown>;
 
   const recipients = typeof to === "string"
     ? [to]
@@ -51,44 +46,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(400).json({ error: "Missing required fields: to, subject, body" });
   }
 
-  const fromAddress = resolveHrFormSender();
-  if (!fromAddress) {
-    return res.status(500).json({
-      error: "HR_FORM_EMAIL_FROM_ADDRESS or EMAIL_FROM_ADDRESS not configured. Set it to a mail-enabled user. " +
-        "The Azure AD app registration also needs the 'Mail.Send' application permission (granted by admin).",
-    });
-  }
-
   try {
     const token = await getGraphToken();
-
-    const graphRes = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromAddress)}/sendMail`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: {
-            subject,
-            body: {
-              contentType: "HTML",
-              content: body,
-            },
-            toRecipients: recipients.map((r: string) => ({
-              emailAddress: { address: r },
-            })),
-          },
-          saveToSentItems: false,
-        }),
-      }
-    );
-
-    if (!graphRes.ok) {
-      const errText = await graphRes.text();
-      throw new Error(`Graph sendMail failed ${graphRes.status}: ${errText}`);
+    const message = { to: recipients, subject, body };
+    if (
+      workflow &&
+      typeof workflow === "object" &&
+      typeof (workflow as Record<string, unknown>).listTitle === "string" &&
+      (typeof (workflow as Record<string, unknown>).responseItemId === "string" ||
+        typeof (workflow as Record<string, unknown>).responseItemId === "number") &&
+      typeof (workflow as Record<string, unknown>).layer === "number"
+    ) {
+      await deliverWorkflowEmail(token, message, workflow as unknown as WorkflowEmailContext);
+    } else {
+      await sendGraphEmail(token, message);
     }
 
     return res.status(200).json({ ok: true });

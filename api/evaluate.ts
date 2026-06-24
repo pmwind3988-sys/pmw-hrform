@@ -1,6 +1,11 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
-import { logError } from "./_utils/logger.js";
+import { logError, logWarn } from "./_utils/logger.js";
+import {
+  buildWorkflowActionEmail,
+  deliverWorkflowEmail,
+  getApplicationBaseUrl,
+} from "./_utils/workflowEmail.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -24,7 +29,7 @@ function rejectedAtLayerStatus(layerNumber: number): string {
 
 const SYSTEM_FIELDS = new Set([
   "id", "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData",
+  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowEmailLog",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch",
@@ -459,6 +464,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // 3. Build update payload based on action
     const updates: Record<string, unknown> = {};
+    let notificationNextLayer: Record<string, unknown> | undefined;
     const now = new Date().toISOString();
 
     if (action === "approve" || action === "confirm") {
@@ -488,6 +494,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const sortedLayers = [...activeLayers].sort((a, b) => Number(a.layerNumber) - Number(b.layerNumber));
       const currentIndex = sortedLayers.findIndex((candidate) => candidate.layerNumber === layerNumber);
       const nextLayer = currentIndex >= 0 ? sortedLayers[currentIndex + 1] : sortedLayers.find((candidate) => Number(candidate.layerNumber) > layerNumber);
+      notificationNextLayer = nextLayer;
       if (nextLayer) {
         updates.CurrentLayer = nextLayer.layerNumber;
         updates.CurrentApprovalLayer = nextLayer.layerNumber;
@@ -514,6 +521,46 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // 4. Update the response item
     await updateListItemFields(graphToken, responseListName, responseItem.id, updates);
+
+    if (notificationNextLayer) {
+      const nextLayerNumber = Number(notificationNextLayer.layerNumber);
+      const recipient = String(responseItem.fields[`L${nextLayerNumber}_Email`] || "").trim();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+        const appBaseUrl = getApplicationBaseUrl();
+        const formSlug = String(formConfig.Slug || "").trim();
+        const publicToken = String(notificationNextLayer.publicToken || "").trim();
+        const reviewLink = notificationNextLayer.authMode === "public" && publicToken
+          ? `${appBaseUrl}/eval/${encodeURIComponent(publicToken)}?item=${safeResponseItemId}`
+          : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${safeResponseItemId}/${nextLayerNumber}`;
+        try {
+          await deliverWorkflowEmail(
+            graphToken,
+            buildWorkflowActionEmail({
+              formTitle,
+              submittedBy: String(responseItem.fields.SubmittedBy || "Public respondent"),
+              responseItemId: safeResponseItemId,
+              layer: nextLayerNumber,
+              totalLayers: activeLayers.length,
+              recipient,
+              layerType: notificationNextLayer.type === "evaluation" ? "evaluation" : "approval",
+              reviewLink,
+            }),
+            {
+              listTitle: responseListName,
+              responseItemId: responseItem.id,
+              layer: nextLayerNumber,
+            },
+          );
+        } catch (emailError) {
+          logWarn("api:evaluate", "Next workflow email delivery failed", {
+            formTitle,
+            responseItemId: safeResponseItemId,
+            layer: nextLayerNumber,
+            errorMessage: emailError instanceof Error ? emailError.message : String(emailError),
+          });
+        }
+      }
+    }
 
     return res.status(200).json({ success: true });
   } catch (err) {
