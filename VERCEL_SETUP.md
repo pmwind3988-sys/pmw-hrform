@@ -37,6 +37,7 @@ The API functions need these env vars to authenticate with SharePoint via client
 | `SYSTEM_CLIENT_ID` | App registration Client ID (app-only) |
 | `SYSTEM_CLIENT_SECRET` | App registration Client Secret |
 | `API_SECRET_KEY` / `VITE_API_SECRET_KEY` | Shared API key for frontend-to-API calls |
+| `CRON_SECRET` | Server-only bearer secret used by Vercel Cron for scheduled evaluator emails |
 | `HR_FORM_EMAIL_FROM_ADDRESS` | Mail-enabled sender for HR form workflow and approval emails |
 | `JOB_APPLICATION_EMAIL_FROM_ADDRESS` | Mail-enabled sender for job application emails |
 | `HR_RECRUITMENT_EMAIL` | Recipient mailbox for job application notifications |
@@ -152,6 +153,7 @@ In Vercel Dashboard → Project Settings → Environment Variables, add:
 - `SYSTEM_CLIENT_SECRET`
 - `API_SECRET_KEY`
 - `VITE_API_SECRET_KEY`
+- `CRON_SECRET`
 - `HR_FORM_EMAIL_FROM_ADDRESS`
 - `JOB_APPLICATION_EMAIL_FROM_ADDRESS`
 - `HR_RECRUITMENT_EMAIL`

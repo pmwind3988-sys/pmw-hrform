@@ -23,7 +23,7 @@ import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { rowsToHtml, getDynamicMatrixFields } from "../utils/DynamicMatrix";
-import { registerSignaturePad } from "../utils/SignaturePad";
+import { registerSignaturePad, SignatureCapture } from "../utils/SignaturePad";
 import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
 import Logo from "../components/Logo";
@@ -63,7 +63,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
 
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
-      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowEmailLog',
+      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowEmailLog','WorkflowEmailSchedule',
       'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -156,7 +156,7 @@ function valueToText(value: unknown): string {
 
 const SYSTEM_FIELDS = new Set([
   "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowEmailLog",
+  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch",
@@ -291,7 +291,7 @@ export default function EvaluationPage() {
 
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
-  const [signatureData] = useState<string | null>(null);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
   const [checkboxApproved, setCheckboxApproved] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
 
@@ -577,6 +577,7 @@ export default function EvaluationPage() {
         ...(nextApproverEmail ? { nextApproverEmail } : {}),
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
+        ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),
       });
 
       setActionState("success");
@@ -922,9 +923,7 @@ export default function EvaluationPage() {
                   <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
                     Signature
                   </div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecond, fontStyle: "italic" }}>
-                    Signature pad will be rendered here.
-                  </div>
+                  <SignatureCapture value={signatureData} onChange={setSignatureData} disabled={actionState === "submitting"} />
                 </div>
               )}
 
@@ -981,10 +980,10 @@ export default function EvaluationPage() {
                     <button
                       className="eval-action-button"
                       onClick={() => handleSubmit("approve")}
-                      style={{ ...btnPrimary, opacity: actionState === "submitting" || (isCheckboxMode && !checkboxApproved) ? 0.6 : 1 }}
-                      disabled={actionState === "submitting" || (isCheckboxMode && !checkboxApproved)}
+                      style={{ ...btnPrimary, opacity: actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData) ? 0.6 : 1 }}
+                      disabled={actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData)}
                     >
-                      {actionState === "submitting" ? "Submitting..." : "Approve"}
+                      {actionState === "submitting" ? "Submitting..." : isSignatureRequired && !signatureData ? "Signature required" : "Approve"}
                     </button>
                     <button className="eval-action-button" onClick={() => handleSubmit("reject")} style={btnOutline} disabled={actionState === "submitting"}>
                       Reject

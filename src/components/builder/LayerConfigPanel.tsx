@@ -20,6 +20,7 @@ import type {
   LayerConfigItem,
   ApprovalLayerConfig,
   EvaluationLayerConfig,
+  EvaluationEmailSchedule,
   AuthMode,
   ConfirmationType,
   ManualBranch,
@@ -569,6 +570,59 @@ export default function LayerConfigPanel({
     </div>
   );
 
+  const renderEvaluationEmailSchedule = (
+    layer: EvaluationLayerConfig,
+    onPatch: (patch: Partial<EvaluationLayerConfig>) => void,
+  ) => {
+    const schedule = layer.emailSchedule ?? { mode: "immediate" as const };
+    const setMode = (mode: EvaluationEmailSchedule["mode"]) => {
+      onPatch({
+        emailSchedule: mode === "custom_days"
+          ? { mode, customDays: Math.max(1, schedule.customDays ?? 30) }
+          : { mode },
+      });
+    };
+    return (
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 9, background: C.lightGray }}>
+        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
+          Evaluator Email Timing
+        </label>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <button onClick={() => setMode("immediate")} style={TOGGLE_BTN(schedule.mode === "immediate")}>
+            Send right away
+          </button>
+          <button onClick={() => setMode("three_months")} style={TOGGLE_BTN(schedule.mode === "three_months")}>
+            After 3 months
+          </button>
+          <button onClick={() => setMode("custom_days")} style={TOGGLE_BTN(schedule.mode === "custom_days")}>
+            Custom delay
+          </button>
+        </div>
+        {schedule.mode === "custom_days" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 7 }}>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={schedule.customDays ?? 30}
+              onChange={(event) => onPatch({
+                emailSchedule: {
+                  mode: "custom_days",
+                  customDays: Math.max(1, Math.trunc(Number(event.target.value) || 1)),
+                },
+              })}
+              style={{ ...inp, width: 92 }}
+            />
+            <span style={{ fontSize: 10, color: C.textSecond }}>days after this evaluation layer becomes active</span>
+          </div>
+        )}
+        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 5 }}>
+          Admins and Form Builder Superusers can override the date for an individual submission.
+        </div>
+      </div>
+    );
+  };
+
   // ── Render per-layer settings ──────────────────────────────────────────────
   const renderLayerSettings = (layer: LayerConfigItem, idx: number) => {
     const isApproval = layer.type === "approval";
@@ -612,6 +666,7 @@ export default function LayerConfigPanel({
                 tokenExpiresAt: layer.tokenExpiresAt,
                 notifyOnComplete: layer.notifyOnComplete,
                 surveyElements: [],
+                emailSchedule: { mode: "immediate" },
               };
               patchLayer(idx, converted as unknown as Record<string, unknown>);
             }} style={TOGGLE_BTN(isEval)}>Evaluation</button>
@@ -692,6 +747,10 @@ export default function LayerConfigPanel({
         {/* Evaluation-specific: configure form */}
         {isEval && (
           <div>
+            {renderEvaluationEmailSchedule(
+              layer as EvaluationLayerConfig,
+              (patch) => patchLayer(idx, patch),
+            )}
             {evalPickerOpen === idx ? (
               <EvalElementPicker
                 elements={(layer as EvaluationLayerConfig).surveyElements || []}
@@ -815,6 +874,7 @@ export default function LayerConfigPanel({
                 tokenExpiresAt: layer.tokenExpiresAt,
                 notifyOnComplete: layer.notifyOnComplete,
                 surveyElements: [],
+                emailSchedule: { mode: "immediate" },
               };
               patchBranchLayer(bi, li, converted as unknown as Record<string, unknown>);
             }} style={TOGGLE_BTN(isEval)}>Evaluation</button>
@@ -895,6 +955,10 @@ export default function LayerConfigPanel({
         {/* Evaluation-specific: configure form */}
         {isEval && (
           <div>
+            {renderEvaluationEmailSchedule(
+              layer as EvaluationLayerConfig,
+              (patch) => patchBranchLayer(bi, li, patch),
+            )}
             {branchEvalPicker === `${bi}-${li}` ? (
               <EvalElementPicker
                 elements={(layer as EvaluationLayerConfig).surveyElements || []}

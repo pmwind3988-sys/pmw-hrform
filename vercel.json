@@ -3,6 +3,9 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "crons": [
+    { "path": "/api/workflow-email-cron", "schedule": "0 * * * *" }
+  ],
   "rewrites": [
     { "source": "/((?!api/|assets/|favicon|src/|@vite/|@react-refresh|.*\\.).*)", "destination": "/index.html" }
   ],

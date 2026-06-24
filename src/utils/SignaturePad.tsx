@@ -393,6 +393,64 @@ function SignatureModal({
   );
 }
 
+export function SignatureCapture({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+  disabled?: boolean;
+}) {
+  const [modalOpen, setModalOpen] = useState(false);
+  return (
+    <div>
+      {value ? (
+        <div style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 10, padding: 10, background: C.white }}>
+          <img src={value} alt="Captured signature" style={{ display: "block", width: "100%", maxHeight: 150, objectFit: "contain" }} />
+          {!disabled && (
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+              <button type="button" onClick={() => setModalOpen(true)} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.purpleMid}`, background: C.white, color: C.purple, cursor: "pointer", fontWeight: 600 }}>
+                Edit signature
+              </button>
+              <button type="button" onClick={() => onChange(null)} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.red}`, background: C.white, color: C.red, cursor: "pointer", fontWeight: 600 }}>
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setModalOpen(true)}
+          style={{
+            width: "100%", minHeight: 112, borderRadius: 10, border: `2px dashed ${C.purpleMid}`,
+            background: C.purplePale, color: C.purple, cursor: disabled ? "not-allowed" : "pointer",
+            fontSize: 13, fontWeight: 700,
+          }}
+        >
+          Click to sign
+        </button>
+      )}
+      {modalOpen && (
+        <SignatureModal
+          width={600}
+          height={240}
+          penColor="#000000"
+          backgroundColor="#FFFFFF"
+          existingDataUrl={value}
+          onSave={(dataUrl) => {
+            onChange(dataUrl);
+            setModalOpen(false);
+          }}
+          onCancel={() => setModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Main Question Component ────────────────────────────────────────────
 
 function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {

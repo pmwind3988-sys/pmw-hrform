@@ -19,8 +19,9 @@ import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLo
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
 import {
   buildWorkflowActionEmail,
-  deliverWorkflowEmail,
   getApplicationBaseUrl,
+  scheduleOrDeliverWorkflowEmail,
+  type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
 
 // ─── Why SP REST is used for Image / Hyperlink columns ────────────────────────
@@ -75,6 +76,7 @@ interface ApiLayerConfigItem {
   assignee: ApiLayerAssignee;
   title?: string;
   publicToken?: string;
+  emailSchedule?: WorkflowEmailScheduleConfig;
 }
 
 interface ApiLayerConfig {
@@ -1248,7 +1250,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           ? `${appBaseUrl}/eval/${encodeURIComponent(firstLayer.publicToken)}?item=${encodeURIComponent(parentId)}`
           : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${encodeURIComponent(parentId)}/${firstLayer.layerNumber}`;
         try {
-          await deliverWorkflowEmail(
+          await scheduleOrDeliverWorkflowEmail(
             token,
             buildWorkflowActionEmail({
               formTitle: listTitle,
@@ -1264,6 +1266,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               listTitle,
               responseItemId: parentId,
               layer: firstLayer.layerNumber,
+            },
+            firstLayer.type === "evaluation" ? firstLayer.emailSchedule : undefined,
+            {
+              layer: firstLayer.layerNumber,
+              layerType: firstLayer.type,
+              totalLayers: parsedLayerConfig?.layers?.length ?? 1,
+              reviewLink,
+              submittedBy: valueToText(submissionBody.SubmittedBy) || "Public respondent",
             },
           );
         } catch (emailError) {

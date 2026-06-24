@@ -17,6 +17,27 @@ export interface WorkflowEmailEntry {
 }
 
 export type WorkflowEmailLog = Record<string, WorkflowEmailEntry>;
+export type WorkflowEmailScheduleMode = "immediate" | "three_months" | "custom_days";
+export type WorkflowEmailScheduleStatus = "scheduled" | "sending" | "sent" | "failed";
+
+export interface WorkflowEmailScheduleConfig {
+  mode: WorkflowEmailScheduleMode;
+  customDays?: number;
+}
+
+export interface WorkflowEmailScheduleEntry {
+  layer: number;
+  recipient: string;
+  dueAt: string;
+  status: WorkflowEmailScheduleStatus;
+  updatedAt: string;
+  layerType: "approval" | "evaluation";
+  totalLayers: number;
+  reviewLink: string;
+  submittedBy: string;
+}
+
+export type WorkflowEmailScheduleLog = Record<string, WorkflowEmailScheduleEntry>;
 
 interface WorkflowEmailAttempt {
   layer: number;
@@ -59,6 +80,71 @@ function parseWorkflowEmailLog(raw: unknown): WorkflowEmailLog {
   } catch {
     return {};
   }
+}
+
+export function parseWorkflowEmailSchedule(raw: unknown): WorkflowEmailScheduleLog {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as WorkflowEmailScheduleLog;
+  }
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as WorkflowEmailScheduleLog
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function addCalendarMonthsClamped(date: Date, months: number): Date {
+  const result = new Date(date);
+  const targetDay = result.getUTCDate();
+  result.setUTCDate(1);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(
+    result.getUTCFullYear(),
+    result.getUTCMonth() + 1,
+    0,
+  )).getUTCDate();
+  result.setUTCDate(Math.min(targetDay, lastDay));
+  return result;
+}
+
+export function resolveWorkflowEmailDueAt(
+  schedule: WorkflowEmailScheduleConfig | undefined,
+  activatedAt = new Date(),
+): string {
+  if (!schedule || schedule.mode === "immediate") return activatedAt.toISOString();
+  if (schedule.mode === "three_months") {
+    return addCalendarMonthsClamped(activatedAt, 3).toISOString();
+  }
+  const days = Math.max(1, Math.trunc(schedule.customDays ?? 1));
+  const result = new Date(activatedAt);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result.toISOString();
+}
+
+export function setWorkflowEmailSchedule(
+  raw: unknown,
+  entry: WorkflowEmailScheduleEntry,
+): WorkflowEmailScheduleLog {
+  return {
+    ...parseWorkflowEmailSchedule(raw),
+    [String(entry.layer)]: entry,
+  };
+}
+
+export function getDueWorkflowEmailSchedules(
+  raw: unknown,
+  now = new Date(),
+): WorkflowEmailScheduleEntry[] {
+  const nowTime = now.getTime();
+  return Object.values(parseWorkflowEmailSchedule(raw)).filter((entry) => {
+    if (entry.status !== "scheduled") return false;
+    const dueTime = Date.parse(entry.dueAt);
+    return Number.isFinite(dueTime) && dueTime <= nowTime;
+  });
 }
 
 export function recordWorkflowEmailAttempt(
@@ -150,13 +236,65 @@ async function persistWorkflowEmailAttempt(
     String(context.responseItemId),
   );
   const log = recordWorkflowEmailAttempt(item?.fields.WorkflowEmailLog, attempt);
+  const schedule = parseWorkflowEmailSchedule(item?.fields.WorkflowEmailSchedule);
+  const scheduledEntry = schedule[String(context.layer)];
+  const fields: Record<string, unknown> = { WorkflowEmailLog: JSON.stringify(log) };
+  if (scheduledEntry) {
+    fields.WorkflowEmailSchedule = JSON.stringify(setWorkflowEmailSchedule(schedule, {
+      ...scheduledEntry,
+      status: attempt.status,
+      updatedAt: attempt.attemptedAt,
+    }));
+  }
   await updateListItemFields(
     token,
     context.listTitle,
     String(context.responseItemId),
-    { WorkflowEmailLog: JSON.stringify(log) },
+    fields,
   );
   return log[String(context.layer)];
+}
+
+export async function persistWorkflowEmailSchedule(
+  token: string,
+  context: WorkflowEmailContext,
+  entry: WorkflowEmailScheduleEntry,
+): Promise<WorkflowEmailScheduleEntry> {
+  await ensureListColumns(token, context.listTitle, [
+    { name: "WorkflowEmailSchedule", displayName: "WorkflowEmailSchedule", type: "note" },
+    { name: "WorkflowEmailLog", displayName: "WorkflowEmailLog", type: "note" },
+  ]);
+  const item = await queryListItemById(token, context.listTitle, String(context.responseItemId));
+  const schedule = setWorkflowEmailSchedule(item?.fields.WorkflowEmailSchedule, entry);
+  await updateListItemFields(token, context.listTitle, String(context.responseItemId), {
+    WorkflowEmailSchedule: JSON.stringify(schedule),
+  });
+  return schedule[String(entry.layer)];
+}
+
+export async function scheduleOrDeliverWorkflowEmail(
+  token: string,
+  message: WorkflowEmailMessage,
+  context: WorkflowEmailContext,
+  config: WorkflowEmailScheduleConfig | undefined,
+  details: Omit<WorkflowEmailScheduleEntry, "recipient" | "dueAt" | "status" | "updatedAt">,
+): Promise<WorkflowEmailScheduleEntry> {
+  const now = new Date();
+  const recipient = typeof message.to === "string" ? message.to : message.to.join(", ");
+  const entry: WorkflowEmailScheduleEntry = {
+    ...details,
+    layer: context.layer,
+    recipient,
+    dueAt: resolveWorkflowEmailDueAt(config, now),
+    status: "scheduled",
+    updatedAt: now.toISOString(),
+  };
+  await persistWorkflowEmailSchedule(token, context, entry);
+  if (!config || config.mode === "immediate") {
+    await deliverWorkflowEmail(token, message, context);
+    return { ...entry, status: "sent", updatedAt: new Date().toISOString() };
+  }
+  return entry;
 }
 
 export async function deliverWorkflowEmail(

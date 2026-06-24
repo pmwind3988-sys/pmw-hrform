@@ -3,8 +3,9 @@ import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, q
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   buildWorkflowActionEmail,
-  deliverWorkflowEmail,
   getApplicationBaseUrl,
+  scheduleOrDeliverWorkflowEmail,
+  type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
@@ -29,7 +30,7 @@ function rejectedAtLayerStatus(layerNumber: number): string {
 
 const SYSTEM_FIELDS = new Set([
   "id", "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowEmailLog",
+  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch",
@@ -533,7 +534,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           ? `${appBaseUrl}/eval/${encodeURIComponent(publicToken)}?item=${safeResponseItemId}`
           : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${safeResponseItemId}/${nextLayerNumber}`;
         try {
-          await deliverWorkflowEmail(
+          await scheduleOrDeliverWorkflowEmail(
             graphToken,
             buildWorkflowActionEmail({
               formTitle,
@@ -549,6 +550,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               listTitle: responseListName,
               responseItemId: responseItem.id,
               layer: nextLayerNumber,
+            },
+            notificationNextLayer.type === "evaluation"
+              ? notificationNextLayer.emailSchedule as WorkflowEmailScheduleConfig | undefined
+              : undefined,
+            {
+              layer: nextLayerNumber,
+              layerType: notificationNextLayer.type === "evaluation" ? "evaluation" : "approval",
+              totalLayers: activeLayers.length,
+              reviewLink,
+              submittedBy: String(responseItem.fields.SubmittedBy || "Public respondent"),
             },
           );
         } catch (emailError) {

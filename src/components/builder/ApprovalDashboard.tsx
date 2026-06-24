@@ -11,7 +11,7 @@ import { FlatLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
-import { registerSignaturePad } from "../../utils/SignaturePad";
+import { registerSignaturePad, SignatureCapture } from "../../utils/SignaturePad";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
@@ -24,6 +24,11 @@ import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotal
 import { getSelectedCompany } from "../../utils/companySelection";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
+import {
+  getScheduledWorkflowEmail,
+  isValidFutureScheduleDate,
+  setScheduledWorkflowEmail,
+} from "../../utils/workflowEmailSchedule";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
@@ -76,6 +81,7 @@ interface PendingItem {
   PdfUrl?: string;
   EvaluationData?: string;
   WorkflowEmailLog?: string;
+  WorkflowEmailSchedule?: string;
   SelectedBranch?: string;
   totalLayers?: number;
 }
@@ -129,7 +135,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
 
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
-      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowEmailLog',
+      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowEmailLog','WorkflowEmailSchedule',
       'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -191,6 +197,11 @@ function formatDateTime(d: string | undefined | null): string {
   } catch {
     return d;
   }
+}
+
+function toDateTimeLocalValue(date: Date): string {
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -498,7 +509,12 @@ export default function ApprovalDashboard() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [resendingItemKey, setResendingItemKey] = useState("");
   const [emailNotice, setEmailNotice] = useState("");
+  const [customEmailDate, setCustomEmailDate] = useState("");
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [pdfRegeneratingItemKey, setPdfRegeneratingItemKey] = useState("");
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
+  const [currentLayerConfig, setCurrentLayerConfig] = useState<LayerConfigItem | null>(null);
+  const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [evalSurveyModel, setEvalSurveyModel] = useState<Model | null>(null);
   const [evalValid, setEvalValid] = useState(true);
   const [actionSuccess, setActionSuccess] = useState<{
@@ -701,6 +717,24 @@ export default function ApprovalDashboard() {
                   // Column may not exist on older lists until the first delivery attempt.
                 }
               };
+              const attachWorkflowEmailSchedules = async (itemsToUpdate: PendingItem[]): Promise<void> => {
+                try {
+                  const scheduleData = await spGet(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,WorkflowEmailSchedule&$orderby=Created desc&$top=100`
+                  ) as { value?: { Id: number; WorkflowEmailSchedule?: string }[] };
+                  const scheduleMap = new Map(
+                    (scheduleData.value ?? [])
+                      .filter((current) => !!current.WorkflowEmailSchedule)
+                      .map((current) => [current.Id, current.WorkflowEmailSchedule as string]),
+                  );
+                  for (const current of itemsToUpdate) {
+                    const workflowEmailSchedule = scheduleMap.get(current.Id);
+                    if (workflowEmailSchedule) current.WorkflowEmailSchedule = workflowEmailSchedule;
+                  }
+                } catch {
+                  // Column may not exist on older lists until scheduling is configured.
+                }
+              };
 
               // Tier 1: core columns only (no CurrentLayer/SelectedBranch — may not exist on older lists)
               const tier1 = await (async () => {
@@ -743,6 +777,7 @@ export default function ApprovalDashboard() {
                   }
                 } catch { /* column may not exist */ }
                 await attachWorkflowEmailLogs(tier1.value || []);
+                await attachWorkflowEmailSchedules(tier1.value || []);
                 // SelectedBranch (only if the form has manual branches)
                 if (hasBranches) {
                   try {
@@ -773,6 +808,7 @@ export default function ApprovalDashboard() {
               })();
               if (tier2) {
                 await attachWorkflowEmailLogs(tier2.value || []);
+                await attachWorkflowEmailSchedules(tier2.value || []);
                 return tier2;
               }
 
@@ -789,6 +825,7 @@ export default function ApprovalDashboard() {
                   ...item, FormStatus: '', CurrentLayer: 0, L1_Status: '',
                 })) as PendingItem[];
                 await attachWorkflowEmailLogs(tier3Items);
+                await attachWorkflowEmailSchedules(tier3Items);
                 return { value: tier3Items };
               }
 
@@ -804,6 +841,7 @@ export default function ApprovalDashboard() {
                   FormVersion: '', FormStatus: '', Status: '', CurrentLayer: 0, L1_Status: '',
                 })) as PendingItem[];
               await attachWorkflowEmailLogs(basicItems);
+              await attachWorkflowEmailSchedules(basicItems);
               return { value: basicItems };
             })();
 
@@ -850,6 +888,7 @@ export default function ApprovalDashboard() {
     'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
     'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
     'WorkflowEmailLog',
+    'WorkflowEmailSchedule',
     'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
     'Author','Editor','Created','Modified','ContentType','PermMask',
     'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -866,10 +905,13 @@ export default function ApprovalDashboard() {
     setSurveyJson(null);
     setResponseData(null);
     setCurrentLayerType(null);
+    setCurrentLayerConfig(null);
+    setApprovalSignature(null);
     setEvalSurveyModel(null);
     setEvalValid(true);
     setCompletedLayers({});
     setSelectedLayerAccess(null);
+    setCustomEmailDate("");
 
     try {
       // Get form config
@@ -955,6 +997,7 @@ export default function ApprovalDashboard() {
           FormStatus: valueToText(respItem.FormStatus) || item.FormStatus,
           Status: valueToText(respItem.Status) || item.Status,
           WorkflowEmailLog: valueToText(respItem.WorkflowEmailLog) || item.WorkflowEmailLog,
+          WorkflowEmailSchedule: valueToText(respItem.WorkflowEmailSchedule) || item.WorkflowEmailSchedule,
         };
         setSelectedItem(detailItem);
         if (masterLayerCfg?.manualBranches?.length && detailItem.SelectedBranch && pendingBranch) {
@@ -989,6 +1032,7 @@ export default function ApprovalDashboard() {
 
         const activeConfig = versionLayerCfg || masterLayerCfg || formLayerConfigsRef.current[item.Title];
         const currentResolution = resolveCurrentLayer(activeConfig, detailItem);
+        setCurrentLayerConfig(currentResolution.currentLayer ?? null);
         const currentLayerNumber = currentResolution.currentLayerNumber;
         const assignedEmail = normalizeEmailAddress(respItem[`L${currentLayerNumber}_Email`]);
         const signedInEmail = normalizeEmailAddress(accounts[0]?.username);
@@ -1047,6 +1091,7 @@ export default function ApprovalDashboard() {
 
         if (pendingBranch) {
           setCurrentLayerType(null);
+          setCurrentLayerConfig(null);
           setEvalSurveyModel(null);
           return;
         }
@@ -1186,6 +1231,7 @@ export default function ApprovalDashboard() {
         nextApproverEmail,
         ...(nextLayerConfig?.type ? { nextLayerType: nextLayerConfig.type } : {}),
         ...(nextLayerConfig?.layerNumber ? { nextLayerNumber: nextLayerConfig.layerNumber } : {}),
+        ...(nextLayerConfig?.type === "evaluation" ? { nextEmailSchedule: nextLayerConfig.emailSchedule } : {}),
         pdfUrl,
       });
 
@@ -1282,6 +1328,7 @@ export default function ApprovalDashboard() {
           action: "submit",
           nextApproverEmail: firstApproverEmail,
           ...(bLayers[0]?.type ? { nextLayerType: bLayers[0].type } : {}),
+          ...(bLayers[0]?.type === "evaluation" ? { nextEmailSchedule: bLayers[0].emailSchedule } : {}),
           reviewLink: `${window.location.origin}/admin/submissions?form=${encodeURIComponent(listName)}&item=${respId}`,
         });
       }
@@ -1358,17 +1405,18 @@ export default function ApprovalDashboard() {
 
       const refreshed = await spGet(
         token,
-        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=WorkflowEmailLog`
-      ) as { WorkflowEmailLog?: string };
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=WorkflowEmailLog,WorkflowEmailSchedule`
+      ) as { WorkflowEmailLog?: string; WorkflowEmailSchedule?: string };
       const workflowEmailLog = valueToText(refreshed.WorkflowEmailLog);
+      const workflowEmailSchedule = valueToText(refreshed.WorkflowEmailSchedule);
       setPendingItems((previous) => previous.map((current) =>
         getPendingItemKey(current) === itemKey
-          ? { ...current, WorkflowEmailLog: workflowEmailLog }
+          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule }
           : current
       ));
       setSelectedItem((current) =>
         current && getPendingItemKey(current) === itemKey
-          ? { ...current, WorkflowEmailLog: workflowEmailLog }
+          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule }
           : current
       );
       setEmailNotice(`Evaluator email sent again to ${recipient}.`);
@@ -1376,6 +1424,107 @@ export default function ApprovalDashboard() {
       setError(error instanceof Error ? error.message : "Could not resend the evaluator email.");
     } finally {
       setResendingItemKey("");
+    }
+  };
+
+  const handleSaveCustomEmailDate = async () => {
+    if (!token || !selectedItem || (!isAdmin && !isSuperuser)) return;
+    if (!isValidFutureScheduleDate(customEmailDate)) {
+      setError("Evaluator email date must be now or later.");
+      return;
+    }
+    setScheduleSaving(true);
+    setError("");
+    setEmailNotice("");
+    try {
+      const itemKey = getPendingItemKey(selectedItem);
+      const rawItem = await spGet(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`
+      ) as Record<string, unknown>;
+      const currentLayerNumber = Number(rawItem.CurrentLayer || rawItem.CurrentApprovalLayer || selectedItem.CurrentLayer || selectedItem.CurrentApprovalLayer || 0);
+      const configSource = itemLayerConfigsRef.current[itemKey] || formLayerConfigsRef.current[selectedItem.Title];
+      const activeLayers = getActiveLayers(configSource, valueToText(rawItem.SelectedBranch) || selectedItem.SelectedBranch);
+      const currentLayer = activeLayers.find((layer) => layer.layerNumber === currentLayerNumber);
+      if (!currentLayer || currentLayer.type !== "evaluation") {
+        throw new Error("Only the active evaluation layer can be scheduled.");
+      }
+
+      let recipient = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
+      if (!EMAIL_RE.test(recipient)) {
+        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
+        if (resolved.error) throw new Error(resolved.error);
+        recipient = resolved.email;
+      }
+      if (!EMAIL_RE.test(recipient)) throw new Error("The active evaluation layer has no valid evaluator email.");
+
+      const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
+      const publicToken = currentLayer.publicToken || "";
+      const formSlug = valueToText(cfg?.Slug);
+      const reviewLink = currentLayer.authMode === "public" && publicToken
+        ? `${window.location.origin}/eval/${encodeURIComponent(publicToken)}?item=${selectedItem.Id}`
+        : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${selectedItem.Id}/${currentLayerNumber}`;
+      const updatedAt = new Date().toISOString();
+      const schedule = setScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, {
+        layer: currentLayerNumber,
+        recipient,
+        dueAt: new Date(customEmailDate).toISOString(),
+        status: "scheduled",
+        updatedAt,
+        layerType: "evaluation",
+        totalLayers: activeLayers.length || selectedItem.totalLayers || currentLayerNumber,
+        reviewLink,
+        submittedBy: selectedItem.SubmittedBy,
+      });
+      await ensureWorkflowColumns(token, selectedItem.Title, activeLayers.length || currentLayerNumber);
+      await spPatch(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`,
+        {
+          [`L${currentLayerNumber}_Email`]: recipient,
+          WorkflowEmailSchedule: JSON.stringify(schedule),
+        },
+      );
+      const serialized = JSON.stringify(schedule);
+      setPendingItems((previous) => previous.map((current) =>
+        getPendingItemKey(current) === itemKey
+          ? { ...current, WorkflowEmailSchedule: serialized }
+          : current
+      ));
+      setSelectedItem((current) => current ? { ...current, WorkflowEmailSchedule: serialized } : current);
+      setEmailNotice(`Evaluator email scheduled for ${formatDateTime(new Date(customEmailDate).toISOString())}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not schedule the evaluator email.");
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
+  const handleRegeneratePdf = async (item: PendingItem) => {
+    if (!token || (!isAdmin && !isSuperuser)) return;
+    const itemKey = getPendingItemKey(item);
+    setPdfRegeneratingItemKey(itemKey);
+    setError("");
+    setEmailNotice("");
+    try {
+      const pdfData = await loadPdfData(item, token);
+      if (!pdfData) throw new Error("Could not load the submission data needed to rebuild the PDF.");
+      pdfData.meta.formStatus = item.FormStatus || item.Status || "submitted";
+      const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
+      const pdfUrl = await generateAndStorePdf(token, item.Title, item.Id, pdfData, {
+        replaceExistingPdfUrl: item.PdfUrl,
+      });
+      setPendingItems((previous) => previous.map((current) =>
+        getPendingItemKey(current) === itemKey ? { ...current, PdfUrl: pdfUrl } : current
+      ));
+      setSelectedItem((current) =>
+        current && getPendingItemKey(current) === itemKey ? { ...current, PdfUrl: pdfUrl } : current
+      );
+      setEmailNotice("PDF rebuilt and replaced successfully.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not rebuild the PDF.");
+    } finally {
+      setPdfRegeneratingItemKey("");
     }
   };
 
@@ -1467,6 +1616,10 @@ export default function ApprovalDashboard() {
 
     setActionLoading(true);
     try {
+      const requiresSignature = currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature";
+      if (requiresSignature && !approvalSignature) {
+        throw new Error("A signature is required before approving this layer.");
+      }
       const currentLayer = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
       await assertSubmissionLayerCanAct(token, selectedItem, currentLayer);
       let branchLayers: LayerConfigItem[] | null = null;
@@ -1532,6 +1685,7 @@ export default function ApprovalDashboard() {
       // Also update enhanced L{n}_Status so the PDF reflects the correct status
       patchBody[`L${currentLayer}_Status`] = SP_LAYER_STATUS.APPROVED;
       patchBody[`L${currentLayer}_SignedAt`] = new Date().toISOString();
+      if (approvalSignature) patchBody[`L${currentLayer}_Signature`] = approvalSignature;
       await spPatch(
         token,
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
@@ -1564,6 +1718,7 @@ export default function ApprovalDashboard() {
         nextApproverEmail,
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
+        ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),
         pdfUrl,
       });
 
@@ -1988,6 +2143,8 @@ export default function ApprovalDashboard() {
                   const itemKey = getPendingItemKey(item);
                   const currentLayerNumber = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || 1;
                   const emailStatus = getWorkflowEmailStatus(item.WorkflowEmailLog, currentLayerNumber);
+                  const emailSchedule = getScheduledWorkflowEmail(item.WorkflowEmailSchedule, currentLayerNumber);
+                  const hasPendingEmailSchedule = emailSchedule?.status === "scheduled";
                   const isEvaluationItem = itemCurrentTypes[itemKey] === "evaluation";
                   return (
                   <div
@@ -2012,22 +2169,33 @@ export default function ApprovalDashboard() {
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>
                           {formatLayerProgress(item)}
                         </div>
-                        {isEvaluationItem && (
+                        {isEvaluationItem && (isAdmin || isSuperuser) && (
                           <div
-                            title={emailStatus.status === "not_sent"
-                              ? "No evaluator email delivery has been recorded."
+                            title={hasPendingEmailSchedule
+                              ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                              : emailStatus.status === "not_sent"
+                              ? emailSchedule
+                                ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                                : "No evaluator email delivery has been recorded."
                               : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
                             style={{
                               display: "inline-flex", alignItems: "center", marginTop: 6,
                               fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
-                              background: emailStatus.status === "sent" ? C.greenPale
-                                : emailStatus.status === "failed" ? C.redPale : "#F3F4F6",
-                              color: emailStatus.status === "sent" ? "#065F46"
-                                : emailStatus.status === "failed" ? "#991B1B" : C.textSecond,
+                              background: hasPendingEmailSchedule ? C.amberPale
+                                : emailStatus.status === "sent" ? C.greenPale
+                                : emailStatus.status === "failed" ? C.redPale
+                                  : emailSchedule ? C.amberPale : "#F3F4F6",
+                              color: hasPendingEmailSchedule ? "#92400E"
+                                : emailStatus.status === "sent" ? "#065F46"
+                                : emailStatus.status === "failed" ? "#991B1B"
+                                  : emailSchedule ? "#92400E" : C.textSecond,
                             }}
                           >
-                            {emailStatus.status === "sent" ? "Evaluator email sent"
-                              : emailStatus.status === "failed" ? "Evaluator email failed" : "Evaluator email not sent"}
+                            {hasPendingEmailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
+                              : emailStatus.status === "sent" ? "Evaluator email sent"
+                              : emailStatus.status === "failed" ? "Evaluator email failed"
+                                : emailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
+                                  : "Evaluator email not sent"}
                           </div>
                         )}
                       </div>
@@ -2074,6 +2242,25 @@ export default function ApprovalDashboard() {
                         >
                           <DeleteIcon style={{ fontSize: 15 }} />
                         </button>
+                        {(isAdmin || isSuperuser) && (
+                          <button
+                            title={item.PdfUrl ? "Rebuild and replace PDF" : "Generate PDF"}
+                            aria-label={`${item.PdfUrl ? "Rebuild" : "Generate"} PDF for ${item.Title} submission ${item.Id}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleRegeneratePdf(item);
+                            }}
+                            disabled={pdfRegeneratingItemKey === itemKey}
+                            style={{
+                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
+                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              cursor: pdfRegeneratingItemKey === itemKey ? "not-allowed" : "pointer",
+                              opacity: pdfRegeneratingItemKey === itemKey ? 0.55 : 1,
+                            }}
+                          >
+                            <DescriptionIcon style={{ fontSize: 15 }} />
+                          </button>
+                        )}
                         {isEvaluationItem && (isAdmin || isSuperuser) && (
                           <button
                             title="Force resend evaluator email"
@@ -2163,6 +2350,59 @@ export default function ApprovalDashboard() {
                         );
                         return branch?.label || selectedItem.SelectedBranch;
                       } catch { return selectedItem.SelectedBranch; }})()}
+                    </div>
+                  )}
+                  {currentLayerType === "evaluation" && (isAdmin || isSuperuser) && (
+                    <div style={{ marginTop: 12, padding: 12, borderRadius: 9, border: `1px solid ${C.purpleMid}`, background: C.purplePale }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Evaluator email controls</div>
+                      <div style={{ fontSize: 11, color: C.textSecond, marginTop: 3 }}>
+                        {(() => {
+                          const layerNumber = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
+                          const delivery = getWorkflowEmailStatus(selectedItem.WorkflowEmailLog, layerNumber);
+                          const schedule = getScheduledWorkflowEmail(selectedItem.WorkflowEmailSchedule, layerNumber);
+                          if (schedule?.status === "scheduled") return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
+                          if (delivery.status === "sent") return `Sent to ${delivery.recipient} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)} (${delivery.attempts} attempt${delivery.attempts === 1 ? "" : "s"}).`;
+                          if (delivery.status === "failed") return `Last send failed on ${formatDateTime(delivery.lastAttemptAt)}.`;
+                          if (schedule) return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
+                          return "No evaluator email has been sent or scheduled.";
+                        })()}
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 9 }}>
+                        <input
+                          type="datetime-local"
+                          value={customEmailDate}
+                          min={toDateTimeLocalValue(new Date())}
+                          onChange={(event) => setCustomEmailDate(event.target.value)}
+                          style={{ padding: "7px 9px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 11, background: "#fff" }}
+                        />
+                        <button
+                          onClick={() => void handleSaveCustomEmailDate()}
+                          disabled={scheduleSaving || !customEmailDate}
+                          style={{
+                            padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
+                            background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
+                            cursor: scheduleSaving || !customEmailDate ? "not-allowed" : "pointer",
+                            opacity: scheduleSaving || !customEmailDate ? 0.55 : 1,
+                          }}
+                        >
+                          {scheduleSaving ? "Saving..." : "Set custom date"}
+                        </button>
+                        <button
+                          onClick={() => void handleForceResend(selectedItem)}
+                          disabled={resendingItemKey === getPendingItemKey(selectedItem)}
+                          style={{
+                            padding: "7px 11px", borderRadius: 7, border: "none",
+                            background: C.purple, color: "#fff", fontSize: 11, fontWeight: 700,
+                            cursor: resendingItemKey === getPendingItemKey(selectedItem) ? "not-allowed" : "pointer",
+                            opacity: resendingItemKey === getPendingItemKey(selectedItem) ? 0.55 : 1,
+                          }}
+                        >
+                          Send now / resend
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 5 }}>
+                        Custom dates must be now or later. Send now works even after a successful delivery.
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2278,6 +2518,18 @@ export default function ApprovalDashboard() {
                   </div>
                 )}
 
+                {currentLayerConfig?.type === "approval" &&
+                  currentLayerConfig.confirmationType === "signature" &&
+                  getItemStatus(selectedItem) === "pending" &&
+                  !isCurrentLayerTerminal(selectedItem, completedLayers) && (
+                    <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 10 }}>
+                        Approval signature
+                      </div>
+                      <SignatureCapture value={approvalSignature} onChange={setApprovalSignature} disabled={actionLoading} />
+                    </div>
+                  )}
+
                 <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, display: "flex", gap: 12 }}>
                   {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
                     <button onClick={handleEvaluationSubmit} disabled={actionLoading || (!!evalSurveyModel && !evalValid)}
@@ -2288,11 +2540,12 @@ export default function ApprovalDashboard() {
                     </button>
                   ) : getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
                     <>
-                      <button onClick={handleApprove} disabled={actionLoading}
+                      <button onClick={handleApprove} disabled={actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature)}
                         style={{ flex: 1, padding: "12px 16px", borderRadius: 8, border: "none",
                           background: C.green, color: "#fff", fontWeight: 600,
-                          cursor: actionLoading ? "not-allowed" : "pointer", opacity: actionLoading ? 0.6 : 1 }}>
-                        ✓ Approve
+                          cursor: actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature) ? "not-allowed" : "pointer",
+                          opacity: actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature) ? 0.6 : 1 }}>
+                        {currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature ? "Signature required" : "✓ Approve"}
                       </button>
                       <button onClick={() => setShowRejectDialog(true)} disabled={actionLoading}
                         style={{ flex: 1, padding: "12px 16px", borderRadius: 8,
@@ -2302,12 +2555,28 @@ export default function ApprovalDashboard() {
                       </button>
                     </>
                   ) : (
-                    <div style={{ flex: 1, textAlign: "center", color: C.textMuted, fontSize: 13 }}>
-                      {getItemDisplayStatus(selectedItem)} — {selectedItem.PdfUrl ? (
-                        <a href={selectedItem.PdfUrl.startsWith("http") ? selectedItem.PdfUrl : `${new URL(SP_SITE_URL).origin}${selectedItem.PdfUrl}`}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{ color: C.purple, fontWeight: 600 }}>View PDF</a>
-                      ) : "No PDF available"}
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap", color: C.textMuted, fontSize: 13 }}>
+                      <span>
+                        {getItemDisplayStatus(selectedItem)} — {selectedItem.PdfUrl ? (
+                          <a href={selectedItem.PdfUrl.startsWith("http") ? selectedItem.PdfUrl : `${new URL(SP_SITE_URL).origin}${selectedItem.PdfUrl}`}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{ color: C.purple, fontWeight: 600 }}>View PDF</a>
+                        ) : "No PDF available"}
+                      </span>
+                      {(isAdmin || isSuperuser) && (
+                        <button
+                          onClick={() => void handleRegeneratePdf(selectedItem)}
+                          disabled={pdfRegeneratingItemKey === getPendingItemKey(selectedItem)}
+                          style={{
+                            padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
+                            background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
+                            cursor: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "not-allowed" : "pointer",
+                            opacity: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? 0.55 : 1,
+                          }}
+                        >
+                          {pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "Rebuilding..." : "Rebuild PDF"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

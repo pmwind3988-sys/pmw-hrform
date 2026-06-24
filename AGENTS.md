@@ -30,7 +30,7 @@ npx vitest run     # ~77 unit tests in src/utils/__tests__/FormBuilderEngine.tes
 - `@react-pdf/renderer` — generates PDF on client side. `src/utils/generateFormPdf.ts` handles PDF creation flow.
 - `react-dnd` v16 (HTML5 backend) — drag-drop canvas in form builder.
 - **API**: Vercel serverless functions in `api/` — **not Express**. Graph API client (`api/_utils/graphClient.ts`) for all list operations. No SP REST SDK — raw `fetch` to `graph.microsoft.com`.
-- **API auth**: All 8 API routes (`form-config`, `submit-form`, `evaluate`, `jobs-list`, `job-apply`, `job-admin`, `send-email`, `dashboard-background`) require `X-Api-Key` header matching `API_SECRET_KEY` env var. Validated by `api/_utils/auth.ts`. Frontend sends via `VITE_API_SECRET_KEY` (same value, compiled into bundle).
+- **API auth**: Frontend-facing API routes require `X-Api-Key` matching `API_SECRET_KEY`. The scheduled `workflow-email-cron` route accepts Vercel's `Authorization: Bearer CRON_SECRET` header or the normal API key for manual verification.
 - **Security**: CORS restricted, CSP set, API auth enforced, error messages sanitized server-side, `encodeURIComponent` on all Graph API path params.
 - Other notable deps: `dompurify` (HTML sanitization), `qrcode`, `libphonenumber-js`.
 
@@ -144,6 +144,7 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 | `SYSTEM_CLIENT_ID` / `SYSTEM_CLIENT_SECRET` | API server-side Graph API token (Vercel) | NOT `VITE_` prefixed |
 | `API_SECRET_KEY` | Server-side API key for `X-Api-Key` auth | Should differ from `VITE_API_SECRET_KEY` |
 | `VITE_API_SECRET_KEY` | Client-side API key (compiled into bundle) | Must match `API_SECRET_KEY` for requests to work |
+| `CRON_SECRET` | Vercel Cron authentication for scheduled evaluator emails | Server-only; use a separate random value |
 | `HR_RECRUITMENT_EMAIL` / `VITE_HR_RECRUITMENT_EMAIL` | Recipient for job application HR emails | |
 | `HR_FORM_EMAIL_FROM_ADDRESS` | Sender for HR form workflow/approval emails | Falls back to `EMAIL_FROM_ADDRESS`; mail-enabled user, needs `Mail.Send` |
 | `JOB_APPLICATION_EMAIL_FROM_ADDRESS` | Sender for job application/recruitment emails | Falls back to `EMAIL_FROM_ADDRESS`; mail-enabled user, needs `Mail.Send` |

@@ -66,6 +66,12 @@ export interface ApprovalLayer {
 export type LayerType = "approval" | "evaluation";
 export type AuthMode = "365" | "public";
 export type ConfirmationType = "signature" | "checkbox";
+export type EvaluationEmailScheduleMode = "immediate" | "three_months" | "custom_days";
+
+export interface EvaluationEmailSchedule {
+  mode: EvaluationEmailScheduleMode;
+  customDays?: number;
+}
 
 export type LayerStatus =
   | "pending"
@@ -132,6 +138,7 @@ export interface EvaluationLayerConfig extends BaseLayer {
   type: "evaluation";
   surveyElements: Record<string, unknown>[];
   confirmationLabel?: string;
+  emailSchedule?: EvaluationEmailSchedule;
 }
 
 export type LayerConfigItem = ApprovalLayerConfig | EvaluationLayerConfig;

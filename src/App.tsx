@@ -531,6 +531,7 @@ function mapSubmission(
       key === "CurrentLayer" ||
       key === "EvaluationData" ||
       key === "WorkflowEmailLog" ||
+      key === "WorkflowEmailSchedule" ||
       key === "FormId" ||
       key === "FormID" ||
       key === "FormVersion" ||

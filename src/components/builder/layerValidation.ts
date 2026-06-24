@@ -72,6 +72,14 @@ function validateLayer(
   if (layer.type === "evaluation" && layer.authMode === "365" && layer.assignee.type === "field-reference") {
     warnings.push(`${label}: the referenced field must contain an email address when the submission is reviewed.`);
   }
+
+  if (
+    layer.type === "evaluation" &&
+    layer.emailSchedule?.mode === "custom_days" &&
+    (!Number.isInteger(layer.emailSchedule.customDays) || (layer.emailSchedule.customDays ?? 0) < 1)
+  ) {
+    errors.push(`${label} custom evaluator email delay must be at least 1 whole day.`);
+  }
   if (layer.authMode === "365" && layer.assignee.type === "department-approver") {
     warnings.push(`${label}: department matching is exact; keep the form choices aligned with the approver directory.`);
   }

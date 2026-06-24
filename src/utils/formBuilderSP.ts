@@ -1,4 +1,5 @@
-import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, EvaluationDataEntry, LayerConfigItem } from '../types/index.ts';
+import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmailSchedule } from '../types/index.ts';
+import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
@@ -1390,6 +1391,7 @@ const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
 const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'EvaluationData', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowEmailLog', k: SP_FIELD_KIND.note, ml: true },
+  { n: 'WorkflowEmailSchedule', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
   { n: 'FormStatus', k: SP_FIELD_KIND.text },
 ];
@@ -1892,6 +1894,7 @@ interface ApprovalNotificationParams {
   pdfUrl?: string;
   responseListTitle?: string;
   throwOnEmailError?: boolean;
+  nextEmailSchedule?: EvaluationEmailSchedule;
 }
 
 // ── Styled email HTML template ────────────────────────────────────────────
@@ -1996,7 +1999,7 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule } = params;
   const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
   const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
@@ -2004,6 +2007,24 @@ export async function triggerApprovalNotification(
   const submissionId = `#${responseItemId}`;
   const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const persistSchedule = async (recipient: string, targetLayer: number, targetLink: string) => {
+    await ensureWorkflowColumns(token, responseListTitle, totalLayers);
+    const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})`;
+    const item = await spGet(token, `${itemUrl}?$select=WorkflowEmailSchedule`) as { WorkflowEmailSchedule?: string };
+    const now = new Date();
+    const schedule = setScheduledWorkflowEmail(item.WorkflowEmailSchedule, {
+      layer: targetLayer,
+      recipient,
+      dueAt: resolveEvaluationEmailDueAt(nextLayerType === "evaluation" ? nextEmailSchedule : undefined, now),
+      status: "scheduled",
+      updatedAt: now.toISOString(),
+      layerType: nextLayerType,
+      totalLayers,
+      reviewLink: targetLink,
+      submittedBy,
+    });
+    await spPatch(token, itemUrl, { WorkflowEmailSchedule: JSON.stringify(schedule) });
+  };
 
   try {
     if (action === 'submit') {
@@ -2022,6 +2043,10 @@ export async function triggerApprovalNotification(
       }
 
       if (targetEmail) {
+        await persistSchedule(targetEmail, layer, requestLink);
+        if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
+          return;
+        }
         await sendSpEmail(token, {
           to: targetEmail,
           subject: `Action required: ${formTitle} needs your ${nextActionNoun}`,
@@ -2054,6 +2079,10 @@ export async function triggerApprovalNotification(
     } else if (action === 'approve') {
       if (layer < totalLayers && nextApproverEmail) {
         // Notify next layer approver
+        await persistSchedule(nextApproverEmail, displayNextLayerNumber, requestLink);
+        if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
+          return;
+        }
         await sendSpEmail(token, {
           to: nextApproverEmail,
           subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}`,
@@ -2360,6 +2389,24 @@ export async function uploadFormPdf(token: string, formTitle: string, responseId
   const sitePath = new URL(SP_SITE_URL).pathname;
   const result = await spUploadFile(token, PDF_LIBRARY, fileName, bytes) as { ServerRelativeUrl?: string };
   return result.ServerRelativeUrl ?? `${sitePath}/${PDF_LIBRARY}/${fileName}`;
+}
+
+export async function deleteFormPdf(token: string, pdfUrl: string): Promise<void> {
+  if (!pdfUrl.trim()) return;
+  let serverRelativeUrl = pdfUrl.trim();
+  try {
+    if (/^https?:\/\//i.test(serverRelativeUrl)) {
+      serverRelativeUrl = new URL(serverRelativeUrl).pathname;
+    }
+    serverRelativeUrl = decodeURIComponent(serverRelativeUrl.split(/[?#]/)[0] ?? serverRelativeUrl);
+  } catch {
+    throw new Error("The existing PDF URL is invalid.");
+  }
+  if (!serverRelativeUrl.toLowerCase().includes(`/${PDF_LIBRARY.toLowerCase()}/`)) {
+    throw new Error("Refusing to delete a file outside the Form PDFs library.");
+  }
+  const encodedPath = encodeURIComponent(sanitizeODataValue(serverRelativeUrl)).replace(/%2F/gi, "/");
+  await spDelete(token, `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodedPath}')`);
 }
 
 // ── Document Library File Upload ────────────────────────────────────────

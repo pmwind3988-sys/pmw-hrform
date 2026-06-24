@@ -94,6 +94,7 @@ const SYSTEM_FIELDS = new Set([
   "CurrentApprovalLayer",
   "EvaluationData",
   "WorkflowEmailLog",
+  "WorkflowEmailSchedule",
   "PDPAConsent",
   "PDPANoticeVersion",
   "PDPAConsentAt",

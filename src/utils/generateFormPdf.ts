@@ -4,7 +4,7 @@
  */
 import { pdf } from "@react-pdf/renderer";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "./FormPdfDocument";
-import { uploadFormPdf, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
+import { uploadFormPdf, deleteFormPdf, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
 import type { MatrixColumnDef } from "./formBuilderSP";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -201,6 +201,19 @@ function isImageSource(value: string): boolean {
   return /^data:image\//i.test(trimmed) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(trimmed);
 }
 
+function isSharePointSource(value: string, siteUrl = SP_SITE_URL): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return false;
+  if (/^\/(sites|teams)\//i.test(trimmed)) return true;
+  try {
+    const site = new URL(siteUrl);
+    const candidate = new URL(trimmed, site.origin);
+    return candidate.origin.toLowerCase() === site.origin.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 function extractImageSrcFromHtml(value: string): string {
   const match = value.match(/<img\b[^>]*\bsrc=(["'])(.*?)\1/i);
   return match?.[2]?.trim() ?? "";
@@ -277,7 +290,7 @@ async function imageSourceToDataUrl(token: string, source: string, cache: Map<st
   const requestUrl = spFileUrl || absolute;
   try {
     const response = await fetch(requestUrl, {
-      headers: spFileUrl ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: spFileUrl || isSharePointSource(absolute) ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!response.ok) return absolute;
     const blob = await response.blob();
@@ -290,13 +303,25 @@ async function imageSourceToDataUrl(token: string, source: string, cache: Map<st
   }
 }
 
-function imageSourceFromString(value: string): string {
+function imageSourceFromString(value: string, siteUrl = SP_SITE_URL): string {
   const trimmed = value.trim();
   const parsed = parseMaybeJson(trimmed);
-  if (parsed !== null) return "";
+  if (parsed !== null) {
+    if (typeof parsed === "string") return imageSourceFromString(parsed, siteUrl);
+    if (isRecord(parsed)) {
+      for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
+        const nested = parsed[key];
+        if (typeof nested === "string") {
+          const source = imageSourceFromString(nested, siteUrl);
+          if (source) return source;
+        }
+      }
+    }
+    return "";
+  }
   const htmlSrc = extractImageSrcFromHtml(trimmed);
   const candidate = splitSharePointUrlFieldValue(htmlSrc || trimmed);
-  return isImageSource(candidate) ? candidate : "";
+  return isImageSource(candidate) || isSharePointSource(candidate, siteUrl) ? candidate : "";
 }
 
 async function hydrateImageValue(token: string, value: unknown, cache: Map<string, string>): Promise<unknown> {
@@ -316,7 +341,7 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
   const next: Record<string, unknown> = { ...value };
   for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
     const raw = next[key];
-    if (typeof raw === "string" && isImageSource(raw)) {
+    if (typeof raw === "string" && (isImageSource(raw) || isSharePointSource(raw))) {
       next[key] = await imageSourceToDataUrl(token, raw, cache);
     }
   }
@@ -366,7 +391,8 @@ export async function generateAndStorePdf(
   token: string,
   listTitle: string,
   responseItemId: number,
-  data: PdfFormData
+  data: PdfFormData,
+  options: { replaceExistingPdfUrl?: string } = {},
 ): Promise<string> {
   // ── Inject matrix child rows ──────────────────────────────────────────
   // For dynamicmatrix/tableinput fields, read child list rows and attach
@@ -410,6 +436,10 @@ export async function generateAndStorePdf(
     ),
   ]);
 
+  if (options.replaceExistingPdfUrl) {
+    await deleteFormPdf(token, options.replaceExistingPdfUrl);
+  }
+
   // Upload to SharePoint Form PDFs library
   const pdfUrl = await uploadFormPdf(token, listTitle, responseItemId, blob);
 
@@ -429,13 +459,17 @@ export async function generateAndStorePdf(
         await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`, {
           PdfUrl: pdfUrl,
         });
-      } catch (retryErr) {
-        console.warn("[PDF] failed to store PdfUrl after adding column:", retryErr);
+      } catch (retryError) {
+        throw retryError;
       }
     } else {
-      console.warn("[PDF] failed to store PdfUrl:", e);
+      throw e;
     }
   }
 
   return pdfUrl;
 }
+
+export const __test__ = {
+  imageSourceFromString,
+};
