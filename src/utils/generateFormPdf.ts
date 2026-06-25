@@ -6,6 +6,7 @@ import { pdf } from "@react-pdf/renderer";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "./FormPdfDocument";
 import { uploadFormPdf, deleteFormPdf, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
 import type { MatrixColumnDef } from "./formBuilderSP";
+import { fetchWithAuthRecovery } from "./authRecovery";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -289,7 +290,7 @@ async function imageSourceToDataUrl(token: string, source: string, cache: Map<st
   const spFileUrl = sharePointFileValueUrl(absolute);
   const requestUrl = spFileUrl || absolute;
   try {
-    const response = await fetch(requestUrl, {
+    const response = await fetchWithAuthRecovery(requestUrl, {
       headers: spFileUrl || isSharePointSource(absolute) ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!response.ok) return absolute;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import { fetchWithAuthRecovery } from "../../utils/authRecovery";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -340,7 +341,7 @@ function useAuthenticatedMediaSource(source: string, accessToken?: string | null
     }
 
     setLoading(true);
-    void fetch(fileValueUrl, { headers: { Authorization: `Bearer ${accessToken}` } })
+    void fetchWithAuthRecovery(fileValueUrl, { headers: { Authorization: `Bearer ${accessToken}` } })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Media fetch failed: ${response.status}`);
         const blob = await response.blob();

@@ -19,6 +19,7 @@ import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import Logo from "../components/Logo";
 import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
@@ -485,7 +486,7 @@ export default function DynamicFormPage() {
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) return;
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    instance.acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] }).then(r => { tokenRef.current = r.accessToken; }).catch(() => {});
+    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] }).then(token => { tokenRef.current = token; }).catch(() => {});
   }, [isAuthenticated, inProgress, instance, accounts]);
 
   useEffect(() => {
@@ -499,8 +500,7 @@ export default function DynamicFormPage() {
         // Try to acquire token if authenticated
         if (!token && isAuthenticated && accounts[0]) {
           try {
-            const r = await instance.acquireTokenSilent({ scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
-            token = r.accessToken;
+            token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
             tokenRef.current = token;
           } catch {
             // Guest/public loading remains available when silent authentication fails.
@@ -512,7 +512,7 @@ export default function DynamicFormPage() {
           let cfgRaw: Record<string, unknown>;
           let ver: { surveyJson: unknown; meta: unknown } | null;
           if (pinVersion) {
-            const cfgRes = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
+            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
             if (!cfgRes.ok) throw new Error(`Failed to load form config: ${cfgRes.status} ${cfgRes.statusText}`);
             cfgRaw = (await cfgRes.json()).value?.[0];
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);

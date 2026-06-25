@@ -10,6 +10,7 @@ import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
 import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
 import {
+  AUTH_RECOVERY_REQUIRED_EVENT,
   acquireAccessTokenSilentOrRedirect,
   clearAuthTimeoutReloginAttempt,
   hasAuthTimeoutReloginAttempted,
@@ -17,6 +18,7 @@ import {
   markAuthTimeoutReloginAttempted,
   startFreshReauthentication,
 } from "./utils/authRecovery";
+import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
@@ -731,6 +733,47 @@ export default function App() {
     };
   }, [isAuthenticated, inProgress, instance, accountKey]);
 
+  useEffect(() => {
+    const handleAuthRecoveryRequired = (event: Event) => {
+      if (!isAuthenticated || !activeAccount || inProgress !== "none") return;
+      if (authProfileLoadingRef.current) return;
+      if (reauthRedirectInProgressRef.current) return;
+
+      const detail = event instanceof CustomEvent
+        ? event.detail as AuthRecoveryEventDetail | undefined
+        : undefined;
+
+      if (hasAuthTimeoutReloginAttempted()) {
+        setErrorMsg("The automatic re-login did not finish. Please re-login or sign out to recover your Microsoft 365 session.");
+        setAuthErrorMode("reauth");
+        setAuthErrorStep("reauth");
+        setAuthProfileStatus("unknown");
+        setPageState("error");
+        return;
+      }
+
+      markAuthTimeoutReloginAttempted();
+      reauthRedirectInProgressRef.current = true;
+      setAuthErrorMode("reauth");
+      setAuthErrorStep(null);
+      setAuthLoadStep("reauth");
+      setLoadProgress(90);
+      setLoadStatus(detail?.message || "Microsoft 365 session expired. Reconnecting...");
+      setPageState("loading");
+
+      void startFreshReauthentication(instance, loginRequest.scopes, activeAccount).catch((error: unknown) => {
+        reauthRedirectInProgressRef.current = false;
+        setErrorMsg(error instanceof Error ? error.message : "Could not restart sign-in.");
+        setAuthErrorStep("reauth");
+        setAuthProfileStatus("unknown");
+        setPageState("error");
+      });
+    };
+
+    window.addEventListener(AUTH_RECOVERY_REQUIRED_EVENT, handleAuthRecoveryRequired);
+    return () => window.removeEventListener(AUTH_RECOVERY_REQUIRED_EVENT, handleAuthRecoveryRequired);
+  }, [isAuthenticated, inProgress, instance, accountKey]);
+
   
   useEffect(() => {
     if (pageState !== "loading" || !isAuthenticated || isPublicRoute || !activeAccount || inProgress !== "none") return;
@@ -1206,7 +1249,7 @@ export default function App() {
     );
   }
 
-  if (!isPublicRoute && pageState === "error") {
+  if (pageState === "error" && (!isPublicRoute || authErrorMode === "reauth")) {
     const isReauthError = authErrorMode === "reauth";
 
     return (
@@ -1226,7 +1269,10 @@ export default function App() {
   }
 
   const privateRouteNeedsProfile = isAuthenticated && !isPublicRoute && !authProfileReady;
-  if (!isPublicRoute && (pageState === "checking" || pageState === "loading" || privateRouteNeedsProfile)) {
+  if (
+    (!isPublicRoute && (pageState === "checking" || pageState === "loading" || privateRouteNeedsProfile)) ||
+    (isPublicRoute && pageState === "loading" && authErrorMode === "reauth")
+  ) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />

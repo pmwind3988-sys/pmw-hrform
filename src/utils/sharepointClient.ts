@@ -5,7 +5,7 @@ import type {
   SharePointClient,
   Submission,
 } from "../types";
-import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "./authRecovery";
 
 export class SharePointHttpError extends Error {
   readonly status: number;
@@ -231,7 +231,7 @@ async function fetchWithTimeout(url: string | URL | Request, options: RequestIni
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await globalThis.fetch(url, { ...options, signal: controller.signal });
+    return await fetchWithAuthRecovery(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }

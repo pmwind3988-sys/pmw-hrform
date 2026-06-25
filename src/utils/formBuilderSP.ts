@@ -1,6 +1,7 @@
 import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmailSchedule } from '../types/index.ts';
 import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
+import { fetchWithAuthRecovery } from "./authRecovery";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
@@ -263,7 +264,7 @@ async function fetchWithTimeout(url: string | URL | Request, options: RequestIni
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await globalThis.fetch(url, { ...options, signal: controller.signal });
+    return await fetchWithAuthRecovery(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }

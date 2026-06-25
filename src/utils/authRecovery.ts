@@ -5,7 +5,6 @@ import {
   type IPublicClientApplication,
   type SilentRequest,
 } from "@azure/msal-browser";
-import { loginRequest } from "../auth/msalConfig";
 import { setStoredAuthDecision } from "./authDecision";
 
 const STALE_AUTH_ERROR_CODES = new Set([
@@ -25,7 +24,13 @@ const STALE_AUTH_ERROR_CODES = new Set([
 
 const SILENT_TOKEN_TIMEOUT_MS = 20000;
 const AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY = "pmw_auth_timeout_relogin_attempted";
+export const AUTH_RECOVERY_REQUIRED_EVENT = "pmw:auth-recovery-required";
 let redirectStarted = false;
+
+export type AuthRecoveryEventDetail = {
+  reason: "protected_resource_unauthorized";
+  message: string;
+};
 
 function getErrorField(error: unknown, field: string): string {
   if (!error || typeof error !== "object" || !(field in error)) {
@@ -104,6 +109,29 @@ export function isAuthTimeoutReloginRequiredError(error: unknown): boolean {
   return errorCode === "auth_timeout_relogin_required";
 }
 
+export function notifyAuthRecoveryForResponse(response: Pick<Response, "status">): void {
+  if (response.status !== 401 || typeof window === "undefined") return;
+
+  const detail: AuthRecoveryEventDetail = {
+    reason: "protected_resource_unauthorized",
+    message: "Your Microsoft 365 session expired. Reconnecting...",
+  };
+  window.dispatchEvent(new CustomEvent<AuthRecoveryEventDetail>(AUTH_RECOVERY_REQUIRED_EVENT, { detail }));
+}
+
+export async function fetchWithAuthRecovery(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const response = await globalThis.fetch(input, init);
+  if (response.ok) {
+    clearAuthTimeoutReloginAttempt();
+  } else {
+    notifyAuthRecoveryForResponse(response);
+  }
+  return response;
+}
+
 function preserveCurrentRoute(): void {
   try {
     sessionStorage.setItem("pmw_post_login_redirect", window.location.pathname + window.location.search);
@@ -146,7 +174,7 @@ async function clearCachedAuth(instance: IPublicClientApplication, account?: Acc
 
 export async function startReauthentication(
   instance: IPublicClientApplication,
-  scopes: string[] = loginRequest.scopes,
+  scopes: string[],
   account?: AccountInfo,
   forceFresh = false,
 ): Promise<never> {
@@ -180,7 +208,7 @@ export async function startReauthentication(
 
 export async function startFreshReauthentication(
   instance: IPublicClientApplication,
-  scopes: string[] = loginRequest.scopes,
+  scopes: string[],
   account?: AccountInfo,
 ): Promise<never> {
   return startReauthentication(instance, scopes, account, true);

@@ -41,7 +41,7 @@ import { useUserProfile } from "../hooks/useUserProfile";
 import { useMsal } from "@azure/msal-react";
 import { fetchJob, submitApplication, ensureJobApplicationColumns, fetchMyApplications } from "../utils/careersService";
 import type { JobListing, CustomFieldDefinition } from "../types";
-import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import { CareerErrorState, careerActionButtonSx, careerPageSx, careerPanelSx, getCareerErrorMessage } from "../components/careers/careerUi";
@@ -509,7 +509,7 @@ export default function JobApplyPage() {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
           account: activeAccount,
         });
-        const groupResp = await fetch(
+        const groupResp = await fetchWithAuthRecovery(
           `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
           { headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` } },
         );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import type { AccountInfo } from "@azure/msal-browser";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -73,16 +74,16 @@ export function useUserProfile(): UserProfile {
       }
 
       try {
-        const tokenResult = await instance.acquireTokenSilent({
+        const accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: ["User.Read"],
           account,
         });
 
-        const response = await fetch(
+        const response = await fetchWithAuthRecovery(
           "https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,mobilePhone,businessPhones,department,jobTitle",
           {
             headers: {
-              Authorization: `Bearer ${tokenResult.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
             },
           },
         );

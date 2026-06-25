@@ -52,7 +52,7 @@ import {
 import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
 import { fetchCareersPortalData, fetchMyApplications } from "../utils/careersService";
-import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import {
@@ -941,7 +941,7 @@ export default function CareersPage() {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
           account: activeAccount,
         });
-        const groupResp = await fetch(
+        const groupResp = await fetchWithAuthRecovery(
           `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
           { headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` } },
         );

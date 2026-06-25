@@ -34,6 +34,7 @@ import {
   VerifiedUser as ApprovalIcon,
 } from "@mui/icons-material";
 import { useEffect, useState, type ReactNode } from "react";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../../utils/authRecovery";
 import { useMsal } from "@azure/msal-react";
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
 import StatusBadge from "./StatusBadge";
@@ -777,11 +778,11 @@ function useAuthenticatedImageSrc(src: string): { imageSrc: string; isLoading: b
 
     setIsLoading(true);
 
-    void instance.acquireTokenSilent({ ...loginRequest, account })
-      .then(async (tokenResponse) => {
-        const response = await fetch(fileValueUrl, {
+    void acquireAccessTokenSilentOrRedirect(instance, { ...loginRequest, account })
+      .then(async (accessToken) => {
+        const response = await fetchWithAuthRecovery(fileValueUrl, {
           headers: {
-            Authorization: `Bearer ${tokenResponse.accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         });
         if (!response.ok) throw new Error(`Signature image fetch failed: ${response.status}`);

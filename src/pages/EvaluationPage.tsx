@@ -20,7 +20,7 @@ import type { LayerConfigItem, EvaluationDataEntry, EvaluationLayerConfig, FormB
 import DOMPurify from "dompurify";
 import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
-import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { rowsToHtml, getDynamicMatrixFields } from "../utils/DynamicMatrix";
 import { registerSignaturePad, SignatureCapture } from "../utils/SignaturePad";
@@ -403,7 +403,7 @@ export default function EvaluationPage() {
       if (!token) return;
       try {
         // Resolve formTitle from slug
-        const slugData = await fetch(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formSlug)}'&$select=Title,LayerConfig&$top=1`, {
+        const slugData = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formSlug)}'&$select=Title,LayerConfig&$top=1`, {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" },
         });
         const slugJson = await slugData.json();

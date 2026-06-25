@@ -19,7 +19,7 @@ import { validateLayerConfig } from "../components/builder/layerValidation";
 import type { LayerFieldOption } from "../components/builder/layerValidation";
 import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
-import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
+import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import { SP_STATIC } from "../utils/spConfig";
 import type { SurveyJson, LayerConfig, LayerConfigItem } from "../types";
 
@@ -382,7 +382,7 @@ export default function AdminFormBuilder() {
         tokenRef.current = token;
         bootstrapSystemLists(token, () => { }).catch(e => console.warn("[AFB] bootstrap:", e.message));
         try {
-          const ud = await fetch(`${SP_SITE_URL}/_api/web/siteusers?$select=Email,Title&$filter=PrincipalType eq 1`, {
+          const ud = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/siteusers?$select=Email,Title&$filter=PrincipalType eq 1`, {
             headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" },
           }).then(res => res.json());
           setSiteUsers((ud.value || []).filter((u: { Email: string }) => u.Email).map((u: { Email: string; Title: string }) => ({ email: u.Email, name: u.Title })));
