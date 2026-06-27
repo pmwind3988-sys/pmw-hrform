@@ -14,6 +14,7 @@
 | Evaluation element picker | `EvalElementPicker.tsx` | Field type grid for evaluation layer form config |
 | Public link display | `PublicLinkDisplay.tsx` | Copyable public URL with token regeneration |
 | Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results |
+| Submission workflow overrides | `ApprovalDashboard.tsx` | Superuser-only per-item reassignment metadata in `WorkflowAssignmentData`; `L{n}_Email` remains authoritative |
 | Approver input (legacy) | `ApproverRow.tsx` | User search + assignee input with static/field-reference modes |
 | Response viewer | `ResponseViewer.tsx` | Route `/admin/responses/:formTitle`. Renders submissions with SurveyJS read-only, matrix data, PDF generation. ~567 lines. |
 | Publish overlay | `ProvisionOverlay.tsx` | SharePoint list provisioning status spinner |

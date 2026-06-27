@@ -28,9 +28,13 @@ import {
   getScheduledWorkflowEmail,
   isValidFutureScheduleDate,
   setScheduledWorkflowEmail,
+  updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
+import { setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
+import WorkflowAssignmentEditor from "./WorkflowAssignmentEditor";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
+import type { WorkflowAssignmentSaveInput } from "./WorkflowAssignmentEditor";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission, FormBuilderField } from "../../types";
 import BlockIcon from "@mui/icons-material/Block";
@@ -82,6 +86,7 @@ interface PendingItem {
   EvaluationData?: string;
   WorkflowEmailLog?: string;
   WorkflowEmailSchedule?: string;
+  WorkflowAssignmentData?: string;
   SelectedBranch?: string;
   totalLayers?: number;
 }
@@ -135,7 +140,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
 
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
-      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowEmailLog','WorkflowEmailSchedule',
+      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','WorkflowEmailLog','WorkflowEmailSchedule',
       'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -511,6 +516,8 @@ export default function ApprovalDashboard() {
   const [emailNotice, setEmailNotice] = useState("");
   const [customEmailDate, setCustomEmailDate] = useState("");
   const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [selectedActiveLayers, setSelectedActiveLayers] = useState<LayerConfigItem[]>([]);
   const [pdfRegeneratingItemKey, setPdfRegeneratingItemKey] = useState("");
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
   const [currentLayerConfig, setCurrentLayerConfig] = useState<LayerConfigItem | null>(null);
@@ -610,6 +617,7 @@ export default function ApprovalDashboard() {
         setIsAdmin(admin);
         setIsSuperuser(superuser);
         setAdminChecked(true);
+        if (!admin || !superuser) setLoading(false);
       })
       .catch(() => {
         setIsAdmin(false);
@@ -620,7 +628,7 @@ export default function ApprovalDashboard() {
 
   // Get token
   useEffect(() => {
-    if (!adminChecked || !isAdmin) return;
+    if (!adminChecked || !isAdmin || !isSuperuser) return;
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) return;
 
@@ -628,11 +636,11 @@ export default function ApprovalDashboard() {
     acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
       .then(setToken)
       .catch(() => setError("Failed to acquire token"));
-  }, [adminChecked, isAdmin, isAuthenticated, inProgress, instance, accounts]);
+  }, [adminChecked, isAdmin, isSuperuser, isAuthenticated, inProgress, instance, accounts]);
 
   // Load all items (pending, approved, rejected)
   useEffect(() => {
-    if (!adminChecked || !isAdmin) return;
+    if (!adminChecked || !isAdmin || !isSuperuser) return;
     if (!token) return;
 
     const loadData = async () => {
@@ -881,12 +889,13 @@ export default function ApprovalDashboard() {
     };
 
     loadData();
-  }, [adminChecked, isAdmin, token]);
+  }, [adminChecked, isAdmin, isSuperuser, token]);
 
   // ── System columns to exclude from response data ──────────────────────
   const SYSTEM_FIELDS = new Set([
     'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
     'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData',
+    'WorkflowAssignmentData',
     'WorkflowEmailLog',
     'WorkflowEmailSchedule',
     'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
@@ -910,6 +919,7 @@ export default function ApprovalDashboard() {
     setEvalSurveyModel(null);
     setEvalValid(true);
     setCompletedLayers({});
+    setSelectedActiveLayers([]);
     setSelectedLayerAccess(null);
     setCustomEmailDate("");
 
@@ -998,6 +1008,7 @@ export default function ApprovalDashboard() {
           Status: valueToText(respItem.Status) || item.Status,
           WorkflowEmailLog: valueToText(respItem.WorkflowEmailLog) || item.WorkflowEmailLog,
           WorkflowEmailSchedule: valueToText(respItem.WorkflowEmailSchedule) || item.WorkflowEmailSchedule,
+          WorkflowAssignmentData: valueToText(respItem.WorkflowAssignmentData) || item.WorkflowAssignmentData,
         };
         setSelectedItem(detailItem);
         if (masterLayerCfg?.manualBranches?.length && detailItem.SelectedBranch && pendingBranch) {
@@ -1032,6 +1043,7 @@ export default function ApprovalDashboard() {
 
         const activeConfig = versionLayerCfg || masterLayerCfg || formLayerConfigsRef.current[item.Title];
         const currentResolution = resolveCurrentLayer(activeConfig, detailItem);
+        setSelectedActiveLayers(currentResolution.activeLayers);
         setCurrentLayerConfig(currentResolution.currentLayer ?? null);
         const currentLayerNumber = currentResolution.currentLayerNumber;
         const assignedEmail = normalizeEmailAddress(respItem[`L${currentLayerNumber}_Email`]);
@@ -1349,7 +1361,7 @@ export default function ApprovalDashboard() {
   };
 
   const handleForceResend = async (item: PendingItem) => {
-    if (!token || (!isAdmin && !isSuperuser)) return;
+    if (!token || !isSuperuser) return;
     const itemKey = getPendingItemKey(item);
     setResendingItemKey(itemKey);
     setEmailNotice("");
@@ -1427,8 +1439,123 @@ export default function ApprovalDashboard() {
     }
   };
 
+  const handleSaveWorkflowAssignment = async (input: WorkflowAssignmentSaveInput) => {
+    if (!token || !selectedItem || !isSuperuser) return;
+    const email = input.email.trim();
+    if (!EMAIL_RE.test(email)) {
+      setError("Enter a valid approver or evaluator email address.");
+      return;
+    }
+
+    setAssignmentSaving(true);
+    setError("");
+    setEmailNotice("");
+    try {
+      const itemKey = getPendingItemKey(selectedItem);
+      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`;
+      const rawItem = await spGet(token, itemUrl) as Record<string, unknown>;
+      const currentLayerNumber = Number(
+        rawItem.CurrentLayer
+        || rawItem.CurrentApprovalLayer
+        || selectedItem.CurrentLayer
+        || selectedItem.CurrentApprovalLayer
+        || 0,
+      );
+      if (input.layer < currentLayerNumber) {
+        throw new Error("Completed or earlier workflow layers cannot be reassigned.");
+      }
+      if (isTerminalWorkflowStatus(rawItem[`L${input.layer}_Status`])) {
+        throw new Error(`Layer ${input.layer} is already complete and cannot be reassigned.`);
+      }
+
+      const targetLayer = selectedActiveLayers.find((layer) => layer.layerNumber === input.layer);
+      if (!targetLayer) {
+        throw new Error(`Layer ${input.layer} is not available in this submission's workflow.`);
+      }
+
+      const updatedAt = new Date().toISOString();
+      const updatedBy = accounts[0]?.username || accounts[0]?.name || "SYSTEM";
+      const assignmentData = setWorkflowAssignmentOverride(rawItem.WorkflowAssignmentData, {
+        ...input,
+        email,
+        updatedAt,
+        updatedBy,
+        previous: {
+          email: valueToText(rawItem[`L${input.layer}_Email`]) || email,
+          source: "resolved",
+          updatedBy: "SYSTEM",
+          updatedAt: selectedItem.SubmittedAt || updatedAt,
+        },
+      });
+      const patchBody: Record<string, unknown> = {
+        [`L${input.layer}_Email`]: email,
+        WorkflowAssignmentData: JSON.stringify(assignmentData),
+      };
+      if (getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, input.layer)) {
+        patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
+          rawItem.WorkflowEmailSchedule,
+          input.layer,
+          email,
+          updatedAt,
+        ));
+      }
+
+      const maximumLayerNumber = Math.max(
+        input.layer,
+        ...selectedActiveLayers.map((layer) => layer.layerNumber),
+      );
+      await ensureWorkflowColumns(token, selectedItem.Title, maximumLayerNumber);
+      await spPatch(token, itemUrl, patchBody);
+
+      const serializedAssignments = JSON.stringify(assignmentData);
+      const serializedSchedule = typeof patchBody.WorkflowEmailSchedule === "string"
+        ? patchBody.WorkflowEmailSchedule
+        : selectedItem.WorkflowEmailSchedule;
+      setCompletedLayers((previous) => ({
+        ...previous,
+        [input.layer]: {
+          ...(previous[input.layer] || { status: "" }),
+          email,
+        },
+      }));
+      setPendingItems((previous) => previous.map((current) =>
+        getPendingItemKey(current) === itemKey
+          ? {
+            ...current,
+            WorkflowAssignmentData: serializedAssignments,
+            WorkflowEmailSchedule: serializedSchedule,
+          }
+          : current
+      ));
+      setSelectedItem((current) =>
+        current && getPendingItemKey(current) === itemKey
+          ? {
+            ...current,
+            WorkflowAssignmentData: serializedAssignments,
+            WorkflowEmailSchedule: serializedSchedule,
+          }
+          : current
+      );
+      if (input.layer === currentLayerNumber) {
+        setSelectedLayerAccess((previous) => previous ? {
+          ...previous,
+          assignedEmail: email.toLowerCase(),
+          allowed: true,
+          override: true,
+        } : previous);
+      }
+      setEmailNotice(
+        `Layer ${input.layer} ${targetLayer.type === "evaluation" ? "evaluator" : "approver"} updated for this submission only.`,
+      );
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update this workflow assignment.");
+    } finally {
+      setAssignmentSaving(false);
+    }
+  };
+
   const handleSaveCustomEmailDate = async () => {
-    if (!token || !selectedItem || (!isAdmin && !isSuperuser)) return;
+    if (!token || !selectedItem || !isSuperuser) return;
     if (!isValidFutureScheduleDate(customEmailDate)) {
       setError("Evaluator email date must be now or later.");
       return;
@@ -1501,7 +1628,7 @@ export default function ApprovalDashboard() {
   };
 
   const handleRegeneratePdf = async (item: PendingItem) => {
-    if (!token || (!isAdmin && !isSuperuser)) return;
+    if (!token || !isSuperuser) return;
     const itemKey = getPendingItemKey(item);
     setPdfRegeneratingItemKey(itemKey);
     setError("");
@@ -1819,13 +1946,13 @@ export default function ApprovalDashboard() {
     );
   }
 
-  if (adminChecked && !isAdmin) {
+  if (adminChecked && (!isAdmin || !isSuperuser)) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
-          <div style={{ color: C.textSecond }}>You need HR Form Owner permissions to view this page.</div>
+          <div style={{ color: C.textSecond }}>You need HR Forms Owner and Form Builder Superuser permissions to view this page.</div>
         </div>
       </div>
     );
@@ -2351,6 +2478,19 @@ export default function ApprovalDashboard() {
                         return branch?.label || selectedItem.SelectedBranch;
                       } catch { return selectedItem.SelectedBranch; }})()}
                     </div>
+                  )}
+                  {isSuperuser && selectedActiveLayers.length > 0 && (
+                    <WorkflowAssignmentEditor
+                      layers={selectedActiveLayers}
+                      currentLayerNumber={Math.max(
+                        selectedItem.CurrentLayer || 0,
+                        selectedItem.CurrentApprovalLayer || 0,
+                      ) || 1}
+                      layerStates={completedLayers}
+                      rawAssignments={selectedItem.WorkflowAssignmentData}
+                      saving={assignmentSaving}
+                      onSave={handleSaveWorkflowAssignment}
+                    />
                   )}
                   {currentLayerType === "evaluation" && (isAdmin || isSuperuser) && (
                     <div style={{ marginTop: 12, padding: 12, borderRadius: 9, border: `1px solid ${C.purpleMid}`, background: C.purplePale }}>

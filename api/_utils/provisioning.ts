@@ -32,6 +32,7 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
   const columns: GraphColumnSpec[] = [
     { name: "SelectedBranch", displayName: "SelectedBranch", type: "text" },
     { name: "EvaluationData", displayName: "EvaluationData", type: "note" },
+    { name: "WorkflowAssignmentData", displayName: "WorkflowAssignmentData", type: "note" },
     { name: "WorkflowEmailLog", displayName: "WorkflowEmailLog", type: "note" },
     { name: "WorkflowEmailSchedule", displayName: "WorkflowEmailSchedule", type: "note" },
     { name: "CurrentLayer", displayName: "CurrentLayer", type: "number" },

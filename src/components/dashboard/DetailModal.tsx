@@ -96,6 +96,7 @@ const SYSTEM_FIELDS = new Set([
   "EvaluationData",
   "WorkflowEmailLog",
   "WorkflowEmailSchedule",
+  "WorkflowAssignmentData",
   "PDPAConsent",
   "PDPANoticeVersion",
   "PDPAConsentAt",

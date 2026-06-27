@@ -64,6 +64,12 @@ Used by: `SignaturePad` (`src/utils/SignaturePad.tsx`) and `DynamicMatrix` (`src
 - Approval layer assignee type `department-approver` reads the submitted department field, filters the directory by exact `Department` and `ApproverRole`, then writes the resolved email into `L{n}_Email`.
 - This design avoids Microsoft Graph tenant user search and does not require `User.Read.All`.
 
+### Per-Submission Workflow Overrides
+- `/admin/submissions` and `/admin/approvals` are the same internal workflow workspace and both require HR Forms Owner + `superuser`.
+- Assigned approvers/evaluators act through `/eval/...`; that reviewer page is separate from the internal workflow workspace.
+- Item-specific assignee metadata is stored in the response item's `WorkflowAssignmentData` Note column. `L{n}_Email` remains authoritative for routing and access checks.
+- Reassigning a layer also updates any existing `WorkflowEmailSchedule` recipient for that layer without changing its due date. Completed layers cannot be changed.
+
 ### Auth & MSAL
 - Auth state machine in `App.tsx`: `checking → loading → ready/wrong_tenant/error` or `guest/choice`.
 - Auth decision persisted in `localStorage` (`pmw_hr_auth_decision`). Post-login redirect in `sessionStorage` (`pmw_post_login_redirect`).
@@ -157,7 +163,7 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 |---|---|---|
 | `/form/:formId` | `DynamicFormPage` | `src/pages/DynamicFormPage.tsx` |
 | `/admin/builder[/:formTitle]` | `AdminFormBuilder` (superuser-only) | `src/pages/AdminFormBuilder.tsx` |
-| `/admin/approvals` | `ApprovalDashboard` | `src/components/builder/ApprovalDashboard.tsx` |
+| `/admin/approvals` | `ApprovalDashboard` (superuser-only) | `src/components/builder/ApprovalDashboard.tsx` |
 | `/admin/responses/:formTitle` | `ResponseViewer` | `src/components/builder/ResponseViewer.tsx` |
 | `/admin/dashboard` | admin dashboard (AdminGuard) | `AdminHomePage` (via `adminDashboardInner`) |
 | `/user/dashboard` | user dashboard (no guard) | `AdminHomePage` (via `adminDashboardInner`) |

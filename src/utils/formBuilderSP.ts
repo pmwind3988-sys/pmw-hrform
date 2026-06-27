@@ -1391,6 +1391,7 @@ const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
 
 const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'EvaluationData', k: SP_FIELD_KIND.note, ml: true },
+  { n: 'WorkflowAssignmentData', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowEmailLog', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowEmailSchedule', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },

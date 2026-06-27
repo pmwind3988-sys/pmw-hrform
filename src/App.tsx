@@ -15,7 +15,9 @@ import {
   clearAuthTimeoutReloginAttempt,
   hasAuthTimeoutReloginAttempted,
   isAuthTimeoutReloginRequiredError,
+  isStaleAuthError,
   markAuthTimeoutReloginAttempted,
+  notifyAuthRecoveryRequired,
   startFreshReauthentication,
 } from "./utils/authRecovery";
 import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
@@ -534,6 +536,7 @@ function mapSubmission(
       key === "EvaluationData" ||
       key === "WorkflowEmailLog" ||
       key === "WorkflowEmailSchedule" ||
+      key === "WorkflowAssignmentData" ||
       key === "FormId" ||
       key === "FormID" ||
       key === "FormVersion" ||
@@ -708,8 +711,13 @@ export default function App() {
         scopes: loginRequest.scopes,
         account,
       })
-        .catch(() => {
-          // Non-auth token errors are handled by the request that needs the token.
+        .catch((error: unknown) => {
+          if (isAuthTimeoutReloginRequiredError(error) || isStaleAuthError(error)) {
+            notifyAuthRecoveryRequired({
+              reason: "silent_token_timeout",
+              message: "Microsoft 365 session timed out. Reconnecting...",
+            });
+          }
         })
         .finally(() => {
           validating = false;
@@ -968,6 +976,10 @@ export default function App() {
         if (cancelled) return;
         if (isAuthTimeoutReloginRequiredError(err)) {
           showReauthenticationError(err instanceof Error ? err.message : "Please re-login to refresh your Microsoft 365 session.");
+          return;
+        }
+        if (isStaleAuthError(err)) {
+          redirectToFreshSignIn();
           return;
         }
         if (isUnauthorizedError(err)) {
@@ -1368,7 +1380,7 @@ export default function App() {
           <Route
             path="/admin/submissions"
             element={
-              <AdminGuard isAdmin={isAdmin}>
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading submissions..." />} />
@@ -1380,7 +1392,7 @@ export default function App() {
           <Route
             path="/admin/approvals"
             element={
-              <AdminGuard isAdmin={isAdmin}>
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />

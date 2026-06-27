@@ -30,7 +30,7 @@ function rejectedAtLayerStatus(layerNumber: number): string {
 
 const SYSTEM_FIELDS = new Set([
   "id", "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowEmailLog", "WorkflowEmailSchedule",
+  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch",

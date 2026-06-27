@@ -76,6 +76,22 @@ export function getScheduledWorkflowEmail(
   return parseScheduleLog(raw)[String(layerNumber)] ?? null;
 }
 
+export function updateScheduledWorkflowEmailRecipient(
+  raw: unknown,
+  layerNumber: number,
+  recipient: string,
+  updatedAt: string,
+): WorkflowEmailScheduleLog {
+  const schedule = parseScheduleLog(raw);
+  const existing = schedule[String(layerNumber)];
+  if (!existing) return schedule;
+  return setScheduledWorkflowEmail(schedule, {
+    ...existing,
+    recipient: recipient.trim(),
+    updatedAt,
+  });
+}
+
 export function isValidFutureScheduleDate(
   value: string,
   now = new Date(),
