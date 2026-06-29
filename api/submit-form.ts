@@ -19,7 +19,9 @@ import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLo
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
 import {
   buildWorkflowActionEmail,
+  buildManualPaperWorkflowEmail,
   getApplicationBaseUrl,
+  resolveHrFormSender,
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
@@ -78,6 +80,8 @@ interface ApiLayerConfigItem {
   publicToken?: string;
   emailSchedule?: WorkflowEmailScheduleConfig;
   submitterRoutingRules?: ApiEvaluationSubmitterRoutingRule[];
+  surveyElements?: Record<string, unknown>[];
+  manualPaperWhenSenderEmail?: boolean;
 }
 
 interface ApiEvaluationSubmitterRoutingRule {
@@ -87,7 +91,11 @@ interface ApiEvaluationSubmitterRoutingRule {
   emailValue?: string;
   employeeIdField?: string;
   employeeIdValue?: string;
-  action?: "assign-evaluator" | "manual-paper";
+  userIdField?: string;
+  userIdValue?: string;
+  fullNameField?: string;
+  fullNameValue?: string;
+  action?: "assign-evaluator" | "manual-paper" | "send-to-configured-sender";
   evaluatorEmail?: string;
 }
 
@@ -1038,11 +1046,12 @@ function matchingSubmitterRule(
   layer: ApiLayerConfigItem,
   formBody: Record<string, unknown>,
 ): ApiEvaluationSubmitterRoutingRule | null {
-  if (layer.type !== "evaluation") return null;
   for (const rule of layer.submitterRoutingRules ?? []) {
     const expectedEmail = normalizedRoutingValue(rule.emailValue);
     const expectedEmployeeId = normalizedRoutingValue(rule.employeeIdValue);
-    if (!expectedEmail && !expectedEmployeeId) continue;
+    const expectedUserId = normalizedRoutingValue(rule.userIdValue);
+    const expectedFullName = normalizedRoutingValue(rule.fullNameValue);
+    if (!expectedEmail && !expectedEmployeeId && !expectedUserId && !expectedFullName) continue;
 
     if (expectedEmail) {
       const submittedBy = normalizedRoutingValue(formBody.SubmittedBy);
@@ -1055,9 +1064,38 @@ function matchingSubmitterRule(
       if (employeeId !== expectedEmployeeId) continue;
     }
 
+    if (expectedUserId) {
+      const userId = normalizedRoutingValue(lookupSubmittedField(formBody, rule.userIdField));
+      if (userId !== expectedUserId) continue;
+    }
+
+    if (expectedFullName) {
+      const fullName = normalizedRoutingValue(lookupSubmittedField(formBody, rule.fullNameField));
+      if (fullName !== expectedFullName) continue;
+    }
+
     return rule;
   }
   return null;
+}
+
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function manualPaperStatusForLayer(layer: ApiLayerConfigItem): string {
+  return layer.type === "evaluation" ? "Manual Evaluation Required" : "Manual Approval Required";
+}
+
+function isManualPaperLayerStatus(value: unknown): boolean {
+  const normalized = valueToText(value).trim().toLowerCase();
+  return normalized === "manual evaluation required" || normalized === "manual approval required";
+}
+
+function shouldUseManualPaperForSender(layer: ApiLayerConfigItem, email: string): boolean {
+  if (layer.manualPaperWhenSenderEmail === false) return false;
+  const sender = normalizeEmail(resolveHrFormSender());
+  return !!sender && normalizeEmail(email) === sender;
 }
 
 async function applyLayerConfigWorkflow(
@@ -1080,20 +1118,63 @@ async function applyLayerConfigWorkflow(
   for (const layer of layers) {
     const layerNumber = layer.layerNumber;
     const matchedRule = matchingSubmitterRule(layer, formBody);
-    if (matchedRule?.action === "manual-paper") {
-      formBody[`L${layerNumber}_Status`] = "Manual Evaluation Required";
-      formBody[`L${layerNumber}_Email`] = "";
+    if (matchedRule?.action === "manual-paper" || matchedRule?.action === "send-to-configured-sender") {
+      const sender = matchedRule.action === "send-to-configured-sender" ? resolveHrFormSender() : "";
+      formBody[`L${layerNumber}_Status`] = manualPaperStatusForLayer(layer);
+      formBody[`L${layerNumber}_Email`] = sender;
       continue;
     }
     const resolved = matchedRule?.action === "assign-evaluator"
       ? { email: valueToText(matchedRule.evaluatorEmail), name: "" }
       : await resolveLayerAssignee(token, layer, formBody);
-    formBody[`L${layerNumber}_Status`] = LAYER_PENDING_STATUS;
+    formBody[`L${layerNumber}_Status`] = shouldUseManualPaperForSender(layer, resolved.email)
+      ? manualPaperStatusForLayer(layer)
+      : LAYER_PENDING_STATUS;
     formBody[`L${layerNumber}_Email`] = resolved.email;
   }
   formBody.FormStatus = FORM_SUBMITTED_STATUS;
   formBody.CurrentLayer = layers[0]?.layerNumber ?? 1;
   formBody.CurrentApprovalLayer = formBody.CurrentLayer;
+}
+
+async function sendManualPaperWorkflowEmail(
+  token: string,
+  params: {
+    listTitle: string;
+    responseItemId: string | number;
+    submittedBy: string;
+    recipient: string;
+    layer: ApiLayerConfigItem;
+    totalLayers: number;
+  },
+): Promise<void> {
+  await scheduleOrDeliverWorkflowEmail(
+    token,
+    buildManualPaperWorkflowEmail({
+      formTitle: params.listTitle,
+      submittedBy: params.submittedBy,
+      responseItemId: params.responseItemId,
+      layer: params.layer.layerNumber,
+      totalLayers: params.totalLayers,
+      recipient: params.recipient,
+      layerType: params.layer.type,
+      layerTitle: params.layer.title,
+      surveyElements: params.layer.surveyElements,
+    }),
+    {
+      listTitle: params.listTitle,
+      responseItemId: params.responseItemId,
+      layer: params.layer.layerNumber,
+    },
+    params.layer.type === "evaluation" ? params.layer.emailSchedule : undefined,
+    {
+      layer: params.layer.layerNumber,
+      layerType: params.layer.type,
+      totalLayers: params.totalLayers,
+      reviewLink: "",
+      submittedBy: params.submittedBy,
+    },
+  );
 }
 
 interface ApiRequest {
@@ -1306,36 +1387,49 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (EMAIL_RE.test(recipient)) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = valueToText(formConfig.Slug);
-        const reviewLink = firstLayer.authMode === "public" && firstLayer.publicToken
-          ? `${appBaseUrl}/eval/${encodeURIComponent(firstLayer.publicToken)}?item=${encodeURIComponent(parentId)}`
-          : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${encodeURIComponent(parentId)}/${firstLayer.layerNumber}`;
         try {
-          await scheduleOrDeliverWorkflowEmail(
-            token,
-            buildWorkflowActionEmail({
-              formTitle: listTitle,
-              submittedBy: valueToText(submissionBody.SubmittedBy) || "Public respondent",
-              responseItemId: parentId,
-              layer: firstLayer.layerNumber,
-              totalLayers: parsedLayerConfig?.layers?.length ?? 1,
-              recipient,
-              layerType: firstLayer.type,
-              reviewLink,
-            }),
-            {
+          const submittedBy = valueToText(submissionBody.SubmittedBy) || "Public respondent";
+          const totalLayers = parsedLayerConfig?.layers?.length ?? 1;
+          if (isManualPaperLayerStatus(submissionBody[`L${firstLayer.layerNumber}_Status`])) {
+            await sendManualPaperWorkflowEmail(token, {
               listTitle,
               responseItemId: parentId,
-              layer: firstLayer.layerNumber,
-            },
-            firstLayer.type === "evaluation" ? firstLayer.emailSchedule : undefined,
-            {
-              layer: firstLayer.layerNumber,
-              layerType: firstLayer.type,
-              totalLayers: parsedLayerConfig?.layers?.length ?? 1,
-              reviewLink,
-              submittedBy: valueToText(submissionBody.SubmittedBy) || "Public respondent",
-            },
-          );
+              submittedBy,
+              recipient,
+              layer: firstLayer,
+              totalLayers,
+            });
+          } else {
+            const reviewLink = firstLayer.authMode === "public" && firstLayer.publicToken
+              ? `${appBaseUrl}/eval/${encodeURIComponent(firstLayer.publicToken)}?item=${encodeURIComponent(parentId)}`
+              : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${encodeURIComponent(parentId)}/${firstLayer.layerNumber}`;
+            await scheduleOrDeliverWorkflowEmail(
+              token,
+              buildWorkflowActionEmail({
+                formTitle: listTitle,
+                submittedBy,
+                responseItemId: parentId,
+                layer: firstLayer.layerNumber,
+                totalLayers,
+                recipient,
+                layerType: firstLayer.type,
+                reviewLink,
+              }),
+              {
+                listTitle,
+                responseItemId: parentId,
+                layer: firstLayer.layerNumber,
+              },
+              firstLayer.type === "evaluation" ? firstLayer.emailSchedule : undefined,
+              {
+                layer: firstLayer.layerNumber,
+                layerType: firstLayer.type,
+                totalLayers,
+                reviewLink,
+                submittedBy,
+              },
+            );
+          }
         } catch (emailError) {
           logWarn("api:submit-form", "Initial workflow email delivery failed", {
             listTitle,

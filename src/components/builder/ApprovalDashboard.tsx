@@ -23,6 +23,7 @@ import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany } from "../../utils/companySelection";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
+import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import {
   getScheduledWorkflowEmail,
@@ -47,6 +48,11 @@ import ReplayIcon from "@mui/icons-material/Replay";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CONFIGURED_SENDER_EMAIL = (
+  import.meta.env.VITE_HR_FORM_EMAIL_FROM_ADDRESS ||
+  import.meta.env.VITE_EMAIL_FROM_ADDRESS ||
+  ""
+).trim().toLowerCase();
 const SUBMISSIONS_PER_PAGE = 12;
 
 // Theme
@@ -348,6 +354,16 @@ function stripFieldReference(value: string): string {
 
 function normalizeEmailAddress(value: unknown): string {
   return valueToText(value).toLowerCase();
+}
+
+function manualPaperStatusForLayer(layer: LayerConfigItem): string {
+  return layer.type === "evaluation" ? "Manual Evaluation Required" : "Manual Approval Required";
+}
+
+function shouldUseManualPaperForSender(layer: LayerConfigItem, email: string): boolean {
+  return layer.manualPaperWhenSenderEmail !== false &&
+    !!CONFIGURED_SENDER_EMAIL &&
+    email.trim().toLowerCase() === CONFIGURED_SENDER_EMAIL;
 }
 
 async function resolveDepartmentApproverEmail(
@@ -1312,6 +1328,15 @@ export default function ApprovalDashboard() {
       const resolvedEmails: Record<number, string> = {};
       const assigneeErrors: string[] = [];
       for (const layer of bLayers) {
+        const routed = resolveEvaluationSubmitterRouting(layer, submittedData);
+        if (routed?.manualPaper) {
+          resolvedEmails[layer.layerNumber] = routed.sendToConfiguredSender ? CONFIGURED_SENDER_EMAIL : "";
+          continue;
+        }
+        if (routed?.email) {
+          resolvedEmails[layer.layerNumber] = routed.email;
+          continue;
+        }
         const result = await resolveLayerAssigneeEmail(token, layer, submittedData);
         if (result.error) assigneeErrors.push(result.error);
         if (result.email) resolvedEmails[layer.layerNumber] = result.email;
@@ -1330,9 +1355,13 @@ export default function ApprovalDashboard() {
         CurrentApprovalLayer: firstLayerNumber,
       };
       for (const layer of bLayers) {
-        patchBody[`L${layer.layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
-        if (resolvedEmails[layer.layerNumber]) {
-          patchBody[`L${layer.layerNumber}_Email`] = resolvedEmails[layer.layerNumber];
+        const routed = resolveEvaluationSubmitterRouting(layer, submittedData);
+        const resolvedEmail = resolvedEmails[layer.layerNumber] || "";
+        patchBody[`L${layer.layerNumber}_Status`] = routed?.manualPaper || shouldUseManualPaperForSender(layer, resolvedEmail)
+          ? manualPaperStatusForLayer(layer)
+          : SP_LAYER_STATUS.PENDING;
+        if (resolvedEmail) {
+          patchBody[`L${layer.layerNumber}_Email`] = resolvedEmail;
         }
       }
 

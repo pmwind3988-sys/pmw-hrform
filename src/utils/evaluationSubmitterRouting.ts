@@ -1,9 +1,10 @@
-import type { EvaluationLayerConfig, EvaluationSubmitterRoutingRule } from "../types";
+import type { EvaluationSubmitterRoutingRule, LayerConfigItem } from "../types";
 
 export interface EvaluationSubmitterRoutingResult {
   rule: EvaluationSubmitterRoutingRule;
   email?: string;
   manualPaper: boolean;
+  sendToConfiguredSender: boolean;
 }
 
 function text(value: unknown): string {
@@ -26,9 +27,13 @@ function fieldValue(data: Record<string, unknown>, fieldName: string | undefined
 function ruleMatches(rule: EvaluationSubmitterRoutingRule, data: Record<string, unknown>): boolean {
   const expectedEmail = normalized(rule.emailValue);
   const expectedEmployeeId = normalized(rule.employeeIdValue);
+  const expectedUserId = normalized(rule.userIdValue);
+  const expectedFullName = normalized(rule.fullNameValue);
   const hasEmailCondition = !!expectedEmail;
   const hasEmployeeCondition = !!expectedEmployeeId;
-  if (!hasEmailCondition && !hasEmployeeCondition) return false;
+  const hasUserIdCondition = !!expectedUserId;
+  const hasFullNameCondition = !!expectedFullName;
+  if (!hasEmailCondition && !hasEmployeeCondition && !hasUserIdCondition && !hasFullNameCondition) return false;
 
   if (hasEmailCondition) {
     const submittedBy = normalized(data.SubmittedBy);
@@ -41,11 +46,21 @@ function ruleMatches(rule: EvaluationSubmitterRoutingRule, data: Record<string, 
     if (actualEmployeeId !== expectedEmployeeId) return false;
   }
 
+  if (hasUserIdCondition) {
+    const actualUserId = normalized(fieldValue(data, rule.userIdField));
+    if (actualUserId !== expectedUserId) return false;
+  }
+
+  if (hasFullNameCondition) {
+    const actualFullName = normalized(fieldValue(data, rule.fullNameField));
+    if (actualFullName !== expectedFullName) return false;
+  }
+
   return true;
 }
 
 export function resolveEvaluationSubmitterRouting(
-  layer: EvaluationLayerConfig,
+  layer: LayerConfigItem,
   data: Record<string, unknown>,
 ): EvaluationSubmitterRoutingResult | null {
   const rule = (layer.submitterRoutingRules ?? []).find((candidate) => ruleMatches(candidate, data));
@@ -53,6 +68,7 @@ export function resolveEvaluationSubmitterRouting(
   return {
     rule,
     email: rule.action === "assign-evaluator" ? text(rule.evaluatorEmail) : undefined,
-    manualPaper: rule.action === "manual-paper",
+    manualPaper: rule.action === "manual-paper" || rule.action === "send-to-configured-sender",
+    sendToConfiguredSender: rule.action === "send-to-configured-sender",
   };
 }

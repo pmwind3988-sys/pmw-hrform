@@ -13,7 +13,7 @@ import "survey-core/survey-core.min.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
-import type { EvaluationLayerConfig, LayerConfig, LayerConfigItem } from "../types";
+import type { LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
@@ -30,6 +30,11 @@ import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload 
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
+const CONFIGURED_SENDER_EMAIL = (
+  import.meta.env.VITE_HR_FORM_EMAIL_FROM_ADDRESS ||
+  import.meta.env.VITE_EMAIL_FROM_ADDRESS ||
+  ""
+).trim().toLowerCase();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
@@ -182,6 +187,16 @@ function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string,
     throw new Error(`${label} needs a valid assignee email before this form can be submitted.`);
   }
   return email;
+}
+
+function manualPaperStatusForLayer(layer: LayerConfigItem): string {
+  return layer.type === "evaluation" ? "Manual Evaluation Required" : "Manual Approval Required";
+}
+
+function shouldUseManualPaperForSender(layer: LayerConfigItem, email: string): boolean {
+  return layer.manualPaperWhenSenderEmail !== false &&
+    !!CONFIGURED_SENDER_EMAIL &&
+    email.trim().toLowerCase() === CONFIGURED_SENDER_EMAIL;
 }
 
 async function resolveDepartmentApproverEmail(
@@ -967,7 +982,7 @@ export default function DynamicFormPage() {
         }
       }
 
-      let hasManualPaperEvaluation = false;
+      let hasManualPaperWorkflow = false;
 
       // Step 3: Build body (keep existing logic)
       const body: Record<string, unknown> = {};
@@ -1003,17 +1018,20 @@ export default function DynamicFormPage() {
         for (let index = 0; index < layerConfigParsed.layers.length; index++) {
           const layer = layerConfigParsed.layers[index];
           const layerNumber = layer.layerNumber;
-          const routed = layer.type === "evaluation"
-            ? resolveEvaluationSubmitterRouting(layer as EvaluationLayerConfig, body)
-            : null;
+          const routed = resolveEvaluationSubmitterRouting(layer, body);
           if (routed?.manualPaper) {
-            hasManualPaperEvaluation = true;
-            body[`L${layerNumber}_Status`] = "Manual Evaluation Required";
-            body[`L${layerNumber}_Email`] = "";
-            activeLayers[index] = { email: "", name: "" };
+            hasManualPaperWorkflow = true;
+            body[`L${layerNumber}_Status`] = manualPaperStatusForLayer(layer);
+            const senderEmail = routed.sendToConfiguredSender ? CONFIGURED_SENDER_EMAIL : "";
+            body[`L${layerNumber}_Email`] = senderEmail;
+            activeLayers[index] = { email: senderEmail, name: "" };
           } else {
             const routedEmail = routed?.email || activeLayers[index]?.email || "";
-            body[`L${layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
+            const manualPaperForSender = shouldUseManualPaperForSender(layer, routedEmail);
+            if (manualPaperForSender) hasManualPaperWorkflow = true;
+            body[`L${layerNumber}_Status`] = manualPaperForSender
+              ? manualPaperStatusForLayer(layer)
+              : SP_LAYER_STATUS.PENDING;
             body[`L${layerNumber}_Email`] = routedEmail;
             activeLayers[index] = { ...(activeLayers[index] || { name: "" }), email: routedEmail };
           }
@@ -1164,10 +1182,14 @@ export default function DynamicFormPage() {
         // Step 7: Trigger notification
         if (resolvedLayerCount > 0 && result?.Id) {
           const layer1Email = activeLayers[0]?.email;
+          const firstLayerNumber = layerConfigParsed?.layers?.[0]?.layerNumber ?? 1;
+          const firstLayerManualPaper = String(body[`L${firstLayerNumber}_Status`] || "").toLowerCase().startsWith("manual ");
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
           const baseUrl = window.location.origin;
 
-          if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
+          if (firstLayerManualPaper) {
+            // Manual-paper workflow notices are sent with the generated PDF below.
+          } else if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
             const reviewLink = formSlug
               ? `${baseUrl}/eval/${encodeURIComponent(formSlug)}/${result.Id}/1`
               : undefined;
@@ -1200,8 +1222,8 @@ export default function DynamicFormPage() {
           }
         }
 
-        // Step 7: Generate PDF for no-layers or manual-paper evaluation submissions.
-        if ((resolvedLayerCount === 0 || hasManualPaperEvaluation) && result?.Id && token) {
+        // Step 7: Generate PDF for no-layers or manual-paper workflow submissions.
+        if ((resolvedLayerCount === 0 || hasManualPaperWorkflow) && result?.Id && token) {
           try {
             const cfgData = await getFormConfigByTitle(token, cfg.Title as string);
             const formVer = cfgData ? (cfgData as unknown as Record<string, unknown>).CurrentVersion as string || "1.0" : "1.0";
@@ -1264,10 +1286,10 @@ export default function DynamicFormPage() {
                 isoStandards: isoStandardsText,
                 logoUrl: logoUrl || "/logo-128.png",
                 pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
-                  ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperEvaluation ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
-                  : hasManualPaperEvaluation ? { enabled: true, title: "Manual Evaluation Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
+                  ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
+                  : hasManualPaperWorkflow ? { enabled: true, title: "Manual Workflow Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
               });
-              if (hasManualPaperEvaluation) {
+              if (hasManualPaperWorkflow) {
                 const pdfLink = pdfUrl.startsWith("http") ? pdfUrl : `${new URL(SP_SITE_URL).origin}${pdfUrl}`;
                 await fetch("/api/send-email", {
                   method: "POST",
@@ -1278,8 +1300,8 @@ export default function DynamicFormPage() {
                   },
                   body: JSON.stringify({
                     sendToConfiguredSender: true,
-                    subject: `Manual evaluation PDF ready: ${cfg.Title as string}`,
-                    body: `A submission matched a manual paper evaluation rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/><a href="${pdfLink}">Open generated PDF</a>`,
+                    subject: `Manual workflow PDF ready: ${cfg.Title as string}`,
+                    body: `A submission matched a manual paper workflow rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/><a href="${pdfLink}">Open generated PDF</a>`,
                   }),
                 });
               }

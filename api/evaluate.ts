@@ -3,6 +3,7 @@ import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, q
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   buildWorkflowActionEmail,
+  buildManualPaperWorkflowEmail,
   getApplicationBaseUrl,
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
@@ -48,6 +49,19 @@ function isTerminalLayerStatus(value: unknown): boolean {
 function isTerminalFormStatus(value: unknown): boolean {
   const normalized = String(value || "").trim().toLowerCase().replace(/[\s_-]/g, "");
   return ["completed", "rejected", "cancelled", "fullyapproved"].includes(normalized);
+}
+
+function isManualPaperLayerStatus(value: unknown): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "manual evaluation required" || normalized === "manual approval required";
+}
+
+function layerSurveyElements(layer: Record<string, unknown>): Record<string, unknown>[] {
+  return Array.isArray(layer.surveyElements)
+    ? layer.surveyElements.filter((element): element is Record<string, unknown> =>
+        typeof element === "object" && element !== null && !Array.isArray(element)
+      )
+    : [];
 }
 
 function parseSurveyJson(raw: unknown): unknown {
@@ -534,18 +548,34 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           ? `${appBaseUrl}/eval/${encodeURIComponent(publicToken)}?item=${safeResponseItemId}`
           : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${safeResponseItemId}/${nextLayerNumber}`;
         try {
+          const layerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
+          const totalLayerCount = activeLayers.length;
+          const submittedBy = String(responseItem.fields.SubmittedBy || "Public respondent");
+          const manualPaper = isManualPaperLayerStatus(responseItem.fields[`L${nextLayerNumber}_Status`]);
           await scheduleOrDeliverWorkflowEmail(
             graphToken,
-            buildWorkflowActionEmail({
-              formTitle,
-              submittedBy: String(responseItem.fields.SubmittedBy || "Public respondent"),
-              responseItemId: safeResponseItemId,
-              layer: nextLayerNumber,
-              totalLayers: activeLayers.length,
-              recipient,
-              layerType: notificationNextLayer.type === "evaluation" ? "evaluation" : "approval",
-              reviewLink,
-            }),
+            manualPaper
+              ? buildManualPaperWorkflowEmail({
+                  formTitle,
+                  submittedBy,
+                  responseItemId: safeResponseItemId,
+                  layer: nextLayerNumber,
+                  totalLayers: totalLayerCount,
+                  recipient,
+                  layerType,
+                  layerTitle: typeof notificationNextLayer.title === "string" ? notificationNextLayer.title : undefined,
+                  surveyElements: layerSurveyElements(notificationNextLayer),
+                })
+              : buildWorkflowActionEmail({
+                  formTitle,
+                  submittedBy,
+                  responseItemId: safeResponseItemId,
+                  layer: nextLayerNumber,
+                  totalLayers: totalLayerCount,
+                  recipient,
+                  layerType,
+                  reviewLink,
+                }),
             {
               listTitle: responseListName,
               responseItemId: responseItem.id,
@@ -556,10 +586,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               : undefined,
             {
               layer: nextLayerNumber,
-              layerType: notificationNextLayer.type === "evaluation" ? "evaluation" : "approval",
-              totalLayers: activeLayers.length,
-              reviewLink,
-              submittedBy: String(responseItem.fields.SubmittedBy || "Public respondent"),
+              layerType,
+              totalLayers: totalLayerCount,
+              reviewLink: manualPaper ? "" : reviewLink,
+              submittedBy,
             },
           );
         } catch (emailError) {

@@ -1993,6 +1993,74 @@ function emailBody(params: {
 </body></html>`;
 }
 
+function isManualPaperWorkflowStatus(value: unknown): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "manual evaluation required" || normalized === "manual approval required";
+}
+
+async function getLayerStatusForNotification(
+  token: string,
+  responseListTitle: string,
+  responseItemId: number,
+  layerNumber: number,
+): Promise<string> {
+  try {
+    const item = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})?$select=L${layerNumber}_Status`,
+    ) as Record<string, unknown>;
+    return String(item[`L${layerNumber}_Status`] || "");
+  } catch {
+    return "";
+  }
+}
+
+function manualPaperEmailBody(params: {
+  formTitle: string;
+  submittedBy: string;
+  responseItemId: number;
+  layerNumber: number;
+  totalLayers: number;
+  layerType: "approval" | "evaluation";
+}): string {
+  const fieldLabels = params.layerType === "evaluation"
+    ? ["Evaluation notes", "Evaluator name", "Signature", "Evaluation date"]
+    : ["Approval outcome", "Approver name", "Signature", "Signed date", "Rejection reason"];
+  const fieldsHtml = fieldLabels.map((label) => `<tr>
+    <td style="padding:10px 0;border-bottom:1px solid #E5EAF1;font-size:13px;color:#111827;font-weight:650">${escapeHtml(label)}</td>
+    <td style="padding:10px 0;border-bottom:1px solid #E5EAF1;font-size:13px;color:#9CA3AF">________________________________</td>
+  </tr>`).join("");
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F3F6FA;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(params.formTitle)} #${params.responseItemId} needs manual ${escapeHtml(params.layerType)}.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FA">
+  <tr><td align="center" style="padding:32px 16px">
+    <table role="presentation" width="584" cellpadding="0" cellspacing="0" style="width:100%;max-width:584px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,0.06),0 10px 30px rgba(17,24,39,0.08)">
+      <tr><td style="padding:22px 28px;background:#FFFFFF;border-bottom:1px solid #E5EAF1">
+        <div style="font-size:12px;line-height:16px;color:#6B7280;font-weight:700;text-transform:uppercase;letter-spacing:0.08em">PMW HR Form</div>
+        <div style="margin-top:4px;font-size:13px;line-height:18px;color:#4B5563">Manual workflow notification</div>
+      </td></tr>
+      <tr><td style="padding:28px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:999px">
+          <tr><td style="padding:6px 12px;font-size:11px;line-height:14px;font-weight:800;color:#92400E;text-transform:uppercase;letter-spacing:0.06em">Manual paper workflow</td></tr>
+        </table>
+        <h1 style="margin:0 0 8px;font-size:22px;line-height:28px;color:#111827;font-weight:750">${escapeHtml(params.formTitle)} needs manual ${escapeHtml(params.layerType)}</h1>
+        <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#4B5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer.</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
+          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Form</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(params.formTitle)}</td></tr>
+          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Submission ID</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">#${params.responseItemId}</td></tr>
+          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Submitted by</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(params.submittedBy)}</td></tr>
+          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Workflow stage</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">Layer ${params.layerNumber} of ${params.totalLayers}</td></tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-top:1px solid #E5EAF1">${fieldsHtml}</table>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+}
+
 /**
  * Triggers email notifications for approval workflow.
  * Handles: new submission, layer approved, final approval, rejection.
@@ -2045,7 +2113,28 @@ export async function triggerApprovalNotification(
       }
 
       if (targetEmail) {
+        const targetLayerStatus = await getLayerStatusForNotification(token, responseListTitle, responseItemId, layer);
         await persistSchedule(targetEmail, layer, requestLink);
+        if (isManualPaperWorkflowStatus(targetLayerStatus)) {
+          await sendSpEmail(token, {
+            to: targetEmail,
+            subject: `Manual ${nextLayerType}: ${formTitle} layer ${layer}`,
+            workflow: {
+              listTitle: responseListTitle,
+              responseItemId,
+              layer,
+            },
+            body: manualPaperEmailBody({
+              formTitle,
+              submittedBy,
+              responseItemId,
+              layerNumber: layer,
+              totalLayers,
+              layerType: nextLayerType,
+            }),
+          });
+          return;
+        }
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
           return;
         }
@@ -2081,7 +2170,28 @@ export async function triggerApprovalNotification(
     } else if (action === 'approve') {
       if (layer < totalLayers && nextApproverEmail) {
         // Notify next layer approver
+        const targetLayerStatus = await getLayerStatusForNotification(token, responseListTitle, responseItemId, displayNextLayerNumber);
         await persistSchedule(nextApproverEmail, displayNextLayerNumber, requestLink);
+        if (isManualPaperWorkflowStatus(targetLayerStatus)) {
+          await sendSpEmail(token, {
+            to: nextApproverEmail,
+            subject: `Manual ${nextLayerType}: ${formTitle} layer ${displayNextLayerNumber}`,
+            workflow: {
+              listTitle: responseListTitle,
+              responseItemId,
+              layer: displayNextLayerNumber,
+            },
+            body: manualPaperEmailBody({
+              formTitle,
+              submittedBy,
+              responseItemId,
+              layerNumber: displayNextLayerNumber,
+              totalLayers,
+              layerType: nextLayerType,
+            }),
+          });
+          return;
+        }
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
           return;
         }

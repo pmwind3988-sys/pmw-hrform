@@ -126,6 +126,8 @@ export interface BaseLayer {
   publicToken?: string;
   tokenExpiresAt?: string;
   notifyOnComplete?: boolean;
+  manualPaperWhenSenderEmail?: boolean;
+  submitterRoutingRules?: EvaluationSubmitterRoutingRule[];
 }
 
 export interface ApprovalLayerConfig extends BaseLayer {
@@ -139,7 +141,6 @@ export interface EvaluationLayerConfig extends BaseLayer {
   surveyElements: Record<string, unknown>[];
   confirmationLabel?: string;
   emailSchedule?: EvaluationEmailSchedule;
-  submitterRoutingRules?: EvaluationSubmitterRoutingRule[];
 }
 
 export type LayerConfigItem = ApprovalLayerConfig | EvaluationLayerConfig;
@@ -151,7 +152,11 @@ export interface EvaluationSubmitterRoutingRule {
   emailValue?: string;
   employeeIdField?: string;
   employeeIdValue?: string;
-  action: "assign-evaluator" | "manual-paper";
+  userIdField?: string;
+  userIdValue?: string;
+  fullNameField?: string;
+  fullNameValue?: string;
+  action: "assign-evaluator" | "manual-paper" | "send-to-configured-sender";
   evaluatorEmail?: string;
 }
 

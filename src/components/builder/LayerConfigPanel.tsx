@@ -625,8 +625,8 @@ export default function LayerConfigPanel({
   };
 
   const renderSubmitterRoutingRules = (
-    layer: EvaluationLayerConfig,
-    onPatch: (patch: Partial<EvaluationLayerConfig>) => void,
+    layer: LayerConfigItem,
+    onPatch: (patch: Partial<LayerConfigItem>) => void,
   ) => {
     const rules = layer.submitterRoutingRules ?? [];
     const patchRule = (ruleIndex: number, patch: Partial<EvaluationSubmitterRoutingRule>) => {
@@ -638,7 +638,7 @@ export default function LayerConfigPanel({
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 9, background: C.white }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em" }}>
-            Submitter Exceptions
+            Submitter Routing
           </label>
           <button
             type="button"
@@ -659,7 +659,7 @@ export default function LayerConfigPanel({
           </button>
         </div>
         <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45, marginBottom: rules.length ? 8 : 0 }}>
-          Match by submitted email, employee ID field/value, or both. The first matching rule wins.
+          Match by submitted email, employee ID, user ID, full name, or a combination. The first matching rule wins.
         </div>
         {rules.map((rule, ruleIndex) => (
           <div key={rule.id || ruleIndex} style={{ border: `1px solid ${C.borderLight}`, borderRadius: 8, padding: 8, marginTop: 7, background: C.offWhite }}>
@@ -708,12 +708,41 @@ export default function LayerConfigPanel({
                 style={{ ...inp, height: 30, fontSize: 11 }}
               />
               <select
+                value={rule.userIdField || ""}
+                onChange={event => patchRule(ruleIndex, { userIdField: event.target.value })}
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              >
+                <option value="">User ID field</option>
+                {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
+              </select>
+              <input
+                value={rule.userIdValue || ""}
+                onChange={event => patchRule(ruleIndex, { userIdValue: event.target.value })}
+                placeholder="User ID value"
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              />
+              <select
+                value={rule.fullNameField || ""}
+                onChange={event => patchRule(ruleIndex, { fullNameField: event.target.value })}
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              >
+                <option value="">Full name field</option>
+                {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
+              </select>
+              <input
+                value={rule.fullNameValue || ""}
+                onChange={event => patchRule(ruleIndex, { fullNameValue: event.target.value })}
+                placeholder="Full name value"
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              />
+              <select
                 value={rule.action}
                 onChange={event => patchRule(ruleIndex, { action: event.target.value as EvaluationSubmitterRoutingRule["action"] })}
                 style={{ ...inp, height: 30, fontSize: 11 }}
               >
-                <option value="assign-evaluator">Different evaluator</option>
-                <option value="manual-paper">Manual paper evaluation</option>
+                <option value="assign-evaluator">Different assignee</option>
+                <option value="send-to-configured-sender">Send to EMAIL_FROM_ADDRESS</option>
+                <option value="manual-paper">Manual paper / no online assignee</option>
               </select>
             </div>
             {rule.action === "assign-evaluator" && (
@@ -755,6 +784,8 @@ export default function LayerConfigPanel({
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
                 notifyOnComplete: layer.notifyOnComplete,
+                manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
+                submitterRoutingRules: layer.submitterRoutingRules,
                 confirmationType: "signature",
                 allowRejectionReason: true,
               };
@@ -772,6 +803,8 @@ export default function LayerConfigPanel({
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
                 notifyOnComplete: layer.notifyOnComplete,
+                manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
+                submitterRoutingRules: layer.submitterRoutingRules,
                 surveyElements: [],
                 emailSchedule: { mode: "immediate" },
               };
@@ -817,6 +850,26 @@ export default function LayerConfigPanel({
           suggestions,
         })}
 
+        {layer.authMode === "365" && (
+          <>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 9px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={layer.manualPaperWhenSenderEmail !== false}
+                onChange={event => patchLayer(idx, { manualPaperWhenSenderEmail: event.target.checked })}
+                style={{ width: 14, height: 14, accentColor: C.purple, marginTop: 1 }}
+              />
+              <span style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.45 }}>
+                Treat the configured sender email as paper/manual. If this layer resolves to EMAIL_FROM_ADDRESS, no online evaluator link is sent and the manual approval/evaluation notice goes to that mailbox.
+              </span>
+            </label>
+            {renderSubmitterRoutingRules(
+              layer,
+              (patch) => patchLayer(idx, patch),
+            )}
+          </>
+        )}
+
         {/* Approval-specific: confirmation type */}
         {isApproval && (
           <>
@@ -855,10 +908,6 @@ export default function LayerConfigPanel({
         {isEval && (
           <div>
             {renderEvaluationEmailSchedule(
-              layer as EvaluationLayerConfig,
-              (patch) => patchLayer(idx, patch),
-            )}
-            {renderSubmitterRoutingRules(
               layer as EvaluationLayerConfig,
               (patch) => patchLayer(idx, patch),
             )}
@@ -967,6 +1016,8 @@ export default function LayerConfigPanel({
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
                 notifyOnComplete: layer.notifyOnComplete,
+                manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
+                submitterRoutingRules: layer.submitterRoutingRules,
                 confirmationType: "signature",
                 allowRejectionReason: true,
               };
@@ -984,6 +1035,8 @@ export default function LayerConfigPanel({
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
                 notifyOnComplete: layer.notifyOnComplete,
+                manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
+                submitterRoutingRules: layer.submitterRoutingRules,
                 surveyElements: [],
                 emailSchedule: { mode: "immediate" },
               };
@@ -1029,6 +1082,26 @@ export default function LayerConfigPanel({
           suggestions: branchSuggestions,
         })}
 
+        {layer.authMode === "365" && (
+          <>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 9px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={layer.manualPaperWhenSenderEmail !== false}
+                onChange={event => patchBranchLayer(bi, li, { manualPaperWhenSenderEmail: event.target.checked })}
+                style={{ width: 14, height: 14, accentColor: C.purple, marginTop: 1 }}
+              />
+              <span style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.45 }}>
+                Treat the configured sender email as paper/manual. If this layer resolves to EMAIL_FROM_ADDRESS, no online evaluator link is sent and the manual approval/evaluation notice goes to that mailbox.
+              </span>
+            </label>
+            {renderSubmitterRoutingRules(
+              layer,
+              (patch) => patchBranchLayer(bi, li, patch),
+            )}
+          </>
+        )}
+
         {/* Approval-specific: confirmation type */}
         {isApproval && (
           <>
@@ -1067,10 +1140,6 @@ export default function LayerConfigPanel({
         {isEval && (
           <div>
             {renderEvaluationEmailSchedule(
-              layer as EvaluationLayerConfig,
-              (patch) => patchBranchLayer(bi, li, patch),
-            )}
-            {renderSubmitterRoutingRules(
               layer as EvaluationLayerConfig,
               (patch) => patchBranchLayer(bi, li, patch),
             )}
