@@ -5,6 +5,7 @@ import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/render
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
 import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
+import type { PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export interface PdfFormData {
@@ -25,6 +26,7 @@ export interface PdfFormData {
   layerResults?: PdfLayerResult[];
   isoStandards?: string;
   logoUrl?: string;
+  pdfConfig?: PdfConfig;
 }
 
 export interface PdfLayerResult {
@@ -142,6 +144,16 @@ const S = StyleSheet.create({
   evalSubRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 6, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
   evalSubLabel: { width: "34%", fontSize: 6, color: C.muted, paddingRight: 5, lineHeight: 1.25 },
   evalSubValue: { width: "66%", fontSize: 6, color: C.text, lineHeight: 1.25 },
+  paperEvalRow: { flexDirection: "row", paddingVertical: 6, paddingHorizontal: 6, borderBottomWidth: 0.4, borderBottomColor: C.borderLight, alignItems: "flex-start" },
+  paperEvalLabel: { width: "34%", fontSize: 8.5, color: C.text, paddingRight: 8, lineHeight: 1.25 },
+  paperFieldBox: { width: "66%" },
+  paperLine: { height: 18, borderBottomWidth: 0.7, borderBottomColor: C.border, marginBottom: 5 },
+  paperLineText: { fontSize: 8, color: C.text, lineHeight: 1.2 },
+  paperOptionGroup: { width: "66%", flexDirection: "row", flexWrap: "wrap" },
+  paperOption: { flexDirection: "row", alignItems: "center", marginRight: 16, marginBottom: 7 },
+  paperOptionBox: { width: 11, height: 11, borderWidth: 0.9, borderColor: C.text, marginRight: 5, alignItems: "center", justifyContent: "center" },
+  paperOptionMark: { fontSize: 8, fontWeight: "bold", lineHeight: 1 },
+  paperOptionLabel: { fontSize: 8, color: C.text, lineHeight: 1.2 },
 
   // ── No data ──
   noData: { fontSize: 7, color: C.muted, fontStyle: "italic", textAlign: "center", paddingVertical: 10 },
@@ -173,6 +185,13 @@ function fmtDate(d: string | undefined | null): string {
 
 function fmtVal(v: unknown, field: Partial<FormSubmissionField> = {}): string {
   return formatPdfFieldValue(v, field);
+}
+
+function isEmptyPdfValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
 }
 
 function fallbackPdfLabel(key: string): string {
@@ -331,10 +350,177 @@ function renderMeasureValue(field: FormSubmissionField) {
   );
 }
 
-function evaluationFieldsForLayer(layer: PdfLayerResult): FormSubmissionField[] {
+function textValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function optionText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
+function choiceOption(choice: unknown): { value: string; label: string } | null {
+  if (typeof choice === "string" || typeof choice === "number" || typeof choice === "boolean") {
+    const value = String(choice);
+    return { value, label: value };
+  }
+  if (!isRecord(choice)) return null;
+  const rawValue = choice.value ?? choice.itemValue ?? choice.id ?? choice.name;
+  const value = optionText(rawValue);
+  if (!value) return null;
+  const label = optionText(choice.text) || optionText(choice.title) || optionText(choice.label) || value;
+  return { value, label };
+}
+
+function normalizedSelectedValues(value: unknown): Set<string> {
+  if (isEmptyPdfValue(value)) return new Set();
+  const parsed = typeof value === "string" ? parseMaybeJson(value) ?? value : value;
+  const values = Array.isArray(parsed) ? parsed : [parsed];
+  return new Set(values.map((entry) => String(entry)));
+}
+
+function choiceOptionsForField(field: FormSubmissionField): { value: string; label: string }[] {
+  const type = field.type.toLowerCase();
+  if (type === "boolean" || type === "consent") {
+    return [
+      { value: "true", label: field.labelTrue || "Yes" },
+      { value: "false", label: field.labelFalse || "No" },
+    ];
+  }
+  return (field.choices ?? []).map(choiceOption).filter((option): option is { value: string; label: string } => option !== null);
+}
+
+function shouldRenderTickboxes(field: FormSubmissionField): boolean {
+  const type = field.type.toLowerCase();
+  return ["boolean", "consent", "dropdown", "radiogroup", "checkbox", "tagbox", "buttongroup"].includes(type)
+    || ((field.choices?.length ?? 0) > 0 && ["", "text"].includes(type));
+}
+
+function isLongTextField(field: FormSubmissionField): boolean {
+  const type = field.type.toLowerCase();
+  const inputType = field.inputType?.toLowerCase() ?? "";
+  return type === "comment" || type === "richedit" || type === "html" || inputType === "comment" || (field.rows ?? 0) > 1;
+}
+
+function lineCountForField(field: FormSubmissionField): number {
+  if (isLongTextField(field)) return Math.max(3, Math.min(8, Math.trunc(field.rows ?? 4)));
+  return 1;
+}
+
+function renderPaperLines(field: FormSubmissionField) {
+  const lines = Array.from({ length: lineCountForField(field) });
+  const display = fmtVal(field.value, field);
+  return (
+    <View style={S.paperFieldBox}>
+      {lines.map((_, index) => (
+        <View key={`${field.key}-line-${index}`} style={S.paperLine}>
+          {index === 0 && display ? <Text style={S.paperLineText}>{display}</Text> : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function renderTickboxOptions(field: FormSubmissionField) {
+  const options = choiceOptionsForField(field);
+  if (options.length === 0) return renderPaperLines(field);
+  const selected = normalizedSelectedValues(field.value);
+  if (field.type.toLowerCase() === "boolean" || field.type.toLowerCase() === "consent") {
+    const boolValue = typeof field.value === "boolean" ? String(field.value) : String(field.value).toLowerCase();
+    if (boolValue === "yes") selected.add("true");
+    if (boolValue === "no") selected.add("false");
+  }
+  return (
+    <View style={S.paperOptionGroup}>
+      {options.map((option) => (
+        <View key={`${field.key}-${option.value}`} style={S.paperOption}>
+          <View style={S.paperOptionBox}>
+            {selected.has(option.value) ? <Text style={S.paperOptionMark}>X</Text> : null}
+          </View>
+          <Text style={S.paperOptionLabel}>{option.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function renderPaperFieldValue(field: FormSubmissionField) {
+  if (shouldRenderTickboxes(field)) return renderTickboxOptions(field);
+  return renderPaperLines(field);
+}
+
+const NON_INPUT_EVALUATION_TYPES = new Set([
+  "html",
+  "image",
+  "spacer",
+  "divider",
+  "pagebreak",
+  "alert",
+  "countdown",
+  "datatable",
+  "chartdisplay",
+]);
+
+function evaluationChildElements(element: Record<string, unknown>): Record<string, unknown>[] {
+  const children: Record<string, unknown>[] = [];
+  for (const key of ["elements", "templateElements", "questions"]) {
+    const value = element[key];
+    if (Array.isArray(value)) children.push(...value.filter(isRecord));
+  }
+  const columns = element.columns;
+  if (Array.isArray(columns)) {
+    for (const column of columns) {
+      if (isRecord(column) && Array.isArray(column.elements)) {
+        children.push(...column.elements.filter(isRecord));
+      }
+    }
+  }
+  return children;
+}
+
+function emptyEvaluationFields(elements: Record<string, unknown>[]): FormSubmissionField[] {
+  const fields: FormSubmissionField[] = [];
+  const visit = (element: Record<string, unknown>): void => {
+    const type = textValue(element.type).toLowerCase();
+    const key = textValue(element.name);
+    const children = evaluationChildElements(element);
+    if (type === "panel" || type === "paneldynamic" || (!key && children.length > 0)) {
+      for (const child of children) visit(child);
+      return;
+    }
+    if (!key || NON_INPUT_EVALUATION_TYPES.has(type)) return;
+    fields.push({
+      key,
+      label: textValue(element.title) || fallbackPdfLabel(key),
+      type: textValue(element.type),
+      inputType: textValue(element.inputType) || undefined,
+      choices: Array.isArray(element.choices) ? element.choices : undefined,
+      rateValues: Array.isArray(element.rateValues) ? element.rateValues : undefined,
+      rateMin: numberValue(element.rateMin),
+      rateMax: numberValue(element.rateMax),
+      minRateDescription: textValue(element.minRateDescription) || undefined,
+      maxRateDescription: textValue(element.maxRateDescription) || undefined,
+      rows: numberValue(element.rows),
+      labelTrue: textValue(element.labelTrue) || undefined,
+      labelFalse: textValue(element.labelFalse) || undefined,
+      value: "",
+      kind: "field",
+    });
+  };
+  for (const element of elements) visit(element);
+  return fields;
+}
+
+function evaluationFieldsForLayer(layer: PdfLayerResult, includeEmpty: boolean): FormSubmissionField[] {
   const fields = layer.evaluationFields;
-  if (!fields || Object.keys(fields).length === 0) return [];
   const elements = layer.evaluationSurveyElements ?? [];
+  if ((!fields || Object.keys(fields).length === 0) && includeEmpty) return emptyEvaluationFields(elements);
+  if (!fields || Object.keys(fields).length === 0) return [];
   if (elements.length > 0) {
     return buildFormSubmissionSections({ pages: [{ name: "Evaluation", elements }] }, fields, {
       fallbackSectionTitle: "Evaluation",
@@ -365,33 +551,43 @@ function renderImageSources(sources: string[]) {
   );
 }
 
-export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl }: PdfFormData) {
+export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Submitted answers",
     includeAdditionalFields: false,
   });
-  const title = surveyJson?.title || meta.formTitle;
+  const layoutConfig = pdfConfig?.enabled === false ? undefined : pdfConfig;
+  const title = layoutConfig?.title?.trim() || surveyJson?.title || meta.formTitle;
   const badge = badgeStyle(meta.formStatus);
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
+  const primary = layoutConfig?.primaryColor?.trim() || C.primary;
+  const secondary = layoutConfig?.secondaryColor?.trim() || C.secondary;
+  const comfortable = layoutConfig?.density === "comfortable";
+  const showStatusBadge = layoutConfig?.showStatusBadge !== false;
+  const showApproverChain = layoutConfig?.showApproverChain !== false;
+  const showSignatures = layoutConfig?.showSignatures !== false;
+  const showEvaluationDetails = layoutConfig?.showEvaluationDetails !== false;
+  const includeEmptyEvaluationFields = layoutConfig?.includeEmptyEvaluationFields === true;
+  const effectiveLogoUrl = layoutConfig?.headerLogoUrl?.trim() || logoUrl;
 
   return (
     <Document>
-      <Page size="A4" style={S.page}>
+      <Page size="A4" style={[S.page, comfortable ? { fontSize: 9.3, lineHeight: 1.35 } : {}]}>
         {/* ═══ HEADER ═══ */}
-        <View style={S.header}>
+        <View style={[S.header, { borderBottomColor: primary }]}>
           <View style={S.logoBox}>
-            {logoUrl ? <Image style={S.logo} src={logoUrl} /> : <Text style={{ fontSize: 14, fontWeight: "bold", color: C.primary }}>LOGO</Text>}
+            {effectiveLogoUrl ? <Image style={S.logo} src={effectiveLogoUrl} /> : <Text style={{ fontSize: 14, fontWeight: "bold", color: primary }}>LOGO</Text>}
           </View>
           <View style={S.headerRight}>
-            <Text style={S.docTitle}>{title}</Text>
+            <Text style={[S.docTitle, { color: primary }]}>{title}</Text>
             <Text style={S.docRef}>Document Ref: {meta.formTitle} / v{meta.formVersion}</Text>
           </View>
         </View>
 
         {/* ═══ STATUS BADGE ═══ */}
-        <View style={[S.badge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
+        {showStatusBadge && <View style={[S.badge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
           <Text style={{ color: badge.text }}>{badge.label}</Text>
-        </View>
+        </View>}
 
         {/* ═══ INFO GRID ═══ */}
         <View style={S.infoGrid}>
@@ -406,7 +602,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ FORM FIELDS ═══ */}
         <View style={S.pageSection}>
-          <Text style={S.sectionLabel}>FORM DATA</Text>
+          <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>FORM DATA</Text>
           {formSections.length === 0 ? (
             <Text style={S.noData}>No form fields available.</Text>
           ) : (
@@ -491,11 +687,11 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
         })()}
 
         {/* ═══ LAYER APPROVAL TABLE ═══ */}
-        {layerResults && layerResults.length > 0 && (
+        {showApproverChain && layerResults && layerResults.length > 0 && (
           <View break style={S.approvalPageSection}>
-            <Text style={S.sectionLabel}>APPROVAL / EVALUATION CHAIN</Text>
+            <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>APPROVAL / EVALUATION CHAIN</Text>
             <View style={S.tableBlock} wrap={false}>
-              <View style={[S.layerRow, S.layerHeader]} wrap={false}>
+              <View style={[S.layerRow, S.layerHeader, { backgroundColor: primary }]} wrap={false}>
                 <Text style={[S.layerHeaderText, S.colNum]}>#</Text>
                 <Text style={[S.layerHeaderText, S.colType]}>Type</Text>
                 <Text style={[S.layerHeaderText, S.colStatus]}>Status</Text>
@@ -511,9 +707,9 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
         )}
 
         {/* ═══ SIGNATURE BLOCKS (only shown when at least one layer has a signature) ═══ */}
-        {layerResults && layerResults.filter(l => l.signature).length > 0 && (
+        {showSignatures && layerResults && layerResults.filter(l => l.signature).length > 0 && (
           <View style={S.approvalPageSection}>
-            <Text style={S.sectionLabel}>SIGNATURES</Text>
+            <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>SIGNATURES</Text>
             {layerResults.filter(l => l.signature).map((layer, i) => {
               const badge = badgeStyle(layer.status);
               return (
@@ -533,22 +729,24 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
         )}
 
         {/* ═══ EVALUATION FIELDS (per layer) ═══ */}
-        {layerResults && layerResults.filter(l => l.type === "evaluation" && l.evaluationFields && Object.keys(l.evaluationFields).length > 0).length > 0 && (
+        {showEvaluationDetails && layerResults && layerResults.filter(l => l.type === "evaluation" && ((l.evaluationFields && Object.keys(l.evaluationFields).length > 0) || (includeEmptyEvaluationFields && l.evaluationSurveyElements?.length))).length > 0 && (
           <View style={S.approvalPageSection}>
-            <Text style={S.sectionLabel}>EVALUATION DETAILS</Text>
+            <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>EVALUATION DETAILS</Text>
             {layerResults.filter(l => l.type === "evaluation").map((layer, i) => {
-              const fields = evaluationFieldsForLayer(layer);
+              const fields = evaluationFieldsForLayer(layer, includeEmptyEvaluationFields);
               if (fields.length === 0) return null;
               return (
-                <View key={i} style={{ marginBottom: 6 }} wrap={false}>
-                  <Text style={S.subSectionLabel}>Layer {layer.layerNumber} - {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
+                <View key={i} style={{ marginBottom: includeEmptyEvaluationFields ? 12 : 6 }} wrap={false}>
+                  <Text style={[S.subSectionLabel, { color: secondary }]}>Layer {layer.layerNumber} - {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
                   {fields.map((field, fi) => {
                     const imageSources = collectImageSources(field.value);
                     const measureValue = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
                     return (
-                      <View key={fi} style={S.evalSubRow} wrap={false}>
-                        <Text style={S.evalSubLabel}>{field.label}</Text>
-                        {imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.evalSubValue}>{fmtVal(field.value, field)}</Text>}
+                      <View key={fi} style={includeEmptyEvaluationFields ? S.paperEvalRow : S.evalSubRow} wrap={false}>
+                        <Text style={includeEmptyEvaluationFields ? S.paperEvalLabel : S.evalSubLabel}>{field.label}</Text>
+                        {includeEmptyEvaluationFields
+                          ? renderPaperFieldValue(field)
+                          : imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.evalSubValue}>{fmtVal(field.value, field)}</Text>}
                       </View>
                     );
                   })}
@@ -567,7 +765,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ FOOTER ═══ */}
         <View style={S.footer} fixed>
-          <Text>Generated {fmtDate(new Date().toISOString())}</Text>
+          <Text>{layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`}</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

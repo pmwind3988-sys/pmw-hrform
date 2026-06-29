@@ -170,6 +170,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
       },
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
+      pdfConfig: isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as PdfFormData["pdfConfig"] : undefined,
     };
   } catch {
     return null;
@@ -515,6 +516,7 @@ export default function ApprovalDashboard() {
   const [resendingItemKey, setResendingItemKey] = useState("");
   const [emailNotice, setEmailNotice] = useState("");
   const [customEmailDate, setCustomEmailDate] = useState("");
+  const [manualEmailRecipient, setManualEmailRecipient] = useState("");
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [selectedActiveLayers, setSelectedActiveLayers] = useState<LayerConfigItem[]>([]);
@@ -922,6 +924,7 @@ export default function ApprovalDashboard() {
     setSelectedActiveLayers([]);
     setSelectedLayerAccess(null);
     setCustomEmailDate("");
+    setManualEmailRecipient("");
 
     try {
       // Get form config
@@ -1046,9 +1049,18 @@ export default function ApprovalDashboard() {
         setSelectedActiveLayers(currentResolution.activeLayers);
         setCurrentLayerConfig(currentResolution.currentLayer ?? null);
         const currentLayerNumber = currentResolution.currentLayerNumber;
-        const assignedEmail = normalizeEmailAddress(respItem[`L${currentLayerNumber}_Email`]);
+        const assignedEmailText = valueToText(respItem[`L${currentLayerNumber}_Email`]);
+        const assignedEmail = normalizeEmailAddress(assignedEmailText);
         const signedInEmail = normalizeEmailAddress(accounts[0]?.username);
         const override = isSuperuser;
+        const delivery = getWorkflowEmailStatus(detailItem.WorkflowEmailLog, currentLayerNumber);
+        const schedule = getScheduledWorkflowEmail(detailItem.WorkflowEmailSchedule, currentLayerNumber);
+        setManualEmailRecipient(
+          assignedEmailText
+          || schedule?.recipient
+          || (delivery.status === "not_sent" ? "" : delivery.recipient)
+          || "",
+        );
         setSelectedLayerAccess({
           allowed: override || (!!assignedEmail && assignedEmail === signedInEmail),
           assignedEmail,
@@ -1360,8 +1372,13 @@ export default function ApprovalDashboard() {
     finally { setBranchLoading(false); }
   };
 
-  const handleForceResend = async (item: PendingItem) => {
+  const handleForceResend = async (item: PendingItem, overrideRecipient?: string) => {
     if (!token || !isSuperuser) return;
+    const manualRecipient = overrideRecipient?.trim() || "";
+    if (manualRecipient && !EMAIL_RE.test(manualRecipient)) {
+      setError("Enter a valid approver or evaluator email address before sending.");
+      return;
+    }
     const itemKey = getPendingItemKey(item);
     setResendingItemKey(itemKey);
     setEmailNotice("");
@@ -1377,7 +1394,7 @@ export default function ApprovalDashboard() {
       const currentLayer = activeLayers.find((layer) => layer.layerNumber === currentLayerNumber);
       if (!currentLayer) throw new Error(`Layer ${currentLayerNumber} is not available in the workflow configuration.`);
 
-      let recipient = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
+      let recipient = manualRecipient || valueToText(rawItem[`L${currentLayerNumber}_Email`]);
       if (!EMAIL_RE.test(recipient)) {
         const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
         if (resolved.error) throw new Error(resolved.error);
@@ -1391,8 +1408,22 @@ export default function ApprovalDashboard() {
         }
       }
       if (!EMAIL_RE.test(recipient)) {
-        throw new Error(`Layer ${currentLayerNumber} has no valid evaluator email.`);
+        throw new Error(`Layer ${currentLayerNumber} has no valid approver or evaluator email.`);
       }
+
+      const updatedAt = new Date().toISOString();
+      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`;
+      const patchBody: Record<string, unknown> = { [`L${currentLayerNumber}_Email`]: recipient };
+      if (getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, currentLayerNumber)) {
+        patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
+          rawItem.WorkflowEmailSchedule,
+          currentLayerNumber,
+          recipient,
+          updatedAt,
+        ));
+      }
+      await ensureWorkflowColumns(token, item.Title, Math.max(currentLayerNumber, activeLayers.length || 0));
+      await spPatch(token, itemUrl, patchBody);
 
       const cfg = await getFormConfigByTitle(token, item.Title) as FormConfig | null;
       const publicToken = currentLayer.publicToken || "";
@@ -1417,10 +1448,11 @@ export default function ApprovalDashboard() {
 
       const refreshed = await spGet(
         token,
-        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=WorkflowEmailLog,WorkflowEmailSchedule`
-      ) as { WorkflowEmailLog?: string; WorkflowEmailSchedule?: string };
+        `${itemUrl}?$select=WorkflowEmailLog,WorkflowEmailSchedule,L${currentLayerNumber}_Email`
+      ) as Record<string, unknown>;
       const workflowEmailLog = valueToText(refreshed.WorkflowEmailLog);
       const workflowEmailSchedule = valueToText(refreshed.WorkflowEmailSchedule);
+      const refreshedRecipient = valueToText(refreshed[`L${currentLayerNumber}_Email`]) || recipient;
       setPendingItems((previous) => previous.map((current) =>
         getPendingItemKey(current) === itemKey
           ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule }
@@ -1431,9 +1463,23 @@ export default function ApprovalDashboard() {
           ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule }
           : current
       );
-      setEmailNotice(`Evaluator email sent again to ${recipient}.`);
+      setCompletedLayers((previous) => ({
+        ...previous,
+        [currentLayerNumber]: {
+          ...(previous[currentLayerNumber] || { status: "" }),
+          email: refreshedRecipient,
+        },
+      }));
+      setManualEmailRecipient(refreshedRecipient);
+      if (selectedLayerAccess?.currentLayerNumber === currentLayerNumber) {
+        setSelectedLayerAccess({
+          ...selectedLayerAccess,
+          assignedEmail: refreshedRecipient.toLowerCase(),
+        });
+      }
+      setEmailNotice(`Workflow email sent to ${refreshedRecipient}.`);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Could not resend the evaluator email.");
+      setError(error instanceof Error ? error.message : "Could not resend the workflow email.");
     } finally {
       setResendingItemKey("");
     }
@@ -1537,6 +1583,7 @@ export default function ApprovalDashboard() {
           : current
       );
       if (input.layer === currentLayerNumber) {
+        setManualEmailRecipient(email);
         setSelectedLayerAccess((previous) => previous ? {
           ...previous,
           assignedEmail: email.toLowerCase(),
@@ -1577,7 +1624,8 @@ export default function ApprovalDashboard() {
         throw new Error("Only the active evaluation layer can be scheduled.");
       }
 
-      let recipient = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
+      let recipient = manualEmailRecipient.trim() || valueToText(rawItem[`L${currentLayerNumber}_Email`]);
+      if (recipient && !EMAIL_RE.test(recipient)) throw new Error("Enter a valid evaluator email address.");
       if (!EMAIL_RE.test(recipient)) {
         const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
         if (resolved.error) throw new Error(resolved.error);
@@ -2319,8 +2367,8 @@ export default function ApprovalDashboard() {
                             }}
                           >
                             {hasPendingEmailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "sent" ? "Evaluator email sent"
-                              : emailStatus.status === "failed" ? "Evaluator email failed"
+                              : emailStatus.status === "sent" ? "Workflow email sent"
+                              : emailStatus.status === "failed" ? "Workflow email failed"
                                 : emailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
                                   : "Evaluator email not sent"}
                           </div>
@@ -2388,10 +2436,10 @@ export default function ApprovalDashboard() {
                             <DescriptionIcon style={{ fontSize: 15 }} />
                           </button>
                         )}
-                        {isEvaluationItem && (isAdmin || isSuperuser) && (
+                        {(isAdmin || isSuperuser) && (
                           <button
-                            title="Force resend evaluator email"
-                            aria-label={`Force resend evaluator email for ${item.Title} submission ${item.Id}`}
+                            title="Send workflow email now"
+                            aria-label={`Send workflow email now for ${item.Title} submission ${item.Id}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               void handleForceResend(item);
@@ -2492,9 +2540,9 @@ export default function ApprovalDashboard() {
                       onSave={handleSaveWorkflowAssignment}
                     />
                   )}
-                  {currentLayerType === "evaluation" && (isAdmin || isSuperuser) && (
+                  {(isAdmin || isSuperuser) && selectedActiveLayers.length > 0 && currentLayerConfig && (
                     <div style={{ marginTop: 12, padding: 12, borderRadius: 9, border: `1px solid ${C.purpleMid}`, background: C.purplePale }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Evaluator email controls</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Workflow email controls</div>
                       <div style={{ fontSize: 11, color: C.textSecond, marginTop: 3 }}>
                         {(() => {
                           const layerNumber = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
@@ -2504,44 +2552,59 @@ export default function ApprovalDashboard() {
                           if (delivery.status === "sent") return `Sent to ${delivery.recipient} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)} (${delivery.attempts} attempt${delivery.attempts === 1 ? "" : "s"}).`;
                           if (delivery.status === "failed") return `Last send failed on ${formatDateTime(delivery.lastAttemptAt)}.`;
                           if (schedule) return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
-                          return "No evaluator email has been sent or scheduled.";
+                          return "No workflow email has been sent or scheduled.";
                         })()}
                       </div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 9 }}>
                         <input
-                          type="datetime-local"
-                          value={customEmailDate}
-                          min={toDateTimeLocalValue(new Date())}
-                          onChange={(event) => setCustomEmailDate(event.target.value)}
-                          style={{ padding: "7px 9px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 11, background: "#fff" }}
-                        />
-                        <button
-                          onClick={() => void handleSaveCustomEmailDate()}
-                          disabled={scheduleSaving || !customEmailDate}
+                          type="email"
+                          value={manualEmailRecipient}
+                          onChange={(event) => setManualEmailRecipient(event.target.value)}
+                          placeholder="approver@example.com"
+                          aria-label="Manual workflow email recipient"
                           style={{
-                            padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
-                            background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
-                            cursor: scheduleSaving || !customEmailDate ? "not-allowed" : "pointer",
-                            opacity: scheduleSaving || !customEmailDate ? 0.55 : 1,
+                            flex: "1 1 220px", minWidth: 190, padding: "7px 9px", borderRadius: 7,
+                            border: `1px solid ${C.border}`, fontSize: 11, background: "#fff",
                           }}
-                        >
-                          {scheduleSaving ? "Saving..." : "Set custom date"}
-                        </button>
+                        />
+                        {currentLayerType === "evaluation" && (
+                          <>
+                            <input
+                              type="datetime-local"
+                              value={customEmailDate}
+                              min={toDateTimeLocalValue(new Date())}
+                              onChange={(event) => setCustomEmailDate(event.target.value)}
+                              style={{ padding: "7px 9px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 11, background: "#fff" }}
+                            />
+                            <button
+                              onClick={() => void handleSaveCustomEmailDate()}
+                              disabled={scheduleSaving || !customEmailDate}
+                              style={{
+                                padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
+                                background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
+                                cursor: scheduleSaving || !customEmailDate ? "not-allowed" : "pointer",
+                                opacity: scheduleSaving || !customEmailDate ? 0.55 : 1,
+                              }}
+                            >
+                              {scheduleSaving ? "Saving..." : "Set custom date"}
+                            </button>
+                          </>
+                        )}
                         <button
-                          onClick={() => void handleForceResend(selectedItem)}
-                          disabled={resendingItemKey === getPendingItemKey(selectedItem)}
+                          onClick={() => void handleForceResend(selectedItem, manualEmailRecipient)}
+                          disabled={resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim()}
                           style={{
                             padding: "7px 11px", borderRadius: 7, border: "none",
                             background: C.purple, color: "#fff", fontSize: 11, fontWeight: 700,
-                            cursor: resendingItemKey === getPendingItemKey(selectedItem) ? "not-allowed" : "pointer",
-                            opacity: resendingItemKey === getPendingItemKey(selectedItem) ? 0.55 : 1,
+                            cursor: resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim() ? "not-allowed" : "pointer",
+                            opacity: resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim() ? 0.55 : 1,
                           }}
                         >
                           Send now / resend
                         </button>
                       </div>
                       <div style={{ fontSize: 10, color: C.textMuted, marginTop: 5 }}>
-                        Custom dates must be now or later. Send now works even after a successful delivery.
+                        The address above replaces the current layer recipient for this submission before sending. Send now works after sent, scheduled, or failed email states.
                       </div>
                     </div>
                   )}

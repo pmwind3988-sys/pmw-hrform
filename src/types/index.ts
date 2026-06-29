@@ -139,9 +139,21 @@ export interface EvaluationLayerConfig extends BaseLayer {
   surveyElements: Record<string, unknown>[];
   confirmationLabel?: string;
   emailSchedule?: EvaluationEmailSchedule;
+  submitterRoutingRules?: EvaluationSubmitterRoutingRule[];
 }
 
 export type LayerConfigItem = ApprovalLayerConfig | EvaluationLayerConfig;
+
+export interface EvaluationSubmitterRoutingRule {
+  id: string;
+  label: string;
+  emailField?: string;
+  emailValue?: string;
+  employeeIdField?: string;
+  employeeIdValue?: string;
+  action: "assign-evaluator" | "manual-paper";
+  evaluatorEmail?: string;
+}
 
 export interface ManualBranch {
   name: string;
@@ -821,6 +833,13 @@ export interface PdfConfig {
   footerText?: string;           // Footer text
   showSubmissionDate?: boolean;
   showApproverChain?: boolean;
+  showEvaluationDetails?: boolean;
+  showSignatures?: boolean;
+  showStatusBadge?: boolean;
+  includeEmptyEvaluationFields?: boolean;
+  density?: "compact" | "comfortable";
+  primaryColor?: string;
+  secondaryColor?: string;
   deliveryMethod: "download" | "email" | "sharepoint";
   sharepointLibrary?: string;     // Target SharePoint document library name
   sharepointFolder?: string;      // Target folder path

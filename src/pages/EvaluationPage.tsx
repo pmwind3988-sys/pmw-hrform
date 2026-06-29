@@ -92,6 +92,9 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
       },
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
+      pdfConfig: typeof versionMeta.pdfConfig === "object" && versionMeta.pdfConfig !== null && !Array.isArray(versionMeta.pdfConfig)
+        ? versionMeta.pdfConfig as PdfFormData["pdfConfig"]
+        : undefined,
     });
   } catch {
     /* PDF generation is best-effort after the workflow state is persisted. */

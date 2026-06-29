@@ -13,10 +13,11 @@ import "survey-core/survey-core.min.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
-import type { LayerConfig, LayerConfigItem } from "../types";
+import type { EvaluationLayerConfig, LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
+import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
@@ -966,6 +967,8 @@ export default function DynamicFormPage() {
         }
       }
 
+      let hasManualPaperEvaluation = false;
+
       // Step 3: Build body (keep existing logic)
       const body: Record<string, unknown> = {};
       const urlFieldPatchNames = new Set(urlFieldPatches.map((patch) => patch.fieldName));
@@ -992,14 +995,28 @@ export default function DynamicFormPage() {
       body.PDPANoticeVersion = PDPA_NOTICE_VERSION;
       body.PDPAConsentAt = new Date().toISOString();
       body.RetentionUntil = getPdpaRetentionUntil(new Date(body.PDPAConsentAt as string));
+      body.SubmittedBy = token ? (userEmail || accounts[0]?.username || "authenticated-user") : "GUEST";
 
       // Step 4: Write layer status columns
       if (layerConfigParsed?.layers?.length && !deferDepartmentApproverLookupToApi) {
         // Enhanced path — use new constants
         for (let index = 0; index < layerConfigParsed.layers.length; index++) {
-          const layerNumber = layerConfigParsed.layers[index].layerNumber;
-          body[`L${layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
-          body[`L${layerNumber}_Email`] = activeLayers[index]?.email ?? "";
+          const layer = layerConfigParsed.layers[index];
+          const layerNumber = layer.layerNumber;
+          const routed = layer.type === "evaluation"
+            ? resolveEvaluationSubmitterRouting(layer as EvaluationLayerConfig, body)
+            : null;
+          if (routed?.manualPaper) {
+            hasManualPaperEvaluation = true;
+            body[`L${layerNumber}_Status`] = "Manual Evaluation Required";
+            body[`L${layerNumber}_Email`] = "";
+            activeLayers[index] = { email: "", name: "" };
+          } else {
+            const routedEmail = routed?.email || activeLayers[index]?.email || "";
+            body[`L${layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
+            body[`L${layerNumber}_Email`] = routedEmail;
+            activeLayers[index] = { ...(activeLayers[index] || { name: "" }), email: routedEmail };
+          }
         }
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
         body.CurrentLayer = layerConfigParsed.layers[0]?.layerNumber ?? 0;
@@ -1025,8 +1042,7 @@ export default function DynamicFormPage() {
       // Step 5: Submit
       let submittedByEmail = "";
       if (token) {
-        submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
-        body.SubmittedBy = submittedByEmail;
+        submittedByEmail = String(body.SubmittedBy || userEmail || accounts[0]?.username || "authenticated-user");
         await ensurePdpaColumns(token, cfg.Title as string);
         if (hasManualBranches) {
           const maxBranchLayers = Math.max(
@@ -1184,8 +1200,8 @@ export default function DynamicFormPage() {
           }
         }
 
-        // Step 7: Generate PDF for no-layers submission (immediate terminal state)
-        if (resolvedLayerCount === 0 && result?.Id && token) {
+        // Step 7: Generate PDF for no-layers or manual-paper evaluation submissions.
+        if ((resolvedLayerCount === 0 || hasManualPaperEvaluation) && result?.Id && token) {
           try {
             const cfgData = await getFormConfigByTitle(token, cfg.Title as string);
             const formVer = cfgData ? (cfgData as unknown as Record<string, unknown>).CurrentVersion as string || "1.0" : "1.0";
@@ -1197,6 +1213,9 @@ export default function DynamicFormPage() {
             if (rawSurvey) {
               const parsed = JSON.parse(rawSurvey);
               const surveyContent = parsed.surveyJson || parsed;
+              const versionMeta = parsed.meta && typeof parsed.meta === "object" && !Array.isArray(parsed.meta)
+                ? parsed.meta as Record<string, unknown>
+                : {};
               const respItem = await spGet(
                 token,
                 `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`
@@ -1237,14 +1256,33 @@ export default function DynamicFormPage() {
                 }
               } catch { /* ignore matrix injection errors */ }
               const { generateAndStorePdf, buildPdfLayerResults } = await import("../utils/generateFormPdf");
-              await generateAndStorePdf(token, cfg.Title as string, result.Id, {
+              const pdfUrl = await generateAndStorePdf(token, cfg.Title as string, result.Id, {
                 surveyJson: surveyContent as PdfFormData["surveyJson"],
                 responseData: pdfData,
                 layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
                 meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
                 isoStandards: isoStandardsText,
                 logoUrl: logoUrl || "/logo-128.png",
+                pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
+                  ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperEvaluation ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
+                  : hasManualPaperEvaluation ? { enabled: true, title: "Manual Evaluation Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
               });
+              if (hasManualPaperEvaluation) {
+                const pdfLink = pdfUrl.startsWith("http") ? pdfUrl : `${new URL(SP_SITE_URL).origin}${pdfUrl}`;
+                await fetch("/api/send-email", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                    ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+                  },
+                  body: JSON.stringify({
+                    sendToConfiguredSender: true,
+                    subject: `Manual evaluation PDF ready: ${cfg.Title as string}`,
+                    body: `A submission matched a manual paper evaluation rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/><a href="${pdfLink}">Open generated PDF</a>`,
+                  }),
+                });
+              }
             }
           } catch {
             // Submission remains successful when optional PDF generation is unavailable.

@@ -29,9 +29,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { to, subject, body, workflow } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow, sendToConfiguredSender } = req.body as Record<string, unknown>;
+  const configuredSender = process.env.HR_FORM_EMAIL_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "";
 
-  const recipients = typeof to === "string"
+  const recipients = sendToConfiguredSender === true && configuredSender
+    ? [configuredSender]
+    : typeof to === "string"
     ? [to]
     : Array.isArray(to)
       ? to.filter((recipient): recipient is string => typeof recipient === "string")

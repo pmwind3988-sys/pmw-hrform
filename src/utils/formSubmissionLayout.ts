@@ -8,6 +8,7 @@ export interface FormSubmissionField {
   type: string;
   inputType?: string;
   choices?: unknown[];
+  rateValues?: unknown[];
   rateMin?: number;
   rateMax?: number;
   minRateDescription?: string;
@@ -16,6 +17,9 @@ export interface FormSubmissionField {
   max?: number;
   prefix?: string;
   suffix?: string;
+  rows?: number;
+  labelTrue?: string;
+  labelFalse?: string;
   value: unknown;
   kind: "field" | "matrix";
   matrixColumns?: { name: string; title: string; cellType?: string; choices?: unknown[] }[];
@@ -253,6 +257,7 @@ export function buildFormSubmissionSections(
       type,
       inputType: textValue(element.inputType) || undefined,
       choices: Array.isArray(element.choices) ? element.choices : undefined,
+      rateValues: Array.isArray(element.rateValues) ? element.rateValues : undefined,
       rateMin: numberValue(element.rateMin),
       rateMax: numberValue(element.rateMax),
       minRateDescription: textValue(element.minRateDescription) || undefined,
@@ -261,6 +266,9 @@ export function buildFormSubmissionSections(
       max: numberValue(element.max),
       prefix: textValue(element.prefix) || undefined,
       suffix: textValue(element.suffix) || undefined,
+      rows: numberValue(element.rows),
+      labelTrue: textValue(element.labelTrue) || undefined,
+      labelFalse: textValue(element.labelFalse) || undefined,
       value,
       kind: MATRIX_TYPES.has(type) && rows.length > 0 ? "matrix" : "field",
       matrixColumns: MATRIX_TYPES.has(type) ? matrixColumns(element) : undefined,

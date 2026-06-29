@@ -77,6 +77,18 @@ interface ApiLayerConfigItem {
   title?: string;
   publicToken?: string;
   emailSchedule?: WorkflowEmailScheduleConfig;
+  submitterRoutingRules?: ApiEvaluationSubmitterRoutingRule[];
+}
+
+interface ApiEvaluationSubmitterRoutingRule {
+  id?: string;
+  label?: string;
+  emailField?: string;
+  emailValue?: string;
+  employeeIdField?: string;
+  employeeIdValue?: string;
+  action?: "assign-evaluator" | "manual-paper";
+  evaluatorEmail?: string;
 }
 
 interface ApiLayerConfig {
@@ -1008,6 +1020,46 @@ async function resolveLayerAssignee(
   return { email, name: "" };
 }
 
+function normalizedRoutingValue(value: unknown): string {
+  return valueToText(value).trim().toLowerCase();
+}
+
+function lookupSubmittedField(formBody: Record<string, unknown>, fieldName: string | undefined): string {
+  if (!fieldName) return "";
+  if (Object.prototype.hasOwnProperty.call(formBody, fieldName)) return valueToText(formBody[fieldName]);
+  const normalizedField = fieldName.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const key = Object.keys(formBody).find((candidate) =>
+    candidate.toLowerCase().replace(/_x[0-9a-f]{4}_/g, "").replace(/[^a-z0-9]+/g, "") === normalizedField
+  );
+  return key ? valueToText(formBody[key]) : "";
+}
+
+function matchingSubmitterRule(
+  layer: ApiLayerConfigItem,
+  formBody: Record<string, unknown>,
+): ApiEvaluationSubmitterRoutingRule | null {
+  if (layer.type !== "evaluation") return null;
+  for (const rule of layer.submitterRoutingRules ?? []) {
+    const expectedEmail = normalizedRoutingValue(rule.emailValue);
+    const expectedEmployeeId = normalizedRoutingValue(rule.employeeIdValue);
+    if (!expectedEmail && !expectedEmployeeId) continue;
+
+    if (expectedEmail) {
+      const submittedBy = normalizedRoutingValue(formBody.SubmittedBy);
+      const fieldEmail = normalizedRoutingValue(lookupSubmittedField(formBody, rule.emailField));
+      if (submittedBy !== expectedEmail && fieldEmail !== expectedEmail) continue;
+    }
+
+    if (expectedEmployeeId) {
+      const employeeId = normalizedRoutingValue(lookupSubmittedField(formBody, rule.employeeIdField));
+      if (employeeId !== expectedEmployeeId) continue;
+    }
+
+    return rule;
+  }
+  return null;
+}
+
 async function applyLayerConfigWorkflow(
   token: string,
   formBody: Record<string, unknown>,
@@ -1027,7 +1079,15 @@ async function applyLayerConfigWorkflow(
 
   for (const layer of layers) {
     const layerNumber = layer.layerNumber;
-    const resolved = await resolveLayerAssignee(token, layer, formBody);
+    const matchedRule = matchingSubmitterRule(layer, formBody);
+    if (matchedRule?.action === "manual-paper") {
+      formBody[`L${layerNumber}_Status`] = "Manual Evaluation Required";
+      formBody[`L${layerNumber}_Email`] = "";
+      continue;
+    }
+    const resolved = matchedRule?.action === "assign-evaluator"
+      ? { email: valueToText(matchedRule.evaluatorEmail), name: "" }
+      : await resolveLayerAssignee(token, layer, formBody);
     formBody[`L${layerNumber}_Status`] = LAYER_PENDING_STATUS;
     formBody[`L${layerNumber}_Email`] = resolved.email;
   }

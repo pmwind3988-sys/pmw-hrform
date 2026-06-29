@@ -351,7 +351,7 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
   const relativeUrl = next.serverRelativeUrl || next.ServerRelativeUrl;
   if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
     const combined = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
-    if (isImageSource(combined)) {
+    if (isImageSource(combined) || isSharePointSource(combined)) {
       next.url = await imageSourceToDataUrl(token, combined, cache);
     }
   }
@@ -381,8 +381,14 @@ async function hydratePdfImages(token: string, data: PdfFormData): Promise<void>
     }
   }
 
-  if (data.logoUrl && isImageSource(data.logoUrl)) {
+  if (data.logoUrl && (isImageSource(data.logoUrl) || isSharePointSource(data.logoUrl))) {
     data.logoUrl = await imageSourceToDataUrl(token, data.logoUrl, cache);
+  }
+  if (data.pdfConfig?.headerLogoUrl) {
+    data.pdfConfig = {
+      ...data.pdfConfig,
+      headerLogoUrl: await imageSourceToDataUrl(token, data.pdfConfig.headerLogoUrl, cache),
+    };
   }
 }
 

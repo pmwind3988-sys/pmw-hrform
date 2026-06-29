@@ -21,6 +21,7 @@ import type {
   ApprovalLayerConfig,
   EvaluationLayerConfig,
   EvaluationEmailSchedule,
+  EvaluationSubmitterRoutingRule,
   AuthMode,
   ConfirmationType,
   ManualBranch,
@@ -623,6 +624,112 @@ export default function LayerConfigPanel({
     );
   };
 
+  const renderSubmitterRoutingRules = (
+    layer: EvaluationLayerConfig,
+    onPatch: (patch: Partial<EvaluationLayerConfig>) => void,
+  ) => {
+    const rules = layer.submitterRoutingRules ?? [];
+    const patchRule = (ruleIndex: number, patch: Partial<EvaluationSubmitterRoutingRule>) => {
+      onPatch({
+        submitterRoutingRules: rules.map((rule, index) => index === ruleIndex ? { ...rule, ...patch } : rule),
+      });
+    };
+    return (
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 9, background: C.white }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em" }}>
+            Submitter Exceptions
+          </label>
+          <button
+            type="button"
+            onClick={() => onPatch({
+              submitterRoutingRules: [
+                ...rules,
+                {
+                  id: crypto.randomUUID(),
+                  label: `Exception ${rules.length + 1}`,
+                  action: "assign-evaluator",
+                  evaluatorEmail: "",
+                },
+              ],
+            })}
+            style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 7, background: C.purplePale, color: C.purple, fontSize: 10, fontWeight: 700, padding: "5px 8px", cursor: "pointer" }}
+          >
+            + Rule
+          </button>
+        </div>
+        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45, marginBottom: rules.length ? 8 : 0 }}>
+          Match by submitted email, employee ID field/value, or both. The first matching rule wins.
+        </div>
+        {rules.map((rule, ruleIndex) => (
+          <div key={rule.id || ruleIndex} style={{ border: `1px solid ${C.borderLight}`, borderRadius: 8, padding: 8, marginTop: 7, background: C.offWhite }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <input
+                value={rule.label}
+                onChange={event => patchRule(ruleIndex, { label: event.target.value })}
+                placeholder="Rule label"
+                style={{ ...inp, height: 30, fontSize: 11, flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => onPatch({ submitterRoutingRules: rules.filter((_, index) => index !== ruleIndex) })}
+                style={{ width: 28, border: "none", borderRadius: 7, background: C.redPale, color: C.red, cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <select
+                value={rule.emailField || ""}
+                onChange={event => patchRule(ruleIndex, { emailField: event.target.value })}
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              >
+                <option value="">Use SubmittedBy email</option>
+                {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
+              </select>
+              <input
+                value={rule.emailValue || ""}
+                onChange={event => patchRule(ruleIndex, { emailValue: event.target.value })}
+                placeholder="Email value"
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              />
+              <select
+                value={rule.employeeIdField || ""}
+                onChange={event => patchRule(ruleIndex, { employeeIdField: event.target.value })}
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              >
+                <option value="">Employee ID field</option>
+                {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
+              </select>
+              <input
+                value={rule.employeeIdValue || ""}
+                onChange={event => patchRule(ruleIndex, { employeeIdValue: event.target.value })}
+                placeholder="Employee ID value"
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              />
+              <select
+                value={rule.action}
+                onChange={event => patchRule(ruleIndex, { action: event.target.value as EvaluationSubmitterRoutingRule["action"] })}
+                style={{ ...inp, height: 30, fontSize: 11 }}
+              >
+                <option value="assign-evaluator">Different evaluator</option>
+                <option value="manual-paper">Manual paper evaluation</option>
+              </select>
+            </div>
+            {rule.action === "assign-evaluator" && (
+              <input
+                value={rule.evaluatorEmail || ""}
+                onChange={event => patchRule(ruleIndex, { evaluatorEmail: event.target.value })}
+                placeholder="different.evaluator@company.com"
+                style={{ ...inp, height: 30, fontSize: 11, marginTop: 6 }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   // ── Render per-layer settings ──────────────────────────────────────────────
   const renderLayerSettings = (layer: LayerConfigItem, idx: number) => {
     const isApproval = layer.type === "approval";
@@ -748,6 +855,10 @@ export default function LayerConfigPanel({
         {isEval && (
           <div>
             {renderEvaluationEmailSchedule(
+              layer as EvaluationLayerConfig,
+              (patch) => patchLayer(idx, patch),
+            )}
+            {renderSubmitterRoutingRules(
               layer as EvaluationLayerConfig,
               (patch) => patchLayer(idx, patch),
             )}
@@ -956,6 +1067,10 @@ export default function LayerConfigPanel({
         {isEval && (
           <div>
             {renderEvaluationEmailSchedule(
+              layer as EvaluationLayerConfig,
+              (patch) => patchBranchLayer(bi, li, patch),
+            )}
+            {renderSubmitterRoutingRules(
               layer as EvaluationLayerConfig,
               (patch) => patchBranchLayer(bi, li, patch),
             )}

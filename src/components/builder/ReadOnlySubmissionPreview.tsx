@@ -22,6 +22,7 @@ interface PreviewField {
   type: string;
   inputType?: string;
   choices?: unknown[];
+  rateValues?: unknown[];
   columns?: unknown[];
   rateMin?: number;
   rateMax?: number;
@@ -120,6 +121,7 @@ function collectPreviewSections(surveyJson: unknown, data: Record<string, unknow
         type,
         inputType: typeof raw.inputType === "string" ? raw.inputType : undefined,
         choices: Array.isArray(raw.choices) ? raw.choices : undefined,
+        rateValues: Array.isArray(raw.rateValues) ? raw.rateValues : undefined,
         columns: Array.isArray(raw.columns) ? raw.columns : undefined,
         rateMin: typeof raw.rateMin === "number" ? raw.rateMin : undefined,
         rateMax: typeof raw.rateMax === "number" ? raw.rateMax : undefined,
@@ -220,8 +222,9 @@ function formatScalarValue(value: unknown, field: PreviewField): string {
   if (Array.isArray(normalized)) {
     return normalized.map((entry) => formatScalarValue(entry, field)).join(", ");
   }
-  if (field.choices?.length) {
-    const label = field.choices.map((choice) => choiceLabel(choice, normalized)).find(Boolean);
+  const choiceOptions = field.type === "rating" && field.rateValues?.length ? field.rateValues : field.choices;
+  if (choiceOptions?.length) {
+    const label = choiceOptions.map((choice) => choiceLabel(choice, normalized)).find(Boolean);
     if (label) return label;
   }
   if (fieldLooksCurrencyLike(field, normalized)) return formatCurrencyValue(normalized, field);
@@ -459,12 +462,14 @@ function RatingValue({ field, value }: { field: PreviewField; value: unknown }) 
   const max = field.rateMax ?? 5;
   const clamped = Math.min(max, Math.max(min, rating));
   const percent = max > min ? ((clamped - min) / (max - min)) * 100 : 100;
+  const selectedLabel = field.rateValues?.map((choice) => choiceLabel(choice, rating)).find(Boolean);
 
   return (
     <div style={{ display: "grid", gap: 7, maxWidth: 340 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontVariantNumeric: "tabular-nums" }}>
         <span style={{ color: C.textPrimary, fontSize: 15, fontWeight: 800 }}>{rating}</span>
         <span style={{ color: C.textMuted, fontSize: 12 }}>of {max}</span>
+        {selectedLabel && <span style={{ color: C.textSecond, fontSize: 12, fontWeight: 700 }}>{selectedLabel}</span>}
       </div>
       <div style={{ position: "relative", height: 8, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
         <div style={{ width: `${percent}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #F7C948, #0078D4)" }} />

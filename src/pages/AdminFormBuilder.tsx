@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
+import { pdf } from "@react-pdf/renderer";
 import FormBuilder from "../components/builder/FormBuilder";
 import FormLibrary from "../components/builder/FormLibrary";
 import VersionHistory from "../components/builder/VersionHistory";
@@ -21,7 +22,8 @@ import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import { SP_STATIC } from "../utils/spConfig";
-import type { SurveyJson, LayerConfig, LayerConfigItem } from "../types";
+import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "../utils/FormPdfDocument";
+import type { SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../types";
 
 // MUI Icons
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -77,6 +79,20 @@ const DEFAULT_COMPANIES = [
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
 type MetaTextKey = "formTitle" | "formId" | "formVersion" | "slug" | "isoStandards" | "companies" | "logoUrl";
+const DEFAULT_PDF_CONFIG: PdfConfig = {
+  enabled: true,
+  title: "Form Submission",
+  deliveryMethod: "sharepoint",
+  showSubmissionDate: true,
+  showApproverChain: true,
+  showEvaluationDetails: true,
+  showSignatures: true,
+  showStatusBadge: true,
+  includeEmptyEvaluationFields: false,
+  density: "compact",
+  primaryColor: "#0078D4",
+  secondaryColor: "#6264A7",
+};
 
 function getLayerFieldOptions(json: SurveyJson | null | undefined): LayerFieldOption[] {
   if (!json) return [];
@@ -201,6 +217,239 @@ function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange
   );
 }
 
+type SampleAssets = {
+  signatureDataUrl: string;
+  photoDataUrl: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function textValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function choiceValue(choice: unknown): unknown {
+  if (isRecord(choice)) return choice.value ?? choice.text ?? choice.Title ?? "";
+  return choice;
+}
+
+function firstChoiceValue(choices: unknown): unknown {
+  return Array.isArray(choices) && choices.length > 0 ? choiceValue(choices[0]) : "Sample option";
+}
+
+function firstTwoChoiceValues(choices: unknown): unknown[] {
+  if (!Array.isArray(choices) || choices.length === 0) return ["Sample option A", "Sample option B"];
+  return choices.slice(0, 2).map(choiceValue);
+}
+
+function collectPdfSampleElements(json: SurveyJson): Record<string, unknown>[] {
+  const elements: Record<string, unknown>[] = [];
+  const walk = (items: unknown[]) => {
+    for (const item of items) {
+      if (!isRecord(item)) continue;
+      const type = textValue(item.type).toLowerCase();
+      if (textValue(item.name) && type !== "panel") elements.push(item);
+      if (type === "dynamicmatrix" || type === "matrixdynamic" || type === "tableinput") continue;
+      if (Array.isArray(item.elements)) walk(item.elements);
+      if (Array.isArray(item.columns)) {
+        for (const column of item.columns) {
+          if (isRecord(column) && Array.isArray(column.elements)) walk(column.elements);
+        }
+      }
+    }
+  };
+  for (const page of json.pages ?? []) walk(page.elements ?? []);
+  return elements;
+}
+
+function fieldLooksLikeImage(field: Record<string, unknown>): boolean {
+  const haystack = [
+    textValue(field.type),
+    textValue(field.inputType),
+    textValue(field.name),
+    textValue(field.title),
+    textValue(field.acceptedTypes),
+  ].join(" ").toLowerCase();
+  return /\b(image|photo|picture|camera|png|jpg|jpeg)\b/.test(haystack);
+}
+
+function sampleValueForElement(field: Record<string, unknown>, index: number, assets: SampleAssets): unknown {
+  const type = textValue(field.type).toLowerCase();
+  const inputType = textValue(field.inputType).toLowerCase();
+  const name = textValue(field.name).toLowerCase();
+  const title = textValue(field.title).toLowerCase();
+
+  if (type.includes("signature") || name.includes("signature") || title.includes("signature")) return assets.signatureDataUrl;
+  if (fieldLooksLikeImage(field)) return assets.photoDataUrl;
+  if (type === "file" || type === "fileupload") return "sample-document.pdf";
+  if (type === "boolean") return true;
+  if (type === "checkbox" || type === "tagbox") return firstTwoChoiceValues(field.choices);
+  if (["dropdown", "radiogroup", "imagepicker", "ranking"].includes(type)) return firstChoiceValue(field.choices);
+  if (type === "rating") {
+    const rateValues = field.rateValues;
+    if (Array.isArray(rateValues) && rateValues.length > 0) return choiceValue(rateValues[rateValues.length - 1]);
+    return typeof field.rateMax === "number" ? field.rateMax : 5;
+  }
+  if (type === "multipletext") {
+    const items = Array.isArray(field.items) ? field.items : [];
+    return Object.fromEntries(items.filter(isRecord).map((item, itemIndex) => [textValue(item.name) || `item${itemIndex + 1}`, `Sample ${itemIndex + 1}`]));
+  }
+  if (inputType === "number" || inputType === "range" || ["number", "currency", "counter"].includes(type)) return 100 + index;
+  if (inputType === "date" || type === "date") return "2026-06-29";
+  if (inputType === "datetime-local" || type === "datetime") return "2026-06-29T09:30";
+  if (inputType === "time" || type === "time") return "09:30";
+  if (inputType === "email" || name.includes("email")) return "sample.submitter@example.com";
+  if (inputType === "tel" || name.includes("phone")) return "+60 12-345 6789";
+  if (name.includes("employee") || name.includes("staff")) return "EMP-0001";
+  if (name === COMPANY_FIELD_NAME) return DEFAULT_COMPANIES.split("\n")[0] || "PMW INDUSTRIES SDN BHD";
+  if (type === "comment" || type === "richedit" || type === "html") {
+    return "This is sample long-form content generated to preview wrapping, spacing, and PDF field layout.";
+  }
+  return `Sample answer ${index + 1}`;
+}
+
+function sampleMatrixRows(field: Record<string, unknown>, assets: SampleAssets): Record<string, unknown>[] {
+  const columns = Array.isArray(field.columns) ? field.columns.filter(isRecord) : [];
+  if (columns.length === 0) return [];
+  return [0, 1].map((rowIndex) => {
+    const row: Record<string, unknown> = {};
+    columns.forEach((column, columnIndex) => {
+      const name = textValue(column.name) || `Column${columnIndex + 1}`;
+      row[name] = sampleValueForElement(column, rowIndex + columnIndex, assets);
+    });
+    return row;
+  });
+}
+
+function buildSampleResponseData(json: SurveyJson, assets: SampleAssets): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  const fields = collectPdfSampleElements(json);
+  fields.forEach((field, index) => {
+    const name = textValue(field.name);
+    if (!name) return;
+    const type = textValue(field.type).toLowerCase();
+    if (type === "dynamicmatrix" || type === "matrixdynamic" || type === "tableinput") {
+      const rows = sampleMatrixRows(field, assets);
+      data[`${name}_childRows`] = { columns: field.columns, rows };
+      data[name] = rows;
+      return;
+    }
+    data[name] = sampleValueForElement(field, index, assets);
+  });
+  return data;
+}
+
+function sampleWorkflowLayers(config: LayerConfig | null): LayerConfigItem[] {
+  if (!config) return [];
+  if (config.layers.length > 0) return config.layers;
+  return config.manualBranches?.[0]?.layers ?? [];
+}
+
+function hasSampleEvaluationLayer(config: LayerConfig | null): boolean {
+  return sampleWorkflowLayers(config).some((layer) => layer.type === "evaluation");
+}
+
+function buildSampleLayerResults(config: LayerConfig | null, assets: SampleAssets, manualPhysical: boolean): PdfLayerResult[] {
+  const layers = sampleWorkflowLayers(config);
+  return layers.map((layer, index) => {
+    const email = layer.assignee.type === "user" && layer.assignee.value
+      ? layer.assignee.value
+      : `${layer.type}${layer.layerNumber}@example.com`;
+    if (layer.type === "evaluation") {
+      if (manualPhysical) {
+        return {
+          layerNumber: layer.layerNumber,
+          type: "evaluation",
+          status: "Manual Evaluation Required",
+          email: "",
+          evaluationFields: {},
+          evaluationSurveyElements: layer.surveyElements ?? [],
+          confirmerEmail: "",
+          confirmerName: "Manual / physical evaluator",
+        };
+      }
+      return {
+        layerNumber: layer.layerNumber,
+        type: "evaluation",
+        status: index === 0 ? "Pending" : "Approved",
+        email,
+        signedAt: "2026-06-29T10:30:00.000Z",
+        signature: assets.signatureDataUrl,
+        evaluationFields: buildSampleResponseData({ pages: [{ name: "Evaluation", elements: layer.surveyElements ?? [] }] }, assets),
+        evaluationSurveyElements: layer.surveyElements ?? [],
+        confirmerEmail: email,
+        confirmerName: `Sample Evaluator ${layer.layerNumber}`,
+      };
+    }
+    return {
+      layerNumber: layer.layerNumber,
+      type: "approval",
+      status: index === 0 ? "Pending" : "Approved",
+      email,
+      signedAt: "2026-06-29T10:30:00.000Z",
+      signature: assets.signatureDataUrl,
+    };
+  });
+}
+
+function makeCanvasPng(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  draw(ctx);
+  return canvas.toDataURL("image/png");
+}
+
+function makeSamplePdfAssets(): SampleAssets {
+  const signatureDataUrl = makeCanvasPng(360, 120, (ctx) => {
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, 360, 120);
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(36, 72);
+    ctx.bezierCurveTo(88, 18, 120, 110, 168, 58);
+    ctx.bezierCurveTo(205, 18, 230, 98, 316, 46);
+    ctx.stroke();
+    ctx.strokeStyle = "#D1D5DB";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(28, 94);
+    ctx.lineTo(330, 94);
+    ctx.stroke();
+  });
+  const photoDataUrl = makeCanvasPng(360, 220, (ctx) => {
+    const gradient = ctx.createLinearGradient(0, 0, 360, 220);
+    gradient.addColorStop(0, "#DBEAFE");
+    gradient.addColorStop(1, "#EEF2FF");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 360, 220);
+    ctx.fillStyle = "#0078D4";
+    ctx.fillRect(28, 28, 304, 164);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "bold 26px Arial";
+    ctx.fillText("SAMPLE PHOTO", 72, 116);
+    ctx.font = "14px Arial";
+    ctx.fillText("Generated preview image", 98, 145);
+  });
+  return { signatureDataUrl, photoDataUrl };
+}
+
+function downloadPdfBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 15_000);
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AdminFormBuilder() {
   const navigate = useNavigate();
@@ -224,10 +473,15 @@ export default function AdminFormBuilder() {
     companies: DEFAULT_COMPANIES,
     companyChoiceEnabled: false,
     logoUrl: "",
+    pdfConfig: DEFAULT_PDF_CONFIG,
   });
   const [showBanner, setShowBanner] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
+  const [samplePdfGenerating, setSamplePdfGenerating] = useState<"" | "filled" | "manual">("");
   const setM = useCallback((k: MetaTextKey, v: string) => setMeta(m => ({ ...m, [k]: v })), []);
+  const setPdfConfig = useCallback((patch: Partial<PdfConfig>) => {
+    setMeta(m => ({ ...m, pdfConfig: { ...m.pdfConfig, ...patch } }));
+  }, []);
   const [slugError, setSlugError] = useState("");
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugLocked, setSlugLocked] = useState(false);
@@ -432,6 +686,9 @@ export default function AdminFormBuilder() {
         companies: loadedMeta.companies as string || DEFAULT_COMPANIES,
         companyChoiceEnabled: loadedMeta.companyChoiceEnabled === true,
         logoUrl: ((data.meta as Record<string, unknown>)?.logoUrl as string) || "",
+        pdfConfig: loadedMeta.pdfConfig && typeof loadedMeta.pdfConfig === "object" && !Array.isArray(loadedMeta.pdfConfig)
+          ? { ...DEFAULT_PDF_CONFIG, ...(loadedMeta.pdfConfig as Partial<PdfConfig>) }
+          : DEFAULT_PDF_CONFIG,
       });
       setShowBanner((data.meta as Record<string, unknown>)?.showBanner !== false);
       setOriginalVersion(c.CurrentVersion as string);
@@ -501,6 +758,7 @@ export default function AdminFormBuilder() {
       companies: DEFAULT_COMPANIES,
       companyChoiceEnabled: false,
       logoUrl: "",
+      pdfConfig: DEFAULT_PDF_CONFIG,
     });
     setNumLayers(0);
     setLayers(Array.from({ length: 5 }, () => ({ email: "", name: "" })));
@@ -508,6 +766,48 @@ export default function AdminFormBuilder() {
     setIsDraft(false);
     setIsPublic(true);
     navigate("/admin/builder");
+  };
+
+  const handleGenerateSamplePdf = async (mode: "filled" | "manual") => {
+    if (!isEditing || !meta.formTitle.trim() || !surveyJson) {
+      showToast("Select an existing form before generating a sample PDF.", "err");
+      return;
+    }
+    if (mode === "manual" && !hasSampleEvaluationLayer(layerConfig)) {
+      showToast("Add at least one evaluation layer before generating a manual / physical evaluation sample.", "err");
+      return;
+    }
+
+    setSamplePdfGenerating(mode);
+    try {
+      const assets = makeSamplePdfAssets();
+      const manualPhysical = mode === "manual";
+      const sampleData: PdfFormData = {
+        surveyJson,
+        responseData: buildSampleResponseData(surveyJson, assets),
+        layerResults: buildSampleLayerResults(layerConfig, assets, manualPhysical),
+        meta: {
+          submittedBy: "sample.submitter@example.com",
+          submittedAt: "2026-06-29T09:30:00.000Z",
+          formTitle: meta.formTitle,
+          formVersion: proposedVersion || meta.formVersion,
+          formStatus: manualPhysical ? "manual evaluation sample" : "sample",
+        },
+        isoStandards: meta.isoStandards,
+        logoUrl: meta.logoUrl || "/logo-128.png",
+        pdfConfig: manualPhysical
+          ? { ...meta.pdfConfig, enabled: true, title: meta.pdfConfig.title || "Manual Evaluation Form", includeEmptyEvaluationFields: true, showEvaluationDetails: true }
+          : meta.pdfConfig,
+      };
+      const blob = await pdf(FormPdfDocument(sampleData)).toBlob();
+      const safeTitle = slugify(meta.formTitle) || "form";
+      downloadPdfBlob(blob, `${safeTitle}-${manualPhysical ? "manual-physical-evaluation-sample" : "sample-layout"}.pdf`);
+      showToast(manualPhysical ? "Manual / physical evaluation sample PDF generated." : "Sample PDF generated with fake data.", "ok");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not generate sample PDF.", "err");
+    } finally {
+      setSamplePdfGenerating("");
+    }
   };
 
   const handleSaveDraft = useCallback(async () => {
@@ -563,7 +863,7 @@ export default function AdminFormBuilder() {
         slug: meta.slug,
         version,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
+        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
         changedBy: userEmail,
         layerConfig: layerConfigToSave,
       });
@@ -844,6 +1144,7 @@ export default function AdminFormBuilder() {
 
   const sidebarTabs = [
     { id: "meta", label: "Form Setup", icon: <DescriptionIcon style={{ fontSize: 14 }} /> },
+    { id: "pdf", label: "PDF Layout", icon: <ReceiptLongIcon style={{ fontSize: 14 }} /> },
     { id: "layers", label: "Layers", icon: <LayersIcon style={{ fontSize: 14 }} /> },
     { id: "version", label: "Versions", icon: <HistoryIcon style={{ fontSize: 14 }} /> },
     { id: "log", label: "Log", icon: <ReceiptLongIcon style={{ fontSize: 14 }} /> },
@@ -1412,6 +1713,166 @@ export default function AdminFormBuilder() {
                           <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>{opt.hint}</div>
                         </button>
                       ))}
+                    </div>
+                  </FB>
+                </div>
+              )}
+
+              {sidebarTab === "pdf" && (
+                <div style={{ animation: "fadeUp .15s ease" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 10 }}>
+                    PDF form layout
+                  </div>
+                  <FB label="Custom PDF layout">
+                    <div style={{
+                      background: meta.pdfConfig.enabled ? C.greenPale : C.offWhite,
+                      border: `1px solid ${meta.pdfConfig.enabled ? "#6EE7B7" : C.border}`,
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                    }}>
+                      <ToggleSwitch
+                        checked={meta.pdfConfig.enabled}
+                        onChange={enabled => setPdfConfig({ enabled })}
+                        label={meta.pdfConfig.enabled ? "Use custom layout" : "Use default layout"}
+                      />
+                    </div>
+                  </FB>
+                  <FB label="Document title">
+                    <TextInput
+                      value={meta.pdfConfig.title}
+                      onChange={title => setPdfConfig({ title })}
+                      placeholder="Form Submission"
+                    />
+                  </FB>
+                  <FB label="Header logo URL" hint="Overrides the form banner logo in generated PDFs.">
+                    <TextInput
+                      value={meta.pdfConfig.headerLogoUrl || ""}
+                      onChange={headerLogoUrl => setPdfConfig({ headerLogoUrl })}
+                      placeholder="https://example.com/logo.png"
+                    />
+                  </FB>
+                  <FB label="Footer text">
+                    <TextInput
+                      value={meta.pdfConfig.footerText || ""}
+                      onChange={footerText => setPdfConfig({ footerText })}
+                      placeholder="Generated date appears when blank"
+                    />
+                  </FB>
+                  <FB label="Density">
+                    <div style={{ display: "flex", gap: 7 }}>
+                      {(["compact", "comfortable"] as const).map(density => (
+                        <button
+                          key={density}
+                          type="button"
+                          onClick={() => setPdfConfig({ density })}
+                          style={{
+                            flex: 1,
+                            minHeight: 34,
+                            borderRadius: 8,
+                            border: `1.5px solid ${meta.pdfConfig.density === density ? C.purple : C.border}`,
+                            background: meta.pdfConfig.density === density ? C.purplePale : C.white,
+                            color: meta.pdfConfig.density === density ? C.purple : C.textSecond,
+                            cursor: "pointer",
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {density === "compact" ? "Compact" : "Comfortable"}
+                        </button>
+                      ))}
+                    </div>
+                  </FB>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <FB label="Primary color">
+                      <input
+                        type="color"
+                        value={meta.pdfConfig.primaryColor || "#0078D4"}
+                        onChange={e => setPdfConfig({ primaryColor: e.target.value })}
+                        style={{ ...inp, height: 38, padding: 4 }}
+                      />
+                    </FB>
+                    <FB label="Secondary color">
+                      <input
+                        type="color"
+                        value={meta.pdfConfig.secondaryColor || "#6264A7"}
+                        onChange={e => setPdfConfig({ secondaryColor: e.target.value })}
+                        style={{ ...inp, height: 38, padding: 4 }}
+                      />
+                    </FB>
+                  </div>
+                  {[
+                    ["showStatusBadge", "Show status badge"],
+                    ["showApproverChain", "Show approval/evaluation chain"],
+                    ["showEvaluationDetails", "Show evaluation details"],
+                    ["showSignatures", "Show signature blocks"],
+                    ["includeEmptyEvaluationFields", "Include blank evaluation fields for paper/manual evaluation"],
+                  ].map(([key, label]) => (
+                    <label key={key} style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 0",
+                      fontSize: 11,
+                      color: C.textSecond,
+                      borderBottom: `1px solid ${C.borderLight}`,
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(meta.pdfConfig[key as keyof PdfConfig])}
+                        onChange={e => setPdfConfig({ [key]: e.target.checked } as Partial<PdfConfig>)}
+                        style={{ width: 14, height: 14, accentColor: C.purple }}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                  <FB label="Sample PDF" hint="Select an existing form, then generate a local preview filled with fake submission, signature, photo, approval, and evaluation data.">
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => void handleGenerateSamplePdf("filled")}
+                        disabled={!!samplePdfGenerating || !isEditing || !surveyJson}
+                        style={{
+                          width: "100%",
+                          minHeight: 38,
+                          border: "none",
+                          borderRadius: 8,
+                          background: samplePdfGenerating || !isEditing || !surveyJson ? C.border : C.purple,
+                          color: C.white,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: samplePdfGenerating || !isEditing || !surveyJson ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 8,
+                        }}
+                      >
+                        {samplePdfGenerating === "filled" && <Spinner size={14} />}
+                        {samplePdfGenerating === "filled" ? "Generating sample..." : "Generate filled sample PDF"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleGenerateSamplePdf("manual")}
+                        disabled={!!samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig)}
+                        style={{
+                          width: "100%",
+                          minHeight: 38,
+                          border: `1px solid ${C.purpleMid}`,
+                          borderRadius: 8,
+                          background: samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig) ? C.offWhite : C.purplePale,
+                          color: samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig) ? C.textMuted : C.purple,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig) ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 8,
+                        }}
+                      >
+                        {samplePdfGenerating === "manual" && <Spinner size={14} />}
+                        {samplePdfGenerating === "manual" ? "Generating manual sample..." : "Generate manual / physical evaluation sample"}
+                      </button>
                     </div>
                   </FB>
                 </div>

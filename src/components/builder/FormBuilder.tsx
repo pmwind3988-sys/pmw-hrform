@@ -2187,7 +2187,6 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string; event: string; to: string; subject: string; body: string; enabled: boolean }[]>([]);
   
   // PDF Config
-  const [pdfConfig, setPdfConfig] = useState<{ enabled: boolean; title: string; deliveryMethod: "download" | "email" | "sharepoint"; headerLogoUrl: string; footerText: string }>({ enabled: false, title: "Form Submission", deliveryMethod: "download", headerLogoUrl: "", footerText: "" });
   
   // Score Config
   const [scoreConfig, setScoreConfig] = useState<{ enabled: boolean; expression: string; thresholds: { green: number; amber: number; red: number }; label: string }>({ enabled: false, expression: "", thresholds: { green: 80, amber: 60, red: 0 }, label: "Score" });
@@ -2208,7 +2207,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const [translations, setTranslations] = useState<Record<string, Record<string, Record<string, string>>>>({});
   
   // Integration Panel tabs
-  const [activeIntegrationTab, setActiveIntegrationTab] = useState<"webhooks" | "email" | "powerautomate" | "pdf">("webhooks");
+  const [activeIntegrationTab, setActiveIntegrationTab] = useState<"webhooks" | "email" | "powerautomate">("webhooks");
   
   // Export format state (placeholder for future use)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -2903,16 +2902,15 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <button onClick={() => setShowIntegrationPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              {/* Tabs: Webhooks | Email | Power Automate | PDF */}
+              {/* Tabs: Webhooks | Email | Power Automate */}
               {
                   <>
                     <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-                      {["webhooks", "email", "powerautomate", "pdf"].map(tab => (
-                        <button key={tab} onClick={() => setActiveIntegrationTab(tab as "webhooks" | "email" | "powerautomate" | "pdf")} style={{ padding: "10px 16px", background: activeIntegrationTab === tab ? C.purplePale : "transparent", border: "none", borderBottom: activeIntegrationTab === tab ? `2px solid ${C.purple}` : "2px solid transparent", cursor: "pointer", fontSize: 12, fontWeight: 600, color: activeIntegrationTab === tab ? C.purple : C.textMuted }}>
+                      {["webhooks", "email", "powerautomate"].map(tab => (
+                        <button key={tab} onClick={() => setActiveIntegrationTab(tab as "webhooks" | "email" | "powerautomate")} style={{ padding: "10px 16px", background: activeIntegrationTab === tab ? C.purplePale : "transparent", border: "none", borderBottom: activeIntegrationTab === tab ? `2px solid ${C.purple}` : "2px solid transparent", cursor: "pointer", fontSize: 12, fontWeight: 600, color: activeIntegrationTab === tab ? C.purple : C.textMuted }}>
                           {tab === "webhooks" && <><PowerIcon style={{ fontSize: 14, marginRight: 4 }} /> Webhooks</>}
                           {tab === "email" && <><EmailIcon style={{ fontSize: 14, marginRight: 4 }} /> Email Templates</>}
                           {tab === "powerautomate" && <><BoltIcon style={{ fontSize: 14, marginRight: 4 }} /> Power Automate</>}
-                          {tab === "pdf" && <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> PDF Generation</>}
                         </button>
                       ))}
                     </div>
@@ -2991,41 +2989,6 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                               <li>Copy the HTTP POST URL and paste above</li>
                             </ol>
                           </div>
-                        </div>
-                      )}
-                      {/* PDF Generation Tab */}
-                      {activeIntegrationTab === "pdf" && (
-                        <div>
-                          <div style={{ marginBottom: 16 }}>
-                            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                              <input type="checkbox" checked={pdfConfig.enabled} onChange={(e) => setPdfConfig({ ...pdfConfig, enabled: e.target.checked })} />
-                              <span style={{ fontSize: 13, fontWeight: 600 }}>Enable PDF Receipt Generation</span>
-                            </label>
-                          </div>
-                          {pdfConfig.enabled && (
-                            <>
-                              <div style={{ marginBottom: 12 }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Document Title</div>
-                                <input value={pdfConfig.title} onChange={(e) => setPdfConfig({ ...pdfConfig, title: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
-                              </div>
-                              <div style={{ marginBottom: 12 }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Header Logo URL</div>
-                                <input value={pdfConfig.headerLogoUrl || ""} onChange={(e) => setPdfConfig({ ...pdfConfig, headerLogoUrl: e.target.value })} placeholder="https://..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
-                              </div>
-                              <div style={{ marginBottom: 12 }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Footer Text</div>
-                                <input value={pdfConfig.footerText || ""} onChange={(e) => setPdfConfig({ ...pdfConfig, footerText: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
-                              </div>
-                              <div style={{ marginBottom: 12 }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Delivery Method</div>
-                                <select value={pdfConfig.deliveryMethod} onChange={(e) => setPdfConfig({ ...pdfConfig, deliveryMethod: e.target.value as "download" | "email" | "sharepoint" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }}>
-                                  <option value="download">Download to User</option>
-                                  <option value="email">Send via Email</option>
-                                  <option value="sharepoint">Save to SharePoint</option>
-                                </select>
-                              </div>
-                            </>
-                          )}
                         </div>
                       )}
                     </div>
