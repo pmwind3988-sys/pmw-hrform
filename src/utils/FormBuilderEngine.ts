@@ -1028,6 +1028,14 @@ export function buildQuestionTree(json: SurveyJson): FormBuilderField[] {
         } else if (fieldSrc.type === "text" && fieldSrc.inputType === "datetime-local") {
           fieldSrc = { ...fieldSrc, type: "datetime", inputType: "datetime" };
         }
+        const defaultValueExpression = typeof fieldSrc.defaultValueExpression === "string"
+          ? fieldSrc.defaultValueExpression.trim().toLowerCase()
+          : "";
+        if (fieldSrc.type === "date" && defaultValueExpression === "today()") {
+          fieldSrc = { ...fieldSrc, defaultValue: "__today__", defaultValueExpression: undefined };
+        } else if (fieldSrc.type === "datetime" && defaultValueExpression === "now()") {
+          fieldSrc = { ...fieldSrc, defaultValue: "__now__", defaultValueExpression: undefined };
+        }
         const field = { ...fieldSrc, _id: (fieldSrc._id as string) || generateFieldId() } as unknown as FormBuilderField;
         result.push(field);
       }

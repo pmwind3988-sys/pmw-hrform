@@ -355,6 +355,40 @@ describe('buildQuestionTree', () => {
     expect(tree[0].type).toBe('date');
     expect(tree[0].inputType).toBe('date');
   });
+
+  it('rehydrates a saved datetime defaultValueExpression as default to current time', () => {
+    const savedJson = buildSurveyJson([
+      makeField({
+        type: 'datetime',
+        inputType: 'datetime',
+        name: 'appointmentAt',
+        title: 'Appointment At',
+        defaultValue: '__now__',
+      }),
+    ]);
+
+    const tree = buildQuestionTree(savedJson);
+
+    expect(tree[0].type).toBe('datetime');
+    expect(tree[0].defaultValue).toBe('__now__');
+  });
+
+  it('rehydrates a saved date defaultValueExpression as default to today', () => {
+    const savedJson = buildSurveyJson([
+      makeField({
+        type: 'date',
+        inputType: 'date',
+        name: 'travelDate',
+        title: 'Travel Date',
+        defaultValue: '__today__',
+      }),
+    ]);
+
+    const tree = buildQuestionTree(savedJson);
+
+    expect(tree[0].type).toBe('date');
+    expect(tree[0].defaultValue).toBe('__today__');
+  });
 });
 
 // ── getSpColumnKind ──────────────────────────────────────────────────────────────
