@@ -313,6 +313,48 @@ describe('buildQuestionTree', () => {
     expect(tree[0].columns).toEqual(field.columns);
     expect(tree[0].tableConfigColumns).toEqual(field.columns);
   });
+
+  it('rehydrates SurveyJS datetime text input as the builder Date & Time type', () => {
+    const json = makeSurveyJson([
+      {
+        name: 'page1',
+        elements: [
+          {
+            type: 'text',
+            inputType: 'datetime-local',
+            name: 'appointmentAt',
+            title: 'Appointment At',
+          },
+        ],
+      },
+    ]);
+
+    const tree = buildQuestionTree(json);
+
+    expect(tree[0].type).toBe('datetime');
+    expect(tree[0].inputType).toBe('datetime');
+  });
+
+  it('rehydrates SurveyJS date text input as the builder Date type', () => {
+    const json = makeSurveyJson([
+      {
+        name: 'page1',
+        elements: [
+          {
+            type: 'text',
+            inputType: 'date',
+            name: 'travelDate',
+            title: 'Travel Date',
+          },
+        ],
+      },
+    ]);
+
+    const tree = buildQuestionTree(json);
+
+    expect(tree[0].type).toBe('date');
+    expect(tree[0].inputType).toBe('date');
+  });
 });
 
 // ── getSpColumnKind ──────────────────────────────────────────────────────────────

@@ -1023,6 +1023,10 @@ export function buildQuestionTree(json: SurveyJson): FormBuilderField[] {
             columns: savedColumns,
             tableConfigColumns: savedColumns,
           };
+        } else if (fieldSrc.type === "text" && fieldSrc.inputType === "date") {
+          fieldSrc = { ...fieldSrc, type: "date" };
+        } else if (fieldSrc.type === "text" && fieldSrc.inputType === "datetime-local") {
+          fieldSrc = { ...fieldSrc, type: "datetime", inputType: "datetime" };
         }
         const field = { ...fieldSrc, _id: (fieldSrc._id as string) || generateFieldId() } as unknown as FormBuilderField;
         result.push(field);
