@@ -111,8 +111,15 @@ function elementLabel(element: SurveyElement, fallback: string): string {
   return textValue(element.title) || textValue(element.name) || fallback;
 }
 
+function isDefaultPageName(value: string): boolean {
+  return /^page\d*$/i.test(value.trim());
+}
+
 function pageTitle(page: SurveyElement, fallback: string): string {
-  return textValue(page.title) || textValue(page.name) || fallback;
+  const title = textValue(page.title);
+  if (title) return title;
+  const name = textValue(page.name);
+  return name && !isDefaultPageName(name) ? name : fallback;
 }
 
 function getChildElements(element: SurveyElement): SurveyElement[] {
@@ -277,7 +284,8 @@ export function buildFormSubmissionSections(
   };
 
   pages.forEach((page, pageIndex) => {
-    const title = pageTitle(page, pages.length > 1 ? `Page ${pageIndex + 1}` : fallbackSectionTitle);
+    const defaultTitle = pageIndex === 0 ? fallbackSectionTitle : `Page ${pageIndex + 1}`;
+    const title = pageTitle(page, defaultTitle);
     const elements = Array.isArray(page.elements) ? page.elements.filter(isRecord) : [];
     for (const element of elements) visitElement(element, title);
   });

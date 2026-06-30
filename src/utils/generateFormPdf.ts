@@ -229,7 +229,7 @@ function splitSharePointUrlFieldValue(value: string): string {
 
 function toAbsoluteSharePointUrl(url: string): string {
   if (!url || url.startsWith("http") || url.startsWith("data:")) return url;
-  if (!/^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(url)) return url;
+  if (!/^(\/sites\/|\/teams\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(url)) return url;
   try {
     return `${new URL(SP_SITE_URL).origin}${url}`;
   } catch {
@@ -248,21 +248,22 @@ function encodeServerRelativePathParam(serverRelativeUrl: string): string {
 function sharePointServerRelativePath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith("data:")) return "";
-  const isSharePointRelativePath = /^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(trimmed);
+  const cleanValue = splitSharePointUrlFieldValue(trimmed).split(/[?#]/)[0] ?? trimmed;
+  const isSharePointRelativePath = /^(\/sites\/|\/teams\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(cleanValue);
 
   try {
-    if (/^https?:\/\//i.test(trimmed)) {
+    if (/^https?:\/\//i.test(cleanValue)) {
       const siteUrl = new URL(SP_SITE_URL);
-      const imageUrl = new URL(trimmed);
+      const imageUrl = new URL(cleanValue);
       if (siteUrl.origin.toLowerCase() !== imageUrl.origin.toLowerCase()) return "";
-      if (!/^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(imageUrl.pathname)) return "";
+      if (!/^(\/sites\/|\/teams\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(imageUrl.pathname)) return "";
       return decodeURIComponent(imageUrl.pathname);
     }
   } catch {
     return "";
   }
 
-  return isSharePointRelativePath ? decodeURIComponent(trimmed.split(/[?#]/)[0] ?? trimmed) : "";
+  return isSharePointRelativePath ? decodeURIComponent(cleanValue) : "";
 }
 
 function sharePointFileValueUrl(value: string): string {
@@ -342,8 +343,9 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
   const next: Record<string, unknown> = { ...value };
   for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
     const raw = next[key];
-    if (typeof raw === "string" && (isImageSource(raw) || isSharePointSource(raw))) {
-      next[key] = await imageSourceToDataUrl(token, raw, cache);
+    if (typeof raw === "string") {
+      const source = imageSourceFromString(raw);
+      if (source) next[key] = await imageSourceToDataUrl(token, source, cache);
     }
   }
 
@@ -480,4 +482,5 @@ export async function generateAndStorePdf(
 
 export const __test__ = {
   imageSourceFromString,
+  sharePointServerRelativePath,
 };

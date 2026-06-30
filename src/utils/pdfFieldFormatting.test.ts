@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
 import { buildFormSubmissionSections } from "./formSubmissionLayout";
+import { __test__ as generateFormPdfTest } from "./generateFormPdf";
 
 describe("PDF field formatting", () => {
   it("formats empty field values as blank text", () => {
@@ -109,5 +110,32 @@ describe("PDF field formatting", () => {
       { key: "managerNotes", rows: 6, labelTrue: undefined, labelFalse: undefined },
       { key: "accepted", rows: undefined, labelTrue: "Yes", labelFalse: "No" },
     ]);
+  });
+
+  it("uses Main Page instead of default SurveyJS page names", () => {
+    const sections = buildFormSubmissionSections({
+      pages: [{
+        name: "page1",
+        elements: [
+          { type: "text", name: "overallRating", title: "Overall Rating" },
+        ],
+      }],
+    }, {
+      overallRating: "Excellent",
+    }, {
+      fallbackSectionTitle: "Main Page",
+      includeAdditionalFields: false,
+    });
+
+    expect(sections[0]?.title).toBe("Main Page");
+  });
+
+  it("recognizes SharePoint Teams signature image URLs with description suffixes", () => {
+    const url = "https://contoso.sharepoint.com/teams/hr/Signature%20Images/submission-123.png, Signature";
+
+    expect(generateFormPdfTest.imageSourceFromString(url, "https://contoso.sharepoint.com/teams/hr"))
+      .toBe("https://contoso.sharepoint.com/teams/hr/Signature%20Images/submission-123.png");
+    expect(generateFormPdfTest.sharePointServerRelativePath("/teams/hr/Signature%20Images/submission-123.png, Signature"))
+      .toBe("/teams/hr/Signature Images/submission-123.png");
   });
 });

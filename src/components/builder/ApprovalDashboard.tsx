@@ -272,27 +272,40 @@ function valueToText(value: unknown): string {
   return "";
 }
 
-function parseMaybeJsonRecord(value: string): Record<string, unknown> | null {
+function parseMaybeJsonValue(value: string): unknown | null {
   const trimmed = value.trim();
-  if (!trimmed.startsWith("{")) return null;
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
   try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    return isRecord(parsed) ? parsed : null;
+    return JSON.parse(trimmed) as unknown;
   } catch {
     return null;
   }
 }
 
+function splitSharePointUrlFieldValue(value: string): string {
+  const trimmed = value.trim();
+  const separatorIndex = trimmed.search(/,\s+/);
+  if (separatorIndex === -1) return trimmed;
+  return trimmed.slice(0, separatorIndex).trim();
+}
+
 function extractImageUrl(value: unknown): string {
   if (typeof value === "string") {
-    const parsed = parseMaybeJsonRecord(value);
-    if (parsed) return extractImageUrl(parsed);
-    return toAbsoluteSharePointUrl(value);
+    const parsed = parseMaybeJsonValue(value);
+    if (parsed !== null) return extractImageUrl(parsed) || value;
+    return toAbsoluteSharePointUrl(splitSharePointUrlFieldValue(value));
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const url = extractImageUrl(entry);
+      if (url) return url;
+    }
+    return "";
   }
   if (!isRecord(value)) return "";
-  for (const key of ["Url", "url", "serverRelativeUrl", "ServerRelativeUrl"]) {
+  for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "serverRelativeUrl", "ServerRelativeUrl"]) {
     const next = value[key];
-    if (typeof next === "string" && next.trim()) return toAbsoluteSharePointUrl(next.trim());
+    if (typeof next === "string" && next.trim()) return toAbsoluteSharePointUrl(splitSharePointUrlFieldValue(next));
   }
   const serverUrl = value.serverUrl || value.ServerUrl;
   const relativeUrl = value.serverRelativeUrl || value.ServerRelativeUrl;

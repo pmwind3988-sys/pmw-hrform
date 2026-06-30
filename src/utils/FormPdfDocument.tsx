@@ -257,7 +257,10 @@ function collectImageSources(value: unknown): string[] {
   const directKeys = ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"];
   for (const key of directKeys) {
     const next = value[key];
-    if (typeof next === "string" && (isImageSource(next) || isSharePointImageCandidate(next))) return [next];
+    if (typeof next === "string") {
+      const candidate = splitSharePointUrlFieldValue(next);
+      if (isImageSource(candidate) || isSharePointImageCandidate(candidate)) return [candidate];
+    }
   }
 
   const serverUrl = value.serverUrl || value.ServerUrl;
@@ -556,7 +559,7 @@ function renderImageSources(sources: string[]) {
 
 export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
-    fallbackSectionTitle: "Submitted answers",
+    fallbackSectionTitle: "Main Page",
     includeAdditionalFields: false,
   });
   const layoutConfig = pdfConfig?.enabled === false ? undefined : pdfConfig;
