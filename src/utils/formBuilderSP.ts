@@ -1850,6 +1850,7 @@ interface EmailParams {
   to: string | string[];
   subject: string;
   body: string;
+  attachments?: WorkflowEmailAttachment[];
   workflow?: {
     listTitle: string;
     responseItemId: number;
@@ -1857,10 +1858,16 @@ interface EmailParams {
   };
 }
 
+interface WorkflowEmailAttachment {
+  name: string;
+  contentType: string;
+  contentBytes: string;
+}
+
 /**
  * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
  */
-export async function sendSpEmail(_token: string, { to, subject, body, workflow }: EmailParams): Promise<void> {
+export async function sendSpEmail(_token: string, { to, subject, body, attachments, workflow }: EmailParams): Promise<void> {
   // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
@@ -1871,7 +1878,7 @@ export async function sendSpEmail(_token: string, { to, subject, body, workflow 
       'Content-Type': 'application/json',
       ...(API_KEY ? { 'X-Api-Key': API_KEY } : {}),
     },
-    body: JSON.stringify({ to, subject, body, workflow }),
+    body: JSON.stringify({ to, subject, body, attachments, workflow }),
   });
 
   if (!response.ok) {
@@ -1897,6 +1904,7 @@ interface ApprovalNotificationParams {
   responseListTitle?: string;
   throwOnEmailError?: boolean;
   nextEmailSchedule?: EvaluationEmailSchedule;
+  attachments?: WorkflowEmailAttachment[];
 }
 
 // ── Styled email HTML template ────────────────────────────────────────────
@@ -2061,7 +2069,7 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, attachments } = params;
   const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
   const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
@@ -2111,6 +2119,7 @@ export async function triggerApprovalNotification(
           await sendSpEmail(token, {
             to: targetEmail,
             subject: `Manual ${nextLayerType}: ${formTitle} layer ${layer}`,
+            attachments,
             workflow: {
               listTitle: responseListTitle,
               responseItemId,
@@ -2168,6 +2177,7 @@ export async function triggerApprovalNotification(
           await sendSpEmail(token, {
             to: nextApproverEmail,
             subject: `Manual ${nextLayerType}: ${formTitle} layer ${displayNextLayerNumber}`,
+            attachments,
             workflow: {
               listTitle: responseListTitle,
               responseItemId,

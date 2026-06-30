@@ -97,6 +97,12 @@ interface PendingItem {
   totalLayers?: number;
 }
 
+interface WorkflowEmailAttachment {
+  name: string;
+  contentType: string;
+  contentBytes: string;
+}
+
 function getPendingItemKey(item: Pick<PendingItem, "Title" | "Id">): string {
   return `${item.Title}::${item.Id}`;
 }
@@ -214,6 +220,29 @@ function formatDateTime(d: string | undefined | null): string {
 function toDateTimeLocalValue(date: Date): string {
   const offsetMs = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      const commaIndex = value.indexOf(",");
+      resolve(commaIndex >= 0 ? value.slice(commaIndex + 1) : value);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read generated PDF."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function safePdfFileName(title: string, id: number): string {
+  const safeTitle = title.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "manual-workflow";
+  return `${safeTitle}_submission_${id}_manual.pdf`;
+}
+
+function isManualPaperWorkflowStatus(value: unknown): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "manual evaluation required" || normalized === "manual approval required";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1461,6 +1490,45 @@ export default function ApprovalDashboard() {
         ? `${window.location.origin}/eval/${encodeURIComponent(publicToken)}?item=${item.Id}`
         : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${item.Id}/${currentLayerNumber}`;
 
+      const currentLayerStatus = valueToText(rawItem[`L${currentLayerNumber}_Status`]);
+      const isManualPaperEmail = isManualPaperWorkflowStatus(currentLayerStatus);
+      let manualPdfUrl = "";
+      let attachments: WorkflowEmailAttachment[] | undefined;
+      if (isManualPaperEmail) {
+        const pdfData = await loadPdfData(item, token);
+        if (!pdfData) throw new Error("Could not load the submission data needed to build the manual PDF attachment.");
+        pdfData.meta.formStatus = item.FormStatus || item.Status || "submitted";
+        pdfData.pdfConfig = {
+          ...(pdfData.pdfConfig ?? {
+            title: "Manual Workflow Form",
+            deliveryMethod: "sharepoint",
+          }),
+          enabled: true,
+          title: pdfData.pdfConfig?.title || "Manual Workflow Form",
+          deliveryMethod: pdfData.pdfConfig?.deliveryMethod || "sharepoint",
+          includeEmptyEvaluationFields: true,
+          showApproverChain: pdfData.pdfConfig?.showApproverChain ?? true,
+          showEvaluationDetails: pdfData.pdfConfig?.showEvaluationDetails ?? true,
+          showSignatures: pdfData.pdfConfig?.showSignatures ?? true,
+          showStatusBadge: pdfData.pdfConfig?.showStatusBadge ?? true,
+        };
+        const existingPdfUrl = item.PdfUrl || valueToText(rawItem.PdfUrl);
+        const { generateAndStorePdf } = await import("../../utils/generateFormPdf");
+        manualPdfUrl = await generateAndStorePdf(token, item.Title, item.Id, pdfData, {
+          replaceExistingPdfUrl: existingPdfUrl || undefined,
+          onGeneratedBlob: async (blob) => {
+            attachments = [{
+              name: safePdfFileName(item.Title, item.Id),
+              contentType: "application/pdf",
+              contentBytes: await blobToBase64(blob),
+            }];
+          },
+        });
+        if (!attachments?.length) {
+          throw new Error("Could not build the manual PDF attachment.");
+        }
+      }
+
       await triggerApprovalNotification(token, {
         formTitle: item.Title,
         submittedBy: item.SubmittedBy,
@@ -1471,6 +1539,8 @@ export default function ApprovalDashboard() {
         nextApproverEmail: recipient,
         nextLayerType: currentLayer.type,
         reviewLink,
+        ...(manualPdfUrl ? { pdfUrl: manualPdfUrl } : {}),
+        ...(attachments ? { attachments } : {}),
         responseListTitle: item.Title,
         throwOnEmailError: true,
       });
@@ -1484,12 +1554,12 @@ export default function ApprovalDashboard() {
       const refreshedRecipient = valueToText(refreshed[`L${currentLayerNumber}_Email`]) || recipient;
       setPendingItems((previous) => previous.map((current) =>
         getPendingItemKey(current) === itemKey
-          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule }
+          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule, ...(manualPdfUrl ? { PdfUrl: manualPdfUrl } : {}) }
           : current
       ));
       setSelectedItem((current) =>
         current && getPendingItemKey(current) === itemKey
-          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule }
+          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule, ...(manualPdfUrl ? { PdfUrl: manualPdfUrl } : {}) }
           : current
       );
       setCompletedLayers((previous) => ({
