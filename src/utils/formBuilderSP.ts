@@ -2023,13 +2023,6 @@ function manualPaperEmailBody(params: {
   totalLayers: number;
   layerType: "approval" | "evaluation";
 }): string {
-  const fieldLabels = params.layerType === "evaluation"
-    ? ["Evaluation notes", "Evaluator name", "Signature", "Evaluation date"]
-    : ["Approval outcome", "Approver name", "Signature", "Signed date", "Rejection reason"];
-  const fieldsHtml = fieldLabels.map((label) => `<tr>
-    <td style="padding:10px 0;border-bottom:1px solid #E5EAF1;font-size:13px;color:#111827;font-weight:650">${escapeHtml(label)}</td>
-    <td style="padding:10px 0;border-bottom:1px solid #E5EAF1;font-size:13px;color:#9CA3AF">________________________________</td>
-  </tr>`).join("");
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#F3F6FA;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
@@ -2046,14 +2039,13 @@ function manualPaperEmailBody(params: {
           <tr><td style="padding:6px 12px;font-size:11px;line-height:14px;font-weight:800;color:#92400E;text-transform:uppercase;letter-spacing:0.06em">Manual paper workflow</td></tr>
         </table>
         <h1 style="margin:0 0 8px;font-size:22px;line-height:28px;color:#111827;font-weight:750">${escapeHtml(params.formTitle)} needs manual ${escapeHtml(params.layerType)}</h1>
-        <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#4B5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer.</p>
+        <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#4B5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${escapeHtml(params.layerType)} in the attached or linked PDF record.</p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
           <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Form</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(params.formTitle)}</td></tr>
           <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Submission ID</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">#${params.responseItemId}</td></tr>
           <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Submitted by</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(params.submittedBy)}</td></tr>
           <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Workflow stage</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">Layer ${params.layerNumber} of ${params.totalLayers}</td></tr>
         </table>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-top:1px solid #E5EAF1">${fieldsHtml}</table>
       </td></tr>
     </table>
   </td></tr>

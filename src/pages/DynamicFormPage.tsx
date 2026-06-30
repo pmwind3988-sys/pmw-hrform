@@ -177,6 +177,24 @@ function uploadFileName(fieldName: string, candidate: UploadCandidate, index?: n
   return `${fieldName}_${Date.now()}${suffix}.${ext}`;
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      const commaIndex = value.indexOf(",");
+      resolve(commaIndex >= 0 ? value.slice(commaIndex + 1) : value);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read generated PDF."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function safePdfFileName(title: string, id: number): string {
+  const safeTitle = title.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "manual-workflow";
+  return `${safeTitle}_submission_${id}_manual.pdf`;
+}
+
 function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string, unknown>): string {
   const rawEmail = layer.assignee.type === "user"
     ? layer.assignee.value
@@ -1278,7 +1296,9 @@ export default function DynamicFormPage() {
                 }
               } catch { /* ignore matrix injection errors */ }
               const { generateAndStorePdf, buildPdfLayerResults } = await import("../utils/generateFormPdf");
-              const pdfUrl = await generateAndStorePdf(token, cfg.Title as string, result.Id, {
+              let manualPdfAttachment: { name: string; contentType: string; contentBytes: string } | null = null;
+              const responseItemId = result.Id;
+              const pdfUrl = await generateAndStorePdf(token, cfg.Title as string, responseItemId, {
                 surveyJson: surveyContent as PdfFormData["surveyJson"],
                 responseData: pdfData,
                 layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
@@ -1288,6 +1308,15 @@ export default function DynamicFormPage() {
                 pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
                   ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
                   : hasManualPaperWorkflow ? { enabled: true, title: "Manual Workflow Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
+              }, {
+                onGeneratedBlob: async (blob) => {
+                  if (!hasManualPaperWorkflow) return;
+                  manualPdfAttachment = {
+                    name: safePdfFileName(cfg.Title as string, responseItemId),
+                    contentType: "application/pdf",
+                    contentBytes: await blobToBase64(blob),
+                  };
+                },
               });
               if (hasManualPaperWorkflow) {
                 const pdfLink = pdfUrl.startsWith("http") ? pdfUrl : `${new URL(SP_SITE_URL).origin}${pdfUrl}`;
@@ -1301,7 +1330,8 @@ export default function DynamicFormPage() {
                   body: JSON.stringify({
                     sendToConfiguredSender: true,
                     subject: `Manual workflow PDF ready: ${cfg.Title as string}`,
-                    body: `A submission matched a manual paper workflow rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/><a href="${pdfLink}">Open generated PDF</a>`,
+                    body: `A submission matched a manual paper workflow rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/>The manual evaluation/approval PDF is attached.<br/><a href="${pdfLink}">Open generated PDF record</a>`,
+                    attachments: manualPdfAttachment ? [manualPdfAttachment] : undefined,
                   }),
                 });
               }

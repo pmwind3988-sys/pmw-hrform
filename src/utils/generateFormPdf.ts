@@ -399,7 +399,7 @@ export async function generateAndStorePdf(
   listTitle: string,
   responseItemId: number,
   data: PdfFormData,
-  options: { replaceExistingPdfUrl?: string } = {},
+  options: { replaceExistingPdfUrl?: string; onGeneratedBlob?: (blob: Blob) => void | Promise<void> } = {},
 ): Promise<string> {
   // ── Inject matrix child rows ──────────────────────────────────────────
   // For dynamicmatrix/tableinput fields, read child list rows and attach
@@ -442,6 +442,7 @@ export async function generateAndStorePdf(
       setTimeout(() => reject(new Error("PDF generation timed out")), 60_000)
     ),
   ]);
+  await options.onGeneratedBlob?.(blob);
 
   if (options.replaceExistingPdfUrl) {
     await deleteFormPdf(token, options.replaceExistingPdfUrl);

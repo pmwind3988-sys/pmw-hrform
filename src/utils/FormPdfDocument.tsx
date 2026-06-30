@@ -144,16 +144,16 @@ const S = StyleSheet.create({
   evalSubRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 6, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
   evalSubLabel: { width: "34%", fontSize: 6, color: C.muted, paddingRight: 5, lineHeight: 1.25 },
   evalSubValue: { width: "66%", fontSize: 6, color: C.text, lineHeight: 1.25 },
-  paperEvalRow: { flexDirection: "row", paddingVertical: 6, paddingHorizontal: 6, borderBottomWidth: 0.4, borderBottomColor: C.borderLight, alignItems: "flex-start" },
-  paperEvalLabel: { width: "34%", fontSize: 8.5, color: C.text, paddingRight: 8, lineHeight: 1.25 },
+  paperEvalRow: { flexDirection: "row", paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: C.borderLight, alignItems: "flex-start" },
+  paperEvalLabel: { width: "30%", fontSize: 10, color: C.text, paddingRight: 10, lineHeight: 1.35 },
   paperFieldBox: { width: "66%" },
-  paperLine: { height: 18, borderBottomWidth: 0.7, borderBottomColor: C.border, marginBottom: 5 },
-  paperLineText: { fontSize: 8, color: C.text, lineHeight: 1.2 },
-  paperOptionGroup: { width: "66%", flexDirection: "row", flexWrap: "wrap" },
-  paperOption: { flexDirection: "row", alignItems: "center", marginRight: 16, marginBottom: 7 },
-  paperOptionBox: { width: 11, height: 11, borderWidth: 0.9, borderColor: C.text, marginRight: 5, alignItems: "center", justifyContent: "center" },
-  paperOptionMark: { fontSize: 8, fontWeight: "bold", lineHeight: 1 },
-  paperOptionLabel: { fontSize: 8, color: C.text, lineHeight: 1.2 },
+  paperLine: { height: 32, borderBottomWidth: 0.9, borderBottomColor: C.border, marginBottom: 8 },
+  paperLineText: { fontSize: 9.5, color: C.text, lineHeight: 1.25 },
+  paperOptionGroup: { width: "70%", flexDirection: "row", flexWrap: "wrap" },
+  paperOption: { flexDirection: "row", alignItems: "center", marginRight: 20, marginBottom: 11 },
+  paperOptionBox: { width: 15, height: 15, borderWidth: 1, borderColor: C.text, marginRight: 7, alignItems: "center", justifyContent: "center" },
+  paperOptionMark: { fontSize: 10, fontWeight: "bold", lineHeight: 1 },
+  paperOptionLabel: { fontSize: 9.5, color: C.text, lineHeight: 1.25 },
 
   // ── No data ──
   noData: { fontSize: 7, color: C.muted, fontStyle: "italic", textAlign: "center", paddingVertical: 10 },
@@ -222,6 +222,11 @@ function isImageSource(value: string): boolean {
   return /^data:image\//i.test(trimmed) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(trimmed);
 }
 
+function isSharePointImageCandidate(value: string): boolean {
+  const trimmed = value.trim();
+  return /^(https?:\/\/|\/)/i.test(trimmed) && /(\/sites\/|\/teams\/|\/Signature%20Images\/|\/Signature Images\/|\/Form%20PDFs\/|\/Lists\/)/i.test(trimmed);
+}
+
 function extractImageSrcFromHtml(value: string): string {
   const match = value.match(/<img\b[^>]*\bsrc=(["'])(.*?)\1/i);
   return match?.[2]?.trim() ?? "";
@@ -244,7 +249,7 @@ function collectImageSources(value: unknown): string[] {
     if (parsed !== null) return collectImageSources(parsed);
     const htmlSrc = extractImageSrcFromHtml(trimmed);
     const candidate = splitSharePointUrlFieldValue(htmlSrc || trimmed);
-    return isImageSource(candidate) ? [candidate] : [];
+    return isImageSource(candidate) || isSharePointImageCandidate(candidate) ? [candidate] : [];
   }
 
   if (!isRecord(value)) return [];
@@ -252,14 +257,14 @@ function collectImageSources(value: unknown): string[] {
   const directKeys = ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"];
   for (const key of directKeys) {
     const next = value[key];
-    if (typeof next === "string" && isImageSource(next)) return [next];
+    if (typeof next === "string" && (isImageSource(next) || isSharePointImageCandidate(next))) return [next];
   }
 
   const serverUrl = value.serverUrl || value.ServerUrl;
   const relativeUrl = value.serverRelativeUrl || value.ServerRelativeUrl;
   if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
     const url = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
-    return isImageSource(url) ? [url] : [];
+    return isImageSource(url) || isSharePointImageCandidate(url) ? [url] : [];
   }
 
   return [];
@@ -278,15 +283,16 @@ function badgeStyle(status?: string) {
 
 function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
   const badge = badgeStyle(layer.status);
+  const isManualPaper = layer.status.trim().toLowerCase().startsWith("manual ");
   const rejectedAtLayer = layer.status.toLowerCase().includes("rejected at layer") ? layer.status : "";
-  const remarks = layer.rejection || rejectedAtLayer || (layer.type === "evaluation" ? "Confirmed" : "");
+  const remarks = isManualPaper ? "" : layer.rejection || rejectedAtLayer || (layer.type === "evaluation" ? "Confirmed" : "");
   return (
     <View style={S.layerRow} wrap={false}>
       <Text style={[S.layerCell, S.colNum]}>{layer.layerNumber}</Text>
       <Text style={[S.layerCell, S.colType]}>{layer.type === "evaluation" ? "Eval" : "Approval"}</Text>
       <Text style={[S.layerCell, S.colStatus, { color: badge.text }]}>{badge.label}</Text>
-      <Text style={[S.layerCell, S.colEmail]}>{layer.email || "—"}</Text>
-      <Text style={[S.layerCell, S.colTime]}>{fmtDate(layer.signedAt)}</Text>
+      <Text style={[S.layerCell, S.colEmail]}>{isManualPaper ? "" : layer.email || ""}</Text>
+      <Text style={[S.layerCell, S.colTime]}>{isManualPaper ? "" : fmtDate(layer.signedAt)}</Text>
       <Text style={[S.layerCell, S.colReason]}>{remarks}</Text>
     </View>
   );
@@ -408,19 +414,16 @@ function isLongTextField(field: FormSubmissionField): boolean {
 }
 
 function lineCountForField(field: FormSubmissionField): number {
-  if (isLongTextField(field)) return Math.max(3, Math.min(8, Math.trunc(field.rows ?? 4)));
-  return 1;
+  if (isLongTextField(field)) return Math.max(4, Math.min(10, Math.trunc(field.rows ?? 5)));
+  return 2;
 }
 
 function renderPaperLines(field: FormSubmissionField) {
   const lines = Array.from({ length: lineCountForField(field) });
-  const display = fmtVal(field.value, field);
   return (
     <View style={S.paperFieldBox}>
       {lines.map((_, index) => (
-        <View key={`${field.key}-line-${index}`} style={S.paperLine}>
-          {index === 0 && display ? <Text style={S.paperLineText}>{display}</Text> : null}
-        </View>
+        <View key={`${field.key}-line-${index}`} style={S.paperLine} />
       ))}
     </View>
   );
@@ -716,7 +719,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
                 <View key={i} style={S.sigBlock} wrap={false}>
                   <View style={S.sigLine}>
                     <Text style={S.sigLabel}>Layer {layer.layerNumber} - {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
-                    <Text style={S.sigName}>{layer.email || "—"} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
+                    <Text style={S.sigName}>{layer.email || ""} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
                     <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}{layer.rejection ? ` - Reason: ${layer.rejection}` : ""}</Text>
                   </View>
                   <View style={S.sigImageBox}>

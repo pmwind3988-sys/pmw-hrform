@@ -4,6 +4,7 @@ import { logError } from "./_utils/logger.js";
 import {
   deliverWorkflowEmail,
   sendGraphEmail,
+  type WorkflowEmailAttachment,
   type WorkflowEmailContext,
 } from "./_utils/workflowEmail.js";
 
@@ -20,6 +21,27 @@ interface ApiResponse {
   end(): void;
 }
 
+function normalizeAttachment(entry: unknown): WorkflowEmailAttachment | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const record = entry as Record<string, unknown>;
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  const contentType = typeof record.contentType === "string" && record.contentType.trim()
+    ? record.contentType.trim()
+    : "application/octet-stream";
+  let contentBytes = typeof record.contentBytes === "string"
+    ? record.contentBytes
+    : typeof record.content === "string"
+      ? record.content
+      : "";
+  if (contentBytes.startsWith("data:")) {
+    const commaIndex = contentBytes.indexOf(",");
+    contentBytes = commaIndex >= 0 ? contentBytes.slice(commaIndex + 1) : "";
+  }
+  contentBytes = contentBytes.trim();
+  if (!name || !contentBytes) return null;
+  return { name, contentType, contentBytes };
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -29,7 +51,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { to, subject, body, workflow, sendToConfiguredSender } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow, sendToConfiguredSender, attachments } = req.body as Record<string, unknown>;
   const configuredSender = process.env.HR_FORM_EMAIL_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "";
 
   const recipients = sendToConfiguredSender === true && configuredSender
@@ -51,7 +73,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
-    const message = { to: recipients, subject, body };
+    const normalizedAttachments = Array.isArray(attachments)
+      ? attachments.map(normalizeAttachment).filter((attachment): attachment is WorkflowEmailAttachment => attachment !== null)
+      : [];
+    const message = {
+      to: recipients,
+      subject,
+      body,
+      ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
+    };
     if (
       workflow &&
       typeof workflow === "object" &&

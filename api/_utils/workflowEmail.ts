@@ -51,6 +51,13 @@ export interface WorkflowEmailMessage {
   to: string | string[];
   subject: string;
   body: string;
+  attachments?: WorkflowEmailAttachment[];
+}
+
+export interface WorkflowEmailAttachment {
+  name: string;
+  contentType: string;
+  contentBytes: string;
 }
 
 export interface WorkflowEmailContext {
@@ -219,6 +226,14 @@ export async function sendGraphEmail(
           toRecipients: recipients.map((recipient) => ({
             emailAddress: { address: recipient },
           })),
+          ...(message.attachments?.length ? {
+            attachments: message.attachments.map((attachment) => ({
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              name: attachment.name,
+              contentType: attachment.contentType,
+              contentBytes: attachment.contentBytes,
+            })),
+          } : {}),
         },
         saveToSentItems: false,
       }),
@@ -345,34 +360,6 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function text(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  return String(value).trim();
-}
-
-function manualPaperFieldRows(params: ManualPaperWorkflowEmailParams): string {
-  if (params.layerType === "approval") {
-    const approvalFields = ["Approval outcome", "Approver name", "Signature", "Signed date", "Rejection reason"];
-    return approvalFields.map((label) => `<tr>
-      <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;color:#374151;font-weight:600">${escapeHtml(label)}</td>
-      <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;color:#9ca3af">________________________________</td>
-    </tr>`).join("");
-  }
-
-  const elements = params.surveyElements ?? [];
-  const fields = elements
-    .map((element) => {
-      const label = text(element.title) || text(element.name);
-      return label ? label : "";
-    })
-    .filter(Boolean);
-  const labels = fields.length > 0 ? fields : ["Evaluation notes", "Evaluator name", "Signature", "Evaluation date"];
-  return labels.map((label) => `<tr>
-    <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;color:#374151;font-weight:600">${escapeHtml(label)}</td>
-    <td style="padding:10px 0;border-bottom:1px solid #e5e7eb;color:#9ca3af">________________________________</td>
-  </tr>`).join("");
-}
-
 export function buildManualPaperWorkflowEmail(
   params: ManualPaperWorkflowEmailParams,
 ): WorkflowEmailMessage {
@@ -387,16 +374,12 @@ export function buildManualPaperWorkflowEmail(
   <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px">
     <div style="font-size:12px;font-weight:700;color:#0078d4;text-transform:uppercase;letter-spacing:.08em">PMW HR Form</div>
     <h1 style="font-size:22px;line-height:28px;margin:12px 0 8px">${escapeHtml(params.formTitle)} needs ${escapeHtml(noun)}</h1>
-    <p style="font-size:14px;line-height:22px;color:#4b5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer.</p>
+    <p style="font-size:14px;line-height:22px;color:#4b5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${escapeHtml(params.layerType)} in the attached or linked PDF record.</p>
     <table style="width:100%;border-collapse:collapse;margin:20px 0">
       <tr><td style="padding:8px 0;color:#6b7280">Submission ID</td><td style="padding:8px 0;font-weight:600">#${escapeHtml(String(params.responseItemId))}</td></tr>
       <tr><td style="padding:8px 0;color:#6b7280">Submitted by</td><td style="padding:8px 0;font-weight:600">${escapeHtml(params.submittedBy)}</td></tr>
       <tr><td style="padding:8px 0;color:#6b7280">Workflow stage</td><td style="padding:8px 0;font-weight:600">Layer ${params.layer} of ${params.totalLayers}</td></tr>
       <tr><td style="padding:8px 0;color:#6b7280">Layer</td><td style="padding:8px 0;font-weight:600">${escapeHtml(layerName)}</td></tr>
-    </table>
-    <h2 style="font-size:15px;line-height:20px;margin:22px 0 8px">Blank ${escapeHtml(params.layerType)} fields</h2>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
-      ${manualPaperFieldRows(params)}
     </table>
   </div>
 </body>
