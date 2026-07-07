@@ -393,7 +393,28 @@ export function queryWebFormVersion(
   token: string,
   formTitle: string,
   formVersion: string,
+  publishKey?: string,
 ): Promise<GraphListItem | null> {
+  if (publishKey) {
+    const keyed = queryListItemByFields(token, "Web Form Versions", {
+      FormTitle: formTitle,
+      FormVersion: formVersion,
+      PublishKey: publishKey,
+    });
+    return keyed.then(async (item) => {
+      if (item || publishKey !== "production") return item;
+      return queryListItemByFields(token, "Web Form Versions", {
+        FormTitle: formTitle,
+        FormVersion: formVersion,
+      });
+    }).catch(async () => {
+      if (publishKey !== "production") return null;
+      return queryListItemByFields(token, "Web Form Versions", {
+        FormTitle: formTitle,
+        FormVersion: formVersion,
+      });
+    });
+  }
   return queryListItemByFields(token, "Web Form Versions", {
     FormTitle: formTitle,
     FormVersion: formVersion,

@@ -13,7 +13,7 @@ import "survey-core/survey-core.min.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
-import type { LayerConfig, LayerConfigItem } from "../types";
+import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
@@ -27,6 +27,7 @@ import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
+import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -72,6 +73,24 @@ type CompanyChoiceOption = { value: string; text: string };
 
 function companyLinesFromText(value: string): string[] {
   return value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+}
+
+function documentHeaderFromMeta(meta: Record<string, unknown> | undefined, formId: string, formVersion: string): Required<DocumentControlHeader> {
+  const raw = meta?.documentHeader;
+  const header = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as DocumentControlHeader
+    : {};
+  return {
+    documentNumber: header.documentNumber || formId,
+    issueNumber: header.issueNumber || "",
+    effectiveDate: header.effectiveDate || "",
+    revisionNumber: header.revisionNumber || formVersion,
+    revisionDate: header.revisionDate || "",
+  };
+}
+
+function isExpiredPublishProfile(value: unknown): boolean {
+  return typeof value === "string" && value.trim() !== "" && Date.parse(value) <= Date.now();
 }
 
 function companyChoiceFromUnknown(choice: unknown): CompanyChoiceOption | null {
@@ -138,6 +157,48 @@ function submittedValueToString(value: unknown): string {
     }
   }
   return "";
+}
+
+function collectSharePointDateTimeFieldNames(surveyJson: unknown): Set<string> {
+  const names = new Set<string>();
+  const root = surveyJson && typeof surveyJson === "object" && !Array.isArray(surveyJson)
+    ? surveyJson as Record<string, unknown>
+    : {};
+  const pages = Array.isArray(root.pages) ? root.pages : [];
+
+  const walk = (elements: unknown): void => {
+    if (!Array.isArray(elements)) return;
+    for (const element of elements) {
+      if (!element || typeof element !== "object" || Array.isArray(element)) continue;
+      const record = element as Record<string, unknown>;
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      const type = typeof record.type === "string" ? record.type : "";
+      const inputType = typeof record.inputType === "string" ? record.inputType : "";
+      if (name && (type === "date" || type === "datetime" || (type === "text" && (inputType === "date" || inputType === "datetime-local")))) {
+        names.add(name);
+      }
+      walk(record.elements);
+      walk(record.templateElements);
+    }
+  };
+
+  for (const page of pages) {
+    if (page && typeof page === "object" && !Array.isArray(page)) {
+      walk((page as Record<string, unknown>).elements);
+    }
+  }
+  return names;
+}
+
+function normalizeSharePointDateTimeFields(
+  raw: Record<string, unknown>,
+  surveyJson: unknown,
+): void {
+  for (const fieldName of collectSharePointDateTimeFieldNames(surveyJson)) {
+    if (!(fieldName in raw)) continue;
+    const normalized = toSharePointMalaysiaDateTime(raw[fieldName]);
+    if (normalized) raw[fieldName] = normalized;
+  }
 }
 
 interface UploadCandidate {
@@ -332,6 +393,11 @@ const globalCss = (t: typeof LIGHT) => `
   .dfp-header{flex-wrap:nowrap}
   .dfp-survey-wrap .sd-container-modern,.dfp-survey-wrap .sd-root-modern{max-width:100%!important}
   .dfp-banner-logo img{max-height:48px!important}
+  .dfp-doc-control{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid ${t.border};border-bottom:1px solid ${t.border};background:${t.cardBg}}
+  .dfp-doc-cell{min-height:42px;padding:7px 8px;border-right:1px solid ${t.border};display:flex;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:${t.textPrimary};line-height:1.35}
+  .dfp-doc-cell:last-child{border-right:none}
+  .dfp-doc-label{font-weight:700}
+  .dfp-doc-value{font-weight:600;color:${t.textSecond}}
   .dfp-company-option span{text-wrap:pretty}
   @media(max-width:768px){
     .dfp-banner-logo{width:116px!important}
@@ -340,6 +406,9 @@ const globalCss = (t: typeof LIGHT) => `
     .dfp-banner-logo img{max-height:40px!important}
     .dfp-banner-info{font-size:12px!important;padding:10px 12px!important}
     .dfp-company-option{flex-basis:100%!important}
+    .dfp-doc-control{grid-template-columns:1fr}
+    .dfp-doc-cell{border-right:none;border-bottom:1px solid ${t.border};justify-content:flex-start;text-align:left;padding:8px 12px}
+    .dfp-doc-cell:last-child{border-bottom:none}
   }
   @media(max-width:640px){
     .dfp-header{padding:0 12px!important;min-height:48px!important}
@@ -488,6 +557,7 @@ export default function DynamicFormPage() {
   const { formId } = useParams<{ formId: string }>();
   const [searchParams] = useSearchParams();
   const pinVersion = searchParams.get("version");
+  const publishKey = searchParams.get("publish") || searchParams.get("batch");
   const prefilledQrPayload = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -511,7 +581,13 @@ export default function DynamicFormPage() {
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState(false);
-  const shareUrl = window.location.origin + window.location.pathname + (pinVersion ? `?version=${pinVersion}` : "");
+  const shareUrl = (() => {
+    const params = new URLSearchParams();
+    if (pinVersion) params.set("version", pinVersion);
+    if (publishKey) params.set("publish", publishKey);
+    const query = params.toString();
+    return window.location.origin + window.location.pathname + (query ? `?${query}` : "");
+  })();
   const tokenRef = useRef<string | null>(null);
   const userEmail = accounts[0]?.username || null;
   const lastDataRef = useRef<Record<string, unknown> | null>(null);
@@ -544,16 +620,23 @@ export default function DynamicFormPage() {
         if (token) {
           // Authenticated path — load directly from SharePoint
           let cfgRaw: Record<string, unknown>;
-          let ver: { surveyJson: unknown; meta: unknown } | null;
+          let ver: { surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishStatus?: string; publishExpiresAt?: string } | null;
           if (pinVersion) {
-            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
+            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
             if (!cfgRes.ok) throw new Error(`Failed to load form config: ${cfgRes.status} ${cfgRes.statusText}`);
             cfgRaw = (await cfgRes.json()).value?.[0];
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
-            ver = await getFormVersion(token, cfgRaw.Title as string, pinVersion);
+            ver = await getFormVersion(token, cfgRaw.Title as string, pinVersion, publishKey);
             if (!ver) throw new Error(`Version ${pinVersion} not found.`);
+            if (ver.publishStatus === "off") throw new Error("This published form profile is turned off.");
+            if (isExpiredPublishProfile(ver.publishExpiresAt)) throw new Error("This published form profile has expired.");
+            if (ver.layerConfig) {
+              cfgRaw.LayerConfig = JSON.stringify(ver.layerConfig);
+            }
+            cfgRaw.CurrentVersion = pinVersion;
+            if (publishKey) cfgRaw.CurrentPublishKey = publishKey;
           } else {
-            const latest = await getLatestFormBySlug(token, formId);
+            const latest = await getLatestFormBySlug(token, formId, publishKey);
             if (!latest) throw new Error(`Form "${formId}" not found.`);
             cfgRaw = latest.formConfig as unknown as Record<string, unknown>;
             ver = { surveyJson: latest.surveyJson, meta: latest.meta };
@@ -565,7 +648,10 @@ export default function DynamicFormPage() {
           });
         } else if (!isAuthenticated) {
           // Unauthenticated path — try public API fallback
-          const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`, {
+          const params = new URLSearchParams({ slug: formId });
+          if (pinVersion) params.set("version", pinVersion);
+          if (publishKey) params.set("publish", publishKey);
+          const res = await fetch(`/api/form-config?${params.toString()}`, {
             headers: {
               "X-Requested-With": "XMLHttpRequest",
               ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
@@ -623,7 +709,7 @@ export default function DynamicFormPage() {
     };
 
     load();
-  }, [formId, pinVersion, isAuthenticated, instance, accounts]);
+  }, [formId, pinVersion, publishKey, isAuthenticated, instance, accounts]);
 
   // Enrich survey JSON with SharePoint-sourced choices
   useEffect(() => {
@@ -815,6 +901,7 @@ export default function DynamicFormPage() {
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
 
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
+  const formIdValue = String(formData?.formConfig?.FormID || "");
   const showBanner = (formData?.meta?.showBanner as boolean) !== false;
   const isoStandardsText = (formData?.meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
   const companiesText = (formData?.meta?.companies as string) || "";
@@ -829,6 +916,7 @@ export default function DynamicFormPage() {
   const logoUrl = (formData?.meta?.logoUrl as string) || "";
   const isPublicForm = formData?.formConfig?.IsPublic !== false;
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
+  const documentHeader = documentHeaderFromMeta(formData?.meta, formIdValue, formVersion);
 
   useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
 
@@ -958,6 +1046,10 @@ export default function DynamicFormPage() {
             }
           }
         }
+      }
+
+      if (token) {
+        normalizeSharePointDateTimeFields(raw, enrichedSurveyJson || formData?.surveyJson);
       }
 
       // Step 2: Resolve layers — try LayerConfig first, fall back to old rules
@@ -1379,6 +1471,8 @@ export default function DynamicFormPage() {
           },
           body: JSON.stringify({
             listTitle: cfg.Title,
+            formVersion: cfg.CurrentVersion,
+            publishKey: cfg.CurrentPublishKey || publishKey,
             body,
             matrixData: Object.keys(matrixData).length > 0 ? matrixData : undefined,
             pdpaConsent: true,
@@ -1524,6 +1618,20 @@ export default function DynamicFormPage() {
           <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "14px 20px" }}>
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandardsText}</div>
             <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 17, color: "#fff" }}>{formTitle}</div>
+          </div>
+          <div className="dfp-doc-control" aria-label="Document control metadata">
+            {[
+              ["Document Number:", documentHeader.documentNumber],
+              ["Issue Number:", documentHeader.issueNumber],
+              ["Effective Date:", documentHeader.effectiveDate],
+              ["Revision Number:", documentHeader.revisionNumber],
+              ["Revision Date:", documentHeader.revisionDate],
+            ].map(([label, value]) => (
+              <div className="dfp-doc-cell" key={label}>
+                <span className="dfp-doc-label">{label}</span>
+                {value && <span className="dfp-doc-value">{value}</span>}
+              </div>
+            ))}
           </div>
           <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${t.border}` }}>
             <div className="dfp-banner-logo" style={{ width: 150, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>

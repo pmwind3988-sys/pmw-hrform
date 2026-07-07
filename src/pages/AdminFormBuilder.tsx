@@ -2,7 +2,7 @@
  * AdminFormBuilder.tsx — Full admin form builder with sidebar
  * Integrates with custom FormBuilder component
  */
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
@@ -24,6 +24,7 @@ import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../ut
 import { SP_STATIC } from "../utils/spConfig";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "../utils/FormPdfDocument";
 import type { SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../types";
+import type { DocumentControlHeader } from "../types";
 
 // MUI Icons
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -57,12 +58,14 @@ import {
   saveFormVersion,
   getFormVersionHistory,
   getFormVersion,
+  updatePublishProfile,
+  setDefaultPublishProfile,
+  updatePublishProfileLayerConfig,
   logEvent,
   getFormLog,
   diffSurveyJson,
-  isVersionGreater,
-  incrementMinor,
-  incrementMajor,
+  DEFAULT_PUBLISH_KEY,
+  normalizePublishKey,
   bootstrapSystemLists,
   provisionFormList,
   deleteForm,
@@ -79,6 +82,8 @@ const DEFAULT_COMPANIES = [
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
 type MetaTextKey = "formTitle" | "formId" | "formVersion" | "slug" | "isoStandards" | "companies" | "logoUrl";
+type DocumentHeaderKey = keyof DocumentControlHeader;
+type PublishIntent = "profile" | "live";
 const DEFAULT_PDF_CONFIG: PdfConfig = {
   enabled: true,
   title: "Form Submission",
@@ -92,6 +97,13 @@ const DEFAULT_PDF_CONFIG: PdfConfig = {
   density: "compact",
   primaryColor: "#0078D4",
   secondaryColor: "#6264A7",
+};
+const DEFAULT_DOCUMENT_HEADER: DocumentControlHeader = {
+  documentNumber: "",
+  issueNumber: "",
+  effectiveDate: "",
+  revisionNumber: "",
+  revisionDate: "",
 };
 
 function getLayerFieldOptions(json: SurveyJson | null | undefined): LayerFieldOption[] {
@@ -110,6 +122,15 @@ function getEffectiveLayerCount(config: LayerConfig | null, fallback: number): n
   if (!config) return fallback;
   const branchCounts = (config.manualBranches ?? []).map((branch) => branch.layers.length);
   return Math.max(config.layers.length, ...branchCounts, 0);
+}
+
+function withDocumentHeaderDefaults(header: DocumentControlHeader, formId: string, version: string): DocumentControlHeader {
+  return {
+    ...DEFAULT_DOCUMENT_HEADER,
+    ...header,
+    documentNumber: header.documentNumber?.trim() || formId.trim(),
+    revisionNumber: header.revisionNumber?.trim() || version.trim(),
+  };
 }
 
 function firstLayerValidationMessage(errors: string[]): string {
@@ -460,7 +481,7 @@ export default function AdminFormBuilder() {
   const [authChecked, setAuthChecked] = useState(false);
   const [siteUsers, setSiteUsers] = useState<{ email: string; name: string }[]>([]);
   const tokenRef = useRef<string | null>(null);
-  const [allForms, setAllForms] = useState<{ Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; NumberOfApprovalLayer?: number; IsPublic?: boolean; IsPublished?: boolean; ApprovalRules?: string }[]>([]);
+  const [allForms, setAllForms] = useState<{ Id?: string; Title: string; FormID?: string; CurrentVersion?: string; CurrentPublishKey?: string; CurrentPublishLabel?: string; Slug?: string; NumberOfApprovalLayer?: number; IsPublic?: boolean; IsPublished?: boolean; ApprovalRules?: string }[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [originalVersion, setOriginalVersion] = useState<string | null>(null);
@@ -473,6 +494,9 @@ export default function AdminFormBuilder() {
     companies: DEFAULT_COMPANIES,
     companyChoiceEnabled: false,
     logoUrl: "",
+    publishKey: DEFAULT_PUBLISH_KEY,
+    publishLabel: "Production",
+    documentHeader: DEFAULT_DOCUMENT_HEADER,
     pdfConfig: DEFAULT_PDF_CONFIG,
   });
   const [showBanner, setShowBanner] = useState(true);
@@ -499,9 +523,8 @@ export default function AdminFormBuilder() {
   const resizingRef = useRef(false);
   const [canSidebarScrollLeft, setCanSidebarScrollLeft] = useState(false);
   const [canSidebarScrollRight, setCanSidebarScrollRight] = useState(false);
-  const [versionHistory, setVersionHistory] = useState<{ FormVersion: string; PublishedBy?: string; PublishedAt?: string }[]>([]);
-  const [viewingOld, setViewingOld] = useState<{ version: string; json: SurveyJson } | null>(null);
-  const [newVersionMode, setNewVersionMode] = useState<"minor" | "major">("minor");
+  const [versionHistory, setVersionHistory] = useState<{ FormVersion: string; PublishKey?: string; PublishLabel?: string; PublishStatus?: "active" | "off"; PublishExpiresAt?: string; DisabledAt?: string; DisabledBy?: string; PublishedBy?: string; PublishedAt?: string }[]>([]);
+  const [viewingOld, setViewingOld] = useState<{ version: string; publishKey: string; json: SurveyJson } | null>(null);
   const [auditLog, setAuditLog] = useState<{ EventType: string; EventSummary?: string; BeforeJSON?: string; AfterJSON?: string; EventAt?: string }[]>([]);
   const [logLoading, setLogLoading] = useState(false);
   const [provLogs, setProvLogs] = useState<{ m: string; t: string }[]>([]);
@@ -515,6 +538,11 @@ export default function AdminFormBuilder() {
   const [deleting, setDeleting] = useState(false);
   const [approvalRules, setApprovalRules] = useState<{ conditionField: string; rules: { when: string; layers: { email: string; name: string; role: string }[] }[] } | null>(null);
   const [layerConfig, setLayerConfig] = useState<LayerConfig | null>(null);
+  const [profileLayerEdit, setProfileLayerEdit] = useState<{ version: string; publishKey: string; publishLabel: string } | null>(null);
+  const [profileLayerSaving, setProfileLayerSaving] = useState(false);
+  const setDocumentHeader = (key: DocumentHeaderKey, value: string) => {
+    setMeta(m => ({ ...m, documentHeader: { ...m.documentHeader, [key]: value } }));
+  };
 
   const pLog = useCallback((m: string, t: string = "info") => setProvLogs(l => [...l, { m, t }]), []);
   const showToast = useCallback((msg: string, type: string = "info") => {
@@ -575,10 +603,7 @@ export default function AdminFormBuilder() {
     };
   }, []);
 
-  const proposedVersion = useMemo(() => {
-    if (!isEditing || !originalVersion) return meta.formVersion;
-    return newVersionMode === "minor" ? incrementMinor(originalVersion) : incrementMajor(originalVersion);
-  }, [isEditing, originalVersion, newVersionMode, meta.formVersion]);
+  const proposedVersion = meta.formVersion.trim() || originalVersion || "1.0";
 
   useEffect(() => {
     if (slugManual || slugLocked) return;
@@ -634,7 +659,7 @@ export default function AdminFormBuilder() {
       try {
         const token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
         tokenRef.current = token;
-        bootstrapSystemLists(token, () => { }).catch(e => console.warn("[AFB] bootstrap:", e.message));
+        bootstrapSystemLists(token, () => { }).catch(() => { /* best-effort system list bootstrap */ });
         try {
           const ud = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/siteusers?$select=Email,Title&$filter=PrincipalType eq 1`, {
             headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" },
@@ -643,11 +668,10 @@ export default function AdminFormBuilder() {
         } catch { /* ignore */ }
         getAllFormConfigs(token).then(setAllForms).catch(e => showToast(`Could not load forms: ${e.message}`, "err"));
       } catch (e) {
-        console.error("[AFB] token:", e);
         showToast("Authentication error. Please refresh.", "err");
       }
-    }).catch(e => {
-      console.warn("[AFB] init effect error:", e);
+    }).catch(() => {
+      showToast("Could not initialize the form builder.", "err");
     });
   }, [isAuthenticated, inProgress, navigate, instance, accounts, showToast]);
 
@@ -666,17 +690,22 @@ export default function AdminFormBuilder() {
         showToast("Form not found.", "err");
         return;
       }
-      const data = await getFormVersion(token, c.Title as string, c.CurrentVersion as string || "1.0");
+      const activePublishKey = normalizePublishKey(c.CurrentPublishKey as string | undefined);
+      const data = await getFormVersion(token, c.Title as string, c.CurrentVersion as string || "1.0", activePublishKey);
       if (!data) {
         showToast("Version data not found.", "err");
         return;
       }
       const loaded = (data.surveyJson || data) as SurveyJson;
       const loadedMeta = (data.meta as Record<string, unknown>) || {};
+      const loadedDocumentHeader = loadedMeta.documentHeader && typeof loadedMeta.documentHeader === "object" && !Array.isArray(loadedMeta.documentHeader)
+        ? loadedMeta.documentHeader as DocumentControlHeader
+        : {};
       setInitialJson(loaded);
       setSurveyJson(loaded);
       prevSurveyRef.current = loaded;
       setViewingOld(null);
+      setProfileLayerEdit(null);
       setMeta({
         formTitle: c.Title as string,
         formId: (c.FormID as string) || "",
@@ -686,6 +715,14 @@ export default function AdminFormBuilder() {
         companies: loadedMeta.companies as string || DEFAULT_COMPANIES,
         companyChoiceEnabled: loadedMeta.companyChoiceEnabled === true,
         logoUrl: ((data.meta as Record<string, unknown>)?.logoUrl as string) || "",
+        publishKey: activePublishKey,
+        publishLabel: (loadedMeta.publishLabel as string) || (c.CurrentPublishLabel as string) || "Production",
+        documentHeader: {
+          ...DEFAULT_DOCUMENT_HEADER,
+          ...loadedDocumentHeader,
+          documentNumber: loadedDocumentHeader.documentNumber || (c.FormID as string) || "",
+          revisionNumber: loadedDocumentHeader.revisionNumber || (c.CurrentVersion as string) || "",
+        },
         pdfConfig: loadedMeta.pdfConfig && typeof loadedMeta.pdfConfig === "object" && !Array.isArray(loadedMeta.pdfConfig)
           ? { ...DEFAULT_PDF_CONFIG, ...(loadedMeta.pdfConfig as Partial<PdfConfig>) }
           : DEFAULT_PDF_CONFIG,
@@ -726,16 +763,13 @@ export default function AdminFormBuilder() {
         setLogLoading(false);
       }).catch(() => { setLogLoading(false); });
     } catch (e) {
-      console.warn("[AFB] loadForEdit error:", e);
       showToast(`Could not load form: ${(e as Error).message}`, "err");
     }
   }, [showToast]);
 
   useEffect(() => {
     if (!paramTitle || !authChecked || !tokenRef.current) return;
-    loadForEdit(decodeURIComponent(paramTitle)).catch(e => {
-      console.warn("[AFB] URL param load error:", e);
-    });
+    loadForEdit(decodeURIComponent(paramTitle)).catch(() => { /* loadForEdit reports user-facing errors */ });
   }, [paramTitle, authChecked, loadForEdit]);
 
   const handleNew = () => {
@@ -748,6 +782,7 @@ export default function AdminFormBuilder() {
     setVersionHistory([]);
     setAuditLog([]);
     setViewingOld(null);
+    setProfileLayerEdit(null);
     setShowBanner(true);
     setMeta({
       formTitle: "",
@@ -758,6 +793,9 @@ export default function AdminFormBuilder() {
       companies: DEFAULT_COMPANIES,
       companyChoiceEnabled: false,
       logoUrl: "",
+      publishKey: DEFAULT_PUBLISH_KEY,
+      publishLabel: "Production",
+      documentHeader: DEFAULT_DOCUMENT_HEADER,
       pdfConfig: DEFAULT_PDF_CONFIG,
     });
     setNumLayers(0);
@@ -826,7 +864,10 @@ export default function AdminFormBuilder() {
     if (!token) { showToast("Authentication is unavailable. Please refresh and try again.", "err"); return; }
     const usedJson = surveyJson;
     if (!usedJson) { showToast("Add at least one field before saving.", "err"); return; }
-    const version = "1.0";
+    const version = meta.formVersion.trim() || "1.0";
+    const publishKey = normalizePublishKey(meta.publishKey);
+    const publishLabel = meta.publishLabel.trim() || (publishKey === DEFAULT_PUBLISH_KEY ? "Production" : publishKey);
+    const documentHeader = withDocumentHeaderDefaults(meta.documentHeader, meta.formId, version);
     const userEmail = accounts[0]?.username || "admin";
     try {
       const layerConfigToSave: LayerConfig | null = layerConfig || (numLayers > 0 ? {
@@ -852,6 +893,8 @@ export default function AdminFormBuilder() {
         numLayers: getEffectiveLayerCount(layerConfigToSave, numLayers),
         slug: meta.slug,
         version,
+        currentPublishKey: publishKey,
+        currentPublishLabel: publishLabel,
         isPublished: false,
         isPublic,
         conditionField: approvalRules?.conditionField || layerConfig?.routing?.[0]?.conditionField || "",
@@ -862,8 +905,10 @@ export default function AdminFormBuilder() {
         listTitle: meta.formTitle.trim(),
         slug: meta.slug,
         version,
+        publishKey,
+        publishLabel,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
+        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
         changedBy: userEmail,
         layerConfig: layerConfigToSave,
       });
@@ -871,7 +916,7 @@ export default function AdminFormBuilder() {
       setIsEditing(true);
       setOriginalVersion(version);
       setSlugLocked(true);
-      setMeta(m => ({ ...m, formVersion: version }));
+      setMeta(m => ({ ...m, formVersion: version, publishKey, publishLabel, documentHeader }));
       showToast(`Draft saved for "${meta.formTitle}".`, "ok");
       refreshLib();
     } catch (e) {
@@ -942,17 +987,171 @@ export default function AdminFormBuilder() {
     }
   };
 
-  const handleViewVersion = async (ver: string) => {
+  const handleViewVersion = async (ver: string, publishKey?: string) => {
     try {
-      const data = await getFormVersion(tokenRef.current!, meta.formTitle, ver);
+      const data = await getFormVersion(tokenRef.current!, meta.formTitle, ver, publishKey || DEFAULT_PUBLISH_KEY);
       if (!data) {
-        showToast(`v${ver} not found.`, "err");
+        showToast(`v${ver} (${publishKey || DEFAULT_PUBLISH_KEY}) not found.`, "err");
         return;
       }
-      setViewingOld({ version: ver, json: (data.surveyJson || data) as SurveyJson });
+      setViewingOld({ version: ver, publishKey: publishKey || DEFAULT_PUBLISH_KEY, json: (data.surveyJson || data) as SurveyJson });
       setSidebarTab("version");
     } catch (e) {
       showToast(`Could not load version: ${(e as Error).message}`, "err");
+    }
+  };
+
+  const refreshVersionHistory = useCallback(() => {
+    const token = tokenRef.current;
+    if (!token || !meta.formTitle) return;
+    getFormVersionHistory(token, meta.formTitle).then(setVersionHistory).catch(() => { /* non-blocking */ });
+  }, [meta.formTitle]);
+
+  const handleSetDefaultProfile = async (version: string, publishKey: string, publishLabel: string) => {
+    const token = tokenRef.current;
+    if (!token) return;
+    try {
+      await setDefaultPublishProfile(token, {
+        listTitle: meta.formTitle,
+        version,
+        publishKey,
+        publishLabel,
+      });
+      const data = await getFormVersion(token, meta.formTitle, version, publishKey);
+      if (data?.surveyJson) {
+        const loaded = data.surveyJson as SurveyJson;
+        setInitialJson(loaded);
+        setSurveyJson(loaded);
+        prevSurveyRef.current = loaded;
+      }
+      if (data?.layerConfig) {
+        setLayerConfig(data.layerConfig as LayerConfig);
+      }
+      setOriginalVersion(version);
+      setMeta(m => ({ ...m, formVersion: version, publishKey, publishLabel }));
+      refreshLib();
+      refreshVersionHistory();
+      showToast(`"${publishLabel}" is now the default public profile.`, "ok");
+    } catch (e) {
+      showToast(`Could not set default profile: ${(e as Error).message}`, "err");
+    }
+  };
+
+  const handleToggleProfileStatus = async (version: string, publishKey: string, nextStatus: "active" | "off") => {
+    const token = tokenRef.current;
+    if (!token) return;
+    if (nextStatus === "off" && version === originalVersion && publishKey === normalizePublishKey(meta.publishKey)) {
+      showToast("Set another profile as default before turning this one off.", "err");
+      return;
+    }
+    try {
+      await updatePublishProfile(token, {
+        listTitle: meta.formTitle,
+        version,
+        publishKey,
+        publishStatus: nextStatus,
+        changedBy: accounts[0]?.username || "admin",
+      });
+      refreshVersionHistory();
+      showToast(nextStatus === "active" ? "Profile turned on." : "Profile turned off.", "ok");
+    } catch (e) {
+      showToast(`Could not update profile: ${(e as Error).message}`, "err");
+    }
+  };
+
+  const handleSetProfileExpiry = async (version: string, publishKey: string, expiryDate: string) => {
+    const token = tokenRef.current;
+    if (!token) return;
+    const publishExpiresAt = expiryDate ? new Date(`${expiryDate}T23:59:59`).toISOString() : "";
+    if (
+      publishExpiresAt &&
+      Date.parse(publishExpiresAt) <= Date.now() &&
+      version === originalVersion &&
+      publishKey === normalizePublishKey(meta.publishKey)
+    ) {
+      showToast("Set another profile as default before expiring this one.", "err");
+      return;
+    }
+    try {
+      await updatePublishProfile(token, {
+        listTitle: meta.formTitle,
+        version,
+        publishKey,
+        publishExpiresAt,
+        changedBy: accounts[0]?.username || "admin",
+      });
+      refreshVersionHistory();
+      showToast(expiryDate ? "Profile expiry updated." : "Profile expiry cleared.", "ok");
+    } catch (e) {
+      showToast(`Could not update expiry: ${(e as Error).message}`, "err");
+    }
+  };
+
+  const handleCopyProfileLink = async (publishKey: string) => {
+    const normalized = normalizePublishKey(publishKey);
+    const path = `/form/${meta.slug}${normalized === DEFAULT_PUBLISH_KEY ? "" : `?publish=${normalized}`}`;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${path}`);
+      showToast("Profile link copied.", "ok");
+    } catch {
+      showToast(path, "info");
+    }
+  };
+
+  const handleEditProfileLayers = async (version: string, publishKey: string, publishLabel: string) => {
+    const token = tokenRef.current;
+    if (!token) return;
+    try {
+      const data = await getFormVersion(token, meta.formTitle, version, publishKey);
+      if (!data) {
+        showToast(`Profile "${publishLabel}" v${version} not found.`, "err");
+        return;
+      }
+      const loadedLayerConfig = data.layerConfig && typeof data.layerConfig === "object" && !Array.isArray(data.layerConfig)
+        ? data.layerConfig as LayerConfig
+        : { version: "1.0" as const, layers: [] };
+      if (data.surveyJson) {
+        const loadedSurveyJson = data.surveyJson as SurveyJson;
+        setSurveyJson(loadedSurveyJson);
+        setInitialJson(loadedSurveyJson);
+        prevSurveyRef.current = loadedSurveyJson;
+      }
+      setLayerConfig(loadedLayerConfig);
+      setProfileLayerEdit({ version, publishKey, publishLabel });
+      setMeta(m => ({ ...m, formVersion: version, publishKey, publishLabel }));
+      setNumLayers(getEffectiveLayerCount(loadedLayerConfig, 0));
+      setSidebarTab("layers");
+      showToast(`Editing layers for ${publishLabel} v${version}.`, "ok");
+    } catch (e) {
+      showToast(`Could not load profile layers: ${(e as Error).message}`, "err");
+    }
+  };
+
+  const handleSaveProfileLayers = async () => {
+    const token = tokenRef.current;
+    if (!token || !profileLayerEdit) return;
+    const configToSave = layerConfig || { version: "1.0" as const, layers: [] };
+    const layerValidation = validateLayerConfig(configToSave, getLayerFieldOptions(surveyJson));
+    if (layerValidation.errors.length > 0) {
+      showToast(firstLayerValidationMessage(layerValidation.errors), "err");
+      return;
+    }
+    setProfileLayerSaving(true);
+    try {
+      await updatePublishProfileLayerConfig(token, {
+        listTitle: meta.formTitle,
+        version: profileLayerEdit.version,
+        publishKey: profileLayerEdit.publishKey,
+        layerConfig: configToSave,
+        changedBy: accounts[0]?.username || "admin",
+      });
+      setNumLayers(getEffectiveLayerCount(configToSave, 0));
+      refreshVersionHistory();
+      showToast(`Layer settings saved for ${profileLayerEdit.publishLabel} v${profileLayerEdit.version}.`, "ok");
+    } catch (e) {
+      showToast(`Could not save profile layers: ${(e as Error).message}`, "err");
+    } finally {
+      setProfileLayerSaving(false);
     }
   };
 
@@ -965,7 +1164,7 @@ export default function AdminFormBuilder() {
     });
   }, [sidebarTab, isEditing, meta.formTitle]);
 
-  const handlePublish = useCallback(async (jsonArg?: SurveyJson) => {
+  const handlePublish = useCallback(async (jsonArg?: SurveyJson, intent: PublishIntent = "live") => {
     if (!meta.formTitle.trim()) {
       showToast("Form title required.", "err");
       setSidebarTab("meta");
@@ -991,12 +1190,19 @@ export default function AdminFormBuilder() {
       showToast("No fields yet.", "err");
       return;
     }
+    if (intent === "profile" && !isEditing) {
+      showToast("Use Actual publish for the first live form, then add extra profiles.", "err");
+      return;
+    }
     const token = tokenRef.current;
     if (!token) {
       showToast("Auth unavailable.", "err");
       return;
     }
-    const version = isEditing && !isDraft ? proposedVersion : meta.formVersion;
+    const version = meta.formVersion.trim() || "1.0";
+    const publishKey = normalizePublishKey(meta.publishKey);
+    const publishLabel = meta.publishLabel.trim() || (publishKey === DEFAULT_PUBLISH_KEY ? "Production" : publishKey);
+    const documentHeader = withDocumentHeaderDefaults(meta.documentHeader, meta.formId, version);
     const title = meta.formTitle.trim();
     const userEmail = accounts[0]?.username || "admin";
     const layerConfigToSave: LayerConfig | null = layerConfig || (numLayers > 0 ? {
@@ -1031,26 +1237,31 @@ export default function AdminFormBuilder() {
       );
       const conflict = others.length > 0 ? others[0].Title : null;
       if (conflict) throw new Error(`Slug "${meta.slug}" used by "${conflict}".`);
-      if (isEditing && originalVersion && !isDraft && !isVersionGreater(version, originalVersion)) throw new Error(`v${version} must be > v${originalVersion}.`);
 
       await provisionFormList(token, title, usedJson, pLog, {
         numLayers: effectiveNumLayers,
         minLayerColumns: 3,
       });
 
-      pLog(`Updating Form Config…`);
-      await upsertFormConfig(token, title, {
-        formId: meta.formId.trim(),
-        numLayers: effectiveNumLayers,
-        slug: meta.slug,
-        version,
-        isPublished: true,
-        isPublic,
-        conditionField: approvalRules?.conditionField || layerConfig?.routing?.[0]?.conditionField || "",
-        approvalRules: approvalRules || null,
-        layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
-      });
-      pLog(`Form Config saved`, "ok");
+      if (intent === "live") {
+        pLog(`Updating Form Config…`);
+        await upsertFormConfig(token, title, {
+          formId: meta.formId.trim(),
+          numLayers: effectiveNumLayers,
+          slug: meta.slug,
+          version,
+          currentPublishKey: publishKey,
+          currentPublishLabel: publishLabel,
+          isPublished: true,
+          isPublic,
+          conditionField: approvalRules?.conditionField || layerConfig?.routing?.[0]?.conditionField || "",
+          approvalRules: approvalRules || null,
+          layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
+        });
+        pLog(`Form Config saved`, "ok");
+      } else {
+        pLog(`Saving profile only; default /form route stays unchanged.`);
+      }
 
       if (effectiveNumLayers > 0) {
         pLog(`Writing approvers…`);
@@ -1073,8 +1284,10 @@ export default function AdminFormBuilder() {
         listTitle: title,
         slug: meta.slug,
         version,
+        publishKey,
+        publishLabel,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, showBanner, logoUrl: meta.logoUrl },
+        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
         changedBy: userEmail,
         layerConfig: layerConfigToSave,
       });
@@ -1087,9 +1300,9 @@ export default function AdminFormBuilder() {
           changedBy: userEmail,
           summary: `Created form at /form/${meta.slug}`,
           before: null,
-          after: { slug: meta.slug, version },
+          after: { slug: meta.slug, version, publishKey, publishLabel },
         });
-      } else {
+      } else if (intent === "live") {
         for (const d of diffs) {
           await logEvent(token, {
             formTitle: title,
@@ -1106,32 +1319,47 @@ export default function AdminFormBuilder() {
           changedBy: userEmail,
           summary: `v${originalVersion} to v${version}`,
           before: { version: originalVersion },
-          after: { version },
+          after: { version, publishKey },
         });
         await logEvent(token, {
           formTitle: title,
           eventType: "PUBLISHED",
           changedBy: userEmail,
-          summary: `Published v${version}`,
+          summary: `Published v${version} (${publishLabel})`,
           before: null,
-          after: { version, slug: meta.slug },
+          after: { version, slug: meta.slug, publishKey, publishLabel },
+        });
+      } else {
+        await logEvent(token, {
+          formTitle: title,
+          eventType: "PUBLISH_PROFILE_SAVED",
+          changedBy: userEmail,
+          summary: `Saved profile ${publishLabel} for v${version}`,
+          before: null,
+          after: { version, slug: meta.slug, publishKey, publishLabel },
         });
       }
-        pLog(`"${title}" v${version} live at /form/${meta.slug}`, "ok");
+      pLog(
+        intent === "live"
+          ? `"${title}" v${version} (${publishLabel}) live at /form/${meta.slug}`
+          : `"${title}" v${version} (${publishLabel}) profile saved; actual live profile unchanged`,
+        "ok"
+      );
       setProvOk(true);
-      prevSurveyRef.current = usedJson;
-      setOriginalVersion(version);
-      setMeta(m => ({ ...m, formVersion: version }));
+      if (intent === "live") prevSurveyRef.current = usedJson;
+      if (intent === "live") setOriginalVersion(version);
+      setMeta(m => ({ ...m, formVersion: version, publishKey, publishLabel, documentHeader }));
       setIsEditing(true);
-      setIsDraft(false);
+      if (intent === "live") setIsDraft(false);
+      setProfileLayerEdit(null);
       setSlugLocked(true);
       refreshLib();
       getFormVersionHistory(token, title).then(setVersionHistory);
     } catch (e) {
-      pLog(`Could not publish: ${(e as Error).message}`, "err");
+      pLog(`Could not ${intent === "live" ? "publish" : "save profile"}: ${(e as Error).message}`, "err");
       setProvErr(true);
     }
-  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, proposedVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast]);
+  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast]);
 
   if (!authChecked) {
     return (
@@ -1152,7 +1380,7 @@ export default function AdminFormBuilder() {
   ];
 
   const formBuilderKey = viewingOld
-    ? `view_${meta.formTitle}_v${viewingOld.version}`
+    ? `view_${meta.formTitle}_v${viewingOld.version}_${viewingOld.publishKey}`
     : initialJson
       ? `edit_${meta.formTitle}_${JSON.stringify(initialJson).slice(0, 60)}`
       : "new";
@@ -1336,7 +1564,7 @@ export default function AdminFormBuilder() {
             </button>
           )}
           <button
-            onClick={() => handlePublish(surveyJson as SurveyJson)}
+            onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
             disabled={!!viewingOld}
             style={{
               display: "flex",
@@ -1358,14 +1586,14 @@ export default function AdminFormBuilder() {
             onMouseEnter={(e) => { if (!viewingOld) e.currentTarget.style.boxShadow = "0 4px 12px rgba(91,33,182,.35)"; }}
             onMouseLeave={(e) => { if (!viewingOld) e.currentTarget.style.boxShadow = "0 2px 8px rgba(91,33,182,.25)"; }}
           >
-            <RocketLaunchIcon style={{ fontSize: 14 }} /> Publish
+            <RocketLaunchIcon style={{ fontSize: 14 }} /> Actual Publish
           </button>
         </div>
       </header>
 
       {viewingOld && (
         <div style={{ background: C.amberPale, borderBottom: "1px solid #FDE68A", padding: "7px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: C.amber }}>
-          <span>Viewing archived <strong>v{viewingOld.version}</strong> (read only)</span>
+          <span>Viewing archived <strong>v{viewingOld.version}</strong> / {viewingOld.publishKey} (read only)</span>
           <button
             onClick={() => setViewingOld(null)}
             style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}
@@ -1528,34 +1756,31 @@ export default function AdminFormBuilder() {
                   <FB label="Form ID / Doc No." required>
                     <TextInput value={meta.formId} onChange={v => setM("formId", v)} placeholder="PMW-HR-001" />
                   </FB>
-                  <FB label="Version" hint={isEditing && !isDraft ? `Current: v${originalVersion} to v${proposedVersion}` : isEditing ? `v${meta.formVersion} (draft)` : undefined}>
-                    {isEditing ? (
-                      <div style={{ display: "flex", gap: 7 }}>
-                        {(["minor", "major"] as const).map(m => (
-                          <button
-                            key={m}
-                            onClick={() => setNewVersionMode(m)}
-                            style={{
-                              flex: 1,
-                              height: 32,
-                              borderRadius: 7,
-                              border: `1px solid ${newVersionMode === m ? C.purple : C.border}`,
-                              background: newVersionMode === m ? C.purplePale : C.white,
-                              color: newVersionMode === m ? C.purple : C.textSecond,
-                              fontSize: 12,
-                              cursor: "pointer",
-                              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                              fontWeight: newVersionMode === m ? 600 : 400,
-                            }}
-                          >
-                            {m === "minor" ? `v${incrementMinor(originalVersion!)}` : `v${incrementMajor(originalVersion!)}`}
-                            <div style={{ fontSize: 9, color: C.textMuted, marginTop: 1 }}>{m} bump</div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <TextInput value={meta.formVersion} onChange={v => setM("formVersion", v)} placeholder="1.0" />
-                    )}
+                  <FB label="Version" hint={isEditing ? `Current live version: v${originalVersion || "?"}. Reusing a version/profile overwrites that published profile.` : "Admin-controlled. Publish will use exactly this value."}>
+                    <TextInput value={meta.formVersion} onChange={v => setM("formVersion", v)} placeholder="1.0" />
+                  </FB>
+                  <FB label="Publish Profile" hint="Use the same version with different evaluator / approval branches. The latest published profile becomes the default /form route.">
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 7 }}>
+                      <TextInput
+                        value={meta.publishKey}
+                        onChange={v => setMeta(m => ({ ...m, publishKey: normalizePublishKey(v) }))}
+                        placeholder="production"
+                      />
+                      <TextInput
+                        value={meta.publishLabel}
+                        onChange={v => setMeta(m => ({ ...m, publishLabel: v }))}
+                        placeholder="Production"
+                      />
+                    </div>
+                  </FB>
+                  <FB label="Document Control Header" hint="Shown under the form title before the company logo row. Blank Document / Revision values fall back to Form ID and Version.">
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+                      <TextInput value={meta.documentHeader.documentNumber || ""} onChange={v => setDocumentHeader("documentNumber", v)} placeholder={meta.formId || "Document Number"} />
+                      <TextInput value={meta.documentHeader.issueNumber || ""} onChange={v => setDocumentHeader("issueNumber", v)} placeholder="Issue Number" />
+                      <TextInput value={meta.documentHeader.effectiveDate || ""} onChange={v => setDocumentHeader("effectiveDate", v)} placeholder="Effective Date" type="date" />
+                      <TextInput value={meta.documentHeader.revisionNumber || ""} onChange={v => setDocumentHeader("revisionNumber", v)} placeholder={meta.formVersion || "Revision Number"} />
+                      <TextInput value={meta.documentHeader.revisionDate || ""} onChange={v => setDocumentHeader("revisionDate", v)} placeholder="Revision Date" type="date" />
+                    </div>
                   </FB>
                   <FB label="Route slug" hint="URL: /form/{slug}. Locked after first publish.">
                     <div style={{ position: "relative" }}>
@@ -1879,13 +2104,68 @@ export default function AdminFormBuilder() {
               )}
 
               {sidebarTab === "layers" && (
-                <LayerConfigPanel
-                  value={layerConfig}
-                  onChange={setLayerConfig}
-                  siteUsers={siteUsers}
-                  formFields={layerFieldOptions}
-                  slug={meta.slug}
-                />
+                <div>
+                  {profileLayerEdit && (
+                    <div style={{
+                      background: C.purplePale,
+                      border: `1px solid ${C.purpleMid}`,
+                      borderRadius: 10,
+                      padding: "10px 11px",
+                      marginBottom: 12,
+                      boxShadow: "0 8px 20px rgba(16,16,16,0.06)",
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: C.textPrimary, marginBottom: 3 }}>
+                        Editing profile layers
+                      </div>
+                      <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55, marginBottom: 9 }}>
+                        Changes here save only to <strong>{profileLayerEdit.publishLabel}</strong> / v{profileLayerEdit.version} / {profileLayerEdit.publishKey}. Use Publish only when you want to republish the whole profile.
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+                        <button
+                          onClick={handleSaveProfileLayers}
+                          disabled={profileLayerSaving}
+                          style={{
+                            minHeight: 32,
+                            border: "none",
+                            borderRadius: 7,
+                            background: profileLayerSaving ? C.border : C.purple,
+                            color: profileLayerSaving ? C.textMuted : C.white,
+                            fontSize: 12,
+                            fontWeight: 800,
+                            cursor: profileLayerSaving ? "wait" : "pointer",
+                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                          }}
+                        >
+                          {profileLayerSaving ? "Saving..." : "Save profile layers"}
+                        </button>
+                        <button
+                          onClick={() => setProfileLayerEdit(null)}
+                          disabled={profileLayerSaving}
+                          style={{
+                            minHeight: 32,
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 7,
+                            background: C.white,
+                            color: C.textSecond,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: profileLayerSaving ? "not-allowed" : "pointer",
+                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                          }}
+                        >
+                          Exit layer edit
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <LayerConfigPanel
+                    value={layerConfig}
+                    onChange={setLayerConfig}
+                    siteUsers={siteUsers}
+                    formFields={layerFieldOptions}
+                    slug={meta.slug}
+                  />
+                </div>
               )}
 
               {sidebarTab === "version" && (
@@ -1896,6 +2176,18 @@ export default function AdminFormBuilder() {
                     </div>
                   ) : (
                     <>
+                      <div style={{
+                        background: C.offWhite,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 8,
+                        padding: "9px 10px",
+                        fontSize: 10,
+                        color: C.textMuted,
+                        lineHeight: 1.55,
+                        marginBottom: 10,
+                      }}>
+                        Manage published profiles here. Off or expired profiles cannot be opened by public users; the current profile is the default route for <strong>/form/{meta.slug || "slug"}</strong>.
+                      </div>
                       {viewingOld && (
                         <div style={{
                           background: C.amberPale,
@@ -1909,7 +2201,7 @@ export default function AdminFormBuilder() {
                           justifyContent: "space-between",
                           alignItems: "center",
                         }}>
-                          <span>Viewing v{viewingOld.version}</span>
+                          <span>Viewing v{viewingOld.version} / {viewingOld.publishKey}</span>
                           <button
                             onClick={() => setViewingOld(null)}
                             style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontSize: 11 }}
@@ -1918,7 +2210,18 @@ export default function AdminFormBuilder() {
                           </button>
                         </div>
                       )}
-                      <VersionHistory history={versionHistory} current={originalVersion || ""} onView={handleViewVersion} />
+                      <VersionHistory
+                        history={versionHistory}
+                        current={originalVersion || ""}
+                        currentPublishKey={normalizePublishKey(meta.publishKey)}
+                        slug={meta.slug}
+                        onView={handleViewVersion}
+                        onSetDefault={handleSetDefaultProfile}
+                        onToggleStatus={handleToggleProfileStatus}
+                        onSetExpiry={handleSetProfileExpiry}
+                        onCopyLink={handleCopyProfileLink}
+                        onEditLayers={handleEditProfileLayers}
+                      />
                     </>
                   )}
                 </div>
@@ -1942,9 +2245,10 @@ export default function AdminFormBuilder() {
                     {[
                       ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
                       ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
-                      ["Version", isEditing && !isDraft ? `${originalVersion} to ${proposedVersion}` : `v${meta.formVersion}${isDraft ? " (draft)" : ""}`],
+                      ["Version", `v${proposedVersion}${isDraft ? " (draft)" : ""}`],
+                      ["Profile", `${meta.publishLabel || "Production"} (${normalizePublishKey(meta.publishKey)})`],
                       ["Status", isDraft ? <span style={{ color: C.amber }}><EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Draft</span> : isEditing ? <span style={{ color: C.green }}><CheckCircleIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Published</span> : "Not published"],
-                      ["Route", meta.slug ? `/form/${meta.slug}` : <em style={{ color: C.amber }}>No slug</em>],
+                      ["Route", meta.slug ? `/form/${meta.slug}${normalizePublishKey(meta.publishKey) === DEFAULT_PUBLISH_KEY ? "" : `?publish=${normalizePublishKey(meta.publishKey)}`}` : <em style={{ color: C.amber }}>No slug</em>],
                       ["Layers", numLayers || "None"],
                       ["Banner", showBanner ? <><CheckCircleIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Visible</> : <><BlockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Hidden</>],
                       ["Company", meta.companyChoiceEnabled ? <><CheckCircleIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Required radio</> : "Not required"],
@@ -1983,24 +2287,47 @@ export default function AdminFormBuilder() {
 <SaveIcon style={{ fontSize: 14, marginRight: 4 }} /> Save Draft
                     </button>
                   )}
-                  <button
-                    onClick={() => handlePublish(surveyJson as SurveyJson)}
-                    disabled={!meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
-                    style={{
-                      width: "100%",
-                      padding: "11px 0",
-                      borderRadius: 8,
-                      border: "none",
-                      background: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
-                      color: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.white,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
-                      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                    }}
-                  >
-                    {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to publish</> : isDraft ? <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish (make live)</> : <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish to SharePoint</>}
-                  </button>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <button
+                      onClick={() => handlePublish(surveyJson as SurveyJson, "profile")}
+                      disabled={!isEditing || !meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
+                      style={{
+                        width: "100%",
+                        padding: "11px 0",
+                        borderRadius: 8,
+                        border: `1px solid ${!isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : C.purpleMid}`,
+                        background: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.offWhite : C.white,
+                        color: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.purple,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
+                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                      }}
+                    >
+                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to save profile</> : <><SaveIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish new profile only</>}
+                    </button>
+                    <button
+                      onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
+                      disabled={!meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
+                      style={{
+                        width: "100%",
+                        padding: "11px 0",
+                        borderRadius: 8,
+                        border: "none",
+                        background: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
+                        color: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.white,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
+                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                      }}
+                    >
+                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to publish</> : isDraft ? <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Actual publish (make live)</> : <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Actual publish to /form route</>}
+                    </button>
+                    <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
+                      New profile saves this profile/version for direct links. Actual publish also makes it the default public <strong>/form/{meta.slug || "slug"}</strong> route.
+                    </div>
+                  </div>
                   <PrefilledQrPanel
                     surveyJson={surveyJson}
                     slug={meta.slug}

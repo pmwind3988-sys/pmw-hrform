@@ -100,6 +100,36 @@ describe('public form signature submission', () => {
     expect(uploadCalls[0]?.[4]).toBe('signature');
   });
 
+  it('stores public form datetimes as Malaysia local wall-clock values for SharePoint', async () => {
+    const schema = __test__.collectSubmissionSchema({
+      pages: [
+        {
+          elements: [
+            { type: 'text', inputType: 'datetime-local', name: 'starttime' },
+            { type: 'text', inputType: 'datetime-local', name: 'endtime' },
+          ],
+        },
+      ],
+    });
+
+    const result = await __test__.buildSubmissionFields(
+      'token',
+      'Overtime Request',
+      {
+        starttime: '2026-06-22T10:00',
+        endtime: '2026-06-22T18:00',
+      },
+      {
+        CurrentVersion: '1.0',
+        FormID: 'FORM-OT',
+      },
+      schema,
+    );
+
+    expect(result.fields.starttime).toBe('2026-06-22T02:00:00.000Z');
+    expect(result.fields.endtime).toBe('2026-06-22T10:00:00.000Z');
+  });
+
   it('patches signature URL fields through SharePoint REST FieldUrlValue', async () => {
     const deps = {
       getSharePointToken: vi.fn(async () => 'sharepoint-token'),

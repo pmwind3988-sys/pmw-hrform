@@ -2,6 +2,7 @@ import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, Eva
 import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 import { fetchWithAuthRecovery } from "./authRecovery";
+import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
@@ -306,7 +307,7 @@ async function getDigest(token: string): Promise<string> {
 
 export async function getFormConfig(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -340,6 +341,10 @@ export async function saveFormVersion(
     listTitle: string;
     slug: string;
     version: string;
+    publishKey?: string;
+    publishLabel?: string;
+    publishStatus?: 'active' | 'off';
+    publishExpiresAt?: string;
     surveyJson: unknown;
     meta: unknown;
     changedBy: string;
@@ -347,17 +352,35 @@ export async function saveFormVersion(
   }
 ): Promise<void> {
   await ensureListExists(token, 'Web Form Versions');
+  const publishKey = normalizePublishKey(params.publishKey);
+  const publishLabel = params.publishLabel?.trim() || (publishKey === DEFAULT_PUBLISH_KEY ? 'Production' : publishKey);
   const jsonStr = JSON.stringify({
     surveyJson: params.surveyJson, meta: params.meta, version: params.version,
+    publishKey, publishLabel,
+    publishStatus: params.publishStatus || 'active',
+    publishExpiresAt: params.publishExpiresAt || '',
     savedAt: new Date().toISOString(), changedBy: params.changedBy,
     layerConfig: params.layerConfig,
   }, null, 2);
-  const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(params.listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(params.version))}'&$select=Id&$top=1`).catch(() => ({ value: [] })) as { value?: { Id: number }[] };
+  let existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(params.listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(params.version))}' and PublishKey eq '${encodeURIComponent(sanitizeODataValue(publishKey))}'&$select=Id&$top=1`)
+    .catch(async () => {
+      if (publishKey !== DEFAULT_PUBLISH_KEY) return { value: [] };
+      return spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(params.listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(params.version))}'&$select=Id&$top=1`).catch(() => ({ value: [] }));
+    }) as { value?: { Id: number }[] };
+  if (publishKey === DEFAULT_PUBLISH_KEY && !existing.value?.length) {
+    existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(params.listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(params.version))}'&$select=Id&$top=1`).catch(() => ({ value: [] })) as { value?: { Id: number }[] };
+  }
   const body = {
-    Title: `${params.listTitle} v${params.version}`,
+    Title: `${params.listTitle} v${params.version} [${publishKey}]`,
     FormTitle: params.listTitle,
     FormSlug: params.slug,
     FormVersion: params.version,
+    PublishKey: publishKey,
+    PublishLabel: publishLabel,
+    PublishStatus: params.publishStatus || 'active',
+    PublishExpiresAt: params.publishExpiresAt || null,
+    DisabledAt: '',
+    DisabledBy: '',
     SurveyJSON: jsonStr,
     PublishedBy: params.changedBy,
     PublishedAt: new Date().toISOString(),
@@ -596,6 +619,17 @@ export function slugify(str: string): string {
     .replace(/^-|-$/g, '');
 }
 
+export const DEFAULT_PUBLISH_KEY = 'production';
+
+export function normalizePublishKey(value?: string | null): string {
+  const normalized = slugify(value || DEFAULT_PUBLISH_KEY);
+  return normalized || DEFAULT_PUBLISH_KEY;
+}
+
+function isPublishExpired(value?: string): boolean {
+  return !!value && Date.parse(value) <= Date.now();
+}
+
 export async function checkSlugConflict(
   token: string,
   slug: string,
@@ -608,8 +642,8 @@ export async function checkSlugConflict(
   return others.length > 0 ? others[0].Title : null;
 }
 
-export async function getAllSlugs(token: string): Promise<{ Title: string; Slug: string; CurrentVersion: string }[]> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Title,Slug,CurrentVersion&$top=500`).catch(() => ({ value: [] })) as { value?: { Title: string; Slug: string; CurrentVersion: string }[] };
+export async function getAllSlugs(token: string): Promise<{ Title: string; Slug: string; CurrentVersion: string; CurrentPublishKey?: string }[]> {
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Title,Slug,CurrentVersion,CurrentPublishKey&$top=500`).catch(() => ({ value: [] })) as { value?: { Title: string; Slug: string; CurrentVersion: string; CurrentPublishKey?: string }[] };
   return data.value || [];
 }
 
@@ -626,12 +660,34 @@ export async function getFormLog(token: string, listTitle: string): Promise<Form
   return data.value || [];
 }
 
-export async function getFormVersion(token: string, listTitle: string, version: string): Promise<{ surveyJson: unknown; meta: unknown } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`).catch(() => ({ value: [] })) as { value?: { SurveyJSON?: string }[] };
+export async function getFormVersion(
+  token: string,
+  listTitle: string,
+  version: string,
+  publishKey?: string | null
+): Promise<{ surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishKey?: string; publishLabel?: string; publishStatus?: string; publishExpiresAt?: string; version?: string } | null> {
+  const baseFilter = `FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'`;
+  const normalizedPublishKey = publishKey ? normalizePublishKey(publishKey) : "";
+  const query = normalizedPublishKey
+    ? `${baseFilter} and PublishKey eq '${encodeURIComponent(sanitizeODataValue(normalizedPublishKey))}'`
+    : baseFilter;
+  let data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${query}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy,PublishKey,PublishLabel,PublishStatus,PublishExpiresAt&$orderby=PublishedAt desc&$top=1`)
+    .catch(async () => {
+      if (!normalizedPublishKey || normalizedPublishKey !== DEFAULT_PUBLISH_KEY) return { value: [] };
+      return spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(() => ({ value: [] }));
+    }) as { value?: { SurveyJSON?: string }[] };
+  if (normalizedPublishKey === DEFAULT_PUBLISH_KEY && !data.value?.length) {
+    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(() => ({ value: [] })) as { value?: { SurveyJSON?: string }[] };
+  }
   const row = data.value?.[0];
   if (!row?.SurveyJSON) return null;
   try {
-    return JSON.parse(row.SurveyJSON);
+    const parsed = JSON.parse(row.SurveyJSON);
+    return {
+      ...parsed,
+      publishStatus: (row as { PublishStatus?: string }).PublishStatus || parsed.publishStatus,
+      publishExpiresAt: (row as { PublishExpiresAt?: string }).PublishExpiresAt || parsed.publishExpiresAt,
+    };
   } catch {
     return null;
   }
@@ -997,6 +1053,8 @@ interface FormConfigData {
   NumberOfApprovalLayer?: number;
   Slug?: string;
   CurrentVersion?: string;
+  CurrentPublishKey?: string;
+  CurrentPublishLabel?: string;
   IsPublished?: boolean;
   IsPublic?: boolean;
   ConditionField?: string;
@@ -1006,13 +1064,13 @@ interface FormConfigData {
 
 export async function getAllFormConfigs(token: string): Promise<FormConfigData[]> {
   if (!await listExists(token, 'Master Form')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
   return data.value || [];
 }
 
 export async function getFormConfigByTitle(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -1021,6 +1079,8 @@ interface UpsertFormConfigParams {
   numLayers?: number;
   slug?: string;
   version?: string;
+  currentPublishKey?: string;
+  currentPublishLabel?: string;
   isPublished?: boolean;
   isPublic?: boolean;
   conditionField?: string;
@@ -1042,6 +1102,8 @@ export async function upsertFormConfig(
     LayerConfig: config.layerConfig || '',
     Slug: config.slug || '',
     CurrentVersion: config.version || '1.0',
+    CurrentPublishKey: normalizePublishKey(config.currentPublishKey),
+    CurrentPublishLabel: config.currentPublishLabel?.trim() || 'Production',
     IsPublished: config.isPublished ?? true,
     IsPublic: config.isPublic ?? true,
     ConditionField: config.conditionField || '',
@@ -1176,6 +1238,12 @@ interface FormVersionRecord {
   FormTitle: string;
   FormSlug: string;
   FormVersion: string;
+  PublishKey?: string;
+  PublishLabel?: string;
+  PublishStatus?: 'active' | 'off';
+  PublishExpiresAt?: string;
+  DisabledAt?: string;
+  DisabledBy?: string;
   SurveyJSON: string;
   PublishedBy: string;
   PublishedAt: string;
@@ -1183,8 +1251,121 @@ interface FormVersionRecord {
 
 export async function getFormVersionHistory(token: string, listTitle: string): Promise<FormVersionRecord[]> {
   if (!await listExists(token, 'Web Form Versions')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=FormVersion,PublishedAt,PublishedBy,Title&$orderby=PublishedAt desc&$top=100`) as { value?: FormVersionRecord[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=FormVersion,PublishKey,PublishLabel,PublishStatus,PublishExpiresAt,DisabledAt,DisabledBy,PublishedAt,PublishedBy,Title&$orderby=PublishedAt desc&$top=100`) as { value?: FormVersionRecord[] };
   return data.value || [];
+}
+
+async function getFormVersionRecordId(
+  token: string,
+  listTitle: string,
+  version: string,
+  publishKey: string
+): Promise<number> {
+  const normalizedPublishKey = normalizePublishKey(publishKey);
+  let data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}' and PublishKey eq '${encodeURIComponent(sanitizeODataValue(normalizedPublishKey))}'&$select=Id&$top=1`)
+    .catch(() => ({ value: [] })) as { value?: { Id: number }[] };
+  if (normalizedPublishKey === DEFAULT_PUBLISH_KEY && !data.value?.length) {
+    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'&$select=Id&$top=1`).catch(() => ({ value: [] })) as { value?: { Id: number }[] };
+  }
+  const id = data.value?.[0]?.Id;
+  if (!id) throw new Error(`Profile "${normalizedPublishKey}" v${version} not found.`);
+  return id;
+}
+
+export async function updatePublishProfile(
+  token: string,
+  params: {
+    listTitle: string;
+    version: string;
+    publishKey: string;
+    publishLabel?: string;
+    publishStatus?: 'active' | 'off';
+    publishExpiresAt?: string;
+    changedBy: string;
+  }
+): Promise<void> {
+  await ensureListExists(token, 'Web Form Versions');
+  const id = await getFormVersionRecordId(token, params.listTitle, params.version, params.publishKey);
+  const body: Record<string, unknown> = {};
+  if (params.publishLabel !== undefined) body.PublishLabel = params.publishLabel.trim() || normalizePublishKey(params.publishKey);
+  if (params.publishStatus !== undefined) {
+    body.PublishStatus = params.publishStatus;
+    body.DisabledAt = params.publishStatus === 'off' ? new Date().toISOString() : '';
+    body.DisabledBy = params.publishStatus === 'off' ? params.changedBy : '';
+  }
+  if (params.publishExpiresAt !== undefined) body.PublishExpiresAt = params.publishExpiresAt || null;
+  await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${id})`, body);
+}
+
+export async function setDefaultPublishProfile(
+  token: string,
+  params: {
+    listTitle: string;
+    version: string;
+    publishKey: string;
+    publishLabel?: string;
+  }
+): Promise<void> {
+  const config = await getFormConfigByTitle(token, params.listTitle);
+  if (!config?.Id) throw new Error(`Form "${params.listTitle}" not found.`);
+  const normalizedPublishKey = normalizePublishKey(params.publishKey);
+  const versionData = await getFormVersion(token, params.listTitle, params.version, normalizedPublishKey);
+  if (!versionData) throw new Error(`Profile "${normalizedPublishKey}" v${params.version} not found.`);
+  const layerConfig = versionData.layerConfig ? JSON.stringify(versionData.layerConfig) : config.LayerConfig || '';
+  await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${config.Id})`, {
+    CurrentVersion: params.version,
+    CurrentPublishKey: normalizedPublishKey,
+    CurrentPublishLabel: params.publishLabel?.trim() || versionData.publishLabel || normalizedPublishKey,
+    LayerConfig: layerConfig,
+    IsPublished: true,
+  });
+}
+
+function effectiveLayerCountFromConfig(layerConfig: unknown): number {
+  if (!layerConfig || typeof layerConfig !== 'object') return 0;
+  const config = layerConfig as { layers?: unknown[]; manualBranches?: { layers?: unknown[] }[] };
+  const branchCounts = (config.manualBranches ?? []).map((branch) => branch.layers?.length ?? 0);
+  return Math.max(config.layers?.length ?? 0, ...branchCounts, 0);
+}
+
+export async function updatePublishProfileLayerConfig(
+  token: string,
+  params: {
+    listTitle: string;
+    version: string;
+    publishKey: string;
+    layerConfig: unknown;
+    changedBy: string;
+  }
+): Promise<void> {
+  await ensureListExists(token, 'Web Form Versions');
+  const normalizedPublishKey = normalizePublishKey(params.publishKey);
+  const id = await getFormVersionRecordId(token, params.listTitle, params.version, normalizedPublishKey);
+  const versionData = await getFormVersion(token, params.listTitle, params.version, normalizedPublishKey);
+  if (!versionData) throw new Error(`Profile "${normalizedPublishKey}" v${params.version} not found.`);
+  const updated = {
+    ...versionData,
+    layerConfig: params.layerConfig,
+    savedAt: new Date().toISOString(),
+    changedBy: params.changedBy,
+  };
+  await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${id})`, {
+    SurveyJSON: JSON.stringify(updated, null, 2),
+    PublishedBy: params.changedBy,
+    PublishedAt: new Date().toISOString(),
+  });
+
+  const config = await getFormConfigByTitle(token, params.listTitle);
+  if (
+    config?.Id &&
+    config.CurrentVersion === params.version &&
+    normalizePublishKey(config.CurrentPublishKey) === normalizedPublishKey
+  ) {
+    await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${config.Id})`, {
+      LayerConfig: JSON.stringify(params.layerConfig),
+      NumberOfApprovalLayer: effectiveLayerCountFromConfig(params.layerConfig),
+    });
+  }
 }
 
 export async function logEvent(
@@ -1251,6 +1432,7 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
   'Master Form': { t: 100, desc: 'Form builder configuration', cols: [
     { n: 'FormID', k: 2 }, { n: 'NumberOfApprovalLayer', k: 9 },
     { n: 'Slug', k: 2 }, { n: 'CurrentVersion', k: 2 },
+    { n: 'CurrentPublishKey', k: 2 }, { n: 'CurrentPublishLabel', k: 2 },
     { n: 'IsPublished', k: 8 }, { n: 'IsPublic', k: 8 },
     { n: 'ConditionField', k: 2 }, { n: 'ApprovalRules', k: 3, ml: true },
     { n: 'LayerConfig', k: 3, ml: true },
@@ -1261,7 +1443,10 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
   ]},
   'Web Form Versions': { t: 100, desc: 'Published form version metadata', cols: [
     { n: 'FormTitle', k: 2 }, { n: 'FormSlug', k: 2 },
-    { n: 'FormVersion', k: 2 }, { n: 'SurveyJSON', k: 3, ml: true },
+    { n: 'FormVersion', k: 2 }, { n: 'PublishKey', k: 2 }, { n: 'PublishLabel', k: 2 },
+    { n: 'PublishStatus', k: 2 }, { n: 'PublishExpiresAt', k: 4 },
+    { n: 'DisabledAt', k: 4 }, { n: 'DisabledBy', k: 2 },
+    { n: 'SurveyJSON', k: 3, ml: true },
     { n: 'PublishedBy', k: 2 }, { n: 'PublishedAt', k: 4 },
   ]},
   'Form Builder Log': { t: 100, desc: 'Audit log', cols: [
@@ -1279,9 +1464,9 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
 };
 
 const LIST_INDEXES: Record<string, string[]> = {
-  'Master Form': ['Title', 'Slug', 'FormID', 'CurrentVersion'],
+  'Master Form': ['Title', 'Slug', 'FormID', 'CurrentVersion', 'CurrentPublishKey'],
   'Approvers': ['FormTitle', 'LayerNumber', 'ApproverEmail'],
-  'Web Form Versions': ['FormTitle', 'FormSlug', 'FormVersion', 'PublishedAt'],
+  'Web Form Versions': ['FormTitle', 'FormSlug', 'FormVersion', 'PublishKey', 'PublishedAt'],
   'Form Builder Log': ['FormTitle', 'EventType', 'ChangedBy', 'EventAt'],
   'AdminPanelSettings': ['BackgroundId', 'UpdatedAt'],
   [CAREER_PORTAL_CARD_LIST]: ['Status', 'SortOrder', 'TargetType', 'TargetValue'],
@@ -1323,30 +1508,57 @@ export async function bootstrapSystemLists(token: string, onLog?: (msg: string, 
 }
 
 // ── Get latest form by slug (from reference) ────────────────────────────────
-export async function getLatestFormBySlug(token: string, slug: string): Promise<{
+export async function getLatestFormBySlug(token: string, slug: string, publishKey?: string | null): Promise<{
   formConfig: FormConfigData;
   surveyJson: unknown;
   meta: unknown;
 } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(sanitizeODataValue(slug))}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(sanitizeODataValue(slug))}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
   const form = data.value?.[0];
   if (!form) return null;
   if (!form.IsPublished) return null;
 
-  const versionData = await getFormVersionByTitle(token, form.Title, form.CurrentVersion || '1.0');
+  const activePublishKey = normalizePublishKey(publishKey || form.CurrentPublishKey);
+  const versionData = await getFormVersionByTitle(token, form.Title, form.CurrentVersion || '1.0', activePublishKey);
+  if (versionData?.publishStatus === 'off' || isPublishExpired(versionData?.publishExpiresAt)) return null;
+  const layerConfig = versionData?.layerConfig
+    ? JSON.stringify(versionData.layerConfig)
+    : form.LayerConfig;
   return {
-    formConfig: form,
+    formConfig: {
+      ...form,
+      CurrentPublishKey: activePublishKey,
+      CurrentPublishLabel: versionData?.publishLabel || form.CurrentPublishLabel || 'Production',
+      LayerConfig: layerConfig,
+    },
     surveyJson: versionData?.surveyJson || null,
     meta: versionData?.meta || {},
   };
 }
 
-async function getFormVersionByTitle(token: string, listTitle: string, version: string): Promise<{ surveyJson: unknown; meta: unknown } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`) as { value?: { SurveyJSON?: string }[] };
+async function getFormVersionByTitle(token: string, listTitle: string, version: string, publishKey?: string | null): Promise<{ surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishKey?: string; publishLabel?: string; publishStatus?: string; publishExpiresAt?: string } | null> {
+  const baseFilter = `FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'`;
+  const normalizedPublishKey = publishKey ? normalizePublishKey(publishKey) : "";
+  const query = normalizedPublishKey
+    ? `${baseFilter} and PublishKey eq '${encodeURIComponent(sanitizeODataValue(normalizedPublishKey))}'`
+    : baseFilter;
+  let data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${query}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy,PublishKey,PublishLabel,PublishStatus,PublishExpiresAt&$orderby=PublishedAt desc&$top=1`)
+    .catch(async () => {
+      if (!normalizedPublishKey || normalizedPublishKey !== DEFAULT_PUBLISH_KEY) return { value: [] };
+      return spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`);
+    }) as { value?: { SurveyJSON?: string }[] };
+  if (normalizedPublishKey === DEFAULT_PUBLISH_KEY && !data.value?.length) {
+    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(() => ({ value: [] })) as { value?: { SurveyJSON?: string }[] };
+  }
   const row = data.value?.[0];
   if (!row?.SurveyJSON) return null;
   try {
-    return JSON.parse(row.SurveyJSON);
+    const parsed = JSON.parse(row.SurveyJSON);
+    return {
+      ...parsed,
+      publishStatus: (row as { PublishStatus?: string }).PublishStatus || parsed.publishStatus,
+      publishExpiresAt: (row as { PublishExpiresAt?: string }).PublishExpiresAt || parsed.publishExpiresAt,
+    };
   } catch {
     return null;
   }
@@ -1734,7 +1946,9 @@ export async function writeMatrixChildItems(
     // Map row values to column names
     for (const col of columns) {
       if (!col.name) continue;
-      body[col.name] = row[col.name] ?? null;
+      body[col.name] = col.cellType === "date"
+        ? toSharePointMalaysiaDateTime(row[col.name]) ?? row[col.name] ?? null
+        : row[col.name] ?? null;
     }
 
     const result = await spPost(

@@ -613,7 +613,23 @@ export interface SurveyJson {
 export interface FormBuilderMeta {
   isoStandards?: string;
   companies?: string;
+  companyChoiceEnabled?: boolean;
   showBanner?: boolean;
+  formId?: string;
+  formVersion?: string;
+  logoUrl?: string;
+  publishKey?: string;
+  publishLabel?: string;
+  documentHeader?: DocumentControlHeader;
+  pdfConfig?: PdfConfig;
+}
+
+export interface DocumentControlHeader {
+  documentNumber?: string;
+  issueNumber?: string;
+  effectiveDate?: string;
+  revisionNumber?: string;
+  revisionDate?: string;
 }
 
 export interface FormConfig {
@@ -623,6 +639,8 @@ export interface FormConfig {
   NumberOfApprovalLayer: number;
   Slug: string;
   CurrentVersion: string;
+  CurrentPublishKey?: string;
+  CurrentPublishLabel?: string;
   IsPublished: boolean;
   IsPublic: boolean;
   ConditionField?: string;
@@ -635,12 +653,25 @@ export interface FormVersionData {
   surveyJson: SurveyJson;
   meta?: FormBuilderMeta;
   version: string;
+  publishKey?: string;
+  publishLabel?: string;
+  publishStatus?: PublishProfileStatus;
+  publishExpiresAt?: string;
   savedAt: string;
   changedBy: string;
+  layerConfig?: LayerConfig | null;
 }
+
+export type PublishProfileStatus = "active" | "off";
 
 export interface FormVersionHistory {
   FormVersion: string;
+  PublishKey?: string;
+  PublishLabel?: string;
+  PublishStatus?: PublishProfileStatus;
+  PublishExpiresAt?: string;
+  DisabledAt?: string;
+  DisabledBy?: string;
   PublishedAt: string;
   PublishedBy: string;
   Title: string;

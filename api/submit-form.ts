@@ -44,6 +44,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LAYER_PENDING_STATUS = "Pending";
 const FORM_SUBMITTED_STATUS = "Submitted";
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MALAYSIA_UTC_OFFSET_MINUTES = 8 * 60;
 
 interface ApiFixedUserLayerAssignee {
   type: "user";
@@ -121,6 +122,16 @@ type ApiFieldKind = "text" | "note" | "number" | "boolean" | "dateTime" | "choic
 interface ApiFieldSpec {
   name: string;
   kind: ApiFieldKind;
+}
+
+interface ApiLocalDateTimeParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  millisecond: number;
 }
 
 interface ApiSubmissionSchema {
@@ -326,11 +337,85 @@ function toBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
-function toIsoDateTime(value: unknown): string | undefined {
+const LOCAL_ISO_DATE_TIME_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2})(?::(\d{2}))?(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/;
+const EXPLICIT_TIMEZONE_RE = /(?:z|[+-]\d{2}:?\d{2})$/i;
+
+function isValidLocalDateTimeParts(parts: ApiLocalDateTimeParts): boolean {
+  const local = new Date(Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.millisecond,
+  ));
+  return (
+    local.getUTCFullYear() === parts.year &&
+    local.getUTCMonth() === parts.month - 1 &&
+    local.getUTCDate() === parts.day &&
+    local.getUTCHours() === parts.hour &&
+    local.getUTCMinutes() === parts.minute &&
+    local.getUTCSeconds() === parts.second
+  );
+}
+
+function parseLocalIsoDateTime(value: string): ApiLocalDateTimeParts | null {
+  const match = value.match(LOCAL_ISO_DATE_TIME_RE);
+  if (!match) return null;
+
+  const parts: ApiLocalDateTimeParts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4] ?? "0"),
+    minute: Number(match[5] ?? "0"),
+    second: Number(match[6] ?? "0"),
+    millisecond: Number((match[7] ?? "0").padEnd(3, "0").slice(0, 3)),
+  };
+  return isValidLocalDateTimeParts(parts) ? parts : null;
+}
+
+function localPartsFromParsedDate(date: Date): ApiLocalDateTimeParts {
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    hour: date.getHours(),
+    minute: date.getMinutes(),
+    second: date.getSeconds(),
+    millisecond: date.getMilliseconds(),
+  };
+}
+
+function malaysiaLocalPartsToUtcIso(parts: ApiLocalDateTimeParts): string {
+  const localAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.millisecond,
+  );
+  return new Date(localAsUtc - MALAYSIA_UTC_OFFSET_MINUTES * 60_000).toISOString();
+}
+
+function toSharePointMalaysiaDateTime(value: unknown): string | undefined {
   const text = valueToText(value);
   if (!text) return undefined;
+
+  if (EXPLICIT_TIMEZONE_RE.test(text)) {
+    const time = Date.parse(text);
+    return Number.isNaN(time) ? undefined : new Date(time).toISOString();
+  }
+
+  const localIsoParts = parseLocalIsoDateTime(text);
+  if (localIsoParts) return malaysiaLocalPartsToUtcIso(localIsoParts);
+
   const time = Date.parse(text);
-  return Number.isNaN(time) ? undefined : new Date(time).toISOString();
+  if (Number.isNaN(time)) return undefined;
+  return malaysiaLocalPartsToUtcIso(localPartsFromParsedDate(new Date(time)));
 }
 
 function toStringArray(value: unknown): string[] {
@@ -442,20 +527,32 @@ function collectSubmissionSchema(surveyJson: Record<string, unknown>): ApiSubmis
   return { fields, matrices };
 }
 
-async function getPublishedSurveyJson(
+async function getPublishedFormSnapshot(
   token: string,
   formConfig: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
+  publishKey?: string,
+): Promise<{ surveyJson: Record<string, unknown>; layerConfig?: unknown; publishKey?: string; publishLabel?: string; publishStatus?: string; publishExpiresAt?: string } | null> {
   const formTitle = valueToText(formConfig.Title);
   const targetVersion = valueToText(formConfig.CurrentVersion) || "1.0";
   if (!formTitle) return null;
 
-  const row = (await queryWebFormVersion(token, formTitle, targetVersion))?.fields;
+  const row = (await queryWebFormVersion(token, formTitle, targetVersion, publishKey))?.fields;
   const parsed = parseJsonRecord(row?.SurveyJSON);
   const surveyJson = parsed?.surveyJson ?? parsed;
   return surveyJson && typeof surveyJson === "object" && !Array.isArray(surveyJson)
-    ? (surveyJson as Record<string, unknown>)
+    ? {
+        surveyJson: surveyJson as Record<string, unknown>,
+        layerConfig: parsed?.layerConfig,
+        publishKey: valueToText(parsed?.publishKey) || publishKey,
+        publishLabel: valueToText(parsed?.publishLabel),
+        publishStatus: valueToText(row?.PublishStatus),
+        publishExpiresAt: valueToText(row?.PublishExpiresAt),
+      }
     : null;
+}
+
+function isExpiredProfile(value: string): boolean {
+  return value.trim() !== "" && Date.parse(value) <= Date.now();
 }
 
 function extractUploadCandidates(value: unknown): ApiUploadCandidate[] {
@@ -597,7 +694,7 @@ async function coerceFieldValue(
     case "boolean":
       return toBoolean(value);
     case "dateTime":
-      return toIsoDateTime(value);
+      return toSharePointMalaysiaDateTime(value);
     case "multiChoice":
       return toStringArray(value);
     case "choice":
@@ -668,7 +765,7 @@ function coerceMatrixCellValue(value: unknown, column: ApiMatrixColumn): unknown
     case "boolean":
       return toBoolean(value);
     case "date":
-      return toIsoDateTime(value);
+      return toSharePointMalaysiaDateTime(value);
     case "checkbox":
       return Array.isArray(column.choices) && column.choices.length > 0
         ? toStringArray(value)
@@ -1201,6 +1298,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const {
     listTitle,
+    formVersion,
+    publishKey,
     body: formBody,
     matrixData,
     pdpaConsent,
@@ -1209,6 +1308,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     retentionUntil,
   } = req.body as {
     listTitle?: string;
+    formVersion?: string;
+    publishKey?: string;
     body?: Record<string, unknown>;
     matrixData?: Record<string, { rows: Record<string, unknown>[]; columns: ApiMatrixColumn[] }>;
     pdpaConsent?: boolean;
@@ -1244,11 +1345,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Form is not public" });
     }
 
-    const surveyJson = await getPublishedSurveyJson(token, formConfig);
-    if (!surveyJson) {
+    const targetVersion = typeof formVersion === "string" && formVersion.trim()
+      ? formVersion.trim()
+      : valueToText(formConfig.CurrentVersion) || "1.0";
+    const targetPublishKey = typeof publishKey === "string" && publishKey.trim()
+      ? publishKey.trim()
+      : valueToText(formConfig.CurrentPublishKey) || "production";
+    formConfig.CurrentVersion = targetVersion;
+    formConfig.CurrentPublishKey = targetPublishKey;
+
+    const publishedSnapshot = await getPublishedFormSnapshot(token, formConfig, targetPublishKey);
+    if (!publishedSnapshot) {
       logError("api:submit-form", "Published form schema unavailable", undefined, { listTitle });
       return res.status(500).json({ error: "Internal server error. Please try again." });
     }
+    if (publishedSnapshot.publishStatus === "off") {
+      return res.status(403).json({ error: "This published form profile is turned off." });
+    }
+    if (isExpiredProfile(publishedSnapshot.publishExpiresAt || "")) {
+      return res.status(403).json({ error: "This published form profile has expired." });
+    }
+    if (publishedSnapshot.layerConfig) {
+      formConfig.LayerConfig = JSON.stringify(publishedSnapshot.layerConfig);
+    }
+    const surveyJson = publishedSnapshot.surveyJson;
 
     const schema = collectSubmissionSchema(surveyJson);
     const submission = await buildSubmissionFields(token, listTitle, formBody, formConfig, schema);
