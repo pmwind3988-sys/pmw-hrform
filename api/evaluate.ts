@@ -64,16 +64,6 @@ function layerSurveyElements(layer: Record<string, unknown>): Record<string, unk
     : [];
 }
 
-function parseSurveyJson(raw: unknown): unknown {
-  if (typeof raw !== "string" || !raw.trim()) return null;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return parsed.surveyJson || parsed;
-  } catch {
-    return null;
-  }
-}
-
 function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: Record<string, unknown>; layerConfig: Record<string, unknown> | null } {
   if (typeof raw !== "string" || !raw.trim()) return { surveyJson: null, meta: {}, layerConfig: null };
   try {

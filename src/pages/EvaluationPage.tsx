@@ -48,11 +48,14 @@ async function getVersionPayload(
   const keyedFilter = publishKey?.trim()
     ? `${baseFilter} and PublishKey eq '${odataString(publishKey.trim())}'`
     : baseFilter;
-  let versionData = await spGet(
-    token,
-    `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${keyedFilter}&$select=SurveyJSON&$top=1`
-  ) as { value?: { SurveyJSON?: string }[] };
-  if (publishKey?.trim() && !versionData.value?.length) {
+  let versionData: { value?: { SurveyJSON?: string }[] };
+  try {
+    versionData = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${keyedFilter}&$select=SurveyJSON&$top=1`
+    ) as { value?: { SurveyJSON?: string }[] };
+  } catch {
+    if (!publishKey?.trim()) throw new Error("Could not load published form version.");
     versionData = await spGet(
       token,
       `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON&$top=1`

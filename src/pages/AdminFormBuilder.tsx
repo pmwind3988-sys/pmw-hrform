@@ -1162,6 +1162,20 @@ export default function AdminFormBuilder() {
     showToast("Layer editor reset for this profile draft. Existing published profiles are unchanged until you publish.", "ok");
   };
 
+  const handleCreateNewProfileDraft = () => {
+    const publishKey = `profile-${Date.now().toString(36)}`;
+    setMeta((current) => ({
+      ...current,
+      publishKey,
+      publishLabel: "New Profile",
+    }));
+    setLayerConfig({ version: "1.0", layers: [] });
+    setNumLayers(0);
+    setProfileLayerEdit(null);
+    setSidebarTab("layers");
+    showToast("New profile draft ready with fresh layers. The active profile remains unchanged.", "ok");
+  };
+
   useEffect(() => {
     if (sidebarTab !== "log" || !isEditing || !tokenRef.current) return;
     setLogLoading(true);
@@ -1766,7 +1780,7 @@ export default function AdminFormBuilder() {
                   <FB label="Version" hint={isEditing ? `Current live version: v${originalVersion || "?"}. Reusing a version/profile overwrites that published profile.` : "Admin-controlled. Publish will use exactly this value."}>
                     <TextInput value={meta.formVersion} onChange={v => setM("formVersion", v)} placeholder="1.0" />
                   </FB>
-                  <FB label="Publish Profile" hint="Use the same version with different evaluator / approval branches. The latest published profile becomes the default /form route.">
+                  <FB label="Publish Profile" hint="Use the same version with a separate evaluation / approval workflow. Saving a profile only preserves the current default /form route.">
                     <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 7 }}>
                       <TextInput
                         value={meta.publishKey}
@@ -2176,7 +2190,7 @@ export default function AdminFormBuilder() {
                       gap: 8,
                     }}>
                       <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
-                        Preparing a new profile for the same version? Set a new Publish Profile key in Meta, then clear this editor to build a fresh approval/evaluation chain. Published profiles keep their saved layers.
+                        Need a separate workflow for the same version? Publish New Profile creates a blank layer draft. Existing profiles keep their saved evaluation and approval layers.
                       </div>
                       <button
                         onClick={handleStartProfileLayersFromScratch}
@@ -2329,6 +2343,24 @@ export default function AdminFormBuilder() {
                   )}
                   <div style={{ display: "grid", gap: 8 }}>
                     <button
+                      onClick={handleCreateNewProfileDraft}
+                      disabled={!isEditing || !meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
+                      style={{
+                        width: "100%",
+                        padding: "11px 0",
+                        borderRadius: 8,
+                        border: "none",
+                        background: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : C.purple,
+                        color: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.white,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
+                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                      }}
+                    >
+                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to create profile</> : <><EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish new profile</>}
+                    </button>
+                    <button
                       onClick={() => handlePublish(surveyJson as SurveyJson, "profile")}
                       disabled={!isEditing || !meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
                       style={{
@@ -2344,7 +2376,7 @@ export default function AdminFormBuilder() {
                         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
                       }}
                     >
-                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to save profile</> : <><SaveIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish new profile only</>}
+                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to save profile</> : <><SaveIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Save profile only</>}
                     </button>
                     <button
                       onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
@@ -2365,7 +2397,7 @@ export default function AdminFormBuilder() {
                       {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to publish</> : isDraft ? <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Actual publish (make live)</> : <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Actual publish to /form route</>}
                     </button>
                     <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
-                      New profile saves this profile/version for direct links. Actual publish also makes it the default public <strong>/form/{meta.slug || "slug"}</strong> route.
+                      Publish New Profile opens a blank same-version workflow. Save Profile Only publishes that profile for direct links; Actual Publish also makes it the default public <strong>/form/{meta.slug || "slug"}</strong> route.
                     </div>
                   </div>
                   <PrefilledQrPanel

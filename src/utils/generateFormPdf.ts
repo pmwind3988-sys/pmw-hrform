@@ -272,6 +272,19 @@ function sharePointFileValueUrl(value: string): string {
   return `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodeServerRelativePathParam(serverRelativePath)}')/$value`;
 }
 
+/**
+ * Some SharePoint Online tenants don't honor bearer-token auth on the
+ * getFileByServerRelativePath `/$value` endpoint (it can 401 or redirect to
+ * an HTML sign-in page while returning 200). `_layouts/15/download.aspx` is
+ * a second, independently-authed download route that reliably accepts the
+ * same bearer token, so we fall back to it before giving up.
+ */
+function sharePointDownloadAspxUrl(value: string): string {
+  const serverRelativePath = sharePointServerRelativePath(value);
+  if (!serverRelativePath) return "";
+  return `${SP_SITE_URL}/_layouts/15/download.aspx?SourceUrl=${encodeURIComponent(serverRelativePath)}`;
+}
+
 async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -288,21 +301,30 @@ async function imageSourceToDataUrl(token: string, source: string, cache: Map<st
   const cached = cache.get(absolute);
   if (cached) return cached;
 
-  const spFileUrl = sharePointFileValueUrl(absolute);
-  const requestUrl = spFileUrl || absolute;
-  try {
-    const response = await fetchWithAuthRecovery(requestUrl, {
-      headers: spFileUrl || isSharePointSource(absolute) ? { Authorization: `Bearer ${token}` } : undefined,
-    });
-    if (!response.ok) return absolute;
-    const blob = await response.blob();
-    if (!blob.type.startsWith("image/")) return absolute;
-    const dataUrl = await blobToDataUrl(blob);
-    cache.set(absolute, dataUrl);
-    return dataUrl;
-  } catch {
-    return absolute;
+  const authHeaders = { Authorization: `Bearer ${token}`, Accept: "*/*" };
+  const candidateUrls = [
+    sharePointFileValueUrl(absolute),
+    sharePointDownloadAspxUrl(absolute),
+  ].filter((url): url is string => !!url);
+  candidateUrls.push(absolute);
+
+  for (const requestUrl of candidateUrls) {
+    try {
+      const response = await fetchWithAuthRecovery(requestUrl, {
+        headers: requestUrl !== absolute || isSharePointSource(absolute) ? authHeaders : undefined,
+      });
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) continue;
+      const dataUrl = await blobToDataUrl(blob);
+      cache.set(absolute, dataUrl);
+      return dataUrl;
+    } catch {
+      continue;
+    }
   }
+  console.warn(`PDF image hydration failed for all candidate URLs; embedding unresolved source: ${absolute}`);
+  return absolute;
 }
 
 function imageSourceFromString(value: string, siteUrl = SP_SITE_URL): string {
