@@ -31,6 +31,7 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
   const count = Math.max(layerCount, 1);
   const columns: GraphColumnSpec[] = [
     { name: "SelectedBranch", displayName: "SelectedBranch", type: "text" },
+    { name: "PublishKey", displayName: "PublishKey", type: "text" },
     { name: "EvaluationData", displayName: "EvaluationData", type: "note" },
     { name: "WorkflowAssignmentData", displayName: "WorkflowAssignmentData", type: "note" },
     { name: "WorkflowEmailLog", displayName: "WorkflowEmailLog", type: "note" },

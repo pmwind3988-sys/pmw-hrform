@@ -1594,6 +1594,7 @@ interface ProvisionFormListOptions {
 const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
   { n: 'SubmittedAt', k: SP_FIELD_KIND.dateTime },
   { n: 'FormVersion', k: SP_FIELD_KIND.text },
+  { n: 'PublishKey', k: SP_FIELD_KIND.text },
   { n: 'FormID', k: SP_FIELD_KIND.text },
   { n: 'SubmittedBy', k: SP_FIELD_KIND.text },
   { n: 'Status', k: SP_FIELD_KIND.text },
@@ -1613,6 +1614,7 @@ const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
 const RESPONSE_INDEXED_COLUMNS = [
   'SubmittedAt',
   'FormVersion',
+  'PublishKey',
   'FormID',
   'SubmittedBy',
   'Status',
@@ -1788,10 +1790,11 @@ export async function ensureWorkflowColumns(
   const count = Math.max(layerCount, 1);
   const result = await ensureColumns(token, listTitle, dedupeColumnSpecs([
     SELECTED_BRANCH_COLUMN_SPEC,
+    { n: 'PublishKey', k: SP_FIELD_KIND.text },
     ...ENHANCED_LAYER_COLUMNS,
     ...layerColumnSpecs(count),
   ]));
-  await ensureIndexedColumns(token, listTitle, ['SelectedBranch', 'CurrentLayer', 'FormStatus']);
+  await ensureIndexedColumns(token, listTitle, ['SelectedBranch', 'PublishKey', 'CurrentLayer', 'FormStatus']);
   return result;
 }
 
@@ -2514,9 +2517,24 @@ export async function getLayerResponseData(
     // Fetch the response item
     const item = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formTitle)}')/items(${responseItemId})`) as Record<string, unknown>;
 
-    // Fetch form config for layer info
-    const configData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(formTitle.replace(/ Responses$/, "")))}'&$select=LayerConfig&$top=1`) as { value?: Record<string, unknown>[] };
-    const rawLayerConfig = configData?.value?.[0]?.LayerConfig as string | undefined;
+    const normalizedFormTitle = formTitle.replace(/ Responses$/, "");
+    const responseFormVersion = typeof item.FormVersion === 'string' && item.FormVersion.trim() ? item.FormVersion.trim() : '';
+    const responsePublishKey = typeof item.PublishKey === 'string' && item.PublishKey.trim() ? item.PublishKey.trim() : '';
+
+    // Fetch form config for fallback layer info.
+    const configData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(normalizedFormTitle))}'&$select=LayerConfig,CurrentVersion,CurrentPublishKey&$top=1`) as { value?: Record<string, unknown>[] };
+    const config = configData?.value?.[0];
+    const fallbackVersion = typeof config?.CurrentVersion === 'string' && config.CurrentVersion.trim() ? config.CurrentVersion.trim() : '1.0';
+    const fallbackPublishKey = typeof config?.CurrentPublishKey === 'string' && config.CurrentPublishKey.trim() ? config.CurrentPublishKey.trim() : DEFAULT_PUBLISH_KEY;
+    const versionData = await getFormVersion(
+      token,
+      normalizedFormTitle,
+      responseFormVersion || fallbackVersion,
+      responsePublishKey || fallbackPublishKey,
+    );
+    const rawLayerConfig = versionData?.layerConfig
+      ? JSON.stringify(versionData.layerConfig)
+      : config?.LayerConfig as string | undefined;
     let layerConfig: LayerConfigItem[] = [];
     if (rawLayerConfig) {
       try {

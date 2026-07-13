@@ -1155,6 +1155,13 @@ export default function AdminFormBuilder() {
     }
   };
 
+  const handleStartProfileLayersFromScratch = () => {
+    setLayerConfig({ version: "1.0", layers: [] });
+    setNumLayers(0);
+    setProfileLayerEdit(null);
+    showToast("Layer editor reset for this profile draft. Existing published profiles are unchanged until you publish.", "ok");
+  };
+
   useEffect(() => {
     if (sidebarTab !== "log" || !isEditing || !tokenRef.current) return;
     setLogLoading(true);
@@ -1263,7 +1270,7 @@ export default function AdminFormBuilder() {
         pLog(`Saving profile only; default /form route stays unchanged.`);
       }
 
-      if (effectiveNumLayers > 0) {
+      if (intent === "live" && effectiveNumLayers > 0) {
         pLog(`Writing approvers…`);
         // When using the new LayerConfigPanel, layer assignee emails are stored
         // in layerConfig.layers[].assignee.value (type: "user") or as field references.
@@ -2156,6 +2163,39 @@ export default function AdminFormBuilder() {
                           Exit layer edit
                         </button>
                       </div>
+                    </div>
+                  )}
+                  {isEditing && !viewingOld && (
+                    <div style={{
+                      background: C.offWhite,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 8,
+                      padding: "9px 10px",
+                      marginBottom: 10,
+                      display: "grid",
+                      gap: 8,
+                    }}>
+                      <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
+                        Preparing a new profile for the same version? Set a new Publish Profile key in Meta, then clear this editor to build a fresh approval/evaluation chain. Published profiles keep their saved layers.
+                      </div>
+                      <button
+                        onClick={handleStartProfileLayersFromScratch}
+                        disabled={profileLayerSaving}
+                        style={{
+                          minHeight: 32,
+                          border: `1px dashed ${C.purpleMid}`,
+                          borderRadius: 7,
+                          background: C.white,
+                          color: C.purple,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: profileLayerSaving ? "not-allowed" : "pointer",
+                          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                        }}
+                      >
+                        <EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} />
+                        Start this profile's layers from scratch
+                      </button>
                     </div>
                   )}
                   <LayerConfigPanel

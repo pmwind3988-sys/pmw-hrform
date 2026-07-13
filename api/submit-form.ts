@@ -797,6 +797,7 @@ async function buildSubmissionFields(
   const fields: Record<string, unknown> = {
     SubmittedAt: new Date().toISOString(),
     FormVersion: valueToText(formConfig.CurrentVersion) || "1.0",
+    PublishKey: valueToText(formConfig.CurrentPublishKey) || "production",
     FormID: valueToText(formConfig.FormID),
     SubmittedBy: "GUEST",
   };
@@ -904,6 +905,7 @@ function isCoreSubmissionField(fieldName: string): boolean {
     fieldName === "SubmittedAt" ||
     fieldName === "SubmittedBy" ||
     fieldName === "FormVersion" ||
+    fieldName === "PublishKey" ||
     fieldName === "FormID" ||
     fieldName === "RawJSON" ||
     fieldName === "PDPAConsent" ||

@@ -34,36 +34,57 @@ const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 registerSignaturePad();
 
+function odataString(value: string): string {
+  return encodeURIComponent(value.replace(/'/g, "''"));
+}
+
+async function getVersionPayload(
+  token: string,
+  formTitle: string,
+  formVersion: string,
+  publishKey?: string,
+): Promise<Record<string, unknown> | null> {
+  const baseFilter = `FormTitle eq '${odataString(formTitle)}' and FormVersion eq '${odataString(formVersion)}'`;
+  const keyedFilter = publishKey?.trim()
+    ? `${baseFilter} and PublishKey eq '${odataString(publishKey.trim())}'`
+    : baseFilter;
+  let versionData = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${keyedFilter}&$select=SurveyJSON&$top=1`
+  ) as { value?: { SurveyJSON?: string }[] };
+  if (publishKey?.trim() && !versionData.value?.length) {
+    versionData = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON&$top=1`
+    ) as { value?: { SurveyJSON?: string }[] };
+  }
+  const rawSurvey = versionData.value?.[0]?.SurveyJSON;
+  if (!rawSurvey) return null;
+  return JSON.parse(rawSurvey) as Record<string, unknown>;
+}
+
 // ── PDF Helper ─────────────────────────────────────────────────────────────
 async function loadPdfAndGenerate(token: string, listTitle: string, responseItemId: number, formTitle: string, formStatus: string): Promise<void> {
   try {
     const cfg = await getFormConfigByTitle(token, formTitle);
     if (!cfg) return;
 
-    const formVersion = (cfg as unknown as Record<string, unknown>).CurrentVersion as string || "1.0";
-
-    const versionData = await spGet(
+    const respItem = await spGet(
       token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title)}' and FormVersion eq '${encodeURIComponent(formVersion)}'&$select=SurveyJSON&$top=1`
-    ) as { value?: { SurveyJSON?: string }[] };
-
-    const rawSurvey = versionData.value?.[0]?.SurveyJSON;
-    if (!rawSurvey) return;
-
-    const parsed = JSON.parse(rawSurvey) as Record<string, unknown>;
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`
+    ) as Record<string, unknown>;
+    const formVersion = valueToText(respItem.FormVersion) || valueToText((cfg as unknown as Record<string, unknown>).CurrentVersion) || "1.0";
+    const publishKey = valueToText(respItem.PublishKey) || valueToText((cfg as unknown as Record<string, unknown>).CurrentPublishKey);
+    const parsed = await getVersionPayload(token, String(cfg.Title), formVersion, publishKey);
+    if (!parsed) return;
     const surveyContent = parsed.surveyJson || parsed;
     const versionMeta = typeof parsed.meta === "object" && parsed.meta !== null && !Array.isArray(parsed.meta)
       ? parsed.meta as Record<string, unknown>
       : {};
 
-    const respItem = await spGet(
-      token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`
-    ) as Record<string, unknown>;
-
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
-      'FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','WorkflowEmailLog','WorkflowEmailSchedule',
+      'FormVersion','PublishKey','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','WorkflowEmailLog','WorkflowEmailSchedule',
       'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -82,7 +103,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
     await generateAndStorePdf(token, listTitle, responseItemId, {
       surveyJson: surveyContent as PdfFormData["surveyJson"],
       responseData: data,
-      layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
+      layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig),
       meta: {
         submittedBy: (respItem.SubmittedBy as string) || "",
         submittedAt: (respItem.SubmittedAt as string) || "",
@@ -159,7 +180,7 @@ function valueToText(value: unknown): string {
 
 const SYSTEM_FIELDS = new Set([
   "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
+  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch",
@@ -434,18 +455,14 @@ export default function EvaluationPage() {
         // Load matrix child list data for dynamicmatrix fields
         const itemFormVersion = data.responseFields.FormVersion as string | undefined;
         if (itemFormVersion) {
-          const versionData = await spGet(
-            token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(resolvedTitle)}' and FormVersion eq '${encodeURIComponent(itemFormVersion)}'&$select=SurveyJSON&$top=1`
-          ) as { value?: { SurveyJSON?: string }[] };
-          const rawSurvey = versionData.value?.[0]?.SurveyJSON;
-          if (rawSurvey) {
-            const parsed = JSON.parse(rawSurvey) as Record<string, unknown>;
+          const itemPublishKey = valueToText(data.responseFields.PublishKey);
+          const parsed = await getVersionPayload(token, resolvedTitle, itemFormVersion, itemPublishKey);
+          if (parsed) {
             setSurveyJson(parsed.surveyJson || parsed);
             const meta = isRecord(parsed.meta) ? parsed.meta : {};
             setLogoUrl(valueToText(meta.logoUrl));
           }
-          loadMatrixChildData(token, resolvedTitle, parseInt(responseId, 10), itemFormVersion);
+          loadMatrixChildData(token, resolvedTitle, parseInt(responseId, 10), itemFormVersion, itemPublishKey);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load data.");
@@ -595,19 +612,13 @@ export default function EvaluationPage() {
     tkn: string,
     resolvedTitle: string,
     respId: number,
-    formVersion: string
+    formVersion: string,
+    publishKey?: string,
   ) => {
     try {
       // Load the version's SurveyJSON to detect dynamicmatrix fields
-      const versionData = await spGet(
-        tkn,
-        `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(resolvedTitle)}' and FormVersion eq '${encodeURIComponent(formVersion)}'&$select=SurveyJSON&$top=1`
-      ) as { value?: { SurveyJSON?: string }[] };
-
-      const rawSurvey = versionData.value?.[0]?.SurveyJSON;
-      if (!rawSurvey) return;
-
-      const parsed = JSON.parse(rawSurvey);
+      const parsed = await getVersionPayload(tkn, resolvedTitle, formVersion, publishKey);
+      if (!parsed) return;
       const surveyDef = parsed.surveyJson || parsed;
       const matrixFields = getDynamicMatrixFields(surveyDef);
 

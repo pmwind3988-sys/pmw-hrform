@@ -84,6 +84,7 @@ interface PendingItem {
   Status: string;
   CurrentApprovalLayer: number;
   FormVersion: string;
+  PublishKey?: string;
   RawJSON: string;
   CurrentLayer?: number;
   FormStatus?: string;
@@ -107,6 +108,10 @@ function getPendingItemKey(item: Pick<PendingItem, "Title" | "Id">): string {
   return `${item.Title}::${item.Id}`;
 }
 
+function getVersionLayerMapKey(formTitle: string, formVersion: string, publishKey?: string): string {
+  return `${formTitle}__${formVersion}__${publishKey || ""}`;
+}
+
 interface FormConfig {
   Title: string;
   NumberOfApprovalLayer?: number;
@@ -122,20 +127,24 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
     if (!cfg) return null;
 
     let formVersion = item.FormVersion || (cfg as unknown as Record<string, unknown>).CurrentVersion as string || "1.0";
+    let publishKey = item.PublishKey || (cfg as unknown as Record<string, unknown>).CurrentPublishKey as string || "";
     if (!formVersion) {
       try {
         const respItem = await spGet(
           token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=FormVersion`
-        ) as { FormVersion?: string };
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=FormVersion,PublishKey`
+        ) as { FormVersion?: string; PublishKey?: string };
         formVersion = respItem?.FormVersion || "1.0";
+        publishKey = respItem?.PublishKey || publishKey;
       } catch { /* keep fallback */ }
     }
 
     // Load survey JSON
+    const baseFilter = `FormTitle eq '${encodeURIComponent(cfg.Title)}' and FormVersion eq '${encodeURIComponent(formVersion)}'`;
+    const keyedFilter = publishKey ? `${baseFilter} and PublishKey eq '${encodeURIComponent(publishKey)}'` : baseFilter;
     const versionData = await spGet(
       token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title)}' and FormVersion eq '${encodeURIComponent(formVersion)}'&$select=SurveyJSON&$top=1`
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${keyedFilter}&$select=SurveyJSON&$top=1`
     ) as { value?: { SurveyJSON?: string }[] };
 
     const rawSurvey = versionData.value?.[0]?.SurveyJSON;
@@ -172,7 +181,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
     return {
       surveyJson: surveyContent as PdfFormData["surveyJson"],
       responseData: data,
-      layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
+      layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig),
       meta: {
         submittedBy: item.SubmittedBy || "",
         submittedAt: item.SubmittedAt || "",

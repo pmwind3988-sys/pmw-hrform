@@ -31,7 +31,7 @@ function rejectedAtLayerStatus(layerNumber: number): string {
 
 const SYSTEM_FIELDS = new Set([
   "id", "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
+  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch",
@@ -74,16 +74,17 @@ function parseSurveyJson(raw: unknown): unknown {
   }
 }
 
-function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: Record<string, unknown> } {
-  if (typeof raw !== "string" || !raw.trim()) return { surveyJson: null, meta: {} };
+function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: Record<string, unknown>; layerConfig: Record<string, unknown> | null } {
+  if (typeof raw !== "string" || !raw.trim()) return { surveyJson: null, meta: {}, layerConfig: null };
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
       surveyJson: parsed.surveyJson || parsed,
       meta: isRecord(parsed.meta) ? parsed.meta : {},
+      layerConfig: isRecord(parsed.layerConfig) ? parsed.layerConfig : null,
     };
   } catch {
-    return { surveyJson: null, meta: {} };
+    return { surveyJson: null, meta: {}, layerConfig: null };
   }
 }
 
@@ -276,6 +277,29 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       if (foundToken) break;
     }
 
+    if (!foundToken) {
+      const versionItems = await queryListItems(graphToken, "Web Form Versions", { top: 500 });
+      for (const versionItem of versionItems) {
+        const parsedVersion = parseVersionPayload(versionItem.fields.SurveyJSON);
+        const parsed = parsedVersion.layerConfig as { layers?: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null;
+        if (!parsed) continue;
+        const searchableLayers = [
+          ...(parsed.layers ?? []),
+          ...((parsed.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
+        ];
+        for (const layer of searchableLayers) {
+          if (layer.publicToken === token) {
+            foundToken = layer;
+            foundFormTitle = String(versionItem.fields.FormTitle || "");
+            foundLayerNumber = layer.layerNumber as number;
+            layerConfig = { layers: parsed.layers ?? [], manualBranches: parsed.manualBranches };
+            break;
+          }
+        }
+        if (foundToken) break;
+      }
+    }
+
     if (!foundToken) return res.status(404).json({ error: "Token not found" });
     if (foundToken.tokenExpiresAt && new Date(foundToken.tokenExpiresAt as string) < new Date()) {
       return res.status(403).json({ error: "Token has expired" });
@@ -288,10 +312,30 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     const responseListName = `${foundFormTitle} Responses`;
     const responseItem = await queryListItemById(graphToken, responseListName, String(responseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
+    const allFields = responseItem.fields || {};
+    const formVersion = String(allFields.FormVersion || "");
+    const responsePublishKey = String(allFields.PublishKey || "");
+    let parsedResponseVersion = { surveyJson: null as unknown, meta: {} as Record<string, unknown>, layerConfig: null as Record<string, unknown> | null };
+    if (formVersion) {
+      const versionRow = (await queryWebFormVersion(graphToken, foundFormTitle, formVersion, responsePublishKey || undefined))?.fields;
+      parsedResponseVersion = parseVersionPayload(versionRow?.SurveyJSON);
+      const responseLayerConfig = parsedResponseVersion.layerConfig as { layers?: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null;
+      if (responseLayerConfig) {
+        layerConfig = { layers: responseLayerConfig.layers ?? [], manualBranches: responseLayerConfig.manualBranches };
+        const responseLayers = [
+          ...(responseLayerConfig.layers ?? []),
+          ...((responseLayerConfig.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
+        ];
+        const responseToken = responseLayers.find((layer) => layer.publicToken === token);
+        if (responseToken) {
+          foundToken = responseToken;
+          foundLayerNumber = responseToken.layerNumber as number;
+        }
+      }
+    }
 
     // Filter fields based on layer visibility
     const visibleFields: Record<string, unknown> = {};
-    const allFields = responseItem.fields || {};
     const selectedBranch = typeof allFields.SelectedBranch === "string" ? allFields.SelectedBranch.trim().toLowerCase() : "";
     const activeLayers = (() => {
       if (selectedBranch && layerConfig?.manualBranches?.length) {
@@ -313,7 +357,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       }));
 
     // Include submission metadata always
-    for (const key of ["Title", "SubmittedBy", "SubmittedAt", "FormVersion", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
+    for (const key of ["Title", "SubmittedBy", "SubmittedAt", "FormVersion", "PublishKey", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
       if (allFields[key] !== undefined) visibleFields[key] = allFields[key];
     }
 
@@ -359,12 +403,9 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
 
     let surveyJson: unknown = null;
     let versionMeta: Record<string, unknown> = {};
-    const formVersion = String(allFields.FormVersion || "");
     if (formVersion) {
-      const versionRow = (await queryWebFormVersion(graphToken, foundFormTitle, formVersion))?.fields;
-      const parsedVersion = parseVersionPayload(versionRow?.SurveyJSON);
-      surveyJson = parsedVersion.surveyJson || parseSurveyJson(versionRow?.SurveyJSON);
-      versionMeta = parsedVersion.meta;
+      surveyJson = parsedResponseVersion.surveyJson;
+      versionMeta = parsedResponseVersion.meta;
     }
     const mediaSrcByField = await buildMediaSrcByField(surveyJson, visibleFields);
 
@@ -432,9 +473,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const formConfig = (await queryMasterFormByTitle(graphToken, formTitle))?.fields;
     if (!formConfig) return res.status(404).json({ error: "Form not found" });
 
+    // 2. Fetch the response item using Graph API before resolving the workflow
+    // config, because same-version profiles can have different layers.
+    const responseListName = `${formTitle} Responses`;
+    const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
+    if (!responseItem) return res.status(404).json({ error: "Response item not found" });
+    const itemFormVersion = String(responseItem.fields.FormVersion || formConfig.CurrentVersion || "1.0");
+    const itemPublishKey = String(responseItem.fields.PublishKey || formConfig.CurrentPublishKey || "");
+    const versionRow = itemFormVersion
+      ? (await queryWebFormVersion(graphToken, formTitle, itemFormVersion, itemPublishKey || undefined))?.fields
+      : null;
+    const versionPayload = parseVersionPayload(versionRow?.SurveyJSON);
+
     // Parse LayerConfig
     let layerConfigParsed: { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null = null;
-    const rawLayerConfig = formConfig.LayerConfig as string | undefined;
+    const rawLayerConfig = versionPayload.layerConfig
+      ? JSON.stringify(versionPayload.layerConfig)
+      : formConfig.LayerConfig as string | undefined;
     if (rawLayerConfig) {
       try { layerConfigParsed = JSON.parse(rawLayerConfig); } catch { /* invalid JSON, fall through */ }
     }
@@ -453,10 +508,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Token has expired" });
     }
 
-    // 2. Fetch the response item using Graph API
-    const responseListName = `${formTitle} Responses`;
-    const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
-    if (!responseItem) return res.status(404).json({ error: "Response item not found" });
     const latestCurrentLayer = Number(responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer || 0);
     const latestLayerStatus = responseItem.fields[`L${layerNumber}_Status`];
     if (isTerminalFormStatus(responseItem.fields.FormStatus || responseItem.fields.Status) || isTerminalLayerStatus(latestLayerStatus)) {
