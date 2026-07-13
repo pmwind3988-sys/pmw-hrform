@@ -14,6 +14,9 @@ interface VersionHistoryProps {
   onSetExpiry?: (v: string, publishKey: string, expiry: string) => void;
   onCopyLink?: (publishKey: string) => void;
   onEditLayers?: (v: string, publishKey: string, publishLabel: string) => void;
+  onOpenQr?: (v: string, publishKey: string, publishLabel: string) => void;
+  /** `${version}::${publishKey}` of the row whose QR is currently loading. */
+  qrBusyKey?: string;
 }
 
 const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) => (
@@ -51,6 +54,8 @@ export default function VersionHistory({
   onSetExpiry,
   onCopyLink,
   onEditLayers,
+  onOpenQr,
+  qrBusyKey,
 }: VersionHistoryProps) {
   if (!history.length) return <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>No history yet.</div>;
 
@@ -123,6 +128,14 @@ export default function VersionHistory({
                 style={profileBtn(C.textSecond, C.white, C.border, !slug)}
               >
                 Copy link
+              </button>
+              <button
+                onClick={() => onOpenQr?.(v.FormVersion, publishKey, publishLabel)}
+                disabled={!slug || off || expired || qrBusyKey === `${v.FormVersion}::${publishKey}`}
+                title={off || expired ? "Turn this profile on to create a QR for it" : "Create a prefilled QR for this profile"}
+                style={profileBtn(C.purple, C.white, C.purpleMid, !slug || off || expired || qrBusyKey === `${v.FormVersion}::${publishKey}`)}
+              >
+                {qrBusyKey === `${v.FormVersion}::${publishKey}` ? "Loading…" : "Prefilled QR"}
               </button>
               <button
                 onClick={() => onSetDefault?.(v.FormVersion, publishKey, publishLabel)}

@@ -540,6 +540,8 @@ export default function AdminFormBuilder() {
   const [layerConfig, setLayerConfig] = useState<LayerConfig | null>(null);
   const [profileLayerEdit, setProfileLayerEdit] = useState<{ version: string; publishKey: string; publishLabel: string } | null>(null);
   const [profileLayerSaving, setProfileLayerSaving] = useState(false);
+  const [qrProfile, setQrProfile] = useState<{ surveyJson: SurveyJson; version: string; publishKey: string; publishLabel: string } | null>(null);
+  const [qrProfileLoading, setQrProfileLoading] = useState("");
   const setDocumentHeader = (key: DocumentHeaderKey, value: string) => {
     setMeta(m => ({ ...m, documentHeader: { ...m.documentHeader, [key]: value } }));
   };
@@ -1095,6 +1097,32 @@ export default function AdminFormBuilder() {
       showToast("Profile link copied.", "ok");
     } catch {
       showToast(path, "info");
+    }
+  };
+
+  const handleOpenProfileQr = async (version: string, publishKey: string, publishLabel: string) => {
+    const token = tokenRef.current;
+    if (!token) return;
+    if (!meta.slug) {
+      showToast("Publish this form first so the QR targets the live /form route.", "err");
+      return;
+    }
+    const qrKey = `${version}::${publishKey}`;
+    setQrProfileLoading(qrKey);
+    try {
+      // Load this profile's own survey version so prefill fields match exactly
+      // what a scanner of that profile will see.
+      const data = await getFormVersion(token, meta.formTitle, version, publishKey);
+      const profileSurveyJson = (data?.surveyJson ?? data) as SurveyJson | undefined;
+      if (!profileSurveyJson) {
+        showToast(`Profile "${publishLabel}" v${version} not found.`, "err");
+        return;
+      }
+      setQrProfile({ surveyJson: profileSurveyJson, version, publishKey, publishLabel });
+    } catch (e) {
+      showToast(`Could not load profile for QR: ${(e as Error).message}`, "err");
+    } finally {
+      setQrProfileLoading("");
     }
   };
 
@@ -2275,6 +2303,8 @@ export default function AdminFormBuilder() {
                         onSetExpiry={handleSetProfileExpiry}
                         onCopyLink={handleCopyProfileLink}
                         onEditLayers={handleEditProfileLayers}
+                        onOpenQr={handleOpenProfileQr}
+                        qrBusyKey={qrProfileLoading}
                       />
                     </>
                   )}
@@ -2404,6 +2434,8 @@ export default function AdminFormBuilder() {
                     surveyJson={surveyJson}
                     slug={meta.slug}
                     canGenerate={isEditing && !isDraft && !!meta.slug && !viewingOld}
+                    publishKey={meta.publishKey}
+                    publishLabel={meta.publishLabel}
                   />
                 </div>
               )}
@@ -2411,6 +2443,57 @@ export default function AdminFormBuilder() {
           </div>
         )}
       </div>
+
+      {qrProfile && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setQrProfile(null); }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(30,27,75,0.45)",
+            animation: "fadeUp .15s ease",
+            padding: 20,
+          }}
+        >
+          <div style={{
+            background: C.white,
+            borderRadius: 10,
+            padding: "20px 22px",
+            maxWidth: 420,
+            width: "100%",
+            maxHeight: "88vh",
+            overflowY: "auto",
+            boxShadow: C.shadowMd,
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>Prefilled QR — {qrProfile.publishLabel}</div>
+                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                  v{qrProfile.version} · {qrProfile.publishKey} · generate as many QR instances as you need for this profile.
+                </div>
+              </div>
+              <button
+                onClick={() => setQrProfile(null)}
+                title="Close"
+                style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: C.textSecond, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+              >
+                <CloseIcon style={{ fontSize: 18 }} />
+              </button>
+            </div>
+            <PrefilledQrPanel
+              surveyJson={qrProfile.surveyJson}
+              slug={meta.slug}
+              canGenerate={!!meta.slug}
+              publishKey={qrProfile.publishKey}
+              publishLabel={qrProfile.publishLabel}
+            />
+          </div>
+        </div>
+      )}
 
       {deleteConfirm && (
         <div style={{

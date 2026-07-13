@@ -8,6 +8,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import type { FormBuilderField, SurveyJson } from "../../types";
 import { C } from "./constants";
 import { flattenQuestions } from "../../utils/FormBuilderEngine";
+import { DEFAULT_PUBLISH_KEY, normalizePublishKey } from "../../utils/formBuilderSP";
 import {
   PREFILLED_QR_PARAM,
   encodePrefilledQrPayload,
@@ -21,6 +22,10 @@ interface PrefilledQrPanelProps {
   surveyJson: SurveyJson | null;
   slug: string;
   canGenerate: boolean;
+  /** Publish profile this QR targets. Defaults to the live/default profile. */
+  publishKey?: string;
+  /** Human-readable profile label, shown so the admin knows which profile is targeted. */
+  publishLabel?: string;
 }
 
 interface ChoiceOption {
@@ -72,8 +77,10 @@ function inputTypeForField(field: FormBuilderField): string {
   return "text";
 }
 
-export default function PrefilledQrPanel({ surveyJson, slug, canGenerate }: PrefilledQrPanelProps) {
+export default function PrefilledQrPanel({ surveyJson, slug, canGenerate, publishKey, publishLabel }: PrefilledQrPanelProps) {
   const fields = getPrefillEligibleFields(surveyJson, flattenQuestions);
+  const targetPublishKey = normalizePublishKey(publishKey);
+  const isDefaultProfile = targetPublishKey === DEFAULT_PUBLISH_KEY;
   const [values, setValues] = useState<Record<string, DraftValue>>({});
   const [locked, setLocked] = useState<Record<string, boolean>>({});
   const [generatedUrl, setGeneratedUrl] = useState("");
@@ -86,7 +93,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, canGenerate }: Pref
     setGeneratedUrl("");
     setQrDataUrl("");
     setCopied(false);
-  }, [surveyJson, slug]);
+  }, [surveyJson, slug, targetPublishKey]);
 
   useEffect(() => {
     if (!generatedUrl) {
@@ -146,6 +153,9 @@ export default function PrefilledQrPanel({ surveyJson, slug, canGenerate }: Pref
     }
     const payload: PrefilledQrPayload = { v: 1, values: nextValues, locked: nextLocked };
     const url = new URL(`/form/${slug}`, window.location.origin);
+    // Point the QR at this specific profile so it loads the correct version +
+    // workflow. The default/live profile needs no param (it owns /form/{slug}).
+    if (!isDefaultProfile) url.searchParams.set("publish", targetPublishKey);
     url.searchParams.set(PREFILLED_QR_PARAM, encodePrefilledQrPayload(payload));
     setGeneratedUrl(url.toString());
   };
@@ -179,7 +189,9 @@ export default function PrefilledQrPanel({ surveyJson, slug, canGenerate }: Pref
         </span>
         <div>
           <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, fontFamily: font }}>Prefilled QR instance</div>
-          <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.4, fontFamily: font }}>Set defaults for this QR only.</div>
+          <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.4, fontFamily: font }}>
+            Set defaults for this QR only{publishLabel ? <> · targets <strong style={{ color: C.purple }}>{publishLabel}</strong></> : isDefaultProfile ? "" : <> · targets <strong style={{ color: C.purple }}>{targetPublishKey}</strong></>}.
+          </div>
         </div>
       </div>
 
@@ -339,7 +351,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, canGenerate }: Pref
             </button>
             <a
               href={qrDataUrl || generatedUrl}
-              download={`${slug || "form"}-prefilled-qr.png`}
+              download={`${slug || "form"}${isDefaultProfile ? "" : `-${targetPublishKey}`}-prefilled-qr.png`}
               style={{ minHeight: 40, borderRadius: 8, background: C.white, color: C.textSecond, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: font, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
             >
               <DownloadIcon style={{ fontSize: 14, marginRight: 4 }} /> PNG
