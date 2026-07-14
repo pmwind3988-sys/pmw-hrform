@@ -1,4 +1,4 @@
-import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmailSchedule } from '../types/index.ts';
+import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmailSchedule, DocumentControlHeader } from '../types/index.ts';
 import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 import { fetchWithAuthRecovery } from "./authRecovery";
@@ -1379,7 +1379,7 @@ export async function updatePublishProfileDocumentHeader(
     listTitle: string;
     version: string;
     publishKey: string;
-    documentHeader: Record<string, unknown>;
+    documentHeader: DocumentControlHeader;
     changedBy: string;
   }
 ): Promise<void> {
