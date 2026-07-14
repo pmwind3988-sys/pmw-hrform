@@ -61,6 +61,7 @@ import {
   updatePublishProfile,
   setDefaultPublishProfile,
   updatePublishProfileLayerConfig,
+  updatePublishProfileDocumentHeader,
   logEvent,
   getFormLog,
   diffSurveyJson,
@@ -542,6 +543,9 @@ export default function AdminFormBuilder() {
   const [profileLayerSaving, setProfileLayerSaving] = useState(false);
   const [qrProfile, setQrProfile] = useState<{ surveyJson: SurveyJson; version: string; publishKey: string; publishLabel: string } | null>(null);
   const [qrProfileLoading, setQrProfileLoading] = useState("");
+  const [docHeaderProfile, setDocHeaderProfile] = useState<{ version: string; publishKey: string; publishLabel: string; header: DocumentControlHeader } | null>(null);
+  const [docHeaderLoading, setDocHeaderLoading] = useState("");
+  const [docHeaderSaving, setDocHeaderSaving] = useState(false);
   const setDocumentHeader = (key: DocumentHeaderKey, value: string) => {
     setMeta(m => ({ ...m, documentHeader: { ...m.documentHeader, [key]: value } }));
   };
@@ -838,6 +842,7 @@ export default function AdminFormBuilder() {
         pdfConfig: manualPhysical
           ? { ...meta.pdfConfig, enabled: true, title: meta.pdfConfig.title || "Manual Evaluation Form", includeEmptyEvaluationFields: true, showEvaluationDetails: true }
           : meta.pdfConfig,
+        documentHeader: withDocumentHeaderDefaults(meta.documentHeader, meta.formId, proposedVersion || meta.formVersion),
       };
       const blob = await pdf(FormPdfDocument(sampleData)).toBlob();
       const safeTitle = slugify(meta.formTitle) || "form";
@@ -1123,6 +1128,55 @@ export default function AdminFormBuilder() {
       showToast(`Could not load profile for QR: ${(e as Error).message}`, "err");
     } finally {
       setQrProfileLoading("");
+    }
+  };
+
+  const handleOpenProfileDocHeader = async (version: string, publishKey: string, publishLabel: string) => {
+    const token = tokenRef.current;
+    if (!token) return;
+    const docKey = `${version}::${publishKey}`;
+    setDocHeaderLoading(docKey);
+    try {
+      // Load this profile's own stored header so edits are per-profile.
+      const data = await getFormVersion(token, meta.formTitle, version, publishKey);
+      const loadedMeta = data?.meta && typeof data.meta === "object" && !Array.isArray(data.meta)
+        ? data.meta as Record<string, unknown>
+        : {};
+      const loadedHeader = loadedMeta.documentHeader && typeof loadedMeta.documentHeader === "object" && !Array.isArray(loadedMeta.documentHeader)
+        ? loadedMeta.documentHeader as DocumentControlHeader
+        : {};
+      setDocHeaderProfile({ version, publishKey, publishLabel, header: { ...DEFAULT_DOCUMENT_HEADER, ...loadedHeader } });
+    } catch (e) {
+      showToast(`Could not load profile header: ${(e as Error).message}`, "err");
+    } finally {
+      setDocHeaderLoading("");
+    }
+  };
+
+  const handleSaveProfileDocHeader = async () => {
+    const token = tokenRef.current;
+    if (!token || !docHeaderProfile) return;
+    setDocHeaderSaving(true);
+    try {
+      const documentHeader = withDocumentHeaderDefaults(docHeaderProfile.header, meta.formId, docHeaderProfile.version);
+      await updatePublishProfileDocumentHeader(token, {
+        listTitle: meta.formTitle,
+        version: docHeaderProfile.version,
+        publishKey: docHeaderProfile.publishKey,
+        documentHeader,
+        changedBy: accounts[0]?.username || "admin",
+      });
+      // If this profile is the one currently loaded in the builder, mirror the change.
+      if (normalizePublishKey(meta.publishKey) === normalizePublishKey(docHeaderProfile.publishKey) && meta.formVersion === docHeaderProfile.version) {
+        setMeta(m => ({ ...m, documentHeader }));
+      }
+      refreshVersionHistory();
+      showToast(`Document header saved for ${docHeaderProfile.publishLabel} v${docHeaderProfile.version}.`, "ok");
+      setDocHeaderProfile(null);
+    } catch (e) {
+      showToast(`Could not save profile header: ${(e as Error).message}`, "err");
+    } finally {
+      setDocHeaderSaving(false);
     }
   };
 
@@ -2305,6 +2359,8 @@ export default function AdminFormBuilder() {
                         onEditLayers={handleEditProfileLayers}
                         onOpenQr={handleOpenProfileQr}
                         qrBusyKey={qrProfileLoading}
+                        onOpenDocHeader={handleOpenProfileDocHeader}
+                        docHeaderBusyKey={docHeaderLoading}
                       />
                     </>
                   )}
@@ -2443,6 +2499,73 @@ export default function AdminFormBuilder() {
           </div>
         )}
       </div>
+
+      {docHeaderProfile && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget && !docHeaderSaving) setDocHeaderProfile(null); }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(30,27,75,0.45)",
+            animation: "fadeUp .15s ease",
+            padding: 20,
+          }}
+        >
+          <div style={{
+            background: C.white,
+            borderRadius: 10,
+            padding: "20px 22px",
+            maxWidth: 440,
+            width: "100%",
+            maxHeight: "88vh",
+            overflowY: "auto",
+            boxShadow: C.shadowMd,
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>Document header — {docHeaderProfile.publishLabel}</div>
+                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                  v{docHeaderProfile.version} · {docHeaderProfile.publishKey}. Saved to this profile only; blank Document / Revision fall back to Form ID and version.
+                </div>
+              </div>
+              <button
+                onClick={() => { if (!docHeaderSaving) setDocHeaderProfile(null); }}
+                title="Close"
+                style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, width: 32, height: 32, cursor: docHeaderSaving ? "not-allowed" : "pointer", color: C.textSecond, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+              >
+                <CloseIcon style={{ fontSize: 18 }} />
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+              <TextInput value={docHeaderProfile.header.documentNumber || ""} onChange={v => setDocHeaderProfile(p => p && ({ ...p, header: { ...p.header, documentNumber: v } }))} placeholder={meta.formId || "Document Number"} disabled={docHeaderSaving} />
+              <TextInput value={docHeaderProfile.header.issueNumber || ""} onChange={v => setDocHeaderProfile(p => p && ({ ...p, header: { ...p.header, issueNumber: v } }))} placeholder="Issue Number" disabled={docHeaderSaving} />
+              <TextInput value={docHeaderProfile.header.effectiveDate || ""} onChange={v => setDocHeaderProfile(p => p && ({ ...p, header: { ...p.header, effectiveDate: v } }))} placeholder="Effective Date" type="date" disabled={docHeaderSaving} />
+              <TextInput value={docHeaderProfile.header.revisionNumber || ""} onChange={v => setDocHeaderProfile(p => p && ({ ...p, header: { ...p.header, revisionNumber: v } }))} placeholder={docHeaderProfile.version || "Revision Number"} disabled={docHeaderSaving} />
+              <TextInput value={docHeaderProfile.header.revisionDate || ""} onChange={v => setDocHeaderProfile(p => p && ({ ...p, header: { ...p.header, revisionDate: v } }))} placeholder="Revision Date" type="date" disabled={docHeaderSaving} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 16 }}>
+              <button
+                onClick={() => { if (!docHeaderSaving) setDocHeaderProfile(null); }}
+                disabled={docHeaderSaving}
+                style={{ minHeight: 38, borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 13, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProfileDocHeader}
+                disabled={docHeaderSaving}
+                style={{ minHeight: 38, borderRadius: 8, border: "none", background: docHeaderSaving ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`, color: docHeaderSaving ? C.textMuted : C.white, fontSize: 13, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
+              >
+                {docHeaderSaving ? "Saving…" : "Save header"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {qrProfile && (
         <div

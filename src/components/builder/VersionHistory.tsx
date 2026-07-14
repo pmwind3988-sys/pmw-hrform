@@ -17,6 +17,9 @@ interface VersionHistoryProps {
   onOpenQr?: (v: string, publishKey: string, publishLabel: string) => void;
   /** `${version}::${publishKey}` of the row whose QR is currently loading. */
   qrBusyKey?: string;
+  onOpenDocHeader?: (v: string, publishKey: string, publishLabel: string) => void;
+  /** `${version}::${publishKey}` of the row whose document header is currently loading. */
+  docHeaderBusyKey?: string;
 }
 
 const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) => (
@@ -56,6 +59,8 @@ export default function VersionHistory({
   onEditLayers,
   onOpenQr,
   qrBusyKey,
+  onOpenDocHeader,
+  docHeaderBusyKey,
 }: VersionHistoryProps) {
   if (!history.length) return <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>No history yet.</div>;
 
@@ -136,6 +141,14 @@ export default function VersionHistory({
                 style={profileBtn(C.purple, C.white, C.purpleMid, !slug || off || expired || qrBusyKey === `${v.FormVersion}::${publishKey}`)}
               >
                 {qrBusyKey === `${v.FormVersion}::${publishKey}` ? "Loading…" : "Prefilled QR"}
+              </button>
+              <button
+                onClick={() => onOpenDocHeader?.(v.FormVersion, publishKey, publishLabel)}
+                disabled={docHeaderBusyKey === `${v.FormVersion}::${publishKey}`}
+                title="Edit the document control header for this profile"
+                style={profileBtn(C.purpleAccent, C.white, C.purpleAccent, docHeaderBusyKey === `${v.FormVersion}::${publishKey}`)}
+              >
+                {docHeaderBusyKey === `${v.FormVersion}::${publishKey}` ? "Loading…" : "Doc header"}
               </button>
               <button
                 onClick={() => onSetDefault?.(v.FormVersion, publishKey, publishLabel)}

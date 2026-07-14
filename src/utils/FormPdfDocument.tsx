@@ -5,7 +5,7 @@ import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/render
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
 import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
-import type { PdfConfig } from "../types";
+import type { DocumentControlHeader, PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export interface PdfFormData {
@@ -27,6 +27,8 @@ export interface PdfFormData {
   isoStandards?: string;
   logoUrl?: string;
   pdfConfig?: PdfConfig;
+  /** Document control header for the specific published profile. */
+  documentHeader?: DocumentControlHeader;
 }
 
 export interface PdfLayerResult {
@@ -91,6 +93,11 @@ const S = StyleSheet.create({
   infoCell: { width: "50%", marginBottom: 4, paddingRight: 8 },
   infoLabel: { fontSize: 6, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6 },
   infoValue: { fontSize: 8, color: C.text, marginTop: 1, lineHeight: 1.25 },
+  // Document control header
+  docControl: { flexDirection: "row", flexWrap: "wrap", borderWidth: 0.5, borderColor: C.border, marginBottom: 10 },
+  docControlCell: { paddingVertical: 3.5, paddingHorizontal: 7, borderRightWidth: 0.5, borderRightColor: C.borderLight, borderBottomWidth: 0.5, borderBottomColor: C.borderLight },
+  docControlLabel: { fontSize: 5.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 },
+  docControlValue: { fontSize: 7.5, color: C.text, marginTop: 1, fontWeight: "bold" },
   // Company block
   companyBox: { backgroundColor: C.bg, padding: 7, marginBottom: 10 },
   companyLine: { fontSize: 6.5, color: C.muted, marginBottom: 1 },
@@ -271,6 +278,21 @@ function collectImageSources(value: unknown): string[] {
   }
 
   return [];
+}
+
+function docControlCells(
+  header: DocumentControlHeader | undefined,
+  formVersion: string,
+): { label: string; value: string }[] {
+  if (!header) return [];
+  const pairs: { label: string; value: string }[] = [
+    { label: "Document No.", value: (header.documentNumber ?? "").trim() },
+    { label: "Issue No.", value: (header.issueNumber ?? "").trim() },
+    { label: "Effective Date", value: formatPdfDateTimeValue((header.effectiveDate ?? "").trim(), false) },
+    { label: "Revision No.", value: (header.revisionNumber ?? "").trim() || formVersion },
+    { label: "Revision Date", value: formatPdfDateTimeValue((header.revisionDate ?? "").trim(), false) },
+  ];
+  return pairs.filter((pair) => pair.value && pair.value !== "—");
 }
 
 function badgeStyle(status?: string) {
@@ -557,7 +579,7 @@ function renderImageSources(sources: string[]) {
   );
 }
 
-export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig }: PdfFormData) {
+export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig, documentHeader }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Main Page",
     includeAdditionalFields: false,
@@ -589,6 +611,18 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
             <Text style={S.docRef}>Document Ref: {meta.formTitle} / v{meta.formVersion}</Text>
           </View>
         </View>
+
+        {/* ═══ DOCUMENT CONTROL HEADER ═══ */}
+        {docControlCells(documentHeader, meta.formVersion).length > 0 && (
+          <View style={S.docControl}>
+            {docControlCells(documentHeader, meta.formVersion).map((cell) => (
+              <View key={cell.label} style={S.docControlCell}>
+                <Text style={S.docControlLabel}>{cell.label}</Text>
+                <Text style={S.docControlValue}>{cell.value}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* ═══ STATUS BADGE ═══ */}
         {showStatusBadge && <View style={[S.badge, { backgroundColor: badge.bg, borderColor: badge.border }]}>

@@ -1401,6 +1401,9 @@ export default function DynamicFormPage() {
                 pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
                   ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
                   : hasManualPaperWorkflow ? { enabled: true, title: "Manual Workflow Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
+                documentHeader: versionMeta.documentHeader && typeof versionMeta.documentHeader === "object" && !Array.isArray(versionMeta.documentHeader)
+                  ? versionMeta.documentHeader as PdfFormData["documentHeader"]
+                  : undefined,
               }, {
                 onGeneratedBlob: async (blob) => {
                   if (!hasManualPaperWorkflow) return;

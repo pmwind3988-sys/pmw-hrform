@@ -119,6 +119,9 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
       pdfConfig: typeof versionMeta.pdfConfig === "object" && versionMeta.pdfConfig !== null && !Array.isArray(versionMeta.pdfConfig)
         ? versionMeta.pdfConfig as PdfFormData["pdfConfig"]
         : undefined,
+      documentHeader: typeof versionMeta.documentHeader === "object" && versionMeta.documentHeader !== null && !Array.isArray(versionMeta.documentHeader)
+        ? versionMeta.documentHeader as PdfFormData["documentHeader"]
+        : undefined,
     });
   } catch {
     /* PDF generation is best-effort after the workflow state is persisted. */

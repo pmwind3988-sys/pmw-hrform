@@ -1368,6 +1368,42 @@ export async function updatePublishProfileLayerConfig(
   }
 }
 
+/**
+ * Updates the Document Control Header stored in a single publish profile's
+ * version record (meta.documentHeader), without touching its survey or layers.
+ * Each profile owns its own version row, so this is inherently per-profile.
+ */
+export async function updatePublishProfileDocumentHeader(
+  token: string,
+  params: {
+    listTitle: string;
+    version: string;
+    publishKey: string;
+    documentHeader: Record<string, unknown>;
+    changedBy: string;
+  }
+): Promise<void> {
+  await ensureListExists(token, 'Web Form Versions');
+  const normalizedPublishKey = normalizePublishKey(params.publishKey);
+  const id = await getFormVersionRecordId(token, params.listTitle, params.version, normalizedPublishKey);
+  const versionData = await getFormVersion(token, params.listTitle, params.version, normalizedPublishKey);
+  if (!versionData) throw new Error(`Profile "${normalizedPublishKey}" v${params.version} not found.`);
+  const existingMeta = versionData.meta && typeof versionData.meta === 'object' && !Array.isArray(versionData.meta)
+    ? versionData.meta as Record<string, unknown>
+    : {};
+  const updated = {
+    ...versionData,
+    meta: { ...existingMeta, documentHeader: params.documentHeader },
+    savedAt: new Date().toISOString(),
+    changedBy: params.changedBy,
+  };
+  await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${id})`, {
+    SurveyJSON: JSON.stringify(updated, null, 2),
+    PublishedBy: params.changedBy,
+    PublishedAt: new Date().toISOString(),
+  });
+}
+
 export async function logEvent(
   token: string,
   params: {
