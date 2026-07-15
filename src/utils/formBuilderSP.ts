@@ -379,7 +379,7 @@ export async function saveFormVersion(
     PublishLabel: publishLabel,
     PublishStatus: params.publishStatus || 'active',
     PublishExpiresAt: params.publishExpiresAt || null,
-    DisabledAt: '',
+    DisabledAt: null,
     DisabledBy: '',
     SurveyJSON: jsonStr,
     PublishedBy: params.changedBy,
@@ -1290,7 +1290,7 @@ export async function updatePublishProfile(
   if (params.publishLabel !== undefined) body.PublishLabel = params.publishLabel.trim() || normalizePublishKey(params.publishKey);
   if (params.publishStatus !== undefined) {
     body.PublishStatus = params.publishStatus;
-    body.DisabledAt = params.publishStatus === 'off' ? new Date().toISOString() : '';
+    body.DisabledAt = params.publishStatus === 'off' ? new Date().toISOString() : null;
     body.DisabledBy = params.publishStatus === 'off' ? params.changedBy : '';
   }
   if (params.publishExpiresAt !== undefined) body.PublishExpiresAt = params.publishExpiresAt || null;
