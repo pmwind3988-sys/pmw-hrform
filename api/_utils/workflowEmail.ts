@@ -198,6 +198,22 @@ export function resolveHrFormSender(): string {
   );
 }
 
+// ─── Paper/manual sentinel address ────────────────────────────────────────────
+// The mailbox that represents "no online reviewer — handle this layer on paper".
+// When a layer's resolved approver/evaluator equals this address, the layer is
+// flagged manual and the notice is emailed to it instead of assigning an online
+// review link. This is deliberately SEPARATE from resolveHrFormSender() (the
+// Graph sendMail "from" mailbox), so the sentinel can be pmw.hrform@pmw-group.com
+// while emails keep sending from the shared EMAIL_FROM_ADDRESS mailbox.
+// ─────────────────────────────────────────────────────────────────────────────
+export function resolveManualPaperAddress(): string {
+  return (
+    process.env.HR_FORM_MANUAL_PAPER_ADDRESS ||
+    process.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS ||
+    ""
+  );
+}
+
 export async function sendGraphEmail(
   token: string,
   message: WorkflowEmailMessage,

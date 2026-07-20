@@ -22,6 +22,7 @@ import {
   buildManualPaperWorkflowEmail,
   getApplicationBaseUrl,
   resolveHrFormSender,
+  resolveManualPaperAddress,
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
@@ -1193,8 +1194,8 @@ function isManualPaperLayerStatus(value: unknown): boolean {
 
 function shouldUseManualPaperForSender(layer: ApiLayerConfigItem, email: string): boolean {
   if (layer.manualPaperWhenSenderEmail === false) return false;
-  const sender = normalizeEmail(resolveHrFormSender());
-  return !!sender && normalizeEmail(email) === sender;
+  const sentinel = normalizeEmail(resolveManualPaperAddress());
+  return !!sentinel && normalizeEmail(email) === sentinel;
 }
 
 async function applyLayerConfigWorkflow(

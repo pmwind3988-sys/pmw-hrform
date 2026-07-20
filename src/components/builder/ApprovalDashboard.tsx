@@ -53,6 +53,11 @@ const CONFIGURED_SENDER_EMAIL = (
   import.meta.env.VITE_EMAIL_FROM_ADDRESS ||
   ""
 ).trim().toLowerCase();
+// Paper/manual sentinel mailbox — a layer assigned to this address is handled on
+// paper (no online reviewer). Kept separate from the email "from" mailbox above.
+const CONFIGURED_MANUAL_PAPER_EMAIL = (
+  import.meta.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS || ""
+).trim().toLowerCase();
 const SUBMISSIONS_PER_PAGE = 12;
 
 // Theme
@@ -223,6 +228,16 @@ function getItemStatus(item: PendingItem): "pending" | "approved" | "rejected" {
   if (s === "approved" || s.includes("approved") || s === "completed" || s === "fully approved" || s.includes("confirmed")) return "approved";
   if (s === "submitted" || s === "in review" || s === "pending" || s === "") return "pending";
   return "pending";
+}
+
+// Published profile (PublishKey) the submission was sent under. Empty on legacy
+// records that predate the profile column — grouped as the default profile.
+const ALL_PROFILES = "__ALL__";
+function getItemProfileKey(item: PendingItem): string {
+  return (item.PublishKey || "").trim();
+}
+function getItemProfileLabel(item: PendingItem): string {
+  return getItemProfileKey(item) || "Default";
 }
 
 function getItemDisplayStatus(item: PendingItem): string {
@@ -431,8 +446,8 @@ function manualPaperStatusForLayer(layer: LayerConfigItem): string {
 
 function shouldUseManualPaperForSender(layer: LayerConfigItem, email: string): boolean {
   return layer.manualPaperWhenSenderEmail !== false &&
-    !!CONFIGURED_SENDER_EMAIL &&
-    email.trim().toLowerCase() === CONFIGURED_SENDER_EMAIL;
+    !!CONFIGURED_MANUAL_PAPER_EMAIL &&
+    email.trim().toLowerCase() === CONFIGURED_MANUAL_PAPER_EMAIL;
 }
 
 async function resolveDepartmentApproverEmail(
@@ -584,6 +599,7 @@ export default function ApprovalDashboard() {
   const [submitterFilter, setSubmitterFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [profileFilter, setProfileFilter] = useState(ALL_PROFILES);
   const [viewMode, setViewMode] = useState<"approvals" | "evaluations">("approvals");
   const [listPage, setListPage] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -663,6 +679,13 @@ export default function ApprovalDashboard() {
     );
   }, [baseFilteredItems, itemCurrentTypes, viewMode]);
 
+  // Distinct published profiles present in the current category, for the filter.
+  const availableProfiles = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of categoryItems) keys.add(getItemProfileKey(item));
+    return Array.from(keys).sort((a, b) => a.localeCompare(b));
+  }, [categoryItems]);
+
   const filteredItems = useMemo(() => {
     let items = categoryItems;
 
@@ -676,15 +699,24 @@ export default function ApprovalDashboard() {
       items = items.filter(i => getItemStatus(i) !== "pending");
     }
 
+    if (profileFilter !== ALL_PROFILES) {
+      items = items.filter(i => getItemProfileKey(i) === profileFilter);
+    }
+
     return items;
-  }, [categoryItems, statusFilter]);
+  }, [categoryItems, statusFilter, profileFilter]);
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
 
   useEffect(() => {
     setListPage(1);
-  }, [viewMode, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo]);
+  }, [viewMode, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo, profileFilter]);
+
+  // A profile selected in one category may not exist in another — reset on switch.
+  useEffect(() => {
+    setProfileFilter(ALL_PROFILES);
+  }, [viewMode]);
 
   useEffect(() => {
     if (listPage > totalListPages) setListPage(totalListPages);
@@ -1546,6 +1578,12 @@ export default function ApprovalDashboard() {
       const updatedAt = new Date().toISOString();
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`;
       const patchBody: Record<string, unknown> = { [`L${currentLayerNumber}_Email`]: recipient };
+      // Retrigger as paper/manual when the current recipient is the paper mailbox,
+      // even if the stored status was never flagged (e.g. legacy submissions).
+      const wantsManualPaper = shouldUseManualPaperForSender(currentLayer, recipient);
+      if (wantsManualPaper && !isManualPaperWorkflowStatus(rawItem[`L${currentLayerNumber}_Status`])) {
+        patchBody[`L${currentLayerNumber}_Status`] = manualPaperStatusForLayer(currentLayer);
+      }
       if (getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, currentLayerNumber)) {
         patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
           rawItem.WorkflowEmailSchedule,
@@ -1565,7 +1603,7 @@ export default function ApprovalDashboard() {
         : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${item.Id}/${currentLayerNumber}`;
 
       const currentLayerStatus = valueToText(rawItem[`L${currentLayerNumber}_Status`]);
-      const isManualPaperEmail = isManualPaperWorkflowStatus(currentLayerStatus);
+      const isManualPaperEmail = isManualPaperWorkflowStatus(currentLayerStatus) || wantsManualPaper;
       let manualPdfUrl = "";
       let attachments: WorkflowEmailAttachment[] | undefined;
       if (isManualPaperEmail) {
@@ -1650,7 +1688,11 @@ export default function ApprovalDashboard() {
           assignedEmail: refreshedRecipient.toLowerCase(),
         });
       }
-      setEmailNotice(`Workflow email sent to ${refreshedRecipient}.`);
+      setEmailNotice(
+        isManualPaperEmail
+          ? `Paper/manual ${currentLayer.type === "evaluation" ? "evaluation" : "approval"} sent to ${refreshedRecipient}.`
+          : `Workflow email sent to ${refreshedRecipient}.`,
+      );
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not resend the workflow email.");
     } finally {
@@ -1706,10 +1748,18 @@ export default function ApprovalDashboard() {
           updatedAt: selectedItem.SubmittedAt || updatedAt,
         },
       });
+      const isManualPaperAssignment = shouldUseManualPaperForSender(targetLayer, email);
       const patchBody: Record<string, unknown> = {
         [`L${input.layer}_Email`]: email,
         WorkflowAssignmentData: JSON.stringify(assignmentData),
       };
+      if (isManualPaperAssignment) {
+        // Assigned to the paper/manual mailbox — flag this layer for paper handling.
+        patchBody[`L${input.layer}_Status`] = manualPaperStatusForLayer(targetLayer);
+      } else if (isManualPaperWorkflowStatus(rawItem[`L${input.layer}_Status`])) {
+        // Reassigned away from the paper mailbox — return the layer to a normal pending review.
+        patchBody[`L${input.layer}_Status`] = SP_LAYER_STATUS.PENDING;
+      }
       if (getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, input.layer)) {
         patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
           rawItem.WorkflowEmailSchedule,
@@ -1764,9 +1814,15 @@ export default function ApprovalDashboard() {
           override: true,
         } : previous);
       }
-      setEmailNotice(
-        `Layer ${input.layer} ${targetLayer.type === "evaluation" ? "evaluator" : "approver"} updated for this submission only.`,
-      );
+      if (isManualPaperAssignment && input.layer === currentLayerNumber) {
+        // The active layer now routes to the paper/manual mailbox — deliver the
+        // manual approval/evaluation notice with the generated PDF straight away.
+        await handleForceResend(selectedItem, email);
+      } else {
+        setEmailNotice(
+          `Layer ${input.layer} ${targetLayer.type === "evaluation" ? "evaluator" : "approver"} updated${isManualPaperAssignment ? " and flagged for manual/paper handling" : ""} for this submission only.`,
+        );
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not update this workflow assignment.");
     } finally {
@@ -2306,9 +2362,27 @@ export default function ApprovalDashboard() {
               }}
             />
           </div>
-          {(titleFilter || submitterFilter || dateFrom || dateTo) && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
+            <span style={{ fontSize: 12, color: C.textMuted }}>Profile</span>
+            <select
+              value={profileFilter}
+              onChange={e => setProfileFilter(e.target.value)}
+              title="Categorise submissions by the published profile they were sent under"
+              style={{
+                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                fontSize: 12, color: C.textPrimary, outline: "none", background: "#fff",
+                maxWidth: 200,
+              }}
+            >
+              <option value={ALL_PROFILES}>All profiles</option>
+              {availableProfiles.map((key) => (
+                <option key={key || "__default__"} value={key}>{key || "Default"}</option>
+              ))}
+            </select>
+          </div>
+          {(titleFilter || submitterFilter || dateFrom || dateTo || profileFilter !== ALL_PROFILES) && (
             <button
-              onClick={() => { setTitleFilter(""); setSubmitterFilter(""); setDateFrom(""); setDateTo(""); }}
+              onClick={() => { setTitleFilter(""); setSubmitterFilter(""); setDateFrom(""); setDateTo(""); setProfileFilter(ALL_PROFILES); }}
               style={{
                 padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
                 background: "transparent", color: C.textMuted, fontSize: 12, cursor: "pointer",
@@ -2494,8 +2568,14 @@ export default function ApprovalDashboard() {
                         <div style={{ fontSize: 13, color: C.textSecond }}>
                           By {item.SubmittedBy} • {formatDateTime(item.SubmittedAt)}
                         </div>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
-                          v{item.FormVersion || "Legacy"}
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span>v{item.FormVersion || "Legacy"}</span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 999,
+                            background: C.purplePale, color: C.purple,
+                          }}>
+                            {getItemProfileLabel(item)}
+                          </span>
                         </div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>
                           {formatLayerProgress(item)}

@@ -36,6 +36,11 @@ const CONFIGURED_SENDER_EMAIL = (
   import.meta.env.VITE_EMAIL_FROM_ADDRESS ||
   ""
 ).trim().toLowerCase();
+// Paper/manual sentinel mailbox — a layer assigned to this address is handled on
+// paper (no online reviewer). Kept separate from the email "from" mailbox above.
+const CONFIGURED_MANUAL_PAPER_EMAIL = (
+  import.meta.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS || ""
+).trim().toLowerCase();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
@@ -274,8 +279,8 @@ function manualPaperStatusForLayer(layer: LayerConfigItem): string {
 
 function shouldUseManualPaperForSender(layer: LayerConfigItem, email: string): boolean {
   return layer.manualPaperWhenSenderEmail !== false &&
-    !!CONFIGURED_SENDER_EMAIL &&
-    email.trim().toLowerCase() === CONFIGURED_SENDER_EMAIL;
+    !!CONFIGURED_MANUAL_PAPER_EMAIL &&
+    email.trim().toLowerCase() === CONFIGURED_MANUAL_PAPER_EMAIL;
 }
 
 async function resolveDepartmentApproverEmail(
