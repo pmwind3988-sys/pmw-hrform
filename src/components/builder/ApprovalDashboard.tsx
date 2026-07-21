@@ -101,6 +101,8 @@ interface PendingItem {
   WorkflowAssignmentData?: string;
   SelectedBranch?: string;
   totalLayers?: number;
+  /** Training title captured inside the submission (form field, not the form name). */
+  trainingTitle?: string;
 }
 
 interface WorkflowEmailAttachment {
@@ -230,9 +232,15 @@ function getItemStatus(item: PendingItem): "pending" | "approved" | "rejected" {
   return "pending";
 }
 
-// Training title = the form title the submission belongs to. This is the
-// primary, user-facing way to categorise submissions.
+// Training title = the value captured in the submission's `trainingTitle` form
+// field (NOT the form/list name). This is the primary, user-facing way to
+// categorise submissions.
+const TRAINING_TITLE_FIELD = "trainingTitle";
 const ALL_TRAININGS = "__ALL_TRAININGS__";
+const NO_TRAINING_TITLE = "__NO_TRAINING_TITLE__";
+function getItemTrainingTitle(item: PendingItem): string {
+  return (item.trainingTitle || "").trim();
+}
 
 // Published profile (PublishKey) the submission was sent under. Empty on legacy
 // records that predate the profile column — grouped as the default profile.
@@ -652,7 +660,7 @@ export default function ApprovalDashboard() {
 
     if (titleFilter.trim()) {
       const q = titleFilter.trim().toLowerCase();
-      items = items.filter(i => i.Title.toLowerCase().includes(q));
+      items = items.filter(i => getItemTrainingTitle(i).toLowerCase().includes(q));
     }
 
     if (submitterFilter.trim()) {
@@ -685,13 +693,23 @@ export default function ApprovalDashboard() {
     );
   }, [baseFilteredItems, itemCurrentTypes, viewMode]);
 
-  // Distinct training titles present in the current category, for the primary
-  // (user-facing) categorisation filter.
+  // Distinct training titles (from each submission's `trainingTitle` field)
+  // present in the current category, for the primary categorisation filter.
   const availableTitles = useMemo(() => {
     const titles = new Set<string>();
-    for (const item of categoryItems) titles.add(item.Title);
+    for (const item of categoryItems) {
+      const training = getItemTrainingTitle(item);
+      if (training) titles.add(training);
+    }
     return Array.from(titles).sort((a, b) => a.localeCompare(b));
   }, [categoryItems]);
+
+  // Whether any submission in the current category has no training title, so the
+  // dropdown can offer an explicit bucket for them.
+  const hasUncategorizedTraining = useMemo(
+    () => categoryItems.some(item => !getItemTrainingTitle(item)),
+    [categoryItems],
+  );
 
   // Distinct published profiles present in the current category, for the filter.
   const availableProfiles = useMemo(() => {
@@ -713,8 +731,10 @@ export default function ApprovalDashboard() {
       items = items.filter(i => getItemStatus(i) !== "pending");
     }
 
-    if (trainingFilter !== ALL_TRAININGS) {
-      items = items.filter(i => i.Title === trainingFilter);
+    if (trainingFilter === NO_TRAINING_TITLE) {
+      items = items.filter(i => !getItemTrainingTitle(i));
+    } else if (trainingFilter !== ALL_TRAININGS) {
+      items = items.filter(i => getItemTrainingTitle(i) === trainingFilter);
     }
 
     if (profileFilter !== ALL_PROFILES) {
@@ -910,6 +930,24 @@ export default function ApprovalDashboard() {
                   // Legacy response lists do not have the profile column.
                 }
               };
+              const attachTrainingTitles = async (itemsToUpdate: PendingItem[]): Promise<void> => {
+                try {
+                  const trainingData = await spGet(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,${TRAINING_TITLE_FIELD}&$orderby=Created desc&$top=100`
+                  ) as { value?: { Id: number; trainingTitle?: string }[] };
+                  const trainingMap = new Map(
+                    (trainingData.value ?? [])
+                      .filter((current) => !!current.trainingTitle)
+                      .map((current) => [current.Id, current.trainingTitle as string]),
+                  );
+                  for (const current of itemsToUpdate) {
+                    const trainingTitle = trainingMap.get(current.Id);
+                    if (trainingTitle) current.trainingTitle = trainingTitle;
+                  }
+                } catch {
+                  // Forms without a `trainingTitle` field simply have no value here.
+                }
+              };
 
               // Tier 1: core columns only (no CurrentLayer/SelectedBranch — may not exist on older lists)
               const tier1 = await (async () => {
@@ -954,6 +992,7 @@ export default function ApprovalDashboard() {
                 await attachWorkflowEmailLogs(tier1.value || []);
                 await attachWorkflowEmailSchedules(tier1.value || []);
                 await attachPublishKeys(tier1.value || []);
+                await attachTrainingTitles(tier1.value || []);
                 // SelectedBranch (only if the form has manual branches)
                 if (hasBranches) {
                   try {
@@ -986,6 +1025,7 @@ export default function ApprovalDashboard() {
                 await attachWorkflowEmailLogs(tier2.value || []);
                 await attachWorkflowEmailSchedules(tier2.value || []);
                 await attachPublishKeys(tier2.value || []);
+                await attachTrainingTitles(tier2.value || []);
                 return tier2;
               }
 
@@ -1004,6 +1044,7 @@ export default function ApprovalDashboard() {
                 await attachWorkflowEmailLogs(tier3Items);
                 await attachWorkflowEmailSchedules(tier3Items);
                 await attachPublishKeys(tier3Items);
+                await attachTrainingTitles(tier3Items);
                 return { value: tier3Items };
               }
 
@@ -1021,6 +1062,7 @@ export default function ApprovalDashboard() {
               await attachWorkflowEmailLogs(basicItems);
               await attachWorkflowEmailSchedules(basicItems);
               await attachPublishKeys(basicItems);
+              await attachTrainingTitles(basicItems);
               return { value: basicItems };
             })();
 
@@ -2387,7 +2429,7 @@ export default function ApprovalDashboard() {
             <select
               value={trainingFilter}
               onChange={e => setTrainingFilter(e.target.value)}
-              title="Categorise submissions by their training title"
+              title="Categorise submissions by the training title captured inside each submission"
               style={{
                 padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
                 fontSize: 12, color: C.textPrimary, outline: "none", background: "#fff",
@@ -2398,6 +2440,9 @@ export default function ApprovalDashboard() {
               {availableTitles.map((title) => (
                 <option key={title} value={title}>{title}</option>
               ))}
+              {hasUncategorizedTraining && (
+                <option value={NO_TRAINING_TITLE}>— No training title —</option>
+              )}
             </select>
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
@@ -2603,6 +2648,15 @@ export default function ApprovalDashboard() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
                         <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4 }}>{item.Title}</div>
+                        {getItemTrainingTitle(item) && (
+                          <div style={{
+                            display: "inline-block", marginBottom: 4,
+                            fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
+                            background: C.purplePale, color: C.purple,
+                          }}>
+                            {getItemTrainingTitle(item)}
+                          </div>
+                        )}
                         <div style={{ fontSize: 13, color: C.textSecond }}>
                           By {item.SubmittedBy} • {formatDateTime(item.SubmittedAt)}
                         </div>
