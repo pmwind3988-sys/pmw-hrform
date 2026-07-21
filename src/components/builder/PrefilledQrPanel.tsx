@@ -9,6 +9,7 @@ import type { FormBuilderField, SurveyJson } from "../../types";
 import { C } from "./constants";
 import { flattenQuestions } from "../../utils/FormBuilderEngine";
 import { DEFAULT_PUBLISH_KEY, normalizePublishKey } from "../../utils/formBuilderSP";
+import { generateQrWithLogo } from "../../utils/qrWithLogo";
 import {
   PREFILLED_QR_PARAM,
   encodePrefilledQrPayload,
@@ -101,10 +102,13 @@ export default function PrefilledQrPanel({ surveyJson, slug, canGenerate, publis
       return;
     }
     let cancelled = false;
-    import("qrcode")
-      .then(({ default: QRCode }) =>
-        QRCode.toDataURL(generatedUrl, { width: 320, margin: 2, color: { dark: C.textPrimary, light: "#FFFFFF" } }),
-      )
+    generateQrWithLogo(generatedUrl, {
+      width: 320,
+      margin: 2,
+      dark: C.textPrimary,
+      light: "#FFFFFF",
+      logoUrl: "/logo-128.png",
+    })
       .then(dataUrl => {
         if (!cancelled) setQrDataUrl(dataUrl);
       })

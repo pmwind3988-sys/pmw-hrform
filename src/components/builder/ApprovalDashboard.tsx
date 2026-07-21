@@ -230,8 +230,13 @@ function getItemStatus(item: PendingItem): "pending" | "approved" | "rejected" {
   return "pending";
 }
 
+// Training title = the form title the submission belongs to. This is the
+// primary, user-facing way to categorise submissions.
+const ALL_TRAININGS = "__ALL_TRAININGS__";
+
 // Published profile (PublishKey) the submission was sent under. Empty on legacy
 // records that predate the profile column — grouped as the default profile.
+// Profile is developer-reference metadata only, not a user-facing category.
 const ALL_PROFILES = "__ALL__";
 function getItemProfileKey(item: PendingItem): string {
   return (item.PublishKey || "").trim();
@@ -599,6 +604,7 @@ export default function ApprovalDashboard() {
   const [submitterFilter, setSubmitterFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [trainingFilter, setTrainingFilter] = useState(ALL_TRAININGS);
   const [profileFilter, setProfileFilter] = useState(ALL_PROFILES);
   const [viewMode, setViewMode] = useState<"approvals" | "evaluations">("approvals");
   const [listPage, setListPage] = useState(1);
@@ -679,6 +685,14 @@ export default function ApprovalDashboard() {
     );
   }, [baseFilteredItems, itemCurrentTypes, viewMode]);
 
+  // Distinct training titles present in the current category, for the primary
+  // (user-facing) categorisation filter.
+  const availableTitles = useMemo(() => {
+    const titles = new Set<string>();
+    for (const item of categoryItems) titles.add(item.Title);
+    return Array.from(titles).sort((a, b) => a.localeCompare(b));
+  }, [categoryItems]);
+
   // Distinct published profiles present in the current category, for the filter.
   const availableProfiles = useMemo(() => {
     const keys = new Set<string>();
@@ -699,22 +713,28 @@ export default function ApprovalDashboard() {
       items = items.filter(i => getItemStatus(i) !== "pending");
     }
 
+    if (trainingFilter !== ALL_TRAININGS) {
+      items = items.filter(i => i.Title === trainingFilter);
+    }
+
     if (profileFilter !== ALL_PROFILES) {
       items = items.filter(i => getItemProfileKey(i) === profileFilter);
     }
 
     return items;
-  }, [categoryItems, statusFilter, profileFilter]);
+  }, [categoryItems, statusFilter, trainingFilter, profileFilter]);
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
 
   useEffect(() => {
     setListPage(1);
-  }, [viewMode, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo, profileFilter]);
+  }, [viewMode, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo, trainingFilter, profileFilter]);
 
-  // A profile selected in one category may not exist in another — reset on switch.
+  // A training title / profile selected in one category may not exist in
+  // another — reset both on switch.
   useEffect(() => {
+    setTrainingFilter(ALL_TRAININGS);
     setProfileFilter(ALL_PROFILES);
   }, [viewMode]);
 
@@ -2322,7 +2342,7 @@ export default function ApprovalDashboard() {
         <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
           <input
             type="text"
-            placeholder="Filter by form title..."
+            placeholder="Search training title..."
             value={titleFilter}
             onChange={e => setTitleFilter(e.target.value)}
             style={{
@@ -2363,14 +2383,32 @@ export default function ApprovalDashboard() {
             />
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-            <span style={{ fontSize: 12, color: C.textMuted }}>Profile</span>
+            <span style={{ fontSize: 12, color: C.textMuted }}>Training</span>
             <select
-              value={profileFilter}
-              onChange={e => setProfileFilter(e.target.value)}
-              title="Categorise submissions by the published profile they were sent under"
+              value={trainingFilter}
+              onChange={e => setTrainingFilter(e.target.value)}
+              title="Categorise submissions by their training title"
               style={{
                 padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
                 fontSize: 12, color: C.textPrimary, outline: "none", background: "#fff",
+                maxWidth: 220,
+              }}
+            >
+              <option value={ALL_TRAININGS}>All training titles</option>
+              {availableTitles.map((title) => (
+                <option key={title} value={title}>{title}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
+            <span style={{ fontSize: 12, color: C.textMuted }} title="Developer-reference metadata only">Profile</span>
+            <select
+              value={profileFilter}
+              onChange={e => setProfileFilter(e.target.value)}
+              title="Developer-reference metadata: the published profile a submission was sent under"
+              style={{
+                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                fontSize: 12, color: C.textMuted, outline: "none", background: "#fff",
                 maxWidth: 200,
               }}
             >
@@ -2380,9 +2418,9 @@ export default function ApprovalDashboard() {
               ))}
             </select>
           </div>
-          {(titleFilter || submitterFilter || dateFrom || dateTo || profileFilter !== ALL_PROFILES) && (
+          {(titleFilter || submitterFilter || dateFrom || dateTo || trainingFilter !== ALL_TRAININGS || profileFilter !== ALL_PROFILES) && (
             <button
-              onClick={() => { setTitleFilter(""); setSubmitterFilter(""); setDateFrom(""); setDateTo(""); setProfileFilter(ALL_PROFILES); }}
+              onClick={() => { setTitleFilter(""); setSubmitterFilter(""); setDateFrom(""); setDateTo(""); setTrainingFilter(ALL_TRAININGS); setProfileFilter(ALL_PROFILES); }}
               style={{
                 padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
                 background: "transparent", color: C.textMuted, fontSize: 12, cursor: "pointer",
@@ -2570,9 +2608,11 @@ export default function ApprovalDashboard() {
                         </div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           <span>v{item.FormVersion || "Legacy"}</span>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 999,
-                            background: C.purplePale, color: C.purple,
+                          <span
+                            title="Profile (developer-reference metadata)"
+                            style={{
+                            fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
+                            background: "#F3F4F6", color: C.textMuted,
                           }}>
                             {getItemProfileLabel(item)}
                           </span>
@@ -2602,11 +2642,11 @@ export default function ApprovalDashboard() {
                                   : emailSchedule ? "#92400E" : C.textSecond,
                             }}
                           >
-                            {hasPendingEmailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "sent" ? "Workflow email sent"
+                            {hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                              : emailStatus.status === "sent" ? `Sent for evaluation${emailStatus.lastAttemptAt ? ` ${formatDateTime(emailStatus.lastAttemptAt)}` : ""}`
                               : emailStatus.status === "failed" ? "Workflow email failed"
-                                : emailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
-                                  : "Evaluator email not sent"}
+                                : emailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                                  : "Evaluation send date not set"}
                           </div>
                         )}
                       </div>
