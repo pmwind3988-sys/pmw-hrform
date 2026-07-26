@@ -19,6 +19,8 @@ import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
+import { LIFECYCLE_STAGES, lifecycleLabel, resolveLifecycleStage } from "../../utils/submissionLifecycle";
+import type { LifecycleStage } from "../../utils/submissionLifecycle";
 import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany } from "../../utils/companySelection";
@@ -103,7 +105,16 @@ interface PendingItem {
   totalLayers?: number;
   /** Training title captured inside the submission (form field, not the form name). */
   trainingTitle?: string;
+  /** Raw L{n}_Status by layer number, loaded via a tolerant tier query. */
+  layerStatuses?: Record<number, string>;
 }
+
+/**
+ * How many L{n}_Status columns the list query asks for. Matches the builder's
+ * default of five layer slots; forms with more layers still resolve correctly
+ * to pending / in review, they just cannot report manual paper past layer 5.
+ */
+const MAX_TRACKED_LAYERS = 5;
 
 interface WorkflowEmailAttachment {
   name: string;
@@ -230,6 +241,20 @@ function getItemStatus(item: PendingItem): "pending" | "approved" | "rejected" {
   if (s === "approved" || s.includes("approved") || s === "completed" || s === "fully approved" || s.includes("confirmed")) return "approved";
   if (s === "submitted" || s === "in review" || s === "pending" || s === "") return "pending";
   return "pending";
+}
+
+function getItemLifecycleStage(item: PendingItem): LifecycleStage {
+  const currentLayerNumber = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0);
+  return resolveLifecycleStage({
+    formStatus: item.FormStatus,
+    status: item.Status,
+    currentLayerStatus: currentLayerNumber > 0 ? item.layerStatuses?.[currentLayerNumber] : undefined,
+  });
+}
+
+/** Manual-branch forms are parked at CurrentLayer 0 until an admin picks a branch. */
+function needsBranchPick(item: PendingItem): boolean {
+  return (item.CurrentLayer ?? 0) === 0 && !(item.SelectedBranch ?? "").trim();
 }
 
 // Training title = the value captured in the submission's `trainingTitle` form
@@ -607,14 +632,14 @@ export default function ApprovalDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected" | "evaluated">("pending");
+  const [stageFilter, setStageFilter] = useState<LifecycleStage>("pending");
   const [titleFilter, setTitleFilter] = useState("");
   const [submitterFilter, setSubmitterFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [trainingFilter, setTrainingFilter] = useState(ALL_TRAININGS);
   const [profileFilter, setProfileFilter] = useState(ALL_PROFILES);
-  const [viewMode, setViewMode] = useState<"approvals" | "evaluations">("approvals");
+  const [workflowTypeFilter, setWorkflowTypeFilter] = useState<"all" | "approval" | "evaluation">("all");
   const [listPage, setListPage] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperuser, setIsSuperuser] = useState(false);
@@ -688,10 +713,13 @@ export default function ApprovalDashboard() {
   }, [pendingItems, titleFilter, submitterFilter, dateFrom, dateTo]);
 
   const categoryItems = useMemo(() => {
+    if (workflowTypeFilter === "all") return baseFilteredItems;
     return baseFilteredItems.filter(i =>
-      viewMode === "evaluations" ? itemCurrentTypes[getPendingItemKey(i)] === "evaluation" : itemCurrentTypes[getPendingItemKey(i)] !== "evaluation"
+      workflowTypeFilter === "evaluation"
+        ? itemCurrentTypes[getPendingItemKey(i)] === "evaluation"
+        : itemCurrentTypes[getPendingItemKey(i)] !== "evaluation"
     );
-  }, [baseFilteredItems, itemCurrentTypes, viewMode]);
+  }, [baseFilteredItems, itemCurrentTypes, workflowTypeFilter]);
 
   // Distinct training titles (from each submission's `trainingTitle` field)
   // present in the current category, for the primary categorisation filter.
@@ -721,15 +749,7 @@ export default function ApprovalDashboard() {
   const filteredItems = useMemo(() => {
     let items = categoryItems;
 
-    if (statusFilter === "pending") {
-      items = items.filter(i => getItemStatus(i) === "pending");
-    } else if (statusFilter === "approved") {
-      items = items.filter(i => getItemStatus(i) === "approved");
-    } else if (statusFilter === "rejected") {
-      items = items.filter(i => getItemStatus(i) === "rejected");
-    } else if (statusFilter === "evaluated") {
-      items = items.filter(i => getItemStatus(i) !== "pending");
-    }
+    items = items.filter(i => getItemLifecycleStage(i) === stageFilter);
 
     if (trainingFilter === NO_TRAINING_TITLE) {
       items = items.filter(i => !getItemTrainingTitle(i));
@@ -742,21 +762,21 @@ export default function ApprovalDashboard() {
     }
 
     return items;
-  }, [categoryItems, statusFilter, trainingFilter, profileFilter]);
+  }, [categoryItems, stageFilter, trainingFilter, profileFilter]);
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
 
   useEffect(() => {
     setListPage(1);
-  }, [viewMode, statusFilter, titleFilter, submitterFilter, dateFrom, dateTo, trainingFilter, profileFilter]);
+  }, [workflowTypeFilter, stageFilter, titleFilter, submitterFilter, dateFrom, dateTo, trainingFilter, profileFilter]);
 
   // A training title / profile selected in one category may not exist in
   // another — reset both on switch.
   useEffect(() => {
     setTrainingFilter(ALL_TRAININGS);
     setProfileFilter(ALL_PROFILES);
-  }, [viewMode]);
+  }, [workflowTypeFilter]);
 
   useEffect(() => {
     if (listPage > totalListPages) setListPage(totalListPages);
@@ -930,6 +950,29 @@ export default function ApprovalDashboard() {
                   // Legacy response lists do not have the profile column.
                 }
               };
+              const attachLayerStatuses = async (itemsToUpdate: PendingItem[]): Promise<void> => {
+                try {
+                  const layerSelect = Array.from({ length: MAX_TRACKED_LAYERS }, (_, i) => `L${i + 1}_Status`).join(",");
+                  const layerData = await spGet(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,${layerSelect}&$orderby=Created desc&$top=100`
+                  ) as { value?: Record<string, unknown>[] };
+                  const layerMap = new Map<number, Record<number, string>>();
+                  for (const row of layerData.value ?? []) {
+                    const statuses: Record<number, string> = {};
+                    for (let n = 1; n <= MAX_TRACKED_LAYERS; n++) {
+                      const value = row[`L${n}_Status`];
+                      if (typeof value === "string" && value.trim()) statuses[n] = value;
+                    }
+                    if (Object.keys(statuses).length > 0) layerMap.set(Number(row.Id), statuses);
+                  }
+                  for (const current of itemsToUpdate) {
+                    const statuses = layerMap.get(current.Id);
+                    if (statuses) current.layerStatuses = statuses;
+                  }
+                } catch {
+                  // Lists provisioned with fewer layer columns simply have no value here.
+                }
+              };
               const attachTrainingTitles = async (itemsToUpdate: PendingItem[]): Promise<void> => {
                 try {
                   const trainingData = await spGet(token,
@@ -992,6 +1035,7 @@ export default function ApprovalDashboard() {
                 await attachWorkflowEmailLogs(tier1.value || []);
                 await attachWorkflowEmailSchedules(tier1.value || []);
                 await attachPublishKeys(tier1.value || []);
+                await attachLayerStatuses(tier1.value || []);
                 await attachTrainingTitles(tier1.value || []);
                 // SelectedBranch (only if the form has manual branches)
                 if (hasBranches) {
@@ -1025,6 +1069,7 @@ export default function ApprovalDashboard() {
                 await attachWorkflowEmailLogs(tier2.value || []);
                 await attachWorkflowEmailSchedules(tier2.value || []);
                 await attachPublishKeys(tier2.value || []);
+                await attachLayerStatuses(tier2.value || []);
                 await attachTrainingTitles(tier2.value || []);
                 return tier2;
               }
@@ -1044,6 +1089,7 @@ export default function ApprovalDashboard() {
                 await attachWorkflowEmailLogs(tier3Items);
                 await attachWorkflowEmailSchedules(tier3Items);
                 await attachPublishKeys(tier3Items);
+                await attachLayerStatuses(tier3Items);
                 await attachTrainingTitles(tier3Items);
                 return { value: tier3Items };
               }
@@ -1062,6 +1108,7 @@ export default function ApprovalDashboard() {
               await attachWorkflowEmailLogs(basicItems);
               await attachWorkflowEmailSchedules(basicItems);
               await attachPublishKeys(basicItems);
+              await attachLayerStatuses(basicItems);
               await attachTrainingTitles(basicItems);
               return { value: basicItems };
             })();
@@ -2326,58 +2373,43 @@ export default function ApprovalDashboard() {
           </div>
         )}
 
-        {/* Category tabs */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {(["approvals", "evaluations"] as const).map((mode) => {
-            const modeCount = baseFilteredItems.filter(i =>
-              mode === "evaluations" ? itemCurrentTypes[getPendingItemKey(i)] === "evaluation" : itemCurrentTypes[getPendingItemKey(i)] !== "evaluation"
-            ).length;
+        {/* Lifecycle tabs — what needs doing, not which layer type the item sits on */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          {LIFECYCLE_STAGES.map((stage) => {
+            const count = categoryItems.filter((item) => getItemLifecycleStage(item) === stage).length;
             return (
               <button
-                key={mode}
-                onClick={() => { setViewMode(mode); setStatusFilter("pending"); }}
+                key={stage}
+                onClick={() => setStageFilter(stage)}
                 style={{
                   padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
                   fontSize: 13, fontWeight: 600,
-                  background: viewMode === mode ? C.purple : "#fff",
-                  color: viewMode === mode ? "#fff" : C.textSecond,
-                  boxShadow: viewMode === mode ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
+                  background: stageFilter === stage ? C.purple : "#fff",
+                  color: stageFilter === stage ? "#fff" : C.textSecond,
+                  boxShadow: stageFilter === stage ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
                 }}
               >
-                {mode === "approvals" ? "Approvals" : "Evaluations"} ({modeCount})
+                {lifecycleLabel(stage)} ({count})
               </button>
             );
           })}
         </div>
 
-        {/* Status tabs */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          {(viewMode === "evaluations"
-            ? (["pending", "evaluated"] as const)
-            : (["pending", "approved", "rejected"] as const)
-          ).map((tab) => {
-            const count = categoryItems.filter((item) => {
-              if (tab === "pending") return getItemStatus(item) === "pending";
-              if (tab === "approved") return getItemStatus(item) === "approved";
-              if (tab === "rejected") return getItemStatus(item) === "rejected";
-              return getItemStatus(item) !== "pending";
-            }).length;
-            return (
-              <button
-                key={tab}
-                onClick={() => setStatusFilter(tab)}
-                style={{
-                  padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
-                  fontSize: 12, fontWeight: 600,
-                  background: statusFilter === tab ? C.purple : "#fff",
-                  color: statusFilter === tab ? "#fff" : C.textSecond,
-                  boxShadow: statusFilter === tab ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
-                }}
-              >
-                {tab === "evaluated" ? "Evaluated" : tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
-              </button>
-            );
-          })}
+        {/* Workflow type — a filter, not a structural split */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: C.textSecond }}>Workflow type</label>
+          <select
+            value={workflowTypeFilter}
+            onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
+            style={{
+              padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+              fontSize: 13, color: C.textPrimary, outline: "none", background: "#fff",
+            }}
+          >
+            <option value="all">All</option>
+            <option value="approval">Approval</option>
+            <option value="evaluation">Evaluation</option>
+          </select>
         </div>
 
         {/* Filters */}
@@ -2617,7 +2649,7 @@ export default function ApprovalDashboard() {
           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <span style={{ fontWeight: 600, color: C.purple }}>
-                {viewMode === "approvals" ? "Approval" : "Evaluation"} {statusFilter === "evaluated" ? "Evaluated" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} ({filteredItems.length})
+                {lifecycleLabel(stageFilter)} ({filteredItems.length})
               </span>
               <span style={{ fontSize: 11, color: C.textSecond }}>
                 Newest first
@@ -2730,6 +2762,16 @@ export default function ApprovalDashboard() {
                         >
                           {getItemDisplayStatus(item)}
                         </span>
+                        {needsBranchPick(item) && (
+                          <span
+                            style={{
+                              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                              background: C.amberPale, color: "#92400E",
+                            }}
+                          >
+                            Branch not selected
+                          </span>
+                        )}
                         <button
                           title="Delete submission permanently"
                           aria-label={`Delete ${item.Title} submission ${item.Id}`}
