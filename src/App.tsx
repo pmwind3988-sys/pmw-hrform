@@ -568,6 +568,11 @@ function mapSubmission(
     listTitle,
     formId,
     formVersion,
+    publishKey: raw.PublishKey ? String(raw.PublishKey) : undefined,
+    currentLayerStatus:
+      currentLayer > 0 && layerStatusValues[currentLayer - 1]
+        ? String(layerStatusValues[currentLayer - 1])
+        : undefined,
     title,
     submittedByEmail,
     submitterName,

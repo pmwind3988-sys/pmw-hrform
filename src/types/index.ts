@@ -21,6 +21,10 @@ export interface Submission {
   listTitle: string;
   formId: string;
   formVersion: string;
+  /** Published profile (PublishKey) the submission was sent under. */
+  publishKey?: string;
+  /** Raw L{n}_Status of the layer currently awaiting action, for lifecycle derivation. */
+  currentLayerStatus?: string;
   title: string;
   submittedByEmail: string;
   submitterName?: string;
