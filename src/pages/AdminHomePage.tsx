@@ -22,6 +22,7 @@ import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { fetchCareersPortalData } from "../utils/careersService";
+import { collectPublishProfiles, collectTrainingTitles } from "../utils/submissionFilters";
 import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
 
@@ -253,6 +254,8 @@ export default function AdminHomePage() {
   const categoryOptions = Array.from(
     new Set(visibleLists.map((list) => listMetaMap[list.title]?.category).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b));
+  const trainingTitleOptions = collectTrainingTitles(submissions);
+  const publishProfileOptions = collectPublishProfiles(submissions);
   const exportRows = submissions.filter((item) =>
     submissionMatchesExportFilters(item, {
       datePreset: exportDatePreset,
@@ -491,6 +494,8 @@ export default function AdminHomePage() {
             setFilters={setFilters}
             sortBy={sortBy}
             setSortBy={setSortBy}
+            trainingTitleOptions={trainingTitleOptions}
+            publishProfileOptions={publishProfileOptions}
             isAdmin={isAdmin}
             canExportSubmissions={canExportSubmissions}
             onOpenExport={() => setExportOpen(true)}

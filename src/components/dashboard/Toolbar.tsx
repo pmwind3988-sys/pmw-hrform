@@ -23,14 +23,17 @@ import {
 } from "@mui/icons-material";
 import type { DiscoveredList } from "../../types";
 import { editorial, editorialShadow } from "../../theme/editorial";
-import { EMPTY_SUBMISSION_FILTERS, countActiveFilters } from "../../utils/submissionFilters";
+import { EMPTY_SUBMISSION_FILTERS, NO_TRAINING_TITLE, countActiveFilters } from "../../utils/submissionFilters";
 import type { SubmissionFilterState } from "../../utils/submissionFilters";
+import { LIFECYCLE_STAGES, lifecycleLabel } from "../../utils/submissionLifecycle";
 
 interface ToolbarProps {
   filters: SubmissionFilterState;
   setFilters: (filters: SubmissionFilterState) => void;
   sortBy: string;
   setSortBy: (v: string) => void;
+  trainingTitleOptions: string[];
+  publishProfileOptions: string[];
   isAdmin: boolean;
   canExportSubmissions: boolean;
   onOpenExport: () => void;
@@ -44,6 +47,8 @@ export default function Toolbar({
   setFilters,
   sortBy,
   setSortBy,
+  trainingTitleOptions,
+  publishProfileOptions,
   isAdmin,
   canExportSubmissions,
   onOpenExport,
@@ -185,7 +190,7 @@ export default function Toolbar({
                 display: "grid",
                 gridTemplateColumns: {
                   xs: "1fr",
-                  sm: isAdmin ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
+                  sm: "repeat(2, minmax(0, 1fr))",
                   lg: isAdmin ? "repeat(4, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
                 },
                 gap: 2,
@@ -218,11 +223,11 @@ export default function Toolbar({
                   sx={selectSx}
                 >
                   <MenuItem value="all">All statuses</MenuItem>
-                  <MenuItem value="pending">Pending</MenuItem>
-                  <MenuItem value="inProgress">In Review</MenuItem>
-                  <MenuItem value="approved">Approved</MenuItem>
-                  <MenuItem value="fullyApproved">Fully Approved</MenuItem>
-                  <MenuItem value="rejected">Rejected</MenuItem>
+                  {LIFECYCLE_STAGES.map((stage) => (
+                    <MenuItem key={stage} value={stage}>
+                      {lifecycleLabel(stage)}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
 
@@ -242,13 +247,70 @@ export default function Toolbar({
               </FormControl>
 
               {isAdmin && (
-                <TextField
-                  placeholder="Filter by submitter email..."
-                  value={filters.submitter}
-                  onChange={(e) => patch({ submitter: e.target.value })}
-                  size="small"
-                  sx={searchFieldSx}
-                />
+                <>
+                  <TextField
+                    placeholder="Filter by submitter email..."
+                    value={filters.submitter}
+                    onChange={(e) => patch({ submitter: e.target.value })}
+                    size="small"
+                    sx={searchFieldSx}
+                  />
+
+                  <TextField
+                    label="Submitted from"
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(e) => patch({ dateFrom: e.target.value })}
+                    size="small"
+                    sx={searchFieldSx}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+
+                  <TextField
+                    label="Submitted to"
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(e) => patch({ dateTo: e.target.value })}
+                    size="small"
+                    sx={searchFieldSx}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+
+                  <FormControl size="small" sx={{ minWidth: 0 }}>
+                    <InputLabel>Training title</InputLabel>
+                    <Select
+                      value={filters.trainingTitle}
+                      label="Training title"
+                      onChange={(e) => patch({ trainingTitle: e.target.value })}
+                      sx={selectSx}
+                    >
+                      <MenuItem value="">All training titles</MenuItem>
+                      <MenuItem value={NO_TRAINING_TITLE}>No training title</MenuItem>
+                      {trainingTitleOptions.map((title) => (
+                        <MenuItem key={title} value={title}>
+                          {title}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" sx={{ minWidth: 0 }}>
+                    <InputLabel>Profile</InputLabel>
+                    <Select
+                      value={filters.publishProfile}
+                      label="Profile"
+                      onChange={(e) => patch({ publishProfile: e.target.value })}
+                      sx={selectSx}
+                    >
+                      <MenuItem value="">All profiles</MenuItem>
+                      {publishProfileOptions.map((profile) => (
+                        <MenuItem key={profile} value={profile}>
+                          {profile}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </>
               )}
             </Box>
 
