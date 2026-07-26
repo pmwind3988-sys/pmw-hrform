@@ -23,18 +23,14 @@ import {
 } from "@mui/icons-material";
 import type { DiscoveredList } from "../../types";
 import { editorial, editorialShadow } from "../../theme/editorial";
+import { EMPTY_SUBMISSION_FILTERS, countActiveFilters } from "../../utils/submissionFilters";
+import type { SubmissionFilterState } from "../../utils/submissionFilters";
 
 interface ToolbarProps {
-  search: string;
-  setSearch: (v: string) => void;
-  listFilter: string;
-  setListFilter: (v: string) => void;
-  statusFilter: string;
-  setStatusFilter: (v: string) => void;
+  filters: SubmissionFilterState;
+  setFilters: (filters: SubmissionFilterState) => void;
   sortBy: string;
   setSortBy: (v: string) => void;
-  submitterFilter: string;
-  setSubmitterFilter: (v: string) => void;
   isAdmin: boolean;
   canExportSubmissions: boolean;
   onOpenExport: () => void;
@@ -44,16 +40,10 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({
-  search,
-  setSearch,
-  listFilter,
-  setListFilter,
-  statusFilter,
-  setStatusFilter,
+  filters,
+  setFilters,
   sortBy,
   setSortBy,
-  submitterFilter,
-  setSubmitterFilter,
   isAdmin,
   canExportSubmissions,
   onOpenExport,
@@ -62,14 +52,9 @@ export default function Toolbar({
   filtered,
 }: ToolbarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const detailedFilterCount = [
-    Boolean(listFilter),
-    statusFilter !== "all",
-    sortBy !== "newest",
-    Boolean(submitterFilter),
-  ].filter(Boolean).length;
-  const hasFilters =
-    search || listFilter || statusFilter !== "all" || sortBy !== "newest" || submitterFilter;
+  const patch = (next: Partial<SubmissionFilterState>) => setFilters({ ...filters, ...next });
+  const detailedFilterCount = countActiveFilters(filters) + (sortBy !== "newest" ? 1 : 0);
+  const hasFilters = detailedFilterCount > 0;
   const searchFieldSx = {
     minWidth: 0,
     "& .MuiOutlinedInput-root": {
@@ -93,11 +78,8 @@ export default function Toolbar({
     },
   } as const;
   const clearFilters = () => {
-    setSearch("");
-    setListFilter("");
-    setStatusFilter("all");
+    setFilters(EMPTY_SUBMISSION_FILTERS);
     setSortBy("newest");
-    setSubmitterFilter("");
   };
 
   return (
@@ -120,8 +102,8 @@ export default function Toolbar({
         >
           <TextField
             placeholder="Search submissions..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={filters.search}
+            onChange={(e) => patch({ search: e.target.value })}
             size="small"
             sx={searchFieldSx}
             slotProps={{
@@ -213,9 +195,9 @@ export default function Toolbar({
               <FormControl size="small" sx={{ minWidth: 0 }}>
                 <InputLabel>List</InputLabel>
                 <Select
-                  value={listFilter}
+                  value={filters.listTitle}
                   label="List"
-                  onChange={(e) => setListFilter(e.target.value)}
+                  onChange={(e) => patch({ listTitle: e.target.value })}
                   sx={selectSx}
                 >
                   <MenuItem value="">All lists</MenuItem>
@@ -230,9 +212,9 @@ export default function Toolbar({
               <FormControl size="small" sx={{ minWidth: 0 }}>
                 <InputLabel>Status</InputLabel>
                 <Select
-                  value={statusFilter}
+                  value={filters.stage}
                   label="Status"
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => patch({ stage: e.target.value })}
                   sx={selectSx}
                 >
                   <MenuItem value="all">All statuses</MenuItem>
@@ -262,8 +244,8 @@ export default function Toolbar({
               {isAdmin && (
                 <TextField
                   placeholder="Filter by submitter email..."
-                  value={submitterFilter}
-                  onChange={(e) => setSubmitterFilter(e.target.value)}
+                  value={filters.submitter}
+                  onChange={(e) => patch({ submitter: e.target.value })}
                   size="small"
                   sx={searchFieldSx}
                 />

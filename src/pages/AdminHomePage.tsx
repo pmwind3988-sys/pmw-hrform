@@ -225,16 +225,10 @@ export default function AdminHomePage() {
     hasFilters,
     detailItem,
     setDetailItem,
-    search,
-    setSearch,
-    listFilter,
-    setListFilter,
-    statusFilter,
-    setStatusFilter,
+    filters,
+    setFilters,
     sortBy,
     setSortBy,
-    submitterFilter,
-    setSubmitterFilter,
     sortedSubmissions,
     onSignOut,
     onSwitchAccount,
@@ -493,16 +487,10 @@ export default function AdminHomePage() {
 
         <Box sx={{ mb: 4 }}>
           <Toolbar
-            search={search}
-            setSearch={setSearch}
-            listFilter={listFilter}
-            setListFilter={setListFilter}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
+            filters={filters}
+            setFilters={setFilters}
             sortBy={sortBy}
             setSortBy={setSortBy}
-            submitterFilter={submitterFilter}
-            setSubmitterFilter={setSubmitterFilter}
             isAdmin={isAdmin}
             canExportSubmissions={canExportSubmissions}
             onOpenExport={() => setExportOpen(true)}

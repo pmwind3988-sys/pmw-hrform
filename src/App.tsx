@@ -27,6 +27,13 @@ import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntr
 import { normalizeLayerStatus } from "./utils/statusConstants";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
 import { isRejectedStatus, resolveWorkflowDisplayState } from "./utils/workflowStatus";
+import {
+  EMPTY_SUBMISSION_FILTERS,
+  hasActiveFilters,
+  sortSubmissions,
+  submissionMatchesFilters,
+} from "./utils/submissionFilters";
+import type { SubmissionFilterState } from "./utils/submissionFilters";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -337,16 +344,6 @@ function isUnauthorizedError(error: unknown): boolean {
   return /\b401\b/.test(message) || message.toLowerCase().includes("unauthorized");
 }
 
-function normalizeStatus(status: string | null): string {
-  if (!status) return "pending";
-  const normalized = status.toLowerCase().replace(/[\s_-]/g, "");
-  if (normalized === "fullyapproved" || normalized === "completed") return "fullyapproved";
-  if (normalized === "approved") return "approved";
-  if (normalized.includes("reject")) return "rejected";
-  if (normalized.includes("progress") || normalized.includes("review")) return "inprogress";
-  return "pending";
-}
-
 function buildConfiguredListFallback(allowedTitles: Set<string>): DiscoveredList[] {
   return [...allowedTitles]
     .sort((a, b) => a.localeCompare(b))
@@ -627,11 +624,8 @@ export default function App() {
   const [authErrorStep, setAuthErrorStep] = useState<AuthLoadStep | null>(null);
 
   // Filters
-  const [search, setSearch] = useState("");
-  const [listFilter, setListFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
   const [sortBy, setSortBy] = useState("newest");
-  const [submitterFilter, setSubmitterFilter] = useState("");
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -1170,44 +1164,8 @@ export default function App() {
   };
 
   // Filter + sort logic
-  const filteredSubmissions = submissions.filter((item) => {
-    if (search) {
-      const searchLower = search.toLowerCase();
-      if (
-        !item.title.toLowerCase().includes(searchLower) &&
-        !item.formId.toLowerCase().includes(searchLower) &&
-        !item.submissionId.toLowerCase().includes(searchLower)
-      ) {
-        return false;
-      }
-    }
-    if (listFilter && item.listTitle !== listFilter) return false;
-    if (statusFilter !== "all" && normalizeStatus(item.formStatus) !== statusFilter.toLowerCase()) return false;
-    if (submitterFilter) {
-      const submitterLower = submitterFilter.toLowerCase();
-      const submitterCandidates = [
-        item.submittedByEmail,
-        item.submitterName ?? "",
-        item.createdByName ?? "",
-        item.createdByEmail ?? "",
-      ];
-      if (!submitterCandidates.some((candidate) => candidate.toLowerCase().includes(submitterLower))) return false;
-    }
-    return true;
-  });
-
-  const sortedSubmissions = [...filteredSubmissions].sort((a, b) => {
-    switch (sortBy) {
-      case "oldest":
-        return (a.submittedAt || "").localeCompare(b.submittedAt || "");
-      case "status":
-        return normalizeStatus(a.formStatus).localeCompare(normalizeStatus(b.formStatus));
-      case "list":
-        return a.listTitle.localeCompare(b.listTitle);
-      default: // newest
-        return (b.submittedAt || "").localeCompare(a.submittedAt || "");
-    }
-  });
+  const filteredSubmissions = submissions.filter((item) => submissionMatchesFilters(item, filters));
+  const sortedSubmissions = sortSubmissions(filteredSubmissions, sortBy);
 
   const listMetaMap = { ...loadedConfig?.listMetaMap };
   for (const list of visibleLists) {
@@ -1216,7 +1174,7 @@ export default function App() {
     }
   }
 
-  const hasFilters = !!(search || listFilter || statusFilter !== "all" || submitterFilter);
+  const hasFilters = hasActiveFilters(filters);
 
   async function handleHardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
     if (!isAdmin && !canUseFormBuilder) {
@@ -1337,16 +1295,10 @@ export default function App() {
         hasFilters={hasFilters}
         detailItem={detailItem}
         setDetailItem={setDetailItem}
-        search={search}
-        setSearch={setSearch}
-        listFilter={listFilter}
-        setListFilter={setListFilter}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
+        filters={filters}
+        setFilters={setFilters}
         sortBy={sortBy}
         setSortBy={setSortBy}
-        submitterFilter={submitterFilter}
-        setSubmitterFilter={setSubmitterFilter}
         sortedSubmissions={sortedSubmissions}
         onSignOut={handleSignOut}
         onSwitchAccount={handleSwitchAccount}

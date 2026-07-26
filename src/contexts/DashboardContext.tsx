@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { Submission, DiscoveredList, ListMetaEntry, HardDeleteSubmissionResult } from "../types";
+import type { SubmissionFilterState } from "../utils/submissionFilters";
 
 export interface DashboardContextValue {
   userEmail: string;
@@ -12,16 +13,10 @@ export interface DashboardContextValue {
   hasFilters: boolean;
   detailItem: Submission | null;
   setDetailItem: (item: Submission | null) => void;
-  search: string;
-  setSearch: (s: string) => void;
-  listFilter: string;
-  setListFilter: (s: string) => void;
-  statusFilter: string;
-  setStatusFilter: (s: string) => void;
+  filters: SubmissionFilterState;
+  setFilters: (filters: SubmissionFilterState) => void;
   sortBy: string;
   setSortBy: (s: string) => void;
-  submitterFilter: string;
-  setSubmitterFilter: (s: string) => void;
   sortedSubmissions: Submission[];
   onSignOut: () => void;
   onSwitchAccount: () => void;
