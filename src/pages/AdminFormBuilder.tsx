@@ -2,20 +2,22 @@
  * AdminFormBuilder.tsx — Full admin form builder with sidebar
  * Integrates with custom FormBuilder component
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { pdf } from "@react-pdf/renderer";
 import FormBuilder from "../components/builder/FormBuilder";
-import FormLibrary from "../components/builder/FormLibrary";
 import VersionHistory from "../components/builder/VersionHistory";
 import AuditLog from "../components/builder/AuditLog";
 import ProvisionOverlay from "../components/builder/ProvisionOverlay";
 import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import PrefilledQrPanel from "../components/builder/PrefilledQrPanel";
 import { C } from "../components/builder/constants";
+import { Icon } from "../components/builder/BuilderIcons";
+import type { BuilderMode, BuilderToolCommand, BuilderToolKey } from "../components/builder/builderTheme";
+import "../components/builder/BuilderShell.css";
 import { validateLayerConfig } from "../components/builder/layerValidation";
 import type { LayerFieldOption } from "../components/builder/layerValidation";
 import { flattenQuestions } from "../utils/FormBuilderEngine";
@@ -27,27 +29,8 @@ import type { SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../typ
 import type { DocumentControlHeader } from "../types";
 
 // MUI Icons
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import FolderIcon from "@mui/icons-material/Folder";
-import SettingsIcon from "@mui/icons-material/Settings";
-import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
-import DescriptionIcon from "@mui/icons-material/Description";
-import HistoryIcon from "@mui/icons-material/History";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import LayersIcon from "@mui/icons-material/Layers";
-import SaveIcon from "@mui/icons-material/Save";
-import EditNoteIcon from "@mui/icons-material/EditNote";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
 import CloseIcon from "@mui/icons-material/Close";
-import PublicIcon from "@mui/icons-material/Public";
-import BlockIcon from "@mui/icons-material/Block";
-import LockIcon from "@mui/icons-material/Lock";
-import BusinessIcon from "@mui/icons-material/Business";
-import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import {
   slugify,
@@ -140,13 +123,11 @@ function firstLayerValidationMessage(errors: string[]): string {
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const G = `*{box-sizing:border-box;margin:0;padding:0;font-family:var(--pmw-font-main)!important}body{font-family:var(--pmw-font-main);background:${C.offWhite};color:${C.textPrimary}}
+// Layout, type and colour for the workspace live in BuilderShell.css. What's
+// left here is what the legacy panels rendered inside the modes still expect.
+const G = `body{background:${C.offWhite};color:${C.textPrimary}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:10px}
-button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid ${C.purple};outline-offset:2px}
-@media(max-width:860px){.afb-header{height:auto!important;min-height:52px;align-items:flex-start!important;flex-wrap:wrap;padding:8px 12px!important;gap:8px}.afb-header-left{width:100%;overflow-x:auto;padding-bottom:2px}.afb-header-actions{width:100%;overflow-x:auto;justify-content:flex-start!important;padding-bottom:2px}.afb-header-title{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-@media(max-width:520px){.afb-header-left{gap:8px!important}.afb-header-title{max-width:150px}.afb-header-actions button{flex:0 0 auto}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}}`;
 const inp = {
   width: "100%",
@@ -175,9 +156,6 @@ const Spinner = ({ size = 18 }: { size?: number }) => (
 );
 
 // ── Inline helper components ──────────────────────────────────────────────────
-const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: ReactNode; color?: string; bg?: string }) => (
-  <span style={{ fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 6, padding: "2px 8px", textTransform: "uppercase", letterSpacing: 0 }}>{children}</span>
-);
 
 function TextInput({ value, onChange, placeholder, error, disabled, ...rest }: { value: string; onChange: (v: string) => void; placeholder?: string; error?: string; disabled?: boolean; [k: string]: unknown }) {
   const [f, setF] = useState(false);
@@ -205,39 +183,7 @@ function TextInput({ value, onChange, placeholder, error, disabled, ...rest }: {
   );
 }
 
-function FB({ label, hint, children, required }: { label: string; hint?: string; children: ReactNode; required?: boolean }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: C.textPrimary, marginBottom: 4 }}>
-        {label}{required && <span style={{ color: C.red, marginLeft: 3 }}>*</span>}
-      </label>
-      {hint && <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4, lineHeight: 1.5 }}>{hint}</div>}
-      {children}
-    </div>
-  );
-}
 
-function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
-      <div
-        onClick={() => onChange(!checked)}
-        style={{
-          width: 40, height: 22, borderRadius: 999, flexShrink: 0,
-          background: checked ? C.purple : "#D1D5DB", position: "relative",
-          transition: "background-color 0.2s", cursor: "pointer",
-        }}
-      >
-        <div style={{
-          position: "absolute", top: 3, left: checked ? 21 : 3,
-          width: 16, height: 16, borderRadius: "50%", background: C.white,
-          transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-        }} />
-      </div>
-      {label && <span style={{ fontSize: 12, color: C.textSecond }}>{label}</span>}
-    </label>
-  );
-}
 
 type SampleAssets = {
   signatureDataUrl: string;
@@ -472,6 +418,74 @@ function downloadPdfBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 15_000);
 }
 
+/** A disclosure card. A closed card still answers the question it hides via its
+ *  right-aligned summary. */
+function Disclosure({ title, sub, summary, open, onToggle, children }: { title: string; sub?: string; summary?: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+  return (
+    <div className="bx-disclosure">
+      <button type="button" className="bx-disc-head" onClick={onToggle} aria-expanded={open}>
+        <span style={{ minWidth: 0 }}>
+          <span className="bx-disc-title">{title}</span>
+          {sub && <span className="bx-disc-sub">{sub}</span>}
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
+          {summary && <span className="bx-meta">{summary}</span>}
+          <Icon name="chevdown" size={16} strokeWidth={1.6} className={`bx-chev${open ? " is-open" : ""}`} />
+        </span>
+      </button>
+      {open && <div className="bx-disc-body">{children}</div>}
+    </div>
+  );
+}
+
+/** `{label / hint} … {value} [action]` — the Publish disclosures’ one row shape. */
+function ActionRow({ label, hint, value, action, onAction, disabled, busy }: { label: string; hint?: string; value?: ReactNode; action: string; onAction: () => void; disabled?: boolean; busy?: boolean }) {
+  return (
+    <div className="bx-actionrow">
+      <div style={{ flex: 1, minWidth: 140 }}>
+        <div style={{ fontSize: 15 }}>{label}</div>
+        {hint && <div className="bx-meta">{hint}</div>}
+      </div>
+      {value !== undefined && value !== "" && <span className="bx-meta bx-num">{value}</span>}
+      <button type="button" className="bx-btn bx-btn-secondary bx-btn-sm" onClick={onAction} disabled={disabled || busy}>
+        {busy && <span className="bx-spinner" style={{ width: 13, height: 13 }} />}
+        {action}
+      </button>
+    </div>
+  );
+}
+
+function TextField({ id, label, value, onChange, placeholder, disabled, error, note, type }: { id: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean; error?: string; note?: ReactNode; type?: string }) {
+  return (
+    <div className="bx-field">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        type={type || "text"}
+        className={`bx-input${error ? " is-error" : ""}`}
+        style={{ height: 40 }}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+      {error ? <div style={{ fontSize: 13.5, fontWeight: 400, color: C.red, marginTop: 5 }}>{error}</div> : note ? <div style={{ marginTop: 5 }}>{note}</div> : null}
+    </div>
+  );
+}
+
+function CheckRow({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+  return (
+    <label className="bx-check">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <span>
+        <span style={{ display: "block" }}>{label}</span>
+        {hint && <span className="bx-check-hint">{hint}</span>}
+      </span>
+    </label>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AdminFormBuilder() {
   const navigate = useNavigate();
@@ -482,8 +496,9 @@ export default function AdminFormBuilder() {
   const [authChecked, setAuthChecked] = useState(false);
   const [siteUsers, setSiteUsers] = useState<{ email: string; name: string }[]>([]);
   const tokenRef = useRef<string | null>(null);
+  /** Render-safe copy of the SharePoint token for panels that fetch on demand. */
+  const [spToken, setSpToken] = useState<string | null>(null);
   const [allForms, setAllForms] = useState<{ Id?: string; Title: string; FormID?: string; CurrentVersion?: string; CurrentPublishKey?: string; CurrentPublishLabel?: string; Slug?: string; NumberOfApprovalLayer?: number; IsPublic?: boolean; IsPublished?: boolean; ApprovalRules?: string }[]>([]);
-  const [libraryOpen, setLibraryOpen] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [originalVersion, setOriginalVersion] = useState<string | null>(null);
   const [meta, setMeta] = useState({
@@ -517,13 +532,29 @@ export default function AdminFormBuilder() {
   const [surveyJson, setSurveyJson] = useState<SurveyJson | null>(null);
   const [initialJson, setInitialJson] = useState<SurveyJson | null>(null);
   const prevSurveyRef = useRef<SurveyJson | null>(null);
-  const [sidebarTab, setSidebarTab] = useState("meta");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const sidebarTabsRef = useRef<HTMLDivElement>(null);
-  const [sidebarWidth, setSidebarWidth] = useState(300);
-  const resizingRef = useRef(false);
-  const [canSidebarScrollLeft, setCanSidebarScrollLeft] = useState(false);
-  const [canSidebarScrollRight, setCanSidebarScrollRight] = useState(false);
+  /** Which of the four modes owns the work area. Chrome stays constant. */
+  const [mode, setMode] = useState<BuilderMode>("build");
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [previewMenuOpen, setPreviewMenuOpen] = useState(false);
+  const [toolCommand, setToolCommand] = useState<BuilderToolCommand | null>(null);
+  const toolNonceRef = useRef(0);
+  /** Every disclosure on Settings and Publish, collapsed until asked for. */
+  const [disc, setDisc] = useState<Record<string, boolean>>({});
+  const toggleDisc = useCallback((k: string) => setDisc(d => ({ ...d, [k]: !d[k] })), []);
+  const [saveBusy, setSaveBusy] = useState<"" | "draft" | "publish">("");
+  const [savedSignature, setSavedSignature] = useState<string | null>(null);
+  const [saveStamp, setSaveStamp] = useState(0);
+  const markSaved = useCallback(() => setSaveStamp(s => s + 1), []);
+  const runTool = useCallback((key: BuilderToolKey) => {
+    toolNonceRef.current += 1;
+    setToolCommand({ key, nonce: toolNonceRef.current });
+    setToolsOpen(false);
+    setPreviewMenuOpen(false);
+    // Every tool panel — preview included — belongs to the form itself, so the
+    // work area returns to Builder rather than opening a modal over Settings.
+    setMode("build");
+  }, []);
   const [versionHistory, setVersionHistory] = useState<{ FormVersion: string; PublishKey?: string; PublishLabel?: string; PublishStatus?: "active" | "off"; PublishExpiresAt?: string; DisabledAt?: string; DisabledBy?: string; PublishedBy?: string; PublishedAt?: string }[]>([]);
   const [viewingOld, setViewingOld] = useState<{ version: string; publishKey: string; json: SurveyJson } | null>(null);
   const [auditLog, setAuditLog] = useState<{ EventType: string; EventSummary?: string; BeforeJSON?: string; AfterJSON?: string; EventAt?: string }[]>([]);
@@ -541,6 +572,7 @@ export default function AdminFormBuilder() {
   const [layerConfig, setLayerConfig] = useState<LayerConfig | null>(null);
   const [profileLayerEdit, setProfileLayerEdit] = useState<{ version: string; publishKey: string; publishLabel: string } | null>(null);
   const [profileLayerSaving, setProfileLayerSaving] = useState(false);
+  const [renameProfileBusy, setRenameProfileBusy] = useState("");
   const [qrProfile, setQrProfile] = useState<{ surveyJson: SurveyJson; version: string; publishKey: string; publishLabel: string } | null>(null);
   const [qrProfileLoading, setQrProfileLoading] = useState("");
   const [docHeaderProfile, setDocHeaderProfile] = useState<{ version: string; publishKey: string; publishLabel: string; header: DocumentControlHeader } | null>(null);
@@ -563,50 +595,16 @@ export default function AdminFormBuilder() {
     }
   }, [accessDenied, showToast]);
 
-  const checkSidebarScrollState = () => {
-    const el = sidebarTabsRef.current;
-    if (el) {
-      setCanSidebarScrollLeft(el.scrollLeft > 0);
-      setCanSidebarScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-    }
-  };
-
-  const sidebarScrollLeft = () => {
-    const el = sidebarTabsRef.current;
-    if (el) el.scrollBy({ left: -200, behavior: 'smooth' });
-  };
-
-  const sidebarScrollRight = () => {
-    const el = sidebarTabsRef.current;
-    if (el) el.scrollBy({ left: 200, behavior: 'smooth' });
-  };
-
+  // Escape closes the two header/nav menus; the modals own their own handling.
   useEffect(() => {
-    checkSidebarScrollState();
-    window.addEventListener('resize', checkSidebarScrollState);
-    return () => window.removeEventListener('resize', checkSidebarScrollState);
-  }, []);
-
-  // ── Sidebar resize via drag ────────────────────────────────────────────
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (!resizingRef.current) return;
-      // side = right sidebar, so dragging from main content area
-      // width = distance from right edge of viewport to cursor
-      const newWidth = Math.max(220, Math.min(800, window.innerWidth - e.clientX));
-      setSidebarWidth(newWidth);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setSwitcherOpen(false);
+      setToolsOpen(false);
+      setPreviewMenuOpen(false);
     };
-    const onMouseUp = () => {
-      resizingRef.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   const proposedVersion = meta.formVersion.trim() || originalVersion || "1.0";
@@ -665,6 +663,7 @@ export default function AdminFormBuilder() {
       try {
         const token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
         tokenRef.current = token;
+        setSpToken(token);
         bootstrapSystemLists(token, () => { }).catch(() => { /* best-effort system list bootstrap */ });
         try {
           const ud = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/siteusers?$select=Email,Title&$filter=PrincipalType eq 1`, {
@@ -762,6 +761,7 @@ export default function AdminFormBuilder() {
       } else {
         setLayerConfig(null);
       }
+      markSaved();
       getFormVersionHistory(token, c.Title as string).then(setVersionHistory).catch(() => {});
       setLogLoading(true);
       getFormLog(token, c.Title as string).then(l => {
@@ -771,7 +771,7 @@ export default function AdminFormBuilder() {
     } catch (e) {
       showToast(`Could not load form: ${(e as Error).message}`, "err");
     }
-  }, [showToast]);
+  }, [showToast, markSaved]);
 
   useEffect(() => {
     if (!paramTitle || !authChecked || !tokenRef.current) return;
@@ -809,6 +809,9 @@ export default function AdminFormBuilder() {
     setLayerConfig(null);
     setIsDraft(false);
     setIsPublic(true);
+    setMode("build");
+    setDisc({});
+    setSavedSignature(null);
     navigate("/admin/builder");
   };
 
@@ -858,13 +861,13 @@ export default function AdminFormBuilder() {
   const handleSaveDraft = useCallback(async () => {
     if (!meta.formTitle.trim()) {
       showToast("Form title is required.", "err");
-      setSidebarTab("meta");
+      setMode("settings");
       return;
     }
     const draftCompanyOptions = meta.companies.split(/\r?\n/).map(c => c.trim()).filter(Boolean);
     if (meta.companyChoiceEnabled && draftCompanyOptions.length < 2) {
       showToast("Add at least two companies before saving the required Company selector.", "err");
-      setSidebarTab("meta");
+      setMode("settings");
       return;
     }
     const token = tokenRef.current;
@@ -876,6 +879,7 @@ export default function AdminFormBuilder() {
     const publishLabel = meta.publishLabel.trim() || (publishKey === DEFAULT_PUBLISH_KEY ? "Production" : publishKey);
     const documentHeader = withDocumentHeaderDefaults(meta.documentHeader, meta.formId, version);
     const userEmail = accounts[0]?.username || "admin";
+    setSaveBusy("draft");
     try {
       const layerConfigToSave: LayerConfig | null = layerConfig || (numLayers > 0 ? {
         version: "1.0" as const,
@@ -892,7 +896,7 @@ export default function AdminFormBuilder() {
       const layerValidation = validateLayerConfig(layerConfigToSave, getLayerFieldOptions(usedJson));
       if (layerValidation.errors.length > 0) {
         showToast(firstLayerValidationMessage(layerValidation.errors), "err");
-        setSidebarTab("layers");
+        setMode("flow");
         return;
       }
       await upsertFormConfig(token, meta.formTitle.trim(), {
@@ -925,11 +929,14 @@ export default function AdminFormBuilder() {
       setSlugLocked(true);
       setMeta(m => ({ ...m, formVersion: version, publishKey, publishLabel, documentHeader }));
       showToast(`Draft saved for "${meta.formTitle}".`, "ok");
+      markSaved();
       refreshLib();
     } catch (e) {
       showToast(`Could not save draft: ${(e as Error).message}`, "err");
+    } finally {
+      setSaveBusy("");
     }
-  }, [meta, surveyJson, numLayers, layers, slugError, isPublic, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib]);
+  }, [meta, surveyJson, numLayers, layers, slugError, isPublic, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib, markSaved]);
 
   const handleDelete = (f: { Id?: string; Title: string }) => {
     setDeleteConfirm({ Id: f.Id, Title: f.Title });
@@ -1002,7 +1009,7 @@ export default function AdminFormBuilder() {
         return;
       }
       setViewingOld({ version: ver, publishKey: publishKey || DEFAULT_PUBLISH_KEY, json: (data.surveyJson || data) as SurveyJson });
-      setSidebarTab("version");
+      setMode("publish"); setDisc(d => ({ ...d, versions: true }));
     } catch (e) {
       showToast(`Could not load version: ${(e as Error).message}`, "err");
     }
@@ -1063,6 +1070,40 @@ export default function AdminFormBuilder() {
       showToast(nextStatus === "active" ? "Profile turned on." : "Profile turned off.", "ok");
     } catch (e) {
       showToast(`Could not update profile: ${(e as Error).message}`, "err");
+    }
+  };
+
+  const handleRenameProfile = async (version: string, publishKey: string, publishLabel: string) => {
+    const token = tokenRef.current;
+    if (!token) return;
+    const nextLabel = publishLabel.trim();
+    if (!nextLabel) {
+      showToast("Enter a name for this profile.", "err");
+      return;
+    }
+    setRenameProfileBusy(`${version}::${publishKey}`);
+    try {
+      await updatePublishProfile(token, {
+        listTitle: meta.formTitle,
+        version,
+        publishKey,
+        publishLabel: nextLabel,
+        changedBy: accounts[0]?.username || "admin",
+      });
+      // Mirror the new name in the builder when the renamed profile is the open one.
+      if (version === originalVersion && normalizePublishKey(publishKey) === normalizePublishKey(meta.publishKey)) {
+        setMeta(m => ({ ...m, publishLabel: nextLabel }));
+      }
+      if (profileLayerEdit?.version === version && normalizePublishKey(profileLayerEdit.publishKey) === normalizePublishKey(publishKey)) {
+        setProfileLayerEdit(edit => edit && { ...edit, publishLabel: nextLabel });
+      }
+      refreshVersionHistory();
+      refreshLib();
+      showToast(`Profile renamed to "${nextLabel}".`, "ok");
+    } catch (e) {
+      showToast(`Could not rename profile: ${(e as Error).message}`, "err");
+    } finally {
+      setRenameProfileBusy("");
     }
   };
 
@@ -1202,7 +1243,7 @@ export default function AdminFormBuilder() {
       setProfileLayerEdit({ version, publishKey, publishLabel });
       setMeta(m => ({ ...m, formVersion: version, publishKey, publishLabel }));
       setNumLayers(getEffectiveLayerCount(loadedLayerConfig, 0));
-      setSidebarTab("layers");
+      setMode("flow");
       showToast(`Editing layers for ${publishLabel} v${version}.`, "ok");
     } catch (e) {
       showToast(`Could not load profile layers: ${(e as Error).message}`, "err");
@@ -1254,34 +1295,36 @@ export default function AdminFormBuilder() {
     setLayerConfig({ version: "1.0", layers: [] });
     setNumLayers(0);
     setProfileLayerEdit(null);
-    setSidebarTab("layers");
+    setMode("flow");
     showToast("New profile draft ready with fresh layers. The active profile remains unchanged.", "ok");
   };
 
+  // Refresh the log the moment its disclosure on Publish is opened.
+  const logOpen = !!disc.log;
   useEffect(() => {
-    if (sidebarTab !== "log" || !isEditing || !tokenRef.current) return;
+    if (!logOpen || !isEditing || !tokenRef.current) return;
     setLogLoading(true);
     getFormLog(tokenRef.current, meta.formTitle).then(l => {
       setAuditLog(l);
       setLogLoading(false);
-    });
-  }, [sidebarTab, isEditing, meta.formTitle]);
+    }).catch(() => setLogLoading(false));
+  }, [logOpen, isEditing, meta.formTitle]);
 
   const handlePublish = useCallback(async (jsonArg?: SurveyJson, intent: PublishIntent = "live") => {
     if (!meta.formTitle.trim()) {
       showToast("Form title required.", "err");
-      setSidebarTab("meta");
+      setMode("settings");
       return;
     }
     if (!meta.formId.trim()) {
       showToast("Form ID required.", "err");
-      setSidebarTab("meta");
+      setMode("settings");
       return;
     }
     const publishCompanyOptions = meta.companies.split(/\r?\n/).map(c => c.trim()).filter(Boolean);
     if (meta.companyChoiceEnabled && publishCompanyOptions.length < 2) {
       showToast("Add at least two companies before publishing the required Company selector.", "err");
-      setSidebarTab("meta");
+      setMode("settings");
       return;
     }
     if (slugError) {
@@ -1323,7 +1366,7 @@ export default function AdminFormBuilder() {
     const layerValidation = validateLayerConfig(layerConfigToSave, getLayerFieldOptions(usedJson));
     if (layerValidation.errors.length > 0) {
       showToast(firstLayerValidationMessage(layerValidation.errors), "err");
-      setSidebarTab("layers");
+      setMode("flow");
       return;
     }
     const effectiveNumLayers = getEffectiveLayerCount(layerConfigToSave, numLayers);
@@ -1449,6 +1492,7 @@ export default function AdminFormBuilder() {
         "ok"
       );
       setProvOk(true);
+      markSaved();
       if (intent === "live") prevSurveyRef.current = usedJson;
       if (intent === "live") setOriginalVersion(version);
       setMeta(m => ({ ...m, formVersion: version, publishKey, publishLabel, documentHeader }));
@@ -1462,7 +1506,26 @@ export default function AdminFormBuilder() {
       pLog(`Could not ${intent === "live" ? "publish" : "save profile"}: ${(e as Error).message}`, "err");
       setProvErr(true);
     }
-  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast]);
+  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast, markSaved]);
+
+  /**
+   * The header's save dot reflects the real thing: this builder does not
+   * auto-persist, so it compares the working state against whatever was last
+   * loaded, saved or published rather than running a fake timer.
+   */
+  const stateSignature = useMemo(
+    () => JSON.stringify([surveyJson, meta, showBanner, isPublic, layerConfig]),
+    [surveyJson, meta, showBanner, isPublic, layerConfig]
+  );
+  const signatureRef = useRef(stateSignature);
+  signatureRef.current = stateSignature;
+  useEffect(() => {
+    if (saveStamp === 0) return;
+    // Runs after the commit that bumped the stamp, so the ref already holds the
+    // state the save actually wrote, including the version the handler set.
+    setSavedSignature(signatureRef.current);
+  }, [saveStamp]);
+  const unsaved = savedSignature !== null && savedSignature !== stateSignature;
 
   if (!authChecked) {
     return (
@@ -1472,15 +1535,6 @@ export default function AdminFormBuilder() {
       </div>
     );
   }
-
-  const sidebarTabs = [
-    { id: "meta", label: "Form Setup", icon: <DescriptionIcon style={{ fontSize: 14 }} /> },
-    { id: "pdf", label: "PDF Layout", icon: <ReceiptLongIcon style={{ fontSize: 14 }} /> },
-    { id: "layers", label: "Layers", icon: <LayersIcon style={{ fontSize: 14 }} /> },
-    { id: "version", label: "Versions", icon: <HistoryIcon style={{ fontSize: 14 }} /> },
-    { id: "log", label: "Log", icon: <ReceiptLongIcon style={{ fontSize: 14 }} /> },
-    { id: "publish", label: "Publish", icon: <RocketLaunchIcon style={{ fontSize: 14 }} /> },
-  ];
 
   const formBuilderKey = viewingOld
     ? `view_${meta.formTitle}_v${viewingOld.version}_${viewingOld.publishKey}`
@@ -1502,225 +1556,285 @@ export default function AdminFormBuilder() {
   const layerFieldOptions = getLayerFieldOptions(surveyJson);
   const toastColor = toast?.type === "err" ? C.red : toast?.type === "ok" ? C.green : C.purple;
 
+  const activePublishKey = normalizePublishKey(meta.publishKey);
+  const fieldCount = surveyJson ? flattenQuestions(surveyJson).length : 0;
+  const publishBlocked = !meta.formTitle.trim() || !meta.formId.trim() || !!slugError || !!viewingOld;
+
+  const MODES: { id: BuilderMode; label: string; icon: string; hint: string }[] = [
+    { id: "build", label: "Builder", icon: "blocks", hint: "Fields, labels and layout" },
+    { id: "flow", label: "Workflow", icon: "flow", hint: "Who approves or evaluates, and in what order" },
+    { id: "settings", label: "Settings", icon: "gear", hint: "Identity, route and access" },
+    { id: "publish", label: "Publish", icon: "rocket", hint: "Review, then make it live" },
+  ];
+  const modeHint = MODES.find(m => m.id === mode)?.hint ?? "";
+
+  const TOOL_GROUPS: { name: string; items: { key: BuilderToolKey; label: string; hint: string }[] }[] = [
+    {
+      name: "Content",
+      items: [
+        { key: "templates", label: "Field templates", hint: "Templates" },
+        { key: "i18n", label: "Translations", hint: "i18n" },
+        { key: "comments", label: "Field comments", hint: "Comments" },
+        { key: "theme", label: "Theme editor", hint: "Theme" },
+        { key: "display", label: "Form display", hint: "SurveyJS" },
+      ],
+    },
+    {
+      name: "Data",
+      items: [
+        { key: "data", label: "Data sources", hint: "SharePoint" },
+        { key: "integrations", label: "Integrations", hint: "Webhooks" },
+        { key: "export", label: "Export", hint: "JSON / XLSX" },
+        { key: "provisioning", label: "Provisioning preview", hint: "SP columns" },
+        { key: "json", label: "Survey JSON", hint: "Raw" },
+      ],
+    },
+    {
+      name: "Governance",
+      items: [
+        { key: "permissions", label: "Field permissions", hint: "Roles" },
+        { key: "submission", label: "Submission settings", hint: "Behaviour" },
+      ],
+    },
+  ];
+
+  const saveState = saveBusy
+    ? { text: "Saving…", color: C.textMuted }
+    : unsaved
+      ? { text: "Unsaved changes", color: C.amber }
+      : savedSignature === null
+        ? { text: "Nothing saved yet", color: C.textMuted }
+        : { text: "All changes saved", color: C.purple };
+
+  const readiness = [
+    { label: "Form title", value: meta.formTitle || "Not set", done: !!meta.formTitle.trim() },
+    { label: "Form ID / document no.", value: meta.formId || "Not set", done: !!meta.formId.trim() },
+    { label: "Route slug", value: meta.slug ? `/form/${meta.slug}` : "Not set", done: !!meta.slug.trim() && !slugError },
+    { label: "Fields on the form", value: String(fieldCount), done: fieldCount > 0 },
+    { label: "Workflow layers", value: numLayers ? String(numLayers) : "None (files direct)", done: true },
+  ];
+
   return (
-    <div style={{ minHeight: "100vh", background: C.offWhite, display: "flex", flexDirection: "column" }}>
+    <div className="bx-root">
       <style>{G}</style>
+
       {toast && (
-        <div style={{
-          position: "fixed",
-          top: 16,
-          right: 16,
-          zIndex: 20000,
-          background: C.white,
-          color: C.black,
-          padding: "12px 18px",
-          borderRadius: 8,
-          border: `1px solid ${toastColor}`,
-          fontSize: 13,
-          fontWeight: 700,
-          lineHeight: 1.45,
-          boxShadow: "0 10px 28px rgba(26,31,43,0.16)",
-          animation: "fadeUp .2s ease",
-          maxWidth: 360,
-          opacity: 1,
-          wordBreak: "break-word",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 10,
-        }}>
-          <span style={{ width: 10, height: 10, borderRadius: 999, background: toastColor, marginTop: 5, flexShrink: 0 }} />
-          {toast.msg}
+        <div className="bx-toast" role="status" aria-live="polite">
+          <span className="bx-dot" style={{ background: toastColor, marginTop: 6 }} />
+          <span>{toast.msg}</span>
         </div>
       )}
 
-      <header className="afb-header" style={{
-        background: C.white,
-        borderBottom: `1px solid ${C.border}`,
-        height: 52,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 18px",
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        boxShadow: "0 1px 0 rgba(91,33,182,.06)",
-        flexShrink: 0,
-      }}>
-        <div className="afb-header-left" style={{ display: "flex", alignItems: "center", gap: 11 }}>
+      {/* ── Brand header ─────────────────────────────────────────────── */}
+      <header className="bx-header">
+        <span className="bx-mark"><Icon name="doc" size={17} strokeWidth={1.6} /></span>
+        <span className="bx-wordmark">PMW Forms</span>
+        <span className="bx-vrule" />
+
+        <div style={{ flex: "none", position: "relative" }}>
           <button
             type="button"
-            onClick={() => { window.location.assign("/"); }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              height: 30,
-              border: `1px solid ${C.border}`,
-              borderRadius: 7,
-              background: C.white,
-              color: C.textSecond,
-              fontSize: 12,
-              cursor: "pointer",
-              padding: "0 12px",
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#F3F4F6"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = C.white; }}
+            className="bx-switcher"
+            onClick={() => { setSwitcherOpen(o => !o); setToolsOpen(false); setPreviewMenuOpen(false); }}
+            aria-expanded={switcherOpen}
+            aria-haspopup="true"
+            title="Switch form"
           >
-            <ArrowBackIcon style={{ fontSize: 14 }} /> Dashboard
+            <span className="bx-switcher-label">{meta.formTitle || "New form"}</span>
+            <Icon name="chevdown" size={13} strokeWidth={1.6} style={{ opacity: 0.6, flex: "none" }} />
           </button>
-          <div style={{ width: 1, height: 17, background: C.border }} />
-          <span style={{ fontSize: 18, color: C.black, display: 'inline-flex' }}><DescriptionIcon style={{ fontSize: 18 }} /></span>
-          <span className="afb-header-title" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
-            {isEditing ? `Editing: ${meta.formTitle}` : "New Form"}
-          </span>
-          <Tag color={C.amber} bg={C.amberPale}>Admin</Tag>
-          {isEditing && <Tag>v{meta.formVersion}</Tag>}
-          {isDraft && <Tag color={C.amber} bg={C.amberPale}>Draft</Tag>}
-          {meta.slug && (
-            <a
-                  href={`/form/${meta.slug}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                fontSize: 10,
-                color: C.purple,
-                textDecoration: "none",
-                background: C.purplePale,
-                borderRadius: 6,
-                padding: "2px 9px",
-                border: `1px solid ${C.purpleMid}`,
-              }}
-            >
-                    /form/{meta.slug} ↗
-            </a>
+          {switcherOpen && (
+            <div className="bx-dropdown">
+              <div className="bx-dropdown-head">
+                <span className="bx-eyebrow">Form library</span>
+                <button
+                  type="button"
+                  className="bx-btn bx-btn-primary bx-btn-sm"
+                  style={{ height: 30 }}
+                  onClick={() => { setSwitcherOpen(false); handleNew(); }}
+                >
+                  New form
+                </button>
+              </div>
+              <div className="bx-dropdown-list">
+                {allForms.length === 0 && (
+                  <div style={{ padding: "18px 14px", fontSize: 14, color: C.textMuted }}>No forms yet. Start one with “New form”.</div>
+                )}
+                {allForms.map(f => (
+                  <div key={f.Id || f.Title} style={{ display: "flex", alignItems: "stretch" }}>
+                    <button
+                      type="button"
+                      className="bx-libraryrow"
+                      aria-current={f.Title === meta.formTitle}
+                      onClick={() => { setSwitcherOpen(false); void loadForEdit(f as unknown as Record<string, unknown>); }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontFamily: "var(--bx-head)", fontWeight: 600, fontSize: 17, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.Title}</span>
+                        <span style={{ display: "flex", gap: 9, alignItems: "center", marginTop: 2 }}>
+                          <span className="bx-meta bx-num">{f.FormID || "No form ID"}</span>
+                          <span className="bx-meta">v{f.CurrentVersion || "1.0"}</span>
+                          <span className={`bx-tag ${f.IsPublished === false ? "bx-tag-warn" : "bx-tag-accent"}`}>{f.IsPublished === false ? "Draft" : "Published"}</span>
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="bx-ghost bx-ghost-bare"
+                      style={{ alignSelf: "center", marginRight: 2 }}
+                      title={`Delete “${f.Title}” — keeps its submissions`}
+                      onClick={() => { setSwitcherOpen(false); handleDelete(f); }}
+                    >
+                      <Icon name="trash" size={15} strokeWidth={1.6} />
+                    </button>
+                    <button
+                      type="button"
+                      className="bx-ghost bx-ghost-bare"
+                      style={{ alignSelf: "center", marginRight: 8 }}
+                      title={`Delete “${f.Title}” and ALL its submissions — irreversible`}
+                      onClick={() => { setSwitcherOpen(false); handleHardDelete(f); }}
+                    >
+                      <Icon name="trashall" size={15} strokeWidth={1.6} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-        <div className="afb-header-actions" style={{ display: "flex", gap: 7 }}>
-          <button
-            onClick={() => setLibraryOpen(o => !o)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              height: 30,
-              padding: "0 12px",
-              border: `1px solid ${C.border}`,
-              borderRadius: 7,
-              background: libraryOpen ? C.purplePale : C.white,
-              color: libraryOpen ? C.purple : C.textSecond,
-              fontSize: 12,
-              cursor: "pointer",
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-            }}
-            onMouseEnter={(e) => { if (!libraryOpen) { e.currentTarget.style.background = "#F9FAFB"; e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.color = C.purple; } }}
-            onMouseLeave={(e) => { if (!libraryOpen) { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSecond; } }}
-          >
-            <FolderIcon style={{ fontSize: 14 }} /> Forms
-          </button>
-          <button
-            onClick={() => setSidebarOpen(o => !o)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              height: 30,
-              padding: "0 12px",
-              border: `1px solid ${C.border}`,
-              borderRadius: 7,
-              background: sidebarOpen ? C.purplePale : C.white,
-              color: sidebarOpen ? C.purple : C.textSecond,
-              fontSize: 12,
-              cursor: "pointer",
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-            }}
-            onMouseEnter={(e) => { if (!sidebarOpen) { e.currentTarget.style.background = "#F9FAFB"; e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.color = C.purple; } }}
-            onMouseLeave={(e) => { if (!sidebarOpen) { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSecond; } }}
-          >
-            <SettingsIcon style={{ fontSize: 14 }} /> Settings
-          </button>
-          {(!isEditing || isDraft) && (
-            <button
-              onClick={() => handleSaveDraft()}
-              disabled={!meta.formTitle.trim() || !!viewingOld}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                height: 30,
-                padding: "0 14px",
-                border: `1px solid ${C.border}`,
-                borderRadius: 7,
-                background: C.white,
-                color: C.textSecond,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: !meta.formTitle.trim() || viewingOld ? "not-allowed" : "pointer",
-                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                opacity: !meta.formTitle.trim() || viewingOld ? 0.5 : 1,
-              }}
-              onMouseEnter={(e) => { if (!viewingOld) e.currentTarget.style.background = C.offWhite; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = C.white; }}
-            >
-              <SaveIcon style={{ fontSize: 14, marginRight: 4 }} /> Save Draft
-            </button>
-          )}
-          <button
-            onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
-            disabled={!!viewingOld}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              height: 30,
-              padding: "0 16px",
-              border: "none",
-              borderRadius: 7,
-              background: viewingOld ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
-              color: C.white,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: viewingOld ? "not-allowed" : "pointer",
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-              boxShadow: viewingOld ? "none" : "0 2px 8px rgba(91,33,182,.25)",
-              opacity: viewingOld ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => { if (!viewingOld) e.currentTarget.style.boxShadow = "0 4px 12px rgba(91,33,182,.35)"; }}
-            onMouseLeave={(e) => { if (!viewingOld) e.currentTarget.style.boxShadow = "0 2px 8px rgba(91,33,182,.25)"; }}
-          >
-            <RocketLaunchIcon style={{ fontSize: 14 }} /> Actual Publish
-          </button>
+
+        <div style={{ flex: "none", display: "flex", gap: 6, alignItems: "center" }}>
+          <span className="bx-tag bx-tag-outline">Admin</span>
+          {isEditing && <span className="bx-tag bx-tag-neutral bx-chip-sec">v{meta.formVersion}</span>}
+          {isDraft && <span className="bx-tag bx-tag-warn bx-chip-sec">Draft</span>}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }} />
+
+        <div className="bx-save" role="status" aria-live="polite">
+          {saveBusy ? <span className="bx-spinner" style={{ width: 12, height: 12 }} /> : <span className="bx-dot" style={{ background: saveState.color }} />}
+          {saveState.text}
         </div>
       </header>
 
-      {viewingOld && (
-        <div style={{ background: C.amberPale, borderBottom: "1px solid #FDE68A", padding: "7px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: C.amber }}>
-          <span>Viewing archived <strong>v{viewingOld.version}</strong> / {viewingOld.publishKey} (read only)</span>
+      {/* ── Mode rail ────────────────────────────────────────────────── */}
+      <nav className="bx-nav" aria-label="Builder modes">
+        <button type="button" className="bx-navitem bx-navhome" title="Back to the admin dashboard" onClick={() => window.location.assign("/")}>
+          <Icon name="home" size={19} strokeWidth={1.6} />
+        </button>
+        {MODES.map(m => (
           <button
-            onClick={() => setViewingOld(null)}
-            style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}
+            key={m.id}
+            type="button"
+            className={`bx-navitem${mode === m.id ? " is-on" : ""}`}
+            aria-current={mode === m.id}
+            aria-label={m.label}
+            title={`${m.label} — ${m.hint}`}
+            onClick={() => { setMode(m.id); setToolsOpen(false); setSwitcherOpen(false); setPreviewMenuOpen(false); }}
           >
-            <CloseIcon style={{ fontSize: 14, marginRight: 4 }} /> Back to current
+            <Icon name={m.icon} size={17} strokeWidth={1.6} />
+            <span className="bx-navitem-label">{m.label}</span>
           </button>
+        ))}
+
+        <div style={{ flex: 1 }} />
+        <div className="bx-navhint">{modeHint}</div>
+
+        <div style={{ position: "relative", display: "flex", alignItems: "center", paddingRight: 8 }}>
+          <button
+            type="button"
+            className="bx-navbtn"
+            onClick={() => { setToolsOpen(o => !o); setSwitcherOpen(false); setPreviewMenuOpen(false); }}
+            aria-expanded={toolsOpen}
+            aria-haspopup="true"
+            aria-label="Tools"
+            title="Templates, translations, data sources, permissions and the raw survey JSON"
+          >
+            <Icon name="wrench" size={15} strokeWidth={1.6} />
+            <span className="bx-navitem-label">Tools</span>
+          </button>
+          {toolsOpen && (
+            <div className="bx-menu">
+              {TOOL_GROUPS.map(group => (
+                <div key={group.name} className="bx-menu-group">
+                  <div className="bx-eyebrow bx-eyebrow-sm" style={{ marginBottom: 5 }}>{group.name}</div>
+                  {group.items.map(item => (
+                    <button key={item.key} type="button" className="bx-menurow" onClick={() => runTool(item.key)}>
+                      <span>{item.label}</span>
+                      <span className="bx-menurow-hint">{item.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "0 16px 0 4px" }}>
+          <button
+            type="button"
+            className="bx-navbtn"
+            onClick={() => { setPreviewMenuOpen(o => !o); setToolsOpen(false); setSwitcherOpen(false); }}
+            aria-expanded={previewMenuOpen}
+            aria-haspopup="true"
+            aria-label="Preview"
+            title="Open a live preview of this form"
+          >
+            <Icon name="eye" size={15} strokeWidth={1.6} />
+            <span className="bx-navitem-label">Preview</span>
+          </button>
+          {previewMenuOpen && (
+            <div className="bx-menu" style={{ width: 230, right: 96 }}>
+              <div className="bx-menu-group">
+                <div className="bx-eyebrow bx-eyebrow-sm" style={{ marginBottom: 5 }}>Live preview</div>
+                {([["preview-desktop", "Desktop"], ["preview-tablet", "Tablet"], ["preview-mobile", "Mobile"]] as const).map(([key, label]) => (
+                  <button key={key} type="button" className="bx-menurow" onClick={() => runTool(key)}>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {meta.slug ? (
+            <a
+              className="bx-navbtn is-solid"
+              href={`/form/${meta.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              title={`Open /form/${meta.slug} in a new tab`}
+              style={{ textDecoration: "none" }}
+            >
+              <span className="bx-navitem-label">Access form</span>
+              <Icon name="external" size={14} strokeWidth={1.6} />
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="bx-navbtn is-solid"
+              disabled
+              title="Publish this form to give it a public route"
+            >
+              <span className="bx-navitem-label">Access form</span>
+              <Icon name="external" size={14} strokeWidth={1.6} />
+            </button>
+          )}
+        </div>
+      </nav>
+
+      {viewingOld && (
+        <div style={{ flex: "none", background: C.amberPale, borderBottom: "1px solid #FDE68A", padding: "9px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", fontSize: 14, color: C.amber }}>
+          <span>Viewing archived <strong>v{viewingOld.version}</strong> / {viewingOld.publishKey} — read only.</span>
+          <button type="button" className="bx-btn bx-btn-secondary bx-btn-sm" onClick={() => setViewingOld(null)}>Back to current</button>
         </div>
       )}
 
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", height: "calc(100vh - 52px)" }}>
-        {libraryOpen && (
-          <div style={{ width: 215, flexShrink: 0, borderRight: `1px solid ${C.border}`, background: C.white, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <FormLibrary forms={allForms} onEdit={loadForEdit} onNew={handleNew} onDelete={handleDelete} onHardDelete={handleHardDelete} current={meta.formTitle} />
-          </div>
-        )}
+      {/* ── Work area ────────────────────────────────────────────────── */}
+      <div className="bx-work">
 
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        <div style={{ display: mode === "build" ? "flex" : "none", flex: 1, minWidth: 0 }}>
           <FormBuilder
             key={formBuilderKey}
             initialJson={viewingOld?.json || initialJson}
-            onChange={json => {
-              if (!viewingOld) setSurveyJson(json);
-            }}
-
+            onChange={json => { if (!viewingOld) setSurveyJson(json); }}
             height="100%"
             readOnly={!!viewingOld}
             token={tokenRef.current || undefined}
@@ -1732,760 +1846,401 @@ export default function AdminFormBuilder() {
               fieldName: COMPANY_FIELD_NAME,
               title: COMPANY_FIELD_LABEL,
             }}
+            sheet={{
+              formId: meta.formId,
+              version: meta.formVersion,
+              slug: meta.slug,
+              isoStandards: showBanner ? meta.isoStandards : "",
+              title: meta.formTitle,
+              titleLocked: isEditing,
+            }}
+            onTitleChange={v => setM("formTitle", v)}
+            toolCommand={toolCommand}
           />
         </div>
 
-        {sidebarOpen && (
-          <div style={{ width: sidebarWidth, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.white, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-            {/* Drag handle for resizing */}
-            <div
-              onMouseDown={() => {
-                resizingRef.current = true;
-                document.body.style.cursor = "ew-resize";
-                document.body.style.userSelect = "none";
-              }}
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 4,
-                cursor: "ew-resize",
-                zIndex: 10,
-              }}
-            />
-            <div style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
-              <button
-                onClick={sidebarScrollLeft}
-                style={{
-                  visibility: canSidebarScrollLeft ? 'visible' : 'hidden',
-                  flexShrink: 0,
-                  width: 24,
-                  height: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: C.white,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  marginLeft: 4,
-                  color: C.textSecond,
-                }}
-              >
-                <ChevronLeftIcon style={{ fontSize: 16 }} />
-              </button>
-              <div
-                ref={sidebarTabsRef}
-                onScroll={checkSidebarScrollState}
-                style={{ display: "flex", overflowX: "auto", gap: 6, padding: "8px 6px", scrollbarWidth: "none", flex: 1 }}
-              >
-                {sidebarTabs.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setSidebarTab(t.id)}
-                    style={{
-                      flex: "0 0 auto",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      height: 30,
-                      border: `1px solid ${sidebarTab === t.id ? C.purple : C.border}`,
-                      borderRadius: 7,
-                      background: sidebarTab === t.id ? C.purplePale : C.white,
-                      color: sidebarTab === t.id ? C.purple : C.textSecond,
-                      fontSize: 12,
-                      fontWeight: sidebarTab === t.id ? 600 : 400,
-                      cursor: "pointer",
-                      padding: "0 12px",
-                      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                      whiteSpace: "nowrap",
-                    }}
-                    onMouseEnter={(e) => { if (sidebarTab !== t.id) { e.currentTarget.style.background = "#F9FAFB"; e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.color = C.purple; } }}
-                    onMouseLeave={(e) => { if (sidebarTab !== t.id) { e.currentTarget.style.background = C.white; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.textSecond; } }}
-                  >
-                    {t.icon} {t.label}
+        {/* ── Workflow ───────────────────────────────────────────────── */}
+        {mode === "flow" && (
+          <div className="bx-scroller">
+            <div className="bx-col bx-col-wide">
+              <div className="bx-eyebrow" style={{ marginBottom: 8 }}>Workflow</div>
+              <h2 className="bx-h2" style={{ marginBottom: 8 }}>Approval &amp; evaluation layers</h2>
+              <p className="bx-lede" style={{ marginBottom: 26 }}>
+                The sequence a submission travels through. Each layer is an approval or an evaluation; with none set, submissions file straight to SharePoint.
+              </p>
+
+              {profileLayerEdit && (
+                <div className="bx-card" style={{ marginBottom: 16, borderLeft: `1px solid ${C.border}`, background: "var(--bx-a100)", borderColor: "var(--bx-a300)" }}>
+                  <div style={{ fontFamily: "var(--bx-head)", fontWeight: 600, fontSize: 20 }}>
+                    Editing {profileLayerEdit.publishLabel} · v{profileLayerEdit.version}
+                  </div>
+                  <p className="bx-lede" style={{ fontSize: 14, margin: "6px 0 14px" }}>
+                    Layer and evaluation changes save only to <strong>{profileLayerEdit.publishLabel}</strong> / v{profileLayerEdit.version} / {profileLayerEdit.publishKey}. Approver directory rows save to SharePoint as you edit them. Publish only when you want to republish the whole profile.
+                  </p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="bx-btn bx-btn-primary bx-btn-sm" onClick={handleSaveProfileLayers} disabled={profileLayerSaving}>
+                      {profileLayerSaving && <span className="bx-spinner" style={{ width: 13, height: 13 }} />}
+                      {profileLayerSaving ? "Saving…" : "Save profile settings"}
+                    </button>
+                    <button type="button" className="bx-btn bx-btn-secondary bx-btn-sm" onClick={() => setProfileLayerEdit(null)} disabled={profileLayerSaving}>
+                      Exit layer edit
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isEditing && !viewingOld && (
+                <div className="bx-actionrow" style={{ marginBottom: 16 }}>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <div style={{ fontSize: 15 }}>Start this profile’s layers from scratch</div>
+                    <div className="bx-meta">Clears the layer draft only. Published profiles keep their saved layers until you publish.</div>
+                  </div>
+                  <button type="button" className="bx-btn bx-btn-secondary bx-btn-sm" onClick={handleStartProfileLayersFromScratch} disabled={profileLayerSaving}>
+                    Reset layers
                   </button>
-                ))}
+                </div>
+              )}
+
+              <div className="bx-legacy">
+                <LayerConfigPanel
+                  value={layerConfig}
+                  onChange={setLayerConfig}
+                  siteUsers={siteUsers}
+                  formFields={layerFieldOptions}
+                  slug={meta.slug}
+                  token={spToken || undefined}
+                />
               </div>
-              <button
-                onClick={sidebarScrollRight}
-                style={{
-                  visibility: canSidebarScrollRight ? 'visible' : 'hidden',
-                  flexShrink: 0,
-                  width: 24,
-                  height: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: C.white,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  marginRight: 4,
-                  color: C.textSecond,
-                }}
-              >
-                <ChevronRightIcon style={{ fontSize: 16 }} />
-              </button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "13px 13px 24px" }}>
-              {sidebarTab === "meta" && (
-                <div style={{ animation: "fadeUp .15s ease" }}>
-                  <div style={{
-                    background: C.offWhite,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 10,
-                    padding: "10px 11px",
-                    marginBottom: 14,
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "flex-start",
-                  }}>
-                    <InfoOutlinedIcon style={{ fontSize: 15, color: C.textMuted, marginTop: 1 }} />
-                    <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
-                      Form Setup controls identity, banner, access, and the managed Company selector. Canvas Properties now handles per-field and display behavior only; duplicate fields are flagged below instead of removed.
-                    </div>
-                  </div>
-                  <FB label="Form Title" hint="Becomes the SP list name. Locked after first publish." required>
-                    <TextInput
-                      value={meta.formTitle}
-                      onChange={v => setM("formTitle", v)}
-                      placeholder="Training Application Form"
-                      disabled={isEditing}
-                    />
-                    {isEditing && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>Locked after first publish</div>}
-                  </FB>
-                  <FB label="Form ID / Doc No." required>
-                    <TextInput value={meta.formId} onChange={v => setM("formId", v)} placeholder="PMW-HR-001" />
-                  </FB>
-                  <FB label="Version" hint={isEditing ? `Current live version: v${originalVersion || "?"}. Reusing a version/profile overwrites that published profile.` : "Admin-controlled. Publish will use exactly this value."}>
-                    <TextInput value={meta.formVersion} onChange={v => setM("formVersion", v)} placeholder="1.0" />
-                  </FB>
-                  <FB label="Publish Profile" hint="Use the same version with a separate evaluation / approval workflow. Saving a profile only preserves the current default /form route.">
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 7 }}>
-                      <TextInput
-                        value={meta.publishKey}
-                        onChange={v => setMeta(m => ({ ...m, publishKey: normalizePublishKey(v) }))}
-                        placeholder="production"
-                      />
-                      <TextInput
-                        value={meta.publishLabel}
-                        onChange={v => setMeta(m => ({ ...m, publishLabel: v }))}
-                        placeholder="Production"
-                      />
-                    </div>
-                  </FB>
-                  <FB label="Document Control Header" hint="Shown under the form title before the company logo row. Blank Document / Revision values fall back to Form ID and Version.">
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-                      <TextInput value={meta.documentHeader.documentNumber || ""} onChange={v => setDocumentHeader("documentNumber", v)} placeholder={meta.formId || "Document Number"} />
-                      <TextInput value={meta.documentHeader.issueNumber || ""} onChange={v => setDocumentHeader("issueNumber", v)} placeholder="Issue Number" />
-                      <TextInput value={meta.documentHeader.effectiveDate || ""} onChange={v => setDocumentHeader("effectiveDate", v)} placeholder="Effective Date" type="date" />
-                      <TextInput value={meta.documentHeader.revisionNumber || ""} onChange={v => setDocumentHeader("revisionNumber", v)} placeholder={meta.formVersion || "Revision Number"} />
-                      <TextInput value={meta.documentHeader.revisionDate || ""} onChange={v => setDocumentHeader("revisionDate", v)} placeholder="Revision Date" type="date" />
-                    </div>
-                  </FB>
-                  <FB label="Route slug" hint="URL: /form/{slug}. Locked after first publish.">
-                    <div style={{ position: "relative" }}>
-                      <TextInput
-                        value={meta.slug}
-                        onChange={v => {
-                          setM("slug", slugify(v));
-                          setSlugManual(true);
-                        }}
-                        placeholder="training-application"
-                        disabled={slugLocked}
-                        error={slugError}
-                      />
-                      {slugChecking && (
-                        <div style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)" }}>
-                          <Spinner size={12} />
-                        </div>
-                      )}
-                      {!slugError && !slugChecking && meta.slug && !slugLocked && (
-                        <div style={{ fontSize: 10, color: C.green, marginTop: 3 }}>Slug available</div>
-                      )}
-                      {slugLocked && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>Locked after publish</div>}
-                    </div>
-                  </FB>
-                  <FB label="ISO Standards">
-                    <TextInput value={meta.isoStandards} onChange={v => setM("isoStandards", v)} />
-                  </FB>
-                  <FB label="Companies" hint="One per line">
-                    <textarea
-                      value={meta.companies}
-                      onChange={e => setM("companies", e.target.value)}
-                      rows={4}
-                      style={{ ...inp, height: "auto", padding: "7px 10px", resize: "vertical", lineHeight: 1.7 }}
-                    />
-                  </FB>
-                  <div style={{
-                    background: meta.companyChoiceEnabled ? C.purplePale : C.offWhite,
-                    border: `1px solid ${meta.companyChoiceEnabled ? C.purpleMid : C.border}`,
-                    borderRadius: 10,
-                    padding: "11px 12px",
-                    marginBottom: 14,
-                    boxShadow: meta.companyChoiceEnabled ? "0 8px 20px rgba(16,16,16,0.06)" : "none",
-                    transition: "background-color .15s, border-color .15s, box-shadow .15s",
-                  }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
-                      <BusinessIcon style={{ fontSize: 16, color: meta.companyChoiceEnabled ? C.purple : C.textMuted, marginTop: 1 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary, marginBottom: 2 }}>Company selector</div>
-                        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.5 }}>
-                          Uses the Companies list above as a required single-select field. Default answer stays empty.
-                        </div>
-                      </div>
-                      <ToggleSwitch
-                        checked={meta.companyChoiceEnabled}
-                        onChange={v => setMeta(m => ({ ...m, companyChoiceEnabled: v }))}
-                        label={meta.companyChoiceEnabled ? "On" : "Off"}
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                      <button
-                        type="button"
-                        style={{
-                          flex: 1,
-                          minHeight: 34,
-                          border: `1px solid ${meta.companyChoiceEnabled ? C.purple : C.border}`,
-                          borderRadius: 8,
-                          background: meta.companyChoiceEnabled ? C.white : C.offWhite,
-                          color: meta.companyChoiceEnabled ? C.purple : C.textMuted,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 5,
-                          cursor: "default",
-                        }}
-                      >
-                        <RadioButtonCheckedIcon style={{ fontSize: 14 }} /> Radio
-                      </button>
-                      <button
-                        type="button"
-                        disabled
-                        title="Checkbox fields allow multiple selections, so they are not used for one-company selection."
-                        style={{
-                          flex: 1,
-                          minHeight: 34,
-                          border: `1px solid ${C.border}`,
-                          borderRadius: 8,
-                          background: C.white,
-                          color: C.textMuted,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          opacity: 0.55,
-                          cursor: "not-allowed",
-                        }}
-                      >
-                        Checkbox
-                      </button>
-                    </div>
-                    <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, lineHeight: 1.5 }}>
-                      Field maintained on the canvas: <strong>{COMPANY_FIELD_LABEL}</strong> / <code>{COMPANY_FIELD_NAME}</code>.
-                    </div>
-                    {meta.companyChoiceEnabled && companyOptions.length < 2 && (
-                      <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "7px 9px", fontSize: 10, color: C.amber, marginTop: 8, lineHeight: 1.45 }}>
-                        <WarningIcon style={{ fontSize: 12, verticalAlign: "middle", marginRight: 4 }} />
-                        Add at least two company lines before publishing.
-                      </div>
-                    )}
-                    {meta.companyChoiceEnabled && extraCompanyFields.length > 0 && (
-                      <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: "7px 9px", fontSize: 10, color: C.red, marginTop: 8, lineHeight: 1.45 }}>
-                        <InfoOutlinedIcon style={{ fontSize: 12, verticalAlign: "middle", marginRight: 4 }} />
-                        Possible duplicate company fields found: {extraCompanyFields.map(f => f.name || f.title).join(", ")}. None were removed.
-                      </div>
-                    )}
-                  </div>
-                  <FB label="Logo URL" hint="Custom logo URL for the banner (defaults to /logo-128.png)">
-                    <TextInput value={meta.logoUrl} onChange={v => setM("logoUrl", v)} placeholder="https://example.com/logo.png" />
-                  </FB>
-                  <FB label="Header / Companies banner" hint="Show or hide the ISO + company banner at the top of the form.">
-                    <div style={{
-                      background: showBanner ? C.greenPale : C.offWhite,
-                      border: `1px solid ${showBanner ? "#6EE7B7" : C.border}`,
-                      borderRadius: 8,
-                      padding: "10px 12px",
-                      transition: "background-color .2s, border-color .2s",
-                    }}>
-                      <ToggleSwitch checked={showBanner} onChange={setShowBanner} label={showBanner ? "Banner visible" : "Banner hidden"} />
-                      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 6, lineHeight: 1.5 }}>
-                        {showBanner ? "ISO standards and company names appear at the top of the form." : "Form opens without the header banner."}
-                      </div>
-                    </div>
-                  </FB>
-                  <FB label="Form Access">
-                    <div style={{ display: "flex", gap: 7 }}>
-                      {[
-                        { v: true, label: <><PublicIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Public</>, hint: "Any M365 user" },
-                        { v: false, label: <><LockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Private</>, hint: "Explicit sign-in gate" },
-                      ].map(opt => (
-                        <button
-                          key={String(opt.v)}
-                          onClick={() => setIsPublic(opt.v)}
-                          style={{
-                            flex: 1,
-                            padding: "8px 4px",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                            border: `1.5px solid ${isPublic === opt.v ? C.purple : C.border}`,
-                            background: isPublic === opt.v ? C.purplePale : C.white,
-                            color: isPublic === opt.v ? C.purple : C.textSecond,
-                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                            transition: "background-color .13s, border-color .13s, color .13s",
-                          }}
-                        >
-                          <div style={{ fontSize: 12, fontWeight: 600 }}>{opt.label}</div>
-                          <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>{opt.hint}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </FB>
-                </div>
-              )}
+          </div>
+        )}
 
-              {sidebarTab === "pdf" && (
-                <div style={{ animation: "fadeUp .15s ease" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 10 }}>
-                    PDF form layout
-                  </div>
-                  <FB label="Custom PDF layout">
-                    <div style={{
-                      background: meta.pdfConfig.enabled ? C.greenPale : C.offWhite,
-                      border: `1px solid ${meta.pdfConfig.enabled ? "#6EE7B7" : C.border}`,
-                      borderRadius: 8,
-                      padding: "10px 12px",
-                    }}>
-                      <ToggleSwitch
-                        checked={meta.pdfConfig.enabled}
-                        onChange={enabled => setPdfConfig({ enabled })}
-                        label={meta.pdfConfig.enabled ? "Use custom layout" : "Use default layout"}
-                      />
-                    </div>
-                  </FB>
-                  <FB label="Document title">
-                    <TextInput
-                      value={meta.pdfConfig.title}
-                      onChange={title => setPdfConfig({ title })}
-                      placeholder="Form Submission"
-                    />
-                  </FB>
-                  <FB label="Header logo URL" hint="Overrides the form banner logo in generated PDFs.">
-                    <TextInput
-                      value={meta.pdfConfig.headerLogoUrl || ""}
-                      onChange={headerLogoUrl => setPdfConfig({ headerLogoUrl })}
-                      placeholder="https://example.com/logo.png"
-                    />
-                  </FB>
-                  <FB label="Footer text">
-                    <TextInput
-                      value={meta.pdfConfig.footerText || ""}
-                      onChange={footerText => setPdfConfig({ footerText })}
-                      placeholder="Generated date appears when blank"
-                    />
-                  </FB>
-                  <FB label="Density">
-                    <div style={{ display: "flex", gap: 7 }}>
-                      {(["compact", "comfortable"] as const).map(density => (
-                        <button
-                          key={density}
-                          type="button"
-                          onClick={() => setPdfConfig({ density })}
-                          style={{
-                            flex: 1,
-                            minHeight: 34,
-                            borderRadius: 8,
-                            border: `1.5px solid ${meta.pdfConfig.density === density ? C.purple : C.border}`,
-                            background: meta.pdfConfig.density === density ? C.purplePale : C.white,
-                            color: meta.pdfConfig.density === density ? C.purple : C.textSecond,
-                            cursor: "pointer",
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {density === "compact" ? "Compact" : "Comfortable"}
-                        </button>
-                      ))}
-                    </div>
-                  </FB>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <FB label="Primary color">
-                      <input
-                        type="color"
-                        value={meta.pdfConfig.primaryColor || "#0078D4"}
-                        onChange={e => setPdfConfig({ primaryColor: e.target.value })}
-                        style={{ ...inp, height: 38, padding: 4 }}
-                      />
-                    </FB>
-                    <FB label="Secondary color">
-                      <input
-                        type="color"
-                        value={meta.pdfConfig.secondaryColor || "#6264A7"}
-                        onChange={e => setPdfConfig({ secondaryColor: e.target.value })}
-                        style={{ ...inp, height: 38, padding: 4 }}
-                      />
-                    </FB>
-                  </div>
-                  {[
-                    ["showStatusBadge", "Show status badge"],
-                    ["showApproverChain", "Show approval/evaluation chain"],
-                    ["showEvaluationDetails", "Show evaluation details"],
-                    ["showSignatures", "Show signature blocks"],
-                    ["includeEmptyEvaluationFields", "Include blank evaluation fields for paper/manual evaluation"],
-                  ].map(([key, label]) => (
-                    <label key={key} style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "8px 0",
-                      fontSize: 11,
-                      color: C.textSecond,
-                      borderBottom: `1px solid ${C.borderLight}`,
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(meta.pdfConfig[key as keyof PdfConfig])}
-                        onChange={e => setPdfConfig({ [key]: e.target.checked } as Partial<PdfConfig>)}
-                        style={{ width: 14, height: 14, accentColor: C.purple }}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                  <FB label="Sample PDF" hint="Select an existing form, then generate a local preview filled with fake submission, signature, photo, approval, and evaluation data.">
-                    <div style={{ display: "grid", gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => void handleGenerateSamplePdf("filled")}
-                        disabled={!!samplePdfGenerating || !isEditing || !surveyJson}
-                        style={{
-                          width: "100%",
-                          minHeight: 38,
-                          border: "none",
-                          borderRadius: 8,
-                          background: samplePdfGenerating || !isEditing || !surveyJson ? C.border : C.purple,
-                          color: C.white,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: samplePdfGenerating || !isEditing || !surveyJson ? "not-allowed" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 8,
-                        }}
-                      >
-                        {samplePdfGenerating === "filled" && <Spinner size={14} />}
-                        {samplePdfGenerating === "filled" ? "Generating sample..." : "Generate filled sample PDF"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleGenerateSamplePdf("manual")}
-                        disabled={!!samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig)}
-                        style={{
-                          width: "100%",
-                          minHeight: 38,
-                          border: `1px solid ${C.purpleMid}`,
-                          borderRadius: 8,
-                          background: samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig) ? C.offWhite : C.purplePale,
-                          color: samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig) ? C.textMuted : C.purple,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig) ? "not-allowed" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 8,
-                        }}
-                      >
-                        {samplePdfGenerating === "manual" && <Spinner size={14} />}
-                        {samplePdfGenerating === "manual" ? "Generating manual sample..." : "Generate manual / physical evaluation sample"}
-                      </button>
-                    </div>
-                  </FB>
-                </div>
-              )}
+        {/* ── Settings ───────────────────────────────────────────────── */}
+        {mode === "settings" && (
+          <div className="bx-scroller">
+            <div className="bx-col">
+              <div className="bx-eyebrow" style={{ marginBottom: 8 }}>Settings</div>
+              <h2 className="bx-h2" style={{ marginBottom: 8 }}>Form setup</h2>
+              <p className="bx-lede" style={{ marginBottom: 26 }}>Identity, route and access. Everything below opens only when you need it.</p>
 
-              {sidebarTab === "layers" && (
-                <div>
-                  {profileLayerEdit && (
-                    <div style={{
-                      background: C.purplePale,
-                      border: `1px solid ${C.purpleMid}`,
-                      borderRadius: 10,
-                      padding: "10px 11px",
-                      marginBottom: 12,
-                      boxShadow: "0 8px 20px rgba(16,16,16,0.06)",
-                    }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: C.textPrimary, marginBottom: 3 }}>
-                        Editing profile layers
-                      </div>
-                      <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55, marginBottom: 9 }}>
-                        Changes here save only to <strong>{profileLayerEdit.publishLabel}</strong> / v{profileLayerEdit.version} / {profileLayerEdit.publishKey}. Use Publish only when you want to republish the whole profile.
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-                        <button
-                          onClick={handleSaveProfileLayers}
-                          disabled={profileLayerSaving}
-                          style={{
-                            minHeight: 32,
-                            border: "none",
-                            borderRadius: 7,
-                            background: profileLayerSaving ? C.border : C.purple,
-                            color: profileLayerSaving ? C.textMuted : C.white,
-                            fontSize: 12,
-                            fontWeight: 800,
-                            cursor: profileLayerSaving ? "wait" : "pointer",
-                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                          }}
-                        >
-                          {profileLayerSaving ? "Saving..." : "Save profile layers"}
-                        </button>
-                        <button
-                          onClick={() => setProfileLayerEdit(null)}
-                          disabled={profileLayerSaving}
-                          style={{
-                            minHeight: 32,
-                            border: `1px solid ${C.border}`,
-                            borderRadius: 7,
-                            background: C.white,
-                            color: C.textSecond,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: profileLayerSaving ? "not-allowed" : "pointer",
-                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                          }}
-                        >
-                          Exit layer edit
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {isEditing && !viewingOld && (
-                    <div style={{
-                      background: C.offWhite,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 8,
-                      padding: "9px 10px",
-                      marginBottom: 10,
-                      display: "grid",
-                      gap: 8,
-                    }}>
-                      <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
-                        Need a separate workflow for the same version? Publish New Profile creates a blank layer draft. Existing profiles keep their saved evaluation and approval layers.
-                      </div>
-                      <button
-                        onClick={handleStartProfileLayersFromScratch}
-                        disabled={profileLayerSaving}
-                        style={{
-                          minHeight: 32,
-                          border: `1px dashed ${C.purpleMid}`,
-                          borderRadius: 7,
-                          background: C.white,
-                          color: C.purple,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: profileLayerSaving ? "not-allowed" : "pointer",
-                          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                        }}
-                      >
-                        <EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} />
-                        Start this profile's layers from scratch
-                      </button>
-                    </div>
-                  )}
-                  <LayerConfigPanel
-                    value={layerConfig}
-                    onChange={setLayerConfig}
-                    siteUsers={siteUsers}
-                    formFields={layerFieldOptions}
-                    slug={meta.slug}
+              <div className="bx-card" style={{ marginBottom: 20 }}>
+                <TextField
+                  id="set-title"
+                  label="Form title *"
+                  value={meta.formTitle}
+                  onChange={v => setM("formTitle", v)}
+                  placeholder="Training Application Form"
+                  disabled={isEditing}
+                  note={isEditing ? <span className="bx-meta">Becomes the SharePoint list name — locked after the first publish.</span> : undefined}
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: 12 }}>
+                  <TextField id="set-formid" label="Form ID / Doc no. *" value={meta.formId} onChange={v => setM("formId", v)} placeholder="PMW-HR-001" />
+                  <TextField id="set-version" label="Version" value={meta.formVersion} onChange={v => setM("formVersion", v)} placeholder="1.0" />
+                </div>
+                <div className="bx-field" style={{ marginBottom: 0 }}>
+                  <label htmlFor="set-slug">Route slug</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      id="set-slug"
+                      className={`bx-input${slugError ? " is-error" : ""}`}
+                      style={{ height: 40 }}
+                      value={meta.slug}
+                      onChange={e => { setM("slug", slugify(e.target.value)); setSlugManual(true); }}
+                      placeholder="training-application"
+                      disabled={slugLocked}
+                    />
+                    {slugChecking && <span className="bx-spinner" style={{ width: 14, height: 14, position: "absolute", right: 11, top: 13 }} />}
+                  </div>
+                  <div style={{ fontSize: 13.5, fontWeight: 400, marginTop: 6, color: slugError ? C.red : meta.slug ? "var(--bx-a700)" : "var(--bx-n600)" }}>
+                    {slugError
+                      ? `Slug conflict — ${slugError}. Pick another route before publishing.`
+                      : meta.slug
+                        ? `Public route: /form/${meta.slug}${slugLocked ? " — locked after first publish" : ""}`
+                        : "Filled from the title; edit it before publishing."}
+                  </div>
+                </div>
+              </div>
+
+              <Disclosure open={!!disc.branding} onToggle={() => toggleDisc("branding")} title="Branding & banner" summary={showBanner ? "Banner on" : "Banner off"}>
+                <TextField id="set-iso" label="ISO standards" value={meta.isoStandards} onChange={v => setM("isoStandards", v)} placeholder="ISO 9001 · ISO 14001" />
+                <div className="bx-field">
+                  <label htmlFor="set-companies">Companies (one per line)</label>
+                  <textarea
+                    id="set-companies"
+                    className="bx-input"
+                    rows={4}
+                    value={meta.companies}
+                    onChange={e => setM("companies", e.target.value)}
                   />
                 </div>
-              )}
+                <TextField id="set-logo" label="Logo URL" value={meta.logoUrl} onChange={v => setM("logoUrl", v)} placeholder="/logo-128.png" />
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 4 }}>
+                  <CheckRow
+                    checked={showBanner}
+                    onChange={setShowBanner}
+                    label="Show header banner"
+                    hint="ISO standards and company names at the top of the form."
+                  />
+                  <CheckRow
+                    checked={meta.companyChoiceEnabled}
+                    onChange={v => setMeta(m => ({ ...m, companyChoiceEnabled: v }))}
+                    label="Required company selector"
+                    hint={`Adds a required single-select field (${COMPANY_FIELD_LABEL} / ${COMPANY_FIELD_NAME}) using the company list above.`}
+                  />
+                </div>
+                {meta.companyChoiceEnabled && companyOptions.length < 2 && (
+                  <div style={{ background: C.amberPale, border: "1px solid #F0D79A", padding: "9px 12px", fontSize: 13.5, color: C.amber, marginTop: 8 }}>
+                    Add at least two company lines before publishing the selector.
+                  </div>
+                )}
+                {meta.companyChoiceEnabled && extraCompanyFields.length > 0 && (
+                  <div style={{ background: C.redPale, border: "1px solid #E8B4B4", padding: "9px 12px", fontSize: 13.5, color: C.red, marginTop: 8 }}>
+                    Possible duplicate company fields on the form: {extraCompanyFields.map(f => f.name || f.title).join(", ")}. None were removed.
+                  </div>
+                )}
+              </Disclosure>
 
-              {sidebarTab === "version" && (
-                <div style={{ animation: "fadeUp .15s ease" }}>
-                  {!isEditing ? (
-                    <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>
-                      Publish a form first to see version history.
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{
-                        background: C.offWhite,
-                        border: `1px solid ${C.border}`,
-                        borderRadius: 8,
-                        padding: "9px 10px",
-                        fontSize: 10,
-                        color: C.textMuted,
-                        lineHeight: 1.55,
-                        marginBottom: 10,
-                      }}>
-                        Manage published profiles here. Off or expired profiles cannot be opened by public users; the current profile is the default route for <strong>/form/{meta.slug || "slug"}</strong>.
-                      </div>
-                      {viewingOld && (
-                        <div style={{
-                          background: C.amberPale,
-                          border: "1px solid #FDE68A",
-                          borderRadius: 8,
-                          padding: "8px 11px",
-                          fontSize: 11,
-                          color: C.amber,
-                          marginBottom: 12,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}>
-                          <span>Viewing v{viewingOld.version} / {viewingOld.publishKey}</span>
-                          <button
-                            onClick={() => setViewingOld(null)}
-                            style={{ background: "none", border: "none", color: C.amber, cursor: "pointer", fontWeight: 600, fontSize: 11 }}
-                          >
-                            Back to current
+              <Disclosure open={!!disc.doc} onToggle={() => toggleDisc("doc")} title="Document control header" summary={meta.documentHeader.documentNumber || meta.formId || "Defaults"}>
+                <p className="bx-lede" style={{ fontSize: 14, marginBottom: 14 }}>
+                  Shown under the form title, above the company logo row. Blank Document and Revision values fall back to the Form ID and Version.
+                </p>
+                <TextField id="doc-number" label="Document number" value={meta.documentHeader.documentNumber || ""} onChange={v => setDocumentHeader("documentNumber", v)} placeholder={meta.formId || "PMW-HR-001"} />
+                <TextField id="doc-issue" label="Issue number" value={meta.documentHeader.issueNumber || ""} onChange={v => setDocumentHeader("issueNumber", v)} placeholder="01" />
+                <TextField id="doc-eff" label="Effective date" type="date" value={meta.documentHeader.effectiveDate || ""} onChange={v => setDocumentHeader("effectiveDate", v)} />
+                <TextField id="doc-rev" label="Revision number" value={meta.documentHeader.revisionNumber || ""} onChange={v => setDocumentHeader("revisionNumber", v)} placeholder={meta.formVersion || "1.0"} />
+                <TextField id="doc-revdate" label="Revision date" type="date" value={meta.documentHeader.revisionDate || ""} onChange={v => setDocumentHeader("revisionDate", v)} />
+              </Disclosure>
+
+              <Disclosure open={!!disc.access} onToggle={() => toggleDisc("access")} title="Access" summary={isPublic ? "Public" : "Private"}>
+                <CheckRow
+                  checked={isPublic}
+                  onChange={setIsPublic}
+                  label="Public — any Microsoft 365 user"
+                  hint="Turn this off for an explicit sign-in gate."
+                />
+              </Disclosure>
+            </div>
+          </div>
+        )}
+
+        {/* ── Publish ────────────────────────────────────────────────── */}
+        {mode === "publish" && (
+          <div className="bx-scroller">
+            <div className="bx-col">
+              <div className="bx-eyebrow" style={{ marginBottom: 8 }}>Publish</div>
+              <h2 className="bx-h2" style={{ marginBottom: 8 }}>Make it live</h2>
+              <p className="bx-lede" style={{ marginBottom: 26 }}>
+                One primary action. Profiles, PDF layout, versions, the audit log and QR codes stay folded away until you need them.
+              </p>
+
+              <div className="bx-card" style={{ padding: "20px 24px", marginBottom: 22 }}>
+                <div className="bx-eyebrow" style={{ marginBottom: 12 }}>Readiness</div>
+                {readiness.map(r => (
+                  <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.borderLight}` }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        flex: "none", width: 22, height: 22, display: "grid", placeItems: "center",
+                        border: `1.5px solid ${r.done ? "var(--bx-a700)" : "var(--bx-n500)"}`,
+                        color: r.done ? "var(--bx-a700)" : "var(--bx-n500)",
+                      }}
+                    >
+                      <Icon name={r.done ? "tick" : "minus"} size={13} strokeWidth={2} />
+                    </span>
+                    <span style={{ flex: 1, fontSize: 15 }}>
+                      {r.label}
+                      <span className="bx-sr">{r.done ? " — ready" : " — not set"}</span>
+                    </span>
+                    <span className="bx-meta bx-num">{r.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="bx-btn bx-btn-primary"
+                  style={{ height: 50, padding: "0 26px", fontSize: 18 }}
+                  onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
+                  disabled={publishBlocked}
+                >
+                  <Icon name="rocket" size={18} strokeWidth={1.6} />
+                  Publish to /form/{meta.slug || "slug"}
+                </button>
+                <button
+                  type="button"
+                  className="bx-btn bx-btn-secondary"
+                  style={{ height: 50, padding: "0 22px", fontSize: 16 }}
+                  onClick={() => handleSaveDraft()}
+                  disabled={!meta.formTitle.trim() || !!viewingOld || !!saveBusy}
+                >
+                  {saveBusy === "draft" && <span className="bx-spinner" style={{ width: 14, height: 14 }} />}
+                  Save draft
+                </button>
+              </div>
+              <p className="bx-lede" style={{ fontSize: 13.5, marginBottom: 26 }}>
+                {viewingOld
+                  ? "Close the archived version preview before publishing."
+                  : publishBlocked
+                    ? "Add a form title and Form ID in Settings, and clear any slug conflict, before publishing."
+                    : "Makes this version the default public route. Nothing else on this screen changes what is live."}
+              </p>
+
+              <Disclosure open={!!disc.profile} onToggle={() => toggleDisc("profile")} title="Publish profile" sub="Same version, separate workflow — advanced" summary={`${meta.publishLabel || "Production"} · ${activePublishKey}`}>
+                <TextField id="pub-label" label="Profile label" value={meta.publishLabel} onChange={v => setMeta(m => ({ ...m, publishLabel: v }))} placeholder="Production" note={<span className="bx-meta">Shown in version history.</span>} />
+                <TextField id="pub-key" label="Publish key" value={meta.publishKey} onChange={v => setMeta(m => ({ ...m, publishKey: normalizePublishKey(v) }))} placeholder="production" note={<span className="bx-meta">The <code>?publish=</code> parameter on the route.</span>} />
+                <ActionRow
+                  label="Save profile only"
+                  hint="Publishes this profile for direct links; leaves the live /form route alone."
+                  action="Save"
+                  onAction={() => handlePublish(surveyJson as SurveyJson, "profile")}
+                  disabled={!isEditing || publishBlocked}
+                />
+                <ActionRow
+                  label="Publish new profile"
+                  hint="Starts a blank same-version workflow. The active profile is unchanged."
+                  action="Create"
+                  onAction={handleCreateNewProfileDraft}
+                  disabled={!isEditing || publishBlocked}
+                />
+              </Disclosure>
+
+              <Disclosure open={!!disc.pdf} onToggle={() => toggleDisc("pdf")} title="PDF layout" sub="Document title, colours, sections, sample generation" summary={meta.pdfConfig.enabled ? "Custom" : "Default"}>
+                <ActionRow
+                  label="Custom PDF layout"
+                  hint="Off falls back to the default layout."
+                  value={meta.pdfConfig.enabled ? "On" : "Off"}
+                  action={disc.pdfCfg ? "Close" : "Configure"}
+                  onAction={() => toggleDisc("pdfCfg")}
+                />
+                {disc.pdfCfg && (
+                  <div style={{ padding: "0 0 14px 15px", borderLeft: `1px solid ${C.border}`, marginBottom: 10 }}>
+                    <CheckRow checked={meta.pdfConfig.enabled} onChange={enabled => setPdfConfig({ enabled })} label="Use the custom layout" />
+                    <TextField id="pdf-title" label="Document title" value={meta.pdfConfig.title} onChange={title => setPdfConfig({ title })} placeholder="Form Submission" />
+                    <TextField id="pdf-logo" label="Header logo URL" value={meta.pdfConfig.headerLogoUrl || ""} onChange={headerLogoUrl => setPdfConfig({ headerLogoUrl })} placeholder="https://example.com/logo.png" />
+                    <TextField id="pdf-footer" label="Footer text" value={meta.pdfConfig.footerText || ""} onChange={footerText => setPdfConfig({ footerText })} placeholder="Generated date appears when blank" />
+                    <div className="bx-field">
+                      <span className="bx-label">Density</span>
+                      <div className="bx-seg">
+                        {(["compact", "comfortable"] as const).map(density => (
+                          <button key={density} type="button" className={meta.pdfConfig.density === density ? "is-on" : ""} onClick={() => setPdfConfig({ density })}>
+                            {density === "compact" ? "Compact" : "Comfortable"}
                           </button>
-                        </div>
-                      )}
-                      <VersionHistory
-                        history={versionHistory}
-                        current={originalVersion || ""}
-                        currentPublishKey={normalizePublishKey(meta.publishKey)}
-                        slug={meta.slug}
-                        onView={handleViewVersion}
-                        onSetDefault={handleSetDefaultProfile}
-                        onToggleStatus={handleToggleProfileStatus}
-                        onSetExpiry={handleSetProfileExpiry}
-                        onCopyLink={handleCopyProfileLink}
-                        onEditLayers={handleEditProfileLayers}
-                        onOpenQr={handleOpenProfileQr}
-                        qrBusyKey={qrProfileLoading}
-                        onOpenDocHeader={handleOpenProfileDocHeader}
-                        docHeaderBusyKey={docHeaderLoading}
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-
-              {sidebarTab === "log" && (
-                <div style={{ animation: "fadeUp .15s ease" }}>
-                  {logLoading ? (
-                    <div style={{ display: "flex", justifyContent: "center", padding: 20 }}>
-                      <Spinner />
-                    </div>
-                  ) : (
-                    <AuditLog logs={auditLog} />
-                  )}
-                </div>
-              )}
-
-              {sidebarTab === "publish" && (
-                <div style={{ animation: "fadeUp .15s ease" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 16 }}>
-                    {[
-                      ["Form", meta.formTitle || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
-                      ["Form ID", meta.formId || <em style={{ color: C.red }}>Missing <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle' }} /></em>],
-                      ["Version", `v${proposedVersion}${isDraft ? " (draft)" : ""}`],
-                      ["Profile", `${meta.publishLabel || "Production"} (${normalizePublishKey(meta.publishKey)})`],
-                      ["Status", isDraft ? <span style={{ color: C.amber }}><EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Draft</span> : isEditing ? <span style={{ color: C.green }}><CheckCircleIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }} /> Published</span> : "Not published"],
-                      ["Route", meta.slug ? `/form/${meta.slug}${normalizePublishKey(meta.publishKey) === DEFAULT_PUBLISH_KEY ? "" : `?publish=${normalizePublishKey(meta.publishKey)}`}` : <em style={{ color: C.amber }}>No slug</em>],
-                      ["Layers", numLayers || "None"],
-                      ["Banner", showBanner ? <><CheckCircleIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Visible</> : <><BlockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Hidden</>],
-                      ["Company", meta.companyChoiceEnabled ? <><CheckCircleIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Required radio</> : "Not required"],
-                      ["Access", isPublic ? <><PublicIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Public</> : <><LockIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 2 }} /> Private</>],
-                    ].map(([k, v]) => (
-                      <div key={k as string} style={{ display: "flex", gap: 10, fontSize: 12 }}>
-                        <span style={{ color: C.textMuted, minWidth: 70 }}>{k as string}:</span>
-                        <span style={{ color: C.textPrimary, fontWeight: 500 }}>{v as ReactNode}</span>
+                        ))}
                       </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div className="bx-field">
+                        <label htmlFor="pdf-c1">Primary colour</label>
+                        <input id="pdf-c1" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.primaryColor || "#0078D4"} onChange={e => setPdfConfig({ primaryColor: e.target.value })} />
+                      </div>
+                      <div className="bx-field">
+                        <label htmlFor="pdf-c2">Secondary colour</label>
+                        <input id="pdf-c2" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.secondaryColor || "#6264A7"} onChange={e => setPdfConfig({ secondaryColor: e.target.value })} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <ActionRow
+                  label="Sections"
+                  hint="Status badge, approval chain, evaluation details, signatures."
+                  value={`${[meta.pdfConfig.showStatusBadge, meta.pdfConfig.showApproverChain, meta.pdfConfig.showEvaluationDetails, meta.pdfConfig.showSignatures].filter(Boolean).length} shown`}
+                  action={disc.pdfSections ? "Close" : "Edit"}
+                  onAction={() => toggleDisc("pdfSections")}
+                />
+                {disc.pdfSections && (
+                  <div style={{ padding: "0 0 14px 15px", borderLeft: `1px solid ${C.border}`, marginBottom: 10 }}>
+                    {([
+                      ["showStatusBadge", "Show status badge"],
+                      ["showApproverChain", "Show approval / evaluation chain"],
+                      ["showEvaluationDetails", "Show evaluation details"],
+                      ["showSignatures", "Show signature blocks"],
+                      ["includeEmptyEvaluationFields", "Include blank evaluation fields for paper evaluation"],
+                    ] as const).map(([key, label]) => (
+                      <CheckRow
+                        key={key}
+                        checked={Boolean(meta.pdfConfig[key])}
+                        onChange={v => setPdfConfig({ [key]: v } as Partial<PdfConfig>)}
+                        label={label}
+                      />
                     ))}
                   </div>
-                  {slugError && (
-                    <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: C.red, marginBottom: 10 }}>
-                      <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4 }} /> {slugError}
-                    </div>
-                  )}
-                  {(!isEditing || isDraft) && (
+                )}
+                <ActionRow
+                  label="Sample PDF"
+                  hint="A local preview filled with fake submission, signature, photo, approval and evaluation data."
+                  action={disc.pdfSample ? "Close" : "Generate"}
+                  onAction={() => toggleDisc("pdfSample")}
+                  disabled={!isEditing || !surveyJson}
+                />
+                {disc.pdfSample && (
+                  <div style={{ padding: "0 0 14px 15px", borderLeft: `1px solid ${C.border}`, display: "grid", gap: 8 }}>
                     <button
-                      onClick={() => handleSaveDraft()}
-                      disabled={!meta.formTitle.trim() || !!viewingOld}
-                      style={{
-                        width: "100%",
-                        padding: "10px 0",
-                        borderRadius: 8,
-                        border: `1px solid ${C.border}`,
-                        background: C.white,
-                        color: !meta.formTitle.trim() || viewingOld ? C.textMuted : C.textSecond,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        cursor: !meta.formTitle.trim() || viewingOld ? "not-allowed" : "pointer",
-                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                        marginBottom: 8,
-                        opacity: !meta.formTitle.trim() || viewingOld ? 0.5 : 1,
-                      }}
+                      type="button"
+                      className="bx-btn bx-btn-primary bx-btn-sm"
+                      onClick={() => void handleGenerateSamplePdf("filled")}
+                      disabled={!!samplePdfGenerating || !isEditing || !surveyJson}
                     >
-<SaveIcon style={{ fontSize: 14, marginRight: 4 }} /> Save Draft
-                    </button>
-                  )}
-                  <div style={{ display: "grid", gap: 8 }}>
-                    <button
-                      onClick={handleCreateNewProfileDraft}
-                      disabled={!isEditing || !meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
-                      style={{
-                        width: "100%",
-                        padding: "11px 0",
-                        borderRadius: 8,
-                        border: "none",
-                        background: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : C.purple,
-                        color: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.white,
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
-                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                      }}
-                    >
-                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to create profile</> : <><EditNoteIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Publish new profile</>}
+                      {samplePdfGenerating === "filled" && <span className="bx-spinner" style={{ width: 13, height: 13 }} />}
+                      {samplePdfGenerating === "filled" ? "Generating…" : "Generate filled sample PDF"}
                     </button>
                     <button
-                      onClick={() => handlePublish(surveyJson as SurveyJson, "profile")}
-                      disabled={!isEditing || !meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
-                      style={{
-                        width: "100%",
-                        padding: "11px 0",
-                        borderRadius: 8,
-                        border: `1px solid ${!isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : C.purpleMid}`,
-                        background: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.offWhite : C.white,
-                        color: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.purple,
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: !isEditing || !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
-                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                      }}
+                      type="button"
+                      className="bx-btn bx-btn-secondary bx-btn-sm"
+                      onClick={() => void handleGenerateSamplePdf("manual")}
+                      disabled={!!samplePdfGenerating || !isEditing || !surveyJson || !hasSampleEvaluationLayer(layerConfig)}
+                      title={hasSampleEvaluationLayer(layerConfig) ? undefined : "Add an evaluation layer in Workflow first"}
                     >
-                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to save profile</> : <><SaveIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Save profile only</>}
+                      {samplePdfGenerating === "manual" && <span className="bx-spinner" style={{ width: 13, height: 13 }} />}
+                      {samplePdfGenerating === "manual" ? "Generating…" : "Generate manual / physical evaluation sample"}
                     </button>
-                    <button
-                      onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
-                      disabled={!meta.formTitle || !meta.formId || !!slugError || !!viewingOld}
-                      style={{
-                        width: "100%",
-                        padding: "11px 0",
-                        borderRadius: 8,
-                        border: "none",
-                        background: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
-                        color: !meta.formTitle || !meta.formId || slugError || viewingOld ? C.textMuted : C.white,
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: !meta.formTitle || !meta.formId || slugError || viewingOld ? "not-allowed" : "pointer",
-                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                      }}
-                    >
-                      {viewingOld ? <><WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Close version preview to publish</> : isDraft ? <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Actual publish (make live)</> : <><RocketLaunchIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> Actual publish to /form route</>}
-                    </button>
-                    <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
-                      Publish New Profile opens a blank same-version workflow. Save Profile Only publishes that profile for direct links; Actual Publish also makes it the default public <strong>/form/{meta.slug || "slug"}</strong> route.
-                    </div>
                   </div>
+                )}
+              </Disclosure>
+
+              <Disclosure open={!!disc.versions} onToggle={() => toggleDisc("versions")} title="Versions & profiles" sub="Rename, expire, set default, QR codes, restore" summary={`${versionHistory.length} published`}>
+                {!isEditing ? (
+                  <p className="bx-lede" style={{ fontSize: 14 }}>Publish this form to start its version history.</p>
+                ) : (
+                  <>
+                    <p className="bx-lede" style={{ fontSize: 14, marginBottom: 14 }}>
+                      Each card is one published profile. Off or expired profiles cannot be opened by public users; the default profile answers <strong>/form/{meta.slug || "slug"}</strong>.
+                    </p>
+                    <div className="bx-legacy"><VersionHistory
+                      history={versionHistory}
+                      current={originalVersion || ""}
+                      currentPublishKey={activePublishKey}
+                      slug={meta.slug}
+                      formTitle={meta.formTitle}
+                      onRename={handleRenameProfile}
+                      renameBusyKey={renameProfileBusy}
+                      onView={handleViewVersion}
+                      onSetDefault={handleSetDefaultProfile}
+                      onToggleStatus={handleToggleProfileStatus}
+                      onSetExpiry={handleSetProfileExpiry}
+                      onCopyLink={handleCopyProfileLink}
+                      onEditLayers={handleEditProfileLayers}
+                      onOpenQr={handleOpenProfileQr}
+                      qrBusyKey={qrProfileLoading}
+                      onOpenDocHeader={handleOpenProfileDocHeader}
+                      docHeaderBusyKey={docHeaderLoading}
+                    /></div>
+                  </>
+                )}
+              </Disclosure>
+
+              <Disclosure open={!!disc.log} onToggle={() => toggleDisc("log")} title="Audit log" sub="Every change, with a before/after diff" summary={isEditing ? `${auditLog.length} entries` : "Not published"}>
+                {logLoading ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: 20 }}>
+                    <span className="bx-spinner" style={{ width: 22, height: 22 }} />
+                  </div>
+                ) : (
+                  <div className="bx-legacy"><AuditLog logs={auditLog} /></div>
+                )}
+              </Disclosure>
+
+              <Disclosure open={!!disc.qr} onToggle={() => toggleDisc("qr")} title="Prefilled QR codes" sub="Generate links with fields already answered" summary={isEditing && !isDraft && meta.slug ? "Available" : "After publish"}>
+                <div className="bx-legacy">
                   <PrefilledQrPanel
                     surveyJson={surveyJson}
                     slug={meta.slug}
@@ -2494,7 +2249,7 @@ export default function AdminFormBuilder() {
                     publishLabel={meta.publishLabel}
                   />
                 </div>
-              )}
+              </Disclosure>
             </div>
           </div>
         )}

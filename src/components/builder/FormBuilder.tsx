@@ -7,102 +7,51 @@ import { Survey } from "survey-react-ui";
 import { Model, Serializer } from "survey-core";
 import "survey-core/survey-core.min.css";
 import type { SurveyJson, FormBuilderField } from "../../types/index";
-import { QUESTION_TYPES, TYPE_GROUPS, createQuestion, buildSurveyJson, validateFields, getSpColumnKind, safeEvalArithmetic } from "../../utils/FormBuilderEngine";
+import { QUESTION_TYPES, createQuestion, buildSurveyJson, validateFields, safeEvalArithmetic } from "../../utils/FormBuilderEngine";
 import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree, reorderFieldsRecursive, moveFieldToRoot } from "../../utils/FormBuilderEngine";
 import { registerSignaturePad } from "../../utils/SignaturePad";
 import { registerDynamicMatrix } from "../../utils/DynamicMatrix";
 import { getAllColumnsForList, getChoiceColumnsForList, getSharePointLists } from "../../utils/formBuilderSP";
 import DOMPurify from "dompurify";
 import { C } from "./constants";
+import { Icon, FieldIcon } from "./BuilderIcons";
+import { PALETTE_ITEMS, TAB_SECTIONS, QUICK_ADD_TYPES, shortTypeLabel, wysKind, hasRoundMark } from "./paletteTaxonomy";
+import type { PaletteTab, PaletteItem } from "./paletteTaxonomy";
+import type { BuilderToolCommand } from "./builderTheme";
 import "./FormBuilder.css";
+import "./BuilderShell.css";
 
 // MUI Icons
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
-import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import SettingsIcon from "@mui/icons-material/Settings";
-import PreviewIcon from "@mui/icons-material/Preview";
 
-import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
-import UndoIcon from "@mui/icons-material/Undo";
-import RedoIcon from "@mui/icons-material/Redo";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CodeIcon from "@mui/icons-material/Code";
-import DesktopWindowsIcon from "@mui/icons-material/DesktopWindows";
-import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import TranslateIcon from "@mui/icons-material/Translate";
 import PaletteIcon from "@mui/icons-material/Palette";
-import CommentIcon from "@mui/icons-material/Comment";
-import HubIcon from "@mui/icons-material/Hub";
-import StorageIcon from "@mui/icons-material/Storage";
-import ShieldIcon from "@mui/icons-material/Shield";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import TextFieldsIcon from "@mui/icons-material/TextFields";
-import ArrowDropDownCircleIcon from "@mui/icons-material/ArrowDropDownCircle";
-import RadioButtonCheckedIcon from "@mui/icons-material/RadioButtonChecked";
-import CheckBoxIcon from "@mui/icons-material/CheckBox";
 
-import NumbersIcon from "@mui/icons-material/Numbers";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import TableChartIcon from "@mui/icons-material/TableChart";
-import ImageIcon from "@mui/icons-material/Image";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
-import GestureIcon from "@mui/icons-material/Gesture";
-import InsertPageBreakIcon from "@mui/icons-material/InsertPageBreak";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import LoopIcon from "@mui/icons-material/Loop";
-import ViewColumnIcon from "@mui/icons-material/ViewColumn";
-import HeightIcon from "@mui/icons-material/Height";
-import HorizontalRuleIcon from "@mui/icons-material/HorizontalRule";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import EmailIcon from "@mui/icons-material/Email";
 import BoltIcon from "@mui/icons-material/Bolt";
 import LinkIcon from "@mui/icons-material/Link";
-import PhoneIcon from "@mui/icons-material/Phone";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 
-import TimelapseIcon from "@mui/icons-material/Timelapse";
 
-import LinearScaleIcon from "@mui/icons-material/LinearScale";
-import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
-import CalculateIcon from "@mui/icons-material/Calculate";
-import PlusOneIcon from "@mui/icons-material/PlusOne";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import StarRateIcon from "@mui/icons-material/StarRate";
-import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import HomeIcon from "@mui/icons-material/Home";
 
-import BadgeIcon from "@mui/icons-material/Badge";
 
-import ArticleIcon from "@mui/icons-material/Article";
-import TableRowsIcon from "@mui/icons-material/TableRows";
-import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import DescriptionIcon from "@mui/icons-material/Description";
 import ChatIcon from "@mui/icons-material/Chat";
 import PersonIcon from "@mui/icons-material/Person";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import DataObjectIcon from "@mui/icons-material/DataObject";
-import LanguageIcon from "@mui/icons-material/Language";
-import VideocamIcon from "@mui/icons-material/Videocam";
-import WarningIcon from "@mui/icons-material/Warning";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PowerIcon from "@mui/icons-material/Power";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ChromeReaderModeIcon from "@mui/icons-material/ChromeReaderMode";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 
-import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
-import BarChartIcon from "@mui/icons-material/BarChart";
-import SpeedIcon from "@mui/icons-material/Speed";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 // ── Register autocapitalize as a custom SurveyJS property ─────────────────
 // ── Register custom SurveyJS widgets and properties ────────────────────
@@ -831,242 +780,328 @@ function LogicRulesEditor({ field, allFields, onChange }: {
 }
 
 // Map SurveyJS types to MUI icons (all 57 field types, each unique)
-const TYPE_ICONS: Record<string, React.ReactNode> = {
-  // Layout
-  pagebreak: <InsertPageBreakIcon />,
-  panel: <DashboardIcon />,
-  repeater: <LoopIcon />,
-  columns: <ViewColumnIcon />,
-  spacer: <HeightIcon />,
-  divider: <HorizontalRuleIcon />,
-  // Basic
-  text: <TextFieldsIcon />,
-  number: <NumbersIcon />,
-  email: <EmailIcon />,
-  url: <LinkIcon />,
-  tel: <PhoneIcon />,
-  comment: <CommentIcon />,
-  date: <CalendarTodayIcon />,
-  datetime: <AccessTimeIcon />,
-  boolean: <CheckCircleIcon />,
-  // Text
-  password: <LockIcon />,
-  // Date/Time
-  duration: <TimelapseIcon />,
-  // Choice
-  dropdown: <ArrowDropDownCircleIcon />,
-  radiogroup: <RadioButtonCheckedIcon />,
-  checkbox: <CheckBoxIcon />,
-  // Selection
-  slider: <LinearScaleIcon />,
-  // Numeric
-  currency: <AttachMoneyIcon />,
-  formula: <CalculateIcon />,
-  counter: <PlusOneIcon />,
-  // Advanced
-  rating: <StarRateIcon />,
-  file: <AttachFileIcon />,
-  imageupload: <AddPhotoAlternateIcon />,
-  signaturepad: <GestureIcon />,
-  nric: <BadgeIcon />,
-  consent: <ArticleIcon />,
-  dynamicmatrix: <TableChartIcon />,
-  tableinput: <TableRowsIcon />,
-  ranking: <FormatListNumberedIcon />,
-  hierarchy: <AccountTreeIcon />,
-  jsoneditor: <DataObjectIcon />,
-  // Display
-  html: <LanguageIcon />,
-  image: <ImageIcon />,
-  videoembed: <VideocamIcon />,
-  alert: <WarningIcon />,
-  countdown: <HourglassEmptyIcon />,
-  datatable: <StorageIcon />,
-  chartdisplay: <BarChartIcon />,
-  scorecard: <SpeedIcon />,
-};
 
 // ── Palette ───────────────────────────────────────────────────────────
+/**
+ * Two tabs of four sections each. Typing flattens both tabs into one "Results"
+ * group so a search never hides a match behind the inactive tab.
+ */
 function Palette({ onAdd }: { onAdd: (td: typeof QUESTION_TYPES[number]) => void }) {
   const [search, setSearch] = useState("");
-  const [activeGroup, setActiveGroup] = useState("All");
-  const filtered = useMemo(() => {
-    let list = QUESTION_TYPES;
-    if (activeGroup !== "All") list = list.filter(t => t.group === activeGroup);
-    if (search.trim()) { const q = search.toLowerCase(); list = list.filter(t => t.label.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)); }
-    return list;
-  }, [search, activeGroup]);
-  const onDragStart = (e: React.DragEvent, td: typeof QUESTION_TYPES[number]) => {
-    e.dataTransfer.setData("palette_type", JSON.stringify(td));
+  const [tab, setTab] = useState<PaletteTab>("basic");
+
+  const groups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q) {
+      const hits = PALETTE_ITEMS.filter(
+        p => p.label.toLowerCase().includes(q) || p.def.type.includes(q) || p.def.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+      );
+      return hits.length ? [{ name: "Results", items: hits }] : [];
+    }
+    return TAB_SECTIONS[tab]
+      .map(name => ({ name, items: PALETTE_ITEMS.filter(p => p.tab === tab && p.section === name) }))
+      .filter(g => g.items.length > 0);
+  }, [search, tab]);
+
+  const onDragStart = (e: React.DragEvent, item: PaletteItem) => {
+    e.dataTransfer.setData("palette_type", JSON.stringify(item.def));
     e.dataTransfer.effectAllowed = "copy";
   };
-  return <div className="fb-palette">
-    <div className="fb-palette-search">
-      <div className="fb-palette-search-wrapper">
-        <SearchIcon className="fb-palette-search-icon" style={{ color: C.textMuted, fontSize: 16 }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search fields…" className="fb-palette-search-input" />
+
+  const tabBtn = (id: PaletteTab, label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === id}
+      className={`bx-palette-tab${tab === id ? " is-on" : ""}`}
+      onClick={() => { setTab(id); setSearch(""); }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <aside className="bx-palette">
+      <div className="bx-palette-tabs" role="tablist" aria-label="Field type groups">
+        {tabBtn("basic", "Basic Fields")}
+        <div className="bx-palette-tabrule" />
+        {tabBtn("advanced", "Advanced")}
       </div>
-    </div>
-    <div className="fb-palette-groups">
-      {["All", ...TYPE_GROUPS].map(g => <button key={g} onClick={() => setActiveGroup(g)} className="fb-palette-group-btn" style={{ background: activeGroup === g ? C.purple : C.offWhite, color: activeGroup === g ? C.white : C.textMuted }}>{g}</button>)}
-    </div>
-    <div className="fb-palette-list">
-      {filtered.map((td, i) => <div key={td.type + i} draggable onDragStart={e => onDragStart(e, td)} onClick={() => onAdd(td)} className="fb-palette-item" title={td.description} style={{ animation: `slideIn 0.15s ease ${i * 0.02}s both` }}>
-        <span className="fb-palette-item-icon">
-          {TYPE_ICONS[td.type]}
-        </span>
-        <div className="fb-palette-item-content">
-          <div className="fb-palette-item-title">{td.label}</div>
-        </div>
-        <DragIndicatorIcon style={{ marginLeft: "auto", flexShrink: 0, opacity: 0.4, fontSize: 16 }} />
-      </div>)}
-      {!filtered.length && <div style={{ textAlign: "center", padding: "24px 0", color: C.textMuted, fontSize: 12 }}>No field types match</div>}
-    </div>
-    <div style={{ padding: "8px 12px", borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.textMuted, textAlign: "center" }}>Click or drag to add a field</div>
-  </div>;
+      <div className="bx-palette-search">
+        <label className="bx-label" htmlFor="bx-palette-search" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+          Search field types
+        </label>
+        <input
+          id="bx-palette-search"
+          className="bx-input"
+          style={{ height: 36 }}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search fields"
+        />
+      </div>
+      <div className="bx-palette-body">
+        {groups.map(group => (
+          <div key={group.name} className="bx-palette-group">
+            <div className="bx-palette-grouphead">
+              <span className="bx-eyebrow bx-eyebrow-sm">{group.name}</span>
+              <span className="bx-palette-grouprule" />
+            </div>
+            <div className="bx-palette-grid">
+              {group.items.map(item => (
+                <button
+                  key={item.def.type}
+                  type="button"
+                  className="bx-pal-btn"
+                  title={item.description}
+                  draggable
+                  onDragStart={e => onDragStart(e, item)}
+                  onClick={() => onAdd(item.def)}
+                >
+                  <FieldIcon type={item.def.type} size={18} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {groups.length === 0 && (
+          <div style={{ padding: "24px 4px", fontSize: 14, color: "var(--bx-n600)" }}>No field types match that search.</div>
+        )}
+      </div>
+    </aside>
+  );
 }
 
-// ── Canvas ────────────────────────────────────────────────────────────
-function FieldCard({ field, index, selected, onSelect, onRemove, onDuplicate, onMoveUp, onMoveDown, isFirst, isLast, errors, onDragStart, onDragOver, onDrop, dragging: _dragging, onDropOnPanel, onRecursiveReorder, depth = 0, selectedId }: {
+// ── The form sheet ────────────────────────────────────────────────────
+/**
+ * Renders one field the way an employee will meet it — a real control, not a
+ * summary card. Everything the old `FieldCard` could do (select, drag-reorder,
+ * drop into a panel, move, duplicate, delete, surface validation errors, refuse
+ * to touch the managed Company selector) still happens here; only the drawing
+ * changed.
+ */
+function choiceTexts(field: FormBuilderField): string[] {
+  const raw = Array.isArray(field.choices) ? field.choices : [];
+  const texts = raw
+    .map(c => (typeof c === "string" ? c : (c as { text?: string; value?: string })?.text || (c as { value?: string })?.value || ""))
+    .filter(Boolean);
+  if (texts.length) return texts.slice(0, 6);
+  if (field.spChoicesSource?.list || field.spFilteredListSource?.list) return ["Loaded from SharePoint"];
+  return ["Option 1", "Option 2", "Option 3"];
+}
+
+function wysPlaceholder(field: FormBuilderField): string {
+  const hint = (field.placeholder as string) || field.description || "";
+  if (hint) return hint;
+  const kind = wysKind(field.type);
+  if (kind === "block") return `${shortTypeLabel(field.type)} area`;
+  if (kind === "area") return "Long answer…";
+  if (field.type === "date") return "dd / mm / yyyy";
+  if (field.type === "datetime") return "dd / mm / yyyy, hh:mm";
+  if (field.type === "number" || field.type === "currency" || field.type === "counter") return "0";
+  return "Short answer…";
+}
+
+function WysControl({ field, children }: { field: FormBuilderField; children?: React.ReactNode }) {
+  const kind = wysKind(field.type);
+  const placeholder = wysPlaceholder(field);
+
+  if (kind === "rule") return <div className="bx-wys-rule" />;
+  if (kind === "container") return <>{children}</>;
+  if (kind === "block") return <div className="bx-wys bx-wys-block">{placeholder}</div>;
+  if (kind === "area") return <div className="bx-wys bx-wys-area">{placeholder}</div>;
+  if (kind === "bool") {
+    return (
+      <div style={{ display: "flex", gap: 10 }}>
+        <span className="bx-wys-chip">{(field.labelTrue as string) || "Yes"}</span>
+        <span className="bx-wys-chip">{(field.labelFalse as string) || "No"}</span>
+      </div>
+    );
+  }
+  if (kind === "choice") {
+    const round = hasRoundMark(field.type);
+    return (
+      <div className="bx-wys-choices">
+        {choiceTexts(field).map((text, i) => (
+          <div key={`${text}-${i}`} className="bx-wys-choice">
+            <span className={`bx-wys-mark${round ? " is-round" : ""}`} />
+            {text}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return <div className="bx-wys">{placeholder}</div>;
+}
+
+function FieldRow({ field, index, selected, onSelect, onRemove, onDuplicate, onMoveUp, onMoveDown, isFirst, isLast, errors, onDragStart, onDragOver, onDrop, dropOver, onDropOnPanel, onRecursiveReorder, selectedId }: {
   field: FormBuilderField; index: number; selected: boolean; onSelect: (id: string) => void;
   onRemove: (id: string) => void; onDuplicate: (field: FormBuilderField) => void;
   onMoveUp: () => void; onMoveDown: () => void; isFirst: boolean; isLast: boolean;
-  errors: { id: string; msg: string }[]; onDragStart: (e: React.DragEvent, i: number) => void;
-  onDragOver: (e: React.DragEvent, i: number) => void; onDrop: (e: React.DragEvent, i: number) => void;
-  dragging: boolean;
+  errors: { id: string; msg: string }[];
+  onDragStart: (e: React.DragEvent, i: number) => void;
+  onDragOver: (e: React.DragEvent, i: number) => void;
+  onDrop: (e: React.DragEvent, i: number) => void;
+  dropOver: boolean;
   onDropOnPanel?: (e: React.DragEvent, panelId: string) => void;
   onRecursiveReorder?: (fromId: string, toId: string) => void;
-  depth?: number;
   selectedId?: string | null;
 }) {
   const err = errors.filter(e => e.id === field._id);
-  const td = QUESTION_TYPES.find(t => t.type === field.type) || QUESTION_TYPES[0];
-  const spColKind = getSpColumnKind(field);
-  const spColLabel = spColKind
-    ? ({ 2: "Text", 3: "Multi-line", 4: "Date", 6: "Choice", 8: "Boolean", 9: "Number", 15: "MultiChoice" }[spColKind.FieldTypeKind] ?? spColKind.label)
-    : null;
-  const managedCompanyChoice = isManagedCompanyChoice(field);
-  const shortcuts = managedCompanyChoice
-    ? "Managed from Form Setup"
-    : selected
-      ? "Del to remove, Ctrl+D to duplicate"
-      : "";
-  const isPanel = field.type === "panel";
+  const managed = isManagedCompanyChoice(field);
+  const isContainer = wysKind(field.type) === "container";
+  const children = Array.isArray(field.elements) ? field.elements : [];
 
-  return <div
-    draggable={!managedCompanyChoice}
-    onDragStart={e => onDragStart(e, index)}
-    onDragOver={e => onDragOver(e, index)}
-    onDrop={e => {
-      if (isPanel && onDropOnPanel) {
-        e.preventDefault();
-        e.stopPropagation();
-        onDropOnPanel(e, field._id);
-        return;
-      }
-      onDrop(e, index);
-    }}
-    className={`fb-field-card ${selected ? 'selected' : 'default'} ${err.length ? 'error' : ''} ${isPanel ? 'panel-card' : ''} ${managedCompanyChoice ? 'managed-company-choice' : ''}`}
-    onClick={e => { e.stopPropagation(); onSelect(field._id); }}
-    title={shortcuts}
-    style={{ marginLeft: depth * 24 }}>
-    <div className="fb-field-row">
-      <div className="fb-field-drag-handle">
-        <DragIndicatorIcon style={{ fontSize: 18 }} />
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
+
+  return (
+    <div
+      className={`bx-fieldrow${selected ? " is-selected" : ""}${err.length ? " is-error" : ""}${dropOver ? " is-dropover" : ""}`}
+      draggable={!managed}
+      onDragStart={e => onDragStart(e, index)}
+      onDragOver={e => onDragOver(e, index)}
+      onDrop={e => {
+        if (isContainer && onDropOnPanel) {
+          e.preventDefault();
+          e.stopPropagation();
+          onDropOnPanel(e, field._id);
+          return;
+        }
+        onDrop(e, index);
+      }}
+      onClick={e => { e.stopPropagation(); onSelect(field._id); }}
+      // Tabbable so the sheet stays navigable by keyboard: Enter or Space opens
+      // this field's properties, exactly as a click does.
+      tabIndex={0}
+      onKeyDown={e => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onSelect(field._id);
+        }
+      }}
+      title={managed ? "Managed from Settings → Branding & banner" : undefined}
+    >
+      <div className="bx-rowtools" onClick={e => e.stopPropagation()}>
+        <button type="button" className="bx-ghost" title={managed ? "The managed Company selector stays at the top" : "Move up"} disabled={managed || isFirst} onClick={stop(onMoveUp)}>
+          <Icon name="chevup" size={14} strokeWidth={1.6} />
+        </button>
+        <button type="button" className="bx-ghost" title={managed ? "The managed Company selector stays at the top" : "Move down"} disabled={managed || isLast} onClick={stop(onMoveDown)}>
+          <Icon name="chevdown" size={14} strokeWidth={1.6} />
+        </button>
+        <button type="button" className="bx-ghost" title={managed ? "The managed Company selector cannot be duplicated" : "Duplicate (Ctrl+D)"} disabled={managed} onClick={stop(() => onDuplicate(field))}>
+          <Icon name="copy" size={14} strokeWidth={1.6} />
+        </button>
+        <button type="button" className="bx-ghost" title={managed ? "Turn the Company selector off in Settings to remove it" : "Delete (Del)"} disabled={managed} onClick={stop(() => onRemove(field._id))}>
+          <Icon name="trash" size={14} strokeWidth={1.6} />
+        </button>
       </div>
-      <div className="fb-field-main">
-        <div className="fb-field-header">
-          <span className="fb-field-title-icon" style={{ display: "flex", alignItems: "center" }}>
-            {managedCompanyChoice ? <CheckBoxIcon /> : TYPE_ICONS[field.type]}
-          </span>
-          <span className="fb-field-title-text">{field.title || "(no label)"}</span>
-          {managedCompanyChoice && <Pill color={C.purple} bg={C.purplePale}>Header selector</Pill>}
-          {managedCompanyChoice && <Pill color={C.textSecond} bg={C.offWhite}>Managed</Pill>}
-          {field.isRequired && <Pill color={C.red} bg={C.redPale}>Required</Pill>}
-          {field.readOnly && <Pill color={C.textMuted} bg={C.offWhite}>Read-only</Pill>}
-          {field.startWithNewLine === false && <Pill color={C.amber} bg={C.amberPale}>Inline</Pill>}
-          {field.titleLocation === "hidden" && <Pill color={C.textMuted} bg={C.offWhite}>Title hidden</Pill>}
-          {field.visibleIf && <Pill color={C.green} bg={C.greenPale}>Conditional</Pill>}
-          {field.enableIf && <Pill color={C.purpleLight} bg={C.purplePale}>Dyn.enable</Pill>}
-          {spColLabel && <Pill color={C.textSecond} bg={C.offWhite}>{spColLabel}</Pill>}
-          {(field.type === "dynamicmatrix" || field.type === "tableinput") && <Pill color={C.amber} bg={C.amberPale}>Rich Text</Pill>}
-          {isPanel && (field.elements?.length ? <Pill color={C.purple} bg={C.purplePale}>{field.elements.length} item{field.elements.length !== 1 ? 's' : ''}</Pill> : <Pill color={C.textMuted} bg={C.offWhite}>Empty</Pill>)}
+
+      <div className="bx-fieldrow-label">
+        <FieldIcon type={field.type} size={17} />
+        <span>
+          {field.title || "(no label)"}
+          {field.isRequired ? " *" : ""}
+        </span>
+        {managed && <span className="bx-tag bx-tag-accent">Managed</span>}
+        {field.visibleIf && <span className="bx-tag bx-tag-neutral">Conditional</span>}
+        {field.readOnly && <span className="bx-tag bx-tag-neutral">Read-only</span>}
+        {field.startWithNewLine === false && <span className="bx-tag bx-tag-neutral">Inline</span>}
+      </div>
+
+      <WysControl field={field}>
+        {isContainer && (
+          <div
+            className="bx-wys-nest"
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={e => { if (onDropOnPanel) { e.preventDefault(); e.stopPropagation(); onDropOnPanel(e, field._id); } }}
+          >
+            {children.length === 0 ? (
+              <div className="bx-wys-nest-empty">Drop fields here to put them inside “{field.title || shortTypeLabel(field.type)}”.</div>
+            ) : (
+              children.map((child, ci) => (
+                <FieldRow
+                  key={child._id}
+                  field={child}
+                  index={ci}
+                  selected={selectedId === child._id}
+                  onSelect={onSelect}
+                  onRemove={onRemove}
+                  onDuplicate={onDuplicate}
+                  onMoveUp={ci > 0 && onRecursiveReorder ? () => onRecursiveReorder(child._id, children[ci - 1]._id) : () => { }}
+                  onMoveDown={ci < children.length - 1 && onRecursiveReorder ? () => onRecursiveReorder(child._id, children[ci + 1]._id) : () => { }}
+                  isFirst={ci === 0}
+                  isLast={ci === children.length - 1}
+                  errors={errors}
+                  onDragStart={(e: React.DragEvent) => {
+                    e.stopPropagation();
+                    e.dataTransfer.setData("field_id", child._id);
+                    e.dataTransfer.setData("from_panel", "true");
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={onDragOver}
+                  onDrop={onDrop}
+                  dropOver={false}
+                  onDropOnPanel={onDropOnPanel}
+                  onRecursiveReorder={onRecursiveReorder}
+                  selectedId={selectedId}
+                />
+              ))
+            )}
+          </div>
+        )}
+      </WysControl>
+
+      {err.map((e, i) => (
+        <div key={i} className="bx-fieldrow-err">
+          <Icon name="warning" size={14} strokeWidth={1.6} />
+          {e.msg}
         </div>
-        <div className="fb-field-meta">
-          <span className="fb-field-name">{field.name}</span>
-          <span className="fb-field-type">· {td.label}</span>
-          {field.defaultValue !== undefined && <span className="fb-field-default">· default: {String(field.defaultValue).slice(0, 20)}</span>}
-        </div>
-        {err.map((e, i) => <div key={i} className="fb-field-error"><WarningAmberIcon style={{ fontSize: 12 }} />{e.msg}</div>)}
-      </div>
-      <div className="fb-field-actions" onClick={e => e.stopPropagation()}>
-        <IconBtn icon={<ArrowUpwardIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Managed selector stays at the top" : "Move up"} onClick={() => onMoveUp()} disabled={managedCompanyChoice || isFirst} />
-        <IconBtn icon={<ArrowDownwardIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Managed selector stays at the top" : "Move down"} onClick={() => onMoveDown()} disabled={managedCompanyChoice || isLast} />
-        <IconBtn icon={<ContentCopyIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Managed selector cannot be duplicated" : "Duplicate (Ctrl+D)"} onClick={() => onDuplicate(field)} disabled={managedCompanyChoice} />
-        <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title={managedCompanyChoice ? "Turn off Company selector in Form Setup to remove it" : "Remove (Del)"} onClick={() => onRemove(field._id)} danger disabled={managedCompanyChoice} />
-      </div>
+      ))}
     </div>
-    {/* Render panel children */}
-    {isPanel && Array.isArray(field.elements) && field.elements.length > 0 && (
-      <div className="fb-panel-children" onClick={e => e.stopPropagation()}>
-        {field.elements.map((child, childIdx) => (
-          <FieldCard
-            key={child._id}
-            field={child}
-            index={childIdx}
-            selected={selectedId === child._id}
-            onSelect={onSelect}
-            onRemove={onRemove}
-            onDuplicate={onDuplicate}
-            onMoveUp={childIdx > 0 && onRecursiveReorder ? () => onRecursiveReorder(child._id, field.elements![childIdx - 1]._id) : () => {}}
-            onMoveDown={childIdx < field.elements!.length - 1 && onRecursiveReorder ? () => onRecursiveReorder(child._id, field.elements![childIdx + 1]._id) : () => {}}
-            isFirst={childIdx === 0}
-            isLast={childIdx === field.elements!.length - 1}
-            errors={errors}
-            onDragStart={(e: React.DragEvent) => {
-              e.stopPropagation();
-              e.dataTransfer.setData("field_id", child._id);
-              e.dataTransfer.setData("from_panel", "true");
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            dragging={false}
-            onDropOnPanel={onDropOnPanel}
-            onRecursiveReorder={onRecursiveReorder}
-            depth={depth + 1}
-            selectedId={selectedId}
-          />
-        ))}
-      </div>
-    )}
-  </div>;
+  );
 }
 
-function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder, onAddFromPalette, errors, onDropOnPanel, onRecursiveReorder, onMoveToRoot }: {
+export type SheetMeta = {
+  formId: string;
+  version: string;
+  slug: string;
+  isoStandards: string;
+  title: string;
+  titleLocked: boolean;
+};
+
+/**
+ * The centre pane: a sheet of paper on a sunken desk, showing the form as the
+ * employee will meet it. The form title is edited here rather than in a
+ * sidebar, and the whole sheet is the drop target for the palette.
+ */
+function FormSheet({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder, onAddFromPalette, errors, onDropOnPanel, onRecursiveReorder, onMoveToRoot, sheet, onTitleChange, onUndo, onRedo, canUndo, canRedo, readOnly }: {
   fields: FormBuilderField[]; selectedId: string | null; onSelect: (id: string | null) => void;
   onRemove: (id: string) => void; onDuplicate: (field: FormBuilderField) => void;
-  onReorder: (from: number, to: number) => void; onAddFromPalette: (td: typeof QUESTION_TYPES[number], atIndex?: number) => void;
+  onReorder: (from: number, to: number) => void;
+  onAddFromPalette: (td: typeof QUESTION_TYPES[number], atIndex?: number) => void;
   errors: { id: string; msg: string }[];
   onDropOnPanel?: (e: React.DragEvent, panelId: string) => void;
   onRecursiveReorder?: (fromId: string, toId: string) => void;
   onMoveToRoot?: (fieldId: string, atIndex: number) => void;
+  sheet?: SheetMeta;
+  onTitleChange?: (v: string) => void;
+  onUndo: () => void; onRedo: () => void; canUndo: boolean; canRedo: boolean;
+  readOnly?: boolean;
 }) {
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const onDragStart = (e: React.DragEvent, i: number) => {
-    if (isManagedCompanyChoice(fields[i])) {
-      e.preventDefault();
-      return;
-    }
+    if (isManagedCompanyChoice(fields[i])) { e.preventDefault(); return; }
     dragIndexRef.current = i;
     setDraggingIndex(i);
     e.dataTransfer.effectAllowed = "move";
-    if (fields[i]) {
-      e.dataTransfer.setData("field_id", fields[i]._id);
-    }
+    if (fields[i]) e.dataTransfer.setData("field_id", fields[i]._id);
   };
   const onDragOver = (e: React.DragEvent, i: number) => { e.preventDefault(); setDragOverIndex(i); };
   const onDrop = (e: React.DragEvent, i: number) => {
@@ -1075,70 +1110,124 @@ function Canvas({ fields, selectedId, onSelect, onRemove, onDuplicate, onReorder
     setDraggingIndex(null);
     const pd = e.dataTransfer.getData("palette_type");
     if (pd) { try { onAddFromPalette(JSON.parse(pd), i); } catch { /* Invalid palette data — ignore */ } dragIndexRef.current = null; return; }
-    // Handle field dragged out of a panel to the root canvas
     const fieldId = e.dataTransfer.getData("field_id");
     const fromPanel = e.dataTransfer.getData("from_panel") === "true";
-    if (fromPanel && fieldId && onMoveToRoot) {
-      onMoveToRoot(fieldId, i);
-      dragIndexRef.current = null;
-      return;
-    }
+    if (fromPanel && fieldId && onMoveToRoot) { onMoveToRoot(fieldId, i); dragIndexRef.current = null; return; }
     if (dragIndexRef.current !== null && dragIndexRef.current !== i) onReorder(dragIndexRef.current, i);
     dragIndexRef.current = null;
   };
   const onDragEnd = () => { setDraggingIndex(null); setDragOverIndex(null); dragIndexRef.current = null; };
 
-  // Handles drops on empty canvas space (appends to end)
-  const onCanvasDrop = (e: React.DragEvent) => {
+  /** Drops on the sheet's own padding append to the end. */
+  const onSheetDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOverIndex(null);
     setDraggingIndex(null);
     const pd = e.dataTransfer.getData("palette_type");
-    if (pd) {
-      try { onAddFromPalette(JSON.parse(pd), fields.length); } catch { /* Invalid palette data — ignore */ }
-    }
-    // Handle field dragged out of a panel to the end of the canvas
+    if (pd) { try { onAddFromPalette(JSON.parse(pd), fields.length); } catch { /* Invalid palette data — ignore */ } }
     const fieldId = e.dataTransfer.getData("field_id");
     const fromPanel = e.dataTransfer.getData("from_panel") === "true";
-    if (fromPanel && fieldId && onMoveToRoot) {
-      onMoveToRoot(fieldId, fields.length);
-    }
+    if (fromPanel && fieldId && onMoveToRoot) onMoveToRoot(fieldId, fields.length);
     dragIndexRef.current = null;
   };
 
-  return <div onDragOver={e => e.preventDefault()} onDrop={onCanvasDrop} onDragEnd={onDragEnd} onClick={() => onSelect(null)} className="fb-canvas">
-    {!fields.length
-      ? <div className="fb-canvas-empty">
-        <div className="fb-canvas-empty-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <TextFieldsIcon style={{ fontSize: 40, color: C.textMuted }} />
+  const quickAdds = QUICK_ADD_TYPES
+    .map(t => PALETTE_ITEMS.find(p => p.def.type === t))
+    .filter((p): p is PaletteItem => !!p);
+
+  const docLine = sheet
+    ? [sheet.formId || "No form ID", `v${sheet.version || "1.0"}`, sheet.slug ? `/form/${sheet.slug}` : null]
+      .filter(Boolean)
+      .join("  ·  ")
+    : "";
+
+  return (
+    <section className="bx-sheetwrap" onDragOver={e => e.preventDefault()} onDrop={onSheetDrop} onDragEnd={onDragEnd} onClick={() => onSelect(null)}>
+      <div className="bx-sheet" onClick={e => e.stopPropagation()}>
+        <div className="bx-sheet-head">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {sheet?.isoStandards ? <div className="bx-sheet-iso">{sheet.isoStandards}</div> : null}
+            <input
+              className="bx-sheet-title"
+              value={sheet?.title ?? ""}
+              onChange={e => onTitleChange?.(e.target.value)}
+              placeholder="Untitled form"
+              aria-label="Form title"
+              disabled={!onTitleChange || sheet?.titleLocked || readOnly}
+              title={sheet?.titleLocked ? "The form title becomes the SharePoint list name and is locked after the first publish." : undefined}
+            />
+            {docLine && <div className="bx-meta bx-num" style={{ marginTop: 6 }}>{docLine}</div>}
+          </div>
+          <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 6, paddingTop: sheet?.isoStandards ? 26 : 6 }}>
+            {errors.length > 0 && (
+              <span className="bx-tag bx-tag-danger" style={{ height: 30, padding: "0 9px" }}>
+                {errors.length} error{errors.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            <button type="button" className="bx-ghost" title="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
+              <Icon name="undo" size={15} strokeWidth={1.6} />
+            </button>
+            <button type="button" className="bx-ghost" title="Redo (Ctrl+Y)" onClick={onRedo} disabled={!canRedo}>
+              <Icon name="redo" size={15} strokeWidth={1.6} />
+            </button>
+          </div>
         </div>
-        <div className="fb-canvas-empty-title">Your form is empty</div>
-        <div className="fb-canvas-empty-text">Click a field type in the left panel,<br />or drag one here to get started.</div>
+
+        {fields.map((field, i) => (
+          <Fragment key={field._id}>
+            <div className="bx-dropzone" style={{ display: dragOverIndex === i && draggingIndex !== i ? "block" : "none" }} />
+            <FieldRow
+              field={field}
+              index={i}
+              selected={selectedId === field._id}
+              onSelect={onSelect}
+              onRemove={onRemove}
+              onDuplicate={onDuplicate}
+              onMoveUp={() => onReorder(i, i - 1)}
+              onMoveDown={() => onReorder(i, i + 1)}
+              isFirst={i === 0}
+              isLast={i === fields.length - 1}
+              errors={errors}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+              dropOver={false}
+              onDropOnPanel={onDropOnPanel}
+              onRecursiveReorder={onRecursiveReorder}
+              selectedId={selectedId}
+            />
+          </Fragment>
+        ))}
+        <div className="bx-dropzone" style={{ display: dragOverIndex === fields.length && draggingIndex !== fields.length ? "block" : "none" }} />
+
+        <div className="bx-sheet-foot">
+          {fields.length === 0 ? (
+            <div className="bx-empty" style={{ width: "100%" }}>
+              <Icon name="plusbox" size={38} strokeWidth={1.3} style={{ color: "var(--bx-accent)", margin: "0 auto 14px", display: "block" }} />
+              <h3>Drag a field here</h3>
+              <p>Choose from Basic or Advanced fields on the left. What you see here is exactly what employees will fill in.</p>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                {quickAdds.map(item => (
+                  <button key={item.def.type} type="button" className="bx-btn bx-btn-secondary" style={{ height: 36 }} onClick={() => onAddFromPalette(item.def)}>
+                    + {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <button type="button" className="bx-btn bx-btn-primary" style={{ height: 44, padding: "0 30px", fontSize: 17 }} disabled title="This is how the submit button will look to employees">
+                Submit
+              </button>
+              <span className="bx-meta">
+                {fields.length} field{fields.length !== 1 ? "s" : ""} · drop a field anywhere to insert
+              </span>
+            </>
+          )}
+        </div>
       </div>
-      : <>
-        {fields.map((field, i) => <Fragment key={field._id}>
-          {/* Stable DOM: indicator always rendered, toggled via display so React never inserts/removes nodes mid-drag */}
-          <div
-            key={`indicator-${field._id}`}
-            className="fb-canvas-drop-indicator"
-            style={{ display: dragOverIndex === i && draggingIndex !== i ? "block" : "none" }}
-          />
-          <FieldCard
-            key={`card-${field._id}`}
-            field={field} index={i} selected={selectedId === field._id}
-            onSelect={onSelect} onRemove={onRemove} onDuplicate={onDuplicate}
-            onMoveUp={() => onReorder(i, i - 1)} onMoveDown={() => onReorder(i, i + 1)}
-            isFirst={i === 0} isLast={i === fields.length - 1} errors={errors}
-            onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} dragging={draggingIndex === i}
-            onDropOnPanel={onDropOnPanel} onRecursiveReorder={onRecursiveReorder} selectedId={selectedId} />
-        </Fragment>)}
-        {/* Drop zone after last card — stable DOM */}
-        <div
-          className="fb-canvas-drop-indicator"
-          style={{ display: dragOverIndex === fields.length && draggingIndex !== fields.length ? "block" : "none" }}
-        />
-      </>}
-  </div>;
+    </section>
+  );
 }
 
 // ── Property Editors ──────────────────────────────────────────────────
@@ -1679,174 +1768,267 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
   </div>;
 }
 
-function PropertyPanel({ field, allFields, onChange, onSurveySettingsChange, surveySettings, token }: {
+/**
+ * SurveySettingsPanel — the form-wide SurveyJS display options. These used to
+ * be what the property column showed when nothing was selected; the properties
+ * dock is now mounted only for a selected field, so they moved to Tools →
+ * Content → Form display.
+ */
+function SurveySettingsPanel({ surveySettings, onSurveySettingsChange }: {
+  surveySettings: Record<string, unknown>;
+  onSurveySettingsChange?: (s: Record<string, unknown>) => void;
+}) {
+  const set = (patch: Record<string, unknown>) => onSurveySettingsChange?.({ ...surveySettings, ...patch });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <p className="bx-lede" style={{ fontSize: 14 }}>
+        Form identity, banner, access and the managed Company selector live in Settings. These control only how SurveyJS renders the form.
+      </p>
+      <PropRow label="Display title"><Input value={(surveySettings.title as string) || ""} onChange={v => set({ title: v })} placeholder="Display title" /></PropRow>
+      <PropRow label="Form description"><Textarea value={(surveySettings.description as string) || ""} onChange={v => set({ description: v })} rows={2} placeholder="Optional description" /></PropRow>
+      <PropRow label="Question titles">
+        <Select value={(surveySettings.titleLocation as string) || "default"} onChange={v => set({ titleLocation: v })} options={[{ value: "default", label: "Default" }, { value: "hidden", label: "Hidden" }, { value: "top", label: "Top" }, { value: "bottom", label: "Bottom" }]} />
+      </PropRow>
+      <PropRow label="Text transform">
+        <Select value={(surveySettings.textTransform as string) || "none"} onChange={v => set({ textTransform: v })} options={[{ value: "none", label: "None" }, { value: "uppercase", label: "ALL UPPERCASE" }, { value: "capitalize", label: "First Letter Only" }, { value: "lowercase", label: "all lowercase" }]} />
+      </PropRow>
+      <PropRow label="Show question numbers">
+        <Select value={(surveySettings.showQuestionNumbers as string) || "on"} onChange={v => set({ showQuestionNumbers: v })} options={[{ value: "on", label: "On" }, { value: "onPage", label: "Per page" }, { value: "onpanel", label: "Per panel" }, { value: "off", label: "Off" }]} />
+      </PropRow>
+      <PropRow label="Error mode">
+        <Select value={(surveySettings.checkErrorsMode as string) || "onValueChanged"} onChange={v => set({ checkErrorsMode: v })} options={[{ value: "onValueChanged", label: "On value change" }, { value: "onComplete", label: "On complete" }, { value: "onNextPage", label: "On next page" }]} />
+      </PropRow>
+      <PropRow label="Text update">
+        <Select value={(surveySettings.textUpdateMode as string) || "onTyping"} onChange={v => set({ textUpdateMode: v })} options={[{ value: "onTyping", label: "On typing" }, { value: "onBlur", label: "On blur" }]} />
+      </PropRow>
+      <Toggle checked={!!surveySettings.showProgressBar} onChange={v => set({ showProgressBar: v })} label="Show progress bar" />
+      <Toggle checked={!!surveySettings.showPageTitles} onChange={v => set({ showPageTitles: v })} label="Show page titles" />
+    </div>
+  );
+}
+
+/** One collapsed card inside the dock's Advanced disclosure. */
+function AdvCard({ title, body, action, open, onToggle, children }: {
+  title: string; body: string; action: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  return (
+    <div className="bx-advcard">
+      <div className="bx-advcard-title">{title}</div>
+      <div className="bx-advcard-body">{body}</div>
+      <button type="button" className="bx-btn bx-btn-secondary bx-btn-sm" onClick={onToggle} aria-expanded={open}>
+        {open ? "Close" : action}
+      </button>
+      {open && <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid var(--bx-divider)", animation: "bx-fade-up .14s ease" }}>{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * The properties dock. Label, name, hint and Required stay in the open; the
+ * logic, validation and options editors — the three things that made the old
+ * third column overflow sideways — fold away under Advanced, together with the
+ * type-specific settings that used to share the General tab.
+ */
+function PropertyPanel({ field, allFields, onChange, onClose, token }: {
   field: FormBuilderField | null; allFields: FormBuilderField[];
   onChange: (patch: Partial<FormBuilderField>) => void;
-  onSurveySettingsChange?: (s: Record<string, unknown>) => void;
-  surveySettings?: Record<string, unknown>;
+  onClose: () => void;
   token?: string;
 }) {
-  const [tab, setTab] = useState("general");
+  const [advOpen, setAdvOpen] = useState(false);
+  const [card, setCard] = useState<"settings" | "logic" | "validation" | "options" | null>(null);
 
-  // Survey-level settings panel
-  if (!field && surveySettings) return <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-    <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-        <SettingsIcon style={{ fontSize: 16, color: C.purple }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>Display & Behavior</span>
+  useEffect(() => { setCard(null); }, [field?._id]);
+
+  if (!field) return null;
+
+  const managed = isManagedCompanyChoice(field);
+  const typeLabel = shortTypeLabel(field.type);
+  const hasChoices = ["dropdown", "radiogroup", "checkbox"].includes(field.type);
+  const isMatrix = field.type === "dynamicmatrix" || field.type === "tableinput";
+  const toggleCard = (k: "settings" | "logic" | "validation" | "options") => setCard(c => (c === k ? null : k));
+
+  return (
+    <aside className="bx-propdock" aria-label="Field properties">
+      <div className="bx-propdock-head">
+        <span className="bx-eyebrow">Field properties</span>
+        <button type="button" className="bx-ghost" title="Close properties" onClick={onClose}>
+          <Icon name="close" size={15} strokeWidth={1.6} />
+        </button>
       </div>
-      <div style={{ fontSize: 10, color: C.textMuted }}>SurveyJS rendering properties</div>
-    </div>
-    <div style={{ flex: 1, padding: "14px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 10px", fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
-          Form identity, banner, access, and the managed Company selector live in Form Setup. These controls only change how SurveyJS displays the form.
-        </div>
-        <PropRow label="Display title"><Input value={(surveySettings.title as string) || ""} onChange={v => onSurveySettingsChange?.({ ...surveySettings, title: v })} placeholder="Display title" /></PropRow>
-        <PropRow label="Display title visibility">
-          <Toggle checked={(surveySettings.titleLocation as string) !== "hidden"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, titleLocation: v ? ((surveySettings.titleLocation as string) === "hidden" ? "top" : surveySettings.titleLocation) : "hidden" })} label={(surveySettings.titleLocation as string) !== "hidden" ? "Visible" : "Hidden"} />
-        </PropRow>
-        <PropRow label="Form description"><Textarea value={(surveySettings.description as string) || ""} onChange={v => onSurveySettingsChange?.({ ...surveySettings, description: v })} rows={2} placeholder="Optional description" /></PropRow>
-        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0, marginBottom: 8 }}>Text Formatting</div>
-          <PropRow label="Question titles">
-            <Select value={(surveySettings.titleLocation as string) || "default"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, titleLocation: v })} options={[{ value: "default", label: "Default" }, { value: "hidden", label: "Hidden" }, { value: "top", label: "Top" }, { value: "bottom", label: "Bottom" }]} />
-          </PropRow>
-          <PropRow label="Text transform">
-            <Select value={(surveySettings.textTransform as string) || "none"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, textTransform: v })} options={[{ value: "none", label: "None" }, { value: "uppercase", label: "ALL UPPERCASE" }, { value: "capitalize", label: "First Letter Only" }, { value: "lowercase", label: "all lowercase" }]} />
-          </PropRow>
-          <PropRow label="Show question numbers">
-            <Select value={(surveySettings.showQuestionNumbers as string) || "on"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, showQuestionNumbers: v })} options={[{ value: "on", label: "On" }, { value: "onPage", label: "Per page" }, { value: "onpanel", label: "Per panel" }, { value: "off", label: "Off" }]} />
-          </PropRow>
-        </div>
-        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0, marginBottom: 8 }}>Behavior</div>
-          <PropRow label="Error mode">
-            <Select value={(surveySettings.checkErrorsMode as string) || "onValueChanged"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, checkErrorsMode: v })} options={[{ value: "onValueChanged", label: "On value change" }, { value: "onComplete", label: "On complete" }, { value: "onNextPage", label: "On next page" }]} />
-          </PropRow>
-          <PropRow label="Text update">
-            <Select value={(surveySettings.textUpdateMode as string) || "onTyping"} onChange={v => onSurveySettingsChange?.({ ...surveySettings, textUpdateMode: v })} options={[{ value: "onTyping", label: "On typing" }, { value: "onBlur", label: "On blur" }]} />
-          </PropRow>
-          <Toggle checked={!!surveySettings.showProgressBar} onChange={v => onSurveySettingsChange?.({ ...surveySettings, showProgressBar: v })} label="Show progress bar" />
-          <Toggle checked={!!surveySettings.showPageTitles} onChange={v => onSurveySettingsChange?.({ ...surveySettings, showPageTitles: v })} label="Show page titles" />
-        </div>
-      </div>
-    </div>
-  </div>;
-
-  if (!field) return <div style={{ padding: 20, textAlign: "center", color: C.textMuted, fontSize: 12 }}>Select a field to edit its properties</div>;
-
-  if (isManagedCompanyChoice(field)) {
-    const options = getCompanyChoiceOptions(field.choices, []);
-    return (
-      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-            <CheckBoxIcon style={{ fontSize: 16, color: C.purple }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>Managed Company Selector</span>
+      <div className="bx-propdock-body">
+        <div className="bx-typecard">
+          <span className="bx-typecard-mark"><FieldIcon type={field.type} size={18} /></span>
+          <div style={{ minWidth: 0 }}>
+            <div className="bx-typecard-label">{typeLabel}</div>
+            <div className="bx-typecard-name">{field.name}</div>
           </div>
-          <div style={{ fontSize: 10, color: C.textMuted, fontFamily: "monospace" }}>{field.name}</div>
         </div>
-        <div style={{ flex: 1, padding: 14 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 9, padding: "10px 11px", fontSize: 11, color: C.textSecond, lineHeight: 1.55 }}>
-              This special layout item is shown as the company question in the form header. Its label and options are controlled by Form Setup, and it can only be removed by turning off the Company selector toggle.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Header choices</div>
-              {options.map(option => (
-                <div key={option.value} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 34, padding: "7px 9px", borderRadius: 8, background: C.white, boxShadow: `0 0 0 1px ${C.border}` }}>
-                  <CheckBoxIcon style={{ fontSize: 14, color: C.purple }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary }}>{option.text}</span>
+
+        {managed ? (
+          <>
+            <p className="bx-lede" style={{ fontSize: 14 }}>
+              This is the managed Company selector shown in the form header. Its label and options come from Settings → Branding &amp; banner, and it can only be removed by turning that toggle off.
+            </p>
+            <div className="bx-label" style={{ marginTop: 18 }}>Header choices</div>
+            <div className="bx-wys-choices">
+              {getCompanyChoiceOptions(field.choices, []).map(option => (
+                <div key={option.value} className="bx-wys-choice">
+                  <span className="bx-wys-mark is-round" />
+                  {option.text}
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+          </>
+        ) : (
+          <>
+            <div className="bx-field">
+              <label htmlFor="bx-prop-label">Question label</label>
+              <input
+                id="bx-prop-label"
+                className="bx-input"
+                value={field.title || ""}
+                onChange={e => {
+                  const v = e.target.value;
+                  const nameFromLabel = v
+                    .replace(/[^a-zA-Z0-9\s]/g, "")
+                    .trim()
+                    .replace(/\s+(.)/g, (_, c) => c.toUpperCase())
+                    .replace(/^([A-Z])/, (_, c) => c.toLowerCase())
+                    .replace(/[^a-zA-Z0-9_]/g, "")
+                    .replace(/\s+/g, "_");
+                  onChange({ title: v, name: nameFromLabel || "" });
+                }}
+                placeholder="Question label"
+              />
+            </div>
+            <div className="bx-field">
+              <label htmlFor="bx-prop-name">Field name</label>
+              <input
+                id="bx-prop-name"
+                className={`bx-input${field.name ? "" : " is-error"}`}
+                value={field.name || ""}
+                onChange={e => onChange({ name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "").replace(/\s+/g, "_") })}
+                placeholder="camelCaseName"
+              />
+              <div className="bx-meta" style={{ marginTop: 5 }}>
+                {field.name ? "Becomes the SharePoint column name." : "Required — this becomes the SharePoint column name."}
+              </div>
+            </div>
+            <div className="bx-field">
+              <label htmlFor="bx-prop-hint">Placeholder / hint</label>
+              <input
+                id="bx-prop-hint"
+                className="bx-input"
+                value={field.description || ""}
+                onChange={e => onChange({ description: e.target.value })}
+                placeholder="Optional helper text"
+              />
+            </div>
+            {field.type !== "html" && (
+              <label className="bx-check" style={{ borderTop: "1px solid var(--bx-divider)", alignItems: "center" }}>
+                <input type="checkbox" checked={!!field.isRequired} onChange={e => onChange({ isRequired: e.target.checked })} style={{ marginTop: 0 }} />
+                Required field
+              </label>
+            )}
 
-  const td = QUESTION_TYPES.find(t => t.type === field.type) || QUESTION_TYPES[0];
-  const hasChoices = ["dropdown", "radiogroup", "checkbox"].includes(field.type);
-  const tabs = [
-    { id: "general", label: "General" },
-    { id: "options", label: "Options" },
-    { id: "logic", label: "Logic" },
-    { id: "validation", label: "Validation" }
-  ];
+            <button type="button" className="bx-subdisclosure" onClick={() => setAdvOpen(o => !o)} aria-expanded={advOpen}>
+              <span>Advanced</span>
+              <Icon name="chevdown" size={15} strokeWidth={1.6} className={`bx-chev${advOpen ? " is-open" : ""}`} />
+            </button>
 
-  return <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-    <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, background: C.purplePale }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-        <span style={{ fontSize: 16, display: "flex", alignItems: "center" }}>
-          {TYPE_ICONS[field.type]}
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>{td.label}</span>
+            {advOpen && (
+              <div style={{ padding: "4px 0 10px", animation: "bx-fade-up .14s ease" }}>
+                <AdvCard
+                  title="Field settings"
+                  body="Type-specific behaviour, the default value, and how this field sits in the layout."
+                  action="Open settings"
+                  open={card === "settings"}
+                  onToggle={() => toggleCard("settings")}
+                >
+                  {!["html", "dynamicmatrix", "file", "formula", "ranking", "panel"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
+                  {field.type === "text" && (
+                    <PropRow label="Input type">
+                      <Select value={field.inputType || "text"} onChange={v => onChange({ inputType: v })} options={[{ value: "text", label: "Text" }, { value: "email", label: "Email" }, { value: "number", label: "Number" }, { value: "date", label: "Date" }, { value: "datetime-local", label: "Date & Time" }, { value: "tel", label: "Phone" }, { value: "url", label: "URL" }, { value: "password", label: "Password" }]} />
+                    </PropRow>
+                  )}
+                  {field.type === "text" && (!field.inputType || field.inputType === "text") && (
+                    <PropRow label="Autocapitalize">
+                      <Select value={field.autocapitalize || "none"} onChange={v => onChange({ autocapitalize: v as "none" | "sentences" | "words" | "characters" })} options={[{ value: "none", label: "None" }, { value: "sentences", label: "Sentences" }, { value: "words", label: "Words" }, { value: "characters", label: "Characters (ALL CAPS)" }]} />
+                    </PropRow>
+                  )}
+                  <FieldTypeProps field={field} onChange={onChange} allFields={allFields} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4, paddingTop: 12, borderTop: "1px solid var(--bx-divider)" }}>
+                    <Toggle checked={!field.startWithNewLine} onChange={v => onChange({ startWithNewLine: !v })} label="Inline (same row as previous)" />
+                    <Toggle checked={!!field.readOnly} onChange={v => onChange({ readOnly: v })} label="Read-only" />
+                    <Toggle checked={field.titleLocation === "hidden"} onChange={v => onChange({ titleLocation: v ? "hidden" : "default" })} label="Hide title" />
+                  </div>
+                </AdvCard>
+
+                <AdvCard
+                  title="Conditional logic"
+                  body="Show or hide this field, and set values, based on earlier answers."
+                  action={field.visibleIf || field.enableIf ? "Edit rules" : "Add a rule"}
+                  open={card === "logic"}
+                  onToggle={() => toggleCard("logic")}
+                >
+                  <LogicRulesEditor field={field} allFields={allFields} onChange={onChange} />
+                </AdvCard>
+
+                <AdvCard
+                  title="Validation"
+                  body="Numeric range, text length, regex, email, or a custom expression."
+                  action={field.validators?.length ? `Edit ${field.validators.length} validator${field.validators.length === 1 ? "" : "s"}` : "Add a validator"}
+                  open={card === "validation"}
+                  onToggle={() => toggleCard("validation")}
+                >
+                  <ValidationEditor field={field} onChange={onChange} />
+                </AdvCard>
+
+                <AdvCard
+                  title="Options & data source"
+                  body="Manual choices, matrix columns, side-by-side layout, or a live SharePoint list column."
+                  action="Configure"
+                  open={card === "options"}
+                  onToggle={() => toggleCard("options")}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {hasChoices && (
+                      <>
+                        <SpChoicesSourceEditor
+                          source={field.spChoicesSource}
+                          token={token}
+                          onChange={src => onChange({ spChoicesSource: src, choices: src?.list ? [] : (field.choices || []) })}
+                        />
+                        <SpFilteredListSourceEditor
+                          source={field.spFilteredListSource}
+                          token={token}
+                          onChange={src => onChange({ spFilteredListSource: src, choices: src?.list ? [] : (field.choices || []) })}
+                        />
+                        {!field.spChoicesSource?.list && !field.spFilteredListSource?.list && (
+                          <PropRow label="Choices"><ChoicesEditor choices={field.choices || []} onChange={c => onChange({ choices: c })} /></PropRow>
+                        )}
+                      </>
+                    )}
+                    {isMatrix && (
+                      <MatrixColumnsEditor
+                        columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
+                        token={token}
+                        onChange={cols => onChange({ columns: cols, tableConfigColumns: cols })}
+                      />
+                    )}
+                    <PropRow label="Columns (side by side)">
+                      <Select value={String(field.colCount ?? 1)} onChange={v => onChange({ colCount: parseInt(v) })} options={[0, 1, 2, 3, 4].map(n => ({ value: String(n), label: n === 0 ? "Auto" : `${n} column${n > 1 ? "s" : ""}` }))} />
+                    </PropRow>
+                  </div>
+                </AdvCard>
+              </div>
+            )}
+          </>
+        )}
       </div>
-      <div style={{ fontSize: 10, color: C.textMuted, fontFamily: "monospace" }}>{field.name}</div>
-    </div>
-    <div style={{ padding: "8px 14px", borderBottom: `1px solid ${C.border}` }}>
-      <select value={tab} onChange={e => setTab(e.target.value)}
-        style={{ width: "100%", height: 32, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0 8px", fontSize: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", color: C.textPrimary, background: C.white, cursor: "pointer" }}>
-        {tabs.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-      </select>
-    </div>
-    <div style={{ flex: 1, padding: "14px" }}>
-      {tab === "general" && <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        <PropRow label="Label" span><Input value={field.title} onChange={v => {
-          const nameFromLabel = v
-            .replace(/[^a-zA-Z0-9\s]/g, "")
-            .trim()
-            .replace(/\s+(.)/g, (_, c) => c.toUpperCase())
-            .replace(/^([A-Z])/, (_, c) => c.toLowerCase())
-            .replace(/[^a-zA-Z0-9_]/g, "")
-            .replace(/\s+/g, "_");
-          onChange({ title: v, name: nameFromLabel || "" });
-        }} placeholder="Question label" /></PropRow>
-        <PropRow label="Field name (SP column)" span>
-          <Input value={field.name} onChange={v => onChange({ name: v.replace(/[^a-zA-Z0-9_]/g, "").replace(/\s+/g, "_") })} placeholder="camelCaseName (required)" />
-          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>Required. No spaces, becomes the SharePoint column name.</div>
-        </PropRow>
-        <PropRow label="Description / hint" span><Input value={field.description || ""} onChange={v => onChange({ description: v })} placeholder="Optional helper text" /></PropRow>
-        {!["html", "dynamicmatrix", "file", "formula", "ranking", "panel"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
-        {field.type === "text" && <PropRow label="Input type"><Select value={field.inputType || "text"} onChange={v => onChange({ inputType: v })} options={[{ value: "text", label: "Text" }, { value: "email", label: "Email" }, { value: "number", label: "Number" }, { value: "date", label: "Date" }, { value: "datetime-local", label: "Date & Time" }, { value: "tel", label: "Phone" }, { value: "url", label: "URL" }, { value: "password", label: "Password" }]} /></PropRow>}
-        {field.type === "text" && (!field.inputType || field.inputType === "text") && <PropRow label="Autocapitalize"><Select value={field.autocapitalize || "none"} onChange={v => onChange({ autocapitalize: v as "none" | "sentences" | "words" | "characters" })} options={[{ value: "none", label: "None" }, { value: "sentences", label: "Sentences" }, { value: "words", label: "Words" }, { value: "characters", label: "Characters (ALL CAPS)" }]} /></PropRow>}
-        <FieldTypeProps field={field} onChange={onChange} allFields={allFields} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-          {field.type !== "html" && <Toggle checked={!!field.isRequired} onChange={v => onChange({ isRequired: v })} label="Required field" />}
-          <Toggle checked={!field.startWithNewLine} onChange={v => onChange({ startWithNewLine: !v })} label="Inline (same row as previous)" />
-          <Toggle checked={!!field.readOnly} onChange={v => onChange({ readOnly: v })} label="Read-only" />
-          <Toggle checked={field.titleLocation === "hidden"} onChange={v => onChange({ titleLocation: v ? "hidden" : "default" })} label="Hide title" />
-        </div>
-      </div>}
-      {tab === "options" && <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {hasChoices && <>
-          <SpChoicesSourceEditor
-            source={field.spChoicesSource}
-            token={token}
-            onChange={src => onChange({ spChoicesSource: src, choices: src?.list ? [] : (field.choices || []) })}
-          />
-          <SpFilteredListSourceEditor
-            source={field.spFilteredListSource}
-            token={token}
-            onChange={src => onChange({ spFilteredListSource: src, choices: src?.list ? [] : (field.choices || []) })}
-          />
-          {!field.spChoicesSource?.list && !field.spFilteredListSource?.list && <PropRow label="Choices"><ChoicesEditor choices={field.choices || []} onChange={c => onChange({ choices: c })} /></PropRow>}
-        </>}
-        {(field.type === "dynamicmatrix" || field.type === "tableinput") && <>
-          <MatrixColumnsEditor
-            columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
-            token={token}
-            onChange={cols => onChange({ columns: cols, tableConfigColumns: cols })}
-          />
-        </>}
-        <PropRow label="Columns (side by side)"><Select value={String(field.colCount ?? 1)} onChange={v => onChange({ colCount: parseInt(v) })} options={[0, 1, 2, 3, 4].map(n => ({ value: String(n), label: n === 0 ? "Auto" : `${n} column${n > 1 ? "s" : ""}` }))} /></PropRow>
-      </div>}
-      {tab === "logic" && <LogicRulesEditor field={field} allFields={allFields} onChange={onChange} />}
-      {tab === "validation" && <ValidationEditor field={field} onChange={onChange} />}
-    </div>
-  </div>;
+    </aside>
+  );
 }
 
 // ── JSON Preview ──────────────────────────────────────────────────────
@@ -2120,9 +2302,19 @@ interface FormBuilderProps {
   onClose?: () => void;
   readOnly?: boolean;
   companyChoice?: CompanyChoiceConfig;
+  /** Sheet header content — the form's identity, edited on the sheet itself. */
+  sheet?: SheetMeta;
+  /** Set when the title may be edited from the sheet (locked after first publish). */
+  onTitleChange?: (v: string) => void;
+  /**
+   * Opens one of the builder's deferred panels. The shell's Tools and Preview
+   * menus live in the mode rail, so they raise a command here rather than the
+   * builder owning an eleven-button toolbar of its own.
+   */
+  toolCommand?: BuilderToolCommand | null;
 }
 
-export default function FormBuilder({ initialJson, onChange, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false, companyChoice }: FormBuilderProps) {
+export default function FormBuilder({ initialJson, onChange, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false, companyChoice, sheet, onTitleChange, toolCommand }: FormBuilderProps) {
   const [fields, setFields] = useState<FormBuilderField[]>(() => {
     if (!initialJson) return [];
     try { return buildQuestionTree(initialJson); } catch { return []; }
@@ -2164,21 +2356,12 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     };
   });
   
-  // Toolbar scroll state
-  const toolbarRightRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  
-  // Property panel scroll state
-  const propertyPanelRef = useRef<HTMLDivElement>(null);
-  const [canPropertyScrollLeft, setCanPropertyScrollLeft] = useState(false);
-  const [canPropertyScrollRight, setCanPropertyScrollRight] = useState(false);
-  
   // ── Part 5: Integration & Submission State ─────────────────────────────────
   const [showIntegrationPanel, setShowIntegrationPanel] = useState(false);
   const [showProvisioningPreview, setShowProvisioningPreview] = useState(false);
   const [showSubmissionSettings, setShowSubmissionSettings] = useState(false);
   const [showFieldPermissions, setShowFieldPermissions] = useState(false);
+  const [showSurveySettings, setShowSurveySettings] = useState(false);
   
   // Webhooks
   const [webhooks, setWebhooks] = useState<{ id: string; name: string; url: string; method: "POST" | "PATCH"; events: string[]; enabled: boolean; payloadTemplate?: string }[]>([]);
@@ -2277,75 +2460,12 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     setFields(current => normalizeCompanyChoiceFields(current, config));
   }, [companyChoiceKey]);
 
-  // Check scroll state for toolbar
-  const checkScrollState = () => {
-    const el = toolbarRightRef.current;
-    if (el) {
-      setCanScrollLeft(el.scrollLeft > 0);
-      setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-    }
-  };
-
-  // Scroll functions
-  const scrollLeft = () => {
-    const el = toolbarRightRef.current;
-    if (el) {
-      el.scrollBy({ left: -200, behavior: 'smooth' });
-    }
-  };
-
-  const scrollRight = () => {
-    const el = toolbarRightRef.current;
-    if (el) {
-      el.scrollBy({ left: 200, behavior: 'smooth' });
-    }
-  };
-
-  // Property panel scroll functions
-  const checkPropertyScrollState = () => {
-    const el = propertyPanelRef.current;
-    if (el) {
-      setCanPropertyScrollLeft(el.scrollLeft > 0);
-      setCanPropertyScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-    }
-  };
-
-  const propertyScrollLeft = () => {
-    const el = propertyPanelRef.current;
-    if (el) {
-      el.scrollBy({ left: -200, behavior: 'smooth' });
-    }
-  };
-
-  const propertyScrollRight = () => {
-    const el = propertyPanelRef.current;
-    if (el) {
-      el.scrollBy({ left: 200, behavior: 'smooth' });
-    }
-  };
-
-  // Update scroll state on mount and window resize
-  useEffect(() => {
-    checkScrollState();
-    window.addEventListener('resize', checkScrollState);
-    return () => window.removeEventListener('resize', checkScrollState);
-  }, []);
-
-  // Property panel scroll state on mount and window resize
-  useEffect(() => {
-    checkPropertyScrollState();
-    window.addEventListener('resize', checkPropertyScrollState);
-    return () => window.removeEventListener('resize', checkPropertyScrollState);
-  }, []);
-
   // Undo/redo stacks
   const MAX_HISTORY = 20;
   const [undoStack, setUndoStack] = useState<FormBuilderField[][]>([]);
   const [redoStack, setRedoStack] = useState<FormBuilderField[][]>([]);
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
-  const undoCount = undoStack.length;
-  const redoCount = redoStack.length;
 
   // Auto-save key
   const AUTOSAVE_KEY = "pmw_formbuilder_draft";
@@ -2505,6 +2625,37 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     }
   }, [pushHistory]);
 
+  /** Opens whichever deferred panel the shell's Tools / Preview menu asked for. */
+  const toolNonce = toolCommand?.nonce;
+  const toolKey = toolCommand?.key;
+  useEffect(() => {
+    if (toolNonce === undefined || !toolKey) return;
+    if (toolKey.startsWith("preview-")) {
+      const found = validateFields(fieldsRef.current);
+      setErrors(found);
+      if (found.length) return;
+      setPreviewDevice(toolKey.slice("preview-".length) as "desktop" | "tablet" | "mobile");
+      setShowPreview(true);
+      return;
+    }
+    switch (toolKey) {
+      case "templates": setShowFieldTemplates(true); break;
+      case "i18n": setShowI18n(true); break;
+      case "comments": setShowFieldComments(true); break;
+      case "theme": setShowThemeEditor(true); break;
+      case "data": setShowDataSources(true); break;
+      case "integrations": setShowIntegrationPanel(true); break;
+      case "export": setShowExportWizard(true); break;
+      case "provisioning": setShowProvisioningPreview(true); break;
+      case "json": setJsonCollapsed(c => !c); break;
+      case "permissions": setShowFieldPermissions(true); break;
+      case "submission": setShowSubmissionSettings(true); break;
+      case "display": setShowSurveySettings(true); break;
+      default: break;
+    }
+    // Re-runs on every raised command, including the same key twice in a row.
+  }, [toolNonce, toolKey]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -2540,107 +2691,59 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   }, [selectedId, handleRemove, handleDuplicate, fields, canUndo, handleUndo, canRedo, handleRedo]);
 
   return <>
-    <div className="fb-root" style={{ height }}>
-      {/* Toolbar */}
-      <div className="fb-toolbar">
-        <div className="fb-toolbar-left">
-          <Pill>{fields.length} field{fields.length !== 1 ? "s" : ""}</Pill>
-          {undoCount > 0 && (
-            <button onClick={handleUndo} className="fb-undo-btn" title={`Undo (${undoCount})`}>
-              <UndoIcon style={{ fontSize: 14 }} /> Undo {undoCount > 1 && <span className="fb-count">{undoCount}</span>}
-            </button>
-          )}
-          {redoCount > 0 && (
-            <button onClick={handleRedo} className="fb-redo-btn" title={`Redo (${redoCount})`}>
-              <RedoIcon style={{ fontSize: 14 }} /> Redo {redoCount > 1 && <span className="fb-count">{redoCount}</span>}
-            </button>
-          )}
-          {errors.length > 0 && <Pill color={C.red} bg={C.redPale}><WarningAmberIcon style={{ fontSize: 12, marginRight: 4 }} /> {errors.length} error{errors.length !== 1 ? "s" : ""}</Pill>}
+    <div className="bx-build" style={{ height }}>
+      <Palette onAdd={td => addField(td)} />
+      <FormSheet
+        fields={fields}
+        selectedId={selectedId}
+        onSelect={id => setSelectedId(id)}
+        onRemove={handleRemove}
+        onDuplicate={handleDuplicate}
+        onReorder={handleReorder}
+        onAddFromPalette={addField}
+        errors={errors}
+        onDropOnPanel={handleDropOnPanel}
+        onRecursiveReorder={handleRecursiveReorder}
+        onMoveToRoot={handleMoveToRoot}
+        sheet={sheet}
+        onTitleChange={onTitleChange}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        readOnly={_readOnly}
+      />
+      {selectedId !== null && (
+        <PropertyPanel
+          field={selectedField || selectedFieldRef.current}
+          allFields={flattenFieldTree(fields)}
+          onChange={patch => {
+            const id = selectedField?._id ?? selectedFieldRef.current?._id ?? null;
+            if (id) handleChange(id, patch);
+          }}
+          onClose={() => setSelectedId(null)}
+          token={_token}
+        />
+      )}
+      {showRestorePrompt && (
+        <div className="bx-toast" role="status">
+          <span className="bx-dot" style={{ background: "var(--bx-a300)", marginTop: 6 }} />
+          <span style={{ flex: 1 }}>
+            An unsaved local draft of this form was found.
+            <span style={{ display: "flex", gap: 8, marginTop: 9 }}>
+              <button type="button" className="bx-btn bx-btn-primary bx-btn-sm" onClick={restoreDraft}>Restore it</button>
+              <button type="button" className="bx-btn bx-btn-secondary bx-btn-sm" onClick={discardDraft}>Discard</button>
+            </span>
+          </span>
         </div>
-        <div className="fb-toolbar-scroll-container">
-          <button 
-            className="fb-toolbar-scroll-btn fb-toolbar-scroll-left" 
-            onClick={scrollLeft}
-            style={{ visibility: canScrollLeft ? 'visible' : 'hidden' }}
-          >
-            <ChevronLeftIcon style={{ fontSize: 16 }} />
-          </button>
-          <div className="fb-toolbar-right" ref={toolbarRightRef} onScroll={checkScrollState}>
-            {showRestorePrompt && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 12 }}>
-                <span style={{ fontSize: 11, color: C.amber }}>Draft saved</span>
-                <button onClick={restoreDraft} style={{ fontSize: 10, padding: "4px 8px", background: C.amber, color: C.white, border: "none", borderRadius: 4, cursor: "pointer" }}>Restore</button>
-                <button onClick={discardDraft} style={{ fontSize: 10, padding: "4px 8px", background: "transparent", color: C.textMuted, border: "none", cursor: "pointer" }}>Discard</button>
-              </div>
-            )}
-            <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.offWhite, borderRadius: 6, padding: 2 }}>
-              {(["desktop", "tablet", "mobile"] as const).map(d => (
-                <button key={d} onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice(d); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }}
-                  title={`Preview on ${d}`} style={{ padding: "4px 8px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 4, fontSize: 12, color: C.textMuted }}>
-                  {d === "desktop" ? <DesktopWindowsIcon style={{ fontSize: 16 }} /> : d === "tablet" ? <PhoneIphoneIcon style={{ fontSize: 16 }} /> : <PhoneIphoneIcon style={{ fontSize: 16 }} />}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setShowI18n(!showI18n)} className={`fb-json-btn ${showI18n ? 'active' : ''}`} style={{ marginRight: 8 }}><TranslateIcon style={{ fontSize: 14, marginRight: 4 }} /> i18n</button>
-            <button onClick={() => setShowFieldTemplates(!showFieldTemplates)} className={`fb-json-btn ${showFieldTemplates ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Templates</button>
-            <button onClick={() => setShowFieldComments(!showFieldComments)} className={`fb-json-btn ${showFieldComments ? 'active' : ''}`} style={{ marginRight: 8 }}><CommentIcon style={{ fontSize: 14, marginRight: 4 }} /> Comments</button>
-            <button onClick={() => setShowThemeEditor(!showThemeEditor)} className={`fb-json-btn ${showThemeEditor ? 'active' : ''}`} style={{ marginRight: 8 }}><PaletteIcon style={{ fontSize: 14, marginRight: 4 }} /> Theme</button>
-            <button onClick={() => setShowExportWizard(!showExportWizard)} className={`fb-json-btn ${showExportWizard ? 'active' : ''}`} style={{ marginRight: 8 }}><FileDownloadIcon style={{ fontSize: 14, marginRight: 4 }} /> Export</button>
-            <button onClick={() => setShowDataSources(!showDataSources)} className={`fb-json-btn ${showDataSources ? 'active' : ''}`} style={{ marginRight: 8 }}><StorageIcon style={{ fontSize: 14, marginRight: 4 }} /> Data</button>
-            <button onClick={() => setShowIntegrationPanel(!showIntegrationPanel)} className={`fb-json-btn ${showIntegrationPanel ? 'active' : ''}`} style={{ marginRight: 8 }}><HubIcon style={{ fontSize: 14, marginRight: 4 }} /> Integration</button>
-            <button onClick={() => setShowProvisioningPreview(!showProvisioningPreview)} className={`fb-json-btn ${showProvisioningPreview ? 'active' : ''}`} style={{ marginRight: 8 }}><TextFieldsIcon style={{ fontSize: 14, marginRight: 4 }} /> Provision</button>
-            <button onClick={() => setShowSubmissionSettings(!showSubmissionSettings)} className={`fb-json-btn ${showSubmissionSettings ? 'active' : ''}`} style={{ marginRight: 8 }}><SettingsIcon style={{ fontSize: 14, marginRight: 4 }} /> Settings</button>
-            <button onClick={() => setShowFieldPermissions(!showFieldPermissions)} className={`fb-json-btn ${showFieldPermissions ? 'active' : ''}`} style={{ marginRight: 8 }}><ShieldIcon style={{ fontSize: 14, marginRight: 4 }} /> Permissions</button>
-            <button onClick={() => { const e = validateFields(fields); setErrors(e); if (!e.length) { setPreviewDevice("desktop"); setShowPreview(true); } else alert(`Fix ${e.length} error(s) first.`); }} className="fb-preview-btn"><PreviewIcon style={{ fontSize: 14, marginRight: 4 }} /> Live Preview</button>
-            <button onClick={() => setJsonCollapsed(c => !c)} className={`fb-json-btn ${!jsonCollapsed ? 'active' : ''}`}><CodeIcon style={{ fontSize: 14, marginRight: 4 }} /> JSON</button>
-          </div>
-          <button 
-            className="fb-toolbar-scroll-btn fb-toolbar-scroll-right" 
-            onClick={scrollRight}
-            style={{ visibility: canScrollRight ? 'visible' : 'hidden' }}
-          >
-            <ChevronRightIcon style={{ fontSize: 16 }} />
-          </button>
+      )}
+    </div>
+      {/* The JSON drawer is now a Tools row, so it only exists once asked for. */}
+      {!jsonCollapsed && (
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 2500, boxShadow: "0 -12px 32px rgba(26,31,43,0.22)" }}>
+          <JsonPreview json={surveyJson} collapsed={false} onToggle={() => setJsonCollapsed(true)} />
         </div>
-      </div>
-      {/* 3-panel layout */}
-      <div className="fb-layout">
-        <div className="fb-palette-panel">
-          <div className="fb-panel-header">
-            <div className="fb-panel-header-text">Field Types</div>
-          </div>
-          <Palette onAdd={td => addField(td)} />
-        </div>
-        <div className="fb-canvas-panel">
-          <div className="fb-canvas-panel-header">
-            <div className="fb-panel-header-text">Form Canvas</div>
-            <div className="fb-canvas-panel-hint">Drag to reorder</div>
-          </div>
-          <div className="fb-canvas-body">
-            <Canvas fields={fields} selectedId={selectedId} onSelect={id => setSelectedId(id)} onRemove={handleRemove} onDuplicate={handleDuplicate} onReorder={handleReorder} onAddFromPalette={addField} errors={errors} onDropOnPanel={handleDropOnPanel} onRecursiveReorder={handleRecursiveReorder} onMoveToRoot={handleMoveToRoot} />
-          </div>
-        </div>
-        <div className="fb-property-panel-side">
-          <div className="fb-panel-header">
-            <div className="fb-panel-header-text">Properties</div>
-          </div>
-          <div className="fb-property-scroll-container">
-            <button className="fb-property-scroll-btn fb-property-scroll-left" onClick={propertyScrollLeft} style={{ visibility: canPropertyScrollLeft ? 'visible' : 'hidden' }}>
-              <ChevronLeftIcon style={{ fontSize: 16 }} />
-            </button>
-            <div className="fb-property-scroll-content" ref={propertyPanelRef} onScroll={checkPropertyScrollState}>
-              <PropertyPanel field={selectedId !== null ? (selectedField || selectedFieldRef.current) : null} allFields={flattenFieldTree(fields)} onChange={patch => {
-                const id = selectedId !== null ? (selectedField?._id ?? selectedFieldRef.current?._id) : null;
-                if (id) handleChange(id, patch);
-              }} surveySettings={surveySettings} onSurveySettingsChange={setSurveySettings} token={_token} />
-            </div>
-            <button className="fb-property-scroll-btn fb-property-scroll-right" onClick={propertyScrollRight} style={{ visibility: canPropertyScrollRight ? 'visible' : 'hidden' }}>
-              <ChevronRightIcon style={{ fontSize: 16 }} />
-            </button>
-          </div>
-        </div>
-      </div>
-      <JsonPreview json={surveyJson} collapsed={jsonCollapsed} onToggle={() => setJsonCollapsed(c => !c)} />
+      )}
       {showPreview && <LivePreviewModal json={surveyJson} onClose={() => setShowPreview(false)} showBanner={showBanner} meta={meta} device={previewDevice} />}
       {/* Command Palette Modal - "/" */}
       {showCommandPalette && (
@@ -2664,7 +2767,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                     style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: i === 0 ? C.offWhite : "transparent" }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = C.offWhite; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = i === 0 ? C.offWhite : "transparent"; }}>
-                    <span style={{ fontSize: 18, width: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>{TYPE_ICONS[td.type]}</span>
+                    <span style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: C.purple }}><FieldIcon type={td.type} size={18} /></span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>{td.label}</div>
                       <div style={{ fontSize: 11, color: C.textMuted }}>{td.description}</div>
@@ -3151,6 +3254,23 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
           </div>
       </div>
         )}
-      </div>
+
+      {showSurveySettings && (
+        <div
+          className="bx-backdrop"
+          onClick={e => { if (e.target === e.currentTarget) setShowSurveySettings(false); }}
+          onKeyDown={e => { if (e.key === "Escape") setShowSurveySettings(false); }}
+        >
+          <div className="bx-dialog bx-dialog-sm" role="dialog" aria-modal="true" aria-label="Form display">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
+              <span className="bx-dialog-title">Form display</span>
+              <button type="button" className="bx-ghost" title="Close" onClick={() => setShowSurveySettings(false)}>
+                <Icon name="close" size={15} strokeWidth={1.6} />
+              </button>
+            </div>
+            <SurveySettingsPanel surveySettings={surveySettings} onSurveySettingsChange={setSurveySettings} />
+          </div>
+        </div>
+      )}
     </>;
 }

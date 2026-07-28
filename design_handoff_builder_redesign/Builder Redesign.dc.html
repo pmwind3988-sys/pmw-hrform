@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_ds/industry-9d4d7f3d-4a65-4682-9c0b-c80a958eeb48/styles.css">
+<script src="_ds/industry-9d4d7f3d-4a65-4682-9c0b-c80a958eeb48/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:15px;line-height:1.55;font-weight:500;-webkit-font-smoothing:antialiased}
+a{color:var(--color-accent);text-decoration:none}a:hover{color:var(--color-accent-700)}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--color-neutral-400)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+input,textarea,select,button{font-family:var(--font-body)}
+.eyebrow{font-family:var(--font-heading);font-weight:600;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent-800)}
+.input{font-size:15px;font-weight:500;background:var(--color-bg);border-width:1.5px}
+.input:focus-visible{border-color:var(--color-accent);box-shadow:0 0 0 3px var(--color-accent-200)}
+.field > label{font-size:13px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--color-neutral-700)}
+.btn{font-size:15px;letter-spacing:.03em;border-width:1.5px}
+.tag{font-weight:600}
+.navitem{display:inline-flex;align-items:center;gap:8px;height:100%;padding:0 22px;cursor:pointer;font-family:var(--font-heading);font-weight:600;font-size:17px;letter-spacing:.04em;color:var(--color-accent-200);border:none;background:transparent;transition:background .14s ease,color .14s ease}
+.navitem:hover{background:color-mix(in srgb,#f2f2f3 12%,transparent);color:#fff}
+.navitem.on{background:var(--color-accent);color:var(--color-bg)}
+.ghost{width:30px;height:30px;display:grid;place-items:center;background:var(--color-bg);border:1.5px solid var(--color-divider);cursor:pointer;color:var(--color-neutral-700)}
+.ghost:hover{border-color:var(--color-accent-800);color:var(--color-accent-800)}
+.row-tools{opacity:0;transition:opacity .12s ease}
+.fieldrow:hover .row-tools{opacity:1}
+.wys{width:100%;min-height:40px;border:1.5px solid var(--color-divider);background:var(--color-bg);padding:8px 12px;font-size:15px;color:var(--color-neutral-600)}
+.navitem,.navbtn{white-space:nowrap}
+.propdock{flex:none;width:330px;background:var(--color-neutral-100);border-left:1px solid var(--color-divider);display:flex;flex-direction:column;animation:slideIn .16s ease}
+.palette{flex:none;width:300px}
+@media (max-width:1180px){.chip-sec{display:none!important}}
+@media (max-width:1080px){.nav-hint{display:none!important}}
+.nav-hint{display:flex}
+.palette-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+@media (max-width:1240px){
+  .propdock{position:absolute;right:0;top:0;bottom:0;z-index:40;box-shadow:var(--shadow-lg)}
+  .palette{width:250px}
+  .palette-grid{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ic-text" viewBox="0 0 24 24"><path d="M4 7V5h16v2M12 5v14M9 19h6"></path></symbol>
+  <symbol id="ic-para" viewBox="0 0 24 24"><path d="M4 6h16M4 11h16M4 16h10"></path></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="9"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></symbol>
+  <symbol id="ic-idcard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14"></rect><circle cx="8" cy="11" r="2.4"></circle><path d="M14 10h5M14 14h5"></path></symbol>
+  <symbol id="ic-chevbox" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"></rect><path d="m8 11 4 4 4-4"></path></symbol>
+  <symbol id="ic-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3.5"></circle></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"></rect><path d="m8 12 3 3 5-6"></path></symbol>
+  <symbol id="ic-toggle" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="5"></rect><circle cx="8" cy="12" r="3"></circle></symbol>
+  <symbol id="ic-filecheck" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5m-8 6 1.8 1.8L16 13"></path></symbol>
+  <symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></symbol>
+  <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></symbol>
+  <symbol id="ic-timer" viewBox="0 0 24 24"><path d="M10 2h4M12 9v4l3 2"></path><circle cx="12" cy="13" r="8"></circle></symbol>
+  <symbol id="ic-hash" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4 8 20M17 4l-2 16"></path></symbol>
+  <symbol id="ic-money" viewBox="0 0 24 24"><path d="M12 3v18M8 7h6a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h7"></path></symbol>
+  <symbol id="ic-plusminus" viewBox="0 0 24 24"><path d="M4 9h8M8 5v8M4 17h8M15 8l3 3 3-3"></path></symbol>
+  <symbol id="ic-slider" viewBox="0 0 24 24"><path d="M4 8h16M4 16h16"></path><circle cx="9" cy="8" r="2.5"></circle><circle cx="15" cy="16" r="2.5"></circle></symbol>
+  <symbol id="ic-star" viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6L12 16.7 6.7 19.6l1.1-6L3.4 9.4l6-.8z"></path></symbol>
+  <symbol id="ic-fx" viewBox="0 0 24 24"><path d="M8 20V8a3 3 0 0 1 3-3h1M6 12h7M15 12l5 8M20 12l-5 8"></path></symbol>
+  <symbol id="ic-upload" viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path></symbol>
+  <symbol id="ic-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"></rect><circle cx="8.5" cy="9.5" r="1.8"></circle><path d="m4 18 5-5 4 4 3-3 4 4"></path></symbol>
+  <symbol id="ic-pen" viewBox="0 0 24 24"><path d="M3 20h4L18 9a2.8 2.8 0 0 0-4-4L3 16z"></path></symbol>
+  <symbol id="ic-ordered" viewBox="0 0 24 24"><path d="M4 6h1v4M4 10h2M9 7h11M9 12h11M9 17h11M4 14h2l-2 3h2"></path></symbol>
+  <symbol id="ic-tree" viewBox="0 0 24 24"><path d="M6 4v12a2 2 0 0 0 2 2h3M6 4h5M13 10h6M13 18h6"></path></symbol>
+  <symbol id="ic-braces" viewBox="0 0 24 24"><path d="M8 4a3 3 0 0 0-3 3v3l-2 2 2 2v3a3 3 0 0 0 3 3M16 4a3 3 0 0 1 3 3v3l2 2-2 2v3a3 3 0 0 1-3 3"></path></symbol>
+  <symbol id="ic-grid" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"></rect><path d="M3 10h18M9 10v10"></path></symbol>
+  <symbol id="ic-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"></rect><path d="M3 10h18M3 15h18M12 10v10"></path></symbol>
+  <symbol id="ic-section" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"></rect><path d="M3 9h18"></path></symbol>
+  <symbol id="ic-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"></rect><path d="M12 4v16"></path></symbol>
+  <symbol id="ic-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M21 6H8a4 4 0 0 0-4 4v1M7 22l-4-4 4-4M3 18h13a4 4 0 0 0 4-4v-1"></path></symbol>
+  <symbol id="ic-spacer" viewBox="0 0 24 24"><path d="M12 4v16M8 7l4-3 4 3M8 17l4 3 4-3"></path></symbol>
+  <symbol id="ic-minus" viewBox="0 0 24 24"><path d="M4 12h16"></path></symbol>
+  <symbol id="ic-pagebreak" viewBox="0 0 24 24"><path d="M6 3h12v6H6zM6 15h12v6H6zM3 12h18"></path></symbol>
+  <symbol id="ic-code" viewBox="0 0 24 24"><path d="m9 8-5 4 5 4m6-8 5 4-5 4"></path></symbol>
+  <symbol id="ic-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></symbol>
+  <symbol id="ic-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12"></rect><path d="m16 10 5-3v10l-5-3"></path></symbol>
+  <symbol id="ic-hourglass" viewBox="0 0 24 24"><path d="M7 3h10M7 21h10M17 3c0 4-5 6-5 9s5 5 5 9M7 3c0 4 5 6 5 9s-5 5-5 9"></path></symbol>
+  <symbol id="ic-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0M12 12l4-3"></path></symbol>
+  <symbol id="ic-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M2 20h20"></path></symbol>
+</svg>
+
+<div style="height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--color-bg)">
+
+  <header style="flex:none;height:56px;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--color-neutral-100);border-bottom:1px solid var(--color-divider)">
+    <div style="flex:none;display:flex;align-items:center;gap:10px">
+      <span style="width:30px;height:30px;display:grid;place-items:center;background:var(--color-accent-800)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f2f2f3" stroke-width="1.6"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h3"></path></svg>
+      </span>
+      <span style="font-family:var(--font-heading);font-weight:600;font-size:22px;letter-spacing:.01em">PMW Forms</span>
+    </div>
+    <div style="flex:none;width:1px;height:24px;background:var(--color-divider)"></div>
+
+    <div style="flex:none;position:relative">
+      <button onClick="{{ toggleSwitcher }}" style="flex:none;display:inline-flex;align-items:center;gap:9px;height:36px;padding:0 12px;background:transparent;border:1.5px solid var(--color-divider);cursor:pointer;color:var(--color-text)" style-hover="border-color:var(--color-accent-800)">
+        <span style="font-family:var(--font-heading);font-weight:600;font-size:20px;line-height:1;white-space:nowrap;max-width:250px;overflow:hidden;text-overflow:ellipsis">{{ headerTitle }}</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".6"><path d="m6 9 6 6 6-6"></path></svg>
+      </button>
+      <sc-if value="{{ switcherOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:40px;left:0;width:330px;background:var(--color-neutral-100);border:1.5px solid var(--color-accent-800);box-shadow:var(--shadow-lg);z-index:60;animation:fadeUp .12s ease">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--color-accent-100);border-bottom:1.5px solid var(--color-accent-800)">
+            <span class="eyebrow">Form library</span>
+            <button onClick="{{ newForm }}" class="btn btn-primary" style="height:30px;padding:0 12px;font-size:13px">New form</button>
+          </div>
+          <div style="max-height:340px;overflow-y:auto">
+            <sc-for list="{{ library }}" as="f" hint-placeholder-count="3">
+              <div onClick="{{ f.open }}" style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid color-mix(in srgb,var(--color-text) 8%,transparent);cursor:pointer" style-hover="background:var(--color-accent-100)">
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:var(--font-heading);font-weight:600;font-size:17px">{{ f.title }}</div>
+                  <div style="display:flex;gap:9px;align-items:center;margin-top:2px">
+                    <span style="font-size:12.5px;color:var(--color-neutral-600);font-variant-numeric:tabular-nums">{{ f.formId }}</span>
+                    <span style="font-size:12.5px;color:var(--color-neutral-600)">v{{ f.version }}</span>
+                    <span class="tag tag-accent" style="font-size:11px">{{ f.state }}</span>
+                  </div>
+                </div>
+                <button onClick="{{ f.del }}" title="Delete form (keeps submissions)" class="ghost" style="background:transparent;border-color:transparent">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg>
+                </button>
+                <button onClick="{{ f.hardDel }}" title="Delete ALL data including submissions" class="ghost" style="background:transparent;border-color:transparent">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h12M8 6V4h6v2M15 6l-1 14H5L4 6M18 9l4 4M22 9l-4 4"></path></svg>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="flex:none;display:flex;gap:6px;align-items:center;white-space:nowrap">
+      <span class="tag tag-outline" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase">Admin</span>
+      <span class="tag tag-neutral chip-sec" style="font-size:11px">v{{ meta.version }}</span>
+      <sc-if value="{{ isDraft }}" hint-placeholder-val="{{ true }}">
+        <span class="tag tag-accent chip-sec" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase">Draft</span>
+      </sc-if>
+    </div>
+
+    <div style="flex:1;min-width:0"></div>
+
+    <div style="flex:none;display:flex;align-items:center;gap:9px;font-size:13.5px;white-space:nowrap;color:var(--color-neutral-700)">
+      <span style="width:8px;height:8px;border-radius:50%;background:{{ saveDotColor }}"></span>
+      {{ saveStatus }}
+    </div>
+  </header>
+
+  <nav style="flex:none;height:52px;display:flex;align-items:stretch;background:var(--color-accent-900);color:var(--color-accent-100)">
+    <button onClick="{{ goHome }}" class="navitem" style="width:56px;padding:0;justify-content:center;background:color-mix(in srgb,#f2f2f3 10%,transparent)">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"></path></svg>
+    </button>
+    <button onClick="{{ setBuild }}" class="navitem {{ navBuild }}">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v6H4zM4 14h9v6H4zM17 14h3v6h-3z"></path></svg>
+      Builder
+    </button>
+    <button onClick="{{ setFlow }}" class="navitem {{ navFlow }}">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 5h11M9 12h11M9 19h11M4 5h1M4 12h1M4 19h1"></path></svg>
+      Workflow
+    </button>
+    <button onClick="{{ setSettings }}" class="navitem {{ navSettings }}">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.9 19.4l-.1.1A2 2 0 1 1 5 16.7l.1-.1A1.6 1.6 0 0 0 4 13.9H4a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 5.6 7.9l-.1-.1A2 2 0 1 1 8.3 5l.1.1a1.6 1.6 0 0 0 1.8.3H10a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1A2 2 0 1 1 20.6 7l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"></path></svg>
+      Settings
+    </button>
+    <button onClick="{{ setPub }}" class="navitem {{ navPub }}">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4.5 16.5 3 21l4.5-1.5M12 15l-3-3m10.5-7.5c1 4-1.5 8-6 11l-3-3c3-4.5 7-7 9-8Z"></path></svg>
+      Publish
+    </button>
+
+    <div style="flex:1"></div>
+
+    <div class="nav-hint" style="align-items:center;padding:0 16px;font-size:13.5px;white-space:nowrap;color:var(--color-accent-300)">{{ modeHint }}</div>
+
+    <div style="position:relative;display:flex;align-items:center;padding-right:8px">
+      <button onClick="{{ toggleTools }}" class="navitem" style="height:36px;padding:0 14px;font-size:15px;border:1.5px solid color-mix(in srgb,#f2f2f3 32%,transparent)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"></path></svg>
+        Tools
+      </button>
+      <sc-if value="{{ toolsOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:46px;right:8px;width:310px;background:var(--color-neutral-100);border:1.5px solid var(--color-accent-800);box-shadow:var(--shadow-lg);z-index:60;padding:6px;color:var(--color-text);animation:fadeUp .12s ease">
+          <sc-for list="{{ toolGroups }}" as="tg" hint-placeholder-count="3">
+            <div style="padding:8px 9px 4px">
+              <div class="eyebrow" style="font-size:11.5px;margin-bottom:5px">{{ tg.name }}</div>
+              <sc-for list="{{ tg.items }}" as="ti" hint-placeholder-count="4">
+                <button onClick="{{ ti.run }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px;background:transparent;border:none;cursor:pointer;text-align:left;color:var(--color-text);font-size:14.5px" style-hover="background:var(--color-accent-100)">
+                  <span>{{ ti.label }}</span>
+                  <span style="font-size:12.5px;color:var(--color-neutral-600)">{{ ti.hint }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;padding:0 16px 0 4px">
+      <button onClick="{{ openPreview }}" class="navbtn" style="flex:none;height:36px;padding:0 15px;background:transparent;border:1.5px solid color-mix(in srgb,#f2f2f3 32%,transparent);color:var(--color-accent-100);font-family:var(--font-heading);font-weight:600;font-size:15px;letter-spacing:.03em;cursor:pointer" style-hover="background:color-mix(in srgb,#f2f2f3 12%,transparent)">Preview</button>
+      <button onClick="{{ doPublish }}" class="navbtn" style="flex:none;height:36px;padding:0 18px;background:var(--color-accent);border:1.5px solid var(--color-accent);color:var(--color-bg);font-family:var(--font-heading);font-weight:600;font-size:15px;letter-spacing:.03em;cursor:pointer" style-hover="background:var(--color-accent-600)">Access form ↗</button>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-height:0;display:flex">
+
+    <sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}">
+      <div style="position:relative;flex:1;min-width:0;display:flex">
+
+        <aside class="palette" style="background:var(--color-neutral-100);border-right:1px solid var(--color-divider);display:flex;flex-direction:column">
+          <div style="flex:none;display:flex;align-items:stretch;height:52px;border-bottom:1px solid var(--color-divider)">
+            <button onClick="{{ pickBasic }}" style="flex:1;background:transparent;border:none;border-bottom:3px solid {{ tabBasicBar }};color:{{ tabBasicFg }};font-family:var(--font-heading);font-weight:600;font-size:17px;letter-spacing:.02em;cursor:pointer">Basic Fields</button>
+            <div style="width:1px;background:var(--color-divider);margin:12px 0"></div>
+            <button onClick="{{ pickAdvanced }}" style="flex:1;background:transparent;border:none;border-bottom:3px solid {{ tabAdvBar }};color:{{ tabAdvFg }};font-family:var(--font-heading);font-weight:600;font-size:17px;letter-spacing:.02em;cursor:pointer">Advanced</button>
+          </div>
+          <div style="flex:none;padding:12px 14px 0">
+            <input class="input" value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search fields" style="height:36px">
+          </div>
+          <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:14px 14px 30px">
+            <sc-for list="{{ paletteSections }}" as="sec" hint-placeholder-count="4">
+              <div style="margin-bottom:18px">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+                  <span class="eyebrow" style="font-size:11.5px;white-space:nowrap">{{ sec.name }}</span>
+                  <span style="flex:1;height:1px;background:var(--color-divider)"></span>
+                </div>
+                <div class="palette-grid">
+                  <sc-for list="{{ sec.items }}" as="p" hint-placeholder-count="4">
+                    <button onClick="{{ p.add }}" title="{{ p.desc }}" style="min-width:0;display:flex;align-items:center;gap:9px;padding:9px 10px;background:var(--color-bg);border:1.5px solid var(--color-divider);cursor:grab;text-align:left;color:var(--color-text);transition:border-color .14s ease,background .14s ease" style-hover="border-color:var(--color-accent-800);background:var(--color-accent-100)">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#ic-{{ p.icon }}"></use></svg>
+                      <span style="flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.label }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:24px 4px;font-size:14px;color:var(--color-neutral-600)">No field types match that search.</div>
+            </sc-if>
+          </div>
+        </aside>
+
+        <section style="flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;background:var(--color-surface);padding:28px 28px 60px">
+          <div style="max-width:840px;margin:0 auto;background:var(--color-neutral-100);border:1px solid var(--color-divider);box-shadow:var(--shadow-sm)">
+
+            <div style="padding:26px 34px;border-bottom:1px solid var(--color-divider)">
+              <sc-if value="{{ meta.banner }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-neutral-600);margin-bottom:8px">{{ meta.iso }}</div>
+              </sc-if>
+              <input value="{{ meta.title }}" onInput="{{ onTitle }}" placeholder="Untitled form" style="width:100%;border:none;background:transparent;outline:none;font-family:var(--font-heading);font-weight:600;font-size:34px;line-height:1.1;color:var(--color-text);padding:0">
+              <div style="font-size:13.5px;color:var(--color-neutral-600);margin-top:6px">{{ docLine }}</div>
+            </div>
+
+            <sc-for list="{{ canvas }}" as="c" hint-placeholder-count="0">
+              <div onClick="{{ c.select }}" class="fieldrow" style="position:relative;padding:20px 34px;border-bottom:1px solid var(--color-divider);border-left:5px solid {{ c.spine }};background:{{ c.bg }};cursor:pointer">
+                <div style="position:absolute;top:12px;right:16px;display:flex;gap:6px" class="row-tools">
+                  <button onClick="{{ c.up }}" title="Move up" class="ghost"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m18 15-6-6-6 6"></path></svg></button>
+                  <button onClick="{{ c.down }}" title="Move down" class="ghost"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 9 6 6 6-6"></path></svg></button>
+                  <button onClick="{{ c.dup }}" title="Duplicate" class="ghost"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="9" width="12" height="12"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg></button>
+                  <button onClick="{{ c.remove }}" title="Delete" class="ghost"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;padding-right:150px">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><use href="#ic-{{ c.icon }}"></use></svg>
+                  <span style="font-size:16px;font-weight:600">{{ c.label }}{{ c.req }}</span>
+                </div>
+
+                <sc-if value="{{ c.isInput }}" hint-placeholder-val="{{ false }}">
+                  <div class="wys">{{ c.placeholder }}</div>
+                </sc-if>
+                <sc-if value="{{ c.isArea }}" hint-placeholder-val="{{ false }}">
+                  <div class="wys" style="min-height:92px">{{ c.placeholder }}</div>
+                </sc-if>
+                <sc-if value="{{ c.isChoice }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:9px">
+                    <sc-for list="{{ c.choices }}" as="ch" hint-placeholder-count="2">
+                      <div style="display:flex;align-items:center;gap:10px;font-size:15px;color:var(--color-neutral-800)">
+                        <span style="width:17px;height:17px;border:1.5px solid var(--color-neutral-500);border-radius:{{ c.dot }}"></span>
+                        {{ ch.text }}
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ c.isBool }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:10px">
+                    <span style="padding:7px 20px;border:1.5px solid var(--color-neutral-500);font-size:14px;color:var(--color-neutral-700)">Yes</span>
+                    <span style="padding:7px 20px;border:1.5px solid var(--color-neutral-500);font-size:14px;color:var(--color-neutral-700)">No</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ c.isBlock }}" hint-placeholder-val="{{ false }}">
+                  <div class="wys" style="min-height:110px;display:grid;place-items:center;border-style:dashed;font-size:14px">{{ c.placeholder }}</div>
+                </sc-if>
+                <sc-if value="{{ c.isRule }}" hint-placeholder-val="{{ false }}">
+                  <div style="height:2px;background:var(--color-neutral-400)"></div>
+                </sc-if>
+              </div>
+            </sc-for>
+
+            <div style="padding:26px 34px 34px">
+              <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:56px 24px;text-align:center;border:2px dashed var(--color-accent-400);background:color-mix(in srgb,var(--color-accent) 5%,transparent)">
+                  <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="1.3" style="margin:0 auto 14px"><rect x="3" y="3" width="18" height="18"></rect><path d="M12 8v8M8 12h8"></path></svg>
+                  <h3 style="margin:0 0 8px;font-size:30px;line-height:1.05">Drag a field here</h3>
+                  <p style="margin:0 auto 18px;max-width:380px;font-size:16px;font-weight:400;line-height:1.6;color:var(--color-neutral-700);text-wrap:pretty">Choose from Basic or Advanced fields on the left. The form you see here is exactly what employees will fill in.</p>
+                  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+                    <sc-for list="{{ quickAdds }}" as="q" hint-placeholder-count="4">
+                      <button onClick="{{ q.add }}" class="btn btn-secondary" style="height:36px">+ {{ q.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ hasFields }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+                  <button class="btn btn-primary" style="height:44px;padding:0 30px;font-size:17px">Submit</button>
+                  <span style="font-size:13.5px;color:var(--color-neutral-600)">{{ fieldCountText }} · drop a field anywhere to insert</span>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </section>
+
+        <sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+          <aside class="propdock">
+            <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;height:52px;padding:0 16px;background:var(--color-accent-100);border-bottom:2px solid var(--color-accent-800)">
+              <span class="eyebrow">Field properties</span>
+              <button onClick="{{ clearSelection }}" class="ghost" title="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+            </div>
+            <div style="flex:1;min-height:0;overflow-y:auto;padding:18px 16px 36px">
+              <div style="display:flex;align-items:center;gap:11px;padding:12px 13px;margin-bottom:18px;border:1.5px solid var(--color-accent-300);background:var(--color-accent-100)">
+                <span style="flex:none;width:32px;height:32px;display:grid;place-items:center;background:var(--color-accent-800)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f2f2f3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-{{ selIcon }}"></use></svg>
+                </span>
+                <div style="min-width:0">
+                  <div style="font-family:var(--font-heading);font-weight:600;font-size:18px;line-height:1.2">{{ selTypeLabel }}</div>
+                  <div style="font-size:12.5px;color:var(--color-accent-800);font-variant-numeric:tabular-nums">{{ selName }}</div>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom:14px"><label>Question label</label><input class="input" value="{{ selLabel }}" onInput="{{ onSelLabel }}" style="height:38px"></div>
+              <div class="field" style="margin-bottom:14px"><label>Field name</label><input class="input" value="{{ selName }}" onInput="{{ onSelName }}" style="height:38px"></div>
+              <div class="field" style="margin-bottom:14px"><label>Placeholder / hint</label><input class="input" value="{{ selHint }}" onInput="{{ onSelHint }}" style="height:38px"></div>
+              <label style="display:flex;align-items:center;gap:10px;padding:12px 0;font-size:15px;border-top:1px solid var(--color-divider);cursor:pointer">
+                <input type="checkbox" checked="{{ selRequired }}" onChange="{{ onSelRequired }}" style="width:16px;height:16px;accent-color:var(--color-accent)">
+                Required field
+              </label>
+              <button onClick="{{ toggleAdv }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:13px 0;background:transparent;border:none;border-top:1px solid var(--color-divider);cursor:pointer;color:var(--color-text);font-family:var(--font-heading);font-weight:600;font-size:17px">
+                <span>Advanced</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate({{ advChevron }}deg)"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{ advOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:4px 0 10px;animation:fadeUp .14s ease">
+                  <sc-for list="{{ advSections }}" as="a" hint-placeholder-count="3">
+                    <div style="border:1.5px solid var(--color-divider);padding:13px;margin-bottom:10px;background:var(--color-bg)">
+                      <div style="font-family:var(--font-heading);font-weight:600;font-size:17px;margin-bottom:3px">{{ a.title }}</div>
+                      <div style="font-size:13.5px;font-weight:400;color:var(--color-neutral-700);line-height:1.55;margin-bottom:11px">{{ a.body }}</div>
+                      <button class="btn btn-secondary" style="height:32px;font-size:13.5px">{{ a.action }}</button>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </aside>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFlow }}" hint-placeholder-val="{{ false }}">
+      <div style="position:relative;flex:1;min-width:0;display:flex;animation:fadeIn .16s ease">
+        <div style="flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;padding:34px 28px 60px;background:var(--color-surface)">
+          <div style="max-width:720px;margin:0 auto">
+            <div class="eyebrow" style="margin-bottom:8px">Workflow</div>
+            <h2 style="margin:0 0 8px;font-size:40px;line-height:1.04">Approval &amp; evaluation layers</h2>
+            <p style="margin:0 0 26px;font-size:16px;font-weight:400;line-height:1.6;color:var(--color-neutral-700);max-width:560px;text-wrap:pretty">The sequence a submission travels through. Each layer is an approval or an evaluation — reorder with the arrows, click to configure.</p>
+
+            <sc-if value="{{ noLayers }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:50px 26px;text-align:center;border:2px dashed var(--color-accent-400);background:color-mix(in srgb,var(--color-accent) 5%,transparent);margin-bottom:20px">
+                <h3 style="margin:0 0 8px;font-size:26px">No layers yet</h3>
+                <p style="margin:0 auto;max-width:360px;font-size:16px;font-weight:400;line-height:1.6;color:var(--color-neutral-700)">Submissions will be filed straight to SharePoint with no approval step.</p>
+              </div>
+            </sc-if>
+
+            <sc-for list="{{ layers }}" as="l" hint-placeholder-count="0">
+              <div onClick="{{ l.select }}" style="display:flex;align-items:center;gap:16px;padding:17px 19px;margin-bottom:12px;background:var(--color-neutral-100);border:1.5px solid {{ l.border }};border-left:6px solid {{ l.accent }};cursor:pointer" style-hover="border-color:var(--color-accent-800)">
+                <span style="flex:none;width:44px;height:44px;display:grid;place-items:center;background:var(--color-accent-800);color:var(--color-bg);font-family:var(--font-heading);font-weight:600;font-size:23px">{{ l.n }}</span>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:9px">
+                    <span style="font-family:var(--font-heading);font-weight:600;font-size:20px;line-height:1.2">{{ l.title }}</span>
+                    <span class="tag tag-accent" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase">{{ l.type }}</span>
+                  </div>
+                  <div style="font-size:13.5px;font-weight:400;color:var(--color-neutral-700);margin-top:3px">{{ l.detail }}</div>
+                </div>
+                <button onClick="{{ l.up }}" title="Move up" class="ghost"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m18 15-6-6-6 6"></path></svg></button>
+                <button onClick="{{ l.down }}" title="Move down" class="ghost"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 9 6 6 6-6"></path></svg></button>
+                <button onClick="{{ l.remove }}" title="Remove layer" class="ghost"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path></svg></button>
+              </div>
+            </sc-for>
+
+            <div style="display:flex;gap:10px;margin-top:18px">
+              <button onClick="{{ addApproval }}" class="btn btn-secondary" style="height:40px;padding:0 18px">+ Approval layer</button>
+              <button onClick="{{ addEvaluation }}" class="btn btn-secondary" style="height:40px;padding:0 18px">+ Evaluation layer</button>
+            </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ hasLayerSel }}" hint-placeholder-val="{{ false }}">
+          <aside class="propdock">
+            <div style="flex:none;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;background:var(--color-accent-100);border-bottom:2px solid var(--color-accent-800)">
+              <span class="eyebrow">{{ layerPanelTitle }}</span>
+              <button onClick="{{ clearLayerSel }}" class="ghost" title="Close"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+            </div>
+            <div style="flex:1;min-height:0;overflow-y:auto;padding:18px 16px 36px">
+              <div class="field" style="margin-bottom:14px"><label>Layer title</label><input class="input" value="{{ layerTitle }}" onInput="{{ onLayerTitle }}" style="height:38px"></div>
+              <div class="field" style="margin-bottom:14px">
+                <label>Layer type</label>
+                <div class="seg" style="width:100%">
+                  <label class="seg-opt" style="flex:1;justify-content:center;background:{{ ltApprovalBg }};color:{{ ltApprovalFg }}"><input type="radio" name="lt" checked="{{ ltApproval }}" onChange="{{ setLtApproval }}">Approval</label>
+                  <label class="seg-opt" style="flex:1;justify-content:center;background:{{ ltEvalBg }};color:{{ ltEvalFg }}"><input type="radio" name="lt" checked="{{ ltEval }}" onChange="{{ setLtEval }}">Evaluation</label>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom:14px">
+                <label>Authentication</label>
+                <div class="seg" style="width:100%">
+                  <label class="seg-opt" style="flex:1;justify-content:center;background:{{ auth365Bg }};color:{{ auth365Fg }}"><input type="radio" name="am" checked="{{ auth365 }}" onChange="{{ setAuth365 }}">Microsoft 365</label>
+                  <label class="seg-opt" style="flex:1;justify-content:center;background:{{ authPubBg }};color:{{ authPubFg }}"><input type="radio" name="am" checked="{{ authPub }}" onChange="{{ setAuthPub }}">Public link</label>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom:14px"><label>Assignee</label><input class="input" value="{{ layerAssignee }}" onInput="{{ onLayerAssignee }}" placeholder="name@pmw.com.my" style="height:38px"></div>
+              <div class="field" style="margin-bottom:14px">
+                <label>Confirmation</label>
+                <div class="seg" style="width:100%">
+                  <label class="seg-opt" style="flex:1;justify-content:center;background:{{ confSigBg }};color:{{ confSigFg }}"><input type="radio" name="cf" checked="{{ confSig }}" onChange="{{ setConfSig }}">Signature</label>
+                  <label class="seg-opt" style="flex:1;justify-content:center;background:{{ confChkBg }};color:{{ confChkFg }}"><input type="radio" name="cf" checked="{{ confChk }}" onChange="{{ setConfChk }}">Checkbox</label>
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:10px;padding:12px 0;font-size:15px;border-top:1px solid var(--color-divider);cursor:pointer">
+                <input type="checkbox" checked="{{ layerReason }}" onChange="{{ onLayerReason }}" style="width:16px;height:16px;accent-color:var(--color-accent)">
+                Require a reason on rejection
+              </label>
+              <sc-if value="{{ ltEval }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1.5px solid var(--color-divider);padding:13px;background:var(--color-bg)">
+                  <div style="font-family:var(--font-heading);font-weight:600;font-size:17px;margin-bottom:4px">Evaluation fields</div>
+                  <div style="font-size:13.5px;font-weight:400;color:var(--color-neutral-700);line-height:1.55;margin-bottom:10px">Pick the questions this evaluator fills in.</div>
+                  <button class="btn btn-secondary" style="height:32px;font-size:13.5px">Choose fields</button>
+                </div>
+              </sc-if>
+            </div>
+          </aside>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;padding:34px 28px 60px;background:var(--color-surface);animation:fadeIn .16s ease">
+        <div style="max-width:720px;margin:0 auto">
+          <div class="eyebrow" style="margin-bottom:8px">Settings</div>
+          <h2 style="margin:0 0 8px;font-size:40px;line-height:1.04">Form setup</h2>
+          <p style="margin:0 0 26px;font-size:16px;font-weight:400;line-height:1.6;color:var(--color-neutral-700);max-width:560px;text-wrap:pretty">Identity, route and access. Everything below opens only when you need it.</p>
+
+          <div style="background:var(--color-neutral-100);border:1px solid var(--color-divider);padding:22px 24px;margin-bottom:20px">
+            <div class="field" style="margin-bottom:16px"><label>Form title *</label><input class="input" value="{{ meta.title }}" onInput="{{ onTitle }}" placeholder="Training Application Form" style="height:40px"></div>
+            <div style="display:grid;grid-template-columns:1fr 120px;gap:12px;margin-bottom:16px">
+              <div class="field"><label>Form ID / Doc no. *</label><input class="input" value="{{ meta.formId }}" onInput="{{ onFormId }}" placeholder="PMW-HR-001" style="height:40px"></div>
+              <div class="field"><label>Version</label><input class="input" value="{{ meta.version }}" onInput="{{ onVersion }}" style="height:40px"></div>
+            </div>
+            <div class="field" style="margin-bottom:7px"><label>Route slug</label><input class="input" value="{{ meta.slug }}" onInput="{{ onSlug }}" placeholder="training-application" style="height:40px"></div>
+            <div style="font-size:13.5px;font-weight:400;color:{{ slugColor }}">{{ slugNote }}</div>
+          </div>
+
+          <sc-for list="{{ setupSections }}" as="s" hint-placeholder-count="3">
+            <div style="background:var(--color-neutral-100);border:1px solid var(--color-divider);margin-bottom:10px">
+              <button onClick="{{ s.toggle }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;background:transparent;border:none;cursor:pointer;color:var(--color-text);text-align:left">
+                <span style="font-family:var(--font-heading);font-weight:600;font-size:20px">{{ s.title }}</span>
+                <span style="display:flex;align-items:center;gap:10px">
+                  <span style="font-size:13.5px;font-weight:400;color:var(--color-neutral-700)">{{ s.summary }}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate({{ s.chevron }}deg);opacity:.7"><path d="m6 9 6 6 6-6"></path></svg>
+                </span>
+              </button>
+              <sc-if value="{{ s.open }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:2px 22px 20px;animation:fadeUp .14s ease">
+                  <sc-for list="{{ s.rows }}" as="r" hint-placeholder-count="2">
+                    <div class="field" style="margin-bottom:12px">
+                      <label>{{ r.label }}</label>
+                      <input class="input" value="{{ r.value }}" onInput="{{ r.onInput }}" placeholder="{{ r.placeholder }}" style="height:38px">
+                    </div>
+                  </sc-for>
+                  <sc-for list="{{ s.toggles }}" as="t" hint-placeholder-count="0">
+                    <label style="display:flex;align-items:flex-start;gap:11px;padding:10px 0;font-size:15px;cursor:pointer">
+                      <input type="checkbox" checked="{{ t.on }}" onChange="{{ t.change }}" style="width:16px;height:16px;margin-top:3px;accent-color:var(--color-accent)">
+                      <span>
+                        <span style="display:block">{{ t.label }}</span>
+                        <span style="display:block;font-size:13.5px;font-weight:400;color:var(--color-neutral-700);line-height:1.5">{{ t.hint }}</span>
+                      </span>
+                    </label>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isPub }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;padding:34px 28px 60px;background:var(--color-surface);animation:fadeIn .16s ease">
+        <div style="max-width:720px;margin:0 auto">
+          <div class="eyebrow" style="margin-bottom:8px">Publish</div>
+          <h2 style="margin:0 0 8px;font-size:40px;line-height:1.04">Make it live</h2>
+          <p style="margin:0 0 26px;font-size:16px;font-weight:400;line-height:1.6;color:var(--color-neutral-700);max-width:560px;text-wrap:pretty">One primary action. Profiles, PDF layout, versions and the audit log stay folded away until you need them.</p>
+
+          <div style="background:var(--color-neutral-100);border:1px solid var(--color-divider);padding:20px 24px;margin-bottom:22px">
+            <div class="eyebrow" style="margin-bottom:12px">Readiness</div>
+            <sc-for list="{{ checklist }}" as="c" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid color-mix(in srgb,var(--color-text) 8%,transparent)">
+                <span style="flex:none;width:22px;height:22px;display:grid;place-items:center;border:1.5px solid {{ c.color }};color:{{ c.color }};font-size:13px">{{ c.mark }}</span>
+                <span style="flex:1;font-size:15px">{{ c.label }}</span>
+                <span style="font-size:13.5px;font-weight:400;color:var(--color-neutral-700);font-variant-numeric:tabular-nums">{{ c.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+            <button onClick="{{ doPublish }}" class="btn btn-primary" style="height:50px;padding:0 26px;font-size:18px">Publish to /form/{{ slugOrPlaceholder }}</button>
+            <button onClick="{{ doDraft }}" class="btn btn-secondary" style="height:50px;padding:0 22px;font-size:16px">Save draft</button>
+          </div>
+          <p style="margin:0 0 26px;font-size:13.5px;font-weight:400;color:var(--color-neutral-700)">Makes this version the default public route. Nothing else on this screen changes what is live.</p>
+
+          <sc-for list="{{ pubSections }}" as="p" hint-placeholder-count="5">
+            <div style="background:var(--color-neutral-100);border:1px solid var(--color-divider);margin-bottom:10px">
+              <button onClick="{{ p.toggle }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;background:transparent;border:none;cursor:pointer;color:var(--color-text);text-align:left">
+                <span>
+                  <span style="display:block;font-family:var(--font-heading);font-weight:600;font-size:20px;line-height:1.2">{{ p.title }}</span>
+                  <span style="display:block;font-size:13.5px;font-weight:400;color:var(--color-neutral-700);margin-top:2px">{{ p.sub }}</span>
+                </span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="flex:none;transform:rotate({{ p.chevron }}deg);opacity:.7"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:2px 22px 20px;animation:fadeUp .14s ease">
+                  <sc-for list="{{ p.rows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;margin-bottom:8px;border:1.5px solid var(--color-divider);background:var(--color-bg)">
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:15px">{{ r.label }}</div>
+                        <div style="font-size:13.5px;font-weight:400;color:var(--color-neutral-700)">{{ r.hint }}</div>
+                      </div>
+                      <span style="font-size:13.5px;font-weight:400;color:var(--color-neutral-700);font-variant-numeric:tabular-nums">{{ r.value }}</span>
+                      <button class="btn btn-secondary" style="height:34px;font-size:13.5px">{{ r.action }}</button>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <sc-if value="{{ previewOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePreview }}" class="dialog-backdrop" style="z-index:200;animation:fadeIn .12s ease">
+      <div onClick="{{ stop }}" class="dialog" style="width:min(760px,100%);max-height:84vh;overflow:auto;background:var(--color-bg)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span class="dialog-title">Live preview</span>
+          <button onClick="{{ closePreview }}" class="btn btn-secondary" style="height:32px;font-size:13.5px">Close</button>
+        </div>
+        <div class="dialog-body">
+          <div style="border:1px solid var(--color-divider);padding:26px;background:var(--color-neutral-100)">
+            <div style="text-align:center;padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--color-divider)">
+              <div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-neutral-600)">{{ meta.iso }}</div>
+              <h3 style="margin:10px 0 0;font-size:28px">{{ previewTitle }}</h3>
+            </div>
+            <sc-for list="{{ canvas }}" as="pf" hint-placeholder-count="0">
+              <div style="margin-bottom:16px">
+                <div style="font-size:15px;font-weight:600;margin-bottom:7px">{{ pf.label }}{{ pf.req }}</div>
+                <div class="wys" style="min-height:{{ pf.h }}">{{ pf.placeholder }}</div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:34px 0;text-align:center;font-size:15px;color:var(--color-neutral-600)">Nothing to preview yet.</div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;right:20px;bottom:20px;z-index:300;display:flex;align-items:center;gap:11px;padding:13px 17px;background:var(--color-accent-900);color:var(--color-accent-100);box-shadow:var(--shadow-lg);animation:fadeUp .16s ease">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--color-accent-300)"></span>
+      <span style="font-size:14.5px">{{ toastText }}</span>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;build&quot;,&quot;flow&quot;,&quot;settings&quot;,&quot;publish&quot;],&quot;default&quot;:&quot;build&quot;,&quot;tsType&quot;:&quot;\&quot;build\&quot; | \&quot;flow\&quot; | \&quot;settings\&quot; | \&quot;publish\&quot;&quot;,&quot;section&quot;:&quot;Demo&quot;}}">
+// [type, label, icon id, tab, section, description]
+const TYPES = [
+  ["text","Single Line","text","basic","Text","Single-line text input"],
+  ["comment","Multi Line","para","basic","Text","Multi-line text area"],
+  ["password","Password","lock","basic","Text","Secure text input"],
+  ["nric","NRIC / IC","idcard","basic","Text","Malaysian NRIC"],
+  ["dropdown","Dropdown","chevbox","basic","Choice","Single-select list"],
+  ["radiogroup","Radio","radio","basic","Choice","Single-select buttons"],
+  ["checkbox","Checkbox","check","basic","Choice","Multi-select boxes"],
+  ["boolean","Yes / No","toggle","basic","Choice","Boolean toggle"],
+  ["consent","Consent","filecheck","basic","Choice","Consent acknowledgement"],
+  ["date","Date","calendar","basic","Date & time","Date picker"],
+  ["datetime","Date-Time","clock","basic","Date & time","Date and time picker"],
+  ["duration","Duration","timer","basic","Date & time","Hours and minutes"],
+  ["number","Number","hash","basic","Numeric","Numeric input field"],
+  ["currency","Currency","money","basic","Numeric","Monetary input"],
+  ["counter","Counter","plusminus","basic","Numeric","Stepper control"],
+  ["slider","Slider","slider","basic","Numeric","Range slider"],
+  ["rating","Rating","star","basic","Numeric","Star rating"],
+  ["formula","Formula","fx","basic","Numeric","Calculated value"],
+  ["file","File Upload","upload","advanced","Rich input","File upload field"],
+  ["imageupload","Image Upload","image","advanced","Rich input","Image capture"],
+  ["signaturepad","Signature","pen","advanced","Rich input","Signature pad"],
+  ["ranking","Ranking","ordered","advanced","Rich input","Drag to rank"],
+  ["hierarchy","Hierarchy","tree","advanced","Rich input","Cascading selector"],
+  ["jsoneditor","JSON Editor","braces","advanced","Rich input","Raw JSON value"],
+  ["dynamicmatrix","Dynamic Matrix","grid","advanced","Tables","Add-row matrix"],
+  ["tableinput","Table Input","table","advanced","Tables","Fixed input table"],
+  ["datatable","Data Table","table","advanced","Tables","Read-only table"],
+  ["panel","Section","section","advanced","Structure","Group fields"],
+  ["columns","Columns","columns","advanced","Structure","Side-by-side layout"],
+  ["repeater","Repeater","repeat","advanced","Structure","Repeatable group"],
+  ["spacer","Spacer","spacer","advanced","Structure","Vertical spacing"],
+  ["divider","Divider","minus","advanced","Structure","Horizontal rule"],
+  ["pagebreak","Page Break","pagebreak","advanced","Structure","New page"],
+  ["html","HTML Block","code","advanced","Display","Raw HTML"],
+  ["image","Image","image","advanced","Display","Static image"],
+  ["alert","Alert","alert","advanced","Display","Inline notice"],
+  ["videoembed","Video","video","advanced","Display","Embedded video"],
+  ["countdown","Countdown","hourglass","advanced","Display","Timer display"],
+  ["scorecard","Scorecard","gauge","advanced","Display","Score summary"],
+  ["chartdisplay","Chart","chart","advanced","Display","Chart output"],
+];
+const SECTIONS = { basic: ["Text","Choice","Date & time","Numeric"], advanced: ["Rich input","Tables","Structure","Display"] };
+const AREA = ["comment","jsoneditor","html"];
+const CHOICE = ["dropdown","radiogroup","checkbox","ranking","hierarchy","consent"];
+const RADIOISH = ["radiogroup","dropdown","hierarchy"];
+const BLOCK = ["signaturepad","file","imageupload","image","dynamicmatrix","tableinput","datatable","chartdisplay","videoembed","repeater","columns","panel"];
+const RULE = ["divider","spacer","pagebreak"];
+
+class Component extends DCLogic {
+  state = {
+    mode: this.props.startMode || "build",
+    paletteTab: "basic",
+    fields: [], sel: null, seq: 1,
+    layers: [], layerSel: null, layerSeq: 1,
+    search: "",
+    toolsOpen: false, switcherOpen: false, previewOpen: false, advOpen: false,
+    open: { branding: false, doc: false, access: false, pdf: false, profile: false, versions: false, log: false, qr: false },
+    meta: { title: "", formId: "", version: "1.0", slug: "", iso: "ISO 9001 · ISO 14001 · ISO 45001",
+      companies: "PMW INDUSTRIES SDN BHD", logoUrl: "", banner: true, companyChoice: false, access: "public",
+      publishKey: "production", publishLabel: "Production", docNo: "", issueNo: "", effDate: "", revNo: "", revDate: "" },
+    saved: true, toast: null,
+  };
+
+  componentDidMount() {
+    this._key = (e) => { if (e.key === "Escape") this.setState({ toolsOpen: false, switcherOpen: false, previewOpen: false }); };
+    document.addEventListener("keydown", this._key);
+  }
+  componentWillUnmount() { document.removeEventListener("keydown", this._key); }
+
+  touch(patch) {
+    this.setState({ ...patch, saved: false });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ saved: true }), 900);
+  }
+  flash(text) {
+    this.setState({ toast: text });
+    clearTimeout(this._tt);
+    this._tt = setTimeout(() => this.setState({ toast: null }), 2600);
+  }
+  setMeta(k, v) { this.touch({ meta: { ...this.state.meta, [k]: v } }); }
+  toggleSection(k) { this.setState({ open: { ...this.state.open, [k]: !this.state.open[k] } }); }
+  slugify(s) { return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+
+  addField(t) {
+    const n = this.state.seq;
+    const f = { id: n, type: t[0], typeLabel: t[1], code: t[2], label: t[1] + " " + n, name: t[0] + "_" + n, hint: "", required: false };
+    this.touch({ fields: [...this.state.fields, f], seq: n + 1, sel: f.id, mode: "build" });
+  }
+  patchSel(patch) { this.touch({ fields: this.state.fields.map(f => f.id === this.state.sel ? { ...f, ...patch } : f) }); }
+  patchLayer(patch) { this.touch({ layers: this.state.layers.map(l => l.id === this.state.layerSel ? { ...l, ...patch } : l) }); }
+  moveField(i, d) {
+    const arr = [...this.state.fields]; const j = i + d;
+    if (j < 0 || j >= arr.length) return;
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    this.touch({ fields: arr });
+  }
+  moveLayer(i, d) {
+    const arr = [...this.state.layers]; const j = i + d;
+    if (j < 0 || j >= arr.length) return;
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    this.touch({ layers: arr });
+  }
+  addLayer(type) {
+    const n = this.state.layerSeq;
+    const l = { id: n, type, title: (type === "approval" ? "Approval" : "Evaluation") + " " + n, authMode: "365", assignee: "", confirm: "signature", reason: true };
+    this.touch({ layers: [...this.state.layers, l], layerSeq: n + 1, layerSel: n });
+  }
+  seg(active) {
+    return active ? { bg: "var(--color-accent)", fg: "var(--color-bg)" } : { bg: "transparent", fg: "var(--color-text)" };
+  }
+
+  renderVals() {
+    const s = this.state, m = s.meta;
+    const sel = s.fields.find(f => f.id === s.sel) || null;
+    const lsel = s.layers.find(l => l.id === s.layerSel) || null;
+    const q = s.search.trim().toLowerCase();
+
+    const item = t => ({ icon: t[2], label: t[1], desc: t[5], add: () => this.addField(t) });
+    const paletteSections = q
+      ? [{ name: "Results", items: TYPES.filter(t => t[1].toLowerCase().includes(q) || t[0].includes(q) || t[5].toLowerCase().includes(q)).map(item) }]
+          .filter(sec => sec.items.length > 0)
+      : SECTIONS[s.paletteTab].map(name => ({ name, items: TYPES.filter(t => t[3] === s.paletteTab && t[4] === name).map(item) }));
+    const noResults = paletteSections.length === 0;
+
+    const canvas = s.fields.map((f, i) => {
+      const isArea = AREA.includes(f.type), isChoice = CHOICE.includes(f.type), isBool = f.type === "boolean";
+      const isBlock = BLOCK.includes(f.type), isRule = RULE.includes(f.type);
+      return {
+        label: f.label, req: f.required ? " *" : "", icon: f.code,
+        h: isArea ? "92px" : isBlock ? "110px" : "40px",
+        placeholder: f.hint || (isBlock ? f.typeLabel + " area" : isArea ? "Long answer…" : f.type === "date" ? "dd / mm / yyyy" : "Short answer…"),
+        isInput: !isArea && !isChoice && !isBool && !isBlock && !isRule,
+        isArea, isChoice, isBool, isBlock, isRule,
+        dot: RADIOISH.includes(f.type) ? "50%" : "0",
+        choices: [{ text: "Option 1" }, { text: "Option 2" }, { text: "Option 3" }],
+        spine: f.id === s.sel ? "var(--color-accent-800)" : "transparent",
+        bg: f.id === s.sel ? "var(--color-accent-100)" : "transparent",
+        select: () => this.setState({ sel: f.id }),
+        up: (e) => { e.stopPropagation(); this.moveField(i, -1); },
+        down: (e) => { e.stopPropagation(); this.moveField(i, 1); },
+        dup: (e) => { e.stopPropagation(); const n = this.state.seq; this.touch({ fields: [...this.state.fields, { ...f, id: n, name: f.name + "_copy", label: f.label + " copy" }], seq: n + 1, sel: n }); },
+        remove: (e) => { e.stopPropagation(); this.touch({ fields: this.state.fields.filter(x => x.id !== f.id), sel: s.sel === f.id ? null : s.sel }); },
+      };
+    });
+
+    const setup = [
+      { key: "branding", title: "Branding & banner", summary: m.banner ? "Banner on" : "Banner off",
+        rows: [
+          { label: "ISO standards", value: m.iso, placeholder: "ISO 9001", onInput: e => this.setMeta("iso", e.target.value) },
+          { label: "Companies (one per line)", value: m.companies, placeholder: "PMW INDUSTRIES SDN BHD", onInput: e => this.setMeta("companies", e.target.value) },
+          { label: "Logo URL", value: m.logoUrl, placeholder: "/logo-128.png", onInput: e => this.setMeta("logoUrl", e.target.value) },
+        ],
+        toggles: [
+          { label: "Show header banner", hint: "ISO standards and company names at the top of the form", on: m.banner, change: () => this.setMeta("banner", !m.banner) },
+          { label: "Required company selector", hint: "Uses the company list above as a single-select radio field", on: m.companyChoice, change: () => this.setMeta("companyChoice", !m.companyChoice) },
+        ] },
+      { key: "doc", title: "Document control header", summary: m.docNo || m.formId || "Defaults",
+        rows: [
+          { label: "Document number", value: m.docNo, placeholder: m.formId || "PMW-HR-001", onInput: e => this.setMeta("docNo", e.target.value) },
+          { label: "Issue number", value: m.issueNo, placeholder: "01", onInput: e => this.setMeta("issueNo", e.target.value) },
+          { label: "Effective date", value: m.effDate, placeholder: "2026-01-01", onInput: e => this.setMeta("effDate", e.target.value) },
+          { label: "Revision number", value: m.revNo, placeholder: m.version, onInput: e => this.setMeta("revNo", e.target.value) },
+          { label: "Revision date", value: m.revDate, placeholder: "2026-01-01", onInput: e => this.setMeta("revDate", e.target.value) },
+        ], toggles: [] },
+      { key: "access", title: "Access", summary: m.access === "public" ? "Public" : "Private",
+        rows: [], toggles: [
+          { label: "Public — any Microsoft 365 user", hint: "Turn off for an explicit sign-in gate", on: m.access === "public", change: () => this.setMeta("access", m.access === "public" ? "private" : "public") },
+        ] },
+    ].map(x => ({ ...x, open: s.open[x.key], chevron: s.open[x.key] ? 180 : 0, toggle: () => this.toggleSection(x.key) }));
+
+    const ok = "var(--color-accent-700)", bad = "var(--color-neutral-500)";
+    const checklist = [
+      { label: "Form title", value: m.title || "Not set", done: !!m.title.trim() },
+      { label: "Form ID / document no.", value: m.formId || "Not set", done: !!m.formId.trim() },
+      { label: "Route slug", value: m.slug ? "/form/" + m.slug : "Not set", done: !!m.slug.trim() },
+      { label: "Fields on the form", value: String(s.fields.length), done: s.fields.length > 0 },
+      { label: "Workflow layers", value: s.layers.length ? String(s.layers.length) : "None (direct file)", done: true },
+    ].map(c => ({ ...c, mark: c.done ? "✓" : "–", color: c.done ? ok : bad }));
+
+    const pub = [
+      { key: "profile", title: "Publish profile", sub: "Same version, separate workflow — advanced",
+        rows: [
+          { label: "Profile label", hint: "Shown in version history", value: m.publishLabel, action: "Rename" },
+          { label: "Publish key", hint: "?publish= parameter on the route", value: m.publishKey, action: "Edit" },
+          { label: "Save profile only", hint: "Publishes for direct links; leaves the live route alone", value: "", action: "Save" },
+          { label: "Publish new profile", hint: "Starts a blank same-version workflow", value: "", action: "Create" },
+        ] },
+      { key: "pdf", title: "PDF layout", sub: "Document title, colours, sections, sample generation",
+        rows: [
+          { label: "Custom PDF layout", hint: "Off falls back to the default layout", value: "On", action: "Configure" },
+          { label: "Sections", hint: "Status badge, approval chain, evaluation details, signatures", value: "4 shown", action: "Edit" },
+          { label: "Sample PDF", hint: "Filled sample, or manual / physical evaluation sample", value: "", action: "Generate" },
+        ] },
+      { key: "versions", title: "Versions & profiles", sub: "Rename, expire, set default, QR codes, restore",
+        rows: [{ label: "Published profiles", hint: "Publish this form to start its history", value: "0", action: "Open" }] },
+      { key: "log", title: "Audit log", sub: "Every change, with a before/after diff",
+        rows: [{ label: "Log entries", hint: "Recorded from the first publish", value: "0", action: "Open" }] },
+      { key: "qr", title: "Prefilled QR codes", sub: "Generate links with fields pre-answered",
+        rows: [{ label: "Prefilled link", hint: "Available once the form is published", value: "", action: "Build" }] },
+    ].map(x => ({ ...x, open: s.open[x.key], chevron: s.open[x.key] ? 180 : 0, toggle: () => this.toggleSection(x.key) }));
+
+    const tool = (label, hint) => ({ label, hint, run: () => { this.setState({ toolsOpen: false }); this.flash(label + " — opens the existing panel"); } });
+    const on = (v) => v ? "on" : "";
+
+    return {
+      meta: m,
+      headerTitle: m.title || "New form",
+      isDraft: true,
+      saveStatus: s.saved ? "All changes saved" : "Saving…",
+      saveDotColor: s.saved ? "var(--color-accent)" : "var(--color-neutral-500)",
+      docLine: (m.formId || "No form ID") + "  ·  v" + m.version + (m.slug ? "  ·  /form/" + m.slug : ""),
+
+      isBuild: s.mode === "build", isFlow: s.mode === "flow", isSettings: s.mode === "settings", isPub: s.mode === "publish",
+      navBuild: on(s.mode === "build"), navFlow: on(s.mode === "flow"), navSettings: on(s.mode === "settings"), navPub: on(s.mode === "publish"),
+      setBuild: () => this.setState({ mode: "build" }),
+      setFlow: () => this.setState({ mode: "flow" }),
+      setSettings: () => this.setState({ mode: "settings" }),
+      setPub: () => this.setState({ mode: "publish" }),
+      goHome: () => this.flash("Back to the admin dashboard"),
+      modeHint: s.mode === "build" ? "Fields, labels and layout"
+        : s.mode === "flow" ? "Who approves or evaluates, and in what order"
+        : s.mode === "settings" ? "Identity, route and access"
+        : "Review, then make it live",
+
+      switcherOpen: s.switcherOpen,
+      toggleSwitcher: () => this.setState({ switcherOpen: !s.switcherOpen, toolsOpen: false }),
+      library: [
+        { title: "Training Application Form", formId: "PMW-HR-001", version: "2.1", state: "Published" },
+        { title: "Leave Request", formId: "PMW-HR-014", version: "1.3", state: "Published" },
+        { title: "Incident Report", formId: "PMW-QA-003", version: "1.0", state: "Draft" },
+      ].map(f => ({ ...f, open: () => { this.setState({ switcherOpen: false }); this.flash("Loading " + f.title); }, del: (e) => { e.stopPropagation(); this.flash("Delete " + f.title + " (keeps submissions)"); }, hardDel: (e) => { e.stopPropagation(); this.flash("Delete ALL data for " + f.title); } })),
+      newForm: () => { this.setState({ switcherOpen: false, fields: [], layers: [], sel: null, meta: { ...m, title: "", formId: "", slug: "" } }); this.flash("New form started"); },
+
+      toolsOpen: s.toolsOpen,
+      toggleTools: () => this.setState({ toolsOpen: !s.toolsOpen, switcherOpen: false }),
+      toolGroups: [
+        { name: "Content", items: [tool("Field templates", "Templates"), tool("Translations", "i18n"), tool("Field comments", "Comments"), tool("Theme editor", "Theme")] },
+        { name: "Data", items: [tool("Data sources", "SharePoint"), tool("Integrations", "Webhooks"), tool("Export", "JSON / XLSX"), tool("Provisioning preview", "SP columns"), tool("Survey JSON", "Raw")] },
+        { name: "Governance", items: [tool("Field permissions", "Roles"), tool("Submission settings", "Behaviour")] },
+      ],
+
+      previewOpen: s.previewOpen,
+      openPreview: () => this.setState({ previewOpen: true }),
+      closePreview: () => this.setState({ previewOpen: false }),
+      stop: (e) => e.stopPropagation(),
+      previewTitle: m.title || "Untitled form",
+
+      paletteWidth: "300px",
+      pickBasic: () => this.setState({ paletteTab: "basic", search: "" }),
+      pickAdvanced: () => this.setState({ paletteTab: "advanced", search: "" }),
+      tabBasicBar: s.paletteTab === "basic" ? "var(--color-accent-800)" : "transparent",
+      tabBasicFg: s.paletteTab === "basic" ? "var(--color-accent-800)" : "var(--color-neutral-700)",
+      tabAdvBar: s.paletteTab === "advanced" ? "var(--color-accent-800)" : "transparent",
+      tabAdvFg: s.paletteTab === "advanced" ? "var(--color-accent-800)" : "var(--color-neutral-700)",
+      search: s.search, onSearch: e => this.setState({ search: e.target.value }),
+      paletteSections, noResults,
+      quickAdds: TYPES.slice(0, 4).map(t => ({ label: t[1], add: () => this.addField(t) })),
+
+      canvas,
+      isEmpty: s.fields.length === 0,
+      hasFields: s.fields.length > 0,
+      fieldCountText: s.fields.length === 1 ? "1 field" : s.fields.length + " fields",
+
+      hasSelection: !!sel,
+      clearSelection: () => this.setState({ sel: null }),
+      selIcon: sel ? sel.code : "text", selTypeLabel: sel ? sel.typeLabel : "", selName: sel ? sel.name : "",
+      selLabel: sel ? sel.label : "", selHint: sel ? sel.hint : "", selRequired: !!(sel && sel.required),
+      onSelLabel: e => this.patchSel({ label: e.target.value }),
+      onSelName: e => this.patchSel({ name: e.target.value }),
+      onSelHint: e => this.patchSel({ hint: e.target.value }),
+      onSelRequired: e => this.patchSel({ required: e.target.checked }),
+      advOpen: s.advOpen, advChevron: s.advOpen ? 180 : 0,
+      toggleAdv: () => this.setState({ advOpen: !s.advOpen }),
+      advSections: [
+        { title: "Conditional logic", body: "Show or hide this field, and set values, based on earlier answers.", action: "Add a rule" },
+        { title: "Validation", body: "Numeric, text length, regex, email or a custom expression.", action: "Add a validator" },
+        { title: "Options & data source", body: "Manual choices, or pull them live from a SharePoint list column.", action: "Configure" },
+      ],
+
+      onTitle: e => { const v = e.target.value; this.touch({ meta: { ...m, title: v, slug: m.slug || this.slugify(v) } }); },
+      onFormId: e => this.setMeta("formId", e.target.value),
+      onVersion: e => this.setMeta("version", e.target.value),
+      onSlug: e => this.setMeta("slug", this.slugify(e.target.value)),
+      slugNote: m.slug ? "Public route: /form/" + m.slug + " — locked after first publish" : "Filled from the title; edit before publishing",
+      slugColor: m.slug ? "var(--color-accent-700)" : "var(--color-neutral-600)",
+      setupSections: setup,
+
+      layers: s.layers.map((l, i) => ({
+        n: i + 1, title: l.title, type: l.type,
+        detail: (l.authMode === "365" ? "Microsoft 365" : "Public link") + " · " + (l.assignee || "no assignee") + " · " + (l.confirm === "signature" ? "signature" : "checkbox"),
+        border: l.id === s.layerSel ? "var(--color-accent-800)" : "var(--color-divider)",
+        accent: l.id === s.layerSel ? "var(--color-accent-800)" : "var(--color-neutral-400)",
+        select: () => this.setState({ layerSel: l.id }),
+        up: (e) => { e.stopPropagation(); this.moveLayer(i, -1); },
+        down: (e) => { e.stopPropagation(); this.moveLayer(i, 1); },
+        remove: (e) => { e.stopPropagation(); this.touch({ layers: this.state.layers.filter(x => x.id !== l.id), layerSel: null }); },
+      })),
+      noLayers: s.layers.length === 0,
+      addApproval: () => this.addLayer("approval"),
+      addEvaluation: () => this.addLayer("evaluation"),
+      layerPanelTitle: lsel ? "Layer " + (s.layers.indexOf(lsel) + 1) : "Layer settings",
+      hasLayerSel: !!lsel,
+      clearLayerSel: () => this.setState({ layerSel: null }),
+      layerTitle: lsel ? lsel.title : "", layerAssignee: lsel ? lsel.assignee : "",
+      onLayerTitle: e => this.patchLayer({ title: e.target.value }),
+      onLayerAssignee: e => this.patchLayer({ assignee: e.target.value }),
+      onLayerReason: e => this.patchLayer({ reason: e.target.checked }),
+      layerReason: !!(lsel && lsel.reason),
+      ltApproval: !!lsel && lsel.type === "approval", ltEval: !!lsel && lsel.type === "evaluation",
+      setLtApproval: () => this.patchLayer({ type: "approval" }), setLtEval: () => this.patchLayer({ type: "evaluation" }),
+      ltApprovalBg: this.seg(!!lsel && lsel.type === "approval").bg, ltApprovalFg: this.seg(!!lsel && lsel.type === "approval").fg,
+      ltEvalBg: this.seg(!!lsel && lsel.type === "evaluation").bg, ltEvalFg: this.seg(!!lsel && lsel.type === "evaluation").fg,
+      auth365: !!lsel && lsel.authMode === "365", authPub: !!lsel && lsel.authMode === "public",
+      setAuth365: () => this.patchLayer({ authMode: "365" }), setAuthPub: () => this.patchLayer({ authMode: "public" }),
+      auth365Bg: this.seg(!!lsel && lsel.authMode === "365").bg, auth365Fg: this.seg(!!lsel && lsel.authMode === "365").fg,
+      authPubBg: this.seg(!!lsel && lsel.authMode === "public").bg, authPubFg: this.seg(!!lsel && lsel.authMode === "public").fg,
+      confSig: !!lsel && lsel.confirm === "signature", confChk: !!lsel && lsel.confirm === "checkbox",
+      setConfSig: () => this.patchLayer({ confirm: "signature" }), setConfChk: () => this.patchLayer({ confirm: "checkbox" }),
+      confSigBg: this.seg(!!lsel && lsel.confirm === "signature").bg, confSigFg: this.seg(!!lsel && lsel.confirm === "signature").fg,
+      confChkBg: this.seg(!!lsel && lsel.confirm === "checkbox").bg, confChkFg: this.seg(!!lsel && lsel.confirm === "checkbox").fg,
+
+      checklist, pubSections: pub,
+      slugOrPlaceholder: m.slug || "slug",
+      doPublish: () => this.flash("Publishing " + (m.title || "this form") + " to /form/" + (m.slug || "slug")),
+      doDraft: () => this.flash("Draft saved"),
+
+      toastOpen: !!s.toast, toastText: s.toast || "",
+    };
+  }
+}
+</script>
+</body>
+</html>

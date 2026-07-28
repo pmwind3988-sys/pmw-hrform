@@ -5,8 +5,11 @@
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| Main builder UI | `FormBuilder.tsx` | react-dnd canvas, `survey-react-ui` renderer, keyboard shortcuts |
-| Form list sidebar | `FormLibrary.tsx` | Available forms, create/load/delete |
+| Main builder UI | `FormBuilder.tsx` | Two-pane workspace: palette (2 tabs) + WYSIWYG form sheet + properties dock. Deferred tool panels open via the `toolCommand` prop raised by the shell's Tools / Preview menus. |
+| Workspace chrome & tokens | `BuilderShell.css`, `builderTheme.ts` | All `--bx-*` tokens and `bx-` classes, scoped under `.bx-root`. Radius 0, Barlow / Barlow Condensed. |
+| Field-type icons | `BuilderIcons.tsx` | One thin-stroke inline SVG per type (`<Icon>` / `<FieldIcon>`), replacing the emoji values in `QUESTION_TYPES`. |
+| Palette taxonomy | `paletteTaxonomy.ts` | Re-buckets the 40 engine types into Basic/Advanced × 4 sections; also declares how each type renders in the sheet. Display-only — `createQuestion` still gets the untouched engine definition. |
+| Form list sidebar | `FormLibrary.tsx` | **Unused by `/admin/builder`** since the redesign — the form switcher dropdown in the brand header replaced it. Still exported from `index.ts`. |
 | Version history | `VersionHistory.tsx` | Web Form Versions list, restore prior version |
 | Audit log | `AuditLog.tsx` | Form Builder Log entries with diff view |
 | Layer sequence editor | `LayerConfigPanel.tsx` | Full layer sequence: type toggle, auth mode, assignee, evaluation elements |
@@ -24,14 +27,15 @@
 ## Builder Architecture
 ```
 AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + superuser)
-  ├── FormLibrary (sidebar — fetches from Master Form SP list)
-  ├── FormBuilder.tsx (canvas — react-dnd drag-drop)
-  │     ├── Palette (question types sidebar)
-  │     ├── Canvas (field cards with reorder)
-  │     ├── PropertyPanel (per-field settings)
-  │     ├── JsonPreview (collapsed JSON output)
+  ├── brand header (form switcher dropdown, status chips, save state)
+  ├── mode rail: Builder | Workflow | Settings | Publish + Tools / Preview menus
+  ├── FormBuilder.tsx (Builder mode — react-dnd drag-drop; stays mounted, hidden in other modes)
+  │     ├── Palette (2 tabs × 4 sections, search)
+  │     ├── FormSheet (WYSIWYG rows on a paper sheet, hover row tools)
+  │     ├── PropertyPanel (.bx-propdock — mounted only while a field is selected)
+  │     ├── JsonPreview (bottom drawer, opened from Tools → Survey JSON)
   │     └── LivePreviewModal (survey-react-ui renderer)
-  ├── LayerConfigPanel (unified Layers tab — replaces old approval + conditional tabs)
+  ├── LayerConfigPanel (Workflow mode, full width — unchanged in function)
   │     ├── LayerCard[] (per-layer config)
   │     ├── EvalElementPicker (for evaluation layers)
   │     └── PublicLinkDisplay (for public layers)

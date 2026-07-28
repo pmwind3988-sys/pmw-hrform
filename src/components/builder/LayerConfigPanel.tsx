@@ -9,11 +9,13 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LayerCard from "./LayerCard";
 import EvalElementPicker from "./EvalElementPicker";
 import PublicLinkDisplay from "./PublicLinkDisplay";
+import DepartmentDirectoryPanel from "./DepartmentDirectoryPanel";
 import { validateLayerConfig } from "./layerValidation";
-import { createDepartmentApproverAssignee, getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
+import { DEPARTMENT_APPROVER_DEFAULTS, createDepartmentApproverAssignee, getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import type { LayerFieldOption } from "./layerValidation";
 import type {
   LayerConfig,
@@ -35,6 +37,8 @@ interface LayerConfigPanelProps {
   siteUsers: { email: string; name: string }[];
   formFields: LayerFieldOption[];
   slug: string;
+  /** SharePoint token, used to manage this profile's approver directory. */
+  token?: string;
 }
 
 const inp = {
@@ -151,25 +155,35 @@ function toDepartmentApproverAssignee(assignee: LayerAssignee): DepartmentApprov
 function DepartmentLookupSettings({
   assignee,
   formFields,
+  token,
   onChange,
 }: {
   assignee: DepartmentApproverLayerAssignee;
   formFields: LayerFieldOption[];
+  token?: string;
   onChange: (assignee: DepartmentApproverLayerAssignee) => void;
 }) {
   const config = getDepartmentApproverLookupConfig(assignee);
   const patch = (next: Partial<DepartmentApproverLayerAssignee>) => {
     onChange({ ...assignee, ...next });
   };
+  // Column names are wired once per site; keep them out of the way unless this
+  // layer has customised them.
+  const usesDefaultColumns =
+    config.departmentColumn === DEPARTMENT_APPROVER_DEFAULTS.departmentColumn &&
+    config.emailColumn === DEPARTMENT_APPROVER_DEFAULTS.emailColumn &&
+    config.nameColumn === DEPARTMENT_APPROVER_DEFAULTS.nameColumn &&
+    config.roleColumn === DEPARTMENT_APPROVER_DEFAULTS.roleColumn;
+  const [columnsOpen, setColumnsOpen] = useState(!usesDefaultColumns);
 
   return (
     <div style={{
       display: "flex",
       flexDirection: "column",
-      gap: 8,
+      gap: 10,
       background: C.offWhite,
       borderRadius: 8,
-      padding: "9px 10px",
+      padding: "10px 10px 11px",
       boxShadow: "inset 0 0 0 1px rgba(26,31,43,0.06)",
     }}>
       <div>
@@ -186,36 +200,73 @@ function DepartmentLookupSettings({
             <option key={field.name} value={field.name}>{departmentFieldOptionLabel(field)}</option>
           ))}
         </select>
+        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45, marginTop: 4 }}>
+          The submitted department must match the SharePoint directory value exactly.
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
         <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
-          List name
+          Directory list
           <input value={config.listName} onChange={e => patch({ listName: e.target.value })} style={{ ...inp, marginTop: 4 }} />
         </label>
         <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
-          Role value
+          Approver role
           <input value={config.roleValue} onChange={e => patch({ roleValue: e.target.value })} style={{ ...inp, marginTop: 4 }} />
         </label>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
-          Department column
-          <input value={config.departmentColumn} onChange={e => patch({ departmentColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
-        </label>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
-          Email column
-          <input value={config.emailColumn} onChange={e => patch({ emailColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
-        </label>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
-          Name column
-          <input value={config.nameColumn} onChange={e => patch({ nameColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
-        </label>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
-          Role column
-          <input value={config.roleColumn} onChange={e => patch({ roleColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
-        </label>
       </div>
-      <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45 }}>
-        The submitted department must match the SharePoint directory value exactly.
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setColumnsOpen(open => !open)}
+          aria-expanded={columnsOpen}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            minHeight: 28,
+            padding: 0,
+            border: "none",
+            background: "none",
+            color: C.textSecond,
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: "pointer",
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+          }}
+        >
+          <ExpandMoreIcon style={{
+            fontSize: 16,
+            transform: columnsOpen ? "rotate(0deg)" : "rotate(-90deg)",
+            transition: "transform .15s ease",
+          }} />
+          Column mapping
+          {!columnsOpen && <span style={{ fontWeight: 500, color: C.textMuted }}>· {usesDefaultColumns ? "standard" : "customised"}</span>}
+        </button>
+        {columnsOpen && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginTop: 7 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+              Department column
+              <input value={config.departmentColumn} onChange={e => patch({ departmentColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+              Email column
+              <input value={config.emailColumn} onChange={e => patch({ emailColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+              Name column
+              <input value={config.nameColumn} onChange={e => patch({ nameColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+              Role column
+              <input value={config.roleColumn} onChange={e => patch({ roleColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
+            </label>
+          </div>
+        )}
       </div>
+
+      <DepartmentDirectoryPanel assignee={assignee} token={token} />
     </div>
   );
 }
@@ -267,6 +318,7 @@ export default function LayerConfigPanel({
   siteUsers,
   formFields,
   slug,
+  token,
 }: LayerConfigPanelProps) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [condEnabled, setCondEnabled] = useState(!!value?.routing?.length);
@@ -512,6 +564,7 @@ export default function LayerConfigPanel({
         <DepartmentLookupSettings
           assignee={layer.assignee}
           formFields={formFields}
+          token={token}
           onChange={onAssigneeChange}
         />
       )}

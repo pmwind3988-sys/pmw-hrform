@@ -1285,16 +1285,54 @@ export async function updatePublishProfile(
   }
 ): Promise<void> {
   await ensureListExists(token, 'Web Form Versions');
-  const id = await getFormVersionRecordId(token, params.listTitle, params.version, params.publishKey);
+  const normalizedPublishKey = normalizePublishKey(params.publishKey);
+  const id = await getFormVersionRecordId(token, params.listTitle, params.version, normalizedPublishKey);
   const body: Record<string, unknown> = {};
-  if (params.publishLabel !== undefined) body.PublishLabel = params.publishLabel.trim() || normalizePublishKey(params.publishKey);
+  const nextLabel = params.publishLabel === undefined
+    ? undefined
+    : params.publishLabel.trim() || normalizedPublishKey;
+  if (nextLabel !== undefined) body.PublishLabel = nextLabel;
   if (params.publishStatus !== undefined) {
     body.PublishStatus = params.publishStatus;
     body.DisabledAt = params.publishStatus === 'off' ? new Date().toISOString() : null;
     body.DisabledBy = params.publishStatus === 'off' ? params.changedBy : '';
   }
   if (params.publishExpiresAt !== undefined) body.PublishExpiresAt = params.publishExpiresAt || null;
+
+  // The profile name is also stored inside the version's own JSON blob, which is
+  // what the public form and the builder read back. Rename both together.
+  if (nextLabel !== undefined) {
+    const versionData = await getFormVersion(token, params.listTitle, params.version, normalizedPublishKey);
+    if (versionData) {
+      const existingMeta = versionData.meta && typeof versionData.meta === 'object' && !Array.isArray(versionData.meta)
+        ? versionData.meta as Record<string, unknown>
+        : null;
+      body.SurveyJSON = JSON.stringify({
+        ...versionData,
+        publishLabel: nextLabel,
+        meta: existingMeta ? { ...existingMeta, publishLabel: nextLabel } : versionData.meta,
+        savedAt: new Date().toISOString(),
+        changedBy: params.changedBy,
+      }, null, 2);
+    }
+  }
+
   await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${id})`, body);
+
+  // A renamed profile that is the live default must carry the new name on the
+  // form config too, otherwise /form keeps showing the old label.
+  if (nextLabel !== undefined) {
+    const config = await getFormConfigByTitle(token, params.listTitle);
+    if (
+      config?.Id &&
+      config.CurrentVersion === params.version &&
+      normalizePublishKey(config.CurrentPublishKey) === normalizedPublishKey
+    ) {
+      await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${config.Id})`, {
+        CurrentPublishLabel: nextLabel,
+      });
+    }
+  }
 }
 
 export async function setDefaultPublishProfile(
