@@ -3,6 +3,7 @@
  * Route: /form/:formId
  */
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
@@ -97,6 +98,49 @@ function documentHeaderFromMeta(meta: Record<string, unknown> | undefined, formI
 
 function isExpiredPublishProfile(value: unknown): boolean {
   return typeof value === "string" && value.trim() !== "" && Date.parse(value) <= Date.now();
+}
+
+type LoadedFormData = {
+  formConfig: Record<string, unknown>;
+  surveyJson: Record<string, unknown>;
+  meta: Record<string, unknown>;
+};
+
+/**
+ * JSON.stringify with object keys emitted in sorted order, so two structurally
+ * identical objects built by different code paths compare equal. The public
+ * endpoint and the direct SharePoint read assemble formConfig in a different key
+ * order, which a plain stringify would report as a difference.
+ */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+}
+
+function loadedFormDataEquals(a: LoadedFormData, b: LoadedFormData): boolean {
+  try {
+    return stableStringify(a) === stableStringify(b);
+  } catch {
+    return false; // circular or otherwise unserialisable — treat as changed
+  }
+}
+
+/**
+ * A reload normally resolves to exactly the same published form — a guest read
+ * followed by the signed-in read once MSAL settles, say. Swapping in an equal but
+ * newly allocated object there re-derives the document control header and rebuilds the
+ * SurveyJS model, so the header blanks out and anything already typed is lost. Keep
+ * the existing object unless the content actually changed.
+ */
+function applyLoadedFormData(
+  setFormData: Dispatch<SetStateAction<LoadedFormData | null>>,
+  next: LoadedFormData,
+): void {
+  setFormData(prev => (prev && loadedFormDataEquals(prev, next) ? prev : next));
 }
 
 function companyChoiceFromUnknown(choice: unknown): CompanyChoiceOption | null {
@@ -574,7 +618,7 @@ export default function DynamicFormPage() {
   useEffect(() => { document.body.style.background = t.bg; document.body.style.color = t.textPrimary; return () => { document.body.style.background = ""; document.body.style.color = ""; }; }, [t]);
 
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState<{ formConfig: Record<string, unknown>; surveyJson: Record<string, unknown>; meta: Record<string, unknown> } | null>(null);
+  const [formData, setFormData] = useState<LoadedFormData | null>(null);
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
@@ -599,26 +643,36 @@ export default function DynamicFormPage() {
   // lists, so reads and writes both have to go through the public endpoints instead.
   const spDirectUnavailableRef = useRef(false);
   const userEmail = accounts[0]?.username || null;
+  // `accounts` is a fresh array on some MSAL events; key the loaders off the identity
+  // itself so an unrelated event cannot re-trigger a full form reload.
+  const activeAccountId = accounts[0]?.homeAccountId;
   const lastDataRef = useRef<Record<string, unknown> | null>(null);
 
   // main.tsx settles MSAL before React renders, but it caps that wait at 3s and gives
   // up silently if initialize() throws — so `inProgress` can still be pending here, or
-  // never reach None at all. Give it a short grace period, then load anyway: a guest
-  // filling in a public form must never be held behind a sign-in state that is stuck.
+  // never reach None at all. Give it a grace period, then load anyway: a guest filling
+  // in a public form must never be held behind a sign-in state that is stuck.
+  // Someone with a cached account waits longer, because giving up early loads the form
+  // as a guest and then reloads it as them a moment later, which is what swaps the
+  // header out from under a user whose session is slow to restore.
   const [msalSettleExpired, setMsalSettleExpired] = useState(false);
   useEffect(() => {
     if (inProgress === InteractionStatus.None) return;
-    const timer = setTimeout(() => setMsalSettleExpired(true), 1500);
+    let hasCachedAccount = false;
+    try { hasCachedAccount = instance.getAllAccounts().length > 0; } catch { /* not initialised yet */ }
+    const timer = setTimeout(() => setMsalSettleExpired(true), hasCachedAccount ? 6000 : 1500);
     return () => clearTimeout(timer);
-  }, [inProgress]);
+  }, [inProgress, instance]);
   const authStateSettled = inProgress === InteractionStatus.None || msalSettleExpired;
 
   useEffect(() => {
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) return;
+    const account = instance.getAllAccounts()[0];
+    if (!account) return;
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] }).then(token => { tokenRef.current = token; }).catch(() => {});
-  }, [isAuthenticated, inProgress, instance, accounts]);
+    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account }).then(token => { tokenRef.current = token; }).catch(() => {});
+  }, [isAuthenticated, inProgress, instance, activeAccountId]);
 
   useEffect(() => {
     if (!formId) { setError("No form slug provided."); setLoading(false); return; }
@@ -694,9 +748,10 @@ export default function DynamicFormPage() {
         let token = tokenRef.current;
 
         // Try to acquire token if authenticated
-        if (!token && isAuthenticated && accounts[0]) {
+        const account = instance.getAllAccounts()[0];
+        if (!token && isAuthenticated && account) {
           try {
-            token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
+            token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account });
             tokenRef.current = token;
           } catch {
             // Guest/public loading remains available when silent authentication fails.
@@ -745,7 +800,7 @@ export default function DynamicFormPage() {
             const direct = await loadFromSharePoint(token);
             if (cancelled) return;
             spDirectUnavailableRef.current = false;
-            setFormData(direct);
+            applyLoadedFormData(setFormData, direct);
           } catch (spError) {
             let fallback: Awaited<ReturnType<typeof loadFromPublicApi>>;
             try {
@@ -769,14 +824,14 @@ export default function DynamicFormPage() {
             // trace someone can find when diagnosing a report.
             console.warn(`[form] SharePoint read failed for "${formId}", served via /api/form-config instead:`, spError);
             spDirectUnavailableRef.current = true;
-            setFormData(fallback);
+            applyLoadedFormData(setFormData, fallback);
           }
         } else {
           // Guests, and signed-in users whose token could not be acquired silently.
           const publicData = await loadFromPublicApi();
           if (cancelled) return;
           spDirectUnavailableRef.current = false;
-          setFormData(publicData);
+          applyLoadedFormData(setFormData, publicData);
         }
       } catch (e) {
         if (cancelled) return;
@@ -788,7 +843,7 @@ export default function DynamicFormPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [formId, pinVersion, publishKey, isAuthenticated, authStateSettled, instance, accounts]);
+  }, [formId, pinVersion, publishKey, isAuthenticated, authStateSettled, instance, activeAccountId]);
 
   // Enrich survey JSON with SharePoint-sourced choices
   useEffect(() => {
