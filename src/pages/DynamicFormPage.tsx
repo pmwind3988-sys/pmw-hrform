@@ -11,7 +11,7 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver, SharePointHttpError, isAccessDeniedError } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
@@ -594,8 +594,23 @@ export default function DynamicFormPage() {
     return window.location.origin + window.location.pathname + (query ? `?${query}` : "");
   })();
   const tokenRef = useRef<string | null>(null);
+  // Set when the signed-in user's own SharePoint credentials cannot reach the form
+  // lists, so reads and writes both have to go through the public endpoints instead.
+  const spDirectUnavailableRef = useRef(false);
   const userEmail = accounts[0]?.username || null;
   const lastDataRef = useRef<Record<string, unknown> | null>(null);
+
+  // main.tsx settles MSAL before React renders, but it caps that wait at 3s and gives
+  // up silently if initialize() throws — so `inProgress` can still be pending here, or
+  // never reach None at all. Give it a short grace period, then load anyway: a guest
+  // filling in a public form must never be held behind a sign-in state that is stuck.
+  const [msalSettleExpired, setMsalSettleExpired] = useState(false);
+  useEffect(() => {
+    if (inProgress === InteractionStatus.None) return;
+    const timer = setTimeout(() => setMsalSettleExpired(true), 1500);
+    return () => clearTimeout(timer);
+  }, [inProgress]);
+  const authStateSettled = inProgress === InteractionStatus.None || msalSettleExpired;
 
   useEffect(() => {
     if (inProgress !== InteractionStatus.None) return;
@@ -606,6 +621,71 @@ export default function DynamicFormPage() {
 
   useEffect(() => {
     if (!formId) { setError("No form slug provided."); setLoading(false); return; }
+    // Wait for the sign-in state to settle before reading anything. Loading while MSAL
+    // is still restoring the session resolves the form as a guest, then re-runs as the
+    // signed-in user and overwrites the first result — which is how the document header
+    // and company selector rendered and then vanished a moment later.
+    if (!authStateSettled) return;
+
+    let cancelled = false;
+
+    // Reads the published form through the public endpoint, which resolves it with
+    // the app-only credential. Used for guests, and as a fallback for signed-in
+    // users whose own SharePoint permissions cannot reach the version lists.
+    const loadFromPublicApi = async () => {
+      const params = new URLSearchParams({ slug: formId });
+      if (pinVersion) params.set("version", pinVersion);
+      if (publishKey) params.set("publish", publishKey);
+      const res = await fetch(`/api/form-config?${params.toString()}`, {
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+        },
+      });
+      const contentType = res.headers.get("content-type") || "";
+      const responseText = await res.text();
+
+      if (contentType.includes("text/html") || responseText.trim().startsWith("<")) {
+        throw new Error("API endpoint not available (returned HTML). Are you running 'vercel dev'?");
+      }
+
+      // Detect if Vite served the raw TypeScript source instead of executing the API
+      if (responseText.includes("export default async function") || responseText.includes('from "/api/_utils/')) {
+        throw new Error("API route is returning source code instead of executing. Make sure you're running 'vercel dev' (not 'npm run dev').");
+      }
+
+      // Check HTTP status before attempting JSON parse
+      if (!res.ok) {
+        let errorDetail: string;
+        try {
+          const errJson = JSON.parse(responseText);
+          errorDetail = errJson.error || `Server error: ${res.status}`;
+        } catch {
+          errorDetail = `Server returned status ${res.status}: ${responseText.substring(0, 200)}`;
+        }
+        throw new Error(errorDetail);
+      }
+
+      let parsed: { error?: string; formConfig?: Record<string, unknown>; surveyJson?: Record<string, unknown>; meta?: Record<string, unknown> };
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Server returned non-JSON: ${responseText.substring(0, 200)}`);
+      }
+
+      if (!parsed.formConfig) {
+        throw new Error("Invalid API response: missing formConfig.");
+      }
+      if (!parsed.surveyJson) {
+        throw new Error(`Form "${formId}" has no published content for this link. Please republish the form and share the link again.`);
+      }
+
+      return {
+        formConfig: parsed.formConfig,
+        surveyJson: parsed.surveyJson,
+        meta: (parsed.meta || {}) as Record<string, unknown>,
+      };
+    };
 
     const load = async () => {
       try {
@@ -622,16 +702,19 @@ export default function DynamicFormPage() {
           }
         }
 
-        if (token) {
-          // Authenticated path — load directly from SharePoint
+        // Signed-in users read straight from SharePoint under their own identity so
+        // private forms work, but that read depends on their list permissions. When it
+        // fails — or comes back without survey content — fall back to the public
+        // endpoint instead of leaving the page with nothing to render.
+        const loadFromSharePoint = async (accessToken: string) => {
           let cfgRaw: Record<string, unknown>;
           let ver: { surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishStatus?: string; publishExpiresAt?: string } | null;
           if (pinVersion) {
-            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
-            if (!cfgRes.ok) throw new Error(`Failed to load form config: ${cfgRes.status} ${cfgRes.statusText}`);
+            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json;odata=nometadata" } });
+            if (!cfgRes.ok) throw new SharePointHttpError(cfgRes.status, `Failed to load form config: ${cfgRes.status} ${cfgRes.statusText}`);
             cfgRaw = (await cfgRes.json()).value?.[0];
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
-            ver = await getFormVersion(token, cfgRaw.Title as string, pinVersion, publishKey);
+            ver = await getFormVersion(accessToken, cfgRaw.Title as string, pinVersion, publishKey);
             if (!ver) throw new Error(`Version ${pinVersion} not found.`);
             if (ver.publishStatus === "off") throw new Error("This published form profile is turned off.");
             if (isExpiredPublishProfile(ver.publishExpiresAt)) throw new Error("This published form profile has expired.");
@@ -641,80 +724,70 @@ export default function DynamicFormPage() {
             cfgRaw.CurrentVersion = pinVersion;
             if (publishKey) cfgRaw.CurrentPublishKey = publishKey;
           } else {
-            const latest = await getLatestFormBySlug(token, formId, publishKey);
+            const latest = await getLatestFormBySlug(accessToken, formId, publishKey);
             if (!latest) throw new Error(`Form "${formId}" not found.`);
             cfgRaw = latest.formConfig as unknown as Record<string, unknown>;
             ver = { surveyJson: latest.surveyJson, meta: latest.meta };
           }
-          setFormData({
+          if (!ver?.surveyJson) {
+            throw new Error(`Published content for "${formId}" could not be read from SharePoint.`);
+          }
+          return {
             formConfig: cfgRaw,
-            surveyJson: (ver?.surveyJson || null) as Record<string, unknown>,
-            meta: (ver?.meta || {}) as Record<string, unknown>,
-          });
-        } else if (!isAuthenticated) {
-          // Unauthenticated path — try public API fallback
-          const params = new URLSearchParams({ slug: formId });
-          if (pinVersion) params.set("version", pinVersion);
-          if (publishKey) params.set("publish", publishKey);
-          const res = await fetch(`/api/form-config?${params.toString()}`, {
-            headers: {
-              "X-Requested-With": "XMLHttpRequest",
-              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
-            },
-          });
-          const contentType = res.headers.get("content-type") || "";
-          const responseText = await res.text();
+            surveyJson: ver.surveyJson as Record<string, unknown>,
+            meta: (ver.meta || {}) as Record<string, unknown>,
+          };
+        };
 
-          if (contentType.includes("text/html") || responseText.trim().startsWith("<")) {
-            throw new Error("API endpoint not available (returned HTML). Are you running 'vercel dev'?");
-          }
-
-          // Detect if Vite served the raw TypeScript source instead of executing the API
-          if (responseText.includes("export default async function") || responseText.includes('from "/api/_utils/')) {
-            throw new Error("API route is returning source code instead of executing. Make sure you're running 'vercel dev' (not 'npm run dev').");
-          }
-
-          // Check HTTP status before attempting JSON parse
-          if (!res.ok) {
-            let errorDetail: string;
-            try {
-              const errJson = JSON.parse(responseText);
-              errorDetail = errJson.error || `Server error: ${res.status}`;
-            } catch {
-              errorDetail = `Server returned status ${res.status}: ${responseText.substring(0, 200)}`;
-            }
-            throw new Error(errorDetail);
-          }
-
-          let parsed: { error?: string; formConfig?: Record<string, unknown>; surveyJson?: Record<string, unknown>; meta?: Record<string, unknown> };
+        if (token) {
           try {
-            parsed = JSON.parse(responseText);
-          } catch {
-            throw new Error(`Server returned non-JSON: ${responseText.substring(0, 200)}`);
+            const direct = await loadFromSharePoint(token);
+            if (cancelled) return;
+            spDirectUnavailableRef.current = false;
+            setFormData(direct);
+          } catch (spError) {
+            let fallback: Awaited<ReturnType<typeof loadFromPublicApi>>;
+            try {
+              fallback = await loadFromPublicApi();
+            } catch {
+              throw spError;
+            }
+            if (cancelled) return;
+            // A private form has to be read and submitted under the signed-in user's
+            // own identity, so report the access problem rather than quietly
+            // downgrading them to an anonymous respondent.
+            if (fallback.formConfig.IsPublic === false) {
+              if (!isAccessDeniedError(spError)) throw spError;
+              throw new Error(
+                `You do not have access to "${String(fallback.formConfig.Title || formId)}". This form is restricted to named SharePoint users — ask HR to grant you access, then reload this page.`,
+                { cause: spError },
+              );
+            }
+            // Silent for the respondent — the public endpoint serves the same form —
+            // but a permission gap here is a real configuration problem, so leave a
+            // trace someone can find when diagnosing a report.
+            console.warn(`[form] SharePoint read failed for "${formId}", served via /api/form-config instead:`, spError);
+            spDirectUnavailableRef.current = true;
+            setFormData(fallback);
           }
-
-          if (!parsed.formConfig) {
-            throw new Error("Invalid API response: missing formConfig.");
-          }
-
-          setFormData({
-            formConfig: parsed.formConfig,
-            surveyJson: (parsed.surveyJson || {}) as Record<string, unknown>,
-            meta: (parsed.meta || {}) as Record<string, unknown>,
-          });
         } else {
-          // Authenticated but could not acquire token
-          throw new Error("Unable to get authentication token. Please sign in again.");
+          // Guests, and signed-in users whose token could not be acquired silently.
+          const publicData = await loadFromPublicApi();
+          if (cancelled) return;
+          spDirectUnavailableRef.current = false;
+          setFormData(publicData);
         }
       } catch (e) {
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     load();
-  }, [formId, pinVersion, publishKey, isAuthenticated, instance, accounts]);
+    return () => { cancelled = true; };
+  }, [formId, pinVersion, publishKey, isAuthenticated, authStateSettled, instance, accounts]);
 
   // Enrich survey JSON with SharePoint-sourced choices
   useEffect(() => {
@@ -724,7 +797,9 @@ export default function DynamicFormPage() {
     const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Inter" });
     const applyPrefill = (json: Record<string, unknown>): Record<string, unknown> =>
       cloneAndApplyPrefilledQr(withAppFont(json), prefilledQrPayload);
-    const tokenRaw = tokenRef.current;
+    // When the direct SharePoint reads are unavailable the config already arrived
+    // from the public endpoint with its choices resolved server-side.
+    const tokenRaw = spDirectUnavailableRef.current ? null : tokenRef.current;
     if (!tokenRaw) { setEnrichedSurveyJson(applyPrefill(baseJson)); return; }
     const token = tokenRaw; // narrowed to string
 
@@ -976,7 +1051,10 @@ export default function DynamicFormPage() {
     
       let activeLayers: { email: string; name: string }[] = [];
       let resolvedLayerCount = 0;
-      const token = tokenRef.current;
+      // Someone who could not read this form from SharePoint cannot write to the
+      // response list either, so submit through the public endpoint (recorded as
+      // GUEST) exactly as an anonymous respondent on the same public link would.
+      const token = spDirectUnavailableRef.current ? null : tokenRef.current;
       const formId = String(cfg.FormID || "");
 
       // Step 1: Upload file/image/signature fields to document libraries
@@ -1575,11 +1653,24 @@ export default function DynamicFormPage() {
     };
   }, [showQr]);
 
-  if (loading || (formData && !formData.surveyJson && !error)) return (
+  if (loading) return (
     <div style={{ minHeight: "100vh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
       <style>{globalCss(t)}</style>
       <Spinner t={t} />
       <div style={{ fontSize: 13, color: t.textMuted, animation: "pulse 1.5s infinite" }}>Loading form...</div>
+    </div>
+  );
+
+  // A form that loaded without survey content can never be filled in or submitted —
+  // say so instead of sitting on a spinner forever.
+  if (!error && !formData?.surveyJson) return (
+    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <style>{globalCss(t)}</style>
+      <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
+        <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
+        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form unavailable</div>
+        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>This link has no published form content. Please ask HR to republish the form and share the link again.</p>
+      </div>
     </div>
   );
 
@@ -1682,7 +1773,7 @@ export default function DynamicFormPage() {
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
               </div>
             )}
-            {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
+            {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
             {survey && isLastSurveyPage && (
               <>
                 <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>

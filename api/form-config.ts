@@ -187,7 +187,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const requestedPublishKey = (req.query.publish || req.query.batch) as string | undefined;
   if (!slug) return res.status(400).json({ error: "Missing slug parameter" });
 
-  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+  // Errors must never reach the edge cache: a single transient Graph failure would
+  // otherwise be replayed to every visitor on this link for up to 5 more minutes.
+  // The success path re-sets this header just before responding.
+  res.setHeader("Cache-Control", "no-store");
 
   try {
     const token = await getGraphToken();
@@ -238,11 +241,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // Without survey content the client has nothing to render or submit, so fail
+    // loudly here rather than returning a 200 the form page cannot use.
+    if (!surveyJson) {
+      return res.status(404).json({
+        error: `No published content found for ${targetVersion}/${targetPublishKey}. Please republish the form.`,
+      });
+    }
+
     // Enrich surveyJson with SP-sourced choices (using system credential)
     const enrichment = surveyJson && typeof surveyJson === "object" && (surveyJson as Record<string, unknown>).pages
       ? await enrichSurveyJson(token, surveyJson as Record<string, unknown>)
       : { spSources: 0, choicesFetched: 0, errors: ["No surveyJson.pages found"] };
 
+    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
     return res.status(200).json({
       formConfig: {
         ...formConfig,
