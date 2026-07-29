@@ -3,15 +3,27 @@ import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workfl
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
-import { SharePointHttpError, isSharePointAccessDeniedError } from "./sharepointClient";
+import { SharePointHttpError } from "./sharepointClient";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
 
-/** Swallow "not found"-shaped failures the way the read fallbacks expect, but let
- *  permission failures propagate so they cannot masquerade as an empty result. */
-function emptyUnlessAccessDenied(error: unknown): { value: never[] } {
-  if (isSharePointAccessDeniedError(error)) throw error;
+/**
+ * The version-row fallbacks below retry with a broader query when the first one does
+ * not fit the list — a tenant whose 'Web Form Versions' predates the PublishKey column
+ * answers that filter with a 400. Absorb only that shape.
+ *
+ * Everything else — 401/403 (no access), 429 (throttled), 5xx, a network drop, or the
+ * 30s AbortError — must propagate. Swallowing those returns an empty result that reads
+ * as "this form has no published version", which silently blanks `meta` and takes the
+ * document header and company selector down with it.
+ */
+function isQueryMismatchError(error: unknown): boolean {
+  return error instanceof SharePointHttpError && (error.status === 400 || error.status === 404);
+}
+
+function emptyOnQueryMismatch(error: unknown): { value: never[] } {
+  if (!isQueryMismatchError(error)) throw error;
   return { value: [] };
 }
 
@@ -681,12 +693,12 @@ export async function getFormVersion(
     : baseFilter;
   let data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${query}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy,PublishKey,PublishLabel,PublishStatus,PublishExpiresAt&$orderby=PublishedAt desc&$top=1`)
     .catch(async (error: unknown) => {
-      if (isSharePointAccessDeniedError(error)) throw error;
+      if (!isQueryMismatchError(error)) throw error;
       if (!normalizedPublishKey || normalizedPublishKey !== DEFAULT_PUBLISH_KEY) return { value: [] };
-      return spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(emptyUnlessAccessDenied);
+      return spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(emptyOnQueryMismatch);
     }) as { value?: { SurveyJSON?: string }[] };
   if (normalizedPublishKey === DEFAULT_PUBLISH_KEY && !data.value?.length) {
-    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(emptyUnlessAccessDenied) as { value?: { SurveyJSON?: string }[] };
+    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(emptyOnQueryMismatch) as { value?: { SurveyJSON?: string }[] };
   }
   const row = data.value?.[0];
   if (!row?.SurveyJSON) return null;
@@ -1627,12 +1639,12 @@ async function getFormVersionByTitle(token: string, listTitle: string, version: 
     : baseFilter;
   let data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${query}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy,PublishKey,PublishLabel,PublishStatus,PublishExpiresAt&$orderby=PublishedAt desc&$top=1`)
     .catch(async (error: unknown) => {
-      if (isSharePointAccessDeniedError(error)) throw error;
+      if (!isQueryMismatchError(error)) throw error;
       if (!normalizedPublishKey || normalizedPublishKey !== DEFAULT_PUBLISH_KEY) return { value: [] };
       return spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`);
     }) as { value?: { SurveyJSON?: string }[] };
   if (normalizedPublishKey === DEFAULT_PUBLISH_KEY && !data.value?.length) {
-    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(emptyUnlessAccessDenied) as { value?: { SurveyJSON?: string }[] };
+    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(emptyOnQueryMismatch) as { value?: { SurveyJSON?: string }[] };
   }
   const row = data.value?.[0];
   if (!row?.SurveyJSON) return null;
