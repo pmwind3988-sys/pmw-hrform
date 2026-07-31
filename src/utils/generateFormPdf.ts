@@ -484,16 +484,12 @@ export async function generateAndStorePdf(
     const msg = (e as Error).message;
     // If the PdfUrl column doesn't exist yet, add it and retry
     if (msg.includes('PdfUrl') && (msg.includes('does not exist') || msg.includes('not found'))) {
-      try {
-        await ensurePdfUrlColumn(token, listTitle);
-        // SharePoint needs a moment after adding a column before it can be written
-        await new Promise(r => setTimeout(r, 2000));
-        await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`, {
-          PdfUrl: pdfUrl,
-        });
-      } catch (retryError) {
-        throw retryError;
-      }
+      await ensurePdfUrlColumn(token, listTitle);
+      // SharePoint needs a moment after adding a column before it can be written
+      await new Promise(r => setTimeout(r, 2000));
+      await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`, {
+        PdfUrl: pdfUrl,
+      });
     } else {
       throw e;
     }

@@ -194,6 +194,77 @@
   background: var(--bx-divider);
 }
 
+/* Secondary-site banner.
+   Amber rather than the accent blue: this is a standing "you are not where you
+   usually are" notice, and it has to stay legible against a builder chrome that
+   is already blue. It is not an error, so it never uses --bx-danger. */
+.bx-site-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  background: #fff4d6;
+  border-bottom: 1px solid var(--bx-warn);
+  color: #6b3d00;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.bx-site-banner strong {
+  font-weight: 700;
+}
+
+.bx-site-banner-exit {
+  margin-left: auto;
+  flex: none;
+  min-height: 30px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--bx-warn);
+  border-radius: 999px;
+  color: #6b3d00;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bx-site-banner-exit:hover {
+  background: rgba(177, 92, 0, 0.1);
+}
+
+.bx-site-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+
+.bx-site-picker-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bx-n600);
+}
+
+.bx-site-picker select {
+  min-height: 32px;
+  padding: 4px 10px;
+  background: var(--bx-white);
+  border: 1px solid var(--bx-n300);
+  border-radius: 8px;
+  color: var(--bx-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bx-site-picker select:focus-visible {
+  outline: 2px solid var(--bx-accent);
+  outline-offset: 1px;
+}
+
 .bx-switcher {
   display: inline-flex;
   align-items: center;

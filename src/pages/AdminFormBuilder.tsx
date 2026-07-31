@@ -2,9 +2,9 @@
  * AdminFormBuilder.tsx — Full admin form builder with sidebar
  * Integrates with custom FormBuilder component
  */
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { pdf } from "@react-pdf/renderer";
@@ -54,9 +54,11 @@ import {
   provisionFormList,
   deleteForm,
   hardDeleteForm,
+  setActiveBuilderSite,
+  resetActiveBuilderSite,
+  getActiveBuilderSiteUrl,
 } from "../utils/formBuilderSP";
-
-const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+import { resolveSite, availableSites, isSiteKey, HOME_SITE_KEY, type SiteKey } from "../config/sites";
 const DEFAULT_COMPANIES = [
   "PMW INDUSTRIES SDN BHD",
   "PMW CONCRETE INDUSTRIES SDN BHD",
@@ -490,6 +492,36 @@ function CheckRow({ checked, onChange, label, hint }: { checked: boolean; onChan
 export default function AdminFormBuilder() {
   const navigate = useNavigate();
   const { formTitle: paramTitle } = useParams<{ formTitle: string }>();
+  const [searchParams] = useSearchParams();
+
+  // The target site lives in the URL so it survives a refresh. Deriving it from
+  // component state instead would let a reload silently drop back to the home
+  // site while the banner still claimed otherwise — and the next publish would
+  // write the wrong site's lists.
+  const requestedSiteKey = searchParams.get("site") || HOME_SITE_KEY;
+  const siteKey: SiteKey = isSiteKey(requestedSiteKey) ? requestedSiteKey : HOME_SITE_KEY;
+  const [siteError, setSiteError] = useState<string | null>(null);
+  const activeSite = useMemo(() => {
+    try {
+      return resolveSite(siteKey);
+    } catch {
+      return null;
+    }
+  }, [siteKey]);
+  const isSecondarySite = siteKey !== HOME_SITE_KEY;
+
+  // Bind the SharePoint layer to the requested site before anything reads it,
+  // and put it back on the way out so a later in-app navigation cannot inherit
+  // this page's target.
+  useLayoutEffect(() => {
+    try {
+      setActiveBuilderSite(siteKey);
+      setSiteError(null);
+    } catch (e) {
+      setSiteError(e instanceof Error ? e.message : String(e));
+    }
+    return () => { resetActiveBuilderSite(); };
+  }, [siteKey]);
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -648,25 +680,38 @@ export default function AdminFormBuilder() {
       navigate("/user/dashboard");
       return;
     }
-    const spClient = createSpClient(instance, accounts);
+    if (siteError || !activeSite) return;
+
+    const homeClient = createSpClient(instance, accounts);
+    // Authority for a secondary site comes from that site's own group, not from
+    // HR's. Membership is per-site in SharePoint, so this check has to run
+    // against the site the builder is about to write to.
+    const targetGroup = activeSite.adminGroup;
+    const targetClient = isSecondarySite
+      ? createSpClient(instance, accounts, activeSite.url)
+      : homeClient;
+
     Promise.all([
-      spClient.isGroupMember(SP_STATIC.adminGroup),
-      spClient.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
-    ]).then(async ([admin, builderSuperuser]) => {
-      if (!admin || !builderSuperuser) {
+      homeClient.isGroupMember(SP_STATIC.adminGroup),
+      homeClient.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
+      isSecondarySite && targetGroup
+        ? targetClient.isGroupMember(targetGroup).catch(() => false)
+        : Promise.resolve(true),
+    ]).then(async ([admin, builderSuperuser, mayUseTargetSite]) => {
+      if (!admin || !builderSuperuser || !mayUseTargetSite) {
         setAccessDenied(true);
         setTimeout(() => navigate("/user/dashboard"), 200);
         return;
       }
       setAuthChecked(true);
-      const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
+      const origin = new URL(activeSite.url || "https://placeholder.sharepoint.com").origin;
       try {
         const token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
         tokenRef.current = token;
         setSpToken(token);
         bootstrapSystemLists(token, () => { }).catch(() => { /* best-effort system list bootstrap */ });
         try {
-          const ud = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/siteusers?$select=Email,Title&$filter=PrincipalType eq 1`, {
+          const ud = await fetchWithAuthRecovery(`${getActiveBuilderSiteUrl()}/_api/web/siteusers?$select=Email,Title&$filter=PrincipalType eq 1`, {
             headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" },
           }).then(res => res.json());
           setSiteUsers((ud.value || []).filter((u: { Email: string }) => u.Email).map((u: { Email: string; Title: string }) => ({ email: u.Email, name: u.Title })));
@@ -678,7 +723,7 @@ export default function AdminFormBuilder() {
     }).catch(() => {
       showToast("Could not initialize the form builder.", "err");
     });
-  }, [isAuthenticated, inProgress, navigate, instance, accounts, showToast]);
+  }, [isAuthenticated, inProgress, navigate, instance, accounts, showToast, activeSite, isSecondarySite, siteError]);
 
   const refreshLib = useCallback(() => {
     setTimeout(() => {
@@ -1527,6 +1572,24 @@ export default function AdminFormBuilder() {
   }, [saveStamp]);
   const unsaved = savedSignature !== null && savedSignature !== stateSignature;
 
+  // A misconfigured site must stop the builder outright. Falling back to the home
+  // site would leave the operator authoring against HR's lists while believing
+  // they were somewhere else.
+  if (siteError) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.offWhite, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <style>{G}</style>
+        <div style={{ maxWidth: 460, background: C.white, border: `1px solid ${C.border}`, borderRadius: 14, padding: "32px 28px" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.red, marginBottom: 8 }}>Site not available</div>
+          <p style={{ fontSize: 13, lineHeight: 1.65, color: C.textSecond, margin: "0 0 18px" }}>{siteError}</p>
+          <button type="button" className="bx-btn" onClick={() => navigate("/admin/builder")}>
+            Back to {resolveSite(HOME_SITE_KEY).label}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!authChecked) {
     return (
       <div style={{ minHeight: "100vh", background: C.offWhite, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1625,10 +1688,44 @@ export default function AdminFormBuilder() {
         </div>
       )}
 
+      {/* A builder pointed somewhere other than the home site says so on every
+          screen. The whole risk of this feature is authoring against the wrong
+          site without noticing, so this is deliberately hard to miss. */}
+      {isSecondarySite && activeSite && (
+        <div className="bx-site-banner" role="status">
+          <Icon name="doc" size={13} strokeWidth={1.8} />
+          <span>
+            Editing forms on <strong>{activeSite.label}</strong> — changes here do not affect {resolveSite(HOME_SITE_KEY).label}.
+          </span>
+          <button type="button" className="bx-site-banner-exit" onClick={() => navigate("/admin/builder")}>
+            Back to {resolveSite(HOME_SITE_KEY).label}
+          </button>
+        </div>
+      )}
+
       {/* ── Brand header ─────────────────────────────────────────────── */}
       <header className="bx-header">
         <span className="bx-mark"><Icon name="doc" size={17} strokeWidth={1.6} /></span>
         <span className="bx-wordmark">PMW Forms</span>
+        {availableSites().length > 1 && (
+          <label className="bx-site-picker">
+            <span className="bx-site-picker-label">Site</span>
+            <select
+              value={siteKey}
+              // A full navigation, not a state change: it reloads the builder
+              // against the new site, so no request started under the previous
+              // site can land afterwards.
+              onChange={(e) => {
+                const next = e.target.value;
+                window.location.assign(next === HOME_SITE_KEY ? "/admin/builder" : `/admin/builder?site=${encodeURIComponent(next)}`);
+              }}
+            >
+              {availableSites().map((site) => (
+                <option key={site.key} value={site.key}>{site.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className="bx-vrule" />
 
         <div style={{ flex: "none", position: "relative" }}>
@@ -2496,6 +2593,13 @@ export default function AdminFormBuilder() {
             <div style={{ fontSize: 11, color: C.red, fontWeight: 600, marginBottom: 18 }}>
               <WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> This action is irreversible. All submission data will be permanently lost.
             </div>
+            {/* Naming the site here is the last chance to catch a delete aimed at
+                the wrong product. */}
+            {activeSite && (
+              <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 18 }}>
+                On site <strong style={{ color: C.textPrimary }}>{activeSite.label}</strong>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 9, justifyContent: "center" }}>
               <button
                 onClick={() => setHardDeleteConfirm(null)}

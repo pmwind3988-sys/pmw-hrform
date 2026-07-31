@@ -667,64 +667,6 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
           )}
         </View>
 
-        {/* ═══ MATRIX TABLES (dynamicmatrix child rows) ═══ */}
-        {false && (() => {
-          // Gather all _childRows entries in responseData
-          const matrixEntries: { fieldName: string; columns: { name: string; title: string }[]; rows: Record<string, unknown>[] }[] = [];
-          for (const key of Object.keys(responseData)) {
-            if (!key.endsWith("_childRows")) continue;
-            const fieldName = key.slice(0, -"_childRows".length);
-            const data = responseData[key] as { columns?: { name: string; title: string }[]; rows?: Record<string, unknown>[] };
-            const rawColumns = data.columns;
-            const rawRows = data.rows;
-            const columns: { name: string; title: string }[] = rawColumns ?? [];
-            const rows: Record<string, unknown>[] = rawRows ?? [];
-            if (rows.length > 0) {
-              matrixEntries.push({ fieldName, columns, rows });
-            }
-          }
-          if (matrixEntries.length === 0) return null;
-
-          return (
-            <View style={{ marginBottom: 24 }}>
-              <Text style={S.sectionLabel}>TABLE DATA</Text>
-              {matrixEntries.map((entry, mIdx) => {
-                const cols = entry.columns;
-                // Calculate column widths proportional to count (min 10%)
-                const colPct = `${Math.max(10, Math.floor(100 / cols.length))}%`;
-                return (
-                  <View key={mIdx} style={S.matrixSection} wrap={false}>
-                    <Text style={S.matrixFieldLabel}>{entry.fieldName}</Text>
-                    <View style={S.matrixTable}>
-                      {/* Header */}
-                      <View style={S.matrixHeaderRow}>
-                        {cols.map((col, cIdx) => (
-                          <View key={cIdx} style={[S.matrixHeaderCell, { width: colPct }, cIdx === cols.length - 1 ? { borderRightWidth: 0 } : {}]}>
-                            <Text style={S.matrixHeaderText}>{col.title || col.name}</Text>
-                          </View>
-                        ))}
-                      </View>
-                      {/* Data rows */}
-                      {entry.rows.map((row, rIdx) => (
-                        <View key={rIdx} style={[S.matrixDataRow, rIdx % 2 === 1 ? S.matrixDataRowAlt : {}]}>
-                          {cols.map((col, cIdx) => {
-                            const val = row[col.name];
-                            const display = Array.isArray(val) ? val.join(", ") : (val === null || val === undefined ? "—" : String(val));
-                            return (
-                              <View key={cIdx} style={[S.matrixDataCell, { width: colPct }, cIdx === cols.length - 1 ? { borderRightWidth: 0 } : {}]}>
-                                <Text style={S.matrixDataText}>{display}</Text>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          );
-        })()}
 
         {/* ═══ LAYER APPROVAL TABLE ═══ */}
         {showApproverChain && layerResults && layerResults.length > 0 && (

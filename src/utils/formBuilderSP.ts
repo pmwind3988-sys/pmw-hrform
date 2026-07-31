@@ -4,9 +4,46 @@ import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 import { SharePointHttpError } from "./sharepointClient";
+import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
 
-const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
+/**
+ * The SharePoint site every call in this module targets.
+ *
+ * Mutable because the form builder can be pointed at a second site (see
+ * `src/config/sites.ts`), and every helper here already reads it at call time
+ * inside a template literal rather than capturing it at module load.
+ *
+ * It defaults to the home site and is only ever changed by the builder route,
+ * which sets it on mount and restores it on unmount. Nothing else in the app
+ * switches sites, so any code path outside the builder always sees the home
+ * site — reading this variable is not a decision a caller has to make.
+ */
+let SP_SITE_URL = resolveSite(HOME_SITE_KEY).url;
+let activeSiteKey: SiteKey = HOME_SITE_KEY;
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
+
+/**
+ * Points this module at one of the configured sites. Throws on an unknown or
+ * unconfigured key rather than falling back — see the note in `resolveSite`.
+ */
+export function setActiveBuilderSite(key: SiteKey): void {
+  const site = resolveSite(key);
+  SP_SITE_URL = site.url;
+  activeSiteKey = site.key;
+}
+
+/** Restores the home site. Call when leaving the builder. */
+export function resetActiveBuilderSite(): void {
+  setActiveBuilderSite(HOME_SITE_KEY);
+}
+
+export function getActiveBuilderSiteKey(): SiteKey {
+  return activeSiteKey;
+}
+
+export function getActiveBuilderSiteUrl(): string {
+  return SP_SITE_URL;
+}
 
 /**
  * The version-row fallbacks below retry with a broader query when the first one does
@@ -2222,11 +2259,15 @@ interface ApprovalNotificationParams {
 
 // ── Styled email HTML template ────────────────────────────────────────────
 
-const SP_ORIGIN = (() => { try { return new URL(SP_SITE_URL).origin; } catch { return ''; } })();
+// A function, not a const: the active site can change, and capturing the origin
+// at module load would pin generated email links to whichever site loaded first.
+function spOrigin(): string {
+  try { return new URL(SP_SITE_URL).origin; } catch { return ''; }
+}
 
 function makePdfLink(pdfUrl: string | undefined): string {
   if (!pdfUrl) return '';
-  const absoluteUrl = pdfUrl.startsWith('http') ? pdfUrl : `${SP_ORIGIN}${pdfUrl}`;
+  const absoluteUrl = pdfUrl.startsWith('http') ? pdfUrl : `${spOrigin()}${pdfUrl}`;
   return `<a href="${escapeHtml(absoluteUrl)}" style="display:inline-block;background:#FFFFFF;color:#0078D4;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;border:1px solid #B4D5F0">View PDF record</a>`;
 }
 

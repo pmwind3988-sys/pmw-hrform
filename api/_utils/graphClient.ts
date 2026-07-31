@@ -136,7 +136,8 @@ function extractCertificateMaterialFromPfx(target: string): SharePointCertificat
   } catch (error) {
     throw new Error(
       `${target} certificate PFX could not be read. Check SHAREPOINT_CERT_PFX_BASE64 and SHAREPOINT_CERT_PASSWORD. ` +
-      `${error instanceof Error ? error.message : String(error)}`
+      `${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
     );
   }
 }

@@ -1159,7 +1159,7 @@ export default function DynamicFormPage() {
                 raw[k] = fileUrl;
               }
             } catch (e) {
-              throw new Error(`Could not upload "${k}": ${e instanceof Error ? e.message : String(e)}`);
+              throw new Error(`Could not upload "${k}": ${e instanceof Error ? e.message : String(e)}`, { cause: e });
             }
           }
           // Handle multi-file arrays (SurveyJS file question with allowMultiple)
@@ -1176,7 +1176,7 @@ export default function DynamicFormPage() {
                   const fileUrl = toAbsoluteSharePointUrl(await uploadFileToDocLib(token, docLibName, fileName, itemCandidate.content));
                   urls.push(fileUrl);
                 } catch (e) {
-                  throw new Error(`Could not upload "${k}": ${e instanceof Error ? e.message : String(e)}`);
+                  throw new Error(`Could not upload "${k}": ${e instanceof Error ? e.message : String(e)}`, { cause: e });
                 }
               }
             }
