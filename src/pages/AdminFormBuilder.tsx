@@ -59,6 +59,35 @@ import {
   getActiveBuilderSiteUrl,
 } from "../utils/formBuilderSP";
 import { resolveSite, availableSites, isSiteKey, HOME_SITE_KEY, type SiteKey } from "../config/sites";
+
+/**
+ * `isGroupMember` returns false for a missing group, a 403 and a network error
+ * alike, so a denial on a secondary site cannot be told apart from its result.
+ * List the groups that actually exist there — a name mismatch is by far the
+ * likeliest cause, and without this the only way to find the right name is to
+ * guess and redeploy.
+ */
+async function describeSiteGroups(
+  client: { acquireToken: () => Promise<string> },
+  siteUrl: string,
+  expected: string,
+): Promise<string> {
+  try {
+    const token = await client.acquireToken();
+    const res = await fetch(`${siteUrl}/_api/web/sitegroups?$select=Title`, {
+      headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return `Could not list groups on ${siteUrl} — HTTP ${res.status}.`;
+    const titles: string[] = ((await res.json()).value || []).map((g: { Title: string }) => g.Title);
+    if (titles.includes(expected)) {
+      return `The group "${expected}" does exist there, so this is a membership problem, not a naming one.`;
+    }
+    return `That site has no group named "${expected}". It has: ${titles.map((t) => `"${t}"`).join(", ")}.`;
+  } catch (e) {
+    return `Could not list groups on ${siteUrl}: ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
+
 const DEFAULT_COMPANIES = [
   "PMW INDUSTRIES SDN BHD",
   "PMW CONCRETE INDUSTRIES SDN BHD",
@@ -596,7 +625,7 @@ export default function AdminFormBuilder() {
   const [provOk, setProvOk] = useState(false);
   const [provErr, setProvErr] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
-  const [accessDenied, setAccessDenied] = useState(false);
+  const [accessDenied, setAccessDenied] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ Id?: string; Title: string } | null>(null);
   const [hardDeleteConfirm, setHardDeleteConfirm] = useState<{ Id?: string; Title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -622,8 +651,8 @@ export default function AdminFormBuilder() {
 
   useEffect(() => {
     if (accessDenied) {
-      showToast("Access denied. You need Form Builder Superuser permissions. Redirecting to dashboard.", "err");
-      setAccessDenied(false);
+      showToast(accessDenied, "err");
+      setAccessDenied(null);
     }
   }, [accessDenied, showToast]);
 
@@ -699,7 +728,19 @@ export default function AdminFormBuilder() {
         : Promise.resolve(true),
     ]).then(async ([admin, builderSuperuser, mayUseTargetSite]) => {
       if (!admin || !builderSuperuser || !mayUseTargetSite) {
-        setAccessDenied(true);
+        // Name the check that actually failed. The redirect below unmounts the
+        // toast almost immediately, so the console line is the one that survives.
+        const missing = [
+          !admin && `"${SP_STATIC.adminGroup}" on ${resolveSite(HOME_SITE_KEY).label}`,
+          !builderSuperuser && `"${SP_STATIC.formBuilderSuperuserGroup}" on ${resolveSite(HOME_SITE_KEY).label}`,
+          !mayUseTargetSite && `"${targetGroup}" on ${activeSite.label}`,
+        ].filter(Boolean).join(" · ");
+        let detail = `Form builder access denied — not a member of: ${missing}.`;
+        if (!mayUseTargetSite && targetGroup) {
+          detail += ` ${await describeSiteGroups(targetClient, activeSite.url, targetGroup)}`;
+        }
+        console.error(detail);
+        setAccessDenied(detail);
         setTimeout(() => navigate("/user/dashboard"), 200);
         return;
       }
