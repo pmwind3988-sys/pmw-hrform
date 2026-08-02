@@ -8,6 +8,11 @@ import WarningIcon from "@mui/icons-material/Warning";
 
 interface PublicLinkDisplayProps {
   slug: string;
+  /**
+   * Origin of the deployment that serves this form — not necessarily this one,
+   * since the builder can author for a second site. See `src/config/sites.ts`.
+   */
+  appOrigin: string;
   publicToken: string;
   tokenExpiresAt: string;
   onTokenChange: (token: string) => void;
@@ -16,6 +21,7 @@ interface PublicLinkDisplayProps {
 
 export default function PublicLinkDisplay({
   slug,
+  appOrigin,
   publicToken,
   tokenExpiresAt,
   onTokenChange,
@@ -24,7 +30,7 @@ export default function PublicLinkDisplay({
   const [copied, setCopied] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
 
-  const url = `${window.location.origin}/form/${slug}?eval=${publicToken}`;
+  const url = `${appOrigin}/form/${slug}?eval=${publicToken}`;
 
   const handleCopy = async () => {
     try {

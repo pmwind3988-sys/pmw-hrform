@@ -34,8 +34,10 @@ body {
     0 2px 4px -1px rgba(0, 120, 212, 0.12),
     0 10px 24px rgba(26, 31, 43, 0.08);
   --fb-shadow: var(--fb-shadow-border);
+  /* Aligned to the shell's 6/10/14 scale so the tool panels reached from the
+     Tools menu share the workspace's geometry rather than their own. */
   --fb-radius-card: 10px;
-  --fb-radius-control: 8px;
+  --fb-radius-control: 6px;
   --fb-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 

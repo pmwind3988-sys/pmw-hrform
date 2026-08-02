@@ -1216,7 +1216,7 @@ function FormSheet({ fields, selectedId, onSelect, onRemove, onDuplicate, onReor
             </div>
           ) : (
             <>
-              <button type="button" className="bx-btn bx-btn-primary" style={{ height: 44, padding: "0 30px", fontSize: 17 }} disabled title="This is how the submit button will look to employees">
+              <button type="button" className="bx-btn bx-btn-primary" style={{ height: 44, padding: "0 30px", fontSize: 15.5 }} disabled title="This is how the submit button will look to employees">
                 Submit
               </button>
               <span className="bx-meta">

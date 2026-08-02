@@ -1626,8 +1626,21 @@ export async function ensureDashboardBackgroundSettingsList(token: string): Prom
   await ensureListExists(token, 'AdminPanelSettings');
 }
 
+/**
+ * The lists the form builder itself reads and writes, and the only ones it may
+ * provision.
+ *
+ * `AdminPanelSettings` and the career portal cards are owned by other pages,
+ * which are fixed to the home site and already provision them on demand. The
+ * builder is the one screen that can be pointed at another site, so creating
+ * them from here put an HR-only list on that site the first time the builder
+ * opened there — lists nobody asked for, on a site that has no page to use them.
+ */
+const BUILDER_LIST_TITLES = ['Master Form', 'Approvers', 'Web Form Versions', 'Form Builder Log'] as const;
+
 export async function bootstrapSystemLists(token: string, onLog?: (msg: string, type: string) => void): Promise<void> {
-  for (const [title, schema] of Object.entries(LIST_SCHEMAS)) {
+  for (const title of BUILDER_LIST_TITLES) {
+    const schema = LIST_SCHEMAS[title];
     onLog?.(`Checking "${title}"…`, 'info');
     await ensureListSchema(token, {
       title,

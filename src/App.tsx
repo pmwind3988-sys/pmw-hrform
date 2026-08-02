@@ -290,6 +290,7 @@ function isPublicRoutePath(pathname: string): boolean {
     pathname === "/careers" ||
     pathname.startsWith("/form/") ||
     pathname.startsWith("/eval/") ||
+    pathname.startsWith("/approval/") ||
     pathname.startsWith("/career-portal/") ||
     pathname.startsWith("/careers/")
   );
@@ -1311,6 +1312,17 @@ export default function App() {
     </ErrorBoundary>
   );
 
+  // Mounted under both /eval/* and /approval/*. EvaluationPage resolves the layer
+  // type from the data, so one component serves both; the prefix only tells the
+  // recipient which of the two they were asked for.
+  const workflowActionInner = (
+    <ErrorBoundary>
+      <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+        <LazyRoute load={loadEvaluationPage} fallback={<LoadingScreen status="Loading evaluation..." />} />
+      </Box>
+    </ErrorBoundary>
+  );
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -1462,26 +1474,20 @@ export default function App() {
               </AdminGuard>
             }
           />
-          <Route
-            path="/eval/:token"
-            element={
-              <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <LazyRoute load={loadEvaluationPage} fallback={<LoadingScreen status="Loading evaluation..." />} />
-                </Box>
-              </ErrorBoundary>
-            }
-          />
-          <Route
-            path="/eval/:formSlug/:responseId/:layerNumber"
-            element={
-              <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <LazyRoute load={loadEvaluationPage} fallback={<LoadingScreen status="Loading evaluation..." />} />
-                </Box>
-              </ErrorBoundary>
-            }
-          />
+          {/*
+            DO NOT REMOVE the /eval/* routes when they start to look redundant
+            next to /approval/*. Approval-layer links were sent as /eval/... for
+            the whole life of the app before the split, and scheduled evaluation
+            emails persist their reviewLink into the SharePoint
+            WorkflowEmailSchedule column — api/workflow-email-cron.ts re-sends
+            that stored string verbatim, it never rebuilds the URL. With
+            three-month scheduling, /eval/... links written today are still
+            being posted months from now. These routes outlive the split.
+          */}
+          <Route path="/eval/:token" element={workflowActionInner} />
+          <Route path="/eval/:formSlug/:responseId/:layerNumber" element={workflowActionInner} />
+          <Route path="/approval/:token" element={workflowActionInner} />
+          <Route path="/approval/:formSlug/:responseId/:layerNumber" element={workflowActionInner} />
           <Route
             path="/career-portal"
             element={

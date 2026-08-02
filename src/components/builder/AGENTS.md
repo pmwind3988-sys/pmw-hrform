@@ -6,7 +6,7 @@
 | Task | File | Notes |
 |------|------|-------|
 | Main builder UI | `FormBuilder.tsx` | Two-pane workspace: palette (2 tabs) + WYSIWYG form sheet + properties dock. Deferred tool panels open via the `toolCommand` prop raised by the shell's Tools / Preview menus. |
-| Workspace chrome & tokens | `BuilderShell.css`, `builderTheme.ts` | All `--bx-*` tokens and `bx-` classes, scoped under `.bx-root`. Radius 0, Barlow / Barlow Condensed. |
+| Workspace chrome & tokens | `BuilderShell.css`, `builderTheme.ts` | All `--bx-*` tokens and `bx-` classes, scoped under `.bx-root`. Public Sans (one family), radius 6/10/14, `--bx-line-field` on every control edge. |
 | Field-type icons | `BuilderIcons.tsx` | One thin-stroke inline SVG per type (`<Icon>` / `<FieldIcon>`), replacing the emoji values in `QUESTION_TYPES`. |
 | Palette taxonomy | `paletteTaxonomy.ts` | Re-buckets the 40 engine types into Basic/Advanced × 4 sections; also declares how each type renders in the sheet. Display-only — `createQuestion` still gets the untouched engine definition. |
 | Form list sidebar | `FormLibrary.tsx` | **Unused by `/admin/builder`** since the redesign — the form switcher dropdown in the brand header replaced it. Still exported from `index.ts`. |

@@ -4,13 +4,14 @@
  * THESIS: the builder is a controlled document, not a dashboard. It refuses the
  *   five-column workspace and shows two panes at most, with the form itself —
  *   not a stack of summary cards — in the middle.
- * OWN-WORLD: square corners everywhere, hairline dividers, condensed headings on
- *   a paper-grey desk, PMW blue reserved for state and action. A dark navy rail
- *   carries the four modes.
+ * OWN-WORLD: the grammar of official form systems. One family — Public Sans, the
+ *   USWDS face — at four weights; softened geometry (6/10/14px); legible field
+ *   borders that state where a control begins; a paper-grey desk; PMW blue
+ *   reserved for state and action. A dark navy rail carries the four modes.
  *
- * Roles map the `industry-tokens.css` handoff ramp onto the PMW logo palette that
- * PRODUCT.md pins (blue for actions/focus/active nav). The layout is the
- * deliverable, the hue stays PMW.
+ * Roles map onto the PMW logo palette that PRODUCT.md pins (blue for
+ * actions/focus/active nav). Values here mirror `BuilderShell.css` `--bx-*` for
+ * the inline-style call sites; change both together.
  */
 export const B = {
   /** Ground behind panels and inputs. */
@@ -40,8 +41,15 @@ export const B = {
   n700: "#4E5866",
   n800: "#363E4A",
 
-  divider: "rgba(26,31,43,0.16)",
-  hairline: "rgba(26,31,43,0.09)",
+  divider: "rgba(26,31,43,0.11)",
+  hairline: "rgba(26,31,43,0.06)",
+  /** Interactive-control edges. Separators may be faint; these may not. */
+  lineField: "#8A929E",
+
+  radiusSm: "6px",
+  radiusMd: "10px",
+  radiusLg: "14px",
+  radiusPill: "999px",
 
   danger: "#C62828",
   dangerPale: "#F8E4E4",
@@ -49,12 +57,14 @@ export const B = {
   warnPale: "#FFF4CE",
   ok: "#107C10",
 
-  shadowSm: "0 1px 2px rgba(26,31,43,0.14)",
-  shadowMd: "0 3px 10px rgba(26,31,43,0.16)",
-  shadowLg: "0 12px 32px rgba(26,31,43,0.22)",
+  shadowSm: "0 1px 2px rgba(26,31,43,0.06), 0 1px 3px rgba(26,31,43,0.09)",
+  shadowMd: "0 2px 4px rgba(26,31,43,0.06), 0 6px 16px rgba(26,31,43,0.10)",
+  shadowLg: "0 4px 10px rgba(26,31,43,0.08), 0 18px 44px rgba(26,31,43,0.16)",
 
-  fontHeading: "'Barlow Condensed','Barlow Semi Condensed','Segoe UI Semibold',var(--pmw-font-main)",
-  fontBody: "'Barlow',var(--pmw-font-main)",
+  /** One family; hierarchy is size, weight, colour and space — not width. */
+  fontBody: "'Public Sans','Segoe UI',var(--pmw-font-main)",
+  /** Retained so existing call sites keep compiling; same stack by design. */
+  fontHeading: "'Public Sans','Segoe UI',var(--pmw-font-main)",
 } as const;
 
 export type BuilderMode = "build" | "flow" | "settings" | "publish";

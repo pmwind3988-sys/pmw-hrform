@@ -8,6 +8,7 @@ import {
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
+import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -585,9 +586,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
         const publicToken = String(notificationNextLayer.publicToken || "").trim();
-        const reviewLink = notificationNextLayer.authMode === "public" && publicToken
-          ? `${appBaseUrl}/eval/${encodeURIComponent(publicToken)}?item=${safeResponseItemId}`
-          : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${safeResponseItemId}/${nextLayerNumber}`;
+        const reviewLink = buildWorkflowReviewLink({
+          baseUrl: appBaseUrl,
+          layerType: String(notificationNextLayer.type || ""),
+          authMode: String(notificationNextLayer.authMode || ""),
+          publicToken,
+          formSlug,
+          responseItemId: safeResponseItemId,
+          layerNumber: nextLayerNumber,
+        });
         try {
           const layerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
           const totalLayerCount = activeLayers.length;

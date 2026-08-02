@@ -22,6 +22,11 @@ type DraftValue = string | string[] | boolean;
 interface PrefilledQrPanelProps {
   surveyJson: SurveyJson | null;
   slug: string;
+  /**
+   * Origin of the deployment that serves this form — not necessarily this one,
+   * since the builder can author for a second site. See `src/config/sites.ts`.
+   */
+  appOrigin: string;
   canGenerate: boolean;
   /** Publish profile this QR targets. Defaults to the live/default profile. */
   publishKey?: string;
@@ -78,7 +83,7 @@ function inputTypeForField(field: FormBuilderField): string {
   return "text";
 }
 
-export default function PrefilledQrPanel({ surveyJson, slug, canGenerate, publishKey, publishLabel }: PrefilledQrPanelProps) {
+export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGenerate, publishKey, publishLabel }: PrefilledQrPanelProps) {
   const fields = getPrefillEligibleFields(surveyJson, flattenQuestions);
   const targetPublishKey = normalizePublishKey(publishKey);
   const isDefaultProfile = targetPublishKey === DEFAULT_PUBLISH_KEY;
@@ -156,7 +161,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, canGenerate, publis
       return;
     }
     const payload: PrefilledQrPayload = { v: 1, values: nextValues, locked: nextLocked };
-    const url = new URL(`/form/${slug}`, window.location.origin);
+    const url = new URL(`/form/${slug}`, appOrigin);
     // Point the QR at this specific profile so it loads the correct version +
     // workflow. The default/live profile needs no param (it owns /form/{slug}).
     if (!isDefaultProfile) url.searchParams.set("publish", targetPublishKey);

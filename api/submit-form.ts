@@ -15,6 +15,7 @@ import {
   deleteDocLibraryFile,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
+import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
 import {
@@ -1523,9 +1524,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               totalLayers,
             });
           } else {
-            const reviewLink = firstLayer.authMode === "public" && firstLayer.publicToken
-              ? `${appBaseUrl}/eval/${encodeURIComponent(firstLayer.publicToken)}?item=${encodeURIComponent(parentId)}`
-              : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${encodeURIComponent(parentId)}/${firstLayer.layerNumber}`;
+            const reviewLink = buildWorkflowReviewLink({
+              baseUrl: appBaseUrl,
+              layerType: firstLayer.type,
+              authMode: firstLayer.authMode,
+              publicToken: firstLayer.publicToken,
+              formSlug,
+              responseItemId: parentId,
+              layerNumber: firstLayer.layerNumber,
+            });
             await scheduleOrDeliverWorkflowEmail(
               token,
               buildWorkflowActionEmail({

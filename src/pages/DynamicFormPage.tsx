@@ -30,6 +30,7 @@ import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
+import { buildWorkflowReviewLink } from "../utils/workflowLink";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -1441,7 +1442,15 @@ export default function DynamicFormPage() {
             // Manual-paper workflow notices are sent with the generated PDF below.
           } else if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
             const reviewLink = formSlug
-              ? `${baseUrl}/eval/${encodeURIComponent(formSlug)}/${result.Id}/1`
+              ? buildWorkflowReviewLink({
+                  baseUrl,
+                  layerType: layerConfigParsed.layers[0].type,
+                  authMode: layerConfigParsed.layers[0].authMode,
+                  publicToken: layerConfigParsed.layers[0].publicToken,
+                  formSlug,
+                  responseItemId: result.Id,
+                  layerNumber: 1,
+                })
               : undefined;
             await triggerApprovalNotification(token, {
               formTitle: cfg.Title as string,

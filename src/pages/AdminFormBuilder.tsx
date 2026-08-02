@@ -58,7 +58,7 @@ import {
   resetActiveBuilderSite,
   getActiveBuilderSiteUrl,
 } from "../utils/formBuilderSP";
-import { resolveSite, availableSites, isSiteKey, HOME_SITE_KEY, type SiteKey } from "../config/sites";
+import { resolveSite, availableSites, isSiteKey, siteAppOrigin, HOME_SITE_KEY, type SiteKey } from "../config/sites";
 
 /**
  * `isGroupMember` returns false for a missing group, a 403 and a network error
@@ -538,6 +538,10 @@ export default function AdminFormBuilder() {
     }
   }, [siteKey]);
   const isSecondarySite = siteKey !== HOME_SITE_KEY;
+  // Every link this page hands out belongs to the deployment that serves the
+  // target site's forms, not to the one the builder is open on. Derived from the
+  // URL like the site key itself, so it can never disagree with the banner.
+  const appOrigin = activeSite ? siteAppOrigin(activeSite) : window.location.origin;
 
   // Bind the SharePoint layer to the requested site before anything reads it,
   // and put it back on the way out so a later in-app navigation cannot inherit
@@ -1225,10 +1229,10 @@ export default function AdminFormBuilder() {
     const normalized = normalizePublishKey(publishKey);
     const path = `/form/${meta.slug}${normalized === DEFAULT_PUBLISH_KEY ? "" : `?publish=${normalized}`}`;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${path}`);
+      await navigator.clipboard.writeText(`${appOrigin}${path}`);
       showToast("Profile link copied.", "ok");
     } catch {
-      showToast(path, "info");
+      showToast(`${appOrigin}${path}`, "info");
     }
   };
 
@@ -1737,6 +1741,7 @@ export default function AdminFormBuilder() {
           <Icon name="doc" size={13} strokeWidth={1.8} />
           <span>
             Editing forms on <strong>{activeSite.label}</strong> — changes here do not affect {resolveSite(HOME_SITE_KEY).label}.
+            {" "}Links open on <strong>{appOrigin.replace(/^https?:\/\//, "")}</strong>.
           </span>
           <button type="button" className="bx-site-banner-exit" onClick={() => navigate("/admin/builder")}>
             Back to {resolveSite(HOME_SITE_KEY).label}
@@ -1807,7 +1812,7 @@ export default function AdminFormBuilder() {
                       onClick={() => { setSwitcherOpen(false); void loadForEdit(f as unknown as Record<string, unknown>); }}
                     >
                       <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: "block", fontFamily: "var(--bx-head)", fontWeight: 600, fontSize: 17, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.Title}</span>
+                        <span style={{ display: "block", fontWeight: 600, fontSize: 15, letterSpacing: "-0.006em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.Title}</span>
                         <span style={{ display: "flex", gap: 9, alignItems: "center", marginTop: 2 }}>
                           <span className="bx-meta bx-num">{f.FormID || "No form ID"}</span>
                           <span className="bx-meta">v{f.CurrentVersion || "1.0"}</span>
@@ -1880,15 +1885,15 @@ export default function AdminFormBuilder() {
         <div style={{ position: "relative", display: "flex", alignItems: "center", paddingRight: 8 }}>
           <button
             type="button"
-            className="bx-navbtn"
+            className="bx-navbtn is-icon"
             onClick={() => { setToolsOpen(o => !o); setSwitcherOpen(false); setPreviewMenuOpen(false); }}
             aria-expanded={toolsOpen}
             aria-haspopup="true"
             aria-label="Tools"
             title="Templates, translations, data sources, permissions and the raw survey JSON"
           >
-            <Icon name="wrench" size={15} strokeWidth={1.6} />
-            <span className="bx-navitem-label">Tools</span>
+            <Icon name="wrench" size={16} strokeWidth={1.6} />
+            <span className="bx-sr">Tools</span>
           </button>
           {toolsOpen && (
             <div className="bx-menu">
@@ -1910,18 +1915,18 @@ export default function AdminFormBuilder() {
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "0 16px 0 4px" }}>
           <button
             type="button"
-            className="bx-navbtn"
+            className="bx-navbtn is-icon"
             onClick={() => { setPreviewMenuOpen(o => !o); setToolsOpen(false); setSwitcherOpen(false); }}
             aria-expanded={previewMenuOpen}
             aria-haspopup="true"
             aria-label="Preview"
             title="Open a live preview of this form"
           >
-            <Icon name="eye" size={15} strokeWidth={1.6} />
-            <span className="bx-navitem-label">Preview</span>
+            <Icon name="eye" size={16} strokeWidth={1.6} />
+            <span className="bx-sr">Preview</span>
           </button>
           {previewMenuOpen && (
-            <div className="bx-menu" style={{ width: 230, right: 96 }}>
+            <div className="bx-menu" style={{ width: 230, right: "auto", left: 0 }}>
               <div className="bx-menu-group">
                 <div className="bx-eyebrow bx-eyebrow-sm" style={{ marginBottom: 5 }}>Live preview</div>
                 {([["preview-desktop", "Desktop"], ["preview-tablet", "Tablet"], ["preview-mobile", "Mobile"]] as const).map(([key, label]) => (
@@ -1935,12 +1940,16 @@ export default function AdminFormBuilder() {
           {meta.slug ? (
             <a
               className="bx-navbtn is-solid"
-              href={`/form/${meta.slug}`}
+              href={`${appOrigin}/form/${meta.slug}`}
               target="_blank"
               rel="noreferrer"
-              title={`Open /form/${meta.slug} in a new tab`}
+              aria-label="Access form"
+              title={`Open ${appOrigin}/form/${meta.slug} in a new tab`}
               style={{ textDecoration: "none" }}
             >
+              {/* The label hides at ≤780px, so the name lives on aria-label —
+                  a solid icon-only button with only a title has no accessible
+                  name at all. */}
               <span className="bx-navitem-label">Access form</span>
               <Icon name="external" size={14} strokeWidth={1.6} />
             </a>
@@ -1949,6 +1958,7 @@ export default function AdminFormBuilder() {
               type="button"
               className="bx-navbtn is-solid"
               disabled
+              aria-label="Access form"
               title="Publish this form to give it a public route"
             >
               <span className="bx-navitem-label">Access form</span>
@@ -2046,6 +2056,7 @@ export default function AdminFormBuilder() {
                   siteUsers={siteUsers}
                   formFields={layerFieldOptions}
                   slug={meta.slug}
+                  appOrigin={appOrigin}
                   token={spToken || undefined}
                 />
               </div>
@@ -2198,7 +2209,7 @@ export default function AdminFormBuilder() {
                 <button
                   type="button"
                   className="bx-btn bx-btn-primary"
-                  style={{ height: 50, padding: "0 26px", fontSize: 18 }}
+                  style={{ height: 50, padding: "0 26px", fontSize: 16 }}
                   onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
                   disabled={publishBlocked}
                 >
@@ -2382,6 +2393,7 @@ export default function AdminFormBuilder() {
                   <PrefilledQrPanel
                     surveyJson={surveyJson}
                     slug={meta.slug}
+                    appOrigin={appOrigin}
                     canGenerate={isEditing && !isDraft && !!meta.slug && !viewingOld}
                     publishKey={meta.publishKey}
                     publishLabel={meta.publishLabel}
@@ -2503,6 +2515,7 @@ export default function AdminFormBuilder() {
             <PrefilledQrPanel
               surveyJson={qrProfile.surveyJson}
               slug={meta.slug}
+              appOrigin={appOrigin}
               canGenerate={!!meta.slug}
               publishKey={qrProfile.publishKey}
               publishLabel={qrProfile.publishLabel}

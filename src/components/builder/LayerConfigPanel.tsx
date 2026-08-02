@@ -37,6 +37,11 @@ interface LayerConfigPanelProps {
   siteUsers: { email: string; name: string }[];
   formFields: LayerFieldOption[];
   slug: string;
+  /**
+   * Origin of the deployment that serves this form — not necessarily this one,
+   * since the builder can author for a second site. See `src/config/sites.ts`.
+   */
+  appOrigin: string;
   /** SharePoint token, used to manage this profile's approver directory. */
   token?: string;
 }
@@ -318,6 +323,7 @@ export default function LayerConfigPanel({
   siteUsers,
   formFields,
   slug,
+  appOrigin,
   token,
 }: LayerConfigPanelProps) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
@@ -1034,6 +1040,7 @@ export default function LayerConfigPanel({
         {layer.authMode === "public" && (
           <PublicLinkDisplay
             slug={slug}
+            appOrigin={appOrigin}
             publicToken={layer.publicToken || ""}
             tokenExpiresAt={layer.tokenExpiresAt || ""}
             onTokenChange={t => patchLayer(idx, { publicToken: t })}
@@ -1266,6 +1273,7 @@ export default function LayerConfigPanel({
         {layer.authMode === "public" && (
           <PublicLinkDisplay
             slug={slug}
+            appOrigin={appOrigin}
             publicToken={layer.publicToken || ""}
             tokenExpiresAt={layer.tokenExpiresAt || ""}
             onTokenChange={t => patchBranchLayer(bi, li, { publicToken: t })}

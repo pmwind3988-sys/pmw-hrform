@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-08-01T12:51:30.559Z",
+        "reason": "Matches Microsoft 365 system faces; shared with pmw-hrform"
+      }
+    ]
+  }
+}

@@ -24,6 +24,7 @@ import type { LifecycleStage } from "../../utils/submissionLifecycle";
 import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany } from "../../utils/companySelection";
+import { buildWorkflowReviewLink } from "../../utils/workflowLink";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
@@ -1707,9 +1708,15 @@ export default function ApprovalDashboard() {
       const cfg = await getFormConfigByTitle(token, item.Title) as FormConfig | null;
       const publicToken = currentLayer.publicToken || "";
       const formSlug = valueToText(cfg?.Slug);
-      const reviewLink = currentLayer.authMode === "public" && publicToken
-        ? `${window.location.origin}/eval/${encodeURIComponent(publicToken)}?item=${item.Id}`
-        : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${item.Id}/${currentLayerNumber}`;
+      const reviewLink = buildWorkflowReviewLink({
+        baseUrl: window.location.origin,
+        layerType: currentLayer.type,
+        authMode: currentLayer.authMode,
+        publicToken,
+        formSlug,
+        responseItemId: item.Id,
+        layerNumber: currentLayerNumber,
+      });
 
       const currentLayerStatus = valueToText(rawItem[`L${currentLayerNumber}_Status`]);
       const isManualPaperEmail = isManualPaperWorkflowStatus(currentLayerStatus) || wantsManualPaper;
@@ -1974,9 +1981,15 @@ export default function ApprovalDashboard() {
       const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
       const publicToken = currentLayer.publicToken || "";
       const formSlug = valueToText(cfg?.Slug);
-      const reviewLink = currentLayer.authMode === "public" && publicToken
-        ? `${window.location.origin}/eval/${encodeURIComponent(publicToken)}?item=${selectedItem.Id}`
-        : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${selectedItem.Id}/${currentLayerNumber}`;
+      const reviewLink = buildWorkflowReviewLink({
+        baseUrl: window.location.origin,
+        layerType: currentLayer.type,
+        authMode: currentLayer.authMode,
+        publicToken,
+        formSlug,
+        responseItemId: selectedItem.Id,
+        layerNumber: currentLayerNumber,
+      });
       const updatedAt = new Date().toISOString();
       const schedule = setScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, {
         layer: currentLayerNumber,

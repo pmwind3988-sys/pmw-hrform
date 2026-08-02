@@ -1,17 +1,29 @@
 /* ==========================================================================
    BuilderShell.css — /admin/builder workspace chrome.
 
-   FIRST VIEWPORT: brand header (56px) over a navy mode rail (52px); below it
-   two panes at most — field palette left, the real form sheet centred on a
-   sunken desk, properties sliding in only when a field is selected.
-   FORM: square-cornered document tooling. Radius 0 everywhere, hairline
-   dividers, condensed headings, PMW blue reserved for state and action.
+   THESIS: this is the tool that authors controlled documents, so it is built
+     from the grammar of official form systems — not the square blueprint
+     wireframe it replaces, and not the card-grid dashboard the category ships.
+   OWN-WORLD: Public Sans, the type system of the US Web Design System, at one
+     family and four weights; softened geometry (6/10/14px) on a paper-grey
+     desk; legible field borders that state where a control begins; PMW blue
+     held back for state and action; a navy rail carrying the four modes.
+   STORY: an HR admin returns to a form they already know, finds the field they
+     came for without reading chrome, changes it, and republishes.
+   FIRST VIEWPORT: brand header (56px) over the navy mode rail (52px); below it
+     two panes at most — field palette left, the real form sheet centred on the
+     desk, properties sliding in only when a field is selected.
+   FORM: official-forms grammar. Chosen directly rather than by concept roll —
+     composition, topology, content and function were all fixed by the request;
+     only the material rendition changed.
 
    Everything is prefixed `bx-` and scoped under `.bx-root` so no other screen
-   inherits the condensed type or the square edges.
+   inherits this type ramp or geometry.
    ========================================================================== */
 
-@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap");
+/* Three weights, all three used: 400 body, 600 UI/headings, 700 wordmark and
+   page titles. 500 was requested and never drawn, so it is not requested. */
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap");
 
 .bx-root {
   --bx-bg: #f2f4f7;
@@ -34,15 +46,35 @@
   --bx-n600: #667181;
   --bx-n700: #4e5866;
   --bx-n800: #363e4a;
-  --bx-divider: rgba(26, 31, 43, 0.16);
-  --bx-hairline: rgba(26, 31, 43, 0.09);
+  --bx-divider: rgba(26, 31, 43, 0.11);
+  --bx-hairline: rgba(26, 31, 43, 0.06);
+  /* Separators may be faint; the edge of an *interactive control* may not.
+     The old --bx-divider on a control read 1.35:1 against its own fill, well
+     under WCAG 1.4.11's 3:1 for component boundaries. Field edges get their
+     own token, pitched where USWDS — Public Sans's native system — pitches
+     them, and every input/select/secondary-button border points at it. */
+  --bx-line-field: #7f8794;
   --bx-danger: #c62828;
   --bx-warn: #b15c00;
-  --bx-sh-sm: 0 1px 2px rgba(26, 31, 43, 0.14);
-  --bx-sh-md: 0 3px 10px rgba(26, 31, 43, 0.16);
-  --bx-sh-lg: 0 12px 32px rgba(26, 31, 43, 0.22);
-  --bx-head: "Barlow Condensed", "Barlow Semi Condensed", "Segoe UI Semibold", var(--pmw-font-main);
-  --bx-body: "Barlow", var(--pmw-font-main);
+
+  /* Softened geometry. The sheet and dialog read as paper, controls as chips. */
+  --bx-r-sm: 6px;
+  --bx-r-md: 10px;
+  --bx-r-lg: 14px;
+  --bx-r-pill: 999px;
+
+  /* Offset + soft blur, never a zero-offset halo. Lighter than the wireframe
+     world's shadows because the geometry now carries the separation. */
+  --bx-sh-sm: 0 1px 2px rgba(26, 31, 43, 0.06), 0 1px 3px rgba(26, 31, 43, 0.09);
+  --bx-sh-md: 0 2px 4px rgba(26, 31, 43, 0.06), 0 6px 16px rgba(26, 31, 43, 0.1);
+  --bx-sh-lg: 0 4px 10px rgba(26, 31, 43, 0.08), 0 18px 44px rgba(26, 31, 43, 0.16);
+
+  /* One family. Hierarchy is size, weight, colour and space — not width.
+     Public Sans is a workhorse UI face with open apertures and true tabular
+     figures; it is materially wider than the Barlow Condensed it replaces, so
+     every display size below steps down to hold the same measure. */
+  --bx-body: "Public Sans", "Segoe UI", var(--pmw-font-main);
+  --bx-head: var(--bx-body);
 
   height: 100vh;
   display: flex;
@@ -53,7 +85,7 @@
   font-family: var(--bx-body) !important;
   font-size: 15px;
   line-height: 1.55;
-  font-weight: 500;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -71,32 +103,15 @@
   font-family: var(--bx-body) !important;
 }
 
-/* Anything that carries the condensed face and is *also* a form control needs
-   to out-rank the rule above, so these are listed once, scoped, together. */
-.bx-root .bx-wordmark,
-.bx-root .bx-switcher-label,
-.bx-root .bx-navitem,
-.bx-root .bx-navbtn,
-.bx-root .bx-eyebrow,
-.bx-root .bx-btn,
-.bx-root .bx-palette-tab,
-.bx-root .bx-sheet-title,
-.bx-root .bx-disc-title,
-.bx-root .bx-subdisclosure,
-.bx-root .bx-typecard-label,
-.bx-root .bx-advcard-title,
-.bx-root .bx-dialog-title,
-.bx-root .bx-headfont {
-  font-family: var(--bx-head) !important;
-}
-
+/* The second family is gone, so the block of `!important` overrides that used
+   to re-apply the condensed face to form controls went with it — everything
+   now inherits one stack. Headings keep only their weight and tracking. */
 .bx-root h1,
 .bx-root h2,
 .bx-root h3,
 .bx-root .bx-headfont {
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  letter-spacing: 0.005em;
+  letter-spacing: -0.011em;
   margin: 0;
 }
 
@@ -179,11 +194,10 @@
 }
 
 .bx-wordmark {
-  font-family: var(--bx-head) !important;
-  font-weight: 600;
-  font-size: 22px;
+  font-weight: 700;
+  font-size: 18px;
   line-height: 1;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.017em;
   white-space: nowrap;
 }
 
@@ -273,19 +287,21 @@
   max-width: 300px;
   padding: 0 12px;
   background: transparent;
-  border: 1.5px solid var(--bx-divider);
+  border: 1px solid var(--bx-line-field);
+  border-radius: var(--bx-r-sm);
   color: var(--bx-text);
   cursor: pointer;
-  transition: border-color 0.14s ease;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
 }
 .bx-switcher:hover {
   border-color: var(--bx-a800);
+  background: var(--bx-a100);
 }
 .bx-switcher-label {
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1;
+  letter-spacing: -0.011em;
   white-space: nowrap;
   max-width: 250px;
   overflow: hidden;
@@ -299,8 +315,10 @@
   width: 330px;
   max-width: calc(100vw - 40px);
   background: var(--bx-panel);
-  border: 1.5px solid var(--bx-a800);
+  border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-md);
   box-shadow: var(--bx-sh-lg);
+  overflow: hidden;
   z-index: 60;
   animation: bx-fade-up 0.12s ease;
 }
@@ -311,7 +329,7 @@
   gap: 10px;
   padding: 11px 14px;
   background: var(--bx-a100);
-  border-bottom: 2px solid var(--bx-a800);
+  border-bottom: 1px solid var(--bx-a300);
 }
 .bx-dropdown-list {
   max-height: 340px;
@@ -344,7 +362,8 @@
   display: inline-flex;
   align-items: center;
   height: 20px;
-  padding: 0 7px;
+  padding: 0 9px;
+  border-radius: var(--bx-r-pill);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -386,7 +405,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 13.5px;
+  font-size: 13px;
   white-space: nowrap;
   color: var(--bx-n700);
 }
@@ -413,14 +432,13 @@
   align-items: center;
   gap: 8px;
   height: 100%;
-  padding: 0 22px;
+  padding: 0 18px;
   border: none;
   background: transparent;
   cursor: pointer;
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 17px;
-  letter-spacing: 0.04em;
+  font-size: 14px;
+  letter-spacing: 0.005em;
   white-space: nowrap;
   color: var(--bx-a200);
   transition: background-color 0.14s ease, color 0.14s ease;
@@ -444,7 +462,7 @@
   display: flex;
   align-items: center;
   padding: 0 16px;
-  font-size: 13.5px;
+  font-size: 13px;
   white-space: nowrap;
   color: var(--bx-a300);
 }
@@ -455,14 +473,14 @@
   align-items: center;
   gap: 7px;
   height: 36px;
-  padding: 0 15px;
+  padding: 0 14px;
   background: transparent;
-  border: 1.5px solid rgba(242, 244, 247, 0.32);
+  border: 1px solid rgba(242, 244, 247, 0.38);
+  border-radius: var(--bx-r-sm);
   color: var(--bx-a100);
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 15px;
-  letter-spacing: 0.03em;
+  font-size: 13px;
+  letter-spacing: 0.002em;
   white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
@@ -474,7 +492,16 @@
   background: var(--bx-accent);
   border-color: var(--bx-accent);
   color: #fff;
-  padding: 0 18px;
+  padding: 0 16px;
+}
+/* Tools and Preview drop their labels: a wrench and an eye are unambiguous at
+   this size, and the two utilities reading as icons is what lets the one
+   labelled button beside them read as the primary action. The accessible name
+   moves to .bx-sr + title, never to the icon alone. */
+.bx-navbtn.is-icon {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
 }
 .bx-navbtn.is-solid:hover:not(:disabled) {
   background: var(--bx-a600);
@@ -492,7 +519,8 @@
   width: 310px;
   max-width: calc(100vw - 24px);
   background: var(--bx-panel);
-  border: 1.5px solid var(--bx-a800);
+  border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-md);
   box-shadow: var(--bx-sh-lg);
   color: var(--bx-text);
   padding: 6px;
@@ -511,17 +539,18 @@
   padding: 9px;
   background: transparent;
   border: none;
+  border-radius: var(--bx-r-sm);
   text-align: left;
   cursor: pointer;
   color: var(--bx-text);
-  font-size: 14.5px;
+  font-size: 14px;
 }
 .bx-menurow:hover,
 .bx-menurow:focus-visible {
   background: var(--bx-a100);
 }
 .bx-menurow-hint {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--bx-n600);
   white-space: nowrap;
 }
@@ -529,19 +558,19 @@
 /* ── Typography helpers ─────────────────────────────────────────────────── */
 
 .bx-eyebrow {
-  font-family: var(--bx-head) !important;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.16em;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--bx-a800);
 }
 .bx-eyebrow-sm {
-  font-size: 11.5px;
+  font-size: 10.5px;
 }
 .bx-h2 {
-  font-size: 40px;
-  line-height: 1.04;
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
 }
 .bx-lede {
   margin: 0;
@@ -553,7 +582,7 @@
   text-wrap: pretty;
 }
 .bx-meta {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--bx-n600);
 }
@@ -600,12 +629,14 @@
 .bx-card {
   background: var(--bx-panel);
   border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-md);
   padding: 22px 24px;
 }
 
 .bx-disclosure {
   background: var(--bx-panel);
   border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-md);
   margin-bottom: 10px;
 }
 .bx-disc-head {
@@ -621,19 +652,22 @@
   color: var(--bx-text);
   text-align: left;
 }
+.bx-disc-head {
+  border-radius: var(--bx-r-md);
+}
 .bx-disc-head:hover {
   background: var(--bx-a100);
 }
 .bx-disc-title {
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 16.5px;
+  line-height: 1.25;
+  letter-spacing: -0.011em;
   display: block;
 }
 .bx-disc-sub {
   display: block;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--bx-n700);
   margin-top: 2px;
@@ -657,7 +691,8 @@
   gap: 14px;
   padding: 13px 15px;
   margin-bottom: 8px;
-  border: 1.5px solid var(--bx-divider);
+  border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-sm);
   background: var(--bx-bg);
   flex-wrap: wrap;
 }
@@ -668,15 +703,18 @@
   display: block;
   margin-bottom: 14px;
 }
+/* Sentence case, not the tracked uppercase this world used to set on every
+   field. Uppercase strips word shape, which is the thing that makes a label
+   recognisable without reading it — the wrong trade in a form editor with
+   this many fields. Uppercase now survives only on eyebrows and tags. */
 .bx-field > label,
 .bx-label {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--bx-n700);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .bx-input {
@@ -684,11 +722,11 @@
   height: 38px;
   padding: 0 12px;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--bx-text);
-  background: var(--bx-bg);
-  border: 1.5px solid var(--bx-divider);
-  border-radius: 0;
+  background: var(--bx-white);
+  border: 1px solid var(--bx-line-field);
+  border-radius: var(--bx-r-sm);
   outline: none;
   transition: border-color 0.14s ease, box-shadow 0.14s ease;
 }
@@ -702,7 +740,7 @@ textarea.bx-input {
   color: var(--bx-n700);
 }
 .bx-input:hover:not(:disabled) {
-  border-color: var(--bx-n400);
+  border-color: var(--bx-n600);
 }
 .bx-input:focus {
   border-color: var(--bx-accent);
@@ -723,13 +761,12 @@ textarea.bx-input {
   justify-content: center;
   gap: 7px;
   height: 38px;
-  padding: 0 18px;
-  font-family: var(--bx-head) !important;
-  font-size: 16px;
+  padding: 0 17px;
+  font-size: 14.5px;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  border: 1.5px solid transparent;
-  border-radius: 0;
+  letter-spacing: -0.002em;
+  border: 1px solid transparent;
+  border-radius: var(--bx-r-sm);
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
@@ -744,8 +781,8 @@ textarea.bx-input {
   border-color: var(--bx-a600);
 }
 .bx-btn-secondary {
-  background: var(--bx-bg);
-  border-color: var(--bx-divider);
+  background: var(--bx-white);
+  border-color: var(--bx-line-field);
   color: var(--bx-text);
 }
 .bx-btn-secondary:hover:not(:disabled) {
@@ -768,7 +805,7 @@ textarea.bx-input {
 .bx-btn-sm {
   height: 32px;
   padding: 0 13px;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .bx-ghost {
@@ -777,14 +814,16 @@ textarea.bx-input {
   flex: none;
   display: grid;
   place-items: center;
-  background: var(--bx-bg);
-  border: 1.5px solid var(--bx-divider);
+  background: var(--bx-white);
+  border: 1px solid var(--bx-line-field);
+  border-radius: var(--bx-r-sm);
   color: var(--bx-n700);
   cursor: pointer;
-  transition: border-color 0.14s ease, color 0.14s ease;
+  transition: border-color 0.14s ease, color 0.14s ease, background-color 0.14s ease;
 }
 .bx-ghost:hover:not(:disabled) {
   border-color: var(--bx-a800);
+  background: var(--bx-a100);
   color: var(--bx-a800);
 }
 .bx-ghost:disabled {
@@ -814,7 +853,7 @@ textarea.bx-input {
 }
 .bx-check-hint {
   display: block;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--bx-n700);
   line-height: 1.5;
@@ -822,8 +861,10 @@ textarea.bx-input {
 
 .bx-seg {
   display: flex;
-  border: 1.5px solid var(--bx-divider);
-  background: var(--bx-bg);
+  border: 1px solid var(--bx-line-field);
+  border-radius: var(--bx-r-sm);
+  background: var(--bx-white);
+  overflow: hidden;
 }
 .bx-seg > button {
   flex: 1;
@@ -855,11 +896,13 @@ textarea.bx-input {
   padding: 56px 24px;
   text-align: center;
   border: 2px dashed var(--bx-a400);
+  border-radius: var(--bx-r-md);
   background: rgba(0, 120, 212, 0.05);
 }
 .bx-empty h3 {
-  font-size: 30px;
-  line-height: 1.05;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.021em;
   margin: 0 0 8px;
 }
 .bx-empty p {
@@ -902,12 +945,11 @@ textarea.bx-input {
   min-width: 0;
   background: transparent;
   border: none;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2.5px solid transparent;
   color: var(--bx-n700);
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 17px;
-  letter-spacing: 0.02em;
+  font-size: 14.5px;
+  letter-spacing: -0.002em;
   cursor: pointer;
   transition: color 0.14s ease, border-color 0.14s ease;
 }
@@ -962,16 +1004,18 @@ textarea.bx-input {
   align-items: center;
   gap: 9px;
   padding: 9px 10px;
-  background: var(--bx-bg);
-  border: 1.5px solid var(--bx-divider);
+  background: var(--bx-white);
+  border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-sm);
   color: var(--bx-text);
   text-align: left;
   cursor: grab;
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  transition: border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
 }
 .bx-pal-btn:hover {
-  border-color: var(--bx-a800);
+  border-color: var(--bx-a400);
   background: var(--bx-a100);
+  box-shadow: var(--bx-sh-sm);
 }
 .bx-pal-btn:active {
   cursor: grabbing;
@@ -1004,7 +1048,11 @@ textarea.bx-input {
   margin: 0 auto;
   background: var(--bx-panel);
   border: 1px solid var(--bx-divider);
-  box-shadow: var(--bx-sh-sm);
+  border-radius: var(--bx-r-lg);
+  /* Field rows run edge to edge, so the sheet has to clip them to its own
+     corners now that it has any. */
+  overflow: hidden;
+  box-shadow: var(--bx-sh-md);
 }
 .bx-sheet-head {
   display: flex;
@@ -1014,8 +1062,9 @@ textarea.bx-input {
   border-bottom: 1px solid var(--bx-divider);
 }
 .bx-sheet-iso {
-  font-size: 12px;
-  letter-spacing: 0.16em;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--bx-n600);
   margin-bottom: 8px;
@@ -1027,10 +1076,10 @@ textarea.bx-input {
   background: transparent;
   outline: none;
   padding: 0;
-  font-family: var(--bx-head) !important;
-  font-weight: 600;
-  font-size: 34px;
-  line-height: 1.1;
+  font-weight: 700;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.021em;
   color: var(--bx-text);
 }
 .bx-sheet-title::placeholder {
@@ -1051,7 +1100,9 @@ textarea.bx-input {
   position: relative;
   padding: 20px 34px;
   border-bottom: 1px solid var(--bx-divider);
-  border-left: 5px solid transparent;
+  /* Selection is carried by fill *and* bar, never colour alone — but the bar
+     is 3px, not the 5px slab the old wireframe world used. */
+  border-left: 3px solid transparent;
   cursor: pointer;
   transition: background-color 0.14s ease, border-left-color 0.14s ease;
 }
@@ -1099,15 +1150,16 @@ textarea.bx-input {
   gap: 6px;
   margin-top: 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--bx-danger);
 }
 
 .bx-wys {
   width: 100%;
   min-height: 40px;
-  border: 1.5px solid var(--bx-divider);
-  background: var(--bx-bg);
+  border: 1px solid var(--bx-line-field);
+  border-radius: var(--bx-r-sm);
+  background: var(--bx-white);
   padding: 8px 12px;
   font-size: 15px;
   font-weight: 400;
@@ -1146,18 +1198,21 @@ textarea.bx-input {
   height: 17px;
   flex: none;
   border: 1.5px solid var(--bx-n500);
+  border-radius: 3px;
 }
 .bx-wys-mark.is-round {
   border-radius: 50%;
 }
 .bx-wys-chip {
   padding: 7px 20px;
-  border: 1.5px solid var(--bx-n500);
+  border: 1px solid var(--bx-n500);
+  border-radius: var(--bx-r-pill);
   font-size: 14px;
   color: var(--bx-n700);
 }
 .bx-wys-nest {
   border: 1.5px dashed var(--bx-n400);
+  border-radius: var(--bx-r-md);
   background: var(--bx-bg);
 }
 .bx-wys-nest .bx-fieldrow {
@@ -1208,7 +1263,7 @@ textarea.bx-input {
   height: 52px;
   padding: 0 16px;
   background: var(--bx-a100);
-  border-bottom: 2px solid var(--bx-a800);
+  border-bottom: 1px solid var(--bx-a300);
 }
 .bx-propdock-body {
   flex: 1;
@@ -1222,7 +1277,8 @@ textarea.bx-input {
   gap: 11px;
   padding: 12px 13px;
   margin-bottom: 18px;
-  border: 1.5px solid var(--bx-a300);
+  border: 1px solid var(--bx-a300);
+  border-radius: var(--bx-r-md);
   background: var(--bx-a100);
 }
 .bx-typecard-mark {
@@ -1231,17 +1287,18 @@ textarea.bx-input {
   height: 32px;
   display: grid;
   place-items: center;
+  border-radius: var(--bx-r-sm);
   background: var(--bx-a800);
   color: var(--bx-bg);
 }
 .bx-typecard-label {
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 18px;
-  line-height: 1.2;
+  font-size: 15.5px;
+  line-height: 1.25;
+  letter-spacing: -0.011em;
 }
 .bx-typecard-name {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--bx-a800);
   font-variant-numeric: tabular-nums;
   word-break: break-all;
@@ -1257,24 +1314,25 @@ textarea.bx-input {
   border-top: 1px solid var(--bx-divider);
   cursor: pointer;
   color: var(--bx-text);
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 17px;
+  font-size: 15px;
+  letter-spacing: -0.006em;
 }
 .bx-advcard {
-  border: 1.5px solid var(--bx-divider);
+  border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-md);
   padding: 13px;
   margin-bottom: 10px;
   background: var(--bx-bg);
 }
 .bx-advcard-title {
-  font-family: var(--bx-head) !important;
   font-weight: 600;
-  font-size: 17px;
+  font-size: 15px;
+  letter-spacing: -0.006em;
   margin-bottom: 3px;
 }
 .bx-advcard-body {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--bx-n700);
   line-height: 1.55;
@@ -1286,9 +1344,12 @@ textarea.bx-input {
    own markup — the redesign only re-homes them. This strips the rounded corners
    they were drawn with so they sit inside the square world without a seam. */
 
+/* The world is no longer square, so this no longer flattens corners to 0 — it
+   normalises the legacy panels' assorted 4–14px radii onto this system's
+   --bx-r-sm so they sit inside it without a seam. Circles are exempt. */
 .bx-legacy,
-.bx-legacy *:not(.bx-spinner) {
-  border-radius: 0 !important;
+.bx-legacy *:not(.bx-spinner):not(.bx-tag):not([class*="round"]) {
+  border-radius: var(--bx-r-sm) !important;
 }
 .bx-legacy input[type="checkbox"],
 .bx-legacy input[type="radio"] {
@@ -1313,7 +1374,8 @@ textarea.bx-input {
   max-height: 84vh;
   overflow: auto;
   background: var(--bx-bg);
-  border: 1.5px solid var(--bx-a800);
+  border: 1px solid var(--bx-divider);
+  border-radius: var(--bx-r-lg);
   box-shadow: var(--bx-sh-lg);
   padding: 20px 22px;
 }
@@ -1321,10 +1383,10 @@ textarea.bx-input {
   width: min(460px, 100%);
 }
 .bx-dialog-title {
-  font-family: var(--bx-head) !important;
-  font-weight: 600;
-  font-size: 24px;
-  line-height: 1.2;
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: -0.017em;
 }
 
 .bx-toast {
@@ -1339,9 +1401,12 @@ textarea.bx-input {
   padding: 13px 17px;
   background: var(--bx-a900);
   color: var(--bx-a100);
+  border-radius: var(--bx-r-md);
   box-shadow: var(--bx-sh-lg);
-  font-size: 14.5px;
-  line-height: 1.5;
+  font-size: 14px;
+  /* Light-on-dark: a touch more leading and tracking, per the type system. */
+  line-height: 1.55;
+  letter-spacing: 0.006em;
   animation: bx-fade-up 0.16s ease;
 }
 
@@ -1385,8 +1450,8 @@ textarea.bx-input {
     display: none;
   }
   .bx-navitem {
-    padding: 0 14px;
-    font-size: 16px;
+    padding: 0 12px;
+    font-size: 13px;
   }
   .bx-palette {
     width: 208px;
@@ -1408,10 +1473,10 @@ textarea.bx-input {
     padding: 20px 18px 26px;
   }
   .bx-h2 {
-    font-size: 32px;
+    font-size: 25px;
   }
   .bx-sheet-title {
-    font-size: 27px;
+    font-size: 22px;
   }
 }
 
@@ -1448,7 +1513,7 @@ textarea.bx-input {
   }
   .bx-switcher-label {
     max-width: 140px;
-    font-size: 17px;
+    font-size: 15px;
   }
 }
 
