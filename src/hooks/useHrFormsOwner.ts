@@ -17,19 +17,30 @@ import { SP_STATIC } from "../utils/spConfig";
  */
 export function useHrFormsOwner(): boolean {
   const { instance, accounts } = useMsal();
-  const activeAccount = instance.getActiveAccount() ?? accounts[0];
-  const userEmail = activeAccount?.username?.toLowerCase() || "";
+  const activeAccount = instance.getActiveAccount() ?? accounts[0] ?? null;
+
+  // MSAL rebuilds the AccountInfo object on every read, so its identity changes
+  // on every render. This effect MUST key on a stable primitive — depending on
+  // the object re-runs the effect each render, and the reset below then flips
+  // resolved `true` back to `false`, re-rendering into an unbounded loop that
+  // fires a SharePoint request per pass. Only signed-in HR Forms Owners hit it:
+  // for everyone else the state never leaves `false`, so React bails out.
+  const accountKey = activeAccount?.homeAccountId || activeAccount?.username || "";
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    // Reset on account change so a switched-to account never inherits the
-    // previous one's answer while its own check is still in flight.
+    // Safe here precisely because accountKey only changes on a real account
+    // change: a switched-to account never inherits the previous answer.
     setIsOwner(false);
+    if (!accountKey) return;
 
     async function check() {
-      if (!activeAccount || !userEmail) return;
+      // Re-read rather than closing over the render-time object.
+      const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0];
+      const userEmail = account?.username?.toLowerCase() || "";
+      if (!account || !userEmail) return;
 
       try {
         const spSiteUrl = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -37,7 +48,7 @@ export function useHrFormsOwner(): boolean {
 
         const token = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(spSiteUrl).origin}/AllSites.Manage`],
-          account: activeAccount,
+          account,
         });
 
         const response = await fetchWithAuthRecovery(
@@ -59,7 +70,7 @@ export function useHrFormsOwner(): boolean {
     return () => {
       cancelled = true;
     };
-  }, [instance, activeAccount, userEmail]);
+  }, [instance, accountKey]);
 
   return isOwner;
 }

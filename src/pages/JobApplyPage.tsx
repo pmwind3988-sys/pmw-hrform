@@ -475,7 +475,12 @@ export default function JobApplyPage() {
   const profile = useUserProfile();
   const { instance, accounts } = useMsal();
   const activeAccount = instance.getActiveAccount() ?? accounts[0];
-  const userEmail = activeAccount?.username?.toLowerCase() || "";
+  // MSAL rebuilds AccountInfo on every read, so `activeAccount` has a new object
+  // identity each render. Effects must key on this stable string - depending on
+  // the object re-runs them every render, and any effect that then sets state
+  // re-renders into an unbounded fetch loop. Signed out the value is a stable
+  // undefined, which is why only signed-in sessions spin.
+  const accountKey = activeAccount?.homeAccountId || activeAccount?.username || "";
   const overrideRequested = searchParams.get("override") === "1";
 
   const [job, setJob] = useState<JobListing | null>(null);
@@ -525,19 +530,22 @@ export default function JobApplyPage() {
   useEffect(() => {
     let cancelled = false;
     async function checkDuplicate() {
-      if (!jobId || !userEmail) {
+      // Re-read rather than closing over the render-time object.
+      const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+      const email = account?.username?.toLowerCase() || "";
+      if (!jobId || !email) {
         setDuplicateChecking(false);
         return;
       }
       setDuplicateChecking(true);
       try {
-        if (!activeAccount) throw new Error("No signed-in account");
+        if (!account) throw new Error("No signed-in account");
         const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
         const accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: activeAccount,
+          account,
         });
-        const applications = await fetchMyApplications(userEmail, { accessToken });
+        const applications = await fetchMyApplications(email, { accessToken });
         if (!cancelled) {
           const applied = applications.some((app) => app.jobListingId === jobId);
           setAlreadyApplied(applied);
@@ -556,7 +564,7 @@ export default function JobApplyPage() {
     }
     void checkDuplicate();
     return () => { cancelled = true; };
-  }, [jobId, userEmail, adminOverrideMode, instance, activeAccount]);
+  }, [jobId, accountKey, adminOverrideMode, instance]);
 
   const form = useReactiveForm<FormValues>({
     name: { value: "", validators: [required] },

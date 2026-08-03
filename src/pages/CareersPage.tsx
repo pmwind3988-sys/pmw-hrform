@@ -363,7 +363,12 @@ export default function CareersPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeAccount = instance.getActiveAccount() ?? accounts[0];
-  const userEmail = activeAccount?.username?.toLowerCase() || "";
+  // MSAL rebuilds AccountInfo on every read, so `activeAccount` has a new object
+  // identity each render. Effects must key on this stable string - depending on
+  // the object re-runs them every render, and any effect that then sets state
+  // re-renders into an unbounded fetch loop. Signed out the value is a stable
+  // undefined, which is why only signed-in sessions spin.
+  const accountKey = activeAccount?.homeAccountId || activeAccount?.username || "";
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [portalCards, setPortalCards] = useState<CareerPortalCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -409,12 +414,15 @@ export default function CareersPage() {
     let cancelled = false;
     async function load() {
       try {
-        const myApplications = userEmail && activeAccount
+        // Re-read rather than closing over the render-time object.
+        const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+        const email = account?.username?.toLowerCase() || "";
+        const myApplications = email && account
           ? acquireAccessTokenSilentOrRedirect(instance, {
               scopes: [`${new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin}/AllSites.Manage`],
-              account: activeAccount,
+              account,
             })
-              .then((accessToken) => fetchMyApplications(userEmail, { accessToken }))
+              .then((accessToken) => fetchMyApplications(email, { accessToken }))
               .catch(() => [] as JobAdminApplication[])
           : Promise.resolve([] as JobAdminApplication[]);
         const [portalData, appData] = await Promise.all([
@@ -434,7 +442,7 @@ export default function CareersPage() {
     }
     void load();
     return () => { cancelled = true; };
-  }, [instance, activeAccount, userEmail, reloadKey]);
+  }, [instance, accountKey, reloadKey]);
 
   useEffect(() => {
     setJobsPage(0);

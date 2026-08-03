@@ -142,7 +142,12 @@ export default function JobDetailsPage() {
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   const activeAccount = instance.getActiveAccount() ?? accounts[0];
-  const userEmail = activeAccount?.username?.toLowerCase() || "";
+  // MSAL rebuilds AccountInfo on every read, so `activeAccount` has a new object
+  // identity each render. Effects must key on this stable string - depending on
+  // the object re-runs them every render, and any effect that then sets state
+  // re-renders into an unbounded fetch loop. Signed out the value is a stable
+  // undefined, which is why only signed-in sessions spin.
+  const accountKey = activeAccount?.homeAccountId || activeAccount?.username || "";
   const isHrFormsOwner = useHrFormsOwner();
 
   const [job, setJob] = useState<JobListing | null>(null);
@@ -181,15 +186,18 @@ export default function JobDetailsPage() {
   useEffect(() => {
     let cancelled = false;
     async function loadApplications() {
-      if (!userEmail || !activeAccount) return;
+      // Re-read rather than closing over the render-time object.
+      const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+      const email = account?.username?.toLowerCase() || "";
+      if (!email || !account) return;
       try {
         const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
         if (!SP_SITE_URL) return;
         const accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
           scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: activeAccount,
+          account,
         });
-        const applications = await fetchMyApplications(userEmail, { accessToken });
+        const applications = await fetchMyApplications(email, { accessToken });
         if (!cancelled) setMyApps(applications);
       } catch {
         // Applied state is an enhancement — browsing must not depend on it.
@@ -199,7 +207,7 @@ export default function JobDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [instance, activeAccount, userEmail]);
+  }, [instance, accountKey]);
 
   const isApplied = useMemo(
     () => Boolean(jobId) && myApps.some((app) => app.jobListingId === jobId),
