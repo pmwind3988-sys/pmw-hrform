@@ -35,7 +35,6 @@ import {
   AccessTime,
   Search as SearchIcon,
   Close,
-  AutoAwesome,
   AssignmentTurnedIn,
   TrendingUp,
   WorkOutlined,
@@ -213,80 +212,39 @@ function PortalWelcomePanel({
         ...reduceMotionSx,
       }}
     >
-      <Box
-        sx={{
-          position: "relative",
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(320px, 0.92fr)" },
-          gap: { xs: 2.5, md: 3 },
-          alignItems: "center",
-        }}
-      >
-        <Box sx={{ order: { xs: 2, md: 1 } }}>
-          <Chip
-            icon={<AutoAwesome sx={{ fontSize: 16 }} />}
-            label={isSignedIn ? "Welcome back" : "Now hiring"}
-            size="small"
+      {/* The eyebrow, headline and standfirst that used to sit beside the
+          carousel are gone: CareerHero now carries that message directly above
+          this panel, and saying it twice pushed the actual jobs below the fold.
+          What remains is the part that does work — the cards and the counts. */}
+      <Box sx={{ position: "relative", minWidth: 0 }}>
+        <CareerPortalCarousel cards={portalCards} onCardTarget={onPortalCardTarget} />
+      </Box>
+
+      {applicationsCount > 0 && (
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: { xs: 2, md: 2.5 } }}>
+          <Button
+            variant={viewingApplications ? "contained" : "outlined"}
+            startIcon={viewingApplications ? <ArrowBack /> : <AssignmentTurnedIn />}
+            onClick={onViewApplications}
             sx={{
-              mb: 1.5,
-              borderRadius: "999px",
-              backgroundColor: editorial.blueWash,
-              color: editorial.pmwBlueDark,
-              fontWeight: 800,
-              border: `1px solid ${editorial.pmwBlueSoft}`,
-              "& .MuiChip-icon": { color: editorial.pmwBlue },
-            }}
-          />
-          <Typography
-            variant="h4"
-            component="h2"
-            sx={{
-              color: editorial.ink,
-              fontWeight: 800,
-              fontSize: { xs: "1.75rem", sm: "2.2rem" },
-              lineHeight: 1.08,
-              mb: 1,
-              letterSpacing: 0,
-              textWrap: "balance",
+              ...careerActionButtonSx,
+              fontWeight: 700,
+              borderColor: viewingApplications ? editorial.pmwBlue : editorial.pmwBlueSoft,
+              backgroundColor: viewingApplications ? editorial.pmwBlue : "#ffffff",
+              color: viewingApplications ? "#ffffff" : editorial.pmwBlueDark,
+              "&:hover": {
+                transform: "translateY(-2px)",
+                borderColor: editorial.pmwBlueDark,
+                backgroundColor: viewingApplications ? editorial.pmwBlueDark : editorial.blueWash,
+                boxShadow: "none",
+              },
+              ...reduceMotionSx,
             }}
           >
-            {isSignedIn ? "Internal advancement starts here" : "Build your career at PMW Group"}
-          </Typography>
-          <Typography variant="body1" sx={{ color: editorial.ink, maxWidth: 640, mb: 2.25 }}>
-            {isSignedIn
-              ? "Explore roles & track your applications"
-              : "Explore open roles at PMW Group"}
-          </Typography>
-          {applicationsCount > 0 && (
-            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-              <Button
-                variant={viewingApplications ? "contained" : "outlined"}
-                startIcon={viewingApplications ? <ArrowBack /> : <AssignmentTurnedIn />}
-                onClick={onViewApplications}
-                sx={{
-                  ...careerActionButtonSx,
-                  fontWeight: 700,
-                  borderColor: viewingApplications ? editorial.pmwBlue : editorial.pmwBlueSoft,
-                  backgroundColor: viewingApplications ? editorial.pmwBlue : "#ffffff",
-                  color: viewingApplications ? "#ffffff" : editorial.pmwBlueDark,
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    borderColor: editorial.pmwBlueDark,
-                    backgroundColor: viewingApplications ? editorial.pmwBlueDark : editorial.blueWash,
-                    boxShadow: "none",
-                  },
-                  ...reduceMotionSx,
-                }}
-              >
-                {viewingApplications ? "Back to careers" : "My applications"}
-              </Button>
-            </Box>
-          )}
+            {viewingApplications ? "Back to careers" : "My applications"}
+          </Button>
         </Box>
-        <Box sx={{ order: { xs: 1, md: 2 }, minWidth: 0 }}>
-          <CareerPortalCarousel cards={portalCards} onCardTarget={onPortalCardTarget} />
-        </Box>
-      </Box>
+      )}
 
       <Box
         sx={{
