@@ -4,8 +4,6 @@ import {
   Box,
   Typography,
   Badge,
-  Card,
-  CardContent,
   Button,
   Chip,
   Grid,
@@ -34,10 +32,6 @@ import {
 import { keyframes } from "@mui/material/styles";
 import {
   ArrowBack,
-  ArrowForward,
-  LocationOn,
-  CalendarToday,
-  People,
   AccessTime,
   Search as SearchIcon,
   Close,
@@ -46,15 +40,16 @@ import {
   TrendingUp,
   WorkOutlined,
   FilterList,
-  Business,
   Description,
 } from "@mui/icons-material";
-import DOMPurify from "dompurify";
 import { useMsal } from "@azure/msal-react";
 import { fetchCareersPortalData, fetchMyApplications } from "../utils/careersService";
-import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
+import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
+import CareerHero from "../components/careers/CareerHero";
+import JobCard from "../components/careers/JobCard";
 import {
   CareerEmptyState,
   CareerErrorState,
@@ -65,6 +60,7 @@ import {
   careerSearchFieldSx,
   careerToolbarSx,
   getCareerErrorMessage,
+  jobBoardRailSx,
 } from "../components/careers/careerUi";
 import type { JobListing, JobAdminApplication, CareerPortalCard } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
@@ -148,16 +144,6 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-function getEmploymentTypeColor(type: string): string {
-  const map: Record<string, string> = {
-    "Full-time": "#101010",
-    "Part-time": "#5F646D",
-    Contract: "#805800",
-    Internship: "#107C10",
-  };
-  return map[type] || "#5F646D";
-}
-
 function getThisWeekStart(): Date {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -176,238 +162,13 @@ function dateInputBoundary(value: string, boundary: "start" | "end"): number | n
   return date.getTime();
 }
 
-function JobCard({
-  job,
-  onSelect,
-  isApplied,
-  index,
-}: {
-  job: JobListing;
-  onSelect: (job: JobListing) => void;
-  isApplied: boolean;
-  index: number;
-}) {
-  const openJob = () => onSelect(job);
-
-  return (
-    <Card
-      sx={{
-        borderRadius: "12px",
-        position: "relative",
-        overflow: "hidden",
-        height: "100%",
-        border: `1px solid ${editorial.border}`,
-        boxShadow: "none",
-        transition: "transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, opacity 0.22s ease",
-        animation: `${fadeInUp} 0.42s ease both`,
-        animationDelay: staggerDelay(index),
-        cursor: "pointer",
-        opacity: isApplied ? 0.82 : 1,
-        transform: "translateY(0)",
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          background: `linear-gradient(90deg, ${editorial.pmwBlue}, ${editorial.pmwPurple})`,
-          transform: "scaleX(0)",
-          transformOrigin: "left",
-          transition: "transform 0.24s ease",
-        },
-        "&:hover": {
-          transform: "translateY(-3px)",
-          borderColor: editorial.pmwBlue,
-          boxShadow: editorialShadow,
-          opacity: 1,
-          "&::before": {
-            transform: "scaleX(1)",
-          },
-          "& .job-card-title": {
-            color: editorial.pmwBlueDark,
-          },
-          "& .job-card-cta": {
-            color: editorial.pmwBlueDark,
-            transform: "translateX(3px)",
-          },
-          "& .job-card-icon": {
-            color: editorial.pmwBlue,
-            transform: "scale(1.08)",
-          },
-        },
-        "&:active": {
-          transform: "translateY(-1px) scale(0.96)",
-        },
-        "&:focus-visible": {
-          outline: `3px solid ${editorial.pmwBlueSoft}`,
-          outlineOffset: 3,
-        },
-        ...reduceMotionSx,
-      }}
-      onClick={openJob}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openJob();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`View ${job.title}`}
-    >
-      <CardContent sx={{ p: { xs: 2.25, md: 2.75 }, "&:last-child": { pb: { xs: 2.25, md: 2.75 } } }}>
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(230px, 280px)" },
-            gap: { xs: 2, md: 3 },
-            alignItems: { xs: "stretch", md: "center" },
-          }}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25, flexWrap: "wrap", mb: 1.25 }}>
-              <Typography
-                className="job-card-title"
-                variant="h6"
-                sx={{
-                  flex: "1 1 320px",
-                  minWidth: 0,
-                  fontWeight: 800,
-                  color: editorial.ink,
-                  fontSize: { xs: "1.08rem", md: "1.2rem" },
-                  lineHeight: 1.25,
-                  wordBreak: "break-word",
-                  transition: "color 0.2s ease",
-                }}
-              >
-                {job.title}
-              </Typography>
-              <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: { xs: "flex-start", md: "flex-end" } }}>
-                {job.company && (
-                  <Chip
-                    label={job.company}
-                    size="small"
-                    sx={{
-                      backgroundColor: editorial.blueWash,
-                      color: editorial.ink,
-                      fontWeight: 800,
-                      fontSize: "0.7rem",
-                      borderRadius: "999px",
-                      border: `1px solid ${editorial.border}`,
-                    }}
-                  />
-                )}
-                <Chip
-                  label={job.department}
-                  size="small"
-                  sx={{
-                    backgroundColor: editorial.purpleWash,
-                    color: editorial.pmwPurpleDark,
-                    fontWeight: 800,
-                    fontSize: "0.7rem",
-                    borderRadius: "999px",
-                    border: `1px solid ${editorial.pmwPurpleSoft}`,
-                  }}
-                />
-                {isApplied && (
-                  <Chip
-                    label="Already Submitted"
-                    size="small"
-                    sx={{
-                      backgroundColor: "#E6F4EA",
-                      color: "#34A853",
-                      fontWeight: 700,
-                      fontSize: "0.65rem",
-                      borderRadius: "999px",
-                    }}
-                  />
-                )}
-              </Box>
-            </Box>
-
-            <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.75 }, flexWrap: "wrap" }}>
-              {job.location && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-                  <LocationOn className="job-card-icon" sx={{ fontSize: 15, color: editorial.muted, transition: "transform 0.2s ease, color 0.2s ease" }} />
-                  <Typography variant="body2" sx={{ color: editorial.muted, fontSize: "0.82rem", overflowWrap: "anywhere" }}>
-                    {job.location}
-                  </Typography>
-                </Box>
-              )}
-              {job.closingDate && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <CalendarToday className="job-card-icon" sx={{ fontSize: 14, color: editorial.softMuted, transition: "transform 0.2s ease, color 0.2s ease" }} />
-                  <Typography variant="caption" sx={{ color: editorial.softMuted, fontSize: "0.78rem" }}>
-                    Closing {formatDate(job.closingDate)}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          </Box>
-
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: { xs: "row", md: "column" },
-              alignItems: { xs: "center", md: "flex-end" },
-              justifyContent: { xs: "space-between", md: "center" },
-              gap: { xs: 1.25, md: 1 },
-              minWidth: 0,
-              pt: { xs: 1.5, md: 0 },
-              pl: { xs: 0, md: 2.75 },
-              borderTop: { xs: `1px solid ${editorial.border}`, md: "none" },
-              borderLeft: { xs: "none", md: `1px solid ${editorial.border}` },
-              flexWrap: { xs: "wrap", md: "nowrap" },
-            }}
-          >
-            <Chip
-              label={job.employmentType}
-              size="small"
-              sx={{
-                backgroundColor: `${getEmploymentTypeColor(job.employmentType)}14`,
-                color: getEmploymentTypeColor(job.employmentType),
-                fontWeight: 800,
-                fontSize: "0.7rem",
-                borderRadius: "999px",
-                flexShrink: 0,
-              }}
-            />
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-              <People className="job-card-icon" sx={{ fontSize: 14, color: editorial.softMuted, transition: "transform 0.2s ease, color 0.2s ease" }} />
-              <Typography variant="caption" sx={{ color: editorial.softMuted, fontSize: "0.78rem", whiteSpace: "nowrap" }}>
-                {job.applicationCount} {job.applicationCount === 1 ? "applicant" : "applicants"}
-              </Typography>
-            </Box>
-            <Box
-              className="job-card-cta"
-              sx={{
-                color: editorial.ink,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 0.5,
-                fontWeight: 800,
-                fontSize: "0.82rem",
-                whiteSpace: "nowrap",
-                transition: "transform 0.2s ease, color 0.2s ease",
-              }}
-            >
-              View role
-              <ArrowForward sx={{ fontSize: 16 }} />
-            </Box>
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
-
 function PortalWelcomePanel({
   totalJobs,
   visibleJobs,
   applicationsCount,
   viewingApplications,
   portalCards,
+  isSignedIn,
   onViewApplications,
   onPortalCardTarget,
 }: {
@@ -416,9 +177,13 @@ function PortalWelcomePanel({
   applicationsCount: number;
   viewingApplications: boolean;
   portalCards: CareerPortalCard[];
+  isSignedIn: boolean;
   onViewApplications: () => void;
   onPortalCardTarget: (card: CareerPortalCard) => void;
 }) {
+  // Tracking past applications reads the Job Applications list with the visitor's
+  // own delegated token, so it only exists for a signed-in employee. A public
+  // visitor can browse and apply; they just have nothing to track here.
   const stats = [
     { label: "Open roles", value: totalJobs, icon: <WorkOutlined />, tone: "blue" as const },
     {
@@ -427,7 +192,9 @@ function PortalWelcomePanel({
       icon: <TrendingUp />,
       tone: "purple" as const,
     },
-    { label: "My applications", value: applicationsCount, icon: <AssignmentTurnedIn />, tone: "success" as const },
+    ...(isSignedIn
+      ? [{ label: "My applications", value: applicationsCount, icon: <AssignmentTurnedIn />, tone: "success" as const }]
+      : []),
   ];
 
   return (
@@ -458,7 +225,7 @@ function PortalWelcomePanel({
         <Box sx={{ order: { xs: 2, md: 1 } }}>
           <Chip
             icon={<AutoAwesome sx={{ fontSize: 16 }} />}
-            label="Welcome back"
+            label={isSignedIn ? "Welcome back" : "Now hiring"}
             size="small"
             sx={{
               mb: 1.5,
@@ -483,10 +250,12 @@ function PortalWelcomePanel({
               textWrap: "balance",
             }}
           >
-            Internal advancement starts here
+            {isSignedIn ? "Internal advancement starts here" : "Build your career at PMW Group"}
           </Typography>
           <Typography variant="body1" sx={{ color: editorial.ink, maxWidth: 640, mb: 2.25 }}>
-            Explore roles built for PMW talent and keep your application journey in view.
+            {isSignedIn
+              ? "Explore roles & track your applications"
+              : "Explore open roles at PMW Group"}
           </Typography>
           {applicationsCount > 0 && (
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -523,7 +292,7 @@ function PortalWelcomePanel({
         sx={{
           position: "relative",
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+          gridTemplateColumns: { xs: "1fr", sm: `repeat(${stats.length}, minmax(0, 1fr))` },
           gap: 1,
           mt: { xs: 2, md: 2.5 },
         }}
@@ -631,236 +400,6 @@ function CareersLoadingSkeleton() {
   );
 }
 
-function JobDetailDialog({
-  job,
-  open,
-  onClose,
-  isApplied,
-  isAdmin,
-  onTestSubmit,
-}: {
-  job: JobListing | null;
-  open: boolean;
-  onClose: () => void;
-  isApplied: boolean;
-  isAdmin: boolean;
-  onTestSubmit: (jobId: string) => void;
-}) {
-  const navigate = useNavigate();
-
-  if (!job) return null;
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      slotProps={{
-        backdrop: {
-          sx: {
-            backgroundColor: "rgba(17, 24, 39, 0.36)",
-            backdropFilter: "blur(3px)",
-          },
-        },
-        paper: {
-          sx: {
-            borderRadius: "12px",
-            maxHeight: "90vh",
-            overflow: "hidden",
-            border: `1px solid ${editorial.pmwBlueSoft}`,
-            animation: `${scaleIn} 0.24s ease both`,
-            ...reduceMotionSx,
-          },
-        },
-      }}
-    >
-      <DialogTitle
-        sx={{
-          pb: 2,
-          pr: 8,
-          position: "relative",
-          overflow: "hidden",
-          backgroundColor: "#FFFFFF",
-          borderBottom: `1px solid ${editorial.pmwBlueSoft}`,
-          ...reduceMotionSx,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 1 }}>
-          <Typography variant="h5" component="div" sx={{ fontWeight: 800, color: editorial.ink, fontSize: "1.25rem", textWrap: "balance" }}>
-            {job.title}
-          </Typography>
-          {isApplied && (
-            <Chip label="Already Submitted" size="small" sx={{ backgroundColor: "#E6F4EA", color: "#34A853", fontWeight: 600, borderRadius: "8px", fontSize: "0.7rem" }} />
-          )}
-        </Box>
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-          {job.company && (
-            <Chip
-              icon={<Business sx={{ fontSize: 14 }} />}
-              label={job.company}
-              size="small"
-              sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800, borderRadius: "8px", "& .MuiChip-icon": { color: editorial.pmwBlue } }}
-            />
-          )}
-          <Chip
-            label={job.department}
-            size="small"
-            sx={{ backgroundColor: editorial.pmwPurple, color: "#fff", fontWeight: 800, borderRadius: "8px" }}
-          />
-          <Chip
-            label={job.employmentType}
-            size="small"
-            sx={{
-              backgroundColor: `${getEmploymentTypeColor(job.employmentType)}14`,
-              color: getEmploymentTypeColor(job.employmentType),
-              fontWeight: 600,
-              borderRadius: "8px",
-            }}
-          />
-          {job.location && (
-            <Typography variant="caption" sx={{ color: editorial.muted, display: "flex", alignItems: "center", gap: 0.3 }}>
-              <LocationOn sx={{ fontSize: 14 }} /> {job.location}
-            </Typography>
-          )}
-        </Box>
-        <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
-          {job.closingDate && (
-            <Typography variant="caption" sx={{ color: editorial.muted, display: "flex", alignItems: "center", gap: 0.3 }}>
-              <CalendarToday sx={{ fontSize: 12 }} /> Closing {formatDate(job.closingDate)}
-            </Typography>
-          )}
-          <Typography variant="caption" sx={{ color: editorial.muted, display: "flex", alignItems: "center", gap: 0.3 }}>
-            <People sx={{ fontSize: 12 }} /> {job.applicationCount} {job.applicationCount === 1 ? "applicant" : "applicants"}
-          </Typography>
-        </Box>
-        <IconButton
-          onClick={onClose}
-          size="small"
-          sx={{
-            ...careerIconButtonSx,
-            position: "absolute",
-            right: 12,
-            top: 12,
-            zIndex: 1,
-            color: editorial.muted,
-            "&:hover": {
-              transform: "rotate(90deg)",
-              backgroundColor: editorial.blueWash,
-            },
-            ...reduceMotionSx,
-          }}
-        >
-          <Close />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent dividers sx={{ py: 3 }}>
-        {job.jobDescription ? (
-          <Box
-            sx={{
-              "& p": { mb: 1.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.9rem" },
-              "& ul, & ol": { pl: 3, mb: 1.5 },
-              "& li": { mb: 0.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.9rem" },
-              "& h1, & h2, & h3, & h4": { mt: 2, mb: 1, fontWeight: 800, color: editorial.ink },
-              "& strong": { fontWeight: 600 },
-              "& a": {
-                color: editorial.pmwBlueDark,
-                textDecoration: "none",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-                padding: "1px 6px",
-                borderRadius: "6px",
-                backgroundColor: editorial.blueWash,
-                border: "1px solid rgba(0,120,212,0.15)",
-                transition: "transform 0.18s ease, background-color 0.18s ease",
-                "&:hover": { backgroundColor: editorial.pmwBlueSoft, textDecoration: "underline", transform: "translateY(-1px)" },
-              },
-              "& br": { display: "block", content: '""', mb: 0.5 },
-            }}
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.jobDescription) }}
-          />
-        ) : (
-          <Typography variant="body2" sx={{ color: editorial.muted }}>
-            No description provided.
-          </Typography>
-        )}
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, py: 2, gap: 1, backgroundColor: editorial.blueSoft }}>
-        <Button
-          startIcon={<Close />}
-          onClick={onClose}
-          sx={{
-            ...careerActionButtonSx,
-            color: editorial.muted,
-            fontWeight: 700,
-            "&:hover": { transform: "translateY(-1px)", backgroundColor: editorial.white },
-            ...reduceMotionSx,
-          }}
-        >
-          Close
-        </Button>
-        {isApplied && isAdmin ? (
-          <Button
-            variant="outlined"
-            onClick={() => onTestSubmit(job.id)}
-            sx={{
-              borderRadius: "8px",
-              textTransform: "none",
-              fontWeight: 600,
-              borderColor: "#E67635",
-              color: "#E67635",
-              px: 3,
-              transition: "transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease",
-              "&:hover": { borderColor: "#D4621A", backgroundColor: "rgba(230, 118, 53, 0.06)", transform: "translateY(-2px)", boxShadow: "0 8px 18px rgba(230, 118, 53, 0.16)" },
-              "&:active": { transform: "translateY(0) scale(0.98)" },
-              ...reduceMotionSx,
-            }}
-          >
-            Override Apply
-          </Button>
-        ) : isApplied ? (
-          <Button
-            variant="contained"
-            disabled
-            sx={{
-              ...careerActionButtonSx,
-              fontWeight: 600,
-              px: 4,
-              backgroundColor: "#9CA3AF",
-            }}
-          >
-            Already Submitted
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            endIcon={<ArrowForward />}
-            onClick={() => navigate(`/career-portal/${job.id}/apply`)}
-            sx={{
-              ...careerActionButtonSx,
-              backgroundColor: editorial.pmwBlue,
-              fontWeight: 800,
-              px: 4,
-              "&:hover": {
-                backgroundColor: editorial.pmwBlueDark,
-                transform: "translateY(-2px)",
-                boxShadow: "0 8px 18px rgba(0, 120, 212, 0.24)",
-              },
-              ...reduceMotionSx,
-            }}
-          >
-            Apply now
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
-  );
-}
-
 export default function CareersPage() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
@@ -877,11 +416,10 @@ export default function CareersPage() {
   const [deptFilter, setDeptFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortBy, setSortBy] = useState("newest");
-  const [showJobAdvancedFilters, setShowJobAdvancedFilters] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
+  const [showJobAdvancedFilters, setShowJobAdvancedFilters] = useState(true);
   const [selectedApp, setSelectedApp] = useState<JobAdminApplication | null>(null);
   const [myApps, setMyApps] = useState<JobAdminApplication[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin = useHrFormsOwner();
   const [appliedFilter, setAppliedFilter] = useState("all"); // "all" | "applied" | "unapplied"
   const [jobsPage, setJobsPage] = useState(0);
   const [jobsRowsPerPage, setJobsRowsPerPage] = useState(12);
@@ -896,6 +434,16 @@ export default function CareersPage() {
 
   // Opportunities that the current user has applied to -> set of job listing IDs
   const appliedJobIds = useMemo(() => new Set(myApps.map((a) => a.jobListingId).filter(Boolean)), [myApps]);
+
+  const isSignedIn = Boolean(activeAccount);
+
+  // Applied/unapplied filtering is derived from the signed-in employee's own
+  // application history, which a public visitor has no way to load.
+  const canFilterByApplied = isSignedIn;
+
+  // The rail filters the job list, so it has nothing to act on while the user is
+  // reading their own application history — the results column takes full width.
+  const showFilterRail = !loading && !error && jobs.length > 0 && appliedFilter !== "applied";
 
   const isJobApplied = (jobId: string) => appliedJobIds.has(jobId);
 
@@ -929,31 +477,6 @@ export default function CareersPage() {
     void load();
     return () => { cancelled = true; };
   }, [instance, activeAccount, userEmail, reloadKey]);
-
-  // Check admin status
-  useEffect(() => {
-    let cancelled = false;
-    async function check() {
-      if (!activeAccount) return;
-      try {
-        const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-        const token = await acquireAccessTokenSilentOrRedirect(instance, {
-          scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: activeAccount,
-        });
-        const groupResp = await fetchWithAuthRecovery(
-          `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
-          { headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` } },
-        );
-        if (groupResp.ok) {
-          const data = await groupResp.json() as { value?: { Email?: string }[] };
-          if (!cancelled) setIsAdmin((data.value || []).some((u) => (u.Email || "").toLowerCase() === userEmail));
-        }
-      } catch { /* not admin */ }
-    }
-    if (userEmail) void check();
-    return () => { cancelled = true; };
-  }, [instance, activeAccount, userEmail]);
 
   useEffect(() => {
     setJobsPage(0);
@@ -1084,21 +607,15 @@ export default function CareersPage() {
       : [];
   const requestedJobId = new URLSearchParams(location.search).get("job")?.trim() || "";
 
+  // `?job=` is the legacy deep link — dashboard portal cards and older emails still
+  // carry it. Job detail is its own route now, so forward rather than reopening a
+  // dialog that no longer exists.
   useEffect(() => {
-    if (!requestedJobId || loading) return;
-    const targetJob = jobs.find((job) => job.id === requestedJobId);
-    if (targetJob) setSelectedJob(targetJob);
-  }, [jobs, loading, requestedJobId]);
-
-  function closeJobDetail(): void {
-    setSelectedJob(null);
     if (!requestedJobId) return;
+    navigate(`/career-portal/${encodeURIComponent(requestedJobId)}`, { replace: true });
+  }, [requestedJobId, navigate]);
 
-    const params = new URLSearchParams(location.search);
-    params.delete("job");
-    const nextSearch = params.toString();
-    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ""}`, { replace: true });
-  }
+  const openJobDetails = (job: JobListing) => navigate(`/career-portal/${job.id}`);
 
   const handleViewApplications = () => setAppliedFilter((current) => current === "applied" ? "all" : "applied");
   const handlePortalCardTarget = (card: CareerPortalCard) => {
@@ -1106,12 +623,7 @@ export default function CareersPage() {
     if (card.targetType === "none" || !targetValue) return;
 
     if (card.targetType === "job") {
-      const targetJob = jobs.find((job) => job.id === targetValue);
-      if (targetJob) {
-        setSelectedJob(targetJob);
-      } else {
-        navigate(`/career-portal?job=${encodeURIComponent(targetValue)}`);
-      }
+      navigate(`/career-portal/${encodeURIComponent(targetValue)}`);
       return;
     }
 
@@ -1131,6 +643,16 @@ export default function CareersPage() {
         isAdmin={isAdmin}
         backPath={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
         backLabel="Back to forms dashboard"
+        showBack={Boolean(activeAccount)}
+      />
+
+      <CareerHero
+        title={isSignedIn ? "Internal opportunities" : "Careers at PMW Group"}
+        subtitle={
+          isSignedIn
+            ? "Connecting Talent with Opportunity: Your Gateway to Career Success"
+            : "Connecting Talent with Opportunity: Your Gateway to Career Success"
+        }
       />
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -1141,31 +663,32 @@ export default function CareersPage() {
             applicationsCount={myApps.length}
             viewingApplications={appliedFilter === "applied"}
             portalCards={portalCards}
+            isSignedIn={Boolean(activeAccount)}
             onViewApplications={handleViewApplications}
             onPortalCardTarget={handlePortalCardTarget}
           />
         )}
 
-        {/* Filters (hidden when viewing My Applications) */}
-        {!loading && !error && jobs.length > 0 && appliedFilter !== "applied" && (
+        {/* Template layout: filter rail left, results right. The rail only exists
+            in job-browsing mode, so My Applications reclaims the full width. */}
+        <Grid container spacing={3}>
+        {showFilterRail && (
+        <Grid size={{ xs: 12, md: 3.5 }}>
           <Paper
             sx={{
-              ...careerToolbarSx,
-              mb: 3,
+              ...jobBoardRailSx,
+              position: { md: "sticky" },
+              top: { md: 88 },
               animation: `${fadeInUp} 0.4s ease both`,
               animationDelay: "90ms",
-              "&:hover": {
-                borderColor: editorial.pmwBlue,
-                boxShadow: editorialShadow,
-              },
               ...reduceMotionSx,
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 1.25, width: "100%" }}>
               <Box
                 sx={{
-                  flex: "1 1 360px",
-                  minWidth: { xs: "100%", sm: 320 },
+                  flex: "1 1 auto",
+                  minWidth: 0,
                   display: "flex",
                   alignItems: "center",
                   gap: 0.75,
@@ -1277,7 +800,7 @@ export default function CareersPage() {
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(5, minmax(0, 1fr))" },
+                  gridTemplateColumns: "1fr",
                   gap: 1.25,
                   width: "100%",
                 }}
@@ -1342,25 +865,27 @@ export default function CareersPage() {
                     ))}
                   </Select>
                 </FormControl>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Applied</InputLabel>
-                  <Select
-                    value={appliedFilter}
-                    label="Applied"
-                    onChange={(e) => setAppliedFilter(e.target.value)}
-                    sx={{
-                      borderRadius: "8px",
-                      backgroundColor: "#F8F9FC",
-                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: "#ffffff" },
-                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                    }}
-                  >
-                    <MenuItem value="all">All opportunities</MenuItem>
-                    <MenuItem value="applied">Applied</MenuItem>
-                    <MenuItem value="unapplied">Unapplied</MenuItem>
-                  </Select>
-                </FormControl>
+                {canFilterByApplied && (
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Applied</InputLabel>
+                    <Select
+                      value={appliedFilter}
+                      label="Applied"
+                      onChange={(e) => setAppliedFilter(e.target.value)}
+                      sx={{
+                        borderRadius: "8px",
+                        backgroundColor: "#F8F9FC",
+                        transition: "box-shadow 0.18s ease, background-color 0.18s ease",
+                        "&:hover": { backgroundColor: "#ffffff" },
+                        "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
+                      }}
+                    >
+                      <MenuItem value="all">All opportunities</MenuItem>
+                      <MenuItem value="applied">Applied</MenuItem>
+                      <MenuItem value="unapplied">Unapplied</MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
                 <FormControl size="small" fullWidth>
                   <InputLabel>Sort</InputLabel>
                   <Select
@@ -1384,7 +909,10 @@ export default function CareersPage() {
               </Box>
             )}
           </Paper>
+        </Grid>
         )}
+
+        <Grid size={{ xs: 12, md: showFilterRail ? 8.5 : 12 }}>
 
         {/* Loading */}
         {loading && (
@@ -1705,13 +1233,20 @@ export default function CareersPage() {
         {/* Job Cards Grid (hidden when viewing My Applications) */}
         {!loading && !error && appliedFilter !== "applied" && filteredJobs.length > 0 && (
           <>
-            <Grid container spacing={2.5}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
               {pagedJobs.map((job, index) => (
-                <Grid size={{ xs: 12 }} key={job.id}>
-                  <JobCard job={job} onSelect={setSelectedJob} isApplied={isJobApplied(job.id)} index={index} />
-                </Grid>
+                <Box
+                  key={job.id}
+                  sx={{
+                    animation: `${fadeInUp} 0.42s ease both`,
+                    animationDelay: staggerDelay(index),
+                    ...reduceMotionSx,
+                  }}
+                >
+                  <JobCard job={job} onOpen={openJobDetails} applied={isJobApplied(job.id)} />
+                </Box>
               ))}
-            </Grid>
+            </Box>
             <Paper
               sx={{
                 mt: 2,
@@ -1741,6 +1276,9 @@ export default function CareersPage() {
             </Paper>
           </>
         )}
+
+        </Grid>
+        </Grid>
 
         {/* Application detail dialog */}
         <Dialog
@@ -1895,18 +1433,6 @@ export default function CareersPage() {
           )}
         </Dialog>
 
-        {/* Job detail dialog */}
-        <JobDetailDialog
-          job={selectedJob}
-          open={!!selectedJob}
-          onClose={closeJobDetail}
-          isApplied={!!(selectedJob && isJobApplied(selectedJob.id))}
-          isAdmin={isAdmin}
-          onTestSubmit={(jobId) => {
-            setSelectedJob(null);
-            navigate(`/career-portal/${jobId}/apply?override=1`);
-          }}
-        />
       </Container>
     </Box>
   );

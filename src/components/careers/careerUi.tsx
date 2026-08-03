@@ -84,6 +84,88 @@ export const careerTableShellSx = {
   },
 } satisfies SxProps<Theme>;
 
+/**
+ * Job board geometry, measured from the Figma job-portal template
+ * (file its0mTyfN3jAVbef8BKpEr, Jobs frame 25:6653).
+ *
+ * The template's own accent is a teal `#309689`. That is deliberately NOT carried
+ * over — PRODUCT.md makes logo-led identity a design principle, so PMW blue takes
+ * every place the teal appeared, including the tint in the card shadow. What the
+ * template contributes is proportion: the generous 40px card padding, the 20px
+ * radius, and the meta row rhythm are what make it read as a job board rather
+ * than an admin table.
+ */
+export const jobBoardCardSx = {
+  backgroundColor: editorial.white,
+  borderRadius: "20px",
+  border: editorialHairline,
+  p: { xs: 2.5, sm: 3.5, md: 5 },
+  display: "flex",
+  flexDirection: "column",
+  gap: { xs: 2.5, md: 3.5 },
+  // Template uses a shadow tinted with its accent rather than neutral grey.
+  boxShadow: "0 3px 4px rgba(0, 120, 212, 0.08)",
+  transition: "border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease",
+  "&:hover": {
+    borderColor: editorial.pmwBlue,
+    boxShadow: "0 6px 18px rgba(0, 120, 212, 0.14)",
+    transform: "translateY(-2px)",
+  },
+} satisfies SxProps<Theme>;
+
+/** Small tinted pill — the template's "10 min ago" stamp. */
+export const jobBoardBadgeSx = {
+  height: 28,
+  borderRadius: "8px",
+  px: 1,
+  backgroundColor: "rgba(0, 120, 212, 0.10)",
+  color: editorial.pmwBlueDark,
+  fontWeight: 600,
+  fontSize: "0.8125rem",
+  "& .MuiChip-label": { px: 0.5 },
+} satisfies SxProps<Theme>;
+
+/** One `icon + label` pair in the card's meta row. */
+export const jobBoardMetaItemSx = {
+  display: "flex",
+  alignItems: "center",
+  gap: 1.5,
+  color: editorial.muted,
+  fontWeight: 600,
+  fontSize: "0.9375rem",
+  minWidth: 0,
+  "& .MuiSvgIcon-root": {
+    fontSize: 20,
+    color: editorial.pmwBlue,
+    flexShrink: 0,
+  },
+} satisfies SxProps<Theme>;
+
+/** Solid primary action ("Job details" / "Apply"). */
+export const jobBoardPrimaryButtonSx = {
+  ...careerActionButtonSx,
+  px: 2.5,
+  backgroundColor: editorial.pmwBlue,
+  color: editorial.white,
+  boxShadow: "none",
+  "&:hover": {
+    backgroundColor: editorial.pmwBlueDark,
+    boxShadow: "none",
+  },
+} satisfies SxProps<Theme>;
+
+/** Left filter rail container from the template's sidebar. */
+export const jobBoardRailSx = {
+  backgroundColor: editorial.white,
+  borderRadius: "20px",
+  border: editorialHairline,
+  boxShadow: "0 3px 4px rgba(0, 120, 212, 0.08)",
+  p: { xs: 2, md: 2.5 },
+  display: "flex",
+  flexDirection: "column",
+  gap: 2.5,
+} satisfies SxProps<Theme>;
+
 export const careerReduceMotionSx = {
   "@media (prefers-reduced-motion: reduce)": {
     animation: "none",

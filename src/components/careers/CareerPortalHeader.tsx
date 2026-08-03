@@ -15,6 +15,7 @@ import {
   AssignmentInd,
   AutoAwesome,
   Edit,
+  Login,
   Logout,
   Menu as MenuIcon,
   Person,
@@ -56,6 +57,8 @@ interface CareerPortalHeaderProps {
   actions?: ReactNode;
   showSectionNav?: boolean;
   showPrivacyLink?: boolean;
+  /** Public visitors have no signed-in surface to go back to — hide the arrow. */
+  showBack?: boolean;
 }
 
 const sectionItems: {
@@ -82,6 +85,7 @@ export default function CareerPortalHeader({
   actions,
   showSectionNav = true,
   showPrivacyLink = true,
+  showBack = true,
 }: CareerPortalHeaderProps) {
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
@@ -92,6 +96,9 @@ export default function CareerPortalHeader({
   const mobileMenuOpen = Boolean(mobileMenuAnchorEl);
   const hasMobileActionMenu = Boolean(actions);
   const userEmail = accounts[0]?.username || "";
+  // The career portal is open to the public, so this header renders for visitors
+  // with no Microsoft 365 session. They get a way in, not a way out.
+  const isSignedIn = accounts.length > 0;
 
   const handleProfileOpen = (event: MouseEvent<HTMLElement>) => {
     setProfileAnchorEl(event.currentTarget);
@@ -131,6 +138,18 @@ export default function CareerPortalHeader({
     void instance.logoutRedirect();
   };
 
+  const handleSignIn = () => {
+    handleProfileClose();
+    // Preserve the current portal route so sign-in returns here, matching how
+    // App.tsx restores the pre-login destination.
+    try {
+      sessionStorage.setItem("pmw_post_login_redirect", window.location.pathname + window.location.search);
+    } catch {
+      // Storage may be unavailable — sign-in still works, it just lands on the dashboard.
+    }
+    void instance.loginRedirect(loginRequest);
+  };
+
   return (
     <Paper
       sx={{
@@ -161,6 +180,7 @@ export default function CareerPortalHeader({
               onClick={() => navigate(backPath)}
               aria-label={backLabel}
               sx={{
+                display: showBack ? "inline-flex" : "none",
                 color: editorial.pmwBlueDark,
                 p: { xs: 0.75, sm: 1 },
                 flexShrink: 0,
@@ -365,7 +385,7 @@ export default function CareerPortalHeader({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {userEmail || "Account"}
+                  {userEmail || "Not signed in"}
                 </Typography>
               </MenuItem>
               {((showSectionNav && visibleSections.length > 0) || showPrivacyLink) && (
@@ -396,14 +416,23 @@ export default function CareerPortalHeader({
                 </>
               )}
               <Divider sx={{ my: 0.5 }} />
-              <MenuItem onClick={handleSwitchAccount} sx={{ py: 1.25, px: 2.5 }}>
-                <Person sx={{ mr: 1.5, fontSize: 20, color: editorial.muted }} />
-                <Typography variant="body2">Switch account</Typography>
-              </MenuItem>
-              <MenuItem onClick={handleSignOut} sx={{ py: 1.25, px: 2.5 }}>
-                <Logout sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
-                <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
-              </MenuItem>
+              {isSignedIn ? (
+                [
+                  <MenuItem key="switch" onClick={handleSwitchAccount} sx={{ py: 1.25, px: 2.5 }}>
+                    <Person sx={{ mr: 1.5, fontSize: 20, color: editorial.muted }} />
+                    <Typography variant="body2">Switch account</Typography>
+                  </MenuItem>,
+                  <MenuItem key="signout" onClick={handleSignOut} sx={{ py: 1.25, px: 2.5 }}>
+                    <Logout sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
+                    <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+                  </MenuItem>,
+                ]
+              ) : (
+                <MenuItem onClick={handleSignIn} sx={{ py: 1.25, px: 2.5 }}>
+                  <Login sx={{ mr: 1.5, fontSize: 20, color: editorial.pmwBlueDark }} />
+                  <Typography variant="body2">Sign in with Microsoft 365</Typography>
+                </MenuItem>
+              )}
             </Menu>
           </Stack>
           <Menu

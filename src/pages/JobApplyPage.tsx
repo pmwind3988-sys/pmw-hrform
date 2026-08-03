@@ -38,10 +38,11 @@ import {
 } from "@mui/icons-material";
 import { useReactiveForm, required, email, phone } from "../hooks/useReactiveForm";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
 import { useMsal } from "@azure/msal-react";
 import { fetchJob, submitApplication, ensureJobApplicationColumns, fetchMyApplications } from "../utils/careersService";
 import type { JobListing, CustomFieldDefinition } from "../types";
-import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import { CareerErrorState, careerActionButtonSx, careerPageSx, careerPanelSx, getCareerErrorMessage } from "../components/careers/careerUi";
@@ -487,45 +488,17 @@ export default function JobApplyPage() {
   const [customAnswers, setCustomAnswers] = useState<Record<string, unknown>>({});
   const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
   const [resumeError, setResumeError] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [duplicateBlocked, setDuplicateBlocked] = useState(false);
   const [alreadyApplied, setAlreadyApplied] = useState(false);
   const [duplicateChecking, setDuplicateChecking] = useState(true);
   const [phoneCountryCode, setPhoneCountryCode] = useState("+60");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaTouched, setPdpaTouched] = useState(false);
+  const isSignedIn = Boolean(activeAccount);
+  const isAdmin = useHrFormsOwner();
   const adminOverrideMode = alreadyApplied && isAdmin && overrideRequested;
   const nameLockedFromProfile = !profile.loading && !profile.error && !!profile.displayName;
   const emailLockedFromProfile = !profile.loading && !profile.error && !!profile.email;
-
-  // Check if user is admin (group membership)
-  useEffect(() => {
-    let cancelled = false;
-    async function check() {
-      if (!activeAccount) return;
-      try {
-        const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-        const token = await acquireAccessTokenSilentOrRedirect(instance, {
-          scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: activeAccount,
-        });
-        const groupResp = await fetchWithAuthRecovery(
-          `${SP_SITE_URL}/_api/web/sitegroups/getByName('_HR_ Forms Owners')/users?$select=Email`,
-          { headers: { Accept: "application/json;odata=nometadata", Authorization: `Bearer ${token}` } },
-        );
-        if (groupResp.ok) {
-          const data = await groupResp.json() as { value?: { Email?: string }[] };
-          if (!cancelled) {
-            setIsAdmin((data.value || []).some((u) => (u.Email || "").toLowerCase() === userEmail));
-          }
-        }
-      } catch {
-        // Not admin — proceed as regular user
-      }
-    }
-    void check();
-    return () => { cancelled = true; };
-  }, [instance, activeAccount, userEmail]);
 
   // Fetch job details for summary
   useEffect(() => {
@@ -675,22 +648,23 @@ export default function JobApplyPage() {
     }
 
     try {
+      // A Public Respondent applies without signing in and has no delegated token —
+      // the API writes those through the app-only SharePoint principal instead. Only
+      // a signed-in applicant acquires a token here, which keeps their own identity
+      // on the SharePoint item.
       const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-      if (!SP_SITE_URL || !activeAccount) {
-        setSubmitError("Unable to identify your signed-in SharePoint session. Please sign in again.");
-        setSubmitting(false);
-        return;
-      }
       let accessToken = "";
-      try {
-        accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
-          scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
-          account: activeAccount,
-        });
-      } catch {
-        setSubmitError("Could not get your SharePoint permission token. Please sign in again and retry.");
-        setSubmitting(false);
-        return;
+      if (activeAccount && SP_SITE_URL) {
+        try {
+          accessToken = await acquireAccessTokenSilentOrRedirect(instance, {
+            scopes: [`${new URL(SP_SITE_URL).origin}/AllSites.Manage`],
+            account: activeAccount,
+          });
+        } catch {
+          setSubmitError("Could not get your SharePoint permission token. Please sign in again and retry.");
+          setSubmitting(false);
+          return;
+        }
       }
 
       // Generate submission ref once — used for both the PDF and the API submission
@@ -733,13 +707,17 @@ export default function JobApplyPage() {
         // PDF generation failed — submit without it
       }
 
-      // Ensure all SharePoint columns exist — blocks submission if provisioning fails
-      try {
-        await ensureJobApplicationColumns(accessToken, SP_SITE_URL);
-      } catch (err) {
-        setSubmitError(getCareerErrorMessage(err, "Required application storage could not be prepared. Please retry or contact HR."));
-        setSubmitting(false);
-        return;
+      // Ensure all SharePoint columns exist — blocks submission if provisioning fails.
+      // Needs Manage rights, so only a signed-in applicant can run it; for a Public
+      // Respondent the API provisions server-side before writing.
+      if (accessToken) {
+        try {
+          await ensureJobApplicationColumns(accessToken, SP_SITE_URL);
+        } catch (err) {
+          setSubmitError(getCareerErrorMessage(err, "Required application storage could not be prepared. Please retry or contact HR."));
+          setSubmitting(false);
+          return;
+        }
       }
 
       // Combine resume + supporting docs + generated PDF
@@ -768,8 +746,8 @@ export default function JobApplyPage() {
         coverLetter: values.coverLetter,
         files: allFiles,
         customAnswers,
-        accessToken,
-        submittedByEmail: activeAccount.username || "",
+        accessToken: accessToken || undefined,
+        submittedByEmail: activeAccount?.username || "",
         forceApply,
         submissionRef,
         pdpaConsent: true,
@@ -936,8 +914,10 @@ export default function JobApplyPage() {
           {/* Application Form */}
           <Grid size={{ xs: 12, md: 8 }}>
             <Paper sx={{ ...careerPanelSx, p: { xs: 2.25, sm: 3 }, borderRadius: "12px" }}>
-              {/* Profile loading indicator */}
-              {profile.loading && (
+              {/* Profile prefill only applies to a signed-in applicant. A Public
+                  Respondent has no profile to load, so neither state is an event
+                  worth reporting to them — they just fill the form in. */}
+              {isSignedIn && profile.loading && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
                   <CircularProgress size={14} sx={{ color: editorial.ink }} />
                   <Typography variant="caption" sx={{ color: editorial.muted }}>
@@ -945,7 +925,7 @@ export default function JobApplyPage() {
                   </Typography>
                 </Box>
               )}
-              {profile.error && (
+              {isSignedIn && profile.error && (
                 <Alert severity="warning" sx={{ mb: 2, borderRadius: "8px" }}>
                   Could not load profile. Please fill in your details manually.
                 </Alert>
@@ -959,7 +939,11 @@ export default function JobApplyPage() {
                   <FormSectionHeader
                     icon={<AssignmentInd />}
                     title="Applicant details"
-                    description="Confirm your profile details so HR can reach you about this role."
+                    description={
+                      isSignedIn
+                        ? "Confirm your profile details so HR can reach you about this role."
+                        : "Tell us how HR can reach you about this role."
+                    }
                   />
                   {/* Name */}
                   <TextField

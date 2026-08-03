@@ -278,6 +278,7 @@ const loadAdminHomePage = () => import("./pages/AdminHomePage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadCareersPage = () => import("./pages/CareersPage");
 const loadJobApplyPage = () => import("./pages/JobApplyPage");
+const loadJobDetailsPage = () => import("./pages/JobDetailsPage");
 const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
 const loadAdminJobsPage = () => import("./pages/AdminJobsPage");
 const loadAdminJobManagePage = () => import("./pages/AdminJobManagePage");
@@ -1494,6 +1495,18 @@ export default function App() {
               <ErrorBoundary>
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <LazyRoute load={loadCareersPage} fallback={<LoadingScreen status="Loading career portal..." />} />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          {/* Ranked matching puts /career-portal/:jobId/apply ahead of this,
+              so the apply route is unaffected by the shared prefix. */}
+          <Route
+            path="/career-portal/:jobId"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  <LazyRoute load={loadJobDetailsPage} fallback={<LoadingScreen status="Loading opportunity..." />} />
                 </Box>
               </ErrorBoundary>
             }

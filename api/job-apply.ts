@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken } from "./_utils/graphClient.js";
+import { getGraphToken, getSharePointToken } from "./_utils/graphClient.js";
 import { logError, logInfo, logWarn } from "./_utils/logger.js";
 
 function errorMessage(error: unknown, maxLength?: number): string {
@@ -83,18 +83,18 @@ async function patchHyperlinkViaSPRest(
  * where the URL column was changed to a text-compatible field.
  */
 async function patchUrlColumn(
-  userToken: string,
+  spToken: string,
   listName: string,
   itemId: string,
   fieldName: string,
   url: string,
   description: string,
 ): Promise<void> {
-  // Use the signed-in user's delegated SharePoint token so the item history
-  // records the applicant as the editor.
+  // A signed-in applicant's delegated token records them as the editor in the item
+  // history; a Public Respondent's write lands under the app-only principal.
   try {
-    await patchHyperlinkViaSPRest(userToken, listName, itemId, fieldName, url, description);
-    logInfo("api:job-apply", "URL field saved via SP REST delegated token", { fieldName });
+    await patchHyperlinkViaSPRest(spToken, listName, itemId, fieldName, url, description);
+    logInfo("api:job-apply", "URL field saved via SP REST", { fieldName });
     return;
   } catch (e) {
     logWarn("api:job-apply", "SP REST FieldUrlValue update failed", {
@@ -104,8 +104,8 @@ async function patchUrlColumn(
   }
 
   try {
-    await updateListItemViaSPRest(userToken, listName, itemId, { [fieldName]: url });
-    logInfo("api:job-apply", "URL field saved as text via delegated token", { fieldName });
+    await updateListItemViaSPRest(spToken, listName, itemId, { [fieldName]: url });
+    logInfo("api:job-apply", "URL field saved as text", { fieldName });
     return;
   } catch (e) {
     logWarn("api:job-apply", "SP REST text URL update failed", {
@@ -149,7 +149,11 @@ interface JobApplyBody {
   pdpaNoticeVersion?: string;
   pdpaConsentedAt?: string;
   retentionUntil?: string;
-  /** User's delegated access token (MSAL, AllSites.Manage scope) — used for SP REST v1 calls */
+  /**
+   * Signed-in applicant's delegated access token (MSAL, AllSites.Manage scope),
+   * used for SP REST v1 calls. Omitted by Public Respondents applying from the
+   * open career portal — those submissions fall back to the app-only principal.
+   */
   accessToken?: string;
 }
 
@@ -654,25 +658,58 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (body.pdpaConsent !== true) {
     return res.status(400).json({ error: "PDPA consent is required before submitting an application." });
   }
-  if (!accessToken) {
-    return res.status(401).json({
-      error: "Please sign in again before submitting. A delegated SharePoint token is required.",
-    });
+  // A Public Respondent applies from the open career portal without signing in, so
+  // there is no delegated token to write with. Those submissions run on the
+  // app-only SharePoint certificate principal instead — the same fallback public
+  // HR form submissions use (see api/submit-form.ts).
+  const isPublicSubmission = !accessToken;
+
+  if (isPublicSubmission) {
+    // forceApply bypasses the duplicate guard and is gated on HR Forms Owner
+    // membership, which can only be proven with a delegated token.
+    if (body.forceApply === true) {
+      return res.status(403).json({
+        error: "Only a signed-in HR Forms Owner can submit a duplicate override application.",
+      });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicantEmail)) {
+      return res.status(400).json({ error: "A valid applicant email address is required." });
+    }
   }
-  const delegatedToken = accessToken;
 
   try {
-    const currentUser = await getSharePointCurrentUser(delegatedToken);
-    const authenticatedEmail = resolveSharePointUserEmail(currentUser);
-    if (!authenticatedEmail) {
-      return res.status(401).json({ error: "Could not identify the signed-in SharePoint user." });
+    const spToken = isPublicSubmission ? await getSharePointToken() : (accessToken as string);
+
+    // For a signed-in applicant SharePoint is the authority on who they are. A
+    // Public Respondent has no tenant identity, so the declared applicant email is
+    // all there is — it labels the application, it does not prove who sent it.
+    let authenticatedEmail: string;
+    if (isPublicSubmission) {
+      authenticatedEmail = applicantEmail.toLowerCase();
+    } else {
+      const currentUser = await getSharePointCurrentUser(spToken);
+      authenticatedEmail = resolveSharePointUserEmail(currentUser);
+      if (!authenticatedEmail) {
+        return res.status(401).json({ error: "Could not identify the signed-in SharePoint user." });
+      }
     }
 
-    await ensureJobApplicationColumnsViaSPRest(delegatedToken);
-    await ensureDocLibraryViaSPRest(delegatedToken, DOC_LIB_NAME);
+    // Creating columns and libraries needs Manage rights. A signed-in HR user has
+    // them, so a failure there is a real error worth surfacing. The app-only
+    // principal may not, so on the public path this is best-effort and the
+    // required-column check below is what decides whether the submission proceeds.
+    try {
+      await ensureJobApplicationColumnsViaSPRest(spToken);
+      await ensureDocLibraryViaSPRest(spToken, DOC_LIB_NAME);
+    } catch (provisionError) {
+      if (!isPublicSubmission) throw provisionError;
+      logWarn("api:job-apply", "App-only provisioning skipped for public application", {
+        errorMessage: errorMessage(provisionError, 200),
+      });
+    }
 
     // ── Resolve real column internal names from SharePoint schema ────────
-    const colMap = await resolveColumns(delegatedToken, APPLICATION_LIST);
+    const colMap = await resolveColumns(spToken, APPLICATION_LIST);
 
     logInfo("api:job-apply", "Discovered SharePoint columns", {
       columnCount: colMap.raw.length,
@@ -721,9 +758,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // ── Duplicate check ──────────────────────────────────────────────────
     // ApplicantEmail is not indexed — must send Prefer header to allow filter.
+    // For a Public Respondent authenticatedEmail is the address they typed, so
+    // this catches an honest repeat application but cannot stop someone who
+    // applies again under a different address. Same guarantee public HR forms give.
     if (COL.applicantEmail && COL.jobListingId) {
       const duplicate = await hasDuplicateApplication(
-        delegatedToken,
+        spToken,
         colMap,
         { jobListingId: COL.jobListingId, applicantEmail: COL.applicantEmail, submittedBy: COL.submittedBy },
         jobListingId,
@@ -732,7 +772,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       );
       if (duplicate) {
         const isForceBypass = body.forceApply === true
-          ? await isHrFormsOwner(delegatedToken, authenticatedEmail)
+          ? await isHrFormsOwner(spToken, authenticatedEmail)
           : false;
         if (!isForceBypass) {
           return res.status(409).json({
@@ -741,7 +781,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
         logInfo("api:job-apply", "Admin duplicate override accepted", { authenticatedEmail, jobListingId });
       } else if (body.forceApply === true) {
-        const isAdmin = await isHrFormsOwner(delegatedToken, authenticatedEmail);
+        const isAdmin = await isHrFormsOwner(spToken, authenticatedEmail);
         if (!isAdmin) return res.status(403).json({ error: "Only HR Forms Owners can submit a duplicate test application." });
       }
     }
@@ -771,7 +811,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           });
           return null;
         }
-        return await uploadFileViaSPRest(delegatedToken, DOC_LIB_NAME, uniqueName, binary);
+        return await uploadFileViaSPRest(spToken, DOC_LIB_NAME, uniqueName, binary);
       } catch (e) {
         logError("api:job-apply", "Application file upload failed", e, { fileName: name });
         return null;
@@ -811,14 +851,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (COL.company && company) coreFields[COL.company] = company;
     if (COL.status)         coreFields[COL.status]         = "New";
     if (COL.submissionRef)  coreFields[COL.submissionRef]  = submissionRef;
-    if (COL.submittedBy)    coreFields[COL.submittedBy]    = authenticatedEmail;
+    // GUEST marks a Public Respondent, matching how public HR form submissions are
+    // recorded. The applicant's own address still lands in Applicant Email.
+    if (COL.submittedBy)    coreFields[COL.submittedBy]    = isPublicSubmission ? "GUEST" : authenticatedEmail;
     if (COL.submittedAt)    coreFields[COL.submittedAt]    = submittedAt;
     if (COL.pdpaConsent) coreFields[COL.pdpaConsent] = "Accepted";
     if (COL.pdpaNoticeVersion) coreFields[COL.pdpaNoticeVersion] = body.pdpaNoticeVersion || PDPA_NOTICE_VERSION;
     if (COL.pdpaConsentAt) coreFields[COL.pdpaConsentAt] = pdpaConsentedAt;
     if (COL.retentionUntil) coreFields[COL.retentionUntil] = retentionUntil;
 
-    const created = await createListItemViaSPRest(delegatedToken, APPLICATION_LIST, coreFields);
+    const created = await createListItemViaSPRest(spToken, APPLICATION_LIST, coreFields);
     const itemId = created.id;
     logInfo("api:job-apply", "Created job application item", { itemId, submissionRef });
 
@@ -831,7 +873,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     ): Promise<void> {
       if (!internalName || value === "" || value == null) return;
       try {
-        await updateListItemViaSPRest(delegatedToken, APPLICATION_LIST, itemId, {
+        await updateListItemViaSPRest(spToken, APPLICATION_LIST, itemId, {
           [internalName]: value,
         });
       } catch (e) {
@@ -850,11 +892,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       supportingDocumentCount: supportingDocuments.length,
     });
     if (COL.resumeUrl && resumeUrl) {
-      await patchUrlColumn(delegatedToken, APPLICATION_LIST, itemId, COL.resumeUrl, resumeUrl, "Resume");
+      await patchUrlColumn(spToken, APPLICATION_LIST, itemId, COL.resumeUrl, resumeUrl, "Resume");
     }
     if (COL.coverLetterUrl && supportingDocuments[0]) {
       await patchUrlColumn(
-        delegatedToken,
+        spToken,
         APPLICATION_LIST,
         itemId,
         COL.coverLetterUrl,
@@ -882,7 +924,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // ── Step 3: Increment application count on job listing ────────────────
     try {
-      const jobColMap = await resolveColumns(delegatedToken, JOB_LIST);
+      const jobColMap = await resolveColumns(spToken, JOB_LIST);
       const countCol = findColumn(
         jobColMap,
         "Application Count",
@@ -891,13 +933,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       );
       if (countCol) {
         const liveCount = await countApplicationsForJobViaSPRest(
-          delegatedToken,
+          spToken,
           colMap,
           { jobListingId: COL.jobListingId, status: COL.status },
           jobListingId,
         );
         if (liveCount !== null) {
-          await updateListItemViaSPRest(delegatedToken, JOB_LIST, jobListingId, {
+          await updateListItemViaSPRest(spToken, JOB_LIST, jobListingId, {
             [countCol]: liveCount,
           });
         }
