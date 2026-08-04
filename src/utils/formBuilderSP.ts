@@ -70,6 +70,8 @@ export interface SpColumnSpec {
   ml?: boolean;
   rt?: boolean;
   choices?: string[];
+  /** Choice column accepts a value the respondent typed ("Other" is enabled). */
+  fillIn?: boolean;
   label?: string;
 }
 
@@ -218,6 +220,10 @@ function buildColumnBody(spec: SpColumnSpec): Record<string, unknown> {
   }
   if ((spec.k === 6 || spec.k === 15) && spec.choices && spec.choices.length > 0) {
     body.Choices = { results: spec.choices };
+    // A question with "Other" enabled submits a value the respondent typed. Without
+    // FillInChoice the column treats it as invalid; with it, the answer is stored and
+    // shown like any other.
+    if (spec.fillIn) body.FillInChoice = true;
   }
   return body;
 }
@@ -265,6 +271,37 @@ async function repairUrlColumnDisplayFormat(token: string, listTitle: string, fi
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`repairUrlColumn "${fieldName}" ${response.status}: ${text}`);
+  }
+}
+
+/**
+ * Turn on "Can add values manually" for a choice column that already exists.
+ *
+ * New columns get `FillInChoice` from `buildColumnBody`, but a form published before
+ * anyone enabled "Other" on a field already has its column, and `ensureColumns` skips
+ * those. Without this, republishing would leave the column rejecting the very answers
+ * the newly enabled "Other" row invites.
+ */
+async function repairChoiceColumnFillIn(token: string, listTitle: string, fieldName: string, kind: number): Promise<void> {
+  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields/getbyinternalnameortitle('${encodeURIComponent(fieldName)}')`;
+  const response = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json;odata=nometadata',
+      'Content-Type': 'application/json;odata=verbose',
+      'X-HTTP-Method': 'MERGE',
+      'IF-MATCH': '*',
+      'X-RequestDigest': await getDigest(token),
+    },
+    body: JSON.stringify({
+      __metadata: { type: SP_FIELD_TYPE_MAP[kind] ?? 'SP.FieldChoice' },
+      FillInChoice: true,
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`repairChoiceColumn "${fieldName}" ${response.status}: ${text}`);
   }
 }
 
@@ -784,6 +821,9 @@ export async function ensureColumns(
     if (existingColumns.has(normalized)) {
       if (column.k === SP_FIELD_KIND.image) {
         await repairUrlColumnDisplayFormat(token, listTitle, column.n);
+      }
+      if (column.fillIn) {
+        await repairChoiceColumnFillIn(token, listTitle, column.n, column.k);
       }
       result.existing.push(column.n);
       continue;
@@ -1899,8 +1939,14 @@ async function surveyQuestionColumnSpecs(
     if (!kind) continue;
 
     let choices: string[] | undefined;
+    let fillIn = false;
     if (kind.FieldTypeKind === 6 || kind.FieldTypeKind === 15) {
       choices = await resolveChoiceValues(token, question as unknown as Record<string, unknown>, onLog);
+      // `showOtherItem` is the SurveyJS name, `hasOther` the builder's — a form saved
+      // before the toggle existed may carry either, so honour both.
+      const q = question as unknown as Record<string, unknown>;
+      fillIn = q.showOtherItem === true || q.hasOther === true;
+      if (fillIn) onLog(`  "Other" enabled — column accepts typed answers`, 'info');
     }
 
     columns.push({
@@ -1908,6 +1954,7 @@ async function surveyQuestionColumnSpecs(
       k: kind.FieldTypeKind,
       ml: kind.FieldTypeKind === 3,
       choices,
+      fillIn,
       label: kind.label,
     });
   }

@@ -61,6 +61,9 @@ registerDynamicMatrix();
 const APP_FONT_NAME = "Inter";
 const APP_FONT_STACK = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
 
+/** What SurveyJS labels the "Other" row when the field leaves `otherText` unset. */
+const DEFAULT_OTHER_TEXT = "Other (describe)";
+
 if (!Serializer.findProperty("text", "autocapitalize")) {
   Serializer.addProperty("text", {
     name: "autocapitalize",
@@ -929,6 +932,12 @@ function WysControl({ field, children }: { field: FormBuilderField; children?: R
             {text}
           </div>
         ))}
+        {field.hasOther && (
+          <div className="bx-wys-choice">
+            <span className={`bx-wys-mark${round ? " is-round" : ""}`} />
+            {field.otherText || DEFAULT_OTHER_TEXT}
+          </div>
+        )}
       </div>
     );
   }
@@ -2007,6 +2016,20 @@ function PropertyPanel({ field, allFields, onChange, onClose, token }: {
                         />
                         {!field.spChoicesSource?.list && !field.spFilteredListSource?.list && (
                           <PropRow label="Choices"><ChoicesEditor choices={field.choices || []} onChange={c => onChange({ choices: c })} /></PropRow>
+                        )}
+                        <Toggle
+                          checked={!!field.hasOther}
+                          onChange={v => onChange({ hasOther: v })}
+                          label="Let people enter their own answer"
+                        />
+                        {field.hasOther && (
+                          <PropRow label={'"Other" label'}>
+                            <Input
+                              value={field.otherText ?? ""}
+                              onChange={v => onChange({ otherText: v || undefined })}
+                              placeholder={DEFAULT_OTHER_TEXT}
+                            />
+                          </PropRow>
                         )}
                       </>
                     )}

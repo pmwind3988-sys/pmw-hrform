@@ -48,6 +48,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
+import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1442,7 +1443,7 @@ export default function ApprovalDashboard() {
       const nextLayerNum = nextLayerConfig?.layerNumber ?? currLayerNum + 1;
       const isFinal = !nextLayerConfig && currLayerNum >= totalLayers;
 
-      const fields = evalSurveyModel ? evalSurveyModel.data as Record<string, unknown> : {};
+      const fields = evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data as Record<string, unknown>) : {};
 
       await submitEvaluationData(token, listName, respId, currLayerNum, {
         confirmerEmail: accounts[0]?.username || "SYSTEM",

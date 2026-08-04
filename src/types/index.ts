@@ -295,6 +295,8 @@ export interface FormBuilderField {
   choices?: (string | { value: string; text: string })[];
   colCount?: number;
   hasOther?: boolean;
+  /** Label on the "Other" row. Unset falls back to the SurveyJS default. */
+  otherText?: string;
   hasNone?: boolean;
   rateMin?: number;
   rateMax?: number;

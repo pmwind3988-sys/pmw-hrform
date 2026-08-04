@@ -29,6 +29,7 @@ import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionP
 import Logo from "../components/Logo";
 import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
+import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -523,7 +524,7 @@ export default function EvaluationPage() {
             responseItemId: itemId,
             layerNumber: currentLayer.layerNumber,
             action,
-            fields: evalSurveyModel ? evalSurveyModel.data : {},
+            fields: evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data) : {},
             signature: signatureData || undefined,
             rejection: rejectionReason || undefined,
           }),
@@ -558,7 +559,7 @@ export default function EvaluationPage() {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
           confirmerEmail: userEmail,
           confirmerName: accounts[0]?.name ?? undefined,
-          fields: evalSurveyModel ? evalSurveyModel.data as Record<string, unknown> : {},
+          fields: evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data as Record<string, unknown>) : {},
           signatureUrl: signatureData,
         });
         await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {

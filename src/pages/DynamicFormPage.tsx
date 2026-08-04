@@ -31,6 +31,7 @@ import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SU
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { buildWorkflowReviewLink } from "../utils/workflowLink";
+import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -1102,7 +1103,9 @@ export default function DynamicFormPage() {
     setSubmitStatus("loading");
   }, [pdpaAccepted, showCompanyChoice, companyFieldName, companyChoiceValue, survey]);
   const doSubmitForm = useCallback(async () => {
-    const raw = lastDataRef.current ?? {};
+    // Collapse "other" + "{name}-Comment" pairs into the free text the respondent
+    // typed, before uploads or column mapping read the answers.
+    const raw = foldOtherAnswers(lastDataRef.current ?? {});
     const cfg = formData?.formConfig;
     if (!cfg) { throw new Error("no form config"); }
     
