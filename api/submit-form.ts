@@ -18,6 +18,8 @@ import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
+import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
+import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import {
   buildWorkflowActionEmail,
   buildManualPaperWorkflowEmail,
@@ -909,6 +911,7 @@ function isCoreSubmissionField(fieldName: string): boolean {
     fieldName === "FormVersion" ||
     fieldName === "PublishKey" ||
     fieldName === "FormID" ||
+    fieldName === REFERENCE_NO_FIELD ||
     fieldName === "RawJSON" ||
     fieldName === "PDPAConsent" ||
     fieldName === "PDPANoticeVersion" ||
@@ -1247,6 +1250,7 @@ async function sendManualPaperWorkflowEmail(
     recipient: string;
     layer: ApiLayerConfigItem;
     totalLayers: number;
+    referenceNo: string;
   },
 ): Promise<void> {
   await scheduleOrDeliverWorkflowEmail(
@@ -1261,6 +1265,7 @@ async function sendManualPaperWorkflowEmail(
       layerType: params.layer.type,
       layerTitle: params.layer.title,
       surveyElements: params.layer.surveyElements,
+      referenceNo: params.referenceNo,
     }),
     {
       listTitle: params.listTitle,
@@ -1398,6 +1403,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
 
+    // Claimed after the column check rather than before it: a list provisioned
+    // before reference numbers existed has nowhere to put one, and burning a
+    // number on a submission that cannot store it would leave a permanent gap
+    // for no benefit. Republishing the form adds the column.
+    let referenceNo = "";
+    const referenceConfig = parseReferenceNumberConfig(formConfig.ReferenceConfig);
+    if (referenceConfig.enabled) {
+      if (resolveColumnKey(REFERENCE_NO_FIELD)) {
+        referenceNo = await allocateReferenceNumber({ formTitle: listTitle, config: referenceConfig });
+        submissionBody[REFERENCE_NO_FIELD] = referenceNo;
+      } else {
+        logWarn("api:submit-form", "Reference numbers are on but the response list has no ReferenceNo column", {
+          listTitle,
+        });
+      }
+    }
+
     // Image column fields (urlFieldPatches) are excluded from the Graph create
     // payload — they have never been writable via Graph PATCH on Image columns.
     const createBody = omitUrlPatchFields(submissionBody, submission.urlFieldPatches);
@@ -1522,6 +1544,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               recipient,
               layer: firstLayer,
               totalLayers,
+              referenceNo,
             });
           } else {
             const reviewLink = buildWorkflowReviewLink({
@@ -1544,6 +1567,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 recipient,
                 layerType: firstLayer.type,
                 reviewLink,
+                referenceNo,
               }),
               {
                 listTitle,
@@ -1571,7 +1595,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    return res.status(200).json({ success: true, id: parentId, childItemIds });
+    return res.status(200).json({ success: true, id: parentId, childItemIds, referenceNo });
   } catch (err) {
     if (!cleanupHandled && tokenForCleanup && uploadedFilesForCleanup.length > 0) {
       await cleanupUploadedFiles(tokenForCleanup, uploadedFilesForCleanup);

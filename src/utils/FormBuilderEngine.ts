@@ -430,18 +430,46 @@ export function generateFieldId(prefix = "field"): string {
   return `${prefix}_${rand}`;
 }
 
-// ── Question Factory ───────────────────────────────────────────────────────────
+// ── Schema Names ───────────────────────────────────────────────────────────────
 
-function toCamelCase(label: string): string {
+/**
+ * Turns a human label into the schema name it is stored under — the SharePoint
+ * column for a question, the stored value for a choice.
+ *
+ * Every editor that pairs a label with a schema name derives it through this one
+ * function. The builder decides whether a name is still auto-linked by comparing
+ * it against this output for the label it currently has, so two spellings of
+ * "camel case" would make an untouched name look hand-edited and freeze it.
+ */
+export function schemaNameFromLabel(label: string): string {
   return label
-    .replace(/[^a-zA-Z0-9 ]/g, "")
-    .split(" ")
+    .replace(/[^a-zA-Z0-9 ]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
     .map((word, i) => {
       const lower = word.toLowerCase();
       return i === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
     })
     .join("");
 }
+
+/**
+ * Whether `name` still tracks `label`, i.e. nothing was typed into the schema
+ * name box by hand. An empty name counts as untracked-but-free, so the next
+ * keystroke in the label fills it in.
+ *
+ * `label === name` is accepted too: choices authored before labels and values
+ * were separate are stored as a bare string, which reads back as both.
+ */
+export function isSchemaNameDerivedFrom(name: string, label: string): boolean {
+  if (!name) return true;
+  return name === schemaNameFromLabel(label) || name === label;
+}
+
+// ── Question Factory ───────────────────────────────────────────────────────────
+
+const toCamelCase = schemaNameFromLabel;
 
 export function createQuestion(td: QuestionTypeDefinition): FormBuilderField {
   const _id = generateFieldId();

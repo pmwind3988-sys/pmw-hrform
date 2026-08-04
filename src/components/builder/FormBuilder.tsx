@@ -7,7 +7,7 @@ import { Survey } from "survey-react-ui";
 import { Model, Serializer } from "survey-core";
 import "survey-core/survey-core.min.css";
 import type { SurveyJson, FormBuilderField } from "../../types/index";
-import { QUESTION_TYPES, createQuestion, buildSurveyJson, validateFields, safeEvalArithmetic } from "../../utils/FormBuilderEngine";
+import { QUESTION_TYPES, createQuestion, buildSurveyJson, validateFields, safeEvalArithmetic, schemaNameFromLabel, isSchemaNameDerivedFrom } from "../../utils/FormBuilderEngine";
 import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree, reorderFieldsRecursive, moveFieldToRoot } from "../../utils/FormBuilderEngine";
 import { registerSignaturePad } from "../../utils/SignaturePad";
 import { registerDynamicMatrix } from "../../utils/DynamicMatrix";
@@ -1240,16 +1240,43 @@ function FormSheet({ fields, selectedId, onSelect, onRemove, onDuplicate, onReor
 }
 
 // ── Property Editors ──────────────────────────────────────────────────
+/**
+ * Manual choice list for dropdown / checkbox / radio fields.
+ *
+ * The label is what the employee reads and the only thing most authors care
+ * about, so it leads; the schema name that goes into SharePoint follows it
+ * automatically. Typing into the schema name box unlinks that row — from then on
+ * it survives label edits, which is the only way to rename a label without
+ * orphaning the answers already stored under the old value.
+ */
 function ChoicesEditor({ choices, onChange }: { choices: (string | { value: string; text: string })[]; onChange: (c: (string | { value: string; text: string })[]) => void }) {
-  type ChoiceItem = { value: string; text: string; _textCustomised?: boolean };
-  const items = (Array.isArray(choices) ? choices : []).map(c => typeof c === "string" ? { value: c, text: c } : c) as ChoiceItem[];
-  const update = (i: number, k: string, v: string) => { const n = items.map((it, idx) => idx === i ? { ...it, [k]: v, ...(k === "value" && !it._textCustomised ? { text: v } : {}) } : it); onChange(n.map(x => x.value === x.text ? x.value : x)); };
-  const add = () => { const n = [...items, { value: `option${items.length + 1}`, text: `Option ${items.length + 1}` }]; onChange(n.map(x => x.value === x.text ? x.value : x)); };
+  type ChoiceItem = { value: string; text: string };
+  const items = (Array.isArray(choices) ? choices : []).map(c => typeof c === "string" ? { value: c, text: c } : { value: c.value, text: c.text ?? c.value }) as ChoiceItem[];
+  // A choice whose label and schema name match collapses back to a bare string,
+  // the shape SurveyJS and every older saved form already use.
+  const emit = (next: ChoiceItem[]) => onChange(next.map(x => x.value === x.text ? x.value : x));
+  const setLabel = (i: number, text: string) => emit(items.map((it, idx) => {
+    if (idx !== i) return it;
+    return isSchemaNameDerivedFrom(it.value, it.text)
+      ? { text, value: schemaNameFromLabel(text) }
+      : { ...it, text };
+  }));
+  const setName = (i: number, value: string) => emit(items.map((it, idx) =>
+    idx === i ? { ...it, value: value.replace(/[^a-zA-Z0-9_]/g, "") } : it));
+  const add = () => {
+    const label = `Option ${items.length + 1}`;
+    emit([...items, { value: schemaNameFromLabel(label), text: label }]);
+  };
   return <div className="fb-choices-list">
+    <div className="fb-choice-row fb-choice-head">
+      <span className="fb-choice-input">Label</span>
+      <span className="fb-choice-input">Schema name</span>
+      <span className="fb-choice-head-spacer" />
+    </div>
     {items.map((it, i) => <div key={i} className="fb-choice-row">
-      <Input value={it.value} onChange={v => update(i, "value", v)} placeholder="value" className="fb-choice-input" />
-      <Input value={it.text} onChange={v => update(i, "text", v)} placeholder="label" className="fb-choice-input" />
-      <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title="Remove" onClick={() => onChange(items.filter((_, idx) => idx !== i).map(x => x.value === x.text ? x.value : x))} danger />
+      <Input value={it.text} onChange={v => setLabel(i, v)} placeholder="Label" className="fb-choice-input" aria-label={`Choice ${i + 1} label`} />
+      <Input value={it.value} onChange={v => setName(i, v)} placeholder="schemaName" className="fb-choice-input" aria-label={`Choice ${i + 1} schema name`} />
+      <IconBtn icon={<CloseIcon style={{ fontSize: 14 }} />} title="Remove" onClick={() => emit(items.filter((_, idx) => idx !== i))} danger />
     </div>)}
     <button onClick={add} className="fb-add-choice-btn"><AddIcon style={{ fontSize: 14 }} /> Add option</button>
   </div>;
@@ -1545,13 +1572,18 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
   onChange: (cols: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
 }) {
   const addCol = () => {
-    const idx = columns.length + 1;
-    onChange([...columns, { name: `col${idx}`, title: `Column ${idx}`, cellType: "text" }]);
+    const title = `Column ${columns.length + 1}`;
+    onChange([...columns, { name: schemaNameFromLabel(title), title, cellType: "text" }]);
   };
   const updateCol = (i: number, patch: Partial<typeof columns[0]>) => {
     const next = columns.map((c, idx) => idx === i ? { ...c, ...patch } : c);
     onChange(next);
   };
+  // Same rule as questions and choices: the column name tracks its label until
+  // it is edited directly.
+  const setColTitle = (i: number, title: string) => updateCol(i, isSchemaNameDerivedFrom(columns[i].name, columns[i].title)
+    ? { title, name: schemaNameFromLabel(title) }
+    : { title });
   const removeCol = (i: number) => onChange(columns.filter((_, idx) => idx !== i));
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1567,8 +1599,8 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: C.purple, width: 18 }}>{i + 1}</span>
           <div style={{ flex: 1, display: "flex", gap: 6 }}>
-            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/\s+/g, "_") })} placeholder="Name" style={{ flex: 1, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
-            <input value={col.title} onChange={e => updateCol(i, { title: e.target.value })} placeholder="Title" style={{ flex: 1.5, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
+            <input value={col.title} onChange={e => setColTitle(i, e.target.value)} placeholder="Label" aria-label={`Column ${i + 1} label`} style={{ flex: 1.5, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
+            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} placeholder="schemaName" aria-label={`Column ${i + 1} schema name`} style={{ flex: 1, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
           </div>
           <button onClick={() => removeCol(i)} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}><CloseIcon style={{ fontSize: 11 }} /></button>
         </div>
@@ -1783,9 +1815,12 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
  * dock is now mounted only for a selected field, so they moved to Tools →
  * Content → Form display.
  */
-function SurveySettingsPanel({ surveySettings, onSurveySettingsChange }: {
+function SurveySettingsPanel({ surveySettings, onSurveySettingsChange, formTitle, titleLocked, onTitleChange }: {
   surveySettings: Record<string, unknown>;
   onSurveySettingsChange?: (s: Record<string, unknown>) => void;
+  formTitle?: string;
+  titleLocked?: boolean;
+  onTitleChange?: (v: string) => void;
 }) {
   const set = (patch: Record<string, unknown>) => onSurveySettingsChange?.({ ...surveySettings, ...patch });
   return (
@@ -1793,7 +1828,17 @@ function SurveySettingsPanel({ surveySettings, onSurveySettingsChange }: {
       <p className="bx-lede" style={{ fontSize: 14 }}>
         Form identity, banner, access and the managed Company selector live in Settings. These control only how SurveyJS renders the form.
       </p>
-      <PropRow label="Display title"><Input value={(surveySettings.title as string) || ""} onChange={v => set({ title: v })} placeholder="Display title" /></PropRow>
+      {/* The rendered survey shows the form title, so this edits that one value
+          rather than a second title that could disagree with it. */}
+      <PropRow label="Display title">
+        <Input
+          value={formTitle ?? ""}
+          onChange={v => onTitleChange?.(v)}
+          placeholder="Untitled form"
+          disabled={!onTitleChange || titleLocked}
+          title={titleLocked ? "The form title becomes the SharePoint list name and is locked after the first publish." : undefined}
+        />
+      </PropRow>
       <PropRow label="Form description"><Textarea value={(surveySettings.description as string) || ""} onChange={v => set({ description: v })} rows={2} placeholder="Optional description" /></PropRow>
       <PropRow label="Question titles">
         <Select value={(surveySettings.titleLocation as string) || "default"} onChange={v => set({ titleLocation: v })} options={[{ value: "default", label: "Default" }, { value: "hidden", label: "Hidden" }, { value: "top", label: "Top" }, { value: "bottom", label: "Bottom" }]} />
@@ -1899,14 +1944,12 @@ function PropertyPanel({ field, allFields, onChange, onClose, token }: {
                 value={field.title || ""}
                 onChange={e => {
                   const v = e.target.value;
-                  const nameFromLabel = v
-                    .replace(/[^a-zA-Z0-9\s]/g, "")
-                    .trim()
-                    .replace(/\s+(.)/g, (_, c) => c.toUpperCase())
-                    .replace(/^([A-Z])/, (_, c) => c.toLowerCase())
-                    .replace(/[^a-zA-Z0-9_]/g, "")
-                    .replace(/\s+/g, "_");
-                  onChange({ title: v, name: nameFromLabel || "" });
+                  // The field name follows the label until someone edits it by
+                  // hand. Regenerating unconditionally would silently rewrite a
+                  // deliberate SharePoint column name on the next typo fix.
+                  onChange(isSchemaNameDerivedFrom(field.name || "", field.title || "")
+                    ? { title: v, name: schemaNameFromLabel(v) }
+                    : { title: v });
                 }}
                 placeholder="Question label"
               />
@@ -2561,7 +2604,15 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const selectedFieldRef = useRef(selectedField);
   if (selectedField) selectedFieldRef.current = selectedField;
 
-  const surveyJson = useMemo(() => buildSurveyJson(fields, surveySettings), [fields, surveySettings]);
+  // The sheet title is the form's identity everywhere else — the SharePoint list
+  // name, the dashboards, the PDF header — so it is also the title the rendered
+  // survey carries. Deriving it here rather than storing a second copy is what
+  // stops the two from drifting apart when a form is renamed.
+  const sheetTitle = sheet?.title;
+  const surveyJson = useMemo(
+    () => buildSurveyJson(fields, sheetTitle ? { ...surveySettings, title: sheetTitle } : surveySettings),
+    [fields, surveySettings, sheetTitle],
+  );
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   useEffect(() => { if (onChangeRef.current) onChangeRef.current(surveyJson); }, [surveyJson]);
@@ -2852,23 +2903,23 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const csv = fields.map(f => `${f.name},${f.title},${f.type},${f.isRequired ? "Yes" : "No"}`).join("\n");
                   const blob = new Blob([`Field Name,Field Title,Type,Required\n${csv}`], { type: "text/csv" });
                   const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a"); a.href = url; a.download = `${surveySettings.title || "form"}_fields.csv`; a.click();
+                  const a = document.createElement("a"); a.href = url; a.download = `${surveyJson.title || "form"}_fields.csv`; a.click();
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><TableChartIcon style={{ fontSize: 14, marginRight: 4 }} /> Excel CSV</div>
                   <div style={{ fontSize: 11, color: C.textMuted }}>Export field names and types as CSV</div>
                 </button>
                 <button onClick={() => {
-                  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;}h1{color:#0078D4;}label{display:block;margin:12px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:12px;border:1px solid #ddd;border-radius:4px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>` + (f.type === "textarea" ? `<textarea rows="3" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}"></textarea>` : f.type === "select" || f.type === "dropdown" ? `<select><option>Select...</option>${(f.choices || []).map((c: unknown) => `<option>${DOMPurify.sanitize(typeof c === "string" ? String(c) : String((c as { text: string }).text))}</option>`).join("")}</select>` : `<input type="${DOMPurify.sanitize(String(f.inputType ?? "text"))}" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}">`)).join("\n")}</body></html>`;
+                  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;}h1{color:#0078D4;}label{display:block;margin:12px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:12px;border:1px solid #ddd;border-radius:4px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>` + (f.type === "textarea" ? `<textarea rows="3" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}"></textarea>` : f.type === "select" || f.type === "dropdown" ? `<select><option>Select...</option>${(f.choices || []).map((c: unknown) => `<option>${DOMPurify.sanitize(typeof c === "string" ? String(c) : String((c as { text: string }).text))}</option>`).join("")}</select>` : `<input type="${DOMPurify.sanitize(String(f.inputType ?? "text"))}" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}">`)).join("\n")}</body></html>`;
                   const blob = new Blob([html], { type: "text/html" });
                   const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a"); a.href = url; a.download = `${surveySettings.title || "form"}.html`; a.click();
+                  const a = document.createElement("a"); a.href = url; a.download = `${surveyJson.title || "form"}.html`; a.click();
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Blank HTML Form</div>
                   <div style={{ fontSize: 11, color: C.textMuted }}>Export printable blank form as HTML</div>
                 </button>
                 <button onClick={() => {
                   // Simple PDF generation using window.print
-                  const printContent = `<html><head><title>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;}h1{color:#0078D4;border-bottom:2px solid #0078D4;padding-bottom:10px;}label{display:block;margin:16px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;}.field-list{margin-top:30px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveySettings.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<div class="field-list"><label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>${f.description ? `<small style="color:#666">${DOMPurify.sanitize(String(f.description))}</small><br/>` : ""}<div style="height:24px;border-bottom:1px solid #ccc;"></div></div>`).join("\n")}</body></html>`;
+                  const printContent = `<html><head><title>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;}h1{color:#0078D4;border-bottom:2px solid #0078D4;padding-bottom:10px;}label{display:block;margin:16px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;}.field-list{margin-top:30px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<div class="field-list"><label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>${f.description ? `<small style="color:#666">${DOMPurify.sanitize(String(f.description))}</small><br/>` : ""}<div style="height:24px;border-bottom:1px solid #ccc;"></div></div>`).join("\n")}</body></html>`;
                   const printWindow = window.open("", "_blank");
                   if (printWindow) { printWindow.document.write(printContent); printWindow.document.close(); printWindow.print(); }
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
@@ -2877,7 +2928,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 </button>
                 <button onClick={() => {
                   // Create ZIP with all form assets - placeholder for JSZip implementation
-                  const _formTitle = surveySettings.title || "form";
+                  const _formTitle = surveyJson.title || "form";
                   const _jsonStr = JSON.stringify(surveyJson, null, 2);
                   const _csvStr = `Field Name,Field Title,Type,Required\n${fields.map(f => `${f.name},"${f.title}",${f.type},${f.isRequired}`).join("\n")}`;
                   const _emailTemplatesStr = emailTemplates.length > 0 ? JSON.stringify(emailTemplates, null, 2) : "[]";
@@ -3291,7 +3342,13 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 <Icon name="close" size={15} strokeWidth={1.6} />
               </button>
             </div>
-            <SurveySettingsPanel surveySettings={surveySettings} onSurveySettingsChange={setSurveySettings} />
+            <SurveySettingsPanel
+              surveySettings={surveySettings}
+              onSurveySettingsChange={setSurveySettings}
+              formTitle={sheet?.title}
+              titleLocked={sheet?.titleLocked}
+              onTitleChange={onTitleChange}
+            />
           </div>
         </div>
       )}

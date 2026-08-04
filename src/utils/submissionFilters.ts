@@ -37,6 +37,11 @@ export const EMPTY_SUBMISSION_FILTERS: SubmissionFilterState = {
   publishProfile: "",
 };
 
+/** Reference with separators removed, for punctuation-insensitive matching. */
+function compactReference(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export function getSubmissionTrainingTitle(item: Submission): string {
   const value = item.submissionData[TRAINING_TITLE_FIELD];
   return typeof value === "string" ? value.trim() : "";
@@ -88,9 +93,16 @@ function endOfDay(value: string): Date | null {
 
 export function submissionMatchesFilters(item: Submission, filters: SubmissionFilterState): boolean {
   if (filters.search) {
+    // Reference numbers are the ID people actually quote, so they are matched
+    // with separators stripped too — someone searching "0408260001" or pasting
+    // "osh-040826-0001" should land on the same record as "040826-0001".
     const needle = filters.search.toLowerCase();
-    const haystack = [item.title, item.formId, item.submissionId];
-    if (!haystack.some((value) => value.toLowerCase().includes(needle))) return false;
+    const compactNeedle = compactReference(needle);
+    const haystack = [item.title, item.formId, item.submissionId, item.referenceNo ?? ""];
+    const matched =
+      haystack.some((value) => value.toLowerCase().includes(needle)) ||
+      (!!compactNeedle && compactReference(item.referenceNo ?? "").includes(compactNeedle));
+    if (!matched) return false;
   }
 
   if (filters.listTitle && item.listTitle !== filters.listTitle) return false;

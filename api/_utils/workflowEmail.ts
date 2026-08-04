@@ -75,6 +75,8 @@ export interface WorkflowActionEmailParams {
   recipient: string;
   layerType: "approval" | "evaluation";
   reviewLink: string;
+  /** Shown ahead of the numeric item ID when the form issues references. */
+  referenceNo?: string;
 }
 
 export interface ManualPaperWorkflowEmailParams {
@@ -87,6 +89,8 @@ export interface ManualPaperWorkflowEmailParams {
   layerType: "approval" | "evaluation";
   layerTitle?: string;
   surveyElements?: Record<string, unknown>[];
+  /** Shown ahead of the numeric item ID when the form issues references. */
+  referenceNo?: string;
 }
 
 function parseWorkflowEmailLog(raw: unknown): WorkflowEmailLog {
@@ -376,6 +380,22 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#039;");
 }
 
+/**
+ * The reference goes in the subject, not only the body: recipients search their
+ * mailbox by the ID they were given, and a subject match is what surfaces the
+ * whole thread rather than one message.
+ */
+function referenceSuffix(referenceNo: string | undefined): string {
+  const trimmed = (referenceNo ?? "").trim();
+  return trimmed ? ` [${trimmed}]` : "";
+}
+
+function referenceRow(referenceNo: string | undefined): string {
+  const trimmed = (referenceNo ?? "").trim();
+  if (!trimmed) return "";
+  return `<tr><td style="padding:8px 0;color:#6b7280">Reference no.</td><td style="padding:8px 0;font-weight:700">${escapeHtml(trimmed)}</td></tr>`;
+}
+
 export function buildManualPaperWorkflowEmail(
   params: ManualPaperWorkflowEmailParams,
 ): WorkflowEmailMessage {
@@ -383,7 +403,7 @@ export function buildManualPaperWorkflowEmail(
   const layerName = params.layerTitle?.trim() || `Layer ${params.layer}`;
   return {
     to: params.recipient,
-    subject: `Manual ${params.layerType}: ${params.formTitle} layer ${params.layer}`,
+    subject: `Manual ${params.layerType}: ${params.formTitle} layer ${params.layer}${referenceSuffix(params.referenceNo)}`,
     body: `<!doctype html>
 <html>
 <body style="margin:0;padding:24px;background:#f3f6fa;font-family:'Segoe UI',Arial,sans-serif;color:#111827">
@@ -392,6 +412,7 @@ export function buildManualPaperWorkflowEmail(
     <h1 style="font-size:22px;line-height:28px;margin:12px 0 8px">${escapeHtml(params.formTitle)} needs ${escapeHtml(noun)}</h1>
     <p style="font-size:14px;line-height:22px;color:#4b5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${escapeHtml(params.layerType)} in the attached or linked PDF record.</p>
     <table style="width:100%;border-collapse:collapse;margin:20px 0">
+      ${referenceRow(params.referenceNo)}
       <tr><td style="padding:8px 0;color:#6b7280">Submission ID</td><td style="padding:8px 0;font-weight:600">#${escapeHtml(String(params.responseItemId))}</td></tr>
       <tr><td style="padding:8px 0;color:#6b7280">Submitted by</td><td style="padding:8px 0;font-weight:600">${escapeHtml(params.submittedBy)}</td></tr>
       <tr><td style="padding:8px 0;color:#6b7280">Workflow stage</td><td style="padding:8px 0;font-weight:600">Layer ${params.layer} of ${params.totalLayers}</td></tr>
@@ -410,7 +431,7 @@ export function buildWorkflowActionEmail(
   const actionVerb = params.layerType === "evaluation" ? "review" : "approve";
   return {
     to: params.recipient,
-    subject: `Action required: ${params.formTitle} needs your ${actionNoun}`,
+    subject: `Action required: ${params.formTitle} needs your ${actionNoun}${referenceSuffix(params.referenceNo)}`,
     body: `<!doctype html>
 <html>
 <body style="margin:0;padding:24px;background:#f3f6fa;font-family:'Segoe UI',Arial,sans-serif;color:#111827">
@@ -419,6 +440,7 @@ export function buildWorkflowActionEmail(
     <h1 style="font-size:22px;line-height:28px;margin:12px 0 8px">${escapeHtml(params.formTitle)} needs your ${escapeHtml(actionNoun)}</h1>
     <p style="font-size:14px;line-height:22px;color:#4b5563">A submission is waiting for you to ${escapeHtml(actionVerb)}.</p>
     <table style="width:100%;border-collapse:collapse;margin:20px 0">
+      ${referenceRow(params.referenceNo)}
       <tr><td style="padding:8px 0;color:#6b7280">Submission ID</td><td style="padding:8px 0;font-weight:600">#${escapeHtml(String(params.responseItemId))}</td></tr>
       <tr><td style="padding:8px 0;color:#6b7280">Submitted by</td><td style="padding:8px 0;font-weight:600">${escapeHtml(params.submittedBy)}</td></tr>
       <tr><td style="padding:8px 0;color:#6b7280">Workflow stage</td><td style="padding:8px 0;font-weight:600">Layer ${params.layer} of ${params.totalLayers}</td></tr>

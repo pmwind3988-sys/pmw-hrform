@@ -32,6 +32,7 @@ import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload 
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { buildWorkflowReviewLink } from "../utils/workflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
+import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -50,7 +51,10 @@ const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
 const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
 
-const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer"]);
+// Columns a submission tolerates being absent. ReferenceNo is here because a
+// list provisioned before reference numbers existed has no such column, and a
+// respondent should not be blocked on a schema gap only an admin can close.
+const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer", REFERENCE_NO_FIELD]);
 
 function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
   return (
@@ -76,6 +80,35 @@ function mapBodyToSharePointColumnKeys(
     mapped[columnKey] = value;
   }
   return mapped;
+}
+
+/**
+ * Claims this submission's reference from the server.
+ *
+ * Signed-in submissions write their own list item, so without this call two
+ * people submitting at once would compute the same "next" number. `/api/next-reference`
+ * is the only thing that hands numbers out; guests never come through here
+ * because `api/submit-form.ts` allocates on their behalf.
+ *
+ * Failure is propagated rather than swallowed: the reference is the ID the
+ * record is filed and searched under, so a submission saved without one is
+ * worse than a submission the respondent is asked to retry.
+ */
+async function claimReferenceNumber(listTitle: string): Promise<string> {
+  const res = await fetch("/api/next-reference", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+    },
+    body: JSON.stringify({ listTitle }),
+  });
+  const data = await res.json().catch(() => ({})) as { enabled?: boolean; referenceNo?: string; error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `Could not assign a reference number (${res.status}).`);
+  }
+  return data.enabled && typeof data.referenceNo === "string" ? data.referenceNo : "";
 }
 
 type CompanyChoiceOption = { value: string; text: string };
@@ -583,11 +616,20 @@ function CompanySelector({
   );
 }
 
-const SuccessScreen = ({ formTitle, onReset, t }: { formTitle: string; onReset: () => void; t: typeof LIGHT }) => (
+const SuccessScreen = ({ formTitle, referenceNo, onReset, t }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
     <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary, marginBottom: 10 }}>Submission received</div>
     <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.8, maxWidth: 420, margin: "0 auto 10px" }}>Your response for <strong>{formTitle}</strong> has been recorded.</p>
+    {referenceNo && (
+      // The reference is what the respondent has to quote later, so it is given
+      // room to be read and copied rather than tucked into the sentence above.
+      <div style={{ maxWidth: 420, margin: "18px auto 22px", padding: "14px 18px", background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 8 }}>
+        <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: t.textSecond, marginBottom: 6 }}>Reference number</div>
+        <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 20, fontWeight: 700, color: t.textPrimary, userSelect: "all", wordBreak: "break-all" }}>{referenceNo}</div>
+        <div style={{ fontSize: 12, color: t.textSecond, marginTop: 6 }}>Keep this to track or ask about your submission.</div>
+      </div>
+    )}
     <button onClick={onReset} style={{ padding: "11px 30px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardBg, color: t.textSecond, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans'" }}>Submit another response</button>
   </div>
 );
@@ -624,6 +666,8 @@ export default function DynamicFormPage() {
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  /** Reference allocated to the submission just made, for the success screen. */
+  const [submittedReference, setSubmittedReference] = useState("");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
   const [isLastSurveyPage, setIsLastSurveyPage] = useState(true);
@@ -768,7 +812,7 @@ export default function DynamicFormPage() {
           let cfgRaw: Record<string, unknown>;
           let ver: { surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishStatus?: string; publishExpiresAt?: string } | null;
           if (pinVersion) {
-            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json;odata=nometadata" } });
+            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig,ReferenceConfig&$top=1`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json;odata=nometadata" } });
             if (!cfgRes.ok) throw new SharePointHttpError("Failed to load form config", cfgRes);
             cfgRaw = (await cfgRes.json()).value?.[0];
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
@@ -1266,6 +1310,17 @@ export default function DynamicFormPage() {
       body.RetentionUntil = getPdpaRetentionUntil(new Date(body.PDPAConsentAt as string));
       body.SubmittedBy = token ? (userEmail || accounts[0]?.username || "authenticated-user") : "GUEST";
 
+      // Claimed before the item is written so the number and the row appear
+      // together. Guests skip this — api/submit-form.ts allocates for them,
+      // keeping a single allocator regardless of how the row gets created.
+      if (token && parseReferenceNumberConfig(cfg.ReferenceConfig).enabled) {
+        const referenceNo = await claimReferenceNumber(cfg.Title as string);
+        if (referenceNo) {
+          body[REFERENCE_NO_FIELD] = referenceNo;
+          setSubmittedReference(referenceNo);
+        }
+      }
+
       // Step 4: Write layer status columns
       if (layerConfigParsed?.layers?.length && !deferDepartmentApproverLookupToApi) {
         // Enhanced path — use new constants
@@ -1546,7 +1601,7 @@ export default function DynamicFormPage() {
                 surveyJson: surveyContent as PdfFormData["surveyJson"],
                 responseData: pdfData,
                 layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
-                meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
+                meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted", referenceNo: respItem[REFERENCE_NO_FIELD] ? String(respItem[REFERENCE_NO_FIELD]) : undefined },
                 isoStandards: isoStandardsText,
                 logoUrl: logoUrl || "/logo-128.png",
                 pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
@@ -1636,8 +1691,9 @@ export default function DynamicFormPage() {
             retentionUntil: body.RetentionUntil,
           }),
         });
-        const resData = await res.json().catch(() => ({})) as { id?: string; error?: string };
+        const resData = await res.json().catch(() => ({})) as { id?: string; referenceNo?: string; error?: string };
         if (!res.ok) { throw new Error(resData.error || `Submit failed: ${res.status}`); }
+        if (resData.referenceNo) setSubmittedReference(resData.referenceNo);
 
         // If API returned parent item ID and we have matrixData, try server-side child list write
         // (API creates child items using system credential; we verify via RowIds response field)
@@ -1694,6 +1750,7 @@ export default function DynamicFormPage() {
   }, [instance]);
   const handleReset = useCallback(() => {
     setSubmitStatus(null);
+    setSubmittedReference("");
     setPdpaAccepted(false);
     setPdpaConsentError("");
     setCompanyChoiceValue("");
@@ -1831,7 +1888,7 @@ export default function DynamicFormPage() {
 
       <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
-          <SuccessScreen formTitle={formTitle} onReset={handleReset} t={t} />
+          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} />
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (

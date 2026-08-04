@@ -4,6 +4,7 @@ import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 import { SharePointHttpError } from "./sharepointClient";
+import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
 import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
 
 /**
@@ -401,7 +402,7 @@ async function getDigest(token: string): Promise<string> {
 
 export async function getFormConfig(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -1158,17 +1159,19 @@ interface FormConfigData {
   ConditionField?: string;
   ApprovalRules?: string;
   LayerConfig?: string;
+  /** JSON `ReferenceNumberConfig`; see src/utils/referenceNumber.ts. */
+  ReferenceConfig?: string;
 }
 
 export async function getAllFormConfigs(token: string): Promise<FormConfigData[]> {
   if (!await listExists(token, 'Master Form')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
   return data.value || [];
 }
 
 export async function getFormConfigByTitle(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -1184,6 +1187,7 @@ interface UpsertFormConfigParams {
   conditionField?: string;
   approvalRules?: unknown;
   layerConfig?: string;
+  referenceConfig?: string;
 }
 
 export async function upsertFormConfig(
@@ -1206,6 +1210,7 @@ export async function upsertFormConfig(
     IsPublic: config.isPublic ?? true,
     ConditionField: config.conditionField || '',
     ApprovalRules: config.approvalRules ? JSON.stringify(config.approvalRules) : '',
+    [REFERENCE_CONFIG_FIELD]: config.referenceConfig || '',
   };
 
   if (existing?.Id) {
@@ -1608,6 +1613,7 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
     { n: 'IsPublished', k: 8 }, { n: 'IsPublic', k: 8 },
     { n: 'ConditionField', k: 2 }, { n: 'ApprovalRules', k: 3, ml: true },
     { n: 'LayerConfig', k: 3, ml: true },
+    { n: REFERENCE_CONFIG_FIELD, k: 3, ml: true },
   ]},
   'Approvers': { t: 100, desc: 'Approver layers per form', cols: [
     { n: 'FormTitle', k: 2 }, { n: 'LayerNumber', k: 9 },
@@ -1698,7 +1704,7 @@ export async function getLatestFormBySlug(token: string, slug: string, publishKe
   surveyJson: unknown;
   meta: unknown;
 } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(sanitizeODataValue(slug))}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(sanitizeODataValue(slug))}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig&$top=1`) as { value?: FormConfigData[] };
   const form = data.value?.[0];
   if (!form) return null;
   if (!form.IsPublished) return null;
@@ -1778,6 +1784,9 @@ interface ProvisionFormListOptions {
 }
 
 const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
+  // Provisioned on every response list, not only forms with references turned
+  // on, so that switching the setting on never needs a schema change mid-life.
+  { n: REFERENCE_NO_FIELD, k: SP_FIELD_KIND.text },
   { n: 'SubmittedAt', k: SP_FIELD_KIND.dateTime },
   { n: 'FormVersion', k: SP_FIELD_KIND.text },
   { n: 'PublishKey', k: SP_FIELD_KIND.text },
@@ -1798,6 +1807,7 @@ const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
 ];
 
 const RESPONSE_INDEXED_COLUMNS = [
+  REFERENCE_NO_FIELD,
   'SubmittedAt',
   'FormVersion',
   'PublishKey',
@@ -2420,6 +2430,36 @@ function isManualPaperWorkflowStatus(value: unknown): boolean {
   return normalized === "manual evaluation required" || normalized === "manual approval required";
 }
 
+/**
+ * Reads the submission's reference so every workflow email can quote it.
+ *
+ * Fetched here rather than threaded through all eight call sites: the reference
+ * is a property of the stored item, and reading it once at send time cannot
+ * drift out of step with what the record actually says.
+ */
+async function getReferenceNoForNotification(
+  token: string,
+  responseListTitle: string,
+  responseItemId: number,
+): Promise<string> {
+  try {
+    const item = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})?$select=${REFERENCE_NO_FIELD}`,
+    ) as Record<string, unknown>;
+    return String(item[REFERENCE_NO_FIELD] || "").trim();
+  } catch {
+    // A list without the column, or an unreadable item, simply means no
+    // reference line — never a failed notification.
+    return "";
+  }
+}
+
+/** Appends the reference to a subject so mailbox search on it finds the thread. */
+function emailSubjectReferenceSuffix(referenceNo: string): string {
+  return referenceNo ? ` [${referenceNo}]` : "";
+}
+
 async function getLayerStatusForNotification(
   token: string,
   responseListTitle: string,
@@ -2489,6 +2529,11 @@ export async function triggerApprovalNotification(
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
   const workflowStage = `Layer ${displayNextLayerNumber} of ${totalLayers}`;
   const submissionId = `#${responseItemId}`;
+  const referenceNo = await getReferenceNoForNotification(token, responseListTitle, responseItemId);
+  const refSuffix = emailSubjectReferenceSuffix(referenceNo);
+  // Empty detail values are dropped by emailBody, so this row simply disappears
+  // on forms that do not issue references.
+  const referenceDetail: EmailDetail = { label: 'Reference no.', value: referenceNo };
   const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const persistSchedule = async (recipient: string, targetLayer: number, targetLink: string) => {
@@ -2532,7 +2577,7 @@ export async function triggerApprovalNotification(
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
             to: targetEmail,
-            subject: `Manual ${nextLayerType}: ${formTitle} layer ${layer}`,
+            subject: `Manual ${nextLayerType}: ${formTitle} layer ${layer}${refSuffix}`,
             attachments,
             workflow: {
               listTitle: responseListTitle,
@@ -2555,7 +2600,7 @@ export async function triggerApprovalNotification(
         }
         await sendSpEmail(token, {
           to: targetEmail,
-          subject: `Action required: ${formTitle} needs your ${nextActionNoun}`,
+          subject: `Action required: ${formTitle} needs your ${nextActionNoun}${refSuffix}`,
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
@@ -2571,6 +2616,7 @@ export async function triggerApprovalNotification(
             statusBorder: '#BFDBFE',
             details: [
               { label: 'Form', value: formTitle },
+              referenceDetail,
               { label: 'Submission ID', value: submissionId },
               { label: 'Submitted by', value: submittedBy },
               { label: 'Workflow stage', value: `Layer ${layer} of ${totalLayers}` },
@@ -2590,7 +2636,7 @@ export async function triggerApprovalNotification(
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
             to: nextApproverEmail,
-            subject: `Manual ${nextLayerType}: ${formTitle} layer ${displayNextLayerNumber}`,
+            subject: `Manual ${nextLayerType}: ${formTitle} layer ${displayNextLayerNumber}${refSuffix}`,
             attachments,
             workflow: {
               listTitle: responseListTitle,
@@ -2613,7 +2659,7 @@ export async function triggerApprovalNotification(
         }
         await sendSpEmail(token, {
           to: nextApproverEmail,
-          subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}`,
+          subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}${refSuffix}`,
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
@@ -2629,6 +2675,7 @@ export async function triggerApprovalNotification(
             statusBorder: '#FDE68A',
             details: [
               { label: 'Form', value: formTitle },
+              referenceDetail,
               { label: 'Submission ID', value: submissionId },
               { label: 'Submitted by', value: submittedBy },
               { label: 'Completed step', value: `Layer ${layer} of ${totalLayers}` },
@@ -2644,7 +2691,7 @@ export async function triggerApprovalNotification(
         // Final approval - notify submitter
         await sendSpEmail(token, {
           to: submittedBy,
-          subject: `Status update: ${formTitle} approved`,
+          subject: `Status update: ${formTitle} approved${refSuffix}`,
           body: emailBody({
             title: `${formTitle} has been approved`,
             subtitle: 'All required workflow steps have been completed. No further action is needed from you at this time.',
@@ -2655,6 +2702,7 @@ export async function triggerApprovalNotification(
             statusBorder: '#A7F3D0',
             details: [
               { label: 'Form', value: formTitle },
+              referenceDetail,
               { label: 'Submission ID', value: submissionId },
               { label: 'Final status', value: 'Approved' },
               { label: 'Completed layers', value: totalLayers },
@@ -2668,7 +2716,7 @@ export async function triggerApprovalNotification(
       // Notify submitter of rejection
       await sendSpEmail(token, {
         to: submittedBy,
-        subject: `Status update: ${formTitle} not approved`,
+        subject: `Status update: ${formTitle} not approved${refSuffix}`,
         body: emailBody({
           title: `${formTitle} was not approved`,
           subtitle: 'The workflow has been closed at the current step. Open the request record to review the outcome details and any recorded reason.',
@@ -2679,6 +2727,7 @@ export async function triggerApprovalNotification(
           statusBorder: '#FECACA',
           details: [
             { label: 'Form', value: formTitle },
+            referenceDetail,
             { label: 'Submission ID', value: submissionId },
             { label: 'Final status', value: 'Not approved' },
             { label: 'Closed at', value: `Layer ${layer} of ${totalLayers}` },

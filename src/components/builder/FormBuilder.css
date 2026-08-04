@@ -631,6 +631,19 @@ body {
   flex: 1;
   font-size: 11px;
 }
+/* Column captions for the label / schema-name pair below. */
+.fb-choice-head {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--fb-muted);
+}
+.fb-choice-head-spacer {
+  /* Matches the width of each row's remove button so the captions stay aligned. */
+  width: 32px;
+  flex: none;
+}
 .fb-add-choice-btn {
   width: 100%;
   min-height: 34px;

@@ -34,6 +34,7 @@ import {
   submissionMatchesFilters,
 } from "./utils/submissionFilters";
 import type { SubmissionFilterState } from "./utils/submissionFilters";
+import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -553,6 +554,8 @@ function mapSubmission(
       key === "PDPANoticeVersion" ||
       key === "PDPAConsentAt" ||
       key === "RetentionUntil" ||
+      // Surfaced as the submission's own identifier, not as one answer among many.
+      key === REFERENCE_NO_FIELD ||
       key === "AuthorId";
 
     if (isDashboardInternalField && !DETAIL_PASSTHROUGH_FIELDS.has(key)) {
@@ -568,6 +571,7 @@ function mapSubmission(
     formId,
     formVersion,
     publishKey: raw.PublishKey ? String(raw.PublishKey) : undefined,
+    referenceNo: raw[REFERENCE_NO_FIELD] ? String(raw[REFERENCE_NO_FIELD]) : undefined,
     currentLayerStatus:
       currentLayer > 0 && layerStatusValues[currentLayer - 1]
         ? String(layerStatusValues[currentLayer - 1])

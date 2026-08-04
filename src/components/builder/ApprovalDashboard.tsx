@@ -49,6 +49,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
+import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -225,6 +226,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
         formTitle: item.Title,
         formVersion,
         formStatus: "",
+        referenceNo: respItem[REFERENCE_NO_FIELD] ? String(respItem[REFERENCE_NO_FIELD]) : undefined,
       },
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",

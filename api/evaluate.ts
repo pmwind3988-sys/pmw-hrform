@@ -9,6 +9,7 @@ import {
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
+import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -35,7 +36,7 @@ const SYSTEM_FIELDS = new Set([
   "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
-  "SelectedBranch",
+  "SelectedBranch", REFERENCE_NO_FIELD,
 ]);
 
 function isWorkflowField(key: string): boolean {
@@ -348,7 +349,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       }));
 
     // Include submission metadata always
-    for (const key of ["Title", "SubmittedBy", "SubmittedAt", "FormVersion", "PublishKey", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
+    for (const key of [REFERENCE_NO_FIELD, "Title", "SubmittedBy", "SubmittedAt", "FormVersion", "PublishKey", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
       if (allFields[key] !== undefined) visibleFields[key] = allFields[key];
     }
 
@@ -599,6 +600,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const layerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
           const totalLayerCount = activeLayers.length;
           const submittedBy = String(responseItem.fields.SubmittedBy || "Public respondent");
+          const referenceNo = String(responseItem.fields[REFERENCE_NO_FIELD] || "");
           const manualPaper = isManualPaperLayerStatus(responseItem.fields[`L${nextLayerNumber}_Status`]);
           await scheduleOrDeliverWorkflowEmail(
             graphToken,
@@ -613,6 +615,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   layerType,
                   layerTitle: typeof notificationNextLayer.title === "string" ? notificationNextLayer.title : undefined,
                   surveyElements: layerSurveyElements(notificationNextLayer),
+                  referenceNo,
                 })
               : buildWorkflowActionEmail({
                   formTitle,
@@ -623,6 +626,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   recipient,
                   layerType,
                   reviewLink,
+                  referenceNo,
                 }),
             {
               listTitle: responseListName,

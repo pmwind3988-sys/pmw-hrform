@@ -16,6 +16,8 @@ import {
   validateFields,
   duplicateField,
   reorderFields,
+  schemaNameFromLabel,
+  isSchemaNameDerivedFrom,
   QUESTION_TYPES,
 } from '../FormBuilderEngine';
 import type { FormBuilderField, QuestionTypeDefinition, SurveyJson } from '../../types';
@@ -65,6 +67,62 @@ describe('generateFieldId', () => {
   it('handles empty string prefix', () => {
     const id = generateFieldId('');
     expect(id.startsWith('_')).toBe(true);
+  });
+});
+
+// ── schemaNameFromLabel / isSchemaNameDerivedFrom ────────────────────────────────
+
+describe('schemaNameFromLabel', () => {
+  it('camel-cases a multi-word label', () => {
+    expect(schemaNameFromLabel('Employee Full Name')).toBe('employeeFullName');
+  });
+
+  it('drops punctuation instead of gluing the words either side together', () => {
+    expect(schemaNameFromLabel('Date of birth (DD/MM)')).toBe('dateOfBirthDdMm');
+  });
+
+  it('collapses runs of whitespace and trims the ends', () => {
+    expect(schemaNameFromLabel('  Annual   leave  ')).toBe('annualLeave');
+  });
+
+  it('keeps digits', () => {
+    expect(schemaNameFromLabel('Option 1')).toBe('option1');
+  });
+
+  it('returns an empty string for a label with nothing usable in it', () => {
+    expect(schemaNameFromLabel('!!! ???')).toBe('');
+  });
+
+  it('matches the name createQuestion assigns, so a fresh field reads as derived', () => {
+    const td: QuestionTypeDefinition = {
+      type: 'text',
+      label: 'Short Text',
+      icon: 'T',
+      group: 'Basic',
+      description: 'Single line text',
+      spColumnKind: 2,
+      defaultProps: {},
+    };
+    const field = createQuestion(td);
+    expect(isSchemaNameDerivedFrom(field.name, field.title as string)).toBe(true);
+  });
+});
+
+describe('isSchemaNameDerivedFrom', () => {
+  it('treats an empty name as still free to be filled in', () => {
+    expect(isSchemaNameDerivedFrom('', 'Anything')).toBe(true);
+  });
+
+  it('recognises a name generated from the label', () => {
+    expect(isSchemaNameDerivedFrom('employeeName', 'Employee Name')).toBe(true);
+  });
+
+  it('accepts a legacy bare choice where the label is also the stored value', () => {
+    expect(isSchemaNameDerivedFrom('Yes', 'Yes')).toBe(true);
+  });
+
+  it('reports a hand-edited name as no longer derived', () => {
+    expect(isSchemaNameDerivedFrom('emp_name_v2', 'Employee Name')).toBe(false);
   });
 });
 

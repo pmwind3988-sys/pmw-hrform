@@ -24,6 +24,16 @@ import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import { SP_STATIC } from "../utils/spConfig";
+import {
+  DEFAULT_REFERENCE_CONFIG,
+  formatReferenceNumber,
+  malaysiaDateKey,
+  normalizeReferencePrefix,
+  parseReferenceNumberConfig,
+  previewReferenceNumber,
+  serializeReferenceNumberConfig,
+  type ReferenceNumberConfig,
+} from "../utils/referenceNumber";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "../utils/FormPdfDocument";
 import type { SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../types";
 import type { DocumentControlHeader } from "../types";
@@ -538,6 +548,18 @@ export default function AdminFormBuilder() {
     }
   }, [siteKey]);
   const isSecondarySite = siteKey !== HOME_SITE_KEY;
+  // Every navigation that stays inside the builder has to carry the site with
+  // it. Routing to a bare /admin/builder path drops the query parameter, and
+  // because the site is read back from the URL the page would reload as the home
+  // site — banner, form library and the next publish all silently switching to
+  // PMW HR while the form on screen still belongs to OSHES.
+  const builderPath = useCallback(
+    (formTitle?: string) => {
+      const base = formTitle ? `/admin/builder/${encodeURIComponent(formTitle)}` : "/admin/builder";
+      return isSecondarySite ? `${base}?site=${encodeURIComponent(siteKey)}` : base;
+    },
+    [siteKey, isSecondarySite],
+  );
   // Every link this page hands out belongs to the deployment that serves the
   // target site's forms, not to the one the builder is open on. Derived from the
   // URL like the site key itself, so it can never disagree with the banner.
@@ -582,6 +604,7 @@ export default function AdminFormBuilder() {
   });
   const [showBanner, setShowBanner] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
+  const [referenceConfig, setReferenceConfig] = useState<ReferenceNumberConfig>(DEFAULT_REFERENCE_CONFIG);
   const [samplePdfGenerating, setSamplePdfGenerating] = useState<"" | "filled" | "manual">("");
   const setM = useCallback((k: MetaTextKey, v: string) => setMeta(m => ({ ...m, [k]: v })), []);
   const setPdfConfig = useCallback((patch: Partial<PdfConfig>) => {
@@ -829,6 +852,7 @@ export default function AdminFormBuilder() {
       setIsEditing(true);
       setIsDraft(c.IsPublished === false);
       setIsPublic(c.IsPublic !== false);
+      setReferenceConfig(parseReferenceNumberConfig(c.ReferenceConfig));
       if (c.ApprovalRules) {
         try {
           setApprovalRules(JSON.parse(c.ApprovalRules as string));
@@ -899,10 +923,11 @@ export default function AdminFormBuilder() {
     setLayerConfig(null);
     setIsDraft(false);
     setIsPublic(true);
+    setReferenceConfig(DEFAULT_REFERENCE_CONFIG);
     setMode("build");
     setDisc({});
     setSavedSignature(null);
-    navigate("/admin/builder");
+    navigate(builderPath());
   };
 
   const handleGenerateSamplePdf = async (mode: "filled" | "manual") => {
@@ -1001,6 +1026,7 @@ export default function AdminFormBuilder() {
         conditionField: approvalRules?.conditionField || layerConfig?.routing?.[0]?.conditionField || "",
         approvalRules: approvalRules || null,
         layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
+        referenceConfig: serializeReferenceNumberConfig(referenceConfig),
       });
       await saveFormVersion(token, {
         listTitle: meta.formTitle.trim(),
@@ -1026,7 +1052,7 @@ export default function AdminFormBuilder() {
     } finally {
       setSaveBusy("");
     }
-  }, [meta, surveyJson, numLayers, layers, slugError, isPublic, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib, markSaved]);
+  }, [meta, surveyJson, numLayers, layers, slugError, isPublic, referenceConfig, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib, markSaved]);
 
   const handleDelete = (f: { Id?: string; Title: string }) => {
     setDeleteConfirm({ Id: f.Id, Title: f.Title });
@@ -1493,6 +1519,7 @@ export default function AdminFormBuilder() {
           conditionField: approvalRules?.conditionField || layerConfig?.routing?.[0]?.conditionField || "",
           approvalRules: approvalRules || null,
           layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
+          referenceConfig: serializeReferenceNumberConfig(referenceConfig),
         });
         pLog(`Form Config saved`, "ok");
       } else {
@@ -1596,7 +1623,7 @@ export default function AdminFormBuilder() {
       pLog(`Could not ${intent === "live" ? "publish" : "save profile"}: ${(e as Error).message}`, "err");
       setProvErr(true);
     }
-  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, slugError, isPublic, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast, markSaved]);
+  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, slugError, isPublic, referenceConfig, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast, markSaved]);
 
   /**
    * The header's save dot reflects the real thing: this builder does not
@@ -1604,8 +1631,8 @@ export default function AdminFormBuilder() {
    * loaded, saved or published rather than running a fake timer.
    */
   const stateSignature = useMemo(
-    () => JSON.stringify([surveyJson, meta, showBanner, isPublic, layerConfig]),
-    [surveyJson, meta, showBanner, isPublic, layerConfig]
+    () => JSON.stringify([surveyJson, meta, showBanner, isPublic, layerConfig, referenceConfig]),
+    [surveyJson, meta, showBanner, isPublic, layerConfig, referenceConfig]
   );
   const signatureRef = useRef(stateSignature);
   signatureRef.current = stateSignature;
@@ -1649,6 +1676,9 @@ export default function AdminFormBuilder() {
     : initialJson
       ? `edit_${meta.formTitle}_${JSON.stringify(initialJson).slice(0, 60)}`
       : "new";
+  // Recomputed on every render rather than memoised on the date: the builder can
+  // be left open across midnight, and a stale preview would misstate the format.
+  const referencePreview = previewReferenceNumber(referenceConfig);
   const companyOptions = meta.companies
     .split(/\r?\n/)
     .map(c => c.trim())
@@ -2167,6 +2197,66 @@ export default function AdminFormBuilder() {
                   label="Public — any Microsoft 365 user"
                   hint="Turn this off for an explicit sign-in gate."
                 />
+              </Disclosure>
+
+              <Disclosure
+                open={!!disc.reference}
+                onToggle={() => toggleDisc("reference")}
+                title="Reference number"
+                sub="A per-day ID each submission is filed under"
+                summary={referenceConfig.enabled ? referencePreview : "Off"}
+              >
+                <p className="bx-lede" style={{ fontSize: 14, marginBottom: 14 }}>
+                  Gives every submission an ID like <code>{referencePreview}</code> — the Malaysian date, then a counter
+                  that restarts at 1 after midnight. Each form counts separately, and the number is shown to the
+                  submitter, printed on the PDF, quoted in approval emails and searchable from the dashboard.
+                </p>
+                <CheckRow
+                  checked={referenceConfig.enabled}
+                  onChange={v => setReferenceConfig(c => ({ ...c, enabled: v }))}
+                  label="Give each submission a reference number"
+                  hint="Existing submissions keep their blank reference; numbering starts from the next one."
+                />
+                {referenceConfig.enabled && (
+                  <>
+                    <TextField
+                      id="set-ref-prefix"
+                      label="Prefix (optional)"
+                      value={referenceConfig.prefix}
+                      onChange={v => setReferenceConfig(c => ({ ...c, prefix: normalizeReferencePrefix(v) }))}
+                      placeholder="OSH"
+                      note={
+                        <span style={{ fontSize: 13.5, color: C.textSecond }}>
+                          Letters and digits only, up to 12. Useful when several forms are filed side by side.
+                        </span>
+                      }
+                    />
+                    <div className="bx-field">
+                      <label htmlFor="set-ref-pad">Counter digits</label>
+                      <select
+                        id="set-ref-pad"
+                        className="bx-input"
+                        style={{ height: 40 }}
+                        value={String(referenceConfig.pad)}
+                        onChange={e => setReferenceConfig(c => ({ ...c, pad: Number(e.target.value) }))}
+                      >
+                        {[3, 4, 5, 6].map(n => (
+                          <option key={n} value={n}>
+                            {n} digits — {formatReferenceNumber(malaysiaDateKey(), 1, { prefix: "", pad: n }).split("-").pop()}
+                          </option>
+                        ))}
+                      </select>
+                      <div style={{ fontSize: 13.5, color: C.textSecond, marginTop: 5 }}>
+                        Padding only. A busier day than this allows keeps counting rather than wrapping around.
+                      </div>
+                    </div>
+                    {!isEditing && (
+                      <div style={{ background: C.amberPale, border: "1px solid #F0D79A", padding: "9px 12px", fontSize: 13.5, color: C.amber, marginTop: 8 }}>
+                        Numbering begins once the form is published.
+                      </div>
+                    )}
+                  </>
+                )}
               </Disclosure>
             </div>
           </div>
@@ -2708,7 +2798,7 @@ export default function AdminFormBuilder() {
           error={provErr}
           onDone={() => {
             setProvisioning(false);
-            if (provOk) navigate(`/admin/builder/${encodeURIComponent(meta.formTitle)}`);
+            if (provOk) navigate(builderPath(meta.formTitle));
           }}
         />
       )}

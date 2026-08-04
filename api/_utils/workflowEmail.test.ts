@@ -1,10 +1,65 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildManualPaperWorkflowEmail,
+  buildWorkflowActionEmail,
   recordWorkflowEmailAttempt,
   resolveWorkflowEmailDueAt,
   getDueWorkflowEmailSchedules,
   setWorkflowEmailSchedule,
 } from "./workflowEmail.js";
+
+const ACTION_EMAIL_BASE = {
+  formTitle: "Incident Report",
+  submittedBy: "ahmad@example.com",
+  responseItemId: 42,
+  layer: 1,
+  totalLayers: 2,
+  recipient: "approver@example.com",
+  layerType: "approval" as const,
+  reviewLink: "https://example.com/approval/1",
+};
+
+describe("reference numbers in workflow emails", () => {
+  it("puts the reference in the subject and body of an action email", () => {
+    const message = buildWorkflowActionEmail({ ...ACTION_EMAIL_BASE, referenceNo: "OSH-040826-0007" });
+    expect(message.subject).toContain("[OSH-040826-0007]");
+    expect(message.body).toContain("Reference no.");
+    expect(message.body).toContain("OSH-040826-0007");
+  });
+
+  it("leaves the subject and body unchanged when the form issues no reference", () => {
+    const message = buildWorkflowActionEmail(ACTION_EMAIL_BASE);
+    expect(message.subject).toBe("Action required: Incident Report needs your approval");
+    expect(message.body).not.toContain("Reference no.");
+  });
+
+  it("treats a blank reference as absent rather than printing empty brackets", () => {
+    const message = buildWorkflowActionEmail({ ...ACTION_EMAIL_BASE, referenceNo: "   " });
+    expect(message.subject).not.toContain("[");
+    expect(message.body).not.toContain("Reference no.");
+  });
+
+  it("carries the reference into manual paper emails too", () => {
+    const message = buildManualPaperWorkflowEmail({
+      formTitle: "Incident Report",
+      submittedBy: "ahmad@example.com",
+      responseItemId: 42,
+      layer: 1,
+      totalLayers: 2,
+      recipient: "hr@example.com",
+      layerType: "evaluation",
+      referenceNo: "040826-0001",
+    });
+    expect(message.subject).toContain("[040826-0001]");
+    expect(message.body).toContain("040826-0001");
+  });
+
+  it("escapes a reference before putting it in the body", () => {
+    const message = buildWorkflowActionEmail({ ...ACTION_EMAIL_BASE, referenceNo: "<b>x</b>" });
+    expect(message.body).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(message.body).not.toContain("<b>x</b>");
+  });
+});
 
 describe("recordWorkflowEmailAttempt", () => {
   it("replaces a failed delivery with a successful forced resend while preserving the attempt count", () => {

@@ -145,7 +145,7 @@ export default function SubmissionRow({
               {displayTitle}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-              <Chip icon={<NumbersIcon />} label={`Ref ${item.submissionId}`} size="small" sx={identityChipSx} />
+              <Chip icon={<NumbersIcon />} label={`Ref ${item.referenceNo || item.submissionId}`} size="small" sx={identityChipSx} />
               <Typography variant="caption" sx={{ color: editorial.muted }}>
                 {submittedAt}
               </Typography>
@@ -259,7 +259,7 @@ export default function SubmissionRow({
           {displayTitle}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Chip icon={<NumbersIcon />} label={`Ref ${item.submissionId}`} size="small" sx={identityChipSx} />
+          <Chip icon={<NumbersIcon />} label={`Ref ${item.referenceNo || item.submissionId}`} size="small" sx={identityChipSx} />
           <Typography variant="caption" sx={{ color: editorial.muted }}>
             Form {formReference}
           </Typography>

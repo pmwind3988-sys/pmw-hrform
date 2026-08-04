@@ -41,6 +41,23 @@ describe("submissionMatchesFilters", () => {
     expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, search: "nope" })).toBe(false);
   });
 
+  it("searches the reference number", () => {
+    const item = makeSubmission({ referenceNo: "OSH-040826-0007" });
+    expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, search: "040826-0007" })).toBe(true);
+    expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, search: "osh-040826-0007" })).toBe(true);
+    expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, search: "040826-0008" })).toBe(false);
+  });
+
+  it("ignores separators when matching a reference number", () => {
+    const item = makeSubmission({ referenceNo: "OSH-040826-0007" });
+    expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, search: "OSH0408260007" })).toBe(true);
+    expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, search: "osh 040826 0007" })).toBe(true);
+  });
+
+  it("does not match a reference search against a submission that has none", () => {
+    expect(submissionMatchesFilters(makeSubmission(), { ...EMPTY_SUBMISSION_FILTERS, search: "040826-0007" })).toBe(false);
+  });
+
   it("filters by list title exactly", () => {
     const item = makeSubmission();
     expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, listTitle: "Training Feedback" })).toBe(true);
