@@ -604,7 +604,7 @@ export default function CareersPage() {
     <Box sx={careerPageSx}>
       <CareerPortalHeader
         title="PMW Careers"
-        subtitle="Explore internal openings and track your submitted applications."
+        subtitle="Explore job openings and track your submitted applications."
         activeSection="opportunities"
         isAdmin={isAdmin}
         backPath={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
@@ -613,7 +613,7 @@ export default function CareersPage() {
       />
 
       <CareerHero
-        title={isSignedIn ? "Internal opportunities" : "Careers at PMW Group"}
+        title={isSignedIn ? "Career Opportunities" : "Careers at PMW Group"}
         subtitle={
           isSignedIn
             ? "Connecting Talent with Opportunity: Your Gateway to Career Success"
@@ -894,8 +894,8 @@ export default function CareersPage() {
         {!loading && !error && jobs.length === 0 && (
           <CareerEmptyState
             icon={<AccessTime />}
-            title="No internal opportunities"
-            description="There are no internal advancement openings at the moment. Check back later."
+            title="No job opportunities yet"
+            description="There are no openings at the moment. Check back later."
           />
         )}
         {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && appliedFilter !== "applied" && (

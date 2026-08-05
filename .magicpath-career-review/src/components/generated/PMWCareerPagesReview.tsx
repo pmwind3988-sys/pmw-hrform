@@ -89,7 +89,7 @@ function Header({ view, setView }: { view: View; setView: (view: View) => void }
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-black text-zinc-950">PMW Careers</h1>
-            <p className="truncate text-sm text-zinc-600">Internal opportunities and HR career administration</p>
+            <p className="truncate text-sm text-zinc-600">Job opportunities and HR career administration</p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto pb-1 lg:pb-0" aria-label="Career preview views">
@@ -122,7 +122,7 @@ function PortalView() {
       <section className="grid gap-4 rounded-lg border border-zinc-200 bg-white/90 p-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
           <span className="inline-flex min-h-7 items-center rounded-full border border-zinc-300 bg-yellow-100 px-3 text-xs font-black text-zinc-950">Welcome back</span>
-          <h2 className="mt-3 text-balance text-3xl font-black tracking-normal text-zinc-950 sm:text-4xl">Internal advancement starts here</h2>
+          <h2 className="mt-3 text-balance text-3xl font-black tracking-normal text-zinc-950 sm:text-4xl">Career advancement starts here</h2>
           <p className="mt-2 max-w-2xl text-pretty text-sm leading-6 text-zinc-600">Browse open roles, compare fit, and keep your application progress easy to find.</p>
         </div>
         <div className="rounded-lg bg-sky-50 p-4">
@@ -324,7 +324,7 @@ function ApplicationsView() {
 
 function OpeningsView() {
   const [empty, setEmpty] = useState(false);
-  if (empty) return <EmptyState title="No opportunities" body="Create the first internal advancement opening for PMW employees." action="Create opening" />;
+  if (empty) return <EmptyState title="No opportunities" body="Create the first career advancement opening for PMW employees." action="Create opening" />;
 
   return (
     <div className="space-y-4">

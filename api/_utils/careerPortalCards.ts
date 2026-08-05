@@ -56,7 +56,7 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
   {
     id: "system-default-1",
     title: "Grow into your next role",
-    description: "Browse internal openings, compare fit, and move forward with confidence.",
+    description: "Browse job openings, compare fit, and move forward with confidence.",
     imageUrl: "",
     imageSource: "",
     imageOpacity: DEFAULT_CARD_IMAGE_OPACITY,

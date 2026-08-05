@@ -811,7 +811,7 @@ export default function JobApplyPage() {
     <Box sx={careerPageSx}>
       <CareerPortalHeader
         title="Apply for role"
-        subtitle={job ? job.title : "Complete your internal opportunity application."}
+        subtitle={job ? job.title : "Complete your job opportunity application."}
         activeSection="apply"
         backPath="/career-portal"
         backLabel="Back to opportunities"

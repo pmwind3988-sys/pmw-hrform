@@ -378,7 +378,22 @@ export default function JobDetailsPage() {
               <Grid size={12}>
                 <Typography
                   variant="h2"
-                  sx={{ fontWeight: 800, fontSize: "1.5rem", color: editorial.ink, mb: 2.5, mt: { xs: 1, md: 2 } }}
+                  component="span"        // span so the background hugs the text, not the full row
+                  sx={{
+                    display: "inline-block",
+                    fontWeight: 800,
+                    fontSize: "1.5rem",
+                    color: editorial.ink,
+                    mb: 2.5,
+                    mt: { xs: 1, md: 2 },
+                    // readable-on-anything backdrop:
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: 1.5,
+                    backgroundColor: "rgba(255, 255, 255, 0.82)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)", // Safari
+                  }}
                 >
                   Related opportunities
                 </Typography>
