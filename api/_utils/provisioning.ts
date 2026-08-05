@@ -36,6 +36,9 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
     { name: "WorkflowAssignmentData", displayName: "WorkflowAssignmentData", type: "note" },
     { name: "WorkflowEmailLog", displayName: "WorkflowEmailLog", type: "note" },
     { name: "WorkflowEmailSchedule", displayName: "WorkflowEmailSchedule", type: "note" },
+    // Revocation serials for public layer links, `{ "<layer>": <n> }`. Bumping a
+    // layer's serial kills every link already issued for it.
+    { name: "WorkflowGrantSerials", displayName: "WorkflowGrantSerials", type: "note" },
     { name: "CurrentLayer", displayName: "CurrentLayer", type: "number" },
     { name: "FormStatus", displayName: "FormStatus", type: "text" },
   ];
@@ -50,8 +53,15 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
       // Where the layer notification was actually delivered — includes shared
       // mailboxes that receive the notice but cannot act.
       { name: `L${n}_NotifyEmails`, displayName: `L${n}_NotifyEmails`, type: "note" },
-      // Which of the allowed addresses completed the layer.
+      // Which of the allowed addresses completed the layer. On a public layer
+      // this is the address the link holder declared, not a verified account.
       { name: `L${n}_ActedBy`, displayName: `L${n}_ActedBy`, type: "text" },
+      // Name declared by a public link holder, so the audit trail and PDF show
+      // a person rather than an address.
+      { name: `L${n}_ActorName`, displayName: `L${n}_ActorName`, type: "text" },
+      // The full declaration as JSON — phone and any other builder-configured
+      // fields. Note, because the field set is open-ended.
+      { name: `L${n}_ActorIdentity`, displayName: `L${n}_ActorIdentity`, type: "note" },
       { name: `L${n}_SignedAt`, displayName: `L${n}_SignedAt`, type: "dateTime" },
       { name: `L${n}_Rejection`, displayName: `L${n}_Rejection`, type: "note" },
       { name: `L${n}_Signature`, displayName: `L${n}_Signature`, type: "note" },

@@ -2085,8 +2085,6 @@ export default function AdminFormBuilder() {
                   onChange={setLayerConfig}
                   siteUsers={siteUsers}
                   formFields={layerFieldOptions}
-                  slug={meta.slug}
-                  appOrigin={appOrigin}
                   token={spToken || undefined}
                 />
               </div>

@@ -32,6 +32,8 @@ import WarningIcon from "@mui/icons-material/Warning";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
+import PublicIdentityForm from "../components/PublicIdentityForm";
+import type { PublicIdentityField } from "../utils/publicIdentity";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -322,6 +324,13 @@ export default function EvaluationPage() {
   const [logoUrl, setLogoUrl] = useState("");
   const [publicPreviousLayerSummaries, setPublicPreviousLayerSummaries] = useState<PublicPreviousLayerSummary[]>([]);
 
+  // Public layers have no signed-in account, so the link holder declares who
+  // they are before the decision buttons unlock.
+  const [identityFields, setIdentityFields] = useState<PublicIdentityField[]>([]);
+  const [identityValues, setIdentityValues] = useState<Record<string, string>>({});
+  const [identityValid, setIdentityValid] = useState(false);
+  const [identityErrors, setIdentityErrors] = useState<Record<string, string>>({});
+
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
   const [signatureData, setSignatureData] = useState<string | null>(null);
@@ -336,9 +345,11 @@ export default function EvaluationPage() {
   // ── Auth ──
   useEffect(() => {
     if (isPublic) {
-      // Public mode — no auth needed, but need SP token for potential writes
+      // No sign-in on a public link. The actor is whoever declares themselves
+      // in the identity form below, and the server records that declaration —
+      // the page never has an account to read a name off.
       setAuthState("authorized");
-      setUserEmail("SYSTEM");
+      setUserEmail(null);
       return;
     }
     if (inProgress !== InteractionStatus.None) return;
@@ -376,6 +387,11 @@ export default function EvaluationPage() {
 
           setFormTitle(json.data.formTitle);
           setResponseData(json.data.fields);
+          const identityConfig = json.data.identity as { required?: boolean; fields?: PublicIdentityField[] } | undefined;
+          const declaredFields = Array.isArray(identityConfig?.fields) ? identityConfig.fields : [];
+          setIdentityFields(declaredFields);
+          // A layer configured not to ask has nothing to gate on.
+          setIdentityValid(identityConfig?.required !== true || declaredFields.length === 0);
           setCurrentLayer({
             layerNumber: json.data.layerNumber,
             type: json.data.layerType,
@@ -410,7 +426,10 @@ export default function EvaluationPage() {
               prev.push({
                 layerNumber: n,
                 status: json.data.fields[`L${n}_Status`] || null,
-                email: json.data.fields[`L${n}_Email`] || null,
+                // Who actually completed it, which on a public layer is the
+                // address they declared rather than whoever was mailed.
+                email: json.data.fields[`L${n}_ActedBy`] || json.data.fields[`L${n}_Email`] || null,
+                name: json.data.fields[`L${n}_ActorName`] || null,
                 signedAt: json.data.fields[`L${n}_SignedAt`] || null,
                 evaluationData: visibleEvaluationData[String(n)],
               });
@@ -509,7 +528,9 @@ export default function EvaluationPage() {
 
   // ── Submit action ──
   const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm") => {
-    if (!userEmail) return;
+    // A public link has no account behind it; identity comes from the form.
+    if (!isPublic && !userEmail) return;
+    if (isPublic && !identityValid) return;
     if (action === "confirm" && evalSurveyModel) {
       const valid = evalSurveyModel.validate();
       if (!valid) {
@@ -531,10 +552,13 @@ export default function EvaluationPage() {
           },
           body: JSON.stringify({
             token: routeToken,
+            // A signed grant carries its own form, item and layer; these are
+            // ignored server-side unless the link is a legacy form-wide token.
             formTitle,
             responseItemId: itemId,
             layerNumber: currentLayer.layerNumber,
             action,
+            identity: identityValues,
             fields: evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data) : {},
             signature: signatureData || undefined,
             rejection: rejectionReason || undefined,
@@ -542,13 +566,19 @@ export default function EvaluationPage() {
         });
         const json = await res.json();
         if (!res.ok || !json.success) {
+          if (json.code === "identity-required" && json.fieldErrors) {
+            setIdentityErrors(json.fieldErrors as Record<string, string>);
+          }
           throw new Error(json.error || "Failed to submit this decision.");
         }
+        setIdentityErrors({});
         setActionState("success");
         return;
       }
 
-      if (!token) return;
+      // Past the public branch, so this is the 365 path: the signed-in address
+      // is the actor and every write below is attributed to it.
+      if (!token || !userEmail) return;
       const listTitle = formTitle; // list is named after form title
       const respId = parseInt(responseId || "0", 10);
       await assertSignedInLayerCanSubmit(listTitle, respId, displayLayerNumber);
@@ -632,7 +662,7 @@ export default function EvaluationPage() {
       setError(e instanceof Error ? e.message : "Failed to submit this decision.");
       setActionState("error");
     }
-  }, [token, userEmail, evalSurveyModel, isPublic, routeToken, currentLayer, formTitle, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData]);
+  }, [token, userEmail, evalSurveyModel, isPublic, routeToken, currentLayer, formTitle, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData, identityValid, identityValues]);
 
   /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
   const loadMatrixChildData = async (
@@ -775,6 +805,9 @@ export default function EvaluationPage() {
   const isCheckboxMode = currentLayer?.type === "approval" && (currentLayer as unknown as Record<string, unknown>).confirmationType === "checkbox";
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
   const isLayerAlreadyComplete = isTerminalLayerStatus(currentLayerStatus) || isTerminalFormStatus(formStatus);
+  // 365 layers are already identified by the signed-in account; only a public
+  // link waits on the declaration form.
+  const identityDeclared = !isPublic || identityValid;
   const currentLayerLabel = currentLayerStatus || (isLayerAlreadyComplete ? "Completed" : "Pending");
   const effectiveLayerNumber = currentLayer?.layerNumber || displayLayerNumber;
 
@@ -948,6 +981,17 @@ export default function EvaluationPage() {
             </div>
           ) : (
             <>
+              {isPublic && identityFields.length > 0 && (
+                <PublicIdentityForm
+                  fields={identityFields}
+                  values={identityValues}
+                  onChange={setIdentityValues}
+                  onValidityChange={setIdentityValid}
+                  serverErrors={identityErrors}
+                  disabled={actionState === "submitting"}
+                />
+              )}
+
               {isEvaluation && (
                 <div style={{ marginBottom: 16 }}>
                   {evalSurveyModel ? (
@@ -1014,22 +1058,35 @@ export default function EvaluationPage() {
                   <button
                     className="eval-action-button"
                     onClick={() => handleSubmit("confirm")}
-                    style={{ ...btnPrimary, opacity: actionState === "submitting" || !evalSurveyModel || !evalValid ? 0.6 : 1 }}
-                    disabled={actionState === "submitting" || !evalSurveyModel || !evalValid}
+                    style={{ ...btnPrimary, opacity: actionState === "submitting" || !evalSurveyModel || !evalValid || !identityDeclared ? 0.6 : 1 }}
+                    disabled={actionState === "submitting" || !evalSurveyModel || !evalValid || !identityDeclared}
                   >
-                    {actionState === "submitting" ? "Submitting..." : !evalValid ? "Fill required fields" : "Submit Evaluation"}
+                    {actionState === "submitting"
+                      ? "Submitting..."
+                      : !identityDeclared ? "Confirm your details above"
+                      : !evalValid ? "Fill required fields"
+                      : "Submit Evaluation"}
                   </button>
                 ) : (
                   <>
                     <button
                       className="eval-action-button"
                       onClick={() => handleSubmit("approve")}
-                      style={{ ...btnPrimary, opacity: actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData) ? 0.6 : 1 }}
-                      disabled={actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData)}
+                      style={{ ...btnPrimary, opacity: actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData) || !identityDeclared ? 0.6 : 1 }}
+                      disabled={actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData) || !identityDeclared}
                     >
-                      {actionState === "submitting" ? "Submitting..." : isSignatureRequired && !signatureData ? "Signature required" : "Approve"}
+                      {actionState === "submitting"
+                        ? "Submitting..."
+                        : !identityDeclared ? "Confirm your details above"
+                        : isSignatureRequired && !signatureData ? "Signature required"
+                        : "Approve"}
                     </button>
-                    <button className="eval-action-button" onClick={() => handleSubmit("reject")} style={btnOutline} disabled={actionState === "submitting"}>
+                    <button
+                      className="eval-action-button"
+                      onClick={() => handleSubmit("reject")}
+                      style={{ ...btnOutline, opacity: actionState === "submitting" || !identityDeclared ? 0.6 : 1 }}
+                      disabled={actionState === "submitting" || !identityDeclared}
+                    >
                       Reject
                     </button>
                   </>

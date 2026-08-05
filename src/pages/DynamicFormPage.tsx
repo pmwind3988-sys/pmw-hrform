@@ -31,6 +31,7 @@ import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SU
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { buildWorkflowReviewLink } from "../utils/workflowLink";
+import { issueWorkflowReviewLink } from "../utils/issueWorkflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
@@ -61,7 +62,7 @@ const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLay
 // layer could have several actors has none of them, and the submission still
 // works off L{n}_Email alone. Anchored to the L{n}_ prefix so a form field that
 // merely ends in "_Emails" is still reported as a genuine schema gap.
-const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy)$/;
+const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy|ActorName|ActorIdentity)$/;
 
 function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
   return (
@@ -1561,6 +1562,26 @@ export default function DynamicFormPage() {
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
           const baseUrl = window.location.origin;
 
+          // A public first layer is actioned without signing in, so it needs a
+          // signed per-submission link. The browser cannot sign one — without
+          // this the recipient would be mailed the admin URL they cannot open.
+          let publicReviewLink = "";
+          if (layerConfigParsed?.layers?.[0]?.authMode === "public" && formSlug) {
+            try {
+              publicReviewLink = await issueWorkflowReviewLink({
+                formSlug,
+                responseItemId: result.Id,
+                layerNumber: firstLayerNumber,
+                layerType: layerConfigParsed.layers[0].type,
+                authMode: "public",
+              });
+            } catch (linkError) {
+              // The submission is already saved; losing the link is worth a
+              // resend from the dashboard, not a failed submit.
+              void linkError;
+            }
+          }
+
           if (firstLayerManualPaper) {
             // Manual-paper workflow notices are sent with the generated PDF below.
           } else if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
@@ -1602,6 +1623,7 @@ export default function DynamicFormPage() {
               ...(layerConfigParsed?.layers?.[0]?.type === "evaluation"
                 ? { nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule }
                 : {}),
+              ...(publicReviewLink ? { reviewLink: publicReviewLink } : {}),
             });
           }
         }

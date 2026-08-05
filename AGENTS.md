@@ -80,13 +80,33 @@ A layer's `assignee` can now resolve to more than one person, and the mail can g
   - `L{n}_Email` (text) — the **primary** actor. Unchanged.
   - `L{n}_Emails` (note) — every address allowed to act, `"; "` joined. Note, not text, because an expanded DL overruns 255 chars.
   - `L{n}_NotifyEmails` (note) — where the notification was actually delivered.
-  - `L{n}_ActedBy` (text) — which of the allowed addresses decided. The PDF prefers this over `L{n}_Email`.
+  - `L{n}_ActedBy` (text) — which of the allowed addresses decided. The PDF prefers this over `L{n}_Email`. On a public layer this is the address the link holder **declared**, not a verified account.
+  - `L{n}_ActorName` (text) / `L{n}_ActorIdentity` (note) — a public link holder's declared name and full declaration JSON. Empty on 365 layers.
 - **Access checks read `L{n}_Emails`**, falling back to `L{n}_Email` for submissions predating these columns — see `isLayerActor()` in `src/utils/layerRecipients.ts` (mirrored at `api/_utils/layerRecipients.ts`; keep the two in sync).
 - **Notification split**: `BaseLayer.notifyEmails` lists mailboxes that receive the layer email but **can never act**. `notifyRecipientMode: "notify-only"` sends to those mailboxes *instead of* the assignee — the shared-mailbox case, where the approval still belongs to and is recorded against the evaluator.
 - **DL expansion needs `Group.Read.All` as a *Microsoft Graph* Application permission** (admin consent) on `SYSTEM_CLIENT_ID` — not SharePoint. It runs on the `getGraphToken()` token; the SharePoint token is a separate acquisition and granting it there does nothing. Without it Graph returns 403 and submission fails with a configuration error rather than silently assigning nobody. Members come from `/groups/{id}/transitiveMembers`, so nested groups flatten; disabled accounts are skipped.
 - The browser cannot expand a DL (delegated token lacks the permission), so `DynamicFormPage` and `ApprovalDashboard` call `POST /api/expand-group` with a **form slug + layer number**, never an address — the server reads the address off that layer's published config. Keeps the route from being a general membership lookup for anyone holding `VITE_API_SECRET_KEY`.
 - **Reassigning a layer replaces the whole actor set**, not just the primary — otherwise former co-assignees keep access.
-- **Forms published before this change** have none of the three new columns. Both submit paths drop them silently (`OPTIONAL_LAYER_COLUMN_RE` in `api/submit-form.ts` and `src/pages/DynamicFormPage.tsx`) instead of failing the submission — the notification still fans out because it is computed in memory, but the access check falls back to `L{n}_Email` until the form is republished.
+- **Forms published before this change** have none of the new columns. Both submit paths drop them silently (`OPTIONAL_LAYER_COLUMN_RE` in `api/submit-form.ts` and `src/pages/DynamicFormPage.tsx`) instead of failing the submission — the notification still fans out because it is computed in memory, but the access check falls back to `L{n}_Email` until the form is republished.
+
+### Public Layers — Signed Links and Declared Identity
+A layer with `authMode: "public"` is actioned by whoever holds the emailed link, with no 365 sign-in. Two pieces do the work: the **link** carries the authority, the **declaration** carries the identity.
+
+**The link is a signed grant** (`api/_utils/publicGrant.ts`), `v1.<base64url payload>.<base64url HMAC-SHA256>`, payload `{f: formTitle, i: itemId, l: layer, s: serial, e: expiry}`:
+- **One submission per link.** The item is inside the signature, so `?item=` is no longer trusted — editing it cannot reach another submission. This replaced a form-wide `publicToken` that worked on *every* submission and was served to anonymous callers by `/api/form-config`.
+- **Signed with `PUBLIC_LINK_SECRET`**, falling back to the server-only `CRON_SECRET`. **Never `API_SECRET_KEY`** — its `VITE_` twin ships in the browser bundle. Rotating the secret kills every link already in an inbox.
+- **Expiry is per link**, from the layer's `publicAccess.linkTtlHours` (default 168h) at mint time.
+- **Single use falls out of the existing terminal checks** in `api/evaluate.ts` — a link stays readable but stops accepting decisions once the layer is terminal or the submission has moved on. Those responses now carry `code: "already-actioned"`.
+- **Revocation** is the `serial`, matched against the response item's `WorkflowGrantSerials` note column (`{"<layer>": <n>}`, absent = 0). Bumping it invalidates every outstanding link for that layer.
+- Links are minted by `issueLayerLinkToken()` from `api/submit-form.ts`, `api/evaluate.ts`, and `api/workflow-link.ts`. The browser cannot sign, so `ApprovalDashboard` calls `POST /api/workflow-link` (`src/utils/issueWorkflowLink.ts`) — form slug + item + layer, never a token; the route refuses unless the layer is public and the submission is sitting on it.
+
+**The identity is declared, not verified** (`src/utils/publicIdentity.ts`, mirrored at `api/_utils/publicIdentity.ts` — keep in sync):
+- The builder picks the fields per layer (`publicAccess.identityFields`); Full name / Email / Contact number are on by default, Company and ID/Staff no. are available. `requireIdentity: false` skips the whole step and records the decision as `SYSTEM`.
+- The page (`src/components/PublicIdentityForm.tsx`) gates the action buttons; `api/evaluate.ts` re-validates and answers `code: "identity-required"` with per-field `fieldErrors`.
+- Optional narrowing: `allowedEmailDomains`, and `requireAssigneeEmailMatch` (the declared address must be one of `L{n}_Emails`). Neither authenticates anybody — they only restrict what is accepted.
+- Stored to `L{n}_ActedBy` / `L{n}_ActorName` / `L{n}_ActorIdentity`, and into the `EvaluationData` entry's `confirmerEmail` / `confirmerName` / `identity`.
+
+**Backward compatibility:** a token that is not a signed grant falls through to the old scan-every-form-for-`publicToken` path with `?item=`, honouring the old `tokenExpiresAt` and logging a warning. `publicToken`/`tokenExpiresAt` are still on the type for that data, but the builder no longer mints them and `/api/form-config` strips both before answering an anonymous caller.
 
 ### Per-Submission Workflow Overrides
 - `/admin/submissions` and `/admin/approvals` are the same internal workflow workspace and both require HR Forms Owner + `superuser`.
@@ -216,7 +236,7 @@ AdminFormBuilder.tsx (page — /admin/builder, Form Builder Superuser-only)
   │     ├── JsonPreview (collapsed raw JSON)
   │     └── LivePreviewModal (survey-react-ui)
   ├── LayerConfigPanel (approval/evaluation layer sequence editor)
-  │     ├── LayerCard[], EvalElementPicker, PublicLinkDisplay
+  │     ├── LayerCard[], EvalElementPicker, PublicAccessSettings
   ├── VersionHistory / AuditLog / ProvisionOverlay
 ```
 

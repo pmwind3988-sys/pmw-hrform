@@ -1803,6 +1803,9 @@ const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'WorkflowAssignmentData', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowEmailLog', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowEmailSchedule', k: SP_FIELD_KIND.note, ml: true },
+  // Revocation serials for public layer links, `{ "<layer>": <n> }`. Bumping a
+  // layer's serial kills every link already issued for it.
+  { n: 'WorkflowGrantSerials', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
   { n: 'FormStatus', k: SP_FIELD_KIND.text },
 ];
@@ -1847,8 +1850,15 @@ function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
       // Where the notification was actually delivered — may include a shared
       // mailbox that receives the notice but cannot act.
       { n: `L${n}_NotifyEmails`, k: 3, ml: true },
-      // Which of the allowed addresses completed the layer.
+      // Which of the allowed addresses completed the layer. On a public layer
+      // this is the address the link holder declared, not a verified account.
       { n: `L${n}_ActedBy`, k: 2 },
+      // Name declared by a public link holder, so the audit trail and PDF show
+      // a person rather than an address.
+      { n: `L${n}_ActorName`, k: 2 },
+      // The full declaration as JSON — phone and any other builder-configured
+      // fields. Multi-line, because the field set is open-ended.
+      { n: `L${n}_ActorIdentity`, k: 3, ml: true },
       { n: `L${n}_SignedAt`, k: 4 },
       { n: `L${n}_Rejection`, k: 3, ml: true },
       { n: `L${n}_Signature`, k: 3, ml: true },

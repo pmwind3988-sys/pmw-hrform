@@ -12,7 +12,7 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LayerCard from "./LayerCard";
 import EvalElementPicker from "./EvalElementPicker";
-import PublicLinkDisplay from "./PublicLinkDisplay";
+import PublicAccessSettings from "./PublicAccessSettings";
 import DepartmentDirectoryPanel from "./DepartmentDirectoryPanel";
 import { validateLayerConfig } from "./layerValidation";
 import { DEPARTMENT_APPROVER_DEFAULTS, createDepartmentApproverAssignee, getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
@@ -32,18 +32,16 @@ import type {
   MultiUserLayerAssignee,
 } from "../../types";
 import { isLayerEmail, joinEmailList, parseEmailList } from "../../utils/layerRecipients";
+import { defaultPublicAccessConfig } from "../../utils/publicIdentity";
 
 interface LayerConfigPanelProps {
   value: LayerConfig | null;
   onChange: (config: LayerConfig | null) => void;
   siteUsers: { email: string; name: string }[];
   formFields: LayerFieldOption[];
-  slug: string;
-  /**
-   * Origin of the deployment that serves this form — not necessarily this one,
-   * since the builder can author for a second site. See `src/config/sites.ts`.
-   */
-  appOrigin: string;
+  // No slug/appOrigin here any more: public layers no longer have one shareable
+  // URL to compose. Each submission is mailed its own link when it reaches the
+  // layer — see `api/_utils/publicGrant.ts`.
   /** SharePoint token, used to manage this profile's approver directory. */
   token?: string;
 }
@@ -544,8 +542,6 @@ export default function LayerConfigPanel({
   onChange,
   siteUsers,
   formFields,
-  slug,
-  appOrigin,
   token,
 }: LayerConfigPanelProps) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
@@ -1090,6 +1086,7 @@ export default function LayerConfigPanel({
                 description: layer.description,
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
+                publicAccess: layer.publicAccess,
                 notifyOnComplete: layer.notifyOnComplete,
                 manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
                 submitterRoutingRules: layer.submitterRoutingRules,
@@ -1109,6 +1106,7 @@ export default function LayerConfigPanel({
                 description: layer.description,
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
+                publicAccess: layer.publicAccess,
                 notifyOnComplete: layer.notifyOnComplete,
                 manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
                 submitterRoutingRules: layer.submitterRoutingRules,
@@ -1129,22 +1127,18 @@ export default function LayerConfigPanel({
             <button onClick={() => patchLayer(idx, { authMode: "365" as AuthMode })} style={TOGGLE_BTN(layer.authMode === "365")}>
               <LockIcon style={{ fontSize: 12, marginRight: 4 }} /> 365 Sign-in
             </button>
-            <button onClick={() => {
-              const patch: Partial<LayerConfigItem> & { publicToken?: string; tokenExpiresAt?: string } = { authMode: "public" as AuthMode };
-              if (!layer.publicToken) patch.publicToken = crypto.randomUUID();
-              if (!layer.tokenExpiresAt) {
-                const d = new Date();
-                d.setDate(d.getDate() + 30);
-                patch.tokenExpiresAt = d.toISOString();
-              }
-              patchLayer(idx, patch);
-            }} style={TOGGLE_BTN(layer.authMode === "public")}>
+            <button onClick={() => patchLayer(idx, {
+              authMode: "public" as AuthMode,
+              // No form-wide token is minted any more; links are issued per
+              // submission when the layer is reached.
+              ...(layer.publicAccess ? {} : { publicAccess: defaultPublicAccessConfig() }),
+            })} style={TOGGLE_BTN(layer.authMode === "public")}>
               <LinkIcon style={{ fontSize: 12, marginRight: 4 }} /> Public Link
             </button>
           </div>
           {layer.authMode === "public" && (
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
-              Anyone with the link can access this layer without signing in.
+              No sign-in — whoever holds the emailed link can act, after saying who they are.
             </div>
           )}
         </div>
@@ -1290,15 +1284,11 @@ export default function LayerConfigPanel({
           />
         </div>
 
-        {/* Public link display */}
+        {/* Public link behaviour */}
         {layer.authMode === "public" && (
-          <PublicLinkDisplay
-            slug={slug}
-            appOrigin={appOrigin}
-            publicToken={layer.publicToken || ""}
-            tokenExpiresAt={layer.tokenExpiresAt || ""}
-            onTokenChange={t => patchLayer(idx, { publicToken: t })}
-            onExpiryChange={d => patchLayer(idx, { tokenExpiresAt: d })}
+          <PublicAccessSettings
+            value={layer.publicAccess}
+            onChange={publicAccess => patchLayer(idx, { publicAccess })}
           />
         )}
       </div>
@@ -1329,6 +1319,7 @@ export default function LayerConfigPanel({
                 description: layer.description,
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
+                publicAccess: layer.publicAccess,
                 notifyOnComplete: layer.notifyOnComplete,
                 manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
                 submitterRoutingRules: layer.submitterRoutingRules,
@@ -1348,6 +1339,7 @@ export default function LayerConfigPanel({
                 description: layer.description,
                 publicToken: layer.publicToken,
                 tokenExpiresAt: layer.tokenExpiresAt,
+                publicAccess: layer.publicAccess,
                 notifyOnComplete: layer.notifyOnComplete,
                 manualPaperWhenSenderEmail: layer.manualPaperWhenSenderEmail,
                 submitterRoutingRules: layer.submitterRoutingRules,
@@ -1368,22 +1360,16 @@ export default function LayerConfigPanel({
             <button onClick={() => patchBranchLayer(bi, li, { authMode: "365" as AuthMode })} style={TOGGLE_BTN(layer.authMode === "365")}>
               <LockIcon style={{ fontSize: 12, marginRight: 4 }} /> 365 Sign-in
             </button>
-            <button onClick={() => {
-              const patch: Partial<LayerConfigItem> & { publicToken?: string; tokenExpiresAt?: string } = { authMode: "public" as AuthMode };
-              if (!layer.publicToken) patch.publicToken = crypto.randomUUID();
-              if (!layer.tokenExpiresAt) {
-                const d = new Date();
-                d.setDate(d.getDate() + 30);
-                patch.tokenExpiresAt = d.toISOString();
-              }
-              patchBranchLayer(bi, li, patch);
-            }} style={TOGGLE_BTN(layer.authMode === "public")}>
+            <button onClick={() => patchBranchLayer(bi, li, {
+              authMode: "public" as AuthMode,
+              ...(layer.publicAccess ? {} : { publicAccess: defaultPublicAccessConfig() }),
+            })} style={TOGGLE_BTN(layer.authMode === "public")}>
               <LinkIcon style={{ fontSize: 12, marginRight: 4 }} /> Public Link
             </button>
           </div>
           {layer.authMode === "public" && (
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
-              Anyone with the link can access this layer without signing in.
+              No sign-in — whoever holds the emailed link can act, after saying who they are.
             </div>
           )}
         </div>
@@ -1529,15 +1515,11 @@ export default function LayerConfigPanel({
           />
         </div>
 
-        {/* Public link display */}
+        {/* Public link behaviour */}
         {layer.authMode === "public" && (
-          <PublicLinkDisplay
-            slug={slug}
-            appOrigin={appOrigin}
-            publicToken={layer.publicToken || ""}
-            tokenExpiresAt={layer.tokenExpiresAt || ""}
-            onTokenChange={t => patchBranchLayer(bi, li, { publicToken: t })}
-            onExpiryChange={d => patchBranchLayer(bi, li, { tokenExpiresAt: d })}
+          <PublicAccessSettings
+            value={layer.publicAccess}
+            onChange={publicAccess => patchBranchLayer(bi, li, { publicAccess })}
           />
         )}
       </div>

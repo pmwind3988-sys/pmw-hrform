@@ -15,7 +15,7 @@
 | Layer sequence editor | `LayerConfigPanel.tsx` | Full layer sequence: type toggle, auth mode, assignee, evaluation elements |
 | Layer card | `LayerCard.tsx` | Single layer card with type badge, auth icon, move controls |
 | Evaluation element picker | `EvalElementPicker.tsx` | Field type grid for evaluation layer form config |
-| Public link display | `PublicLinkDisplay.tsx` | Copyable public URL with token regeneration |
+| Public link behaviour | `PublicAccessSettings.tsx` | Link lifetime + the details a public link holder must declare. There is no copyable form-wide URL any more: each submission is mailed its own signed link. |
 | Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results |
 | Submission workflow overrides | `ApprovalDashboard.tsx` | Superuser-only per-item reassignment metadata in `WorkflowAssignmentData`; `L{n}_Email` remains authoritative |
 | Approver input (legacy) | `ApproverRow.tsx` | User search + assignee input with static/field-reference modes |
@@ -38,7 +38,7 @@ AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + 
   ├── LayerConfigPanel (Workflow mode, full width — unchanged in function)
   │     ├── LayerCard[] (per-layer config)
   │     ├── EvalElementPicker (for evaluation layers)
-  │     └── PublicLinkDisplay (for public layers)
+  │     └── PublicAccessSettings (for public layers)
   ├── VersionHistory (side panel — Web Form Versions SP list)
   ├── AuditLog (side panel — Form Builder Log SP list)
   ├── ApproverRow[] (used within LayerConfigPanel for static assignee input)

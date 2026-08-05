@@ -32,6 +32,14 @@ _Avoid_: Assuming one layer means one approver, or that every actor must act
 An address that receives a layer's notification email without being able to act on it, typically a shared or team mailbox. The approval or evaluation still belongs to the layer's actors and is recorded against whoever decided.
 _Avoid_: Treating the mailbox as the assignee, or letting it approve
 
+**Public Grant**:
+The signed link that lets someone approve or evaluate without a Microsoft 365 sign-in. Each submission gets its own, bound to that one submission and layer, expiring on the layer's schedule and refusing a second decision once one has landed.
+_Avoid_: One shared link per form, taking the target submission from the URL query, or calling a grant a "token" as if it were reusable
+
+**Declared Identity**:
+The name, email, contact number and anything else a public link holder states about themselves before acting. It is recorded against the decision, not verified — the link is what carries the authority.
+_Avoid_: Describing it as sign-in or authentication, or treating a declared address as a proven one
+
 **Managed Company Selector**:
 A required, single-select company question controlled from Form Setup and presented in the form header. It represents the company the submission belongs to.
 _Avoid_: Company banner, duplicate Company field

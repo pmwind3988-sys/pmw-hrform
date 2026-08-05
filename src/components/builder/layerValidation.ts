@@ -1,5 +1,13 @@
 import type { LayerConfig, LayerConfigItem, ManualBranch } from "../../types";
 import { parseEmailList } from "../../utils/layerRecipients";
+import {
+  enabledIdentityFields,
+  IDENTITY_EMAIL_KEY,
+  isIdentityDomain,
+  MAX_PUBLIC_LINK_TTL_HOURS,
+  MIN_PUBLIC_LINK_TTL_HOURS,
+  normalizePublicAccessConfig,
+} from "../../utils/publicIdentity";
 
 export interface LayerFieldOption {
   name: string;
@@ -68,15 +76,43 @@ function validateLayer(
   }
 
   if (layer.authMode === "public") {
-    if (!layer.publicToken?.trim()) {
-      errors.push(`${label}: public layers need an access token.`);
+    const access = normalizePublicAccessConfig(layer.publicAccess);
+    const identityFields = enabledIdentityFields(access);
+    const emailCollected = identityFields.some((field) => field.key === IDENTITY_EMAIL_KEY);
+
+    // The link is mailed, never displayed, so a layer nobody is addressed to
+    // produces a submission that silently stalls.
+    if (!layer.assignee?.value?.trim() && parseEmailList(layer.notifyEmails).length === 0) {
+      errors.push(`${label}: public layers still need someone to send the link to.`);
     }
-    if (!layer.tokenExpiresAt?.trim()) {
-      errors.push(`${label}: public layers need an expiry date.`);
-    } else if (Number.isNaN(Date.parse(layer.tokenExpiresAt))) {
-      errors.push(`${label}: public link expiry is not a valid date.`);
-    } else if (new Date(layer.tokenExpiresAt).getTime() <= Date.now()) {
-      warnings.push(`${label}: public link has already expired.`);
+
+    const rawTtl = layer.publicAccess?.linkTtlHours;
+    if (rawTtl !== undefined && (!Number.isFinite(rawTtl) || rawTtl < MIN_PUBLIC_LINK_TTL_HOURS || rawTtl > MAX_PUBLIC_LINK_TTL_HOURS)) {
+      errors.push(`${label}: link validity must be between ${MIN_PUBLIC_LINK_TTL_HOURS} and ${MAX_PUBLIC_LINK_TTL_HOURS} hours.`);
+    } else if (access.linkTtlHours > 720) {
+      warnings.push(`${label}: a link valid for ${Math.round(access.linkTtlHours / 24)} days is a long-lived credential in someone's inbox.`);
+    }
+
+    if (access.requireIdentity && identityFields.length === 0) {
+      errors.push(`${label}: turn on at least one detail to collect, or switch off the declaration requirement.`);
+    }
+    if (!access.requireIdentity) {
+      warnings.push(`${label}: nobody is recorded as the approver — the decision will show as SYSTEM.`);
+    }
+
+    const invalidDomains = access.allowedEmailDomains.filter((domain) => !isIdentityDomain(domain));
+    if (invalidDomains.length > 0) {
+      errors.push(`${label}: these are not valid email domains — ${invalidDomains.join(", ")}.`);
+    }
+    if (access.allowedEmailDomains.length > 0 && !emailCollected) {
+      errors.push(`${label}: restricting email domains needs the email detail turned on.`);
+    }
+    if (access.requireAssigneeEmailMatch) {
+      if (!emailCollected) {
+        errors.push(`${label}: matching against the assignee needs the email detail turned on.`);
+      } else if (layer.assignee?.type === "field-reference" || layer.assignee?.type === "department-approver") {
+        warnings.push(`${label}: the assignee is resolved per submission, so what counts as a match varies by submission.`);
+      }
     }
   }
 

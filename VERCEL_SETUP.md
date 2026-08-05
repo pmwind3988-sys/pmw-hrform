@@ -38,6 +38,7 @@ The API functions need these env vars to authenticate with SharePoint via client
 | `SYSTEM_CLIENT_SECRET` | App registration Client Secret |
 | `API_SECRET_KEY` / `VITE_API_SECRET_KEY` | Shared API key for frontend-to-API calls |
 | `CRON_SECRET` | Server-only bearer secret used by Vercel Cron for scheduled evaluator emails |
+| `PUBLIC_LINK_SECRET` | Server-only HMAC key that signs public approval/evaluation links. Falls back to `CRON_SECRET` if unset. **Never set this to `API_SECRET_KEY`** — see below |
 | `HR_FORM_EMAIL_FROM_ADDRESS` | Mail-enabled sender for HR form workflow and approval emails |
 | `JOB_APPLICATION_EMAIL_FROM_ADDRESS` | Mail-enabled sender for job application emails |
 | `HR_RECRUITMENT_EMAIL` | Recipient mailbox for job application notifications |
@@ -127,6 +128,25 @@ Which token uses which: SharePoint REST calls go through `getSharePointToken()` 
 
 ---
 
+## 6b. Public approval links (`PUBLIC_LINK_SECRET`)
+
+A workflow layer set to **Public Link** is actioned without a 365 sign-in. Each submission is
+emailed its own HMAC-signed link, scoped to that one submission and layer, expiring on the layer's
+configured schedule and refusing a second decision once one has landed.
+
+- Generate a value with `openssl rand -base64 32` (or anything long and random) and add it as a
+  **server-only** variable — no `VITE_` prefix.
+- If it is unset, links are signed with `CRON_SECRET` instead. That works, but a dedicated key
+  means rotating one does not invalidate the other.
+- **Never reuse `API_SECRET_KEY`.** Its twin `VITE_API_SECRET_KEY` ships inside the browser bundle,
+  so anyone could mint their own approval links.
+- **Rotating the secret invalidates every link already sitting in an inbox.** Recipients get "This
+  review link is not valid"; reissue from `/admin/submissions`.
+- If neither variable is set, public layers fall back to the legacy form-wide token where one still
+  exists on the layer, and no new signed links are issued.
+
+---
+
 ## 7. Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -136,6 +156,9 @@ Which token uses which: SharePoint REST calls go through `getSharePointToken()` 
 | "Form is not public" | `IsPublic` is false | Check form settings in the builder |
 | CORS errors | `vercel.json` headers not applied | Make sure `vercel.json` is in project root |
 | API returns HTML instead of JSON | Using `npm run dev` instead of `vercel dev` | Run `vercel dev` |
+| "This review link is not valid" on a public link | `PUBLIC_LINK_SECRET` (or `CRON_SECRET`) changed since the link was mailed | Reissue the link from `/admin/submissions`; rotating the signing key invalidates every outstanding link |
+| "This review link has expired" | Past the layer's configured link validity | Reissue from `/admin/submissions`, or raise "Link valid for" on the layer |
+| "This review link has been replaced by a newer one" | The layer's link was reissued with revocation | Use the most recent email |
 | "Could not expand the distribution list" on submit | `Group.Read.All` not granted, or the address is not a mail-enabled group | Grant `Group.Read.All` with admin consent; confirm the address resolves under Entra ID → Groups |
 
 ---
@@ -173,6 +196,7 @@ In Vercel Dashboard → Project Settings → Environment Variables, add:
 - `API_SECRET_KEY`
 - `VITE_API_SECRET_KEY`
 - `CRON_SECRET`
+- `PUBLIC_LINK_SECRET`
 - `HR_FORM_EMAIL_FROM_ADDRESS`
 - `JOB_APPLICATION_EMAIL_FROM_ADDRESS`
 - `HR_RECRUITMENT_EMAIL`

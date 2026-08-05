@@ -1,3 +1,5 @@
+import type { PublicAccessConfig } from "../utils/publicIdentity";
+
 // Page state machine states
 export const PAGE_STATES = {
   checking: "checking",
@@ -99,6 +101,15 @@ export type FormStatus =
 /** Mirrors `NotifyRecipientMode` in `src/utils/layerRecipients.ts`. */
 export type NotifyRecipientMode = "both" | "notify-only";
 
+// Re-exported rather than restated: these are structural, and a second copy
+// would drift from the module that actually validates against them.
+export type {
+  PublicAccessConfig,
+  PublicIdentityField,
+  PublicIdentityFieldType,
+  ResolvedPublicAccessConfig,
+} from "../utils/publicIdentity";
+
 export interface FixedUserLayerAssignee {
   type: "user";
   value: string;
@@ -155,8 +166,20 @@ export interface BaseLayer {
   assignee: LayerAssignee;
   title?: string;
   description?: string;
+  /**
+   * Legacy form-wide public token. Superseded by the per-submission signed
+   * grants in `api/_utils/publicGrant.ts`; kept so links already in an inbox,
+   * and forms published before that change, still resolve.
+   */
   publicToken?: string;
+  /** Legacy companion to `publicToken` — one expiry shared by every submission. */
   tokenExpiresAt?: string;
+  /**
+   * How a `authMode: "public"` layer behaves: link lifetime, and what the link
+   * holder must declare about themselves before they can act.
+   * See `src/utils/publicIdentity.ts`.
+   */
+  publicAccess?: PublicAccessConfig;
   notifyOnComplete?: boolean;
   manualPaperWhenSenderEmail?: boolean;
   submitterRoutingRules?: EvaluationSubmitterRoutingRule[];
@@ -233,6 +256,11 @@ export interface EvaluationDataEntry {
   fields: Record<string, unknown>;
   notes?: string;
   signatureUrl?: string | null;
+  /**
+   * What a public link holder declared about themselves before acting. Absent
+   * on 365 layers, where the identity comes from the signed-in account.
+   */
+  identity?: Record<string, string>;
 }
 
 export interface ApprovalLayerResult {

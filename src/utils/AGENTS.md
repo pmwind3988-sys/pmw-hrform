@@ -9,6 +9,10 @@
 | SP REST client (builder) | `formBuilderSP.ts` | **Standalone** — raw `token: string` param, NOT `createSpClient`; ~1470 lines, 43 exports |
 | Config loader | `spConfig.ts` | `SP_STATIC` group names, `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`, `legacyToLayerConfig()` migration helper |
 | Form logic | `FormBuilderEngine.ts` | Pure functions: 57 question types, validation, survey JSON builder, versioning |
+| Layer actors vs. recipients | `layerRecipients.ts` | Who may act on a layer (`L{n}_Emails`) vs. who gets the mail (`L{n}_NotifyEmails`). **Mirrored at `api/_utils/layerRecipients.ts` — keep in sync.** |
+| Public layer identity | `publicIdentity.ts` | What a public link holder must declare about themselves, and validation of what they declared. **Mirrored at `api/_utils/publicIdentity.ts` — keep in sync.** |
+| Public review links | `issueWorkflowLink.ts` | Asks `POST /api/workflow-link` for a public layer's signed link, optionally revoking the previous one. Non-public layers are composed locally by `workflowLink.ts`. |
+| Distribution list expansion | `expandLayerGroup.ts` | Calls `POST /api/expand-group` with a form slug + layer, never an address. |
 | Status constants | `statusConstants.ts` | `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`, `layerColumn()` helper |
 | Custom widget | `DynamicMatrix.tsx` | Custom SurveyJS widget for matrix questions + `rowsToHtml()` matrix↔HTML conversion |
 | Auth persistence | `authDecision.ts` | `localStorage` helpers for `pmw_hr_auth_decision` |

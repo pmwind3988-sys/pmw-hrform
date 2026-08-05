@@ -113,6 +113,9 @@ export function buildPdfLayerResults(
       // On a layer shared by several people, the primary L{n}_Email is not
       // necessarily who decided — the record should name the person who did.
       email: (rawResponse[`L${n}_ActedBy`] as string) || (rawResponse[`L${n}_Email`] as string) || "",
+      // Public layers have no account to read a name off, so the person states
+      // one; 365 layers leave this empty and the address stands alone.
+      actorName: (rawResponse[`L${n}_ActorName`] as string) || undefined,
       signedAt: (rawResponse[`L${n}_SignedAt`] as string) || undefined,
       rejection: (rawResponse[`L${n}_Rejection`] as string) || undefined,
       signature: (rawResponse[`L${n}_Signature`] as string) || undefined,

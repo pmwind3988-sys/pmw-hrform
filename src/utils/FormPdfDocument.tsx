@@ -49,6 +49,19 @@ export interface PdfLayerResult {
   /** For evaluation layers: confirmer name/email */
   confirmerEmail?: string;
   confirmerName?: string;
+  /**
+   * Name declared by a public link holder. A 365 layer has none — the address
+   * is the identity there.
+   */
+  actorName?: string;
+}
+
+/** "Ada Lovelace (ada@example.com)" when a name was declared, else the address. */
+function layerActorLabel(layer: PdfLayerResult): string {
+  const name = (layer.actorName || "").trim();
+  const email = (layer.email || "").trim();
+  if (!name) return email;
+  return email ? `${name} (${email})` : name;
 }
 
 // ── Colors ────────────────────────────────────────────────────────────────
@@ -319,7 +332,7 @@ function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
       <Text style={[S.layerCell, S.colNum]}>{layer.layerNumber}</Text>
       <Text style={[S.layerCell, S.colType]}>{layer.type === "evaluation" ? "Eval" : "Approval"}</Text>
       <Text style={[S.layerCell, S.colStatus, { color: badge.text }]}>{badge.label}</Text>
-      <Text style={[S.layerCell, S.colEmail]}>{isManualPaper ? "" : layer.email || ""}</Text>
+      <Text style={[S.layerCell, S.colEmail]}>{isManualPaper ? "" : layerActorLabel(layer)}</Text>
       <Text style={[S.layerCell, S.colTime]}>{isManualPaper ? "" : fmtDate(layer.signedAt)}</Text>
       <Text style={[S.layerCell, S.colReason]}>{remarks}</Text>
     </View>
@@ -709,7 +722,7 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
                 <View key={i} style={S.sigBlock} wrap={false}>
                   <View style={S.sigLine}>
                     <Text style={S.sigLabel}>Layer {layer.layerNumber} - {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
-                    <Text style={S.sigName}>{layer.email || ""} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
+                    <Text style={S.sigName}>{layerActorLabel(layer)} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
                     <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}{layer.rejection ? ` - Reason: ${layer.rejection}` : ""}</Text>
                   </View>
                   <View style={S.sigImageBox}>

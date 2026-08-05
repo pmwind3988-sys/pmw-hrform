@@ -10,6 +10,6 @@ export { default as ProvisionOverlay } from "./ProvisionOverlay";
 export { default as LayerConfigPanel } from "./LayerConfigPanel";
 export { default as LayerCard } from "./LayerCard";
 export { default as EvalElementPicker } from "./EvalElementPicker";
-export { default as PublicLinkDisplay } from "./PublicLinkDisplay";
+export { default as PublicAccessSettings } from "./PublicAccessSettings";
 export { default as EvaluationSummary } from "./EvaluationSummary";
 export { C } from "./constants";

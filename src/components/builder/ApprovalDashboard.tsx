@@ -24,7 +24,7 @@ import type { LifecycleStage } from "../../utils/submissionLifecycle";
 import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany } from "../../utils/companySelection";
-import { buildWorkflowReviewLink } from "../../utils/workflowLink";
+import { issueWorkflowReviewLink } from "../../utils/issueWorkflowLink";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
@@ -1783,16 +1783,18 @@ export default function ApprovalDashboard() {
       await spPatch(token, itemUrl, patchBody);
 
       const cfg = await getFormConfigByTitle(token, item.Title) as FormConfig | null;
-      const publicToken = currentLayer.publicToken || "";
       const formSlug = valueToText(cfg?.Slug);
-      const reviewLink = buildWorkflowReviewLink({
-        baseUrl: window.location.origin,
-        layerType: currentLayer.type,
-        authMode: currentLayer.authMode,
-        publicToken,
+      // A public layer's link is signed server-side and scoped to this one
+      // submission. Naming a different recipient revokes what was issued before,
+      // so the previous holder loses access; a plain nudge leaves their existing
+      // link working, since they may be about to act on it.
+      const reviewLink = await issueWorkflowReviewLink({
         formSlug,
         responseItemId: item.Id,
         layerNumber: currentLayerNumber,
+        layerType: currentLayer.type,
+        authMode: currentLayer.authMode,
+        revokeExisting: manualRecipient !== "",
       });
 
       const currentLayerStatus = valueToText(rawItem[`L${currentLayerNumber}_Status`]);
@@ -2060,16 +2062,14 @@ export default function ApprovalDashboard() {
       if (!EMAIL_RE.test(recipient)) throw new Error("The active evaluation layer has no valid evaluator email.");
 
       const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
-      const publicToken = currentLayer.publicToken || "";
       const formSlug = valueToText(cfg?.Slug);
-      const reviewLink = buildWorkflowReviewLink({
-        baseUrl: window.location.origin,
-        layerType: currentLayer.type,
-        authMode: currentLayer.authMode,
-        publicToken,
+      const reviewLink = await issueWorkflowReviewLink({
         formSlug,
         responseItemId: selectedItem.Id,
         layerNumber: currentLayerNumber,
+        layerType: currentLayer.type,
+        authMode: currentLayer.authMode,
+        revokeExisting: manualEmailRecipient.trim() !== "",
       });
       const updatedAt = new Date().toISOString();
       // Typing a recipient here names one evaluator; otherwise keep the actor

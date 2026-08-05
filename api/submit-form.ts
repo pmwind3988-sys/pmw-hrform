@@ -16,6 +16,8 @@ import {
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
+import { issueLayerLinkToken } from "./_utils/publicGrant.js";
+import type { PublicAccessConfig } from "./_utils/publicIdentity.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
@@ -100,7 +102,10 @@ interface ApiLayerConfigItem {
   authMode: "365" | "public";
   assignee: ApiLayerAssignee;
   title?: string;
+  /** Legacy form-wide public token; superseded by signed per-submission grants. */
   publicToken?: string;
+  /** Link lifetime and the identity a public link holder must declare. */
+  publicAccess?: PublicAccessConfig;
   emailSchedule?: WorkflowEmailScheduleConfig;
   submitterRoutingRules?: ApiEvaluationSubmitterRoutingRule[];
   surveyElements?: Record<string, unknown>[];
@@ -889,7 +894,7 @@ async function getColumnKeyResolver(
 // better than refusing the submission over a schema gap only an admin can
 // close. Anchored to the L{n}_ prefix so a form field that merely ends in
 // "_Emails" is still reported as a genuine gap.
-const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy)$/;
+const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy|ActorName|ActorIdentity)$/;
 
 function mapToExistingColumns(
   fields: Record<string, unknown>,
@@ -1636,7 +1641,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               baseUrl: appBaseUrl,
               layerType: firstLayer.type,
               authMode: firstLayer.authMode,
-              publicToken: firstLayer.publicToken,
+              // A public layer is mailed a grant scoped to this submission
+              // alone, expiring on the layer's own schedule. A brand-new item
+              // has no revocations yet, so the serial starts at 0.
+              publicToken: issueLayerLinkToken(firstLayer, {
+                formTitle: listTitle,
+                responseItemId: parentId,
+                layerNumber: firstLayer.layerNumber,
+              }),
               formSlug,
               responseItemId: parentId,
               layerNumber: firstLayer.layerNumber,

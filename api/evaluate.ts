@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
+import { ensureListColumns, getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   buildWorkflowActionEmail,
@@ -10,7 +10,22 @@ import {
 } from "./_utils/workflowEmail.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { parseValidEmailList } from "./_utils/layerRecipients.js";
+import { parseEmailList, parseValidEmailList } from "./_utils/layerRecipients.js";
+import {
+  currentGrantSerial,
+  GRANT_SERIAL_COLUMN,
+  issueLayerLinkToken,
+  looksLikePublicGrant,
+  verifyPublicGrant,
+  type PublicGrant,
+  type PublicGrantFailure,
+} from "./_utils/publicGrant.js";
+import {
+  enabledIdentityFields,
+  normalizePublicAccessConfig,
+  validateDeclaredIdentity,
+  writeDeclaredIdentityFields,
+} from "./_utils/publicIdentity.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -232,6 +247,119 @@ async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, 
   return result;
 }
 
+interface LayerConfigShape {
+  layers?: Record<string, unknown>[];
+  manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[];
+}
+
+/** Main-path layers plus every manual branch's layers, in one list. */
+function allConfiguredLayers(config: LayerConfigShape | null): Record<string, unknown>[] {
+  return [
+    ...(config?.layers ?? []),
+    ...((config?.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
+  ];
+}
+
+function parseLayerConfigJson(raw: unknown): LayerConfigShape | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return isRecord(parsed) ? parsed as LayerConfigShape : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The legacy form-wide `publicToken`: one UUID shared by every submission of a
+ * form, so it can only be resolved by scanning. Retained for links already in an
+ * inbox — new links are signed grants (`_utils/publicGrant.ts`).
+ */
+async function findLayerByLegacyToken(graphToken: string, token: string): Promise<{
+  layer: Record<string, unknown>;
+  formTitle: string;
+  layerConfig: LayerConfigShape;
+} | null> {
+  const masterItems = await queryListItems(graphToken, "Master Form", { top: 500 });
+  for (const form of masterItems) {
+    const parsed = parseLayerConfigJson(form.fields.LayerConfig);
+    if (!parsed) continue;
+    const layer = allConfiguredLayers(parsed).find((entry) => entry.publicToken === token);
+    if (layer) return { layer, formTitle: String(form.fields.Title || ""), layerConfig: parsed };
+  }
+
+  const versionItems = await queryListItems(graphToken, "Web Form Versions", { top: 500 });
+  for (const versionItem of versionItems) {
+    const parsed = parseVersionPayload(versionItem.fields.SurveyJSON).layerConfig as LayerConfigShape | null;
+    if (!parsed) continue;
+    const layer = allConfiguredLayers(parsed).find((entry) => entry.publicToken === token);
+    if (layer) return { layer, formTitle: String(versionItem.fields.FormTitle || ""), layerConfig: parsed };
+  }
+
+  return null;
+}
+
+/** Client-facing wording for each way a signed grant can fail to resolve. */
+const GRANT_FAILURES: Record<PublicGrantFailure, { status: number; code: string; error: string }> = {
+  malformed: { status: 400, code: "invalid-link", error: "This review link is not valid. Please ask the sender for a new one." },
+  "bad-signature": { status: 403, code: "invalid-link", error: "This review link is not valid. Please ask the sender for a new one." },
+  expired: { status: 403, code: "expired", error: "This review link has expired. Please ask the sender for a new one." },
+  unconfigured: { status: 500, code: "unconfigured", error: "Public review links are not configured on this deployment." },
+};
+
+const REVOKED_ERROR = {
+  status: 403,
+  code: "revoked",
+  error: "This review link has been replaced by a newer one. Please use the most recent email.",
+};
+
+/**
+ * Persists a decision, surviving a response list that predates the declared
+ * identity columns.
+ *
+ * Those lists exist in the wild — the columns only arrive on republish — and a
+ * single unknown field makes Graph reject the whole PATCH. Losing the recorded
+ * identity is bad; losing the approval itself is worse, so the columns are
+ * created if possible and dropped if not.
+ */
+async function writeDecision(
+  graphToken: string,
+  responseListName: string,
+  itemId: string,
+  updates: Record<string, unknown>,
+  layerNumber: number,
+): Promise<void> {
+  const identityColumns = [`L${layerNumber}_ActorName`, `L${layerNumber}_ActorIdentity`];
+  const writingIdentity = identityColumns.some((column) => column in updates);
+
+  if (writingIdentity) {
+    await ensureListColumns(graphToken, responseListName, [
+      { name: `L${layerNumber}_ActorName`, displayName: `L${layerNumber}_ActorName`, type: "text" },
+      { name: `L${layerNumber}_ActorIdentity`, displayName: `L${layerNumber}_ActorIdentity`, type: "note" },
+    ]).catch(() => {});
+  }
+
+  try {
+    await updateListItemFields(graphToken, responseListName, itemId, updates);
+  } catch (error) {
+    if (!writingIdentity) throw error;
+    const withoutIdentity = { ...updates };
+    for (const column of identityColumns) delete withoutIdentity[column];
+    logWarn("api:evaluate", "Declared identity columns missing; recording the decision without them", {
+      responseListName,
+      layerNumber,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    await updateListItemFields(graphToken, responseListName, itemId, withoutIdentity);
+  }
+}
+
+/** The layer's actor addresses, for `requireAssigneeEmailMatch`. */
+function layerActorEmails(fields: Record<string, unknown>, layerNumber: number): string[] {
+  const actors = parseEmailList(fields[`L${layerNumber}_Emails`]);
+  return actors.length > 0 ? actors : parseEmailList(fields[`L${layerNumber}_Email`]);
+}
+
 async function handleGet(req: ApiRequest, res: ApiResponse) {
   const { token } = req.query as { token?: string };
   if (!token || typeof token !== "string") {
@@ -241,90 +369,76 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
   try {
     const graphToken = await getGraphToken();
 
-    // Find the token in all Master Form items
-    const masterItems = await queryListItems(graphToken, "Master Form", { top: 500 });
     let foundToken: Record<string, unknown> | null = null;
     let foundFormTitle = "";
     let foundLayerNumber = 0;
-    let layerConfig: { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null = null;
+    let responseItemId = 0;
+    let layerConfig: LayerConfigShape | null = null;
+    let grant: PublicGrant | null = null;
 
-    for (const form of masterItems) {
-      const rawLayerConfig = form.fields.LayerConfig as string | undefined;
-      if (!rawLayerConfig) continue;
-      try {
-        const parsed = JSON.parse(rawLayerConfig) as { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] };
-        const searchableLayers = [
-          ...(parsed.layers ?? []),
-          ...((parsed.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
-        ];
-        for (const layer of searchableLayers) {
-          if (layer.publicToken === token) {
-            foundToken = layer;
-            foundFormTitle = form.fields.Title as string;
-            foundLayerNumber = layer.layerNumber as number;
-            layerConfig = parsed;
-            break;
-          }
-        }
-      } catch { /* invalid JSON, skip */ }
-      if (foundToken) break;
-    }
-
-    if (!foundToken) {
-      const versionItems = await queryListItems(graphToken, "Web Form Versions", { top: 500 });
-      for (const versionItem of versionItems) {
-        const parsedVersion = parseVersionPayload(versionItem.fields.SurveyJSON);
-        const parsed = parsedVersion.layerConfig as { layers?: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null;
-        if (!parsed) continue;
-        const searchableLayers = [
-          ...(parsed.layers ?? []),
-          ...((parsed.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
-        ];
-        for (const layer of searchableLayers) {
-          if (layer.publicToken === token) {
-            foundToken = layer;
-            foundFormTitle = String(versionItem.fields.FormTitle || "");
-            foundLayerNumber = layer.layerNumber as number;
-            layerConfig = { layers: parsed.layers ?? [], manualBranches: parsed.manualBranches };
-            break;
-          }
-        }
-        if (foundToken) break;
+    if (looksLikePublicGrant(token)) {
+      const verification = verifyPublicGrant(token);
+      if (!verification.ok) {
+        const failure = GRANT_FAILURES[verification.reason];
+        return res.status(failure.status).json({ error: failure.error, code: failure.code });
       }
+      grant = verification.grant;
+      foundFormTitle = grant.formTitle;
+      foundLayerNumber = grant.layerNumber;
+      // The submission is inside the signature, so ?item= is never consulted —
+      // editing it cannot point this link at somebody else's submission.
+      responseItemId = grant.responseItemId;
+      const masterItem = await queryMasterFormByTitle(graphToken, foundFormTitle);
+      layerConfig = parseLayerConfigJson(masterItem?.fields.LayerConfig);
+      foundToken = allConfiguredLayers(layerConfig)
+        .find((layer) => Number(layer.layerNumber) === foundLayerNumber) ?? null;
+    } else {
+      const legacy = await findLayerByLegacyToken(graphToken, token);
+      if (!legacy) return res.status(404).json({ error: "Token not found", code: "invalid-link" });
+      logWarn("api:evaluate:get", "Legacy form-wide public token used", { formTitle: legacy.formTitle });
+      foundToken = legacy.layer;
+      foundFormTitle = legacy.formTitle;
+      foundLayerNumber = Number(legacy.layer.layerNumber);
+      layerConfig = legacy.layerConfig;
+      if (foundToken.tokenExpiresAt && new Date(foundToken.tokenExpiresAt as string) < new Date()) {
+        return res.status(403).json({ error: "This review link has expired.", code: "expired" });
+      }
+      responseItemId = req.query.responseItemId ? Number(req.query.responseItemId) : 0;
+      if (!responseItemId) return res.status(400).json({ error: "Missing responseItemId query parameter" });
     }
-
-    if (!foundToken) return res.status(404).json({ error: "Token not found" });
-    if (foundToken.tokenExpiresAt && new Date(foundToken.tokenExpiresAt as string) < new Date()) {
-      return res.status(403).json({ error: "Token has expired" });
-    }
-
-    // The caller must provide the response item ID
-    const responseItemId = req.query.responseItemId ? Number(req.query.responseItemId) : undefined;
-    if (!responseItemId) return res.status(400).json({ error: "Missing responseItemId query parameter" });
 
     const responseListName = `${foundFormTitle} Responses`;
     const responseItem = await queryListItemById(graphToken, responseListName, String(responseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
     const allFields = responseItem.fields || {};
+
+    if (grant && currentGrantSerial(allFields[GRANT_SERIAL_COLUMN], foundLayerNumber) !== grant.serial) {
+      return res.status(REVOKED_ERROR.status).json({ error: REVOKED_ERROR.error, code: REVOKED_ERROR.code });
+    }
+
     const formVersion = String(allFields.FormVersion || "");
     const responsePublishKey = String(allFields.PublishKey || "");
     let parsedResponseVersion = { surveyJson: null as unknown, meta: {} as Record<string, unknown>, layerConfig: null as Record<string, unknown> | null };
     if (formVersion) {
       const versionRow = (await queryWebFormVersion(graphToken, foundFormTitle, formVersion, responsePublishKey || undefined))?.fields;
       parsedResponseVersion = parseVersionPayload(versionRow?.SurveyJSON);
-      const responseLayerConfig = parsedResponseVersion.layerConfig as { layers?: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null;
+      const responseLayerConfig = parsedResponseVersion.layerConfig as LayerConfigShape | null;
       if (responseLayerConfig) {
-        layerConfig = { layers: responseLayerConfig.layers ?? [], manualBranches: responseLayerConfig.manualBranches };
-        const responseLayers = [
-          ...(responseLayerConfig.layers ?? []),
-          ...((responseLayerConfig.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
-        ];
-        const responseToken = responseLayers.find((layer) => layer.publicToken === token);
-        if (responseToken) {
-          foundToken = responseToken;
-          foundLayerNumber = responseToken.layerNumber as number;
+        layerConfig = responseLayerConfig;
+        // The version the submission was made under is authoritative — same
+        // form, same publish key can still carry different layers.
+        const responseLayer = allConfiguredLayers(responseLayerConfig).find((layer) =>
+          grant ? Number(layer.layerNumber) === foundLayerNumber : layer.publicToken === token
+        );
+        if (responseLayer) {
+          foundToken = responseLayer;
+          foundLayerNumber = Number(responseLayer.layerNumber);
         }
       }
+    }
+
+    if (!foundToken) {
+      return res.status(404).json({ error: "This layer is no longer part of the form.", code: "invalid-link" });
     }
 
     // Filter fields based on layer visibility
@@ -370,6 +484,9 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           visibleFields[`L${n}_Email`] = allFields[`L${n}_Email`];
           visibleFields[`L${n}_Emails`] = allFields[`L${n}_Emails`];
           visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
+          // The name a public link holder declared, so earlier public layers
+          // read as a person rather than a bare address.
+          visibleFields[`L${n}_ActorName`] = allFields[`L${n}_ActorName`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         } else if (n === foundLayerNumber) {
           // Current layer — include status
@@ -405,11 +522,21 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     }
     const mediaSrcByField = await buildMediaSrcByField(surveyJson, visibleFields);
 
+    // What the link holder must declare about themselves before the action
+    // buttons unlock. Normalized here so a layer authored before public access
+    // was configurable still gets the defaults.
+    const publicAccess = normalizePublicAccessConfig(foundToken.publicAccess);
+
     return res.status(200).json({
       success: true,
       data: {
         formTitle: foundFormTitle,
         layerNumber: foundLayerNumber,
+        identity: {
+          required: publicAccess.requireIdentity,
+          fields: publicAccess.requireIdentity ? enabledIdentityFields(publicAccess) : [],
+        },
+        linkExpiresAt: grant ? grant.expiresAt.toISOString() : (foundToken.tokenExpiresAt || ""),
         totalLayers: activeLayers.length || 0,
         layerType: foundToken.type || "approval",
         layerTitle: foundToken.title || "",
@@ -444,22 +571,37 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { token, layerNumber, formTitle, responseItemId, fields, action, signature, rejection } = req.body;
-  const safeResponseItemId = Number(responseItemId);
-  if (!safeResponseItemId) return res.status(400).json({ error: "Invalid responseItemId" });
+  const { token, fields, action, signature, rejection, identity: declaredIdentity } = req.body;
 
-  // Validate required fields
   if (!token || typeof token !== "string") {
     return res.status(400).json({ error: "Missing or invalid public token" });
   }
+  if (typeof action !== "string" || !["approve", "reject", "confirm"].includes(action)) {
+    return res.status(400).json({ error: "action must be 'approve', 'reject', or 'confirm'" });
+  }
+
+  let grant: PublicGrant | null = null;
+  if (looksLikePublicGrant(token)) {
+    const verification = verifyPublicGrant(token);
+    if (!verification.ok) {
+      const failure = GRANT_FAILURES[verification.reason];
+      return res.status(failure.status).json({ error: failure.error, code: failure.code });
+    }
+    grant = verification.grant;
+  }
+
+  // A signed grant names its own target, so the body's copies are ignored:
+  // rewriting them cannot aim a valid link at somebody else's submission.
+  const formTitle = grant ? grant.formTitle : req.body.formTitle;
+  const safeResponseItemId = grant ? grant.responseItemId : Number(req.body.responseItemId);
+  const layerNumber = grant ? grant.layerNumber : req.body.layerNumber;
+
   if (!formTitle || typeof formTitle !== "string") {
     return res.status(400).json({ error: "Missing or invalid formTitle" });
   }
+  if (!safeResponseItemId) return res.status(400).json({ error: "Invalid responseItemId" });
   if (!layerNumber || typeof layerNumber !== "number") {
     return res.status(400).json({ error: "Missing or invalid layerNumber" });
-  }
-  if (typeof action !== "string" || !["approve", "reject", "confirm"].includes(action)) {
-    return res.status(400).json({ error: "action must be 'approve', 'reject', or 'confirm'" });
   }
 
   try {
@@ -474,6 +616,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const responseListName = `${formTitle} Responses`;
     const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
+    if (grant && currentGrantSerial(responseItem.fields[GRANT_SERIAL_COLUMN], layerNumber) !== grant.serial) {
+      return res.status(REVOKED_ERROR.status).json({ error: REVOKED_ERROR.error, code: REVOKED_ERROR.code });
+    }
     const itemFormVersion = String(responseItem.fields.FormVersion || formConfig.CurrentVersion || "1.0");
     const itemPublishKey = String(responseItem.fields.PublishKey || formConfig.CurrentPublishKey || "");
     const versionRow = itemFormVersion
@@ -496,21 +641,46 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ...(layerConfigParsed.layers ?? []),
       ...((layerConfigParsed.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
     ];
-    const layer = searchableLayers.find((l) => l.layerNumber === layerNumber && l.publicToken === token) as Record<string, unknown> | undefined;
+    // A grant's layer number is signed, so it identifies the layer on its own;
+    // a legacy link must still match the form-wide token stored on the layer.
+    const layer = searchableLayers.find((l) =>
+      l.layerNumber === layerNumber && (grant ? true : l.publicToken === token)
+    ) as Record<string, unknown> | undefined;
     if (!layer) return res.status(404).json({ error: `Layer ${layerNumber} not found in config` });
 
-    // Validate the token
-    if (layer.tokenExpiresAt && new Date(layer.tokenExpiresAt as string) < new Date()) {
-      return res.status(403).json({ error: "Token has expired" });
+    if (!grant && layer.tokenExpiresAt && new Date(layer.tokenExpiresAt as string) < new Date()) {
+      return res.status(403).json({ error: "This review link has expired.", code: "expired" });
     }
 
+    // This is the single-use rule: the link stays readable, but once a decision
+    // has landed the layer is terminal and no second decision is accepted.
     const latestCurrentLayer = Number(responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer || 0);
     const latestLayerStatus = responseItem.fields[`L${layerNumber}_Status`];
     if (isTerminalFormStatus(responseItem.fields.FormStatus || responseItem.fields.Status) || isTerminalLayerStatus(latestLayerStatus)) {
-      return res.status(409).json({ error: "This layer has already been completed and cannot be submitted again." });
+      return res.status(409).json({
+        error: "This layer has already been completed and cannot be submitted again.",
+        code: "already-actioned",
+      });
     }
     if (latestCurrentLayer && latestCurrentLayer !== layerNumber) {
-      return res.status(409).json({ error: "This evaluation link is no longer active for the current workflow layer." });
+      return res.status(409).json({
+        error: "This evaluation link is no longer active for the current workflow layer.",
+        code: "already-actioned",
+      });
+    }
+
+    // Nobody signed in, so the actor is whoever the link holder says they are.
+    // Declared, never verified — see `_utils/publicIdentity.ts`.
+    const publicAccess = normalizePublicAccessConfig(layer.publicAccess);
+    const identityResult = validateDeclaredIdentity(publicAccess, declaredIdentity, {
+      actorEmails: layerActorEmails(responseItem.fields, layerNumber),
+    });
+    if (!identityResult.ok) {
+      return res.status(400).json({
+        error: "Please complete your details before submitting this decision.",
+        code: "identity-required",
+        fieldErrors: identityResult.errors,
+      });
     }
 
     const selectedBranch = typeof responseItem.fields.SelectedBranch === "string" ? responseItem.fields.SelectedBranch.trim().toLowerCase() : "";
@@ -529,6 +699,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let notificationNextLayer: Record<string, unknown> | undefined;
     const now = new Date().toISOString();
 
+    // Stamped on every outcome, so a rejection is as attributable as an approval.
+    writeDeclaredIdentityFields(updates, layerNumber, identityResult);
+
     if (action === "approve" || action === "confirm") {
       updates[`L${layerNumber}_Status`] = action === "approve" ? "Approved" : "Confirmed";
       updates[`L${layerNumber}_SignedAt`] = now;
@@ -542,12 +715,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           try { evalData = JSON.parse(responseItem.fields.EvaluationData as string); } catch { /* invalid JSON, start fresh */ }
         }
         evalData[String(layerNumber)] = {
-          confirmerEmail: "SYSTEM",
-          confirmerName: null,
+          // Whoever the link holder declared themselves to be. "SYSTEM" only
+          // remains for a layer configured not to ask.
+          confirmerEmail: identityResult.email || "SYSTEM",
+          confirmerName: identityResult.name || null,
           confirmedAt: now,
           status: "confirmed",
           fields: fields,
           signatureUrl: signature || null,
+          ...(Object.keys(identityResult.identity).length > 0 ? { identity: identityResult.identity } : {}),
         };
         updates.EvaluationData = JSON.stringify(evalData);
       }
@@ -582,7 +758,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     // 4. Update the response item
-    await updateListItemFields(graphToken, responseListName, responseItem.id, updates);
+    await writeDecision(graphToken, responseListName, responseItem.id, updates, layerNumber);
 
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);
@@ -596,7 +772,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
-        const publicToken = String(notificationNextLayer.publicToken || "").trim();
+        // A public next layer gets its own grant, bound to this submission and
+        // expiring on that layer's own schedule.
+        const publicToken = issueLayerLinkToken(notificationNextLayer, {
+          formTitle,
+          responseItemId: safeResponseItemId,
+          layerNumber: nextLayerNumber,
+          serial: currentGrantSerial(responseItem.fields[GRANT_SERIAL_COLUMN], nextLayerNumber),
+        });
         const reviewLink = buildWorkflowReviewLink({
           baseUrl: appBaseUrl,
           layerType: String(notificationNextLayer.type || ""),

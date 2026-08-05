@@ -37,6 +37,48 @@ function isExpired(value: unknown): boolean {
 }
 
 /**
+ * Removes the legacy form-wide `publicToken` before the config leaves for an
+ * anonymous caller.
+ *
+ * This route is the public form loader, so anything it returns is readable by
+ * anyone with the slug. A `publicToken` in that payload is an approval
+ * credential for every submission of the form — it was never meant to be
+ * fetchable without the email that carried it. Nothing on the respondent side
+ * reads these two fields; the builder loads its config over a signed-in
+ * SharePoint call instead.
+ */
+function redactLayerConfig(raw: unknown): unknown {
+  if (typeof raw !== "string" || !raw.trim()) return raw;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return raw;
+
+  const config = parsed as {
+    layers?: Record<string, unknown>[];
+    manualBranches?: { layers?: Record<string, unknown>[] }[];
+  };
+  const strip = (layers: Record<string, unknown>[] | undefined) =>
+    (layers ?? []).map((layer) => {
+      const { publicToken, tokenExpiresAt, ...rest } = layer;
+      void publicToken;
+      void tokenExpiresAt;
+      return rest;
+    });
+
+  return JSON.stringify({
+    ...config,
+    ...(config.layers ? { layers: strip(config.layers) } : {}),
+    ...(config.manualBranches
+      ? { manualBranches: config.manualBranches.map((branch) => ({ ...branch, layers: strip(branch.layers) })) }
+      : {}),
+  });
+}
+
+/**
  * Walk survey JSON elements and resolve SharePoint-sourced choices via Graph API.
  * Mutates `surveyJson` in place — populates `choices` arrays from `spChoicesSource`
  * and `spFilteredListSource` references.
@@ -261,7 +303,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         CurrentVersion: targetVersion,
         CurrentPublishKey: targetPublishKey,
         CurrentPublishLabel: publishLabel,
-        LayerConfig: versionLayerConfig ? JSON.stringify(versionLayerConfig) : formConfig.LayerConfig,
+        LayerConfig: redactLayerConfig(
+          versionLayerConfig ? JSON.stringify(versionLayerConfig) : formConfig.LayerConfig,
+        ),
       },
       surveyJson,
       meta,
