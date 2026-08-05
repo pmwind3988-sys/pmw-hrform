@@ -5,6 +5,7 @@ import { fetchWithAuthRecovery } from "./authRecovery";
 import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 import { SharePointHttpError } from "./sharepointClient";
 import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
+import { joinEmailList, parseValidEmailList } from "./layerRecipients";
 import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
 
 /**
@@ -1839,6 +1840,15 @@ function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
     specs.push(
       { n: `L${n}_Status`, k: 2 },
       { n: `L${n}_Email`, k: 2 },
+      // Every address allowed to act on the layer, "; " joined. Multi-line
+      // because an expanded distribution list overruns the 255-char text limit.
+      // L{n}_Email stays the primary so legacy readers keep working.
+      { n: `L${n}_Emails`, k: 3, ml: true },
+      // Where the notification was actually delivered — may include a shared
+      // mailbox that receives the notice but cannot act.
+      { n: `L${n}_NotifyEmails`, k: 3, ml: true },
+      // Which of the allowed addresses completed the layer.
+      { n: `L${n}_ActedBy`, k: 2 },
       { n: `L${n}_SignedAt`, k: 4 },
       { n: `L${n}_Rejection`, k: 3, ml: true },
       { n: `L${n}_Signature`, k: 3, ml: true },
@@ -2317,6 +2327,12 @@ interface ApprovalNotificationParams {
   totalLayers: number;
   action?: 'submit' | 'approve' | 'reject';
   nextApproverEmail?: string;
+  /**
+   * Full delivery list for the target layer when it fans out — several
+   * evaluators, and/or a shared mailbox that receives the notice without being
+   * able to act. Defaults to `nextApproverEmail` alone.
+   */
+  nextRecipients?: string[];
   nextLayerType?: 'approval' | 'evaluation';
   nextLayerNumber?: number;
   reviewLink?: string;
@@ -2523,7 +2539,14 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, attachments } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, attachments } = params;
+  // One address stays a plain string so existing single-assignee mail is byte
+  // for byte unchanged; only fan-out layers become an array.
+  const deliveryList = (primary: string): string | string[] => {
+    const recipients = parseValidEmailList(nextRecipients?.length ? nextRecipients : primary);
+    if (recipients.length === 0) return primary;
+    return recipients.length === 1 ? recipients[0] : recipients;
+  };
   const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
   const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
@@ -2536,7 +2559,8 @@ export async function triggerApprovalNotification(
   const referenceDetail: EmailDetail = { label: 'Reference no.', value: referenceNo };
   const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  const persistSchedule = async (recipient: string, targetLayer: number, targetLink: string) => {
+  const persistSchedule = async (recipients: string | string[], targetLayer: number, targetLink: string) => {
+    const recipient = Array.isArray(recipients) ? joinEmailList(recipients) : recipients;
     await ensureWorkflowColumns(token, responseListTitle, totalLayers);
     const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})`;
     const item = await spGet(token, `${itemUrl}?$select=WorkflowEmailSchedule`) as { WorkflowEmailSchedule?: string };
@@ -2573,10 +2597,11 @@ export async function triggerApprovalNotification(
 
       if (targetEmail) {
         const targetLayerStatus = await getLayerStatusForNotification(token, responseListTitle, responseItemId, layer);
-        await persistSchedule(targetEmail, layer, requestLink);
+        const submitRecipients = deliveryList(targetEmail);
+        await persistSchedule(submitRecipients, layer, requestLink);
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
-            to: targetEmail,
+            to: submitRecipients,
             subject: `Manual ${nextLayerType}: ${formTitle} layer ${layer}${refSuffix}`,
             attachments,
             workflow: {
@@ -2599,7 +2624,7 @@ export async function triggerApprovalNotification(
           return;
         }
         await sendSpEmail(token, {
-          to: targetEmail,
+          to: submitRecipients,
           subject: `Action required: ${formTitle} needs your ${nextActionNoun}${refSuffix}`,
           workflow: {
             listTitle: responseListTitle,
@@ -2632,10 +2657,11 @@ export async function triggerApprovalNotification(
       if (layer < totalLayers && nextApproverEmail) {
         // Notify next layer approver
         const targetLayerStatus = await getLayerStatusForNotification(token, responseListTitle, responseItemId, displayNextLayerNumber);
-        await persistSchedule(nextApproverEmail, displayNextLayerNumber, requestLink);
+        const nextLayerRecipients = deliveryList(nextApproverEmail);
+        await persistSchedule(nextLayerRecipients, displayNextLayerNumber, requestLink);
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
-            to: nextApproverEmail,
+            to: nextLayerRecipients,
             subject: `Manual ${nextLayerType}: ${formTitle} layer ${displayNextLayerNumber}${refSuffix}`,
             attachments,
             workflow: {
@@ -2658,7 +2684,7 @@ export async function triggerApprovalNotification(
           return;
         }
         await sendSpEmail(token, {
-          to: nextApproverEmail,
+          to: nextLayerRecipients,
           subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}${refSuffix}`,
           workflow: {
             listTitle: responseListTitle,
@@ -2892,6 +2918,12 @@ export async function updateLayerStatus(
     signedAt?: string;
     rejection?: string;
     signature?: string;
+    /**
+     * Which of the layer's assignees actually acted. On a layer shared by
+     * several people, L{n}_Email only names the primary, so without this there
+     * is no record of who decided.
+     */
+    actedBy?: string;
   }
 ): Promise<void> {
   const body: Record<string, unknown> = {
@@ -2901,6 +2933,7 @@ export async function updateLayerStatus(
   if (updates.rejection !== undefined) body[`L${layerNumber}_Rejection`] = updates.rejection;
   if (updates.signature !== undefined) body[`L${layerNumber}_Signature`] = updates.signature;
   if (updates.email !== undefined) body[`L${layerNumber}_Email`] = updates.email;
+  if (updates.actedBy) body[`L${layerNumber}_ActedBy`] = updates.actedBy;
 
   await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${responseItemId})`, body);
 }

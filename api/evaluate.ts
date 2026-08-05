@@ -10,6 +10,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
+import { parseValidEmailList } from "./_utils/layerRecipients.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -367,11 +368,14 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         if (n < foundLayerNumber) {
           visibleFields[`L${n}_Status`] = allFields[`L${n}_Status`];
           visibleFields[`L${n}_Email`] = allFields[`L${n}_Email`];
+          visibleFields[`L${n}_Emails`] = allFields[`L${n}_Emails`];
+          visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         } else if (n === foundLayerNumber) {
           // Current layer — include status
           visibleFields[`L${n}_Status`] = allFields[`L${n}_Status`];
           visibleFields[`L${n}_Email`] = allFields[`L${n}_Email`];
+          visibleFields[`L${n}_Emails`] = allFields[`L${n}_Emails`];
         }
         // Future layers (n > foundLayerNumber) — HIDDEN
       }
@@ -582,8 +586,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);
-      const recipient = String(responseItem.fields[`L${nextLayerNumber}_Email`] || "").trim();
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+      // The next layer may fan out to several evaluators and/or a shared
+      // mailbox; L{n}_Email holds only the primary actor.
+      const recipients = parseValidEmailList(
+        responseItem.fields[`L${nextLayerNumber}_NotifyEmails`]
+        || responseItem.fields[`L${nextLayerNumber}_Email`],
+      );
+      const recipient = recipients.length === 1 ? recipients[0] : recipients;
+      if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
         const publicToken = String(notificationNextLayer.publicToken || "").trim();

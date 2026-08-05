@@ -1,4 +1,5 @@
 import type { LayerConfig, LayerConfigItem, ManualBranch } from "../../types";
+import { parseEmailList } from "../../utils/layerRecipients";
 
 export interface LayerFieldOption {
   name: string;
@@ -38,6 +39,16 @@ function validateLayer(
       errors.push(`${label}: assign an approver, email field, or department lookup.`);
     } else if (layer.assignee.type === "user" && !isValidLayerEmail(assigneeValue)) {
       errors.push(`${label}: static assignee must be a valid email address.`);
+    } else if (layer.assignee.type === "users") {
+      const emails = parseEmailList(assigneeValue);
+      const invalid = emails.filter((email) => !isValidLayerEmail(email));
+      if (emails.length === 0) {
+        errors.push(`${label}: add at least one assignee email.`);
+      } else if (invalid.length > 0) {
+        errors.push(`${label}: these assignee addresses are not valid emails — ${invalid.join(", ")}.`);
+      }
+    } else if (layer.assignee.type === "distribution-list" && !isValidLayerEmail(assigneeValue)) {
+      errors.push(`${label}: the distribution list must be a valid email address.`);
     } else if (layer.assignee.type === "field-reference" && !fieldNames.has(assigneeValue)) {
       errors.push(`${label}: field reference "${assigneeValue}" does not exist in the form.`);
     } else if (layer.assignee.type === "department-approver") {
@@ -82,6 +93,22 @@ function validateLayer(
   }
   if (layer.authMode === "365" && layer.assignee.type === "department-approver") {
     warnings.push(`${label}: department matching is exact; keep the form choices aligned with the approver directory.`);
+  }
+
+  if (layer.authMode === "365" && layer.assignee.type === "distribution-list") {
+    warnings.push(`${label}: distribution list members are read at submit time and need the Group.Read.All Graph permission.`);
+  }
+
+  const notifyEmails = parseEmailList(layer.notifyEmails);
+  const invalidNotify = notifyEmails.filter((email) => !isValidLayerEmail(email));
+  if (invalidNotify.length > 0) {
+    errors.push(`${label}: these notification addresses are not valid emails — ${invalidNotify.join(", ")}.`);
+  }
+  if (layer.notifyRecipientMode === "notify-only" && notifyEmails.length === 0) {
+    errors.push(`${label}: notify-only delivery needs at least one notification mailbox.`);
+  }
+  if (layer.notifyRecipientMode === "notify-only" && notifyEmails.length > 0) {
+    warnings.push(`${label}: the assignee is not emailed directly — they only hear about this through ${notifyEmails.join(", ")}.`);
   }
 
   return { errors, warnings };

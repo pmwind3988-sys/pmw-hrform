@@ -29,7 +29,9 @@ import type {
   ManualBranch,
   LayerAssignee,
   DepartmentApproverLayerAssignee,
+  MultiUserLayerAssignee,
 } from "../../types";
+import { isLayerEmail, joinEmailList, parseEmailList } from "../../utils/layerRecipients";
 
 interface LayerConfigPanelProps {
   value: LayerConfig | null;
@@ -143,7 +145,27 @@ function departmentFieldOptionLabel(field: LayerFieldOption): string {
 }
 
 function toUserAssignee(assignee: LayerAssignee): LayerAssignee {
-  return { type: "user", value: assignee.type === "user" ? assignee.value : "" };
+  // Collapsing a multi-person layer keeps the first address so switching modes
+  // back and forth does not silently wipe what was typed.
+  const carried = assignee.type === "user"
+    ? assignee.value
+    : assignee.type === "users"
+      ? parseEmailList(assignee.value)[0] ?? ""
+      : "";
+  return { type: "user", value: carried };
+}
+
+function toMultiUserAssignee(assignee: LayerAssignee): LayerAssignee {
+  const carried = assignee.type === "users"
+    ? assignee.value
+    : assignee.type === "user"
+      ? assignee.value
+      : "";
+  return { type: "users", value: carried };
+}
+
+function toDistributionListAssignee(assignee: LayerAssignee): LayerAssignee {
+  return { type: "distribution-list", value: assignee.type === "distribution-list" ? assignee.value : "" };
 }
 
 function toFieldReferenceAssignee(assignee: LayerAssignee): LayerAssignee {
@@ -272,6 +294,206 @@ function DepartmentLookupSettings({
       </div>
 
       <DepartmentDirectoryPanel assignee={assignee} token={token} />
+    </div>
+  );
+}
+
+/**
+ * Editable address chips. Used both for a layer shared by several reviewers and
+ * for the notification-only mailboxes, so the two read the same way.
+ */
+function EmailChipInput({
+  emails,
+  siteUsers,
+  placeholder,
+  emptyHint,
+  onChange,
+}: {
+  emails: string[];
+  siteUsers: { email: string; name: string }[];
+  placeholder: string;
+  emptyHint: string;
+  onChange: (emails: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const lowered = new Set(emails.map(entry => entry.toLowerCase()));
+  const query = draft.trim().toLowerCase();
+  const suggestions = siteUsers
+    .filter(user => !lowered.has(user.email.toLowerCase()))
+    .filter(user => !query || user.email.toLowerCase().includes(query) || user.name.toLowerCase().includes(query))
+    .slice(0, 4);
+
+  const commit = (value: string) => {
+    const added = parseEmailList(value).filter(entry => !lowered.has(entry.toLowerCase()));
+    if (added.length > 0) onChange([...emails, ...added]);
+    setDraft("");
+  };
+
+  return (
+    <div>
+      {emails.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+          {emails.map(email => (
+            <span
+              key={email}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                maxWidth: "100%",
+                background: isLayerEmail(email) ? C.purplePale : C.offWhite,
+                border: `1px solid ${isLayerEmail(email) ? C.purple : C.red}`,
+                color: isLayerEmail(email) ? C.purple : C.red,
+                borderRadius: 999,
+                padding: "3px 4px 3px 9px",
+                fontSize: 10,
+                fontWeight: 600,
+              }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{email}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${email}`}
+                onClick={() => onChange(emails.filter(entry => entry !== email))}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  border: "none",
+                  background: "none",
+                  color: "inherit",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                <CloseIcon style={{ fontSize: 12 }} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <input
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter" || e.key === "," || e.key === ";") {
+            e.preventDefault();
+            commit(draft);
+          } else if (e.key === "Backspace" && !draft && emails.length > 0) {
+            onChange(emails.slice(0, -1));
+          }
+        }}
+        onBlur={() => commit(draft)}
+        placeholder={placeholder}
+        style={inp}
+      />
+
+      {suggestions.length > 0 && draft.trim() && (
+        <div style={{
+          marginTop: 4,
+          border: `1px solid ${C.border}`,
+          borderRadius: 9,
+          overflow: "hidden",
+          background: C.white,
+        }}>
+          {suggestions.map(user => (
+            <div
+              key={user.email}
+              onMouseDown={e => { e.preventDefault(); commit(user.email); }}
+              style={{ padding: "6px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+              onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <div style={{ fontSize: 11, fontWeight: 500 }}>{user.name}</div>
+              <div style={{ fontSize: 9, color: C.textMuted }}>{user.email}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+        {emails.length === 0 ? emptyHint : "Press Enter, comma or semicolon to add another address."}
+      </div>
+    </div>
+  );
+}
+
+function MultiUserAssigneeEditor({
+  assignee,
+  siteUsers,
+  onChange,
+}: {
+  assignee: MultiUserLayerAssignee;
+  siteUsers: { email: string; name: string }[];
+  onChange: (assignee: LayerAssignee) => void;
+}) {
+  const emails = parseEmailList(assignee.value);
+  return (
+    <>
+      <EmailChipInput
+        emails={emails}
+        siteUsers={siteUsers}
+        placeholder="email@company.com"
+        emptyHint="Add every person who may act on this layer."
+        onChange={next => onChange({ type: "users", value: joinEmailList(next) })}
+      />
+      {emails.length > 1 && (
+        <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2, lineHeight: 1.5 }}>
+          Any one of these {emails.length} people completes the layer — the first decision wins and the rest go stale.
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Where the layer's email lands, which is not always who may act on it: a
+ * shared mailbox can carry the notice while the decision stays with the
+ * configured evaluator.
+ */
+function NotificationRecipientsEditor({
+  layer,
+  siteUsers,
+  onChange,
+}: {
+  layer: LayerConfigItem;
+  siteUsers: { email: string; name: string }[];
+  onChange: (patch: Partial<LayerConfigItem>) => void;
+}) {
+  const notifyEmails = parseEmailList(layer.notifyEmails);
+  const notifyOnly = layer.notifyRecipientMode === "notify-only";
+
+  return (
+    <div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+        Notify also
+      </label>
+      <EmailChipInput
+        emails={notifyEmails}
+        siteUsers={siteUsers}
+        placeholder="shared-mailbox@company.com"
+        emptyHint="Optional. These mailboxes receive the notification but cannot approve or evaluate."
+        onChange={next => onChange({
+          notifyEmails: next,
+          // A mailbox-only route with nobody to route to would silently drop the
+          // notification, so clear the mode along with the last address.
+          ...(next.length === 0 && notifyOnly ? { notifyRecipientMode: "both" as const } : {}),
+        })}
+      />
+      {notifyEmails.length > 0 && (
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6, fontSize: 10, color: C.textSecond, lineHeight: 1.5, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={notifyOnly}
+            onChange={e => onChange({ notifyRecipientMode: e.target.checked ? "notify-only" : "both" })}
+            style={{ marginTop: 1 }}
+          />
+          <span>
+            Send <strong>only</strong> to these mailboxes — the assignee is not emailed directly, but the approval or
+            evaluation is still theirs to make and is recorded against them.
+          </span>
+        </label>
+      )}
     </div>
   );
 }
@@ -496,10 +718,21 @@ export default function LayerConfigPanel({
       <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
         Assignee
       </label>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
+      {/* Split 3 + 2 rather than reflowing five buttons through one grid: the
+          top row is addresses typed here, the bottom row addresses resolved
+          from the submission. Also keeps the last row from ending in a gap. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4, marginBottom: 4 }}>
         <button onClick={() => onAssigneeChange(toUserAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "user")}>
           Fixed user
         </button>
+        <button onClick={() => onAssigneeChange(toMultiUserAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "users")}>
+          Several people
+        </button>
+        <button onClick={() => onAssigneeChange(toDistributionListAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "distribution-list")}>
+          Distribution list
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
         <button onClick={() => onAssigneeChange(toFieldReferenceAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "field-reference")}>
           Form field email
         </button>
@@ -552,6 +785,21 @@ export default function LayerConfigPanel({
             </div>
           )}
         </div>
+      ) : layer.assignee.type === "users" ? (
+        <MultiUserAssigneeEditor assignee={layer.assignee} siteUsers={siteUsers} onChange={onAssigneeChange} />
+      ) : layer.assignee.type === "distribution-list" ? (
+        <>
+          <input
+            value={layer.assignee.value}
+            onChange={e => onAssigneeChange({ type: "distribution-list", value: e.target.value })}
+            placeholder="team-dl@company.com"
+            style={inp}
+          />
+          <div style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+            Members are read from the group when a form is submitted, and any one of them can complete this layer.
+            Needs the <strong>Group.Read.All</strong> Graph permission on the app registration.
+          </div>
+        </>
       ) : layer.assignee.type === "field-reference" ? (
         <>
           <select
@@ -909,6 +1157,12 @@ export default function LayerConfigPanel({
           suggestions,
         })}
 
+        <NotificationRecipientsEditor
+          layer={layer}
+          siteUsers={siteUsers}
+          onChange={patch => patchLayer(idx, patch)}
+        />
+
         {layer.authMode === "365" && (
           <>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 9px", cursor: "pointer" }}>
@@ -1141,6 +1395,12 @@ export default function LayerConfigPanel({
           setQuery: setBranchSearchQ,
           suggestions: branchSuggestions,
         })}
+
+        <NotificationRecipientsEditor
+          layer={layer}
+          siteUsers={siteUsers}
+          onChange={patch => patchBranchLayer(bi, li, patch)}
+        />
 
         {layer.authMode === "365" && (
           <>

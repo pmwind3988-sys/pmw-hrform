@@ -64,6 +64,30 @@ Used by: `SignaturePad` (`src/utils/SignaturePad.tsx`) and `DynamicMatrix` (`src
 - Approval layer assignee type `department-approver` reads the submitted department field, filters the directory by exact `Department` and `ApproverRole`, then writes the resolved email into `L{n}_Email`.
 - This design avoids Microsoft Graph tenant user search and does not require `User.Read.All`.
 
+### Layer Assignees — Several People, Distribution Lists, Shared Mailboxes
+A layer's `assignee` can now resolve to more than one person, and the mail can go somewhere other than the assignee:
+
+| `assignee.type` | `value` | Resolves to |
+|---|---|---|
+| `user` | one email | that person |
+| `users` | comma/semicolon/newline separated emails | all of them |
+| `distribution-list` | a DL / mail-enabled group address | its members, expanded via Graph |
+| `field-reference` | a form field name | the submitted email |
+| `department-approver` | a department field name | the directory lookup |
+
+- **Any one of them completes the layer.** The first approval/evaluation wins; the other links go stale via the existing `CurrentLayer` / terminal-status checks. There is no per-person quorum.
+- **Response columns** (all additive — `L{n}_Email` keeps its old meaning and every legacy reader still works):
+  - `L{n}_Email` (text) — the **primary** actor. Unchanged.
+  - `L{n}_Emails` (note) — every address allowed to act, `"; "` joined. Note, not text, because an expanded DL overruns 255 chars.
+  - `L{n}_NotifyEmails` (note) — where the notification was actually delivered.
+  - `L{n}_ActedBy` (text) — which of the allowed addresses decided. The PDF prefers this over `L{n}_Email`.
+- **Access checks read `L{n}_Emails`**, falling back to `L{n}_Email` for submissions predating these columns — see `isLayerActor()` in `src/utils/layerRecipients.ts` (mirrored at `api/_utils/layerRecipients.ts`; keep the two in sync).
+- **Notification split**: `BaseLayer.notifyEmails` lists mailboxes that receive the layer email but **can never act**. `notifyRecipientMode: "notify-only"` sends to those mailboxes *instead of* the assignee — the shared-mailbox case, where the approval still belongs to and is recorded against the evaluator.
+- **DL expansion needs `Group.Read.All` as a *Microsoft Graph* Application permission** (admin consent) on `SYSTEM_CLIENT_ID` — not SharePoint. It runs on the `getGraphToken()` token; the SharePoint token is a separate acquisition and granting it there does nothing. Without it Graph returns 403 and submission fails with a configuration error rather than silently assigning nobody. Members come from `/groups/{id}/transitiveMembers`, so nested groups flatten; disabled accounts are skipped.
+- The browser cannot expand a DL (delegated token lacks the permission), so `DynamicFormPage` and `ApprovalDashboard` call `POST /api/expand-group` with a **form slug + layer number**, never an address — the server reads the address off that layer's published config. Keeps the route from being a general membership lookup for anyone holding `VITE_API_SECRET_KEY`.
+- **Reassigning a layer replaces the whole actor set**, not just the primary — otherwise former co-assignees keep access.
+- **Forms published before this change** have none of the three new columns. Both submit paths drop them silently (`OPTIONAL_LAYER_COLUMN_RE` in `api/submit-form.ts` and `src/pages/DynamicFormPage.tsx`) instead of failing the submission — the notification still fans out because it is computed in memory, but the access check falls back to `L{n}_Email` until the form is republished.
+
 ### Per-Submission Workflow Overrides
 - `/admin/submissions` and `/admin/approvals` are the same internal workflow workspace and both require HR Forms Owner + `superuser`.
 - Assigned approvers/evaluators act through `/eval/...`; that reviewer page is separate from the internal workflow workspace.

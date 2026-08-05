@@ -33,6 +33,8 @@ import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { buildWorkflowReviewLink } from "../utils/workflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
+import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
+import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -55,10 +57,16 @@ const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
 // list provisioned before reference numbers existed has no such column, and a
 // respondent should not be blocked on a schema gap only an admin can close.
 const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer", REFERENCE_NO_FIELD]);
+// The multi-assignee columns are the same story: a list provisioned before a
+// layer could have several actors has none of them, and the submission still
+// works off L{n}_Email alone. Anchored to the L{n}_ prefix so a form field that
+// merely ends in "_Emails" is still reported as a genuine schema gap.
+const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy)$/;
 
 function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
   return (
     OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS.has(fieldName) ||
+    OPTIONAL_LAYER_COLUMN_RE.test(fieldName) ||
     fieldName.endsWith("_Response") ||
     fieldName.endsWith("_Json") ||
     fieldName.endsWith("_RowIds")
@@ -342,7 +350,7 @@ function safePdfFileName(title: string, id: number): string {
 }
 
 function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string, unknown>): string {
-  const rawEmail = layer.assignee.type === "user"
+  const rawEmail = layer.assignee.type === "user" || layer.assignee.type === "distribution-list"
     ? layer.assignee.value
     : submittedValueToString(submittedData[stripFieldReference(layer.assignee.value)]);
   const email = rawEmail.trim();
@@ -415,18 +423,64 @@ async function resolveDepartmentApproverEmail(
   };
 }
 
+/**
+ * A layer's resolved actors. `email` is the primary written to `L{n}_Email`,
+ * kept so every existing reader keeps working; `emails` is the full any-one-of
+ * set written to `L{n}_Emails`.
+ */
+interface ResolvedLayerActors {
+  email: string;
+  name: string;
+  emails: string[];
+}
+
+function toResolvedActors(email: string, name: string): ResolvedLayerActors {
+  const trimmed = email.trim();
+  return { email: trimmed, name, emails: trimmed ? [trimmed] : [] };
+}
+
 async function resolveLayerAssignee(
   layer: LayerConfigItem,
   submittedData: Record<string, unknown>,
   token: string | null,
-): Promise<{ email: string; name: string }> {
+  slug: string,
+): Promise<ResolvedLayerActors> {
+  const label = layer.title || `Layer ${layer.layerNumber}`;
+
   if (layer.assignee.type === "department-approver") {
     if (!token) {
       throw new Error("Department approver lookup needs a SharePoint token or server-side submission.");
     }
-    return resolveDepartmentApproverEmail(token, layer, submittedData);
+    const resolved = await resolveDepartmentApproverEmail(token, layer, submittedData);
+    return toResolvedActors(resolved.email, resolved.name);
   }
-  return { email: resolveLayerEmail(layer, submittedData), name: "" };
+
+  if (layer.assignee.type === "users") {
+    const emails = parseValidEmailList(layer.assignee.value);
+    if (layer.authMode === "365" && emails.length === 0) {
+      throw new Error(`${label} needs at least one valid assignee email before this form can be submitted.`);
+    }
+    return { email: emails[0] ?? "", name: "", emails };
+  }
+
+  if (layer.assignee.type === "distribution-list") {
+    const address = layer.assignee.value.trim();
+    if (!EMAIL_RE.test(address)) {
+      throw new Error(`${label} needs a valid distribution list address before this form can be submitted.`);
+    }
+    const members = await expandLayerDistributionList(slug, layer.layerNumber);
+    if (members.length === 0) {
+      if (layer.authMode === "365") {
+        throw new Error(`${label}: the distribution list ${address} returned no members.`);
+      }
+      // Public layers act through a token, not an identity check, so mailing
+      // the list address itself still works.
+      return toResolvedActors(address, "");
+    }
+    return { email: members[0], name: "", emails: members };
+  }
+
+  return toResolvedActors(resolveLayerEmail(layer, submittedData), "");
 }
 const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
 
@@ -1153,7 +1207,7 @@ export default function DynamicFormPage() {
     const cfg = formData?.formConfig;
     if (!cfg) { throw new Error("no form config"); }
     
-      let activeLayers: { email: string; name: string }[] = [];
+      let activeLayers: { email: string; name: string; emails?: string[] }[] = [];
       let resolvedLayerCount = 0;
       // Someone who could not read this form from SharePoint cannot write to the
       // response list either, so submit through the public endpoint (recorded as
@@ -1257,8 +1311,9 @@ export default function DynamicFormPage() {
       } else if (layerConfigParsed?.layers?.length) {
         resolvedLayerCount = layerConfigParsed.layers.length;
         if (!deferDepartmentApproverLookupToApi) {
+          const configSlug = (cfg.Slug as string) || (cfg.slug as string) || formId || "";
           for (const layer of layerConfigParsed.layers) {
-            activeLayers.push(await resolveLayerAssignee(layer, raw, token));
+            activeLayers.push(await resolveLayerAssignee(layer, raw, token, configSlug));
           }
         }
       } else {
@@ -1332,17 +1387,24 @@ export default function DynamicFormPage() {
             hasManualPaperWorkflow = true;
             body[`L${layerNumber}_Status`] = manualPaperStatusForLayer(layer);
             const senderEmail = routed.sendToConfiguredSender ? CONFIGURED_SENDER_EMAIL : "";
-            body[`L${layerNumber}_Email`] = senderEmail;
-            activeLayers[index] = { email: senderEmail, name: "" };
+            const actors = senderEmail ? [senderEmail] : [];
+            writeLayerRecipientFields(body, layer, actors);
+            activeLayers[index] = { email: senderEmail, name: "", emails: actors };
           } else {
-            const routedEmail = routed?.email || activeLayers[index]?.email || "";
+            // A submitter routing rule names one evaluator, so it overrides the
+            // layer's whole actor set rather than joining it.
+            const fallbackEmail = routed?.email || activeLayers[index]?.email || "";
+            const actors = routed?.email
+              ? parseValidEmailList(routed.email)
+              : activeLayers[index]?.emails ?? parseValidEmailList(activeLayers[index]?.email);
+            const routedEmail = actors[0] ?? fallbackEmail;
             const manualPaperForSender = shouldUseManualPaperForSender(layer, routedEmail);
             if (manualPaperForSender) hasManualPaperWorkflow = true;
             body[`L${layerNumber}_Status`] = manualPaperForSender
               ? manualPaperStatusForLayer(layer)
               : SP_LAYER_STATUS.PENDING;
-            body[`L${layerNumber}_Email`] = routedEmail;
-            activeLayers[index] = { ...(activeLayers[index] || { name: "" }), email: routedEmail };
+            writeLayerRecipientFields(body, layer, actors, fallbackEmail);
+            activeLayers[index] = { ...(activeLayers[index] || { name: "" }), email: routedEmail, emails: actors };
           }
         }
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
@@ -1492,6 +1554,9 @@ export default function DynamicFormPage() {
         if (resolvedLayerCount > 0 && result?.Id) {
           const layer1Email = activeLayers[0]?.email;
           const firstLayerNumber = layerConfigParsed?.layers?.[0]?.layerNumber ?? 1;
+          // Multiple evaluators and/or a shared mailbox: L{n}_NotifyEmails is
+          // the delivery list, L{n}_Email only the primary actor.
+          const layer1Recipients = parseValidEmailList(body[`L${firstLayerNumber}_NotifyEmails`]);
           const firstLayerManualPaper = String(body[`L${firstLayerNumber}_Status`] || "").toLowerCase().startsWith("manual ");
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
           const baseUrl = window.location.origin;
@@ -1518,6 +1583,7 @@ export default function DynamicFormPage() {
               totalLayers: resolvedLayerCount,
               action: "submit",
               nextApproverEmail: layer1Email,
+              ...(layer1Recipients.length ? { nextRecipients: layer1Recipients } : {}),
               nextLayerType: layerConfigParsed.layers[0].type,
               nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule,
               reviewLink,
@@ -1531,6 +1597,7 @@ export default function DynamicFormPage() {
               totalLayers: resolvedLayerCount,
               action: "submit",
               ...(layer1Email ? { nextApproverEmail: layer1Email } : {}),
+              ...(layer1Recipients.length ? { nextRecipients: layer1Recipients } : {}),
               ...(layerConfigParsed?.layers?.[0]?.type ? { nextLayerType: layerConfigParsed.layers[0].type } : {}),
               ...(layerConfigParsed?.layers?.[0]?.type === "evaluation"
                 ? { nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule }

@@ -24,6 +24,14 @@ _Avoid_: Treating branches as extra layers inside the main sequence
 An approval/evaluation layer assignee that reads the submitted department value and resolves the approver email from the SharePoint list `Department Approver Directory`. Department values must match exactly.
 _Avoid_: Tenant-wide user search, free-text manager name field, SharePoint Person column
 
+**Layer Actor**:
+A person allowed to approve or evaluate one layer. A layer can have several — named individually or expanded from a distribution list — and any one of them completes it; the first decision wins.
+_Avoid_: Assuming one layer means one approver, or that every actor must act
+
+**Notification Mailbox**:
+An address that receives a layer's notification email without being able to act on it, typically a shared or team mailbox. The approval or evaluation still belongs to the layer's actors and is recorded against whoever decided.
+_Avoid_: Treating the mailbox as the assignee, or letting it approve
+
 **Managed Company Selector**:
 A required, single-select company question controlled from Form Setup and presented in the form header. It represents the company the submission belongs to.
 _Avoid_: Company banner, duplicate Company field

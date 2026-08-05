@@ -29,6 +29,12 @@ import {
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
+import { expandDistributionList } from "./_utils/groupMembers.js";
+import {
+  parseValidEmailList,
+  writeLayerRecipientFields,
+  type NotifyRecipientMode,
+} from "./_utils/layerRecipients.js";
 
 // ─── Why SP REST is used for Image / Hyperlink columns ────────────────────────
 // Graph can create the response item and upload files, but it is unreliable for
@@ -71,8 +77,20 @@ interface ApiDepartmentApproverLayerAssignee {
   roleValue?: string;
 }
 
+interface ApiMultiUserLayerAssignee {
+  type: "users";
+  value: string;
+}
+
+interface ApiDistributionListLayerAssignee {
+  type: "distribution-list";
+  value: string;
+}
+
 type ApiLayerAssignee =
   | ApiFixedUserLayerAssignee
+  | ApiMultiUserLayerAssignee
+  | ApiDistributionListLayerAssignee
   | ApiFieldReferenceLayerAssignee
   | ApiDepartmentApproverLayerAssignee;
 
@@ -87,6 +105,8 @@ interface ApiLayerConfigItem {
   submitterRoutingRules?: ApiEvaluationSubmitterRoutingRule[];
   surveyElements?: Record<string, unknown>[];
   manualPaperWhenSenderEmail?: boolean;
+  notifyEmails?: string[];
+  notifyRecipientMode?: NotifyRecipientMode;
 }
 
 interface ApiEvaluationSubmitterRoutingRule {
@@ -864,6 +884,13 @@ async function getColumnKeyResolver(
   return (fieldName: string) => byName.get(fieldName.toLowerCase()) ?? null;
 }
 
+// Columns a list provisioned before layers could have several actors simply
+// does not have. Routing still works off L{n}_Email, so dropping these is far
+// better than refusing the submission over a schema gap only an admin can
+// close. Anchored to the L{n}_ prefix so a form field that merely ends in
+// "_Emails" is still reported as a genuine gap.
+const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy)$/;
+
 function mapToExistingColumns(
   fields: Record<string, unknown>,
   resolveColumnKey: (fieldName: string) => string | null,
@@ -873,6 +900,13 @@ function mapToExistingColumns(
   for (const [fieldName, value] of Object.entries(fields)) {
     const columnKey = resolveColumnKey(fieldName);
     if (!columnKey) {
+      if (OPTIONAL_LAYER_COLUMN_RE.test(fieldName)) {
+        logWarn("api:submit-form", "Multi-assignee layer column missing; republish to enable it", {
+          listTitle,
+          fieldName,
+        });
+        continue;
+      }
       logWarn("api:submit-form", "Submitted field missing from response list schema", { listTitle, fieldName });
       throw new PublicSubmissionError(
         `The public form field "${fieldName}" is not provisioned. Please republish the form before trying again.`,
@@ -1111,14 +1145,59 @@ async function cleanupPartialSubmission(
   await cleanupUploadedFiles(token, uploadedFiles);
 }
 
+/**
+ * A layer's resolved actors: every address allowed to approve/evaluate it.
+ * `email` stays the primary (written to `L{n}_Email`) so existing readers and
+ * the dashboard keep working unchanged; `emails` is the full any-one-of set.
+ */
+interface ResolvedLayerActors {
+  email: string;
+  name: string;
+  emails: string[];
+}
+
+function toResolvedActors(email: string, name: string): ResolvedLayerActors {
+  const trimmed = email.trim();
+  return { email: trimmed, name, emails: trimmed ? [trimmed] : [] };
+}
+
 async function resolveLayerAssignee(
   token: string,
   layer: ApiLayerConfigItem,
   formBody: Record<string, unknown>,
-): Promise<{ email: string; name: string }> {
+): Promise<ResolvedLayerActors> {
   const label = layer.title || `Layer ${layer.layerNumber}`;
   if (layer.assignee.type === "department-approver") {
-    return resolveDepartmentApproverFromList(token, layer.assignee, formBody, label);
+    const resolved = await resolveDepartmentApproverFromList(token, layer.assignee, formBody, label);
+    return toResolvedActors(resolved.email, resolved.name);
+  }
+
+  if (layer.assignee.type === "users") {
+    const emails = parseValidEmailList(layer.assignee.value);
+    if (layer.authMode === "365" && emails.length === 0) {
+      throw new Error(`${label} needs at least one valid assignee email before the workflow can start.`);
+    }
+    return { email: emails[0] ?? "", name: "", emails };
+  }
+
+  if (layer.assignee.type === "distribution-list") {
+    const address = layer.assignee.value.trim();
+    if (!EMAIL_RE.test(address)) {
+      throw new Error(`${label} needs a valid distribution list address before the workflow can start.`);
+    }
+    const members = await expandDistributionList(token, address);
+    if (members.length === 0) {
+      if (layer.authMode === "365") {
+        throw new Error(
+          `${label}: no members could be read from the distribution list ${address}. `
+          + "Check the address and that Group.Read.All is granted to the app registration.",
+        );
+      }
+      // Public layers act through a token rather than an identity check, so the
+      // list address itself is a workable fallback for delivery.
+      return toResolvedActors(address, "");
+    }
+    return { email: members[0], name: "", emails: members };
   }
 
   const rawEmail =
@@ -1129,7 +1208,7 @@ async function resolveLayerAssignee(
   if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
     throw new Error(`${label} needs a valid assignee email before the workflow can start.`);
   }
-  return { email, name: "" };
+  return toResolvedActors(email, "");
 }
 
 function normalizedRoutingValue(value: unknown): string {
@@ -1225,16 +1304,16 @@ async function applyLayerConfigWorkflow(
     if (matchedRule?.action === "manual-paper" || matchedRule?.action === "send-to-configured-sender") {
       const sender = matchedRule.action === "send-to-configured-sender" ? resolveHrFormSender() : "";
       formBody[`L${layerNumber}_Status`] = manualPaperStatusForLayer(layer);
-      formBody[`L${layerNumber}_Email`] = sender;
+      writeLayerRecipientFields(formBody, layer, sender ? [sender] : []);
       continue;
     }
     const resolved = matchedRule?.action === "assign-evaluator"
-      ? { email: valueToText(matchedRule.evaluatorEmail), name: "" }
+      ? toResolvedActors(valueToText(matchedRule.evaluatorEmail), "")
       : await resolveLayerAssignee(token, layer, formBody);
     formBody[`L${layerNumber}_Status`] = shouldUseManualPaperForSender(layer, resolved.email)
       ? manualPaperStatusForLayer(layer)
       : LAYER_PENDING_STATUS;
-    formBody[`L${layerNumber}_Email`] = resolved.email;
+    writeLayerRecipientFields(formBody, layer, resolved.emails);
   }
   formBody.FormStatus = FORM_SUBMITTED_STATUS;
   formBody.CurrentLayer = layers[0]?.layerNumber ?? 1;
@@ -1247,7 +1326,7 @@ async function sendManualPaperWorkflowEmail(
     listTitle: string;
     responseItemId: string | number;
     submittedBy: string;
-    recipient: string;
+    recipient: string | string[];
     layer: ApiLayerConfigItem;
     totalLayers: number;
     referenceNo: string;
@@ -1529,8 +1608,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const firstLayer = parsedLayerConfig?.layers?.[0];
     if (firstLayer) {
-      const recipient = valueToText(submissionBody[`L${firstLayer.layerNumber}_Email`]);
-      if (EMAIL_RE.test(recipient)) {
+      // The notification may fan out to several evaluators and/or a shared
+      // mailbox; L{n}_Email is only the primary actor.
+      const recipients = parseValidEmailList(
+        submissionBody[`L${firstLayer.layerNumber}_NotifyEmails`]
+        || submissionBody[`L${firstLayer.layerNumber}_Email`],
+      );
+      const recipient = recipients.length === 1 ? recipients[0] : recipients;
+      if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = valueToText(formConfig.Slug);
         try {

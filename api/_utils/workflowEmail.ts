@@ -72,7 +72,8 @@ export interface WorkflowActionEmailParams {
   responseItemId: string | number;
   layer: number;
   totalLayers: number;
-  recipient: string;
+  /** One address, or the full delivery list when the layer fans out to several. */
+  recipient: string | string[];
   layerType: "approval" | "evaluation";
   reviewLink: string;
   /** Shown ahead of the numeric item ID when the form issues references. */
@@ -85,7 +86,8 @@ export interface ManualPaperWorkflowEmailParams {
   responseItemId: string | number;
   layer: number;
   totalLayers: number;
-  recipient: string;
+  /** One address, or the full delivery list when the layer fans out to several. */
+  recipient: string | string[];
   layerType: "approval" | "evaluation";
   layerTitle?: string;
   surveyElements?: Record<string, unknown>[];

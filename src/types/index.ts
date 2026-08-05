@@ -96,6 +96,9 @@ export type FormStatus =
   | "rejected"
   | "cancelled";
 
+/** Mirrors `NotifyRecipientMode` in `src/utils/layerRecipients.ts`. */
+export type NotifyRecipientMode = "both" | "notify-only";
+
 export interface FixedUserLayerAssignee {
   type: "user";
   value: string;
@@ -103,6 +106,27 @@ export interface FixedUserLayerAssignee {
 
 export interface FieldReferenceLayerAssignee {
   type: "field-reference";
+  value: string;
+}
+
+/**
+ * Several named people share one layer. Any one of them completes it — the
+ * first to approve/evaluate wins and the others' links go stale.
+ */
+export interface MultiUserLayerAssignee {
+  type: "users";
+  /** Comma/semicolon/newline separated evaluator emails. */
+  value: string;
+}
+
+/**
+ * A distribution list or mail-enabled group. The address is expanded to its
+ * members server-side at submit time (Graph `Group.Read.All`), and every member
+ * becomes an actor for the layer.
+ */
+export interface DistributionListLayerAssignee {
+  type: "distribution-list";
+  /** The distribution list / group address. */
   value: string;
 }
 
@@ -119,6 +143,8 @@ export interface DepartmentApproverLayerAssignee {
 
 export type LayerAssignee =
   | FixedUserLayerAssignee
+  | MultiUserLayerAssignee
+  | DistributionListLayerAssignee
   | FieldReferenceLayerAssignee
   | DepartmentApproverLayerAssignee;
 
@@ -134,6 +160,17 @@ export interface BaseLayer {
   notifyOnComplete?: boolean;
   manualPaperWhenSenderEmail?: boolean;
   submitterRoutingRules?: EvaluationSubmitterRoutingRule[];
+  /**
+   * Mailboxes that receive this layer's notification email but can never
+   * approve/evaluate — typically a shared/team mailbox.
+   */
+  notifyEmails?: string[];
+  /**
+   * "both" (default) mails the assignee(s) and `notifyEmails`; "notify-only"
+   * routes the notice exclusively to `notifyEmails` while the action still
+   * belongs to the assignee(s).
+   */
+  notifyRecipientMode?: NotifyRecipientMode;
 }
 
 export interface ApprovalLayerConfig extends BaseLayer {

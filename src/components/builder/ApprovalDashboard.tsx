@@ -50,6 +50,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
+import { isLayerActor, parseValidEmailList, writeLayerRecipientFields } from "../../utils/layerRecipients";
+import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -541,20 +543,70 @@ async function resolveDepartmentApproverEmail(
   };
 }
 
+/**
+ * Resolves who may act on a layer. `email` is the primary written to
+ * `L{n}_Email`; `emails` is the full any-one-of set, which is longer than one
+ * entry for a shared layer or an expanded distribution list.
+ */
 async function resolveLayerAssigneeEmail(
   token: string,
   layer: LayerConfigItem,
   submittedData: Record<string, unknown>,
-): Promise<{ email: string; error?: string }> {
+  formSlug: string,
+): Promise<{ email: string; emails: string[]; error?: string }> {
   const layerLabel = layer.title || `Layer ${layer.layerNumber}`;
   if (layer.assignee.type === "department-approver") {
     try {
       const resolved = await resolveDepartmentApproverEmail(token, layer, submittedData);
-      return { email: resolved.email };
+      return { email: resolved.email, emails: resolved.email ? [resolved.email] : [] };
     } catch (error) {
       return {
         email: "",
+        emails: [],
         error: error instanceof Error ? error.message : `${layerLabel} could not resolve the department approver.`,
+      };
+    }
+  }
+
+  if (layer.assignee.type === "users") {
+    const emails = parseValidEmailList(layer.assignee.value);
+    if (layer.authMode === "365" && emails.length === 0) {
+      return {
+        email: "",
+        emails,
+        error: `${layerLabel} needs at least one valid assignee email before the workflow can start.`,
+      };
+    }
+    return { email: emails[0] ?? "", emails };
+  }
+
+  if (layer.assignee.type === "distribution-list") {
+    const address = layer.assignee.value.trim();
+    if (!EMAIL_RE.test(address)) {
+      return {
+        email: address,
+        emails: [],
+        error: `${layerLabel} needs a valid distribution list address before the workflow can start.`,
+      };
+    }
+    try {
+      const members = await expandLayerDistributionList(formSlug, layer.layerNumber);
+      if (members.length === 0) {
+        if (layer.authMode === "365") {
+          return {
+            email: "",
+            emails: [],
+            error: `${layerLabel}: the distribution list ${address} returned no members.`,
+          };
+        }
+        return { email: address, emails: [address] };
+      }
+      return { email: members[0], emails: members };
+    } catch (error) {
+      return {
+        email: "",
+        emails: [],
+        error: error instanceof Error ? error.message : `${layerLabel} could not read the distribution list members.`,
       };
     }
   }
@@ -566,6 +618,7 @@ async function resolveLayerAssigneeEmail(
   if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
     return {
       email,
+      emails: [],
       error: `${layerLabel} needs a valid assignee email before the workflow can start.`,
     };
   }
@@ -573,11 +626,12 @@ async function resolveLayerAssigneeEmail(
   if (email && !EMAIL_RE.test(email)) {
     return {
       email,
+      emails: [],
       error: `${layerLabel} resolved to "${email}", which is not a valid email address.`,
     };
   }
 
-  return { email };
+  return { email, emails: email ? [email] : [] };
 }
 
 function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {
@@ -633,6 +687,9 @@ export default function ApprovalDashboard() {
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [responseData, setResponseData] = useState<Record<string, unknown> | null>(null);
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
+  // Needed to expand a distribution-list assignee: the server looks the address
+  // up on the published layer config rather than trusting one sent from here.
+  const currentFormSlug = () => valueToText(formConfig?.Slug);
   const [actionLoading, setActionLoading] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -1324,6 +1381,12 @@ export default function ApprovalDashboard() {
         const currentLayerNumber = currentResolution.currentLayerNumber;
         const assignedEmailText = valueToText(respItem[`L${currentLayerNumber}_Email`]);
         const assignedEmail = normalizeEmailAddress(assignedEmailText);
+        // A layer can be shared by several people or an expanded distribution
+        // list; any one of them may act, so access is checked against the whole
+        // set. Older submissions only carry the single L{n}_Email.
+        const assignedEmailList = parseValidEmailList(
+          respItem[`L${currentLayerNumber}_Emails`] || assignedEmailText,
+        );
         const signedInEmail = normalizeEmailAddress(accounts[0]?.username);
         const override = isSuperuser;
         const delivery = getWorkflowEmailStatus(detailItem.WorkflowEmailLog, currentLayerNumber);
@@ -1335,8 +1398,8 @@ export default function ApprovalDashboard() {
           || "",
         );
         setSelectedLayerAccess({
-          allowed: override || (!!assignedEmail && assignedEmail === signedInEmail),
-          assignedEmail,
+          allowed: override || isLayerActor(signedInEmail, assignedEmailList, assignedEmailText),
+          assignedEmail: assignedEmailList.length > 1 ? assignedEmailList.join(", ") : assignedEmail,
           currentLayerNumber,
           override,
         });
@@ -1456,6 +1519,7 @@ export default function ApprovalDashboard() {
       await updateLayerStatus(token, listName, respId, currLayerNum, {
         status: SP_LAYER_STATUS.CONFIRMED,
         signedAt: now,
+        actedBy: accounts[0]?.username || "",
       });
 
       // Patch FormStatus, CurrentLayer, Status to SP so the change persists on refresh
@@ -1483,14 +1547,16 @@ export default function ApprovalDashboard() {
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`
           ) as Record<string, unknown>);
-          const result = await resolveLayerAssigneeEmail(token, nextLayerConfig, submittedData);
+          const result = await resolveLayerAssigneeEmail(token, nextLayerConfig, submittedData, currentFormSlug());
           if (result.error) throw new Error(result.error);
           nextApproverEmail = result.email;
           if (nextApproverEmail) {
+            const nextLayerPatch: Record<string, unknown> = {};
+            writeLayerRecipientFields(nextLayerPatch, nextLayerConfig, result.emails, nextApproverEmail);
             await spPatch(
               token,
               `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`,
-              { [`L${nextLayerNum}_Email`]: nextApproverEmail },
+              nextLayerPatch,
             );
           }
         }
@@ -1574,6 +1640,7 @@ export default function ApprovalDashboard() {
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`
       ) as Record<string, unknown>);
       const resolvedEmails: Record<number, string> = {};
+      const resolvedActors: Record<number, string[]> = {};
       const assigneeErrors: string[] = [];
       for (const layer of bLayers) {
         const routed = resolveEvaluationSubmitterRouting(layer, submittedData);
@@ -1585,9 +1652,10 @@ export default function ApprovalDashboard() {
           resolvedEmails[layer.layerNumber] = routed.email;
           continue;
         }
-        const result = await resolveLayerAssigneeEmail(token, layer, submittedData);
+        const result = await resolveLayerAssigneeEmail(token, layer, submittedData, currentFormSlug());
         if (result.error) assigneeErrors.push(result.error);
         if (result.email) resolvedEmails[layer.layerNumber] = result.email;
+        if (result.emails.length > 0) resolvedActors[layer.layerNumber] = result.emails;
       }
       if (assigneeErrors.length > 0) {
         throw new Error(`Cannot start branch: ${assigneeErrors.join(" ")}`);
@@ -1609,7 +1677,7 @@ export default function ApprovalDashboard() {
           ? manualPaperStatusForLayer(layer)
           : SP_LAYER_STATUS.PENDING;
         if (resolvedEmail) {
-          patchBody[`L${layer.layerNumber}_Email`] = resolvedEmail;
+          writeLayerRecipientFields(patchBody, layer, resolvedActors[layer.layerNumber] ?? [resolvedEmail], resolvedEmail);
         }
       }
 
@@ -1673,7 +1741,7 @@ export default function ApprovalDashboard() {
 
       let recipient = manualRecipient || valueToText(rawItem[`L${currentLayerNumber}_Email`]);
       if (!EMAIL_RE.test(recipient)) {
-        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
+        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem, currentFormSlug());
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
         if (recipient) {
@@ -1690,7 +1758,13 @@ export default function ApprovalDashboard() {
 
       const updatedAt = new Date().toISOString();
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`;
-      const patchBody: Record<string, unknown> = { [`L${currentLayerNumber}_Email`]: recipient };
+      const patchBody: Record<string, unknown> = {};
+      // A manual override names one person; otherwise keep whatever actor set
+      // the layer already resolved to and just refresh the delivery list.
+      const resendActors = manualRecipient
+        ? [recipient]
+        : parseValidEmailList(rawItem[`L${currentLayerNumber}_Emails`] || recipient);
+      const resendRecipients = writeLayerRecipientFields(patchBody, currentLayer, resendActors, recipient);
       // Retrigger as paper/manual when the current recipient is the paper mailbox,
       // even if the stored status was never flagged (e.g. legacy submissions).
       const wantsManualPaper = shouldUseManualPaperForSender(currentLayer, recipient);
@@ -1768,6 +1842,7 @@ export default function ApprovalDashboard() {
         totalLayers: activeLayers.length || item.totalLayers || currentLayerNumber,
         action: "submit",
         nextApproverEmail: recipient,
+        ...(resendRecipients.length ? { nextRecipients: resendRecipients } : {}),
         nextLayerType: currentLayer.type,
         reviewLink,
         ...(manualPdfUrl ? { pdfUrl: manualPdfUrl } : {}),
@@ -1869,9 +1944,12 @@ export default function ApprovalDashboard() {
       });
       const isManualPaperAssignment = shouldUseManualPaperForSender(targetLayer, email);
       const patchBody: Record<string, unknown> = {
-        [`L${input.layer}_Email`]: email,
         WorkflowAssignmentData: JSON.stringify(assignmentData),
       };
+      // Naming one person replaces the layer's whole actor set: anyone who
+      // shared it (co-evaluators, an expanded distribution list) must lose
+      // access, not merely stop being the primary.
+      writeLayerRecipientFields(patchBody, targetLayer, [email], email);
       if (isManualPaperAssignment) {
         // Assigned to the paper/manual mailbox — flag this layer for paper handling.
         patchBody[`L${input.layer}_Status`] = manualPaperStatusForLayer(targetLayer);
@@ -1975,7 +2053,7 @@ export default function ApprovalDashboard() {
       let recipient = manualEmailRecipient.trim() || valueToText(rawItem[`L${currentLayerNumber}_Email`]);
       if (recipient && !EMAIL_RE.test(recipient)) throw new Error("Enter a valid evaluator email address.");
       if (!EMAIL_RE.test(recipient)) {
-        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
+        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem, currentFormSlug());
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
       }
@@ -1994,9 +2072,21 @@ export default function ApprovalDashboard() {
         layerNumber: currentLayerNumber,
       });
       const updatedAt = new Date().toISOString();
+      // Typing a recipient here names one evaluator; otherwise keep the actor
+      // set the layer already resolved to and schedule the full delivery list.
+      const scheduleActors = manualEmailRecipient.trim()
+        ? [recipient]
+        : parseValidEmailList(rawItem[`L${currentLayerNumber}_Emails`] || recipient);
+      const scheduleRecipientPatch: Record<string, unknown> = {};
+      const scheduleRecipients = writeLayerRecipientFields(
+        scheduleRecipientPatch,
+        currentLayer,
+        scheduleActors,
+        recipient,
+      );
       const schedule = setScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, {
         layer: currentLayerNumber,
-        recipient,
+        recipient: (scheduleRecipients.length ? scheduleRecipients : [recipient]).join("; "),
         dueAt: new Date(customEmailDate).toISOString(),
         status: "scheduled",
         updatedAt,
@@ -2010,7 +2100,7 @@ export default function ApprovalDashboard() {
         token,
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`,
         {
-          [`L${currentLayerNumber}_Email`]: recipient,
+          ...scheduleRecipientPatch,
           WorkflowEmailSchedule: JSON.stringify(schedule),
         },
       );
@@ -2175,14 +2265,16 @@ export default function ApprovalDashboard() {
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`
           ) as Record<string, unknown>);
-          const result = await resolveLayerAssigneeEmail(token, nextLayer, submittedData);
+          const result = await resolveLayerAssigneeEmail(token, nextLayer, submittedData, currentFormSlug());
           if (result.error) throw new Error(result.error);
           nextApproverEmail = result.email;
           if (nextApproverEmail) {
+            const nextLayerPatch: Record<string, unknown> = {};
+            writeLayerRecipientFields(nextLayerPatch, nextLayer, result.emails, nextApproverEmail);
             await spPatch(
               token,
               `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
-              { [`L${nextLayerNumber}_Email`]: nextApproverEmail },
+              nextLayerPatch,
             );
           }
         }
@@ -2202,6 +2294,9 @@ export default function ApprovalDashboard() {
       // Also update enhanced L{n}_Status so the PDF reflects the correct status
       patchBody[`L${currentLayer}_Status`] = SP_LAYER_STATUS.APPROVED;
       patchBody[`L${currentLayer}_SignedAt`] = new Date().toISOString();
+      // On a layer shared by several people L{n}_Email only names the primary,
+      // so record which of them actually decided.
+      patchBody[`L${currentLayer}_ActedBy`] = accounts[0]?.username || "";
       if (approvalSignature) patchBody[`L${currentLayer}_Signature`] = approvalSignature;
       await spPatch(
         token,
@@ -2273,7 +2368,10 @@ export default function ApprovalDashboard() {
       await spPatch(
         token,
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
-        buildRejectedWorkflowPatch(currentLayer, totalLayers, new Date().toISOString(), reason),
+        {
+          ...buildRejectedWorkflowPatch(currentLayer, totalLayers, new Date().toISOString(), reason),
+          [`L${currentLayer}_ActedBy`]: accounts[0]?.username || "",
+        },
       );
 
       // Generate PDF after writing all terminal layer statuses so the chain is accurate.

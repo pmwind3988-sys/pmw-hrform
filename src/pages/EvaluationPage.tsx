@@ -31,6 +31,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
+import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -445,9 +446,18 @@ export default function EvaluationPage() {
 
         const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
         if (!data) { setError("Could not load evaluation data."); setLoading(false); return; }
-        const assignedEmail = String(data.responseFields[`L${displayLayerNumber}_Email`] || "").trim().toLowerCase();
-        const signedInEmail = (userEmail || "").trim().toLowerCase();
-        if (data.currentLayer?.authMode !== "public" && (!assignedEmail || assignedEmail !== signedInEmail)) {
+        // A layer can be assigned to several people (or an expanded distribution
+        // list) — any one of them may act. L{n}_Emails carries the full set;
+        // older submissions only have the single L{n}_Email.
+        const signedInEmail = (userEmail || "").trim();
+        if (
+          data.currentLayer?.authMode !== "public"
+          && !isLayerActor(
+            signedInEmail,
+            data.responseFields[`L${displayLayerNumber}_Emails`],
+            data.responseFields[`L${displayLayerNumber}_Email`],
+          )
+        ) {
           setError("This approval layer is not assigned to your account.");
           setLoading(false);
           return;
@@ -554,7 +564,10 @@ export default function EvaluationPage() {
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
 
       if (action === "reject") {
-        await spPatch(token, itemUrl, buildRejectedWorkflowPatch(displayLayerNumber, effectiveTotalLayers, now, rejectionReason));
+        await spPatch(token, itemUrl, {
+          ...buildRejectedWorkflowPatch(displayLayerNumber, effectiveTotalLayers, now, rejectionReason),
+          [`L${displayLayerNumber}_ActedBy`]: userEmail,
+        });
         await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
       } else if (action === "confirm" && currentLayer?.type === "evaluation") {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
@@ -567,6 +580,7 @@ export default function EvaluationPage() {
           status: SP_LAYER_STATUS.CONFIRMED,
           signedAt: now,
           signature: signatureData || undefined,
+          actedBy: userEmail,
         });
         await spPatch(token, itemUrl, {
           Status: isFinal ? "Completed" : "In Review",
@@ -582,6 +596,7 @@ export default function EvaluationPage() {
           status: SP_LAYER_STATUS.APPROVED,
           signedAt: now,
           signature: signatureData || undefined,
+          actedBy: userEmail,
         });
         await spPatch(token, itemUrl, {
           Status: isFinal ? "Approved" : `Approved Layer ${displayLayerNumber}`,
@@ -595,6 +610,9 @@ export default function EvaluationPage() {
       }
 
       const nextApproverEmail = !isFinal ? valueToText(responseData?.[`L${nextLayerNumber}_Email`]) : "";
+      const nextRecipients = !isFinal
+        ? parseValidEmailList(responseData?.[`L${nextLayerNumber}_NotifyEmails`])
+        : [];
       await triggerApprovalNotification(token, {
         formTitle,
         submittedBy: valueToText(responseData?.SubmittedBy) || userEmail,
@@ -603,6 +621,7 @@ export default function EvaluationPage() {
         totalLayers: effectiveTotalLayers,
         action: action === "reject" ? "reject" : "approve",
         ...(nextApproverEmail ? { nextApproverEmail } : {}),
+        ...(nextRecipients.length ? { nextRecipients } : {}),
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
         ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),

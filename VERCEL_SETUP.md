@@ -96,16 +96,34 @@ This starts both:
 
 ## 6. Prerequisite: Admin Consent
 
-Your app registration (`SYSTEM_CLIENT_ID`) must have **admin consent** granted for SharePoint permissions. Without it, the client credentials flow will fail.
+Your app registration (`SYSTEM_CLIENT_ID`) must have **admin consent** granted. Without it, the client credentials flow will fail.
 
-### Required permissions:
-- `Sites.Read.All` (to read form configs)
-- `Sites.Manage.All` or `Sites.FullControl.All` (to write submissions)
+The app acquires **two separate tokens**, so the permissions below come from **two different APIs** when you add them in the portal. Adding one under the wrong API silently does nothing — the token that needs it is a different token.
 
-### How to grant:
+### Required permissions
+
+All are **Application** permissions (client credentials, no signed-in user) — never Delegated.
+
+| Permission | Add under | Needed for |
+|---|---|---|
+| `Sites.Selected` | **Microsoft Graph** | All Graph list reads/writes. Grants nothing on its own — each site must additionally be granted to the app (see note) |
+| `Mail.Send` | **Microsoft Graph** | Workflow, approval and job application emails |
+| `Group.Read.All` | **Microsoft Graph** | Expanding a distribution-list layer assignee — see below |
+| `AuditLog.Read.All` | **Microsoft Graph** | Currently granted; not required by any route in this repo |
+
+> **`Sites.Selected` is not `Sites.Read.All`.** It authorises nothing until a specific site is granted to the app registration (via Graph `sites/{id}/permissions` or PnP `Grant-PnPAzureADAppSitePermission`). If Graph list calls start returning 403 for a *new* SharePoint site, this is why — the app needs that site added, not a broader permission.
+
+The certificate-based SharePoint REST token (`getSharePointToken()`) carries its own separate grants, used for the Hyperlink/Image field patches Graph handles unreliably. Those were configured before this work and are not listed here.
+
+`Group.Read.All` is needed **only if** a workflow layer is assigned to a distribution list. Without it, `POST /api/expand-group` gets a 403 from Graph and those submissions fail with a configuration error rather than silently assigning nobody. Layers assigned to individual people never need it.
+
+Which token uses which: SharePoint REST calls go through `getSharePointToken()` (scope = your site origin); everything else — Graph list operations, `sendMail`, group expansion — goes through `getGraphToken()` (scope `https://graph.microsoft.com/.default`). Both in `api/_utils/graphClient.ts`.
+
+### How to grant
 1. Go to [Azure Portal](https://portal.azure.com) → Microsoft Entra ID → App registrations
 2. Find your system app (`d3b814bf-b62f-4281-93ca-8e8082155bf7`)
-3. API Permissions → Grant admin consent for [your tenant]
+3. API permissions → **Add a permission** → pick **Microsoft Graph** or **SharePoint** per the table → **Application permissions** → select → Add
+4. **Grant admin consent for [your tenant]**, then confirm every row shows "Granted for [tenant]"
 
 ---
 
@@ -118,6 +136,7 @@ Your app registration (`SYSTEM_CLIENT_ID`) must have **admin consent** granted f
 | "Form is not public" | `IsPublic` is false | Check form settings in the builder |
 | CORS errors | `vercel.json` headers not applied | Make sure `vercel.json` is in project root |
 | API returns HTML instead of JSON | Using `npm run dev` instead of `vercel dev` | Run `vercel dev` |
+| "Could not expand the distribution list" on submit | `Group.Read.All` not granted, or the address is not a mail-enabled group | Grant `Group.Read.All` with admin consent; confirm the address resolves under Entra ID → Groups |
 
 ---
 
