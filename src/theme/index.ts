@@ -294,6 +294,12 @@ const theme = createTheme({
       },
     },
     MuiMenu: {
+      defaultProps: {
+        // Modal's scroll lock puts `overflow: hidden` + scrollbar-compensation
+        // padding on <body>, which shunts the centered layout sideways every
+        // time a dropdown opens. Dialogs still lock; anchored menus don't need to.
+        disableScrollLock: true,
+      },
       styleOverrides: {
         paper: {
           borderRadius: 12,

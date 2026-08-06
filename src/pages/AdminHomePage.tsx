@@ -223,6 +223,10 @@ export default function AdminHomePage() {
         color: editorial.ink,
         WebkitFontSmoothing: "antialiased",
         position: "relative",
+        // `clip` rather than `hidden`: it stops a stray wide child from making the
+        // whole document scroll/pinch-zoom sideways without creating a scroll
+        // container, so the sticky Header keeps sticking to the viewport.
+        overflowX: "clip",
         "&::before": {
           content: '""',
           position: "fixed",
