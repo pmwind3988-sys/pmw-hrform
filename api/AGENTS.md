@@ -16,12 +16,13 @@
 | Layer actors vs. recipients | `_utils/layerRecipients.ts` | Who may act (`L{n}_Emails`) vs. who gets the mail (`L{n}_NotifyEmails`). **Mirror of `src/utils/layerRecipients.ts` — keep both in sync.** |
 | Send email | `send-email.ts` | `POST /api/send-email`. Sends HR form workflow mail via Graph API `sendMail` from `HR_FORM_EMAIL_FROM_ADDRESS` (fallback `EMAIL_FROM_ADDRESS`). Requires `Mail.Send` app permission. |
 | Scheduled workflow email | `workflow-email-cron.ts` | Daily Vercel Cron runner. Sends due per-item evaluator emails persisted in `WorkflowEmailSchedule`; authenticated with `CRON_SECRET` or `X-Api-Key`. |
-| Job listings (public) | `jobs-list.ts` | `GET /api/jobs-list`. Lists active jobs from "Internal Job Listing" SP list with live applicant counts. |
+| Job listings (public) | `jobs-list.ts` | `GET /api/jobs-list`. Lists active jobs from "Internal Job Listing" SP list with live applicant counts. Enforces career portal access — see below. |
 | Job applications | `job-apply.ts` | `POST /api/job-apply`. Creates "Job Applications" item, uploads files, sends HR email. See gotchas in root AGENTS.md. |
 | Job admin | `job-admin.ts` | `GET/PUT/DELETE /api/job-admin`. Admin CRUD for applications and job listings. All IDs validated as numeric before Graph `$filter`. |
 | Graph client | `_utils/graphClient.ts` | Client-credentials token for `graph.microsoft.com/v1.0`. Exports: `queryListItems`, `createListItem`, `updateListItemFields`, `deleteListItem`, `queryListItemById`, `getListId`, etc. |
 | API auth | `_utils/auth.ts` | Validates `X-Api-Key` header against `API_SECRET_KEY` env var. Used by all routes. |
 | Career portal cards | `_utils/careerPortalCards.ts` | CRUD helpers for "Career Portal Cards" SP list. Used by jobs-list.ts and job-admin.ts. |
+| Career portal access | `_utils/careerPortalAccess.ts` | Reads/writes the `career-portal-access` item in `AdminPanelSettings` (`SettingValue` = `public` \| `internal`). `readCareerPortalAccess` never throws — a missing list or a Graph failure falls back to public, which is how the portal behaved before the setting existed. |
 | List provisioning | `_utils/provisioning.ts` | Helpers for ensuring SP list schemas exist (used by submit-form, job-apply). |
 | Logger | `_utils/logger.ts` | Sanitized logging helpers that avoid raw personal data in output. |
 

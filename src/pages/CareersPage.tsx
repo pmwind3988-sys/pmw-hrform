@@ -42,9 +42,14 @@ import {
   Description,
 } from "@mui/icons-material";
 import { useMsal } from "@azure/msal-react";
-import { fetchCareersPortalData, fetchMyApplications } from "../utils/careersService";
-import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
+import {
+  acquireCareerPortalToken,
+  fetchCareersPortalData,
+  fetchMyApplications,
+  isCareerPortalPrivateError,
+} from "../utils/careersService";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
+import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGate";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import CareerHero from "../components/careers/CareerHero";
@@ -373,6 +378,7 @@ export default function CareersPage() {
   const [portalCards, setPortalCards] = useState<CareerPortalCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [restrictedMessage, setRestrictedMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [searchText, setSearchText] = useState("");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -417,16 +423,14 @@ export default function CareersPage() {
         // Re-read rather than closing over the render-time object.
         const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
         const email = account?.username?.toLowerCase() || "";
-        const myApplications = email && account
-          ? acquireAccessTokenSilentOrRedirect(instance, {
-              scopes: [`${new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin}/AllSites.Manage`],
-              account,
-            })
-              .then((accessToken) => fetchMyApplications(email, { accessToken }))
-              .catch(() => [] as JobAdminApplication[])
+        // Also proves to the API that a signed-in employee is asking, which is
+        // what a portal closed to the public checks before returning anything.
+        const accessToken = await acquireCareerPortalToken(instance, account);
+        const myApplications = email && accessToken
+          ? fetchMyApplications(email, { accessToken }).catch(() => [] as JobAdminApplication[])
           : Promise.resolve([] as JobAdminApplication[]);
         const [portalData, appData] = await Promise.all([
-          fetchCareersPortalData(),
+          fetchCareersPortalData({ accessToken }),
           myApplications,
         ]);
         if (!cancelled) {
@@ -435,7 +439,12 @@ export default function CareersPage() {
           setMyApps(appData);
         }
       } catch (err) {
-        if (!cancelled) setError(getCareerErrorMessage(err, "Failed to load opportunities."));
+        if (cancelled) return;
+        if (isCareerPortalPrivateError(err)) {
+          setRestrictedMessage(err instanceof Error ? err.message : "");
+        } else {
+          setError(getCareerErrorMessage(err, "Failed to load opportunities."));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -599,6 +608,10 @@ export default function CareersPage() {
       window.open(targetValue, "_blank", "noopener,noreferrer");
     }
   };
+
+  if (restrictedMessage !== null) {
+    return <CareerPortalPrivateGate message={restrictedMessage} />;
+  }
 
   return (
     <Box sx={careerPageSx}>

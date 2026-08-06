@@ -20,6 +20,9 @@ export const PDPA_COLUMNS: GraphColumnSpec[] = [
 
 export const ADMIN_PANEL_SETTINGS_COLUMNS: GraphColumnSpec[] = [
   { name: "BackgroundId", displayName: "BackgroundId", type: "text" },
+  // Generic value slot for settings that are a single scalar (career portal
+  // access, for one). Keyed by the item's Title, same as every other setting.
+  { name: "SettingValue", displayName: "SettingValue", type: "text" },
   { name: "CustomImageUrl", displayName: "CustomImageUrl", type: "note" },
   { name: "CustomImageSource", displayName: "CustomImageSource", type: "note" },
   { name: "ImageOpacity", displayName: "ImageOpacity", type: "number" },

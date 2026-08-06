@@ -40,7 +40,15 @@ import { useReactiveForm, required, email, phone } from "../hooks/useReactiveFor
 import { useUserProfile } from "../hooks/useUserProfile";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
 import { useMsal } from "@azure/msal-react";
-import { fetchJob, submitApplication, ensureJobApplicationColumns, fetchMyApplications } from "../utils/careersService";
+import {
+  acquireCareerPortalToken,
+  fetchJob,
+  submitApplication,
+  ensureJobApplicationColumns,
+  fetchMyApplications,
+  isCareerPortalPrivateError,
+} from "../utils/careersService";
+import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGate";
 import type { JobListing, CustomFieldDefinition } from "../types";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
@@ -486,6 +494,7 @@ export default function JobApplyPage() {
   const [job, setJob] = useState<JobListing | null>(null);
   const [jobLoading, setJobLoading] = useState(true);
   const [jobLoadError, setJobLoadError] = useState<string | null>(null);
+  const [restrictedMessage, setRestrictedMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -512,11 +521,17 @@ export default function JobApplyPage() {
       setJobLoading(true);
       setJobLoadError(null);
       try {
-        const found = jobId ? await fetchJob(jobId) : null;
+        // Re-read rather than closing over the render-time object.
+        const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+        const accessToken = await acquireCareerPortalToken(instance, account);
+        const found = jobId ? await fetchJob(jobId, { accessToken }) : null;
         if (!cancelled) setJob(found);
       } catch (err) {
-        if (!cancelled) {
-          setJob(null);
+        if (cancelled) return;
+        setJob(null);
+        if (isCareerPortalPrivateError(err)) {
+          setRestrictedMessage(err instanceof Error ? err.message : "");
+        } else {
           setJobLoadError(getCareerErrorMessage(err, "Could not load this opportunity."));
         }
       } finally {
@@ -525,7 +540,7 @@ export default function JobApplyPage() {
     }
     void load();
     return () => { cancelled = true; };
-  }, [jobId]);
+  }, [jobId, instance, accountKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -767,6 +782,11 @@ export default function JobApplyPage() {
       setSubmitted(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
+      // An admin can close the portal between opening this form and submitting it.
+      if (isCareerPortalPrivateError(err)) {
+        setRestrictedMessage(msg);
+        return;
+      }
       // Detect duplicate rejection (409)
       if (msg.includes("already applied")) {
         setDuplicateBlocked(true);
@@ -796,6 +816,10 @@ export default function JobApplyPage() {
     }
     void doSubmit(values, adminOverrideMode);
   });
+
+  if (restrictedMessage !== null) {
+    return <CareerPortalPrivateGate message={restrictedMessage} />;
+  }
 
   if (submitted) {
     return (

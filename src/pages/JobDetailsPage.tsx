@@ -23,7 +23,14 @@ import {
 } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import type { JobAdminApplication, JobListing } from "../types";
-import { fetchJob, fetchJobs, fetchMyApplications } from "../utils/careersService";
+import {
+  acquireCareerPortalToken,
+  fetchJob,
+  fetchJobs,
+  fetchMyApplications,
+  isCareerPortalPrivateError,
+} from "../utils/careersService";
+import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGate";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
@@ -154,6 +161,7 @@ export default function JobDetailsPage() {
   const [allJobs, setAllJobs] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [restrictedMessage, setRestrictedMessage] = useState<string | null>(null);
   const [myApps, setMyApps] = useState<JobAdminApplication[]>([]);
 
   useEffect(() => {
@@ -162,15 +170,23 @@ export default function JobDetailsPage() {
       setLoading(true);
       setError(null);
       try {
+        // Re-read rather than closing over the render-time object.
+        const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+        const accessToken = await acquireCareerPortalToken(instance, account);
         const [found, jobs] = await Promise.all([
-          jobId ? fetchJob(jobId) : Promise.resolve(null),
-          fetchJobs().catch(() => [] as JobListing[]),
+          jobId ? fetchJob(jobId, { accessToken }) : Promise.resolve(null),
+          fetchJobs({ accessToken }).catch(() => [] as JobListing[]),
         ]);
         if (cancelled) return;
         setJob(found);
         setAllJobs(jobs);
       } catch (err) {
-        if (!cancelled) setError(getCareerErrorMessage(err, "Could not load this opportunity."));
+        if (cancelled) return;
+        if (isCareerPortalPrivateError(err)) {
+          setRestrictedMessage(err instanceof Error ? err.message : "");
+        } else {
+          setError(getCareerErrorMessage(err, "Could not load this opportunity."));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -179,7 +195,7 @@ export default function JobDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [jobId, instance, accountKey]);
 
   // Application history needs the visitor's own delegated token, so this stays
   // empty for a Public Respondent — they simply do not see an applied state.
@@ -230,6 +246,10 @@ export default function JobDetailsPage() {
   const heroSubtitle = job
     ? [job.company, job.department].filter(Boolean).join(" · ")
     : "Loading opportunity...";
+
+  if (restrictedMessage !== null) {
+    return <CareerPortalPrivateGate message={restrictedMessage} />;
+  }
 
   return (
     <Box sx={careerPageSx}>

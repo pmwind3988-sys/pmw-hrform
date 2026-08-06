@@ -127,6 +127,11 @@ Builder:   AdminFormBuilder.tsx → raw token → src/utils/formBuilderSP.ts (st
   - `api/job-admin.ts` — admin: list/update/delete applications, CRUD for job listings. All IDs validated as numeric before Graph `$filter` usage.
 - **Email**: Uses Graph API `sendMail`. HR form workflow emails use `HR_FORM_EMAIL_FROM_ADDRESS`; job application emails use `JOB_APPLICATION_EMAIL_FROM_ADDRESS`; both fall back to `EMAIL_FROM_ADDRESS` for compatibility. Sender env vars must be mail-enabled users with `Mail.Send` application permission (admin-granted). Job application notifications also require `HR_RECRUITMENT_EMAIL`.
 - **Applicant count**: Computed live from "Job Applications" list grouped by `JobListingID`. Also stored as `Application_x0020_Count` on the job listing item.
+- **Career portal access (public vs. internal)**: HR Forms Owners toggle it from the dashboard header menu → *Career Portal Access* (`src/components/dashboard/CareerPortalAccessDialog.tsx`, `src/hooks/useCareerPortalAccess.ts`).
+  - Stored as the `career-portal-access` item in the `AdminPanelSettings` SP list, `SettingValue` = `public` | `internal` (`api/_utils/careerPortalAccess.ts`). Default and every fallback is **public** — a missing setting must not close a portal nobody closed.
+  - Enforced server-side, not by routing: `api/jobs-list.ts` and `api/job-apply.ts` require an `Authorization: Bearer <SP delegated token>` that resolves to a tenant user while the portal is internal, and answer `403 { code: "career-portal-private" }` otherwise. `/career-portal*` stays in `isPublicRoutePath` so signed-in visitors keep skipping the dashboard profile load.
+  - The career pages send that token via `acquireCareerPortalToken()` and render `CareerPortalPrivateGate` on `isCareerPortalPrivateError(err)`. The client gate is presentation only — the API is the control.
+  - A private portal responds per-caller, so `jobs-list` switches its `Cache-Control` to `private, no-store`.
 
 ### `queryListItemById` — Workaround for Filter-on-ID Issues
 The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemId)` fetches a single list item by its ID in the URL path (`/items/{id}?$expand=fields`). **Always use this instead of `queryListItems` with `$filter=id eq '...'`** — the latter triggers Graph API 500 `generalException`.

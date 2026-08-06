@@ -20,6 +20,7 @@ import {
   updateCareerPortalCard,
   type CareerPortalCardInput,
 } from "./_utils/careerPortalCards.js";
+import { readCareerPortalAccess, writeCareerPortalAccess } from "./_utils/careerPortalAccess.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   createListItemViaSPRest,
@@ -1071,6 +1072,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         } catch (err) {
           return res.status(400).json({ error: err instanceof Error ? err.message : "Failed to delete portal card" });
         }
+      }
+
+      // Who may see the career portal — public visitors, or signed-in accounts only
+      if (action === "get-portal-access") {
+        const portalAccess = await readCareerPortalAccess(token);
+        return res.status(200).json({ portalAccess } as unknown as Record<string, unknown>);
+      }
+
+      if (action === "set-portal-access") {
+        if (typeof rawBody.isPublic !== "boolean") {
+          return res.status(400).json({ error: "Missing required field: isPublic (boolean)" });
+        }
+        const portalAccess = await writeCareerPortalAccess(
+          token,
+          rawBody.isPublic,
+          delegatedUser.email || delegatedUser.login || "admin",
+        );
+        return res.status(200).json({ portalAccess } as unknown as Record<string, unknown>);
       }
 
       // Fetch choices from a SharePoint column

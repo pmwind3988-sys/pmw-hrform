@@ -1,10 +1,39 @@
-import type { JobListing, JobApplyRequest, JobAdminApplication, CareerPortalCard } from "../types";
+import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
+import type {
+  JobListing,
+  JobApplyRequest,
+  JobAdminApplication,
+  CareerPortalCard,
+  CareerPortalAccessSetting,
+} from "../types";
+import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface JobsListResponse {
   jobs: JobListing[];
   portalCards?: CareerPortalCard[];
+  portalAccess?: CareerPortalAccessSetting;
+}
+
+interface PortalAccessResponse {
+  portalAccess: CareerPortalAccessSetting;
+}
+
+/**
+ * The portal is closed to the public and the caller is not signed in. Callers
+ * render the sign-in gate on this instead of a generic failure — the request
+ * was refused by policy, not broken.
+ */
+export class CareerPortalPrivateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CareerPortalPrivateError";
+  }
+}
+
+export function isCareerPortalPrivateError(error: unknown): boolean {
+  return error instanceof CareerPortalPrivateError;
 }
 
 interface ApplyResponse {
@@ -54,18 +83,61 @@ function delegatedHeaders(options: AdminApiOptions): Record<string, string> {
 
 async function readApiError(response: Response, fallback: string): Promise<Error> {
   let detail = "";
+  let code = "";
   try {
-    const body = (await response.json()) as { error?: unknown; message?: unknown };
+    const body = (await response.json()) as { error?: unknown; message?: unknown; code?: unknown };
     const raw = body.error ?? body.message;
     if (typeof raw === "string" && raw.trim()) {
       detail = raw.trim();
     }
+    if (typeof body.code === "string") code = body.code;
   } catch {
     // Some API failures return an empty body or non-JSON response.
   }
 
   const statusText = [response.status, response.statusText].filter(Boolean).join(" ");
+  if (code === "career-portal-private") {
+    return new CareerPortalPrivateError(detail || "The career portal is currently open to signed-in PMW accounts only.");
+  }
   return new Error(detail || `${fallback} (${statusText})`);
+}
+
+// ── Career portal access (visibility) ─────────────────────────────────────────
+
+/**
+ * The SharePoint token the career pages send so the API can tell a signed-in
+ * employee from an anonymous visitor. Resolves to "" when nobody is signed in
+ * or the silent acquisition fails — a closed portal then shows the sign-in gate
+ * rather than a hard error.
+ */
+export async function acquireCareerPortalToken(
+  instance: IPublicClientApplication,
+  account: AccountInfo | null,
+): Promise<string> {
+  if (!account) return "";
+
+  const spSiteUrl = import.meta.env.VITE_SP_SITE_URL || "";
+  let scope: string;
+  try {
+    scope = `${new URL(spSiteUrl).origin}/AllSites.Manage`;
+  } catch {
+    return "";
+  }
+
+  try {
+    return await acquireAccessTokenSilentOrRedirect(instance, { scopes: [scope], account });
+  } catch {
+    return "";
+  }
+}
+
+function bearerHeaders(accessToken?: string): Record<string, string> {
+  return apiHeaders(accessToken ? { Authorization: `Bearer ${accessToken}` } : {});
+}
+
+export interface CareerPortalRequestOptions {
+  /** Delegated SharePoint token, when the visitor is signed in. */
+  accessToken?: string;
 }
 
 // ── API client functions ───────────────────────────────────────────────────────
@@ -81,8 +153,8 @@ function applicationQueryString(query: ApplicationListQuery = {}): string {
   return qs ? `?${qs}` : "";
 }
 
-export async function fetchJobs(): Promise<JobListing[]> {
-  const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
+export async function fetchJobs(options: CareerPortalRequestOptions = {}): Promise<JobListing[]> {
+  const response = await fetch("/api/jobs-list", { headers: bearerHeaders(options.accessToken) });
 
   if (!response.ok) {
     throw await readApiError(response, "Failed to fetch jobs");
@@ -92,8 +164,10 @@ export async function fetchJobs(): Promise<JobListing[]> {
   return data.jobs;
 }
 
-export async function fetchJob(jobId: string): Promise<JobListing | null> {
-  const response = await fetch(`/api/jobs-list?jobId=${encodeURIComponent(jobId)}`, { headers: apiHeaders() });
+export async function fetchJob(jobId: string, options: CareerPortalRequestOptions = {}): Promise<JobListing | null> {
+  const response = await fetch(`/api/jobs-list?jobId=${encodeURIComponent(jobId)}`, {
+    headers: bearerHeaders(options.accessToken),
+  });
 
   if (!response.ok) {
     throw await readApiError(response, "Failed to fetch job");
@@ -103,15 +177,21 @@ export async function fetchJob(jobId: string): Promise<JobListing | null> {
   return data.jobs[0] ?? null;
 }
 
-export async function fetchCareersPortalData(): Promise<{ jobs: JobListing[]; portalCards: CareerPortalCard[] }> {
-  const response = await fetch("/api/jobs-list", { headers: apiHeaders() });
+export async function fetchCareersPortalData(
+  options: CareerPortalRequestOptions = {},
+): Promise<{ jobs: JobListing[]; portalCards: CareerPortalCard[]; portalAccess: CareerPortalAccessSetting }> {
+  const response = await fetch("/api/jobs-list", { headers: bearerHeaders(options.accessToken) });
 
   if (!response.ok) {
     throw await readApiError(response, "Failed to fetch jobs");
   }
 
   const data: JobsListResponse = (await response.json()) as JobsListResponse;
-  return { jobs: data.jobs, portalCards: data.portalCards ?? [] };
+  return {
+    jobs: data.jobs,
+    portalCards: data.portalCards ?? [],
+    portalAccess: data.portalAccess ?? { isPublic: true },
+  };
 }
 
 export async function submitApplication(
@@ -285,6 +365,39 @@ export async function updateJobListing(
 
   const result = (await response.json()) as { success: boolean; warning?: string };
   return result;
+}
+
+export async function fetchCareerPortalAccess(options: AdminApiOptions): Promise<CareerPortalAccessSetting> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: delegatedHeaders(options),
+    body: JSON.stringify({ action: "get-portal-access" }),
+  });
+
+  if (!response.ok) {
+    throw await readApiError(response, "Failed to load career portal access");
+  }
+
+  const data: PortalAccessResponse = (await response.json()) as PortalAccessResponse;
+  return data.portalAccess;
+}
+
+export async function saveCareerPortalAccess(
+  isPublic: boolean,
+  options: AdminApiOptions,
+): Promise<CareerPortalAccessSetting> {
+  const response = await fetch("/api/job-admin", {
+    method: "POST",
+    headers: delegatedHeaders(options),
+    body: JSON.stringify({ action: "set-portal-access", isPublic }),
+  });
+
+  if (!response.ok) {
+    throw await readApiError(response, "Failed to save career portal access");
+  }
+
+  const data: PortalAccessResponse = (await response.json()) as PortalAccessResponse;
+  return data.portalAccess;
 }
 
 export async function fetchCareerPortalCards(options: AdminApiOptions): Promise<CareerPortalCard[]> {

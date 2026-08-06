@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getSharePointToken } from "./_utils/graphClient.js";
+import { readCareerPortalAccess } from "./_utils/careerPortalAccess.js";
 import { logError, logInfo, logWarn } from "./_utils/logger.js";
 
 function errorMessage(error: unknown, maxLength?: number): string {
@@ -665,6 +666,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const isPublicSubmission = !accessToken;
 
   if (isPublicSubmission) {
+    // A closed portal has no Public Respondent path: without a delegated token
+    // there is no tenant identity behind the application.
+    try {
+      const portalAccess = await readCareerPortalAccess(await getGraphToken());
+      if (!portalAccess.isPublic) {
+        return res.status(403).json({
+          error: "The career portal is currently open to signed-in PMW accounts only.",
+          code: "career-portal-private",
+        });
+      }
+    } catch (e) {
+      logError("api:job-apply", "Could not obtain a token to read career portal access", e);
+      return res.status(500).json({ error: "Internal server error. Please try again." });
+    }
+
     // forceApply bypasses the duplicate guard and is gated on HR Forms Owner
     // membership, which can only be proven with a delegated token.
     if (body.forceApply === true) {

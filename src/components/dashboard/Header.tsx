@@ -22,6 +22,7 @@ import {
   WorkOutlined as WorkIcon,
   Menu as MenuIcon,
   PrivacyTip as PrivacyIcon,
+  VisibilityOutlined as PortalAccessIcon,
   Wallpaper as WallpaperIcon,
 } from "@mui/icons-material";
 import type { MouseEvent } from "react";
@@ -30,7 +31,9 @@ import { useNavigate } from "react-router-dom";
 import RoleBadge from "./RoleBadge";
 import Logo from "../Logo";
 import BackgroundPicker from "./BackgroundPicker";
+import CareerPortalAccessDialog from "./CareerPortalAccessDialog";
 import { useDashboardBackground } from "../../hooks/useDashboardBackground";
+import { useCareerPortalAccess } from "../../hooks/useCareerPortalAccess";
 import { editorial, editorialHairline } from "../../theme/editorial";
 
 interface HeaderProps {
@@ -55,6 +58,7 @@ export default function Header({
   const isCompact = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
+  const [portalAccessOpen, setPortalAccessOpen] = useState(false);
   const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
   const [mainMenuAnchorEl, setMainMenuAnchorEl] = useState<null | HTMLElement>(null);
   const {
@@ -64,6 +68,13 @@ export default function Header({
     saving: backgroundSaving,
     setting: backgroundSetting,
   } = useDashboardBackground(isAdmin);
+  const {
+    error: portalAccessError,
+    loading: portalAccessLoading,
+    save: savePortalAccess,
+    saving: portalAccessSaving,
+    setting: portalAccessSetting,
+  } = useCareerPortalAccess(isAdmin, portalAccessOpen);
   const profileOpen = Boolean(profileAnchorEl);
   const mainMenuOpen = Boolean(mainMenuAnchorEl);
   const menuPaperSx = {
@@ -117,6 +128,11 @@ export default function Header({
   const openDashboardBackgroundPicker = (closeMenu: () => void) => {
     closeMenu();
     setBgPickerOpen(true);
+  };
+
+  const openCareerPortalAccess = (closeMenu: () => void) => {
+    closeMenu();
+    setPortalAccessOpen(true);
   };
 
   const navigateFromMenu = (path: string, closeMenu: () => void) => {
@@ -252,6 +268,10 @@ export default function Header({
                         <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
                         <Typography variant="body2">Manage Cards</Typography>
                       </MenuItem>
+                      <MenuItem onClick={() => openCareerPortalAccess(handleMainMenuClose)} sx={menuItemSx}>
+                        <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                        <Typography variant="body2">Career Portal Access</Typography>
+                      </MenuItem>
                       <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
                         <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                         <Typography variant="body2">Dashboard Background</Typography>
@@ -380,6 +400,10 @@ export default function Header({
                         <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
                         <Typography variant="body2">Manage Cards</Typography>
                       </MenuItem>
+                      <MenuItem onClick={() => openCareerPortalAccess(handleProfileClose)} sx={menuItemSx}>
+                        <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                        <Typography variant="body2">Career Portal Access</Typography>
+                      </MenuItem>
                       <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>
                         <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                         <Typography variant="body2">Dashboard Background</Typography>
@@ -406,15 +430,26 @@ export default function Header({
         )}
 
         {isAdmin && (
-          <BackgroundPicker
-            open={bgPickerOpen}
-            onClose={() => setBgPickerOpen(false)}
-            setting={backgroundSetting}
-            loading={backgroundLoading}
-            saving={backgroundSaving}
-            error={backgroundError}
-            onSave={saveBackground}
-          />
+          <>
+            <BackgroundPicker
+              open={bgPickerOpen}
+              onClose={() => setBgPickerOpen(false)}
+              setting={backgroundSetting}
+              loading={backgroundLoading}
+              saving={backgroundSaving}
+              error={backgroundError}
+              onSave={saveBackground}
+            />
+            <CareerPortalAccessDialog
+              open={portalAccessOpen}
+              onClose={() => setPortalAccessOpen(false)}
+              setting={portalAccessSetting}
+              loading={portalAccessLoading}
+              saving={portalAccessSaving}
+              error={portalAccessError}
+              onSave={savePortalAccess}
+            />
+          </>
         )}
       </Toolbar>
     </AppBar>

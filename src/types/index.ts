@@ -1033,6 +1033,14 @@ export interface JobListing {
   customFields?: CustomFieldDefinition[];
 }
 
+/** Who the career portal is open to. Admin-controlled, stored in `AdminPanelSettings`. */
+export interface CareerPortalAccessSetting {
+  /** true = open to anyone; false = signed-in PMW accounts only. */
+  isPublic: boolean;
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
 export interface CareerPortalCard {
   id: string;
   title: string;

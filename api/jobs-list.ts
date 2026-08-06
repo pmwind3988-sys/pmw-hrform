@@ -1,6 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getListColumns, graphFieldEquals, queryListItemById, queryListItems } from "./_utils/graphClient.js";
 import { listCareerPortalCards } from "./_utils/careerPortalCards.js";
+import { readCareerPortalAccess, resolveDelegatedUserEmail } from "./_utils/careerPortalAccess.js";
 import { parseJobCustomFields } from "./_utils/jobListingFields.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -82,6 +83,13 @@ function mapJobItem(item: { id: string; fields: Record<string, unknown> }, colum
   };
 }
 
+function getBearerToken(headers: Record<string, string | string[] | undefined>): string {
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === "authorization")?.[1];
+  const authorization = Array.isArray(entry) ? entry[0] || "" : entry || "";
+  if (!authorization.toLowerCase().startsWith("bearer ")) return "";
+  return authorization.slice(7).trim();
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -91,10 +99,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
-
   try {
     const token = await getGraphToken();
+    const portalAccess = await readCareerPortalAccess(token);
+
+    // A private portal answers differently per caller, so it must never be
+    // served from the shared edge cache.
+    res.setHeader(
+      "Cache-Control",
+      portalAccess.isPublic ? "s-maxage=60, stale-while-revalidate=300" : "private, no-store",
+    );
+
+    if (!portalAccess.isPublic) {
+      const signedInEmail = await resolveDelegatedUserEmail(getBearerToken(req.headers));
+      if (!signedInEmail) {
+        return res.status(403).json({
+          error: "The career portal is currently open to signed-in PMW accounts only.",
+          code: "career-portal-private",
+          portalAccess: { isPublic: false },
+        } as unknown as Record<string, unknown>);
+      }
+    }
+
     const requestUrl = new URL(req.url || "/api/jobs-list", "http://localhost");
     const jobId = requestUrl.searchParams.get("jobId")?.trim();
     const [portalCards, jobColumns] = await Promise.all([
@@ -114,7 +140,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const item = await queryListItemById(token, "Internal Job Listing", jobId);
       const job = item ? mapJobItem(item, jobColumns) : null;
       const jobs = job && job.status === "New" ? [job] : [];
-      return res.status(200).json({ jobs, portalCards } as unknown as Record<string, unknown>);
+      return res.status(200).json({ jobs, portalCards, portalAccess } as unknown as Record<string, unknown>);
     }
 
     const rawItems = await queryListItems(token, "Internal Job Listing", {
@@ -131,7 +157,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const jobs = rawItems.map((item) => mapJobItem(item, jobColumns));
 
-    return res.status(200).json({ jobs, portalCards } as unknown as Record<string, unknown>);
+    return res.status(200).json({ jobs, portalCards, portalAccess } as unknown as Record<string, unknown>);
   } catch (e) {
     logError("api:jobs-list", "Failed to list jobs", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
