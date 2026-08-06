@@ -1,10 +1,12 @@
 import { createListItem, queryListItems, updateListItemFields } from "./graphClient.js";
 import { logWarn } from "./logger.js";
 import { ensureAdminPanelSettingsList } from "./provisioning.js";
+import { ensureTextFieldViaSPRest } from "./sharepointRest.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 const SETTINGS_LIST = "AdminPanelSettings";
 const SETTING_TITLE = "career-portal-access";
+const SETTING_VALUE_COLUMN = "SettingValue";
 
 export interface CareerPortalAccessSetting {
   /** true = anyone can browse and apply; false = signed-in tenant accounts only. */
@@ -72,13 +74,35 @@ export async function readCareerPortalAccess(token: string): Promise<CareerPorta
   };
 }
 
+/**
+ * Makes sure the settings list and its `SettingValue` column exist before a
+ * write. Split across two identities on purpose: the app-only Graph principal
+ * can create the list and write items but is denied column creation (Graph
+ * answers 403 accessDenied on POST .../columns), so the column is added with
+ * the signed-in admin's own SharePoint token, which does have Manage rights.
+ */
+export async function ensureCareerPortalAccessSchema(
+  graphToken: string,
+  delegatedToken: string,
+): Promise<void> {
+  try {
+    await ensureAdminPanelSettingsList(graphToken, SETTINGS_LIST);
+  } catch (error) {
+    // Expected whenever a column is missing — the delegated step below is the
+    // one that has to succeed, and it reports a missing list clearly enough.
+    logWarn("api:career-portal-access", "App-only settings list ensure failed; continuing with delegated provisioning", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  await ensureTextFieldViaSPRest(delegatedToken, SETTINGS_LIST, SETTING_VALUE_COLUMN, SETTING_VALUE_COLUMN);
+}
+
 export async function writeCareerPortalAccess(
   token: string,
   isPublic: boolean,
   updatedBy: string,
 ): Promise<CareerPortalAccessSetting> {
-  await ensureAdminPanelSettingsList(token, SETTINGS_LIST);
-
   const updatedAt = new Date().toISOString();
   const fields = {
     Title: SETTING_TITLE,
@@ -88,10 +112,25 @@ export async function writeCareerPortalAccess(
   };
 
   const existing = await findSettingItem(token);
-  if (existing) {
-    await updateListItemFields(token, SETTINGS_LIST, existing.id, fields);
-  } else {
-    await createListItem(token, SETTINGS_LIST, fields);
+  const writeItem = async () => {
+    if (existing) {
+      await updateListItemFields(token, SETTINGS_LIST, existing.id, fields);
+    } else {
+      await createListItem(token, SETTINGS_LIST, fields);
+    }
+  };
+
+  try {
+    await writeItem();
+  } catch (error) {
+    // Graph can still be serving a cached list schema for a few hundred ms
+    // after the column is created over SP REST, and rejects the unknown field.
+    // One retry turns a confusing first-save failure into a non-event.
+    logWarn("api:career-portal-access", "Retrying career portal access write", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await writeItem();
   }
 
   return { isPublic, updatedBy, updatedAt };

@@ -20,7 +20,11 @@ import {
   updateCareerPortalCard,
   type CareerPortalCardInput,
 } from "./_utils/careerPortalCards.js";
-import { readCareerPortalAccess, writeCareerPortalAccess } from "./_utils/careerPortalAccess.js";
+import {
+  ensureCareerPortalAccessSchema,
+  readCareerPortalAccess,
+  writeCareerPortalAccess,
+} from "./_utils/careerPortalAccess.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   createListItemViaSPRest,
@@ -1083,6 +1087,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (action === "set-portal-access") {
         if (typeof rawBody.isPublic !== "boolean") {
           return res.status(400).json({ error: "Missing required field: isPublic (boolean)" });
+        }
+        try {
+          // Needs the admin's own token: the app-only principal cannot add columns.
+          await ensureCareerPortalAccessSchema(token, delegatedToken);
+        } catch (e) {
+          logError("api:job-admin", "Could not provision the career portal access setting column", e);
+          return res.status(500).json({
+            error: "Could not prepare the AdminPanelSettings list. Confirm your account can manage that SharePoint list, then try again.",
+          });
         }
         const portalAccess = await writeCareerPortalAccess(
           token,

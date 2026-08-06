@@ -22,7 +22,7 @@
 | Graph client | `_utils/graphClient.ts` | Client-credentials token for `graph.microsoft.com/v1.0`. Exports: `queryListItems`, `createListItem`, `updateListItemFields`, `deleteListItem`, `queryListItemById`, `getListId`, etc. |
 | API auth | `_utils/auth.ts` | Validates `X-Api-Key` header against `API_SECRET_KEY` env var. Used by all routes. |
 | Career portal cards | `_utils/careerPortalCards.ts` | CRUD helpers for "Career Portal Cards" SP list. Used by jobs-list.ts and job-admin.ts. |
-| Career portal access | `_utils/careerPortalAccess.ts` | Reads/writes the `career-portal-access` item in `AdminPanelSettings` (`SettingValue` = `public` \| `internal`). `readCareerPortalAccess` never throws — a missing list or a Graph failure falls back to public, which is how the portal behaved before the setting existed. |
+| Career portal access | `_utils/careerPortalAccess.ts` | Reads/writes the `career-portal-access` item in `AdminPanelSettings` (`SettingValue` = `public` \| `internal`). `readCareerPortalAccess` never throws — a missing list or a Graph failure falls back to public, which is how the portal behaved before the setting existed. **`SettingValue` must be provisioned with the admin's delegated token** (`ensureCareerPortalAccessSchema`) — see the app-only column note below. |
 | List provisioning | `_utils/provisioning.ts` | Helpers for ensuring SP list schemas exist (used by submit-form, job-apply). |
 | Logger | `_utils/logger.ts` | Sanitized logging helpers that avoid raw personal data in output. |
 
@@ -32,6 +32,7 @@
 - **CORS**: `vercel.json` restricts `Access-Control-Allow-Origin` to `https://pmw-hrform.vercel.app` for `/api/*`.
 - **Environment**: API routes run server-side in Vercel (Node.js runtime). Use `process.env` for secrets, NOT `import.meta.env.VITE_*`.
 - **Graph API**: Raw `fetch` to `graph.microsoft.com/v1.0` with client credentials flow. No SP REST SDK.
+- **App-only cannot create columns.** The client-credentials principal reads and writes list *items* fine, but `POST /sites/{id}/lists/{id}/columns` comes back `403 accessDenied`. Add columns with the signed-in admin's delegated SharePoint token instead — `ensureTextFieldViaSPRest` in `_utils/sharepointRest.ts`. This is why `ADMIN_PANEL_SETTINGS_COLUMNS` does not list `SettingValue`: `ensureListColumns` throws on the first column it cannot add, so a column named there but absent from an existing site breaks every caller, including dashboard background saves.
 
 ## Anti-Patterns
 - `console.error` in API routes — replace with proper logging.

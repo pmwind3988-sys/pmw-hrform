@@ -18,11 +18,17 @@ export const PDPA_COLUMNS: GraphColumnSpec[] = [
   { name: "RetentionUntil", displayName: "Retention Until", type: "dateTime" },
 ];
 
+/**
+ * Deliberately does NOT list `SettingValue` (the generic scalar slot used by
+ * career portal access). The app-only principal is denied column creation on
+ * this tenant, and `ensureListColumns` throws on the first column it cannot
+ * add — so naming a column here that existing sites lack would break every
+ * caller of this function, dashboard background saves included. `SettingValue`
+ * is provisioned with the admin's delegated token instead; see
+ * `ensureCareerPortalAccessSchema` in `careerPortalAccess.ts`.
+ */
 export const ADMIN_PANEL_SETTINGS_COLUMNS: GraphColumnSpec[] = [
   { name: "BackgroundId", displayName: "BackgroundId", type: "text" },
-  // Generic value slot for settings that are a single scalar (career portal
-  // access, for one). Keyed by the item's Title, same as every other setting.
-  { name: "SettingValue", displayName: "SettingValue", type: "text" },
   { name: "CustomImageUrl", displayName: "CustomImageUrl", type: "note" },
   { name: "CustomImageSource", displayName: "CustomImageSource", type: "note" },
   { name: "ImageOpacity", displayName: "ImageOpacity", type: "number" },
