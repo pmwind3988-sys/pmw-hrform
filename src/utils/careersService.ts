@@ -6,7 +6,6 @@ import type {
   CareerPortalCard,
   CareerPortalAccessSetting,
 } from "../types";
-import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -105,10 +104,18 @@ async function readApiError(response: Response, fallback: string): Promise<Error
 // ── Career portal access (visibility) ─────────────────────────────────────────
 
 /**
- * The SharePoint token the career pages send so the API can tell a signed-in
- * employee from an anonymous visitor. Resolves to "" when nobody is signed in
- * or the silent acquisition fails — a closed portal then shows the sign-in gate
- * rather than a hard error.
+ * A Microsoft Graph token the career pages send so the API can tell a signed-in
+ * employee from an anonymous visitor. Resolves to "" whenever it cannot be had,
+ * and a public portal never looks at it.
+ *
+ * Two deliberate choices here:
+ * - **Graph, not SharePoint.** Staff with no permissions on the HR SharePoint
+ *   site still have a tenant identity, and a portal limited to signed-in
+ *   accounts has to let them in.
+ * - **`acquireTokenSilent`, not `acquireAccessTokenSilentOrRedirect`.** That
+ *   helper navigates to Microsoft when the silent call fails, which would bounce
+ *   someone off a career page they were reading — including a guest on a portal
+ *   that is perfectly public. Failure here has to stay quiet.
  */
 export async function acquireCareerPortalToken(
   instance: IPublicClientApplication,
@@ -116,16 +123,9 @@ export async function acquireCareerPortalToken(
 ): Promise<string> {
   if (!account) return "";
 
-  const spSiteUrl = import.meta.env.VITE_SP_SITE_URL || "";
-  let scope: string;
   try {
-    scope = `${new URL(spSiteUrl).origin}/AllSites.Manage`;
-  } catch {
-    return "";
-  }
-
-  try {
-    return await acquireAccessTokenSilentOrRedirect(instance, { scopes: [scope], account });
+    const result = await instance.acquireTokenSilent({ scopes: ["User.Read"], account });
+    return result.accessToken;
   } catch {
     return "";
   }
@@ -196,10 +196,14 @@ export async function fetchCareersPortalData(
 
 export async function submitApplication(
   data: JobApplyRequest,
+  options: CareerPortalRequestOptions = {},
 ): Promise<ApplyResponse> {
   const response = await fetch("/api/job-apply", {
     method: "POST",
-    headers: apiHeaders(),
+    // The body's own `accessToken` is the SharePoint token the API writes with.
+    // This header is the separate Graph identity proof, which a signed-in
+    // applicant without SharePoint access can still supply.
+    headers: bearerHeaders(options.accessToken),
     body: JSON.stringify(data),
   });
 

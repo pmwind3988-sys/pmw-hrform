@@ -10,6 +10,7 @@ import {
   WarningAmberOutlined as WarningIcon,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import { useMsal } from "@azure/msal-react";
 import { useDashboard } from "../contexts/DashboardContext";
 import Header from "../components/dashboard/Header";
 import StatsRow from "../components/dashboard/StatsRow";
@@ -21,7 +22,7 @@ import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
-import { fetchCareersPortalData } from "../utils/careersService";
+import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
 import { collectPublishProfiles, collectTrainingTitles } from "../utils/submissionFilters";
 import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
@@ -93,12 +94,17 @@ function downloadCsv(csv: string, fileName: string): void {
 
 function DashboardCareerCarousel() {
   const navigate = useNavigate();
+  const { instance } = useMsal();
   const [careerPortalCards, setCareerPortalCards] = useState<CareerPortalCard[]>([]);
   const [careerPortalCardsLoading, setCareerPortalCardsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    void fetchCareersPortalData()
+    // Everyone here is signed in, but the portal may be closed to the public —
+    // without the identity token this carousel would 403 and render empty.
+    const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
+    void acquireCareerPortalToken(instance, account)
+      .then((accessToken) => fetchCareersPortalData({ accessToken }))
       .then((data) => {
         if (mounted) setCareerPortalCards(data.portalCards);
       })
@@ -112,7 +118,7 @@ function DashboardCareerCarousel() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [instance]);
 
   const handleCareerCardTarget = (card: CareerPortalCard) => {
     const targetValue = card.targetValue.trim();

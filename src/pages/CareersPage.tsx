@@ -48,6 +48,7 @@ import {
   fetchMyApplications,
   isCareerPortalPrivateError,
 } from "../utils/careersService";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
 import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGate";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
@@ -423,14 +424,20 @@ export default function CareersPage() {
         // Re-read rather than closing over the render-time object.
         const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
         const email = account?.username?.toLowerCase() || "";
-        // Also proves to the API that a signed-in employee is asking, which is
-        // what a portal closed to the public checks before returning anything.
-        const accessToken = await acquireCareerPortalToken(instance, account);
-        const myApplications = email && accessToken
-          ? fetchMyApplications(email, { accessToken }).catch(() => [] as JobAdminApplication[])
+        // Two different tokens: the Graph one proves to the API that a signed-in
+        // employee is asking (all a closed portal wants to know), the SharePoint
+        // one reads their own application history.
+        const identityToken = await acquireCareerPortalToken(instance, account);
+        const myApplications = email && account
+          ? acquireAccessTokenSilentOrRedirect(instance, {
+              scopes: [`${new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin}/AllSites.Manage`],
+              account,
+            })
+              .then((accessToken) => fetchMyApplications(email, { accessToken }))
+              .catch(() => [] as JobAdminApplication[])
           : Promise.resolve([] as JobAdminApplication[]);
         const [portalData, appData] = await Promise.all([
-          fetchCareersPortalData({ accessToken }),
+          fetchCareersPortalData({ accessToken: identityToken }),
           myApplications,
         ]);
         if (!cancelled) {

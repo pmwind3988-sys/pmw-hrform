@@ -3,7 +3,7 @@ import { logWarn } from "./logger.js";
 import { ensureAdminPanelSettingsList } from "./provisioning.js";
 import { ensureTextFieldViaSPRest } from "./sharepointRest.js";
 
-const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
+const TENANT_ID = process.env.VITE_AZURE_TENANT_ID || process.env.AZURE_TENANT_ID || "";
 const SETTINGS_LIST = "AdminPanelSettings";
 const SETTING_TITLE = "career-portal-access";
 const SETTING_VALUE_COLUMN = "SettingValue";
@@ -21,12 +21,6 @@ export interface CareerPortalAccessSetting {
  * all — must keep behaving exactly as it did.
  */
 export const DEFAULT_CAREER_PORTAL_ACCESS: CareerPortalAccessSetting = { isPublic: true };
-
-interface SharePointUser {
-  Email?: string;
-  LoginName?: string;
-  UserPrincipalName?: string;
-}
 
 /**
  * Reads the stored `SettingValue`. Anything unrecognised — including a blank
@@ -136,30 +130,45 @@ export async function writeCareerPortalAccess(
   return { isPublic, updatedBy, updatedAt };
 }
 
+/** Reads `tid` out of a JWT payload. Untrusted on its own — see below. */
+export function readTokenTenantId(token: string): string {
+  const payload = token.split(".")[1];
+  if (!payload) return "";
+  try {
+    const decoded = Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    return String((JSON.parse(decoded) as { tid?: unknown }).tid || "");
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Resolves the tenant identity behind a delegated SharePoint token. Used to
- * decide whether a career-portal caller is a signed-in employee — it answers
- * "is this somebody" only, never "is this an admin".
+ * Resolves the tenant identity behind a **Microsoft Graph** token, and answers
+ * "is this a signed-in PMW account" only — never "is this an admin".
+ *
+ * Deliberately Graph rather than SharePoint: `/_api/web/currentuser` answers 403
+ * for staff who have no permissions on the HR SharePoint site (App.tsx has a
+ * whole RestrictedAccessScreen for them), and those employees must still be
+ * able to use a portal restricted to signed-in accounts.
+ *
+ * The `tid` claim is only trustworthy because Graph validates the very same
+ * token string a line later — a payload on its own is attacker-controlled text.
+ * Both checks have to pass: right tenant, and a signature Graph accepts.
  */
-export async function resolveDelegatedUserEmail(accessToken: string): Promise<string> {
-  if (!accessToken || !SP_SITE_URL) return "";
+export async function resolveTenantIdentity(accessToken: string): Promise<string> {
+  if (!accessToken) return "";
+  if (TENANT_ID && readTokenTenantId(accessToken) !== TENANT_ID) return "";
 
   try {
-    const response = await fetch(`${SP_SITE_URL}/_api/web/currentuser?$select=Email,UserPrincipalName,LoginName`, {
-      headers: {
-        Accept: "application/json;odata=nometadata",
-        Authorization: `Bearer ${accessToken}`,
-      },
+    const response = await fetch("https://graph.microsoft.com/v1.0/me?$select=userPrincipalName,mail", {
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) return "";
 
-    const user = await response.json() as SharePointUser;
-    const email = String(user.Email || user.UserPrincipalName || "").toLowerCase();
-    if (email) return email;
-    const login = String(user.LoginName || "").toLowerCase();
-    return login.split("|").pop() || "";
+    const user = await response.json() as { userPrincipalName?: string; mail?: string };
+    return String(user.mail || user.userPrincipalName || "").toLowerCase();
   } catch (error) {
-    logWarn("api:career-portal-access", "Failed to resolve delegated user", {
+    logWarn("api:career-portal-access", "Failed to resolve tenant identity", {
       errorMessage: error instanceof Error ? error.message : String(error),
     });
     return "";

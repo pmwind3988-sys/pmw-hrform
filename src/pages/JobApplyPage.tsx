@@ -757,6 +757,11 @@ export default function JobApplyPage() {
         });
       }
 
+      // Separate from the SharePoint token above: this only proves the applicant
+      // is signed in, which is what a portal closed to the public checks. Staff
+      // with no SharePoint site access have one but not the other.
+      const identityToken = await acquireCareerPortalToken(instance, activeAccount ?? null);
+
       const result = await submitApplication({
         jobListingId: jobId,
         jobTitle: job.title,
@@ -777,7 +782,7 @@ export default function JobApplyPage() {
         pdpaNoticeVersion: PDPA_NOTICE_VERSION,
         pdpaConsentedAt: new Date().toISOString(),
         retentionUntil: getPdpaRetentionUntil(),
-      });
+      }, { accessToken: identityToken });
       setSubmissionRef(result.submissionRef);
       setSubmitted(true);
     } catch (err) {

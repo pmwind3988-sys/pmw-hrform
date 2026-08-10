@@ -1,6 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getSharePointToken } from "./_utils/graphClient.js";
-import { readCareerPortalAccess } from "./_utils/careerPortalAccess.js";
+import { readCareerPortalAccess, resolveTenantIdentity } from "./_utils/careerPortalAccess.js";
 import { logError, logInfo, logWarn } from "./_utils/logger.js";
 
 function errorMessage(error: unknown, maxLength?: number): string {
@@ -621,6 +621,14 @@ async function isHrFormsOwner(token: string, authenticatedEmail: string): Promis
   }
 }
 
+/** The caller's Microsoft Graph token, sent only to prove they are signed in. */
+function getBearerToken(headers: Record<string, string | string[] | undefined>): string {
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === "authorization")?.[1];
+  const authorization = Array.isArray(entry) ? entry[0] || "" : entry || "";
+  if (!authorization.toLowerCase().startsWith("bearer ")) return "";
+  return authorization.slice(7).trim();
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -666,18 +674,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const isPublicSubmission = !accessToken;
 
   if (isPublicSubmission) {
-    // A closed portal has no Public Respondent path: without a delegated token
-    // there is no tenant identity behind the application.
+    // A closed portal takes no anonymous applications. The applicant may still
+    // lack a SharePoint token — staff with no permissions on the HR site never
+    // get one — so the Graph identity header, not the SP token, is what decides
+    // whether they are signed in. The write itself still runs app-only below.
     try {
       const portalAccess = await readCareerPortalAccess(await getGraphToken());
       if (!portalAccess.isPublic) {
-        return res.status(403).json({
-          error: "The career portal is currently open to signed-in PMW accounts only.",
-          code: "career-portal-private",
-        });
+        const signedInEmail = await resolveTenantIdentity(getBearerToken(req.headers));
+        if (!signedInEmail) {
+          return res.status(403).json({
+            error: "The career portal is currently open to signed-in PMW accounts only.",
+            code: "career-portal-private",
+          });
+        }
       }
     } catch (e) {
-      logError("api:job-apply", "Could not obtain a token to read career portal access", e);
+      logError("api:job-apply", "Could not check career portal access", e);
       return res.status(500).json({ error: "Internal server error. Please try again." });
     }
 

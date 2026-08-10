@@ -1,7 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getListColumns, graphFieldEquals, queryListItemById, queryListItems } from "./_utils/graphClient.js";
 import { listCareerPortalCards } from "./_utils/careerPortalCards.js";
-import { readCareerPortalAccess, resolveDelegatedUserEmail } from "./_utils/careerPortalAccess.js";
+import { readCareerPortalAccess, resolveTenantIdentity } from "./_utils/careerPortalAccess.js";
 import { parseJobCustomFields } from "./_utils/jobListingFields.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -111,7 +111,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     );
 
     if (!portalAccess.isPublic) {
-      const signedInEmail = await resolveDelegatedUserEmail(getBearerToken(req.headers));
+      const signedInEmail = await resolveTenantIdentity(getBearerToken(req.headers));
       if (!signedInEmail) {
         return res.status(403).json({
           error: "The career portal is currently open to signed-in PMW accounts only.",
