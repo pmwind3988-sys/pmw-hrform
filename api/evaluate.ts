@@ -10,7 +10,14 @@ import {
 } from "./_utils/workflowEmail.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { parseValidEmailList } from "./_utils/layerRecipients.js";
+import { parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
+import {
+  resolveLayerAssignee as resolveSharedLayerAssignee,
+  type ResolvableLayer,
+} from "./_utils/resolveAssignee.js";
+import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
+import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
+import { expandDistributionList } from "./_utils/groupMembers.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -125,6 +132,103 @@ function toAbsoluteSharePointUrl(value: string): string {
     return `${new URL(SP_SITE_URL).origin}${value}`;
   } catch {
     return value;
+  }
+}
+
+/**
+ * Resolves a layer that could not be resolved at submit time and writes its
+ * actors onto the item, returning the delivery list.
+ *
+ * Only runs when the layer has no actors yet, so a layer resolved at submit
+ * time keeps exactly the people it was given — re-resolving here would let a
+ * directory edit made after submission silently redirect a live workflow.
+ *
+ * Answers null when there was nothing to do, or when resolution produced
+ * nobody: the caller then falls back to whatever is stored, and a layer with
+ * no recipients simply sends no mail rather than failing the approval that
+ * just succeeded.
+ */
+async function resolveDeferredNextLayer(params: {
+  graphToken: string;
+  responseListName: string;
+  responseItemId: string;
+  nextLayer: Record<string, unknown>;
+  item: Record<string, unknown>;
+  actedBy: string;
+  previousLayerNumber: number;
+  formTitle: string;
+}): Promise<string[] | null> {
+  const { graphToken, nextLayer, item, actedBy, previousLayerNumber } = params;
+  const layerNumber = Number(nextLayer.layerNumber);
+
+  const existing = parseValidEmailList(
+    item[`L${layerNumber}_Emails`] || item[`L${layerNumber}_Email`],
+  );
+  if (existing.length > 0) return null;
+
+  const assignee = nextLayer.assignee as { type?: string } | undefined;
+  if (!assignee?.type) return null;
+
+  try {
+    const directory = createApprovalDirectoryReader(graphToken);
+    const resolved = await resolveSharedLayerAssignee(
+      nextLayer as unknown as ResolvableLayer,
+      item,
+      {
+        lookupDepartmentApprover: (target, submittedData) =>
+          resolveDepartmentApproverFromList(
+            graphToken,
+            target.assignee as never,
+            submittedData,
+            String(target.title || `Layer ${target.layerNumber}`),
+          ),
+        expandDistributionList: (_target, address) => expandDistributionList(graphToken, address),
+        lookupPerson: directory.lookupPerson,
+        lookupRoleHolder: directory.lookupRoleHolder,
+      },
+      {
+        context: {
+          submitterEmail: String(item.SubmittedBy || ""),
+          // Whoever just acted. Falls back to the address the layer was
+          // assigned to, for the public and paper paths that close without
+          // recording an actor.
+          previousActorEmail: actedBy || String(item[`L${previousLayerNumber}_Email`] || ""),
+        },
+      },
+    );
+
+    if (resolved.error || resolved.parked || resolved.emails.length === 0) {
+      if (resolved.parked) {
+        const patch: Record<string, unknown> = {
+          [`L${layerNumber}_Status`]: "Needs Routing",
+          RoutingNotes: `Layer ${layerNumber}: ${resolved.parked.reason}`,
+        };
+        await updateListItemFields(graphToken, params.responseListName, params.responseItemId, patch)
+          .catch(() => {
+            // RoutingNotes is absent on lists provisioned before it existed.
+            // The status alone still surfaces the layer for an admin.
+            logWarn("api:evaluate", "Could not record routing note", { formTitle: params.formTitle });
+          });
+      }
+      return null;
+    }
+
+    const patch: Record<string, unknown> = {};
+    const delivery = writeLayerRecipientFields(
+      patch,
+      nextLayer as unknown as { layerNumber: number },
+      resolved.emails,
+    );
+    await updateListItemFields(graphToken, params.responseListName, params.responseItemId, patch);
+    return delivery;
+  } catch (error) {
+    // A failure here must not undo the approval that already succeeded.
+    logWarn("api:evaluate", "Late layer resolution failed", {
+      formTitle: params.formTitle,
+      layerNumber,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
 }
 
@@ -534,6 +638,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       updates[`L${layerNumber}_SignedAt`] = now;
       if (signature) updates[`L${layerNumber}_Signature`] = signature;
 
+      // Record who acted, so a later layer can route from them. The public
+      // token identifies a layer, not a person, so this is only knowable when
+      // the layer had exactly one possible actor. With several sharing a layer
+      // we cannot tell which of them clicked, and guessing would put a name
+      // against a decision they may not have made — leave it blank instead.
+      const layerActors = parseValidEmailList(
+        responseItem.fields[`L${layerNumber}_Emails`] || responseItem.fields[`L${layerNumber}_Email`],
+      );
+      if (layerActors.length === 1 && !responseItem.fields[`L${layerNumber}_ActedBy`]) {
+        updates[`L${layerNumber}_ActedBy`] = layerActors[0];
+      }
+
       // For evaluation layers: also write to EvaluationData JSON
       if (layer.type === "evaluation" && fields) {
         // Read existing EvaluationData if any
@@ -586,9 +702,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);
+      // A layer routing from the previous layer's actor was left empty at
+      // submit time, because nobody had acted yet. Now they have, so resolve it
+      // before addressing the mail.
+      const lateResolved = await resolveDeferredNextLayer({
+        graphToken,
+        responseListName,
+        responseItemId: responseItem.id,
+        nextLayer: notificationNextLayer,
+        item: responseItem.fields,
+        actedBy: String(updates[`L${layerNumber}_ActedBy`] || responseItem.fields[`L${layerNumber}_ActedBy`] || ""),
+        previousLayerNumber: layerNumber,
+        formTitle,
+      });
       // The next layer may fan out to several evaluators and/or a shared
       // mailbox; L{n}_Email holds only the primary actor.
-      const recipients = parseValidEmailList(
+      const recipients = lateResolved ?? parseValidEmailList(
         responseItem.fields[`L${nextLayerNumber}_NotifyEmails`]
         || responseItem.fields[`L${nextLayerNumber}_Email`],
       );

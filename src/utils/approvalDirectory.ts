@@ -10,7 +10,7 @@
  * missing — a directory gap parks one submission for an admin to resolve, and
  * must never be the reason a submission is lost.
  */
-import { spGet } from "./formBuilderSP";
+import { SP_FIELD_KIND, ensureColumns, ensureSpList, listExists, spGet } from "./formBuilderSP";
 import {
   APPROVAL_DIRECTORY_COLUMNS,
   APPROVAL_DIRECTORY_LIST,
@@ -34,6 +34,34 @@ const SELECT_COLUMNS = [
 
 function escapeODataString(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+/**
+ * Creates the list and its columns if they are not there yet.
+ *
+ * Must run on an admin's **delegated** token: the app-only Graph principal gets
+ * 403 accessDenied when creating columns (see the app-only note in
+ * api/AGENTS.md), which is why provisioning lives on this side and not in the
+ * serverless routes.
+ */
+export async function ensureApprovalDirectory(token: string): Promise<void> {
+  await ensureSpList(token, APPROVAL_DIRECTORY_LIST, {
+    description: "Who approves whom. One row per person; ApproverEmail carries the reporting line.",
+  });
+  await ensureColumns(token, APPROVAL_DIRECTORY_LIST, [
+    { n: APPROVAL_DIRECTORY_COLUMNS.personEmail, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.personName, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.department, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.position, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.employeeId, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.approverEmail, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.isActive, k: SP_FIELD_KIND.boolean },
+  ]);
+}
+
+/** Whether the list exists at all, for telling "not set up" from "not listed". */
+export async function approvalDirectoryExists(token: string): Promise<boolean> {
+  return listExists(token, APPROVAL_DIRECTORY_LIST);
 }
 
 async function queryDirectory(token: string, filter: string, top: number): Promise<ApprovalDirectoryRow[]> {
