@@ -17,6 +17,12 @@ import {
 import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
+import {
+  layerLabel,
+  resolveLayerAssignee as resolveSharedLayerAssignee,
+  type ResolvableLayer,
+  type ResolvedLayerActors,
+} from "./_utils/resolveAssignee.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
@@ -50,7 +56,6 @@ import {
 
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LAYER_PENDING_STATUS = "Pending";
 const FORM_SUBMITTED_STATUS = "Submitted";
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -322,10 +327,6 @@ function sanitizeRawJsonValue(value: unknown): unknown {
 function buildRawJson(value: Record<string, unknown>): string {
   const json = JSON.stringify(sanitizeRawJsonValue(value));
   return json.length > 250000 ? `${json.slice(0, 250000)}...[truncated]` : json;
-}
-
-function stripFieldReference(value: string): string {
-  return value.replace(/^\$\{/, "").replace(/\}$/, "");
 }
 
 function valueToText(value: unknown): string {
@@ -1145,70 +1146,42 @@ async function cleanupPartialSubmission(
   await cleanupUploadedFiles(token, uploadedFiles);
 }
 
-/**
- * A layer's resolved actors: every address allowed to approve/evaluate it.
- * `email` stays the primary (written to `L{n}_Email`) so existing readers and
- * the dashboard keep working unchanged; `emails` is the full any-one-of set.
- */
-interface ResolvedLayerActors {
-  email: string;
-  name: string;
-  emails: string[];
-}
-
 function toResolvedActors(email: string, name: string): ResolvedLayerActors {
   const trimmed = email.trim();
   return { email: trimmed, name, emails: trimmed ? [trimmed] : [] };
 }
 
+/**
+ * Resolves one layer's actors through the shared resolver, supplying the Graph
+ * flavoured ports. The shared function reports failures rather than throwing;
+ * a submission cannot proceed without an actor, so they are rethrown here.
+ */
 async function resolveLayerAssignee(
   token: string,
   layer: ApiLayerConfigItem,
   formBody: Record<string, unknown>,
 ): Promise<ResolvedLayerActors> {
-  const label = layer.title || `Layer ${layer.layerNumber}`;
-  if (layer.assignee.type === "department-approver") {
-    const resolved = await resolveDepartmentApproverFromList(token, layer.assignee, formBody, label);
-    return toResolvedActors(resolved.email, resolved.name);
-  }
-
-  if (layer.assignee.type === "users") {
-    const emails = parseValidEmailList(layer.assignee.value);
-    if (layer.authMode === "365" && emails.length === 0) {
-      throw new Error(`${label} needs at least one valid assignee email before the workflow can start.`);
-    }
-    return { email: emails[0] ?? "", name: "", emails };
-  }
-
-  if (layer.assignee.type === "distribution-list") {
-    const address = layer.assignee.value.trim();
-    if (!EMAIL_RE.test(address)) {
-      throw new Error(`${label} needs a valid distribution list address before the workflow can start.`);
-    }
-    const members = await expandDistributionList(token, address);
-    if (members.length === 0) {
-      if (layer.authMode === "365") {
-        throw new Error(
-          `${label}: no members could be read from the distribution list ${address}. `
-          + "Check the address and that Group.Read.All is granted to the app registration.",
-        );
-      }
-      // Public layers act through a token rather than an identity check, so the
-      // list address itself is a workable fallback for delivery.
-      return toResolvedActors(address, "");
-    }
-    return { email: members[0], name: "", emails: members };
-  }
-
-  const rawEmail =
-    layer.assignee.type === "user"
-      ? layer.assignee.value
-      : valueToText(formBody[stripFieldReference(layer.assignee.value)]);
-  const email = rawEmail.trim();
-  if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
-    throw new Error(`${label} needs a valid assignee email before the workflow can start.`);
-  }
-  return toResolvedActors(email, "");
+  const resolved = await resolveSharedLayerAssignee(
+    layer as ResolvableLayer,
+    formBody,
+    {
+      lookupDepartmentApprover: (target, submittedData) =>
+        resolveDepartmentApproverFromList(
+          token,
+          target.assignee as ApiDepartmentApproverLayerAssignee,
+          submittedData,
+          layerLabel(target),
+        ),
+      expandDistributionList: (_target, address) => expandDistributionList(token, address),
+    },
+    {
+      emptyDistributionListError: (label, address) =>
+        `${label}: no members could be read from the distribution list ${address}. `
+        + "Check the address and that Group.Read.All is granted to the app registration.",
+    },
+  );
+  if (resolved.error) throw new Error(resolved.error);
+  return { email: resolved.email, name: resolved.name, emails: resolved.emails };
 }
 
 function normalizedRoutingValue(value: unknown): string {

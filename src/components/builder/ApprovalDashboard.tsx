@@ -26,6 +26,10 @@ import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotal
 import { getSelectedCompany } from "../../utils/companySelection";
 import { buildWorkflowReviewLink } from "../../utils/workflowLink";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
+import {
+  resolveLayerAssignee as resolveSharedLayerAssignee,
+  type ResolvableLayer,
+} from "../../utils/resolveAssignee";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import {
@@ -476,10 +480,6 @@ function buildEvaluationSurveyJson(elements: Record<string, unknown>[]): Record<
   };
 }
 
-function stripFieldReference(value: string): string {
-  return value.replace(/^\$\{/, "").replace(/\}$/, "");
-}
-
 function normalizeEmailAddress(value: unknown): string {
   return valueToText(value).toLowerCase();
 }
@@ -554,84 +554,19 @@ async function resolveLayerAssigneeEmail(
   submittedData: Record<string, unknown>,
   formSlug: string,
 ): Promise<{ email: string; emails: string[]; error?: string }> {
-  const layerLabel = layer.title || `Layer ${layer.layerNumber}`;
-  if (layer.assignee.type === "department-approver") {
-    try {
-      const resolved = await resolveDepartmentApproverEmail(token, layer, submittedData);
-      return { email: resolved.email, emails: resolved.email ? [resolved.email] : [] };
-    } catch (error) {
-      return {
-        email: "",
-        emails: [],
-        error: error instanceof Error ? error.message : `${layerLabel} could not resolve the department approver.`,
-      };
-    }
-  }
-
-  if (layer.assignee.type === "users") {
-    const emails = parseValidEmailList(layer.assignee.value);
-    if (layer.authMode === "365" && emails.length === 0) {
-      return {
-        email: "",
-        emails,
-        error: `${layerLabel} needs at least one valid assignee email before the workflow can start.`,
-      };
-    }
-    return { email: emails[0] ?? "", emails };
-  }
-
-  if (layer.assignee.type === "distribution-list") {
-    const address = layer.assignee.value.trim();
-    if (!EMAIL_RE.test(address)) {
-      return {
-        email: address,
-        emails: [],
-        error: `${layerLabel} needs a valid distribution list address before the workflow can start.`,
-      };
-    }
-    try {
-      const members = await expandLayerDistributionList(formSlug, layer.layerNumber);
-      if (members.length === 0) {
-        if (layer.authMode === "365") {
-          return {
-            email: "",
-            emails: [],
-            error: `${layerLabel}: the distribution list ${address} returned no members.`,
-          };
-        }
-        return { email: address, emails: [address] };
-      }
-      return { email: members[0], emails: members };
-    } catch (error) {
-      return {
-        email: "",
-        emails: [],
-        error: error instanceof Error ? error.message : `${layerLabel} could not read the distribution list members.`,
-      };
-    }
-  }
-
-  const email = layer.assignee.type === "user"
-    ? layer.assignee.value.trim()
-    : valueToText(submittedData[stripFieldReference(layer.assignee.value)]);
-
-  if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
-    return {
-      email,
-      emails: [],
-      error: `${layerLabel} needs a valid assignee email before the workflow can start.`,
-    };
-  }
-
-  if (email && !EMAIL_RE.test(email)) {
-    return {
-      email,
-      emails: [],
-      error: `${layerLabel} resolved to "${email}", which is not a valid email address.`,
-    };
-  }
-
-  return { email, emails: email ? [email] : [] };
+  return resolveSharedLayerAssignee(
+    layer as ResolvableLayer,
+    submittedData,
+    {
+      lookupDepartmentApprover: (target, data) =>
+        resolveDepartmentApproverEmail(token, target as unknown as LayerConfigItem, data),
+      expandDistributionList: (target) => expandLayerDistributionList(formSlug, target.layerNumber),
+    },
+    // The dashboard shows what was configured even when it is unusable, and
+    // flags any resolved value that is not an address — it is the surface where
+    // an admin fixes routing, so a bad value has to be visible rather than blank.
+    { keepInvalidDistributionListAddress: true, rejectNonEmailAlways: true },
+  );
 }
 
 function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {

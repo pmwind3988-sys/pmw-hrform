@@ -35,6 +35,11 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
+import {
+  resolveLayerAssignee as resolveSharedLayerAssignee,
+  type ResolvableLayer,
+  type ResolvedLayerActors,
+} from "../utils/resolveAssignee";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -234,10 +239,6 @@ function findCompanyChoiceElement(
   return null;
 }
 
-function stripFieldReference(value: string): string {
-  return value.replace(/^\$\{/, "").replace(/\}$/, "");
-}
-
 function submittedValueToString(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value.trim();
@@ -349,18 +350,6 @@ function safePdfFileName(title: string, id: number): string {
   return `${safeTitle}_submission_${id}_manual.pdf`;
 }
 
-function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string, unknown>): string {
-  const rawEmail = layer.assignee.type === "user" || layer.assignee.type === "distribution-list"
-    ? layer.assignee.value
-    : submittedValueToString(submittedData[stripFieldReference(layer.assignee.value)]);
-  const email = rawEmail.trim();
-  if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
-    const label = layer.title || `Layer ${layer.layerNumber}`;
-    throw new Error(`${label} needs a valid assignee email before this form can be submitted.`);
-  }
-  return email;
-}
-
 function manualPaperStatusForLayer(layer: LayerConfigItem): string {
   return layer.type === "evaluation" ? "Manual Evaluation Required" : "Manual Approval Required";
 }
@@ -376,8 +365,9 @@ async function resolveDepartmentApproverEmail(
   layer: LayerConfigItem,
   submittedData: Record<string, unknown>,
 ): Promise<{ email: string; name: string }> {
+  // Only ever reached as the shared resolver's department-approver port.
   if (layer.assignee.type !== "department-approver") {
-    return { email: resolveLayerEmail(layer, submittedData), name: "" };
+    throw new Error(`Layer ${layer.layerNumber} is not a department approver layer.`);
   }
 
   const label = layer.title || `Layer ${layer.layerNumber}`;
@@ -424,63 +414,33 @@ async function resolveDepartmentApproverEmail(
 }
 
 /**
- * A layer's resolved actors. `email` is the primary written to `L{n}_Email`,
- * kept so every existing reader keeps working; `emails` is the full any-one-of
- * set written to `L{n}_Emails`.
+ * Resolves one layer's actors through the shared resolver, supplying the
+ * browser's ports: SharePoint REST for the directory, and /api/expand-group for
+ * distribution lists, which a delegated token cannot read directly. The shared
+ * function reports failures; a submission needs an actor, so they are rethrown.
  */
-interface ResolvedLayerActors {
-  email: string;
-  name: string;
-  emails: string[];
-}
-
-function toResolvedActors(email: string, name: string): ResolvedLayerActors {
-  const trimmed = email.trim();
-  return { email: trimmed, name, emails: trimmed ? [trimmed] : [] };
-}
-
 async function resolveLayerAssignee(
   layer: LayerConfigItem,
   submittedData: Record<string, unknown>,
   token: string | null,
   slug: string,
 ): Promise<ResolvedLayerActors> {
-  const label = layer.title || `Layer ${layer.layerNumber}`;
-
-  if (layer.assignee.type === "department-approver") {
-    if (!token) {
-      throw new Error("Department approver lookup needs a SharePoint token or server-side submission.");
-    }
-    const resolved = await resolveDepartmentApproverEmail(token, layer, submittedData);
-    return toResolvedActors(resolved.email, resolved.name);
-  }
-
-  if (layer.assignee.type === "users") {
-    const emails = parseValidEmailList(layer.assignee.value);
-    if (layer.authMode === "365" && emails.length === 0) {
-      throw new Error(`${label} needs at least one valid assignee email before this form can be submitted.`);
-    }
-    return { email: emails[0] ?? "", name: "", emails };
-  }
-
-  if (layer.assignee.type === "distribution-list") {
-    const address = layer.assignee.value.trim();
-    if (!EMAIL_RE.test(address)) {
-      throw new Error(`${label} needs a valid distribution list address before this form can be submitted.`);
-    }
-    const members = await expandLayerDistributionList(slug, layer.layerNumber);
-    if (members.length === 0) {
-      if (layer.authMode === "365") {
-        throw new Error(`${label}: the distribution list ${address} returned no members.`);
-      }
-      // Public layers act through a token, not an identity check, so mailing
-      // the list address itself still works.
-      return toResolvedActors(address, "");
-    }
-    return { email: members[0], name: "", emails: members };
-  }
-
-  return toResolvedActors(resolveLayerEmail(layer, submittedData), "");
+  const resolved = await resolveSharedLayerAssignee(
+    layer as ResolvableLayer,
+    submittedData,
+    {
+      lookupDepartmentApprover: (target, data) => {
+        if (!token) {
+          throw new Error("Department approver lookup needs a SharePoint token or server-side submission.");
+        }
+        return resolveDepartmentApproverEmail(token, target as unknown as LayerConfigItem, data);
+      },
+      expandDistributionList: (target) => expandLayerDistributionList(slug, target.layerNumber),
+    },
+    { blockedSuffix: "before this form can be submitted." },
+  );
+  if (resolved.error) throw new Error(resolved.error);
+  return resolved;
 }
 const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
 
