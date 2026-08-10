@@ -24,6 +24,7 @@ import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
 import { collectPublishProfiles, collectTrainingTitles } from "../utils/submissionFilters";
+import { csvCell, downloadCsv } from "../utils/csv";
 import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
 
@@ -41,12 +42,6 @@ const EXPORT_BASE_COLUMNS = [
   "Total Layers",
   "Selected Branch",
 ] as const;
-
-function csvCell(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const text = typeof value === "object" ? JSON.stringify(value) : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
 
 function buildSubmissionCsv(rows: Submission[], listMetaMap: Record<string, { category: string }>): string {
   const fieldKeys = Array.from(
@@ -80,16 +75,6 @@ function buildSubmissionCsv(rows: Submission[], listMetaMap: Record<string, { ca
   }
 
   return lines.join("\r\n");
-}
-
-function downloadCsv(csv: string, fileName: string): void {
-  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function DashboardCareerCarousel() {

@@ -19,6 +19,7 @@ import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
+import { csvRow, downloadCsv } from "../../utils/csv";
 import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
 import { getSelectedCompany } from "../../utils/companySelection";
 
@@ -257,14 +258,8 @@ export default function ResponseViewer() {
       s.FormVersion,
     ]);
 
-    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${formTitle}-submissions.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const csv = [csvRow(headers), ...rows.map(csvRow)].join("\r\n");
+    downloadCsv(csv, `${formTitle}-submissions.csv`);
   };
 
   // Filter submissions

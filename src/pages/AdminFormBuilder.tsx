@@ -1408,11 +1408,13 @@ export default function AdminFormBuilder() {
       publishKey,
       publishLabel: "New Profile",
     }));
-    setLayerConfig({ version: "1.0", layers: [] });
-    setNumLayers(0);
+    // Inherit the workflow that is already loaded. Blanking it here meant every
+    // evaluation layer's questions had to be rebuilt by hand for each profile;
+    // "Start from scratch" in the profile layer editor still clears them.
+    setNumLayers(getEffectiveLayerCount(layerConfig, numLayers));
     setProfileLayerEdit(null);
     setMode("flow");
-    showToast("New profile draft ready with fresh layers. The active profile remains unchanged.", "ok");
+    showToast("New profile draft ready, inheriting the current layers. The active profile remains unchanged.", "ok");
   };
 
   // Refresh the log the moment its disclosure on Publish is opened.
@@ -2337,7 +2339,7 @@ export default function AdminFormBuilder() {
                 />
                 <ActionRow
                   label="Publish new profile"
-                  hint="Starts a blank same-version workflow. The active profile is unchanged."
+                  hint="Copies the current workflow into a new same-version profile. The active profile is unchanged."
                   action="Create"
                   onAction={handleCreateNewProfileDraft}
                   disabled={!isEditing || publishBlocked}

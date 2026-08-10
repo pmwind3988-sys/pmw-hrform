@@ -21,7 +21,7 @@ import {
   startFreshReauthentication,
 } from "./utils/authRecovery";
 import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
-import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
+import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta, surveySnapshotKey } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
@@ -242,12 +242,19 @@ function getActiveLayerConfig(cfg: LayerConfig | null, selectedBranch: string): 
 function resolveSubmissionSurveyJson(
   listTitle: string,
   formVersion: string,
+  publishKey: string,
   surveyJsonByFormVersion?: Record<string, Record<string, SurveyJson | null>>,
 ): SurveyJson | null {
   const formVersions = surveyJsonByFormVersion?.[listTitle];
   if (!formVersions) return null;
 
-  return formVersions[formVersion] ?? Object.values(formVersions).find((surveyJson): surveyJson is SurveyJson => surveyJson !== null) ?? null;
+  // Exact profile first — two profiles on one version have different schemas.
+  // Then the version-only entry for submissions predating PublishKey, then any
+  // snapshot at all rather than rendering nothing.
+  return formVersions[surveySnapshotKey(formVersion, publishKey)]
+    ?? formVersions[formVersion]
+    ?? Object.values(formVersions).find((surveyJson): surveyJson is SurveyJson => surveyJson !== null)
+    ?? null;
 }
 
 function buildAuthLoadingSteps(activeStep: AuthLoadStep, errorStep: AuthLoadStep | null = null): LoadingStep[] {
@@ -416,7 +423,8 @@ function mapSubmission(
     ? Number(rawCurrentLayerValue) || 0
     : 0;
   const selectedBranch = resolveSelectedBranch(raw);
-  const surveyJson = resolveSubmissionSurveyJson(listTitle, formVersion, surveyJsonByFormVersion);
+  const publishKey = raw.PublishKey ? String(raw.PublishKey) : "";
+  const surveyJson = resolveSubmissionSurveyJson(listTitle, formVersion, publishKey, surveyJsonByFormVersion);
 
   const cfg = layerConfigs?.[listTitle] ?? null;
   const layersConfig = getActiveLayerConfig(cfg, selectedBranch);
@@ -570,7 +578,7 @@ function mapSubmission(
     listTitle,
     formId,
     formVersion,
-    publishKey: raw.PublishKey ? String(raw.PublishKey) : undefined,
+    publishKey: publishKey || undefined,
     referenceNo: raw[REFERENCE_NO_FIELD] ? String(raw[REFERENCE_NO_FIELD]) : undefined,
     currentLayerStatus:
       currentLayer > 0 && layerStatusValues[currentLayer - 1]
