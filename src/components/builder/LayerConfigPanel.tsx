@@ -814,14 +814,14 @@ export default function LayerConfigPanel({
           </select>
           <FieldReferenceHint field={formFields.find(field => field.name === layer.assignee.value)} />
         </>
-      ) : (
+      ) : layer.assignee.type === "department-approver" ? (
         <DepartmentLookupSettings
           assignee={layer.assignee}
           formFields={formFields}
           token={token}
           onChange={onAssigneeChange}
         />
-      )}
+      ) : null}
     </div>
   );
 

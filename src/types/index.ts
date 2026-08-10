@@ -141,12 +141,68 @@ export interface DepartmentApproverLayerAssignee {
   roleValue?: string;
 }
 
+/** Where a chain assignee starts counting from. */
+export type ChainStartFrom = "submitter" | "previous-actor" | "field";
+
+/** What to do when a chain runs out before reaching the requested hop. */
+export type ChainFallback =
+  | { mode: "department-hod" }
+  | { mode: "fixed"; email: string }
+  | { mode: "park" };
+
+/**
+ * Follows the reporting line recorded in the `Approval Directory` list, which
+ * answers "who approves this person" one row per person.
+ *
+ * This is what lets one setting cover cases that otherwise need a rule each:
+ * a clerk goes to their HOD, that HOD goes to the CFO, and the CFO goes to the
+ * CEO, all from the same layer configuration, because the answer is per person
+ * rather than per department.
+ *
+ * `startFrom: "previous-actor"` is the "evaluator's evaluator" case — it routes
+ * from whoever actually acted on the layer before, so it cannot be resolved
+ * until that layer completes.
+ */
+export interface ChainLayerAssignee {
+  type: "chain";
+  startFrom: ChainStartFrom;
+  /** The field naming the person, when `startFrom` is "field". Otherwise "". */
+  value: string;
+  /** Steps up the line. 1 = their approver, 2 = their approver's approver. */
+  hops: number;
+  /** Take another step when a hop lands on the submitter themselves. */
+  skipSelf?: boolean;
+  fallback?: ChainFallback;
+}
+
+/** Where a role-holder assignee reads its department from. */
+export type RoleHolderDepartmentSource = "fixed" | "from-submitter" | "from-field";
+
+/**
+ * Resolves to whoever holds a role in a department — "the Head of Safety",
+ * whoever submitted. This is the functional counterpart to `chain`: a safety or
+ * HR form goes to that department's head regardless of the submitter's own line.
+ *
+ * `from-submitter` reproduces `department-approver` while reading the
+ * department off the submitter's directory row instead of a form answer.
+ */
+export interface RoleHolderLayerAssignee {
+  type: "role-holder";
+  department: RoleHolderDepartmentSource;
+  /** Department name when `department` is "fixed"; field name when "from-field". */
+  value: string;
+  /** Directory role to match, e.g. "HOD". */
+  role: string;
+}
+
 export type LayerAssignee =
   | FixedUserLayerAssignee
   | MultiUserLayerAssignee
   | DistributionListLayerAssignee
   | FieldReferenceLayerAssignee
-  | DepartmentApproverLayerAssignee;
+  | DepartmentApproverLayerAssignee
+  | ChainLayerAssignee
+  | RoleHolderLayerAssignee;
 
 export interface BaseLayer {
   layerNumber: number;
