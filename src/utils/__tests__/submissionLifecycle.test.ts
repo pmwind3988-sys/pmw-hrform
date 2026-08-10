@@ -1,10 +1,49 @@
 import { describe, expect, it } from "vitest";
 import {
   LIFECYCLE_STAGES,
+  NEEDS_ROUTING_LAYER_STATUS,
   isManualPaperStatus,
+  isNeedsRoutingStatus,
   lifecycleLabel,
   resolveLifecycleStage,
 } from "../submissionLifecycle";
+
+describe("isNeedsRoutingStatus", () => {
+  it("matches the sentinel the submit paths write", () => {
+    expect(isNeedsRoutingStatus(NEEDS_ROUTING_LAYER_STATUS)).toBe(true);
+    expect(isNeedsRoutingStatus("needs routing")).toBe(true);
+    expect(isNeedsRoutingStatus("  Needs Routing  ")).toBe(true);
+  });
+
+  it("does not collide with the other statuses", () => {
+    expect(isNeedsRoutingStatus("Pending")).toBe(false);
+    expect(isNeedsRoutingStatus("Manual Approval Required")).toBe(false);
+    expect(isNeedsRoutingStatus(null)).toBe(false);
+  });
+
+  it("gives an unroutable layer its own stage, without hiding a finished form", () => {
+    expect(resolveLifecycleStage({
+      formStatus: "Submitted",
+      currentLayerStatus: NEEDS_ROUTING_LAYER_STATUS,
+    })).toBe("needs_routing");
+
+    // A completed or rejected submission stays terminal even if some earlier
+    // layer was parked along the way.
+    expect(resolveLifecycleStage({
+      formStatus: "Completed",
+      currentLayerStatus: NEEDS_ROUTING_LAYER_STATUS,
+    })).toBe("completed");
+    expect(resolveLifecycleStage({
+      formStatus: "Rejected",
+      currentLayerStatus: NEEDS_ROUTING_LAYER_STATUS,
+    })).toBe("rejected");
+  });
+
+  it("is labelled and ordered alongside the other stages", () => {
+    expect(LIFECYCLE_STAGES).toContain("needs_routing");
+    expect(lifecycleLabel("needs_routing")).toBe("Needs routing");
+  });
+});
 
 describe("isManualPaperStatus", () => {
   it("matches both manual paper sentinels case-insensitively", () => {

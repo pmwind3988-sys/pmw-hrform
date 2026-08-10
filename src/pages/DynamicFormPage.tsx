@@ -36,10 +36,14 @@ import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referen
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 import {
+  isDeferredAssignee,
   resolveLayerAssignee as resolveSharedLayerAssignee,
+  type ResolutionContext,
   type ResolvableLayer,
   type ResolvedLayerActors,
 } from "../utils/resolveAssignee";
+import { createApprovalDirectoryReader } from "../utils/approvalDirectory";
+import { NEEDS_ROUTING_LAYER_STATUS } from "../utils/submissionLifecycle";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -66,7 +70,7 @@ const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLay
 // layer could have several actors has none of them, and the submission still
 // works off L{n}_Email alone. Anchored to the L{n}_ prefix so a form field that
 // merely ends in "_Emails" is still reported as a genuine schema gap.
-const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy)$/;
+const OPTIONAL_LAYER_COLUMN_RE = /^(L\d+_(Emails|NotifyEmails|ActedBy)|RoutingNotes)$/;
 
 function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
   return (
@@ -424,7 +428,9 @@ async function resolveLayerAssignee(
   submittedData: Record<string, unknown>,
   token: string | null,
   slug: string,
+  context: ResolutionContext,
 ): Promise<ResolvedLayerActors> {
+  const directory = token ? createApprovalDirectoryReader(token) : null;
   const resolved = await resolveSharedLayerAssignee(
     layer as ResolvableLayer,
     submittedData,
@@ -436,8 +442,12 @@ async function resolveLayerAssignee(
         return resolveDepartmentApproverEmail(token, target as unknown as LayerConfigItem, data);
       },
       expandDistributionList: (target) => expandLayerDistributionList(slug, target.layerNumber),
+      // A guest has no SharePoint token to read the directory with, so chain
+      // layers park rather than resolving. That is the correct outcome: a
+      // public respondent has no identity to route from either.
+      ...(directory ? { lookupPerson: directory.lookupPerson, lookupRoleHolder: directory.lookupRoleHolder } : {}),
     },
-    { blockedSuffix: "before this form can be submitted." },
+    { blockedSuffix: "before this form can be submitted.", context },
   );
   if (resolved.error) throw new Error(resolved.error);
   return resolved;
@@ -1167,7 +1177,7 @@ export default function DynamicFormPage() {
     const cfg = formData?.formConfig;
     if (!cfg) { throw new Error("no form config"); }
     
-      let activeLayers: { email: string; name: string; emails?: string[] }[] = [];
+      let activeLayers: { email: string; name: string; emails?: string[]; parked?: { reason: string } }[] = [];
       let resolvedLayerCount = 0;
       // Someone who could not read this form from SharePoint cannot write to the
       // response list either, so submit through the public endpoint (recorded as
@@ -1272,8 +1282,16 @@ export default function DynamicFormPage() {
         resolvedLayerCount = layerConfigParsed.layers.length;
         if (!deferDepartmentApproverLookupToApi) {
           const configSlug = (cfg.Slug as string) || (cfg.slug as string) || formId || "";
+          // Matches what body.SubmittedBy is set to below; chain layers need it
+          // before the body is assembled.
+          const submitterEmail = token ? (userEmail || accounts[0]?.username || "") : "";
           for (const layer of layerConfigParsed.layers) {
-            activeLayers.push(await resolveLayerAssignee(layer, raw, token, configSlug));
+            if (isDeferredAssignee(layer.assignee)) {
+              // Routes from the previous layer's actor, who does not exist yet.
+              activeLayers.push({ email: "", name: "", emails: [] });
+              continue;
+            }
+            activeLayers.push(await resolveLayerAssignee(layer, raw, token, configSlug, { submitterEmail }));
           }
         }
       } else {
@@ -1337,6 +1355,7 @@ export default function DynamicFormPage() {
       }
 
       // Step 4: Write layer status columns
+      const routingNotes: string[] = [];
       if (layerConfigParsed?.layers?.length && !deferDepartmentApproverLookupToApi) {
         // Enhanced path — use new constants
         for (let index = 0; index < layerConfigParsed.layers.length; index++) {
@@ -1350,6 +1369,13 @@ export default function DynamicFormPage() {
             const actors = senderEmail ? [senderEmail] : [];
             writeLayerRecipientFields(body, layer, actors);
             activeLayers[index] = { email: senderEmail, name: "", emails: actors };
+          } else if (!routed?.email && activeLayers[index]?.parked) {
+            // The directory has no answer for this person yet. Keep the
+            // submission and flag the layer; losing a form over a missing
+            // directory row would be the worst possible outcome here.
+            routingNotes.push(`Layer ${layerNumber}: ${activeLayers[index].parked?.reason ?? "could not be routed"}`);
+            body[`L${layerNumber}_Status`] = NEEDS_ROUTING_LAYER_STATUS;
+            writeLayerRecipientFields(body, layer, []);
           } else {
             // A submitter routing rule names one evaluator, so it overrides the
             // layer's whole actor set rather than joining it.
@@ -1367,6 +1393,7 @@ export default function DynamicFormPage() {
             activeLayers[index] = { ...(activeLayers[index] || { name: "" }), email: routedEmail, emails: actors };
           }
         }
+        if (routingNotes.length > 0) body.RoutingNotes = routingNotes.join("\n");
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
         body.CurrentLayer = layerConfigParsed.layers[0]?.layerNumber ?? 0;
         body.CurrentApprovalLayer = body.CurrentLayer;

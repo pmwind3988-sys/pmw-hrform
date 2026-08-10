@@ -28,8 +28,10 @@ import { buildWorkflowReviewLink } from "../../utils/workflowLink";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
+  type ResolutionContext,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
+import { createApprovalDirectoryReader } from "../../utils/approvalDirectory";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import {
@@ -553,7 +555,8 @@ async function resolveLayerAssigneeEmail(
   layer: LayerConfigItem,
   submittedData: Record<string, unknown>,
   formSlug: string,
-): Promise<{ email: string; emails: string[]; error?: string }> {
+): Promise<{ email: string; emails: string[]; error?: string; parked?: { reason: string }; explanation?: string }> {
+  const directory = createApprovalDirectoryReader(token);
   return resolveSharedLayerAssignee(
     layer as ResolvableLayer,
     submittedData,
@@ -561,12 +564,39 @@ async function resolveLayerAssigneeEmail(
       lookupDepartmentApprover: (target, data) =>
         resolveDepartmentApproverEmail(token, target as unknown as LayerConfigItem, data),
       expandDistributionList: (target) => expandLayerDistributionList(formSlug, target.layerNumber),
+      lookupPerson: directory.lookupPerson,
+      lookupRoleHolder: directory.lookupRoleHolder,
     },
-    // The dashboard shows what was configured even when it is unusable, and
-    // flags any resolved value that is not an address — it is the surface where
-    // an admin fixes routing, so a bad value has to be visible rather than blank.
-    { keepInvalidDistributionListAddress: true, rejectNonEmailAlways: true },
+    {
+      // The dashboard shows what was configured even when it is unusable, and
+      // flags any resolved value that is not an address — it is the surface where
+      // an admin fixes routing, so a bad value has to be visible rather than blank.
+      keepInvalidDistributionListAddress: true,
+      rejectNonEmailAlways: true,
+      context: resolutionContextFromItem(submittedData, layer.layerNumber),
+    },
   );
+}
+
+/**
+ * Identities for chain routing, read off the stored response item.
+ *
+ * The previous layer's actor is `L{n-1}_ActedBy` where one was recorded, and
+ * `L{n-1}_Email` where it was not — public-token and paper layers historically
+ * closed without naming anybody, so the assigned address is the best available
+ * answer for those.
+ */
+function resolutionContextFromItem(
+  item: Record<string, unknown>,
+  layerNumber: number,
+): ResolutionContext {
+  const previous = layerNumber - 1;
+  return {
+    submitterEmail: valueToText(item.SubmittedBy),
+    previousActorEmail: previous >= 1
+      ? valueToText(item[`L${previous}_ActedBy`]) || valueToText(item[`L${previous}_Email`])
+      : "",
+  };
 }
 
 function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {

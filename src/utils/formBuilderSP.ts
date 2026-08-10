@@ -1805,6 +1805,11 @@ const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'WorkflowEmailSchedule', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
   { n: 'FormStatus', k: SP_FIELD_KIND.text },
+  // Why a layer could not be routed, kept on the item so whoever picks the
+  // approver can see the reason without re-deriving it from a directory that
+  // may have changed since. Forms published before this exist without it; both
+  // submit paths drop it rather than failing (OPTIONAL_LAYER_COLUMN_RE).
+  { n: 'RoutingNotes', k: SP_FIELD_KIND.note, ml: true },
 ];
 
 const RESPONSE_INDEXED_COLUMNS = [

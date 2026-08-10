@@ -18,11 +18,14 @@ import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import {
+  isDeferredAssignee,
   layerLabel,
   resolveLayerAssignee as resolveSharedLayerAssignee,
+  type ResolutionContext,
   type ResolvableLayer,
   type ResolvedLayerActors,
 } from "./_utils/resolveAssignee.js";
+import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
@@ -57,6 +60,13 @@ import {
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
 const LAYER_PENDING_STATUS = "Pending";
+/**
+ * Written when the directory has no answer for a layer. Mirrors
+ * isNeedsRoutingStatus() in src/utils/submissionLifecycle.ts — the submission
+ * is saved and flagged, never rejected, so an unlisted person cannot cost
+ * somebody their form.
+ */
+const LAYER_NEEDS_ROUTING_STATUS = "Needs Routing";
 const FORM_SUBMITTED_STATUS = "Submitted";
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MALAYSIA_UTC_OFFSET_MINUTES = 8 * 60;
@@ -885,12 +895,13 @@ async function getColumnKeyResolver(
   return (fieldName: string) => byName.get(fieldName.toLowerCase()) ?? null;
 }
 
-// Columns a list provisioned before layers could have several actors simply
-// does not have. Routing still works off L{n}_Email, so dropping these is far
+// Columns a list provisioned before a later feature simply does not have —
+// multi-actor layers, and the note explaining why a layer could not be routed.
+// Routing still works off L{n}_Email and L{n}_Status, so dropping these is far
 // better than refusing the submission over a schema gap only an admin can
-// close. Anchored to the L{n}_ prefix so a form field that merely ends in
-// "_Emails" is still reported as a genuine gap.
-const OPTIONAL_LAYER_COLUMN_RE = /^L\d+_(Emails|NotifyEmails|ActedBy)$/;
+// close. Anchored so a form field that merely ends in "_Emails" is still
+// reported as a genuine gap.
+const OPTIONAL_LAYER_COLUMN_RE = /^(L\d+_(Emails|NotifyEmails|ActedBy)|RoutingNotes)$/;
 
 function mapToExistingColumns(
   fields: Record<string, unknown>,
@@ -1153,14 +1164,20 @@ function toResolvedActors(email: string, name: string): ResolvedLayerActors {
 
 /**
  * Resolves one layer's actors through the shared resolver, supplying the Graph
- * flavoured ports. The shared function reports failures rather than throwing;
- * a submission cannot proceed without an actor, so they are rethrown here.
+ * flavoured ports.
+ *
+ * `error` means the layer is misconfigured — the submission cannot proceed, so
+ * it is rethrown. `parked` means the directory simply has no answer yet, which
+ * is an everyday state while the org chart is still being filled in: the
+ * submission is kept and the layer is flagged for an admin to route once.
  */
 async function resolveLayerAssignee(
   token: string,
   layer: ApiLayerConfigItem,
   formBody: Record<string, unknown>,
-): Promise<ResolvedLayerActors> {
+  context: ResolutionContext,
+): Promise<ResolvedLayerActors & { parkedReason?: string }> {
+  const directory = createApprovalDirectoryReader(token);
   const resolved = await resolveSharedLayerAssignee(
     layer as ResolvableLayer,
     formBody,
@@ -1173,15 +1190,23 @@ async function resolveLayerAssignee(
           layerLabel(target),
         ),
       expandDistributionList: (_target, address) => expandDistributionList(token, address),
+      lookupPerson: directory.lookupPerson,
+      lookupRoleHolder: directory.lookupRoleHolder,
     },
     {
+      context,
       emptyDistributionListError: (label, address) =>
         `${label}: no members could be read from the distribution list ${address}. `
         + "Check the address and that Group.Read.All is granted to the app registration.",
     },
   );
   if (resolved.error) throw new Error(resolved.error);
-  return { email: resolved.email, name: resolved.name, emails: resolved.emails };
+  return {
+    email: resolved.email,
+    name: resolved.name,
+    emails: resolved.emails,
+    parkedReason: resolved.parked?.reason,
+  };
 }
 
 function normalizedRoutingValue(value: unknown): string {
@@ -1271,6 +1296,12 @@ async function applyLayerConfigWorkflow(
   const layers = layerConfig?.layers ?? [];
   if (layers.length === 0) return;
 
+  // Chain routing needs an identity the form body does not carry. Public
+  // submissions record "GUEST", which the resolver treats as unusable and
+  // parks on rather than guessing.
+  const context: ResolutionContext = { submitterEmail: valueToText(formBody.SubmittedBy) };
+  const parkedReasons: string[] = [];
+
   for (const layer of layers) {
     const layerNumber = layer.layerNumber;
     const matchedRule = matchingSubmitterRule(layer, formBody);
@@ -1280,13 +1311,36 @@ async function applyLayerConfigWorkflow(
       writeLayerRecipientFields(formBody, layer, sender ? [sender] : []);
       continue;
     }
+
+    // A layer routing from the previous layer's actor cannot be resolved yet —
+    // nobody has acted. It is left empty and resolved when it becomes current.
+    if (isDeferredAssignee(layer.assignee)) {
+      formBody[`L${layerNumber}_Status`] = LAYER_PENDING_STATUS;
+      writeLayerRecipientFields(formBody, layer, []);
+      continue;
+    }
+
     const resolved = matchedRule?.action === "assign-evaluator"
       ? toResolvedActors(valueToText(matchedRule.evaluatorEmail), "")
-      : await resolveLayerAssignee(token, layer, formBody);
+      : await resolveLayerAssignee(token, layer, formBody, context);
+
+    if ("parkedReason" in resolved && resolved.parkedReason) {
+      parkedReasons.push(`Layer ${layerNumber}: ${resolved.parkedReason}`);
+      formBody[`L${layerNumber}_Status`] = LAYER_NEEDS_ROUTING_STATUS;
+      writeLayerRecipientFields(formBody, layer, []);
+      continue;
+    }
+
     formBody[`L${layerNumber}_Status`] = shouldUseManualPaperForSender(layer, resolved.email)
       ? manualPaperStatusForLayer(layer)
       : LAYER_PENDING_STATUS;
     writeLayerRecipientFields(formBody, layer, resolved.emails);
+  }
+
+  if (parkedReasons.length > 0) {
+    // Kept on the item so the admin who routes it can see why, without having
+    // to re-derive it from a directory that may have changed since.
+    formBody.RoutingNotes = parkedReasons.join("\n");
   }
   formBody.FormStatus = FORM_SUBMITTED_STATUS;
   formBody.CurrentLayer = layers[0]?.layerNumber ?? 1;
