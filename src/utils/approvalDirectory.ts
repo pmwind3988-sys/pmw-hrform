@@ -24,25 +24,50 @@ import {
   APPROVAL_DIRECTORY_COLUMNS,
   APPROVAL_DIRECTORY_LIST,
   directoryEmailKey,
+  directoryIsUsable,
+  mapDirectoryColumns,
+  missingDirectoryColumns,
   toApprovalDirectoryRow,
+  type DirectoryColumnMap,
   type ApprovalDirectoryRow,
 } from "./approvalDirectorySchema";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
 
-const SELECT_COLUMNS = [
-  "Id",
-  APPROVAL_DIRECTORY_COLUMNS.personEmail,
-  APPROVAL_DIRECTORY_COLUMNS.personName,
-  APPROVAL_DIRECTORY_COLUMNS.department,
-  APPROVAL_DIRECTORY_COLUMNS.position,
-  APPROVAL_DIRECTORY_COLUMNS.employeeId,
-  APPROVAL_DIRECTORY_COLUMNS.approverEmail,
-  APPROVAL_DIRECTORY_COLUMNS.isActive,
-].join(",");
-
 function escapeODataString(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+interface ExistingField {
+  Title?: string;
+  InternalName?: string;
+  StaticName?: string;
+  EntityPropertyName?: string;
+}
+
+/**
+ * The list's real columns, matched against the ones we look for.
+ *
+ * Resolved once per reader rather than assumed, because a column's internal
+ * name rarely equals what somebody typed, and selecting a name that does not
+ * exist fails the whole request — one mismatched column would otherwise make a
+ * correct directory look completely empty.
+ */
+export async function resolveDirectoryColumns(token: string): Promise<DirectoryColumnMap> {
+  const data = await spGet(
+    token,
+    `${listUrl()}/fields?$select=Title,InternalName,StaticName,EntityPropertyName&$top=5000`,
+  ) as { value?: ExistingField[] };
+
+  return mapDirectoryColumns((data.value ?? []).map((field) => ({
+    key: field.EntityPropertyName || field.InternalName || field.StaticName || field.Title || "",
+    aliases: [field.Title, field.InternalName, field.StaticName, field.EntityPropertyName]
+      .filter((alias): alias is string => !!alias),
+  })).filter((column) => column.key));
+}
+
+function selectFor(map: DirectoryColumnMap): string {
+  return ["Id", ...Object.values(map).filter((column): column is string => !!column)].join(",");
 }
 
 /**
@@ -151,22 +176,33 @@ function toItemBody(input: ApprovalDirectoryInput, isNew: boolean): Record<strin
   return body;
 }
 
-/** Every row, newest listing problems first is the caller's job — this sorts by name. */
-export async function loadApprovalDirectory(token: string): Promise<ApprovalDirectoryRow[]> {
-  const params = new URLSearchParams();
-  params.set("$select", SELECT_COLUMNS);
-  params.set("$top", "5000");
+export interface ApprovalDirectoryLoad {
+  rows: ApprovalDirectoryRow[];
+  /** Expected names of columns the list does not have, for the admin to add. */
+  missingColumns: string[];
+  /** False when the list lacks the columns needed to answer anything at all. */
+  usable: boolean;
+}
 
-  const data = await spGet(
-    token,
-    `${listUrl()}/items?${params.toString()}`,
-  ) as { value?: Record<string, unknown>[] };
+/**
+ * Every row, sorted by department then name.
+ *
+ * Reports missing columns rather than quietly returning nothing: a directory
+ * that looks empty because one column name is off is the single most confusing
+ * failure this feature can have.
+ */
+export async function loadApprovalDirectory(token: string): Promise<ApprovalDirectoryLoad> {
+  const map = await resolveDirectoryColumns(token);
+  const missingColumns = missingDirectoryColumns(map);
+  if (!directoryIsUsable(map)) {
+    return { rows: [], missingColumns, usable: false };
+  }
 
-  return (data.value ?? [])
-    .map((item) => ({ ...toApprovalDirectoryRow(item), id: Number(item.Id) || undefined }))
-    .sort((a, b) =>
-      a.department.localeCompare(b.department)
-      || (a.personName || a.personEmail).localeCompare(b.personName || b.personEmail));
+  const rows = (await queryDirectory(token, map, "", 5000)).sort((a, b) =>
+    a.department.localeCompare(b.department)
+    || (a.personName || a.personEmail).localeCompare(b.personName || b.personEmail));
+
+  return { rows, missingColumns, usable: true };
 }
 
 export async function createApprovalDirectoryRow(token: string, input: ApprovalDirectoryInput): Promise<void> {
@@ -189,27 +225,47 @@ export async function deleteApprovalDirectoryRow(token: string, id: number): Pro
   await spDelete(token, `${listUrl()}/items(${id})`);
 }
 
-async function queryDirectory(token: string, filter: string, top: number): Promise<ApprovalDirectoryRow[]> {
+async function queryDirectory(
+  token: string,
+  map: DirectoryColumnMap,
+  filter: string,
+  top: number,
+): Promise<ApprovalDirectoryRow[]> {
   const params = new URLSearchParams();
-  params.set("$select", SELECT_COLUMNS);
-  params.set("$filter", filter);
+  params.set("$select", selectFor(map));
+  if (filter) params.set("$filter", filter);
   params.set("$top", String(top));
 
   const data = await spGet(
     token,
-    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(APPROVAL_DIRECTORY_LIST)}')/items?${params.toString()}`,
+    `${listUrl()}/items?${params.toString()}`,
   ) as { value?: Record<string, unknown>[] };
 
-  return (data.value ?? []).map(toApprovalDirectoryRow);
+  return (data.value ?? []).map((item) => ({
+    ...toApprovalDirectoryRow(item, map),
+    id: Number(item.Id) || undefined,
+  }));
 }
 
 /**
  * One request per distinct address, cached for the life of the reader. Walking
  * a chain re-reads the same rows, since each hop's target is the next hop's
- * subject.
+ * subject. The column map is resolved once and shared by both lookups.
  */
 export function createApprovalDirectoryReader(token: string) {
   const people = new Map<string, ApprovalDirectoryRow | null>();
+  let columnsPromise: Promise<DirectoryColumnMap | null> | null = null;
+
+  /** null when the list is absent or too incomplete to answer anything. */
+  function columns(): Promise<DirectoryColumnMap | null> {
+    // A missing list is the normal state before the directory is set up, so
+    // this resolves to null rather than throwing: the layer parks with a
+    // useful message instead of the submission failing.
+    columnsPromise ??= resolveDirectoryColumns(token)
+      .then((map) => (directoryIsUsable(map) ? map : null))
+      .catch(() => null);
+    return columnsPromise;
+  }
 
   async function lookupPerson(email: string): Promise<ApprovalDirectoryRow | null> {
     const key = directoryEmailKey(email);
@@ -218,16 +274,12 @@ export function createApprovalDirectoryReader(token: string) {
     const cached = people.get(key);
     if (cached !== undefined) return cached;
 
-    // A missing list is the normal state before the directory is set up.
-    // "Nobody is listed" parks the layer with a useful message; throwing here
-    // would fail the whole submission.
-    const row = await queryDirectory(
-      token,
-      `${APPROVAL_DIRECTORY_COLUMNS.personEmail} eq '${escapeODataString(key)}'`,
-      2,
-    )
-      .then((matches) => matches.find((candidate) => candidate.isActive) ?? null)
-      .catch(() => null);
+    const map = await columns();
+    const row = map
+      ? await queryDirectory(token, map, `${map.personEmail} eq '${escapeODataString(key)}'`, 2)
+        .then((matches) => matches.find((candidate) => candidate.isActive) ?? null)
+        .catch(() => null)
+      : null;
 
     people.set(key, row);
     return row;
@@ -241,12 +293,18 @@ export function createApprovalDirectoryReader(token: string) {
     const wantedRole = role.trim();
     if (!wantedDepartment || !wantedRole) return null;
 
+    const map = await columns();
+    // Role lookup needs the two columns that describe the post, which are
+    // optional for chain routing and so may genuinely be absent.
+    if (!map?.department || !map.position) return null;
+
     try {
       const matches = await queryDirectory(
         token,
+        map,
         [
-          `${APPROVAL_DIRECTORY_COLUMNS.department} eq '${escapeODataString(wantedDepartment)}'`,
-          `${APPROVAL_DIRECTORY_COLUMNS.position} eq '${escapeODataString(wantedRole)}'`,
+          `${map.department} eq '${escapeODataString(wantedDepartment)}'`,
+          `${map.position} eq '${escapeODataString(wantedRole)}'`,
         ].join(" and "),
         2,
       );
