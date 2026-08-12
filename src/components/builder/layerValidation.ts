@@ -35,7 +35,37 @@ function validateLayer(
 
   if (layer.authMode === "365") {
     const assigneeValue = layer.assignee?.value?.trim() || "";
-    if (!assigneeValue) {
+    // The directory-driven modes are checked first: they are the two whose
+    // `value` is legitimately empty (a reporting line starting at the submitter
+    // names nobody), so the "assign somebody" check below would wrongly block
+    // publishing them.
+    if (layer.assignee.type === "chain") {
+      if (layer.assignee.startFrom === "field" && !fieldNames.has(assigneeValue)) {
+        errors.push(assigneeValue
+          ? `${label}: field "${assigneeValue}" does not exist in the form.`
+          : `${label}: choose the field naming the person to start the approval line from.`);
+      }
+      if (!Number.isInteger(layer.assignee.hops) || layer.assignee.hops < 1) {
+        errors.push(`${label}: the approval line must go up at least one step.`);
+      }
+      if (layer.assignee.startFrom === "previous-actor" && layer.layerNumber <= 1) {
+        errors.push(`${label}: there is no previous approver to start from on the first step.`);
+      }
+      warnings.push(`${label}: approvers come from the Approval Directory. Anyone missing from it parks for routing rather than failing.`);
+    } else if (layer.assignee.type === "role-holder") {
+      if (!layer.assignee.role?.trim()) {
+        errors.push(`${label}: name the role to look for, such as HOD.`);
+      }
+      if (layer.assignee.department === "fixed" && !assigneeValue) {
+        errors.push(`${label}: name the department whose head should approve.`);
+      }
+      if (layer.assignee.department === "from-field" && !fieldNames.has(assigneeValue)) {
+        errors.push(assigneeValue
+          ? `${label}: department field "${assigneeValue}" does not exist in the form.`
+          : `${label}: choose the field holding the department.`);
+      }
+      warnings.push(`${label}: the role and department must match an Approval Directory row exactly.`);
+    } else if (!assigneeValue) {
       errors.push(`${label}: assign an approver, email field, or department lookup.`);
     } else if (layer.assignee.type === "user" && !isValidLayerEmail(assigneeValue)) {
       errors.push(`${label}: static assignee must be a valid email address.`);

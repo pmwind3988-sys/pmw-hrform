@@ -49,12 +49,31 @@ export default function LayerCard({
   const [hoverDel, setHoverDel] = useState(false);
   const badge = TYPE_BADGE[layer.type] || TYPE_BADGE.approval;
   const auth = AUTH_ICON[layer.authMode] || AUTH_ICON["365"];
-  const assigneeLabel =
-    layer.assignee.type === "field-reference"
-      ? `Field: ${layer.assignee.value || "—"}`
-      : layer.assignee.type === "department-approver"
-        ? `Dept: ${layer.assignee.value || "—"} -> ${layer.assignee.roleValue || "HOD"}`
-      : layer.assignee.value || "No assignee";
+  const assigneeLabel = (() => {
+    const assignee = layer.assignee;
+    if (assignee.type === "field-reference") return `Field: ${assignee.value || "—"}`;
+    if (assignee.type === "department-approver") {
+      return `Dept: ${assignee.value || "—"} -> ${assignee.roleValue || "HOD"}`;
+    }
+    if (assignee.type === "chain") {
+      // These carry no address, so falling through to `value` would read
+      // "No assignee" on a layer that is in fact fully configured.
+      const from = assignee.startFrom === "previous-actor"
+        ? "previous approver"
+        : assignee.startFrom === "field"
+          ? assignee.value || "a field"
+          : "submitter";
+      const steps = assignee.hops > 1 ? ` +${assignee.hops}` : "";
+      return `Line: ${from}${steps}`;
+    }
+    if (assignee.type === "role-holder") {
+      const where = assignee.department === "from-submitter"
+        ? "submitter's dept"
+        : assignee.value || "—";
+      return `${assignee.role || "HOD"} of ${where}`;
+    }
+    return assignee.value || "No assignee";
+  })();
 
   return (
     <div

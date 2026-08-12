@@ -30,6 +30,8 @@ import type {
   LayerAssignee,
   DepartmentApproverLayerAssignee,
   MultiUserLayerAssignee,
+  ChainLayerAssignee,
+  RoleHolderLayerAssignee,
 } from "../../types";
 import { isLayerEmail, joinEmailList, parseEmailList } from "../../utils/layerRecipients";
 
@@ -59,6 +61,28 @@ const inp = {
   color: C.textPrimary,
   background: C.white,
   outline: "none",
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: ".04em",
+  textTransform: "uppercase",
+  color: C.textMuted,
+  marginBottom: 4,
+};
+
+/** For a setting that is valid but will not do what the admin expects. */
+const warningNoteStyle: React.CSSProperties = {
+  marginTop: 6,
+  padding: "7px 9px",
+  border: `1px solid ${C.amber}`,
+  borderRadius: 7,
+  background: C.amberPale,
+  fontSize: 10,
+  lineHeight: 1.5,
+  color: C.textPrimary,
 };
 
 const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
@@ -170,6 +194,188 @@ function toDistributionListAssignee(assignee: LayerAssignee): LayerAssignee {
 
 function toFieldReferenceAssignee(assignee: LayerAssignee): LayerAssignee {
   return { type: "field-reference", value: assignee.type === "field-reference" ? assignee.value : "" };
+}
+
+/**
+ * Editor for a reporting-line layer.
+ *
+ * Deliberately phrased as sentences rather than field labels: "hops: 2" means
+ * nothing to an HR admin, while "their approver's approver" does. The preview
+ * line underneath restates the whole setting in one sentence, so the effect is
+ * legible without knowing what any individual control does.
+ */
+function ChainAssigneeSettings({
+  assignee,
+  layerNumber,
+  formFields,
+  onChange,
+}: {
+  assignee: ChainLayerAssignee;
+  layerNumber: number;
+  formFields: LayerFieldOption[];
+  onChange: (assignee: LayerAssignee) => void;
+}) {
+  const patch = (changes: Partial<ChainLayerAssignee>) => onChange({ ...assignee, ...changes });
+  const isFirstLayer = layerNumber <= 1;
+
+  const startLabel = assignee.startFrom === "previous-actor"
+    ? "whoever approved the step before"
+    : assignee.startFrom === "field"
+      ? `the person named in "${assignee.value || "a field"}"`
+      : "the person who submitted";
+
+  const hopLabel = assignee.hops <= 1
+    ? "their approver"
+    : assignee.hops === 2
+      ? "their approver's approver"
+      : `${assignee.hops} steps up the line`;
+
+  return (
+    <>
+      <label style={fieldLabelStyle}>Start from</label>
+      <select
+        value={assignee.startFrom}
+        onChange={event => patch({ startFrom: event.target.value as ChainLayerAssignee["startFrom"] })}
+        style={{ ...inp, height: 40 }}
+      >
+        <option value="submitter">The person who submitted the form</option>
+        <option value="previous-actor">Whoever approved the previous step</option>
+        <option value="field">A person named in a form field</option>
+      </select>
+
+      {assignee.startFrom === "previous-actor" && isFirstLayer && (
+        <div style={warningNoteStyle}>
+          This is the first step, so there is no previous approver to start from. Submissions will park for
+          routing until this is changed, or the layer is moved after another one.
+        </div>
+      )}
+
+      {assignee.startFrom === "field" && (
+        <select
+          value={assignee.value}
+          onChange={event => patch({ value: event.target.value })}
+          style={{ ...inp, height: 40, marginTop: 6 }}
+        >
+          <option value="">- Select field -</option>
+          {formFields.map(field => (
+            <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>
+          ))}
+        </select>
+      )}
+
+      <label style={{ ...fieldLabelStyle, marginTop: 8 }}>Go up</label>
+      <select
+        value={String(assignee.hops)}
+        onChange={event => patch({ hops: Number(event.target.value) || 1 })}
+        style={{ ...inp, height: 40 }}
+      >
+        <option value="1">One step - their approver</option>
+        <option value="2">Two steps - their approver's approver</option>
+        <option value="3">Three steps</option>
+      </select>
+
+      <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={assignee.skipSelf !== false}
+          onChange={event => patch({ skipSelf: event.target.checked })}
+        />
+        <span style={{ fontSize: 11, color: C.textPrimary }}>
+          Skip past the submitter if the line reaches them
+        </span>
+      </label>
+
+      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, lineHeight: 1.6 }}>
+        Goes to <strong>{hopLabel}</strong>, starting from <strong>{startLabel}</strong>, using the{" "}
+        <strong>Approval Directory</strong> list — one row per person, with the column saying who approves them.
+        <br />
+        Because the answer comes from the person rather than a rule, a clerk and their head of department
+        submitting this same form are sent to different approvers automatically.
+        <br />
+        If nobody can be found, the submission is still saved and flagged <strong>Needs routing</strong>.
+      </div>
+    </>
+  );
+}
+
+/**
+ * Editor for a role-holder layer — "the Head of Safety", whoever submits.
+ * The functional counterpart to a reporting line, for forms that ignore the
+ * submitter's own chain.
+ */
+function RoleHolderSettings({
+  assignee,
+  formFields,
+  onChange,
+}: {
+  assignee: RoleHolderLayerAssignee;
+  formFields: LayerFieldOption[];
+  onChange: (assignee: LayerAssignee) => void;
+}) {
+  const patch = (changes: Partial<RoleHolderLayerAssignee>) => onChange({ ...assignee, ...changes });
+
+  return (
+    <>
+      <label style={fieldLabelStyle}>Which department</label>
+      <select
+        value={assignee.department}
+        onChange={event => patch({ department: event.target.value as RoleHolderLayerAssignee["department"] })}
+        style={{ ...inp, height: 40 }}
+      >
+        <option value="fixed">Always the same department</option>
+        <option value="from-submitter">The submitter's own department</option>
+        <option value="from-field">The department answered on the form</option>
+      </select>
+
+      {assignee.department === "fixed" && (
+        <input
+          value={assignee.value}
+          onChange={event => patch({ value: event.target.value })}
+          placeholder="Safety"
+          style={{ ...inp, marginTop: 6 }}
+        />
+      )}
+
+      {assignee.department === "from-field" && (
+        <select
+          value={assignee.value}
+          onChange={event => patch({ value: event.target.value })}
+          style={{ ...inp, height: 40, marginTop: 6 }}
+        >
+          <option value="">- Select field -</option>
+          {formFields.map(field => (
+            <option key={field.name} value={field.name}>{departmentFieldOptionLabel(field)}</option>
+          ))}
+        </select>
+      )}
+
+      <label style={{ ...fieldLabelStyle, marginTop: 8 }}>Whose role is</label>
+      <input
+        value={assignee.role}
+        onChange={event => patch({ role: event.target.value })}
+        placeholder="HOD"
+        style={inp}
+      />
+
+      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, lineHeight: 1.6 }}>
+        Matches the <strong>Approval Directory</strong> row whose department and position are these — so
+        "Safety" and "HOD" finds whoever currently heads Safety, no matter who submits.
+        <br />
+        Use this for forms that always go to one department, like a safety or HR review, rather than up the
+        submitter's own line.
+      </div>
+    </>
+  );
+}
+
+function toChainAssignee(assignee: LayerAssignee): ChainLayerAssignee {
+  if (assignee.type === "chain") return assignee;
+  return { type: "chain", startFrom: "submitter", value: "", hops: 1, skipSelf: true };
+}
+
+function toRoleHolderAssignee(assignee: LayerAssignee): RoleHolderLayerAssignee {
+  if (assignee.type === "role-holder") return assignee;
+  return { type: "role-holder", department: "fixed", value: "", role: "HOD" };
 }
 
 function toDepartmentApproverAssignee(assignee: LayerAssignee): DepartmentApproverLayerAssignee {
@@ -732,12 +938,23 @@ export default function LayerConfigPanel({
           Distribution list
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, marginBottom: 4 }}>
         <button onClick={() => onAssigneeChange(toFieldReferenceAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "field-reference")}>
           Form field email
         </button>
         <button onClick={() => onAssigneeChange(toDepartmentApproverAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "department-approver")}>
           Department HOD
+        </button>
+      </div>
+      {/* The directory-driven modes sit on their own row: they answer a
+          different question from the four above, which all name an address
+          here or read one off the submission. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
+        <button onClick={() => onAssigneeChange(toChainAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "chain")}>
+          Reporting line
+        </button>
+        <button onClick={() => onAssigneeChange(toRoleHolderAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "role-holder")}>
+          Head of department
         </button>
       </div>
 
@@ -814,6 +1031,19 @@ export default function LayerConfigPanel({
           </select>
           <FieldReferenceHint field={formFields.find(field => field.name === layer.assignee.value)} />
         </>
+      ) : layer.assignee.type === "chain" ? (
+        <ChainAssigneeSettings
+          assignee={layer.assignee}
+          layerNumber={layer.layerNumber}
+          formFields={formFields}
+          onChange={onAssigneeChange}
+        />
+      ) : layer.assignee.type === "role-holder" ? (
+        <RoleHolderSettings
+          assignee={layer.assignee}
+          formFields={formFields}
+          onChange={onAssigneeChange}
+        />
       ) : layer.assignee.type === "department-approver" ? (
         <DepartmentLookupSettings
           assignee={layer.assignee}
