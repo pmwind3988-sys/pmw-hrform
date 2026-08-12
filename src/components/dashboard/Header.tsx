@@ -13,6 +13,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import {
+  AccountTree as RoutingIcon,
   AssignmentInd as ApplicationsIcon,
   AutoAwesome as CardsIcon,
   Edit as EditIcon,
@@ -254,6 +255,12 @@ export default function Header({
                       <Typography variant="body2">Form Builder</Typography>
                     </MenuItem>
                   )}
+                  {canUseFormBuilder && (
+                    <MenuItem onClick={() => navigateFromMenu("/admin/routing", handleMainMenuClose)} sx={menuItemSx}>
+                      <RoutingIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                      <Typography variant="body2">Approval Routing</Typography>
+                    </MenuItem>
+                  )}
                   {isAdmin && (
                     <>
                       <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleMainMenuClose)} sx={menuItemSx}>
@@ -384,6 +391,12 @@ export default function Header({
                     <MenuItem onClick={() => { handleProfileClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
                       <SettingsIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                       <Typography variant="body2">Form Builder</Typography>
+                    </MenuItem>
+                  )}
+                  {canUseFormBuilder && (
+                    <MenuItem onClick={() => navigateFromMenu("/admin/routing", handleProfileClose)} sx={menuItemSx}>
+                      <RoutingIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                      <Typography variant="body2">Approval Routing</Typography>
                     </MenuItem>
                   )}
                   {isAdmin && (

@@ -283,6 +283,7 @@ const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboa
 const loadResponseViewer = () => import("./components/builder/ResponseViewer");
 const loadAdminFormBuilder = () => import("./pages/AdminFormBuilder");
 const loadAdminHomePage = () => import("./pages/AdminHomePage");
+const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadCareersPage = () => import("./pages/CareersPage");
 const loadJobApplyPage = () => import("./pages/JobApplyPage");
@@ -1378,6 +1379,18 @@ export default function App() {
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/routing"
+            element={
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                    <LazyRoute load={loadAdminRoutingPage} fallback={<LoadingScreen status="Loading approval routing..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
