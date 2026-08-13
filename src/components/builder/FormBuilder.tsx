@@ -1567,9 +1567,9 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
 }
 
 function MatrixColumnsEditor({ columns, token, onChange }: {
-  columns: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
+  columns: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
   token?: string;
-  onChange: (cols: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
+  onChange: (cols: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
 }) {
   const addCol = () => {
     const title = `Column ${columns.length + 1}`;
@@ -1788,6 +1788,11 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
             ...columns.map(c => ({ value: c.title, label: c.title }))
           ]} />
         </PropRow>
+        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.6, marginTop: -4 }}>
+          {source?.labelColumn && source.labelColumn !== source.valueColumn
+            ? <>People pick <strong>{source.labelColumn}</strong> from the list; the answer stores <strong>{source.valueColumn}</strong>. Use this when the stored answer has to be exact — an email an approval routes on — but is not what somebody would recognise.</>
+            : <>The list shows the value itself. Pick a label column to show something friendlier, such as a name, while still storing the value.</>}
+        </div>
       </>}
       {source?.list && source?.valueColumn && <>
         <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 2 }}>Filter (optional)</div>
@@ -2078,7 +2083,7 @@ function PropertyPanel({ field, allFields, onChange, onClose, token }: {
                     )}
                     {isMatrix && (
                       <MatrixColumnsEditor
-                        columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
+                        columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
                         token={token}
                         onChange={cols => onChange({ columns: cols, tableConfigColumns: cols })}
                       />

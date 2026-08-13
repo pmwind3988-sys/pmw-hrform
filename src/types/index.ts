@@ -575,11 +575,11 @@ export interface FormBuilderField {
   mustScrollToBottom?: boolean;
   dynamicmatrix?: boolean;
   matrixColumns?: string[];
-  columns?: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
+  columns?: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
   rowHeaders?: string[];
   addRowText?: string;
   // Table Input
-  tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean }; required?: boolean }[];
+  tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean }; required?: boolean }[];
   // Ranking
   rankItems?: string[];
   minItems?: number;

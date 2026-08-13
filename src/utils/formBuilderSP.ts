@@ -6,6 +6,7 @@ import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 import { SharePointHttpError } from "./sharepointClient";
 import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
 import { joinEmailList, parseValidEmailList } from "./layerRecipients";
+import { listChoiceValues, toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions";
 import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
 
 /**
@@ -671,35 +672,47 @@ async function resolveInternalName(
   }
 }
 
+/**
+ * Choices for a question sourced from a list.
+ *
+ * `labelColumn` makes the dropdown show one column while storing another —
+ * a name on screen, an email in the answer. Omitted, the result is the flat
+ * sorted list of values it has always been.
+ */
 export async function getFilteredListChoices(
   listTitle: string,
   valueColumn: string,
   token: string,
   filterColumn?: string,
   filterValue?: string,
-): Promise<string[]> {
+  labelColumn?: string,
+): Promise<ListChoiceOption[]> {
   const encoded = encodeURIComponent(listTitle);
   // Resolve display names → internal names (SP REST returns fields under internal names)
   const internalValCol = await resolveInternalName(listTitle, valueColumn, token);
   const internalFilterCol = filterColumn
     ? await resolveInternalName(listTitle, filterColumn, token)
     : undefined;
+  // A label column naming the value column would select it twice; treat that as
+  // no label, which is also what the admin means by "same as value".
+  const internalLabelCol = labelColumn && labelColumn !== valueColumn
+    ? await resolveInternalName(listTitle, labelColumn, token)
+    : undefined;
 
-  let url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${encodeURIComponent(internalValCol)}&$top=5000`;
+  const select = [internalValCol, ...(internalLabelCol ? [internalLabelCol] : [])]
+    .filter((column, index, all) => all.indexOf(column) === index)
+    .map(encodeURIComponent)
+    .join(",");
+  let url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${select}&$top=5000`;
   if (internalFilterCol && filterValue) {
     url += `&$filter=${encodeURIComponent(internalFilterCol)} eq '${encodeURIComponent(sanitizeODataValue(filterValue))}'`;
   }
   try {
     const data = await spGet(token, url) as { value?: Record<string, unknown>[] };
-    const raw = data.value || [];
-    const values = new Set<string>();
-    for (const item of raw) {
-      const v = item[internalValCol];
-      if (v != null && v !== "") {
-        values.add(String(v));
-      }
-    }
-    return Array.from(values).sort();
+    return toListChoiceOptions((data.value || []).map((item) => ({
+      value: item[internalValCol],
+      label: internalLabelCol ? item[internalLabelCol] : undefined,
+    })));
   } catch {
     return [];
   }
@@ -1902,13 +1915,16 @@ async function resolveChoiceValues(
 
   if (flSrc?.list && flSrc?.valueColumn) {
     try {
-      const choices = await getFilteredListChoices(
+      // Values only: these become a SharePoint choice column's allowed values,
+      // and that column holds what a submission stores, never the label shown
+      // beside it. The label column is deliberately not passed here.
+      const choices = listChoiceValues(await getFilteredListChoices(
         flSrc.list,
         flSrc.valueColumn,
         token,
         flSrc.filterColumn,
         flSrc.filterValue,
-      );
+      ));
       onLog(`  Source choices: ${choices.length} from "${flSrc.list}.${flSrc.valueColumn}"`, 'info');
       return choices;
     } catch {

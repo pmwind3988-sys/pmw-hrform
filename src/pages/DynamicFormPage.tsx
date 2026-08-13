@@ -955,10 +955,10 @@ export default function DynamicFormPage() {
           }
 
           // Main field spFilteredListSource
-          const fls = el.spFilteredListSource as { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string } | undefined;
+          const fls = el.spFilteredListSource as { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string } | undefined;
           if (fls?.list && fls?.valueColumn) {
             pending.push(
-              getFilteredListChoices(fls.list, fls.valueColumn, token, fls.filterColumn, fls.filterValue)
+              getFilteredListChoices(fls.list, fls.valueColumn, token, fls.filterColumn, fls.filterValue, fls.labelColumn)
                 .then((choices) => {
                   if (choices.length > 0) el.choices = choices;
                 })
@@ -980,10 +980,10 @@ export default function DynamicFormPage() {
                     .catch(() => {})
                 );
               }
-              const colFls = col.filteredListSource as { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string } | undefined;
+              const colFls = col.filteredListSource as { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string } | undefined;
               if (colFls?.list && colFls?.valueColumn) {
                 pending.push(
-                  getFilteredListChoices(colFls.list, colFls.valueColumn, token, colFls.filterColumn, colFls.filterValue)
+                  getFilteredListChoices(colFls.list, colFls.valueColumn, token, colFls.filterColumn, colFls.filterValue, colFls.labelColumn)
                     .then((choices) => {
                       if (choices.length > 0) col.choices = choices;
                     })

@@ -1,5 +1,6 @@
 import { createHash, createSign, randomUUID, X509Certificate } from "node:crypto";
 import forge from "node-forge";
+import { toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions.js";
 
 // Microsoft Graph client for serverless API (Sites.Selected compatible)
 // Uses client credentials flow with Graph API scope
@@ -702,13 +703,21 @@ async function resolveColumnName(
  * Fetch distinct values from a list column items via Graph API.
  * Equivalent to the client-side `getFilteredListChoices`.
  */
+/**
+ * Choices for a list-sourced question, over Graph.
+ *
+ * This is the path a signed-out respondent takes, so it must build the same
+ * dropdown as the browser's getFilteredListChoices — hence the shared
+ * toListChoiceOptions rather than a second copy of the rules.
+ */
 export async function getListColumnValues(
   token: string,
   listDisplayName: string,
   valueColumn: string,
   filterColumn?: string,
-  filterValue?: string
-): Promise<string[]> {
+  filterValue?: string,
+  labelColumn?: string
+): Promise<ListChoiceOption[]> {
   const siteId = await getSiteId(token);
   const listId = await getListId(token, listDisplayName);
 
@@ -717,8 +726,14 @@ export async function getListColumnValues(
   const internalFilterCol = filterColumn
     ? await resolveColumnName(token, listDisplayName, filterColumn)
     : undefined;
+  const internalLabelCol = labelColumn && labelColumn !== valueColumn
+    ? await resolveColumnName(token, listDisplayName, labelColumn)
+    : undefined;
 
-  const expand = encodeURIComponent(`fields($select=${internalValueCol})`);
+  const selected = [internalValueCol, ...(internalLabelCol ? [internalLabelCol] : [])]
+    .filter((column, index, all) => all.indexOf(column) === index)
+    .join(",");
+  const expand = encodeURIComponent(`fields($select=${selected})`);
   let filter = "";
   if (internalFilterCol && filterValue) {
     // Sanitize filter value — strip characters that could break Graph $filter syntax
@@ -730,12 +745,10 @@ export async function getListColumnValues(
     `/sites/${siteId}/lists/${listId}/items?$expand=${expand}&$top=5000${filter}`
   )) as { value: Array<{ fields?: Record<string, unknown> }> };
 
-  const values = new Set<string>();
-  for (const item of data.value || []) {
-    const v = item.fields?.[internalValueCol];
-    if (v != null && v !== "") values.add(String(v));
-  }
-  return Array.from(values).sort();
+  return toListChoiceOptions((data.value || []).map((item) => ({
+    value: item.fields?.[internalValueCol],
+    label: internalLabelCol ? item.fields?.[internalLabelCol] : undefined,
+  })));
 }
 
 export async function updateListItemFields(

@@ -1277,8 +1277,8 @@ export default function ApprovalDashboard() {
           surveyContentForPreview = isRecord(surveyContent)
             ? await enrichSurveyJsonChoices(surveyContent, {
               getSharePointChoices: (list, column) => getSharePointChoices(list, column, token),
-              getFilteredListChoices: (list, valueColumn, filterColumn, filterValue) =>
-                getFilteredListChoices(list, valueColumn, token, filterColumn, filterValue),
+              getFilteredListChoices: (list, valueColumn, filterColumn, filterValue, labelColumn) =>
+                getFilteredListChoices(list, valueColumn, token, filterColumn, filterValue, labelColumn),
             })
             : surveyContent;
           setSurveyJson(surveyContentForPreview);
