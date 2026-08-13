@@ -69,7 +69,13 @@ import {
   updateApprovalDirectoryRow,
   type ApprovalDirectoryInput,
 } from "../utils/approvalDirectory";
-import { APPROVAL_DIRECTORY_LIST, directoryEmailKey, type ApprovalDirectoryRow } from "../utils/approvalDirectorySchema";
+import {
+  APPROVAL_DIRECTORY_COLUMNS,
+  APPROVAL_DIRECTORY_LIST,
+  directoryEmailKey,
+  type ApprovalDirectoryRow,
+  type DirectoryColumnMap,
+} from "../utils/approvalDirectorySchema";
 import { findDirectoryProblems, traceApprovalChain } from "../utils/approvalDirectoryHealth";
 import ChainTraceView from "../components/routing/ChainTraceView";
 import DirectoryPersonDialog from "../components/routing/DirectoryPersonDialog";
@@ -79,6 +85,18 @@ type RoutingTab = "people" | "trace" | "health";
 type SnackbarState = { message: string; severity: "success" | "error" } | null;
 
 const ALL_DEPARTMENTS = "__all__";
+
+/**
+ * What is actually lost while a column is missing, so the warning says
+ * something the admin can weigh instead of just naming a column.
+ */
+const MISSING_COLUMN_EFFECT: Record<string, string> = {
+  [APPROVAL_DIRECTORY_COLUMNS.personName]: "the table and form dropdowns show email addresses instead of names",
+  [APPROVAL_DIRECTORY_COLUMNS.department]: 'forms set to "Head of department" have nothing to match on',
+  [APPROVAL_DIRECTORY_COLUMNS.position]: 'forms set to "Head of department" cannot tell who holds the post',
+  [APPROVAL_DIRECTORY_COLUMNS.employeeId]: "staff numbers are not kept; nothing routes on them",
+  [APPROVAL_DIRECTORY_COLUMNS.isActive]: "somebody who has left can only be removed, not switched off",
+};
 
 /** Anything the page could not do, said in words an admin can act on. */
 function errorMessage(error: unknown, fallback: string): string {
@@ -99,6 +117,10 @@ export default function AdminRoutingPage() {
   const [loadError, setLoadError] = useState("");
   const [rows, setRows] = useState<ApprovalDirectoryRow[]>([]);
   const [listExists, setListExists] = useState(true);
+  // Writes are addressed to the columns the list really has, not the names in
+  // the schema — a column made by hand as "EmployeeID" would otherwise reject
+  // every save. Null until the first successful read.
+  const [columns, setColumns] = useState<DirectoryColumnMap | null>(null);
   const [missingColumns, setMissingColumns] = useState<string[]>([]);
   const [usable, setUsable] = useState(true);
   const [provisioning, setProvisioning] = useState(false);
@@ -157,6 +179,7 @@ export default function AdminRoutingPage() {
       setListExists(true);
       const result = await loadApprovalDirectory(activeToken);
       setRows(result.rows);
+      setColumns(result.columns);
       setMissingColumns(result.missingColumns);
       setUsable(result.usable);
     } catch (error) {
@@ -216,11 +239,11 @@ export default function AdminRoutingPage() {
   };
 
   const handleSave = async (input: ApprovalDirectoryInput, id?: number) => {
-    if (!token) return;
+    if (!token || !columns) return;
     setSaving(true);
     try {
-      if (id === undefined) await createApprovalDirectoryRow(token, input);
-      else await updateApprovalDirectoryRow(token, id, input);
+      if (id === undefined) await createApprovalDirectoryRow(token, input, columns);
+      else await updateApprovalDirectoryRow(token, id, input, columns);
       setEditorOpen(false);
       setSnackbar({ message: id === undefined ? "Person added." : "Changes saved.", severity: "success" });
       await load(token);
@@ -252,7 +275,7 @@ export default function AdminRoutingPage() {
    * rollback the admin cannot see into.
    */
   const handleImport = async (plan: DirectoryImportPlan) => {
-    if (!token) return;
+    if (!token || !columns) return;
     const pending = plan.rows.filter((row) => row.action === "create" || row.action === "update");
     setImporting(true);
     setImportProgress({ done: 0, total: pending.length, failures: [] });
@@ -261,8 +284,10 @@ export default function AdminRoutingPage() {
     let done = 0;
     for (const row of pending) {
       try {
-        if (row.action === "create") await createApprovalDirectoryRow(token, row.input);
-        else if (row.existingId !== undefined) await updateApprovalDirectoryRow(token, row.existingId, row.input);
+        if (row.action === "create") await createApprovalDirectoryRow(token, row.input, columns);
+        else if (row.existingId !== undefined) {
+          await updateApprovalDirectoryRow(token, row.existingId, row.input, columns);
+        }
         done++;
       } catch (error) {
         failures.push(`Line ${row.line} (${row.input.personEmail}): ${errorMessage(error, "could not be saved.")}`);
@@ -388,8 +413,21 @@ export default function AdminRoutingPage() {
                   </Button>
                 )}
               >
-                Reporting lines work, but <strong>{missingColumns.join(", ")}</strong> {missingColumns.length === 1 ? "is" : "are"} missing.
-                Without Department and Position, forms set to "Head of department" have nothing to match on.
+                <AlertTitle>
+                  {missingColumns.length === 1
+                    ? "One column is missing"
+                    : `${missingColumns.length} columns are missing`}
+                </AlertTitle>
+                Reporting lines work, and people can still be added — the fields below are simply left out until
+                the columns exist on "{APPROVAL_DIRECTORY_LIST}".
+                <Box component="ul" sx={{ m: "0.5rem 0 0", pl: 2.5 }}>
+                  {missingColumns.map((column) => (
+                    <li key={column}>
+                      <strong>{column}</strong>
+                      {MISSING_COLUMN_EFFECT[column] ? ` — ${MISSING_COLUMN_EFFECT[column]}` : ""}
+                    </li>
+                  ))}
+                </Box>
               </Alert>
             )}
 
@@ -649,6 +687,7 @@ export default function AdminRoutingPage() {
         open={editorOpen}
         editing={editing}
         rows={rows}
+        columns={columns}
         saving={saving}
         onClose={() => setEditorOpen(false)}
         onSave={(input, id) => void handleSave(input, id)}

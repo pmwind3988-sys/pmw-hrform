@@ -29,7 +29,11 @@ import {
   validateApprovalDirectoryInput,
   type ApprovalDirectoryInput,
 } from "../../utils/approvalDirectory";
-import { directoryEmailKey, type ApprovalDirectoryRow } from "../../utils/approvalDirectorySchema";
+import {
+  directoryEmailKey,
+  type ApprovalDirectoryRow,
+  type DirectoryColumnMap,
+} from "../../utils/approvalDirectorySchema";
 import ChainTraceView from "./ChainTraceView";
 
 interface DirectoryPersonDialogProps {
@@ -37,6 +41,12 @@ interface DirectoryPersonDialogProps {
   /** The row being edited, or null when adding somebody new. */
   editing: ApprovalDirectoryRow | null;
   rows: ApprovalDirectoryRow[];
+  /**
+   * Which fields the list can actually hold. A field with no column is hidden
+   * rather than shown and silently dropped on save. Null before the first read,
+   * which shows everything.
+   */
+  columns: DirectoryColumnMap | null;
   saving: boolean;
   onClose: () => void;
   onSave: (input: ApprovalDirectoryInput, id?: number) => void;
@@ -54,6 +64,7 @@ export default function DirectoryPersonDialog({
   open,
   editing,
   rows,
+  columns,
   saving,
   onClose,
   onSave,
@@ -109,6 +120,9 @@ export default function DirectoryPersonDialog({
     return traceApprovalChain(merged, input.personEmail);
   }, [input, rows, editing]);
 
+  /** Whether the list has somewhere to put this field at all. */
+  const has = (key: keyof DirectoryColumnMap): boolean => !columns || !!columns[key];
+
   const field = (
     label: string,
     key: keyof ApprovalDirectoryInput,
@@ -150,23 +164,27 @@ export default function DirectoryPersonDialog({
             // at it, so it is fixed once saved.
             disabled={!!editing}
           />
-          {field("Full name", "personName")}
+          {has("personName") && field("Full name", "personName")}
 
-          <Stack direction={{ xs: "column", sm: "row" }} sx={{ gap: 2 }}>
-            <Autocomplete
-              freeSolo
-              options={departments}
-              value={input.department}
-              onInputChange={(_, value) => setInput((prev) => ({ ...prev, department: value }))}
-              fullWidth
-              renderInput={(params) => (
-                <TextField {...params} label="Department" size="small" helperText={HELP.department} />
+          {(has("department") || has("position")) && (
+            <Stack direction={{ xs: "column", sm: "row" }} sx={{ gap: 2 }}>
+              {has("department") && (
+                <Autocomplete
+                  freeSolo
+                  options={departments}
+                  value={input.department}
+                  onInputChange={(_, value) => setInput((prev) => ({ ...prev, department: value }))}
+                  fullWidth
+                  renderInput={(params) => (
+                    <TextField {...params} label="Department" size="small" helperText={HELP.department} />
+                  )}
+                />
               )}
-            />
-            {field("Position", "position")}
-          </Stack>
+              {has("position") && field("Position", "position")}
+            </Stack>
+          )}
 
-          {field("Employee ID", "employeeId")}
+          {has("employeeId") && field("Employee ID", "employeeId")}
 
           <Autocomplete
             freeSolo
@@ -179,21 +197,23 @@ export default function DirectoryPersonDialog({
             )}
           />
 
-          <FormControlLabel
-            control={(
-              <Switch
-                checked={input.isActive}
-                onChange={(event) => setInput((prev) => ({ ...prev, isActive: event.target.checked }))}
-              />
-            )}
-            label={(
-              <Typography sx={{ fontSize: "0.85rem" }}>
-                {input.isActive
-                  ? "Active — submissions can route to and from this person"
-                  : "Switched off — kept for history, but nothing new routes here"}
-              </Typography>
-            )}
-          />
+          {has("isActive") && (
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={input.isActive}
+                  onChange={(event) => setInput((prev) => ({ ...prev, isActive: event.target.checked }))}
+                />
+              )}
+              label={(
+                <Typography sx={{ fontSize: "0.85rem" }}>
+                  {input.isActive
+                    ? "Active — submissions can route to and from this person"
+                    : "Switched off — kept for history, but nothing new routes here"}
+                </Typography>
+              )}
+            />
+          )}
 
           {preview && (
             <Box sx={{ p: 1.5, borderRadius: "12px", border: `1px solid ${editorial.border}`, backgroundColor: editorial.paperSoft }}>

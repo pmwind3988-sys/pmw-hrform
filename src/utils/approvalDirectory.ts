@@ -23,6 +23,7 @@ import {
 import {
   APPROVAL_DIRECTORY_COLUMNS,
   APPROVAL_DIRECTORY_LIST,
+  REQUIRED_DIRECTORY_FIELDS,
   directoryEmailKey,
   directoryIsUsable,
   mapDirectoryColumns,
@@ -160,16 +161,47 @@ export function validateApprovalDirectoryInput(
   return problems;
 }
 
-function toItemBody(input: ApprovalDirectoryInput, isNew: boolean): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    [APPROVAL_DIRECTORY_COLUMNS.personEmail]: input.personEmail.trim().toLowerCase(),
-    [APPROVAL_DIRECTORY_COLUMNS.personName]: input.personName.trim(),
-    [APPROVAL_DIRECTORY_COLUMNS.department]: input.department.trim(),
-    [APPROVAL_DIRECTORY_COLUMNS.position]: input.position.trim(),
-    [APPROVAL_DIRECTORY_COLUMNS.employeeId]: input.employeeId.trim(),
-    [APPROVAL_DIRECTORY_COLUMNS.approverEmail]: input.approverEmail.trim().toLowerCase(),
-    [APPROVAL_DIRECTORY_COLUMNS.isActive]: input.isActive,
+/**
+ * The item body for a write, addressed to the columns the list actually has.
+ *
+ * Reads have always gone through the resolved column map; writes used the
+ * canonical spellings, and the two disagree the moment a column was made by
+ * hand. A list whose column is `EmployeeID` rather than `EmployeeId` reads
+ * perfectly — the map is case-insensitive — and then fails every single save
+ * with SharePoint's "property does not exist on type", because one unknown
+ * property rejects the whole request rather than being ignored.
+ *
+ * A field with no column at all is left out, so a list missing `EmployeeId`
+ * saves the six fields it can hold instead of refusing the row.
+ */
+export function directoryItemBody(
+  input: ApprovalDirectoryInput,
+  isNew: boolean,
+  map: DirectoryColumnMap,
+): Record<string, unknown> {
+  const missing = REQUIRED_DIRECTORY_FIELDS
+    .filter((field) => !map[field])
+    .map((field) => APPROVAL_DIRECTORY_COLUMNS[field]);
+  if (missing.length > 0) {
+    throw new Error(
+      `"${APPROVAL_DIRECTORY_LIST}" has no ${missing.join(" or ")} column, so there is nowhere to store who approves whom. Add the missing columns first.`,
+    );
+  }
+
+  const body: Record<string, unknown> = {};
+  const put = (field: keyof DirectoryColumnMap, value: unknown): void => {
+    const column = map[field];
+    if (column) body[column] = value;
   };
+
+  put("personEmail", input.personEmail.trim().toLowerCase());
+  put("personName", input.personName.trim());
+  put("department", input.department.trim());
+  put("position", input.position.trim());
+  put("employeeId", input.employeeId.trim());
+  put("approverEmail", input.approverEmail.trim().toLowerCase());
+  put("isActive", input.isActive);
+
   // A generic SharePoint list still requires Title; mirror the person into it
   // on create only, so a hand-maintained title survives later edits.
   if (isNew) body.Title = input.personName.trim() || input.personEmail.trim();
@@ -178,6 +210,11 @@ function toItemBody(input: ApprovalDirectoryInput, isNew: boolean): Record<strin
 
 export interface ApprovalDirectoryLoad {
   rows: ApprovalDirectoryRow[];
+  /**
+   * Which real column backs each field. Writes need this as much as reads do —
+   * see `directoryItemBody` — so it is handed back rather than resolved twice.
+   */
+  columns: DirectoryColumnMap;
   /** Expected names of columns the list does not have, for the admin to add. */
   missingColumns: string[];
   /** False when the list lacks the columns needed to answer anything at all. */
@@ -195,26 +232,31 @@ export async function loadApprovalDirectory(token: string): Promise<ApprovalDire
   const map = await resolveDirectoryColumns(token);
   const missingColumns = missingDirectoryColumns(map);
   if (!directoryIsUsable(map)) {
-    return { rows: [], missingColumns, usable: false };
+    return { rows: [], columns: map, missingColumns, usable: false };
   }
 
   const rows = (await queryDirectory(token, map, "", 5000)).sort((a, b) =>
     a.department.localeCompare(b.department)
     || (a.personName || a.personEmail).localeCompare(b.personName || b.personEmail));
 
-  return { rows, missingColumns, usable: true };
+  return { rows, columns: map, missingColumns, usable: true };
 }
 
-export async function createApprovalDirectoryRow(token: string, input: ApprovalDirectoryInput): Promise<void> {
-  await spPost(token, `${listUrl()}/items`, toItemBody(input, true));
+export async function createApprovalDirectoryRow(
+  token: string,
+  input: ApprovalDirectoryInput,
+  columns: DirectoryColumnMap,
+): Promise<void> {
+  await spPost(token, `${listUrl()}/items`, directoryItemBody(input, true, columns));
 }
 
 export async function updateApprovalDirectoryRow(
   token: string,
   id: number,
   input: ApprovalDirectoryInput,
+  columns: DirectoryColumnMap,
 ): Promise<void> {
-  await spPatch(token, `${listUrl()}/items(${id})`, toItemBody(input, false));
+  await spPatch(token, `${listUrl()}/items(${id})`, directoryItemBody(input, false, columns));
 }
 
 /**
