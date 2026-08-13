@@ -292,6 +292,8 @@ const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
 const loadAdminJobsPage = () => import("./pages/AdminJobsPage");
 const loadAdminJobManagePage = () => import("./pages/AdminJobManagePage");
 const loadAdminCareerPortalCardsPage = () => import("./pages/AdminCareerPortalCardsPage");
+const loadLearningMaterialsPage = () => import("./pages/LearningMaterialsPage");
+const loadAdminLearningPage = () => import("./pages/AdminLearningPage");
 
 function isPublicRoutePath(pathname: string): boolean {
   return (
@@ -1479,6 +1481,31 @@ export default function App() {
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadAdminCareerPortalCardsPage} fallback={<LoadingScreen status="Loading cards..." />} />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          {/* The learning hub is for every signed-in employee, so it carries no
+              AdminGuard — the API still requires a Microsoft 365 identity, and
+              managing the content is gated separately below. */}
+          <Route
+            path="/learning"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  <LazyRoute load={loadLearningMaterialsPage} fallback={<LoadingScreen status="Loading learning materials..." />} />
+                </Box>
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/admin/learning"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                    <LazyRoute load={loadAdminLearningPage} fallback={<LoadingScreen status="Loading library manager..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>

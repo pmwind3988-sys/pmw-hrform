@@ -18,7 +18,9 @@ import {
   AutoAwesome as CardsIcon,
   Edit as EditIcon,
   Person as PersonIcon,
+  LibraryBooksOutlined as LearningIcon,
   Logout as LogoutIcon,
+  School as SchoolIcon,
   Settings as SettingsIcon,
   WorkOutlined as WorkIcon,
   Menu as MenuIcon,
@@ -239,10 +241,14 @@ export default function Header({
 
               <Divider sx={{ my: 0.5 }} />
 
-              {/* 3. Career portal */}
+              {/* 3. Career portal + learning hub */}
               <MenuItem onClick={() => { handleMainMenuClose(); navigate("/career-portal"); }} sx={menuItemSx}>
                 <WorkIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                 <Typography variant="body2">Internal Hiring Portal</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => navigateFromMenu("/learning", handleMainMenuClose)} sx={menuItemSx}>
+                <SchoolIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                <Typography variant="body2">Learning Materials</Typography>
               </MenuItem>
 
               {/* 4. Privileged items */}
@@ -274,6 +280,10 @@ export default function Header({
                       <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleMainMenuClose)} sx={menuItemSx}>
                         <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
                         <Typography variant="body2">Manage Cards</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/learning", handleMainMenuClose)} sx={menuItemSx}>
+                        <LearningIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                        <Typography variant="body2">Manage Learning Materials</Typography>
                       </MenuItem>
                       <MenuItem onClick={() => openCareerPortalAccess(handleMainMenuClose)} sx={menuItemSx}>
                         <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />
@@ -335,6 +345,36 @@ export default function Header({
               }}
             >
               Career Portal
+            </Button>
+
+            <Button
+              size="small"
+              startIcon={<SchoolIcon sx={{ fontSize: 18 }} />}
+              onClick={() => navigate("/learning")}
+              sx={{
+                height: 34,
+                px: 1.5,
+                borderRadius: "8px",
+                backgroundColor: editorial.white,
+                border: `1px solid ${editorial.pmwPurpleSoft}`,
+                color: editorial.pmwPurpleDark,
+                fontSize: "0.75rem",
+                fontWeight: 800,
+                letterSpacing: 0,
+                lineHeight: 1,
+                minWidth: 0,
+                textTransform: "none",
+                whiteSpace: "nowrap",
+                "& .MuiButton-startIcon": {
+                  mr: 0.75,
+                },
+                "&:hover": {
+                  backgroundColor: editorial.purpleWash,
+                  borderColor: editorial.pmwPurple,
+                },
+              }}
+            >
+              Learning
             </Button>
 
             <RoleBadge isAdmin={isAdmin} />
@@ -412,6 +452,10 @@ export default function Header({
                       <MenuItem onClick={() => navigateFromMenu("/admin/career/cards", handleProfileClose)} sx={menuItemSx}>
                         <CardsIcon sx={menuIconSx(editorial.pmwPurple)} />
                         <Typography variant="body2">Manage Cards</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/learning", handleProfileClose)} sx={menuItemSx}>
+                        <LearningIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                        <Typography variant="body2">Manage Learning Materials</Typography>
                       </MenuItem>
                       <MenuItem onClick={() => openCareerPortalAccess(handleProfileClose)} sx={menuItemSx}>
                         <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />
