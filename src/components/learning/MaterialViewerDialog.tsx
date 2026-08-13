@@ -60,6 +60,12 @@ export default function MaterialViewerDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  /**
+   * The material whose `<video>` refused to play, so the reload asks for
+   * SharePoint's player instead. Holding the id rather than a flag means moving
+   * to another material starts fresh without a reset.
+   */
+  const [embedFallbackId, setEmbedFallbackId] = useState("");
   const recordedRef = useRef<Set<string>>(new Set());
   const watchedSecondsRef = useRef(0);
   const materialId = material?.id ?? "";
@@ -79,13 +85,18 @@ export default function MaterialViewerDialog({
 
     async function load() {
       try {
-        const opened = await openLearningMaterial(materialId, accessToken);
+        const opened = await openLearningMaterial(
+          materialId,
+          accessToken,
+          embedFallbackId === materialId,
+        );
         if (cancelled) return;
         setResult(opened);
 
         // A document or an image is on screen the moment it opens, so that is
         // the view. A video has only started buffering — see the timer below.
-        if (!isVideo) void markViewed();
+        // An embedded player gives us no timer at all, so opening has to count.
+        if (!isVideo || opened.mode === "embed") void markViewed();
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "This material could not be opened.");
@@ -99,7 +110,7 @@ export default function MaterialViewerDialog({
     return () => {
       cancelled = true;
     };
-  }, [materialId, accessToken]);
+  }, [materialId, accessToken, embedFallbackId]);
 
   async function markViewed() {
     if (!materialId || recordedRef.current.has(materialId)) return;
@@ -311,6 +322,10 @@ export default function MaterialViewerDialog({
                 controlsList={material.downloadable ? undefined : "nodownload noplaybackrate"}
                 disablePictureInPicture={!material.downloadable}
                 onTimeUpdate={handleTimeUpdate}
+                // Nothing here distinguishes "wrong codec" from "blocked
+                // source" — either way this browser is not going to play the
+                // file, and SharePoint's own player is the answer to both.
+                onError={() => setEmbedFallbackId(material.id)}
                 sx={{
                   width: "100%",
                   maxHeight: fullScreen ? "70vh" : "78vh",

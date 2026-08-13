@@ -351,7 +351,11 @@ async function handleLearnerAction(
     const settings = await readLearningSettings(token);
     const downloadable = settings.materials[materialId]?.downloadable === true;
 
-    if (isMediaKind(kind)) {
+    // The viewer asks for the embed after a `<video>` has failed on it, so a
+    // container this browser cannot decode still plays through SharePoint.
+    const preferEmbed = req.body?.preferEmbed === true;
+
+    if (isMediaKind(kind) && !preferEmbed) {
       const url = await readDownloadUrl(token, materialId);
       if (url) {
         return res.status(200).json({

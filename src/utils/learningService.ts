@@ -103,13 +103,19 @@ export async function fetchLearningLibrary(accessToken: string): Promise<Learnin
   };
 }
 
+/**
+ * `preferEmbed` asks for SharePoint's own viewer instead of the raw bytes. The
+ * dialog sets it after a `<video>` has failed, which is the only reliable signal
+ * that this browser cannot decode the container someone uploaded.
+ */
 export function openLearningMaterial(
   materialId: string,
   accessToken: string,
+  preferEmbed = false,
 ): Promise<LearningMaterialOpenResult> {
   return postAction<LearningMaterialOpenResult>(
     "open-material",
-    { materialId },
+    { materialId, preferEmbed },
     accessToken,
     "Failed to open this material",
   );
