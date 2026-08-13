@@ -23,12 +23,18 @@ import { LIFECYCLE_STAGES, lifecycleLabel, resolveLifecycleStage } from "../../u
 import type { LifecycleStage } from "../../utils/submissionLifecycle";
 import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
+import {
+  isRecord,
+  previousStepFor,
+  resolutionContextFromItem,
+  valueToText,
+  type PreviousStep,
+} from "./workflowChainContext";
 import { getSelectedCompany } from "../../utils/companySelection";
 import { buildWorkflowReviewLink } from "../../utils/workflowLink";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
-  type ResolutionContext,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
 import { createApprovalDirectoryReader } from "../../utils/approvalDirectory";
@@ -337,10 +343,6 @@ function isManualPaperWorkflowStatus(value: unknown): boolean {
   return normalized === "manual evaluation required" || normalized === "manual approval required";
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function toAbsoluteSharePointUrl(url: string): string {
   if (!url || url.startsWith("http") || url.startsWith("data:")) return url;
   if (!url.startsWith("/")) return url;
@@ -351,18 +353,6 @@ function toAbsoluteSharePointUrl(url: string): string {
   }
 }
 
-function valueToText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
-  if (isRecord(value)) {
-    for (const key of ["email", "Email", "value", "Value", "text", "Title"]) {
-      const next = value[key];
-      if (typeof next === "string" && next.trim()) return next.trim();
-    }
-  }
-  return "";
-}
 
 function parseMaybeJsonValue(value: string): unknown | null {
   const trimmed = value.trim();
@@ -555,6 +545,7 @@ async function resolveLayerAssigneeEmail(
   layer: LayerConfigItem,
   submittedData: Record<string, unknown>,
   formSlug: string,
+  previousStep?: PreviousStep,
 ): Promise<{ email: string; emails: string[]; error?: string; parked?: { reason: string }; explanation?: string }> {
   const directory = createApprovalDirectoryReader(token);
   return resolveSharedLayerAssignee(
@@ -573,30 +564,9 @@ async function resolveLayerAssigneeEmail(
       // an admin fixes routing, so a bad value has to be visible rather than blank.
       keepInvalidDistributionListAddress: true,
       rejectNonEmailAlways: true,
-      context: resolutionContextFromItem(submittedData, layer.layerNumber),
+      context: resolutionContextFromItem(submittedData, layer.layerNumber, previousStep),
     },
   );
-}
-
-/**
- * Identities for chain routing, read off the stored response item.
- *
- * The previous layer's actor is `L{n-1}_ActedBy` where one was recorded, and
- * `L{n-1}_Email` where it was not — public-token and paper layers historically
- * closed without naming anybody, so the assigned address is the best available
- * answer for those.
- */
-function resolutionContextFromItem(
-  item: Record<string, unknown>,
-  layerNumber: number,
-): ResolutionContext {
-  const previous = layerNumber - 1;
-  return {
-    submitterEmail: valueToText(item.SubmittedBy),
-    previousActorEmail: previous >= 1
-      ? valueToText(item[`L${previous}_ActedBy`]) || valueToText(item[`L${previous}_Email`])
-      : "",
-  };
 }
 
 function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {
@@ -1512,7 +1482,15 @@ export default function ApprovalDashboard() {
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`
           ) as Record<string, unknown>);
-          const result = await resolveLayerAssigneeEmail(token, nextLayerConfig, submittedData, currentFormSlug());
+          const result = await resolveLayerAssigneeEmail(
+            token,
+            nextLayerConfig,
+            submittedData,
+            currentFormSlug(),
+            // The layer just confirmed, and by whom: `submittedData` may be the
+            // copy held before that was written.
+            { layerNumber: currLayerNum, actedBy: accounts[0]?.username || "" },
+          );
           if (result.error) throw new Error(result.error);
           nextApproverEmail = result.email;
           if (nextApproverEmail) {
@@ -1617,7 +1595,13 @@ export default function ApprovalDashboard() {
           resolvedEmails[layer.layerNumber] = routed.email;
           continue;
         }
-        const result = await resolveLayerAssigneeEmail(token, layer, submittedData, currentFormSlug());
+        const result = await resolveLayerAssigneeEmail(
+          token,
+          layer,
+          submittedData,
+          currentFormSlug(),
+          previousStepFor(bLayers, layer.layerNumber),
+        );
         if (result.error) assigneeErrors.push(result.error);
         if (result.email) resolvedEmails[layer.layerNumber] = result.email;
         if (result.emails.length > 0) resolvedActors[layer.layerNumber] = result.emails;
@@ -1706,7 +1690,13 @@ export default function ApprovalDashboard() {
 
       let recipient = manualRecipient || valueToText(rawItem[`L${currentLayerNumber}_Email`]);
       if (!EMAIL_RE.test(recipient)) {
-        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem, currentFormSlug());
+        const resolved = await resolveLayerAssigneeEmail(
+          token,
+          currentLayer,
+          rawItem,
+          currentFormSlug(),
+          previousStepFor(activeLayers, currentLayerNumber),
+        );
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
         if (recipient) {
@@ -2018,7 +2008,13 @@ export default function ApprovalDashboard() {
       let recipient = manualEmailRecipient.trim() || valueToText(rawItem[`L${currentLayerNumber}_Email`]);
       if (recipient && !EMAIL_RE.test(recipient)) throw new Error("Enter a valid evaluator email address.");
       if (!EMAIL_RE.test(recipient)) {
-        const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem, currentFormSlug());
+        const resolved = await resolveLayerAssigneeEmail(
+          token,
+          currentLayer,
+          rawItem,
+          currentFormSlug(),
+          previousStepFor(activeLayers, currentLayerNumber),
+        );
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
       }
@@ -2230,7 +2226,15 @@ export default function ApprovalDashboard() {
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`
           ) as Record<string, unknown>);
-          const result = await resolveLayerAssigneeEmail(token, nextLayer, submittedData, currentFormSlug());
+          const result = await resolveLayerAssigneeEmail(
+            token,
+            nextLayer,
+            submittedData,
+            currentFormSlug(),
+            // This runs before `L{currentLayer}_ActedBy` is patched below, so
+            // the acting approver is passed rather than read back.
+            { layerNumber: currentLayer, actedBy: accounts[0]?.username || "" },
+          );
           if (result.error) throw new Error(result.error);
           nextApproverEmail = result.email;
           if (nextApproverEmail) {
