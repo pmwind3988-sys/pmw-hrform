@@ -24,11 +24,33 @@ export const learningContentSx = {
   py: { xs: 2.5, sm: 3.5, md: 4 },
 } satisfies SxProps<Theme>;
 
+/**
+ * Every panel is a legibility device as much as a container. The dashboard
+ * background can be a photograph, so ink-on-background text has no contrast
+ * guarantee at all — the blur plus near-opaque white is what keeps the page
+ * readable whichever background an admin picks.
+ */
 export const learningPanelSx = {
   borderRadius: "12px",
   boxShadow: editorialShadow,
   backgroundColor: "rgba(255, 255, 255, 0.94)",
+  backdropFilter: "blur(12px)",
   backgroundImage: "none",
+  border: editorialHairline,
+} satisfies SxProps<Theme>;
+
+/**
+ * For the few labels that would otherwise sit straight on the background —
+ * section headings and the breadcrumb trail. Same surface, sized to the text.
+ */
+export const learningInlineSurfaceSx = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: "8px",
+  px: 1.25,
+  py: 0.5,
+  backgroundColor: "rgba(255, 255, 255, 0.92)",
+  backdropFilter: "blur(12px)",
   border: editorialHairline,
 } satisfies SxProps<Theme>;
 
@@ -101,6 +123,19 @@ export function kindStyle(kind: LearningMaterialKind): KindStyle {
         icon: <InsertDriveFileOutlined />,
       };
   }
+}
+
+export function LearningSectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <Box sx={learningInlineSurfaceSx}>
+      <Typography
+        variant="overline"
+        sx={{ color: editorial.muted, fontWeight: 900, lineHeight: 1.6, letterSpacing: "0.08em" }}
+      >
+        {children}
+      </Typography>
+    </Box>
+  );
 }
 
 export function LearningEmptyState({

@@ -281,6 +281,21 @@ export async function graphGet(token: string, path: string): Promise<unknown> {
   return res.json();
 }
 
+/**
+ * Reads the target of a Graph endpoint that answers with a redirect instead of
+ * a body — `/content` being the one that matters, which 302s to a short-lived
+ * pre-authenticated file URL. Returns "" when the response is not a redirect,
+ * so callers can fall back rather than handle an exception.
+ */
+export async function graphGetRedirectUrl(token: string, path: string): Promise<string> {
+  const res = await fetch(`${GRAPH_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    redirect: "manual",
+  });
+  if (res.status < 300 || res.status >= 400) return "";
+  return res.headers.get("location") || "";
+}
+
 export async function graphPost(token: string, path: string, body: Record<string, unknown>): Promise<unknown> {
   const res = await fetch(`${GRAPH_BASE}${path}`, {
     method: "POST",

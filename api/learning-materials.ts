@@ -353,12 +353,17 @@ async function handleLearnerAction(
 
     if (isMediaKind(kind)) {
       const url = await readDownloadUrl(token, materialId);
-      if (!url) return res.status(502).json({ error: "SharePoint did not return a playable link." });
-      return res.status(200).json({
-        mode: "media",
-        url,
-        ...(downloadable ? { downloadUrl: url } : {}),
-      });
+      if (url) {
+        return res.status(200).json({
+          mode: "media",
+          url,
+          ...(downloadable ? { downloadUrl: url } : {}),
+        });
+      }
+      // No direct source — usually a file SharePoint is still processing. Rather
+      // than tell someone their video is broken, fall through to SharePoint's
+      // own player below, which can play what the <video> tag cannot reach.
+      logWarn("api:learning", "No direct media URL; falling back to the embed viewer", { kind });
     }
 
     // Documents are shown through SharePoint's own viewer. It keeps the file URL
@@ -374,7 +379,7 @@ async function handleLearnerAction(
     }
     if (!embedUrl) {
       return res.status(502).json({
-        error: "This document cannot be previewed right now. Try again shortly.",
+        error: "This material cannot be opened right now. Try again shortly.",
       });
     }
 

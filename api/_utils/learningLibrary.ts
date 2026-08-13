@@ -6,6 +6,7 @@ import {
   getListDriveId,
   graphDelete,
   graphGet,
+  graphGetRedirectUrl,
   graphPatch,
   graphPost,
   queryAllListItems,
@@ -209,9 +210,11 @@ async function readChildren(token: string, driveId: string, path: string): Promi
   const base = path
     ? `/drives/${driveId}/root:/${encodeDrivePath(path)}:/children`
     : `/drives/${driveId}/root/children`;
-  const query =
-    "?$top=200&$select=id,name,size,webUrl,folder,file,createdDateTime,lastModifiedDateTime" +
-    "&$expand=thumbnails($select=small,medium,large)";
+  // Deliberately no `$select`. The pre-authenticated file URL arrives as the
+  // OData annotation `@microsoft.graph.downloadUrl`, and naming an annotation in
+  // `$select` drops it on SharePoint drives — which left every media card without
+  // a source. The default projection includes it, at the cost of a fatter body.
+  const query = "?$top=200&$expand=thumbnails($select=small,medium,large)";
   const data = (await graphGet(token, `${base}${query}`)) as { value?: DriveItemResponse[] };
   return data.value || [];
 }
@@ -298,11 +301,18 @@ export async function readDriveItem(token: string, itemId: string): Promise<Driv
 /** A fresh pre-authenticated URL. The one from the tree read may be an hour old. */
 export async function readDownloadUrl(token: string, itemId: string): Promise<string> {
   const driveId = await getListDriveId(token, LEARNING_LIBRARY);
-  const data = (await graphGet(
-    token,
-    `/drives/${driveId}/items/${encodeURIComponent(itemId)}?$select=id,name,@microsoft.graph.downloadUrl`,
-  )) as DriveItemResponse;
-  return String(data["@microsoft.graph.downloadUrl"] || "");
+  const itemPath = `/drives/${driveId}/items/${encodeURIComponent(itemId)}`;
+
+  // No `$select` here either — see `readChildren`. Asking for the annotation by
+  // name is what made the viewer report "no playable link".
+  const data = (await graphGet(token, itemPath)) as DriveItemResponse;
+  const annotated = String(data["@microsoft.graph.downloadUrl"] || "");
+  if (annotated) return annotated;
+
+  // Second route to the same URL: `/content` redirects to it. Graph withholds
+  // the annotation for items it has not finished processing (a video still
+  // being transcoded, most often), and this answers for those.
+  return graphGetRedirectUrl(token, `${itemPath}/content`);
 }
 
 /**

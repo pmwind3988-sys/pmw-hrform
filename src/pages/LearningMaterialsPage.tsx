@@ -31,8 +31,10 @@ import MaterialViewerDialog from "../components/learning/MaterialViewerDialog";
 import TopicCard from "../components/learning/TopicCard";
 import {
   LearningEmptyState,
+  LearningSectionLabel,
   learningButtonSx,
   learningContentSx,
+  learningInlineSurfaceSx,
   learningPageSx,
   learningPanelSx,
 } from "../components/learning/learningUi";
@@ -141,13 +143,17 @@ export default function LearningMaterialsPage() {
     setSearchParams(next);
   };
 
-  /** Images in the same folder, this one first — the card's hover slideshow. */
+  /**
+   * Images in the same folder, this one first — the card's hover slideshow.
+   * SharePoint's own thumbnail comes first by preference: the full-size original
+   * would have a card quietly pulling megapixels for a 16:9 tile.
+   */
   const slideshowFor = (material: LearningMaterial): string[] => {
     if (material.kind !== "image") return [];
-    const own = material.mediaUrl || material.thumbnailUrl;
+    const own = material.thumbnailUrl || material.mediaUrl || "";
     const siblings = materials
       .filter((item) => item.kind === "image" && item.folderPath === material.folderPath && item.id !== material.id)
-      .map((item) => item.mediaUrl || item.thumbnailUrl)
+      .map((item) => item.thumbnailUrl || item.mediaUrl || "")
       .filter(Boolean);
     return [own, ...siblings].filter(Boolean);
   };
@@ -202,8 +208,11 @@ export default function LearningMaterialsPage() {
 
       <Container maxWidth="xl" disableGutters>
         <Box sx={learningContentSx}>
-          <Box sx={{ mb: { xs: 2.5, md: 3.5 } }}>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1.5 }}>
+          {/* On a photo background the hero is the one block with nothing behind
+              it, so it carries its own surface rather than trusting the picture
+              to stay light where the words are. */}
+          <Paper sx={{ ...learningPanelSx, p: { xs: 2, md: 3 }, mb: { xs: 2.5, md: 3.5 } }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, mb: 1.5 }}>
               <Chip
                 icon={<SchoolOutlined />}
                 size="small"
@@ -220,7 +229,7 @@ export default function LearningMaterialsPage() {
                 size="small"
                 label={`${materials.length} material${materials.length === 1 ? "" : "s"}`}
                 sx={{
-                  backgroundColor: "rgba(255,255,255,0.85)",
+                  backgroundColor: editorial.paperSoft,
                   color: editorial.muted,
                   border: editorialHairline,
                   fontWeight: 800,
@@ -232,7 +241,7 @@ export default function LearningMaterialsPage() {
                 icon={<VisibilityOutlined />}
                 label={`${totalViews} total view${totalViews === 1 ? "" : "s"}`}
                 sx={{
-                  backgroundColor: "rgba(255,255,255,0.85)",
+                  backgroundColor: editorial.paperSoft,
                   color: editorial.muted,
                   border: editorialHairline,
                   fontWeight: 800,
@@ -260,7 +269,7 @@ export default function LearningMaterialsPage() {
               Browse by topic, open a material in place, and pick up where the team left off. View counts show how
               many colleagues have opened each item.
             </Typography>
-          </Box>
+          </Paper>
 
           <Paper sx={{ ...learningPanelSx, p: { xs: 1.5, md: 2 }, mb: { xs: 2.5, md: 3 } }}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" } }}>
@@ -310,7 +319,13 @@ export default function LearningMaterialsPage() {
           </Paper>
 
           {!searching && (
-            <Breadcrumbs sx={{ mb: 2, "& .MuiBreadcrumbs-separator": { color: editorial.softMuted } }}>
+            <Breadcrumbs
+              sx={{
+                ...learningInlineSurfaceSx,
+                mb: 2,
+                "& .MuiBreadcrumbs-separator": { color: editorial.softMuted },
+              }}
+            >
               <Link
                 component="button"
                 type="button"
@@ -409,9 +424,7 @@ export default function LearningMaterialsPage() {
             <>
               {!searching && childTopics.length > 0 && (
                 <Box sx={{ mb: { xs: 3, md: 4 } }}>
-                  <Typography variant="overline" sx={{ color: editorial.softMuted, fontWeight: 900 }}>
-                    {currentPath ? "Subtopics" : "Topics"}
-                  </Typography>
+                  <LearningSectionLabel>{currentPath ? "Subtopics" : "Topics"}</LearningSectionLabel>
                   <Box
                     sx={{
                       mt: 1,
@@ -434,9 +447,11 @@ export default function LearningMaterialsPage() {
 
               {visibleMaterials.length > 0 ? (
                 <Box>
-                  <Typography variant="overline" sx={{ color: editorial.softMuted, fontWeight: 900 }}>
-                    {searching ? `${visibleMaterials.length} result${visibleMaterials.length === 1 ? "" : "s"}` : "Materials"}
-                  </Typography>
+                  <LearningSectionLabel>
+                    {searching
+                      ? `${visibleMaterials.length} result${visibleMaterials.length === 1 ? "" : "s"}`
+                      : "Materials"}
+                  </LearningSectionLabel>
                   <Box
                     sx={{
                       mt: 1,
