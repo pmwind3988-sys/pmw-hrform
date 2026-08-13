@@ -1061,6 +1061,75 @@ export interface CareerPortalCard {
   created: string;
 }
 
+// ── Learning materials (e-learning hub) ──────────────────────────────────────
+
+/** How a material is rendered. Derived from the file extension, never trusted input. */
+export type LearningMaterialKind = "video" | "image" | "pdf" | "document" | "other";
+
+/** A folder in the "Learning Materials" document library — a topic or subtopic. */
+export interface LearningTopic {
+  /** Library-relative path, e.g. "Safety/Fire Drill". Root is "". */
+  path: string;
+  name: string;
+  /** "" for a top-level topic. */
+  parentPath: string;
+  description: string;
+  sortOrder: number;
+  /** Materials directly inside this folder. */
+  materialCount: number;
+  /** Materials in this folder and every folder below it. */
+  totalMaterialCount: number;
+  subtopicCount: number;
+  /** Up to a few thumbnails from inside, for the folder card slideshow. */
+  coverThumbnails: string[];
+}
+
+export interface LearningMaterial {
+  /** Drive item id — the identity used for views, settings, and open requests. */
+  id: string;
+  /** File name in SharePoint, including extension. */
+  fileName: string;
+  /** Admin-set display title, falling back to the file name without extension. */
+  title: string;
+  description: string;
+  kind: LearningMaterialKind;
+  extension: string;
+  folderPath: string;
+  sizeBytes: number;
+  thumbnailUrl: string;
+  /**
+   * Short-lived direct URL, only present for video and image materials — the
+   * card previews and the viewer play the bytes straight from SharePoint.
+   * Documents never expose one; they open through a server-issued embed URL.
+   */
+  mediaUrl?: string;
+  /** Admin toggle. When false the viewer offers no download and no save action. */
+  downloadable: boolean;
+  sortOrder: number;
+  createdAt: string;
+  modifiedAt: string;
+  /** Distinct signed-in accounts that have opened this material. */
+  viewCount: number;
+  /** Whether the requesting account is one of them. */
+  viewedByMe: boolean;
+}
+
+export interface LearningLibraryData {
+  topics: LearningTopic[];
+  materials: LearningMaterial[];
+  /** False when the library has not been provisioned in SharePoint yet. */
+  libraryReady: boolean;
+}
+
+/** What the viewer needs to render one material. */
+export interface LearningMaterialOpenResult {
+  /** `embed` → iframe a SharePoint viewer; `media` → play/show the bytes directly. */
+  mode: "embed" | "media";
+  url: string;
+  /** Only issued when the material is marked downloadable. */
+  downloadUrl?: string;
+}
+
 export interface JobApplication {
   id: string;
   jobListingId: string;

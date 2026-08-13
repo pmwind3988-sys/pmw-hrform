@@ -138,6 +138,15 @@ Builder:   AdminFormBuilder.tsx → raw token → src/utils/formBuilderSP.ts (st
   - Every caller of `fetchJobs` / `fetchJob` / `fetchCareersPortalData` must pass the token, `AdminHomePage`'s dashboard carousel included, or it 403s once the portal is closed.
   - A private portal responds per-caller, so `jobs-list` switches its `Cache-Control` to `private, no-store`.
 
+### Learning Materials Hub (e-learning)
+- **Storage is one SharePoint document library, `Learning Materials`.** Folders are topics, nested folders are subtopics (max 4 deep). Files are materials. Reorganising in SharePoint reorganises the hub — there is no parallel structure to keep in sync.
+- **Views** live in the generic list `Learning Material Views`, one item per (material, viewer), stored in the built-in `Title` column as `{driveItemId}::{sha256(email) first 24 hex}`. Only the Title column is used because the app-only Graph principal cannot create columns on this tenant. Counts are therefore **distinct people, never play counts**, and the address is hashed — the feature never needs to know who watched what (`PDPA_COMPLIANCE.md`).
+- **Per-material settings** (display title, description, `downloadable`, sort order) ride as JSON in the `CustomImageUrl` note column of the existing `AdminPanelSettings` item titled `learning-materials-settings` — the same trick `career-portal-system-default-cards` uses, and for the same reason (no new columns).
+- **Downloads are off by default.** A new upload is view-only until an HR Forms Owner turns the switch on in `/admin/learning`. Documents open through a server-issued SharePoint preview URL (`POST /drives/{id}/items/{id}/preview`) so the file URL never reaches the page; video and images need their bytes and get a short-lived `@microsoft.graph.downloadUrl`. That last part is best-effort, not a security boundary — anything a browser can play, a determined viewer can capture.
+- **Uploads go browser → SharePoint directly** (SP REST, chunked above 8 MB, in `src/utils/learningService.ts`), never through `/api`. A Vercel function body caps at ~4.5 MB, which any real training video clears immediately.
+- **Two different tokens on one route.** `api/learning-materials.ts` treats `Authorization` as a **Graph** token for learner actions (`list`, `open-material`, `record-view` — identity is what makes a view unique, and staff with no SharePoint permissions must still be able to learn) and as a **SharePoint** token for the admin actions listed in `ADMIN_ACTIONS`, which are checked against `_HR_ Forms Owners`.
+- **CSP**: `media-src` must allow `https://*.sharepoint.com` or video silently fails to play — it is not covered by `img-src`, and without it `default-src 'self'` blocks the stream. Document previews need the SharePoint and Office origins in `frame-src`. Both are set in `vercel.json`.
+
 ### `queryListItemById` — Workaround for Filter-on-ID Issues
 The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemId)` fetches a single list item by its ID in the URL path (`/items/{id}?$expand=fields`). **Always use this instead of `queryListItems` with `$filter=id eq '...'`** — the latter triggers Graph API 500 `generalException`.
 
@@ -204,6 +213,8 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 | `/admin/career/applications` | `AdminJobsPage` | `src/pages/AdminJobsPage.tsx` |
 | `/admin/career/opportunities` | `AdminJobManagePage` | `src/pages/AdminJobManagePage.tsx` |
 | `/admin/career/cards` | `AdminCareerPortalCardsPage` | `src/pages/AdminCareerPortalCardsPage.tsx` |
+| `/learning` | `LearningMaterialsPage` (any signed-in account) | `src/pages/LearningMaterialsPage.tsx` |
+| `/admin/learning` | `AdminLearningPage` (AdminGuard) | `src/pages/AdminLearningPage.tsx` |
 | `/admin/jobs` | redirect → `/admin/career/applications` | — |
 | `/admin/jobs/manage` | redirect → `/admin/career/opportunities` | — |
 | `/adminhomepage` | (legacy) redirect via catch-all | `AdminHomePage` |

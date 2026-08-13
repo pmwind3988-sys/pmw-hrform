@@ -22,6 +22,7 @@ import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
+import LearningHubSection from "../components/learning/LearningHubSection";
 import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
 import { collectPublishProfiles, collectTrainingTitles } from "../utils/submissionFilters";
 import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
@@ -376,6 +377,8 @@ export default function AdminHomePage() {
         </Box>
 
         <DashboardCareerCarousel />
+
+        <LearningHubSection />
 
         {missingConfigs.length > 0 && (
           <Box sx={{ mb: 4 }}>

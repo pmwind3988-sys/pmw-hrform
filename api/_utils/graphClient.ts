@@ -298,6 +298,34 @@ export async function graphPost(token: string, path: string, body: Record<string
   return res.json();
 }
 
+export async function graphPatch(token: string, path: string, body: Record<string, unknown>): Promise<unknown> {
+  const res = await fetch(`${GRAPH_BASE}${path}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Graph PATCH ${path} ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+export async function graphDelete(token: string, path: string): Promise<void> {
+  const res = await fetch(`${GRAPH_BASE}${path}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    throw new Error(`Graph DELETE ${path} ${res.status}: ${text}`);
+  }
+}
+
 // --- High-level helpers ---
 
 export interface GraphListItem {
@@ -367,6 +395,49 @@ export async function queryListItems(
     id: item.id,
     fields: item.fields || {},
   }));
+}
+
+/**
+ * Reads every item of a list, following Graph's paging links.
+ *
+ * `queryListItems` stops at one page, which silently truncates any list that has
+ * outgrown `$top` — fine for configuration lists, wrong for anything that grows
+ * with usage (a row per person per thing). `maxItems` is a guard rail, not a
+ * page size: reaching it means the caller's assumptions need revisiting.
+ */
+export async function queryAllListItems(
+  token: string,
+  listDisplayName: string,
+  options?: { pageSize?: number; maxItems?: number },
+): Promise<GraphListItem[]> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const pageSize = Math.min(Math.max(options?.pageSize ?? 999, 1), 999);
+  const maxItems = options?.maxItems ?? 20000;
+
+  const items: GraphListItem[] = [];
+  let url: string | null =
+    `${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items?$select=id&$expand=fields&$top=${pageSize}`;
+
+  while (url && items.length < maxItems) {
+    const res: Response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Graph GET ${res.status}: ${text}`);
+    }
+    const data = (await res.json()) as {
+      value?: Array<{ id: string; fields?: Record<string, unknown> }>;
+      "@odata.nextLink"?: string;
+    };
+    for (const item of data.value || []) {
+      items.push({ id: item.id, fields: item.fields || {} });
+    }
+    url = data["@odata.nextLink"] ?? null;
+  }
+
+  return items;
 }
 
 export async function queryListItemByFields(
@@ -869,6 +940,22 @@ export async function updateListItem(
     const text = await res.text();
     throw new Error(`Graph PATCH item ${res.status}: ${text}`);
   }
+}
+
+const cachedDriveIds: Record<string, string> = {};
+
+/**
+ * Resolves the drive backing a document library, so callers can work with the
+ * drive-item API (folders, thumbnails, previews) instead of list items.
+ */
+export async function getListDriveId(token: string, listDisplayName: string): Promise<string> {
+  if (cachedDriveIds[listDisplayName]) return cachedDriveIds[listDisplayName];
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const drive = (await graphGet(token, `/sites/${siteId}/lists/${listId}/drive?$select=id`)) as { id: string };
+  if (!drive.id) throw new Error(`Document library "${listDisplayName}" has no drive.`);
+  cachedDriveIds[listDisplayName] = drive.id;
+  return drive.id;
 }
 
 /**
