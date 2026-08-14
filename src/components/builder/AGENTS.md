@@ -34,7 +34,9 @@ AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + 
   │     ├── FormSheet (WYSIWYG rows on a paper sheet, hover row tools)
   │     ├── PropertyPanel (.bx-propdock — mounted only while a field is selected)
   │     ├── JsonPreview (bottom drawer, opened from Tools → Survey JSON)
-  │     └── LivePreviewModal (survey-react-ui renderer)
+  │     └── LivePreviewModal (device chrome + banner + Native/SurveyJS toggle)
+  │           ├── NativePreviewBody  (src/native engine — the default)
+  │           └── SurveyJsPreviewBody (survey-react-ui — what a published form uses)
   ├── LayerConfigPanel (Workflow mode, full width — unchanged in function)
   │     ├── LayerCard[] (per-layer config)
   │     ├── EvalElementPicker (for evaluation layers)
@@ -49,6 +51,17 @@ AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + 
 - **Styling**: Inline styles via `C` object — no MUI components, no CSS modules
 - **State**: Local `useState` only — no context or external store
 - **Barrel exports**: `index.ts` re-exports all builder components; import from `components/builder`
+
+## Live preview
+- Draws with the **native engine** (`src/native/`) by default; the header toggle switches to
+  SurveyJS. Keep the toggle: published forms are still served by SurveyJS, so an author
+  needs to be able to see what respondents will actually get. See `src/native/AGENTS.md`.
+- Both bodies share one `dataRef` of typed answers, so switching engines — and switching
+  device — keeps the filled-in state. Closing the modal discards it, as it always has.
+- Device widths are 1180 / 500 / 340. The engine's layout is driven by `@container`
+  queries, so those widths produce the real desktop / tablet / phone layouts regardless of
+  the author's monitor. Changing them changes what "desktop" means — 760 was too narrow and
+  showed the stacked layout.
 
 ## Form Builder Features
 - **Layer System**: Forms have a unified layer sequence. Each layer is either `approval` (approve/reject with signature or checkbox) or `evaluation` (custom SurveyJS fields, confirm action). Stored as `LayerConfig` JSON in Master Form.

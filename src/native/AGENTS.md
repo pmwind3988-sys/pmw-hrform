@@ -3,9 +3,16 @@
 **Scope:** A form renderer that reads published SurveyJSON and draws it without SurveyJS.
 
 **Status: parallel, not a replacement.** `/form/:formId` (`DynamicFormPage`) still runs
-SurveyJS and is still the only route that submits anything. Nothing in this folder is
-imported by it. This exists to answer one question — does a purpose-built renderer read
-better than a themed SurveyJS — and it is evaluated at `/native/:formId`.
+SurveyJS and is still the only route that submits anything. This exists to answer one
+question — does a purpose-built renderer read better than a themed SurveyJS.
+
+Two places use it, neither of them a submit path:
+- `/native/:formId` — the standalone comparison route (`NativeFormPreviewPage`).
+- **The builder's live preview** — `LivePreviewModal` in `components/builder/FormBuilder.tsx`
+  draws with this engine by default, and its header carries a **Native / SurveyJS**
+  toggle. The toggle is not decoration: published forms are still served by SurveyJS, so
+  an author about to publish has to be able to see the renderer their respondents will get.
+  Both bodies share one answers store, so switching carries the filled-in state across.
 
 ## WHERE TO LOOK
 | Task | File | Notes |
@@ -18,6 +25,7 @@ better than a themed SurveyJS — and it is evaluated at `/native/:formId`.
 | The entire visual system | `native-form.css` | Tokens under `.nf`, dark under `.nf[data-theme="dark"]`. |
 | Sample form for `/native/demo` | `demoForm.ts` | Not a fixture; no test asserts against it. |
 | Host page | `../pages/NativeFormPreviewPage.tsx` | Route `/native/:formId`, public. Read-only. |
+| Builder preview | `../components/builder/FormBuilder.tsx` | `NativePreviewBody` / `SurveyJsPreviewBody` / `EngineToggle`, used by `LivePreviewModal`. |
 
 ## Commands
 ```bash
@@ -28,7 +36,8 @@ Visual check without a backend or a tenant:
 npm run dev
 ```
 then `/native/demo`, and `/native/demo?engine=surveyjs` for the same JSON under SurveyJS.
-`?theme=dark` on either.
+`?theme=dark` on either. The builder's preview needs a signed-in session, so `/native/demo`
+is the quicker way to look at the engine itself.
 
 ## Design rules the CSS enforces
 Breaking one of these is what makes a form look untidy, so they are worth restating:
@@ -79,6 +88,18 @@ Published forms carry no column count. `toRows()` in `NativeForm.tsx` groups con
 elements with `startWithNewLine: false` into one row; tables, repeaters and nested panels
 always take a row alone regardless, because an author sets the flag on the field *before*
 the one it affects and cannot see what follows.
+
+### Layout is `@container`, not `@media`
+`.nf` declares `container-type: inline-size`, and every layout breakpoint queries that box
+rather than the viewport. This is what makes the builder's device preview honest: a 340px
+"mobile" preview lays out as mobile even on a 1440px monitor, which viewport queries could
+never do. **Do not add a `@media` layout rule here.** The two that remain are genuinely
+about the device, not the layout — the 16px control-font bump that stops mobile browsers
+zooming in, and `prefers-reduced-motion`. Keying the font bump to the container would
+inflate type inside a narrow preview, which is the one place an author is judging it.
+
+The builder's desktop preview is 1180px wide for the same reason: at the old 760px it
+rendered the stacked layout and labelled it "desktop".
 
 ### CSP blocks `new Function()`
 Same constraint as the rest of the app. `expression.ts` reuses `safeEvalArithmetic` rather

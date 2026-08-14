@@ -11,6 +11,9 @@ import { QUESTION_TYPES, createQuestion, buildSurveyJson, validateFields, safeEv
 import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree, reorderFieldsRecursive, moveFieldToRoot } from "../../utils/FormBuilderEngine";
 import { registerSignaturePad } from "../../utils/SignaturePad";
 import { registerDynamicMatrix } from "../../utils/DynamicMatrix";
+import NativeFormView from "../../native/NativeForm";
+import { parseForm } from "../../native/schema";
+import { useNativeForm } from "../../native/useNativeForm";
 import { getAllColumnsForList, getChoiceColumnsForList, getSharePointLists } from "../../utils/formBuilderSP";
 import DOMPurify from "dompurify";
 import { C } from "./constants";
@@ -2242,12 +2245,93 @@ function createLivePreviewModel(json: SurveyJson, dataRef: { current: Record<str
   }
 }
 
-// ── Live Preview Modal ────────────────────────────────────────────────
-function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" }: { json: SurveyJson; onClose: () => void; showBanner?: boolean; meta?: Record<string, unknown>; device?: "desktop" | "tablet" | "mobile" }) {
-  const dataRef = useRef<Record<string, unknown>>({});
+// ── Preview bodies ────────────────────────────────────────────────────
+
+/** Which renderer the preview modal is currently drawing with. */
+type PreviewEngine = "native" | "surveyjs";
+
+interface PreviewBodyProps {
+  json: SurveyJson;
+  /**
+   * Answers typed into the preview, held outside whichever renderer is showing.
+   *
+   * Both bodies read and write this one store, so switching engines carries the
+   * answers across — an author can fill in enough to trigger their conditional
+   * logic, then check the same filled-in state against the renderer a published
+   * form actually uses. It also survives a device switch, which re-renders the
+   * modal. Closing the preview discards it, as it always has.
+   */
+  dataRef: React.MutableRefObject<Record<string, unknown>>;
+  companyFieldName: string;
+  companyValue: string;
+  onCompanyChange: (value: string) => void;
+}
+
+function NativePreviewBody({ json, dataRef, companyFieldName, companyValue, onCompanyChange }: PreviewBodyProps) {
+  // Memoised on the content, not the object: `buildSurveyJson` hands back a
+  // fresh object whenever the builder re-renders, and reparsing on identity
+  // would rebuild the form — and reset the answers in it — every time the modal
+  // redrew for a reason that had nothing to do with the form.
+  const fingerprint = JSON.stringify(json);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const form = useMemo(() => parseForm(json), [fingerprint]);
+  // Read when the hook reseeds, not on the render that supplies it — the store
+  // is a ref shared with the SurveyJS body, and touching it during render would
+  // be reading a value React does not guarantee is current.
+  const seed = useCallback(() => dataRef.current, [dataRef]);
+  const runtime = useNativeForm(form, seed);
+  const { values, setValue } = runtime;
+
+  // The "all required answered" note describes the form as it stood when the
+  // author pressed the button, so it is derived from the answers it was true of
+  // rather than stored as a flag that an effect would then have to clear —
+  // `values` keeps its identity until an answer actually changes.
+  const [checkedAgainst, setCheckedAgainst] = useState<unknown>(null);
+  const checked = checkedAgainst !== null && checkedAgainst === values;
+
+  useEffect(() => {
+    dataRef.current = values;
+  }, [values, dataRef]);
+
+  // The company chooser sits in the banner above the form but writes into a
+  // field inside it, so the two are kept in step both ways. Both effects key on
+  // the field's current value rather than on `runtime`, which is a fresh object
+  // every render and would run them on every keystroke to no purpose.
+  const companyCurrent = companyFieldName ? values[companyFieldName] : undefined;
+
+  useEffect(() => {
+    if (!companyFieldName || !companyValue) return;
+    if (companyCurrent !== companyValue) setValue(companyFieldName, companyValue);
+  }, [companyFieldName, companyValue, companyCurrent, setValue]);
+
+  useEffect(() => {
+    if (!companyFieldName) return;
+    // Clearing the field propagates too: "" is a string, so the banner follows
+    // the form back to nothing chosen.
+    if (typeof companyCurrent === "string" && companyCurrent !== companyValue) onCompanyChange(companyCurrent);
+  }, [companyFieldName, companyValue, companyCurrent, onCompanyChange]);
+
+  return (
+    <div style={{ maxHeight: "70vh", overflowY: "auto", background: "var(--nf-canvas)" }}>
+      <NativeFormView
+        runtime={runtime}
+        submitLabel="Check answers"
+        onSubmit={() => setCheckedAgainst(runtime.validateAll().ok ? values : null)}
+        footer={
+          checked ? (
+            <div className="nf-note" data-tone="success">
+              <div>Every required question on this page is answered. Nothing was saved.</div>
+            </div>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+function SurveyJsPreviewBody({ json, dataRef, companyFieldName, companyValue, onCompanyChange }: PreviewBodyProps) {
   const [model, setModel] = useState<Model | null>(null);
   const [surveyMountKey, setSurveyMountKey] = useState(0);
-  const [previewCompany, setPreviewCompany] = useState("");
   const jsonFingerprint = JSON.stringify(json);
 
   // Create/dispose the Survey model in an effect so React Strict Mode remounts
@@ -2260,7 +2344,92 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
       nextModel?.dispose();
       setModel(null);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jsonFingerprint]);
+
+  useEffect(() => {
+    if (!model || !companyFieldName) return;
+    if (companyValue && model.getValue(companyFieldName) !== companyValue) {
+      model.setValue(companyFieldName, companyValue);
+    }
+    const syncCompanyValue = (_sender: Model, options: { name: string; value: unknown }) => {
+      if (options.name === companyFieldName) {
+        onCompanyChange(typeof options.value === "string" ? options.value : "");
+      }
+    };
+    model.onValueChanged.add(syncCompanyValue);
+    return () => model.onValueChanged.remove(syncCompanyValue);
+  }, [model, companyFieldName, companyValue, onCompanyChange]);
+
+  if (!model) return null;
+
+  return (
+    <div className="fb-preview-wrap" style={{
+      padding: "20px 24px", maxHeight: "70vh", overflowY: "auto",
+      backgroundColor: json.backgroundColor || "#FFFFFF",
+      // SurveyJS v2 CSS custom properties for theming
+      ["--sjs-primary-backcolor" as string]: json.primaryColor || "#0078D4",
+      ["--sjs-primary-backcolor-light" as string]: json.primaryColor ? `${json.primaryColor}33` : "#7C3AED33",
+      ["--sjs-primary-backcolor-dark" as string]: json.primaryColor || "#3B0764",
+      ["--sjs-general-backcolor" as string]: json.backgroundColor || "#FFFFFF",
+      ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
+      ["--sjs-general-forecolor" as string]: json.textColor || "#1A1F2B",
+      ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1A1F2B",
+      ["--sjs-font-family" as string]: APP_FONT_STACK,
+      ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
+      ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
+      ["--sjs-questionpanel-cornerRadius" as string]: json.borderRadius || "8px",
+      ["--sjs-editorpanel-cornerRadius" as string]: json.borderRadius || "8px",
+      ["--sjs-error-backcolor" as string]: json.errorColor ? `${json.errorColor}1A` : "#FEE2E2",
+      ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
+    } as React.CSSProperties}><style>{`.fb-preview-wrap .sd-container-modern>.sd-title{text-align:center!important}
+.fb-preview-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}`}</style><Survey key={surveyMountKey} model={model} /></div>
+  );
+}
+
+/**
+ * Switches the preview between the two renderers.
+ *
+ * It is here rather than behind a setting because on this branch the two
+ * disagree: the native engine is what the preview shows by default, but
+ * `/form/:formId` still serves published forms through SurveyJS. An author about
+ * to publish needs to be able to see the renderer their respondents will
+ * actually get, and the footer text under each says which is which.
+ */
+function EngineToggle({ engine, onChange }: { engine: PreviewEngine; onChange: (next: PreviewEngine) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 8, background: "rgba(255,255,255,0.15)" }}>
+      {([["native", "Native"], ["surveyjs", "SurveyJS"]] as const).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onChange(id)}
+          aria-pressed={engine === id}
+          title={id === "native" ? "The new renderer" : "What a published form uses today"}
+          style={{
+            border: "none",
+            borderRadius: 6,
+            padding: "4px 10px",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 11,
+            fontWeight: 700,
+            background: engine === id ? C.white : "transparent",
+            color: engine === id ? C.purple : "rgba(255,255,255,0.75)",
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Live Preview Modal ────────────────────────────────────────────────
+function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" }: { json: SurveyJson; onClose: () => void; showBanner?: boolean; meta?: Record<string, unknown>; device?: "desktop" | "tablet" | "mobile" }) {
+  const dataRef = useRef<Record<string, unknown>>({});
+  const [previewCompany, setPreviewCompany] = useState("");
+  const [engine, setEngine] = useState<PreviewEngine>("native");
 
   const formTitle = json?.title || "Form Preview";
   const isoStandards = (meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
@@ -2274,25 +2443,21 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
   const companyFieldName = String(companySelector?.name || "");
   const companyTitle = String(companySelector?.title || "Company");
   const logoUrl = (meta?.logoUrl as string) || "";
-  const deviceWidth = device === "desktop" ? 760 : device === "tablet" ? 500 : 340;
+  // Desktop is 1180 because that is the width the native engine's own layout is
+  // built around — at the old 760 the preview showed the stacked phone layout
+  // and called it "desktop", which is the one thing a device preview must not do.
+  const deviceWidth = device === "desktop" ? 1180 : device === "tablet" ? 500 : 340;
   const bannerLogoWidth = device === "desktop" ? 150 : device === "tablet" ? 132 : 104;
   const bannerLogoMaxHeight = device === "desktop" ? 48 : device === "tablet" ? 42 : 34;
   const showHeaderBanner = showBanner || Boolean(companySelector);
 
-  useEffect(() => {
-    if (!model || !companyFieldName) return;
-    const current = model.getValue(companyFieldName);
-    setPreviewCompany(typeof current === "string" ? current : "");
-    const syncCompanyValue = (_sender: Model, options: { name: string; value: unknown }) => {
-      if (options.name === companyFieldName) {
-        setPreviewCompany(typeof options.value === "string" ? options.value : "");
-      }
-    };
-    model.onValueChanged.add(syncCompanyValue);
-    return () => model.onValueChanged.remove(syncCompanyValue);
-  }, [model, companyFieldName]);
-
-  if (!model) return null;
+  const bodyProps = {
+    json,
+    dataRef,
+    companyFieldName,
+    companyValue: previewCompany,
+    onCompanyChange: setPreviewCompany,
+  };
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
@@ -2302,7 +2467,10 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>Live Form Preview</div>
           <div style={{ fontSize: 14, color: C.white, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>How users will see this form</div>
         </div>
-        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <EngineToggle engine={engine} onChange={setEngine} />
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
+        </div>
       </div>
       {showHeaderBanner && <div style={{ borderBottom: `1px solid ${C.border}` }}>
         <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "16px 22px" }}>
@@ -2322,10 +2490,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
                       options={companyOptions}
                       value={previewCompany}
                       compact={device !== "desktop"}
-                      onChange={value => {
-                        model.setValue(companyFieldName, value);
-                        setPreviewCompany(value);
-                      }}
+                      onChange={setPreviewCompany}
                     />
                   : companyLines.length > 0
                   ? companyLines.map((line, i) => <div key={i} style={i > 0 ? { marginTop: 4 } : undefined}>{line}</div>)
@@ -2335,27 +2500,12 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
           </tbody>
         </table>
       </div>}
-      <div className="fb-preview-wrap" style={{
-        padding: "20px 24px", maxHeight: "70vh", overflowY: "auto",
-        backgroundColor: json.backgroundColor || "#FFFFFF",
-        // SurveyJS v2 CSS custom properties for theming
-        ["--sjs-primary-backcolor" as string]: json.primaryColor || "#0078D4",
-        ["--sjs-primary-backcolor-light" as string]: json.primaryColor ? `${json.primaryColor}33` : "#7C3AED33",
-        ["--sjs-primary-backcolor-dark" as string]: json.primaryColor || "#3B0764",
-        ["--sjs-general-backcolor" as string]: json.backgroundColor || "#FFFFFF",
-        ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
-        ["--sjs-general-forecolor" as string]: json.textColor || "#1A1F2B",
-        ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1A1F2B",
-        ["--sjs-font-family" as string]: APP_FONT_STACK,
-        ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
-        ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
-        ["--sjs-questionpanel-cornerRadius" as string]: json.borderRadius || "8px",
-        ["--sjs-editorpanel-cornerRadius" as string]: json.borderRadius || "8px",
-        ["--sjs-error-backcolor" as string]: json.errorColor ? `${json.errorColor}1A` : "#FEE2E2",
-        ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
-      } as React.CSSProperties}><style>{`.fb-preview-wrap .sd-container-modern>.sd-title{text-align:center!important}
-.fb-preview-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}`}</style><Survey key={surveyMountKey} model={model} /></div>
-      <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>Preview only. Submissions are not saved.</div>
+      {engine === "native" ? <NativePreviewBody {...bodyProps} /> : <SurveyJsPreviewBody {...bodyProps} />}
+      <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>
+        {engine === "native"
+          ? "Preview only — nothing is saved. Published forms are still served by the SurveyJS renderer; switch above to check that."
+          : "Preview only. Submissions are not saved. This is the renderer a published form uses today."}
+      </div>
     </div>
   </div>;
 }

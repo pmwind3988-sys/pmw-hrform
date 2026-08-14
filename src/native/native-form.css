@@ -68,6 +68,16 @@
   color: var(--nf-ink);
   font-size: var(--nf-fs-body);
   line-height: 1.5;
+
+  /* Every layout rule below is a `@container` query against this box rather than
+     a `@media` query against the viewport, because the form is not always the
+     page. The builder's device preview renders it inside a 340/500/1180px modal,
+     and viewport rules there describe the author's monitor — a "mobile preview"
+     on a wide screen would lay itself out as a desktop. Sized by its own
+     container, the preview is accurate wherever it is embedded, and the
+     standalone route is unaffected since there `.nf` *is* the page width. */
+  container-type: inline-size;
+  container-name: nf;
 }
 
 .nf[data-theme="dark"] {
@@ -108,7 +118,7 @@
 /* The rail only becomes a column when there is genuinely room for one. Below
    this it moves inline above the fields, where it still gives the respondent
    the section list and the count of what is left. */
-@media (min-width: 1080px) {
+@container nf (min-width: 1080px) {
   .nf-shell[data-rail="on"] {
     grid-template-columns: minmax(0, 1fr) 268px;
     gap: 24px;
@@ -479,7 +489,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-@media (max-width: 640px) {
+@container nf (max-width: 640px) {
   .nf-options[data-cols] {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -993,7 +1003,7 @@
   min-width: 0;
 }
 
-@media (min-width: 1080px) {
+@container nf (min-width: 1080px) {
   .nf-rail {
     position: sticky;
     top: 20px;
@@ -1131,7 +1141,7 @@
    nothing they have not just lived through — so it moves to the top and keeps
    only the count. The section list would be a second navigation competing with
    scrolling, and the submit button is already in the sticky action bar. */
-@media (max-width: 1079px) {
+@container nf (max-width: 1079px) {
   .nf-rail {
     order: -1;
   }
@@ -1267,7 +1277,7 @@
   backdrop-filter: blur(8px);
 }
 
-@media (min-width: 1080px) {
+@container nf (min-width: 1080px) {
   .nf-shell[data-rail="on"] .nf-actionbar {
     display: none;
   }
@@ -1363,16 +1373,9 @@
   margin: 0;
 }
 
-/* Mobile browsers zoom the page when a control's text is under 16px and never
-   zoom back out. The desktop density is 13.5px, so the bump is scoped to the
-   width where the zoom actually triggers. */
-@media (max-width: 767px) {
-  .nf input,
-  .nf select,
-  .nf textarea {
-    font-size: 16px;
-  }
-
+/* Tightened up when the form itself is narrow — a container question, since a
+   500px-wide preview needs the same tighter padding as a 500px-wide phone. */
+@container nf (max-width: 767px) {
   .nf-shell {
     padding: 16px 14px 32px;
   }
@@ -1384,6 +1387,19 @@
   .nf-actionbar {
     margin: 4px -14px -32px;
     padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+/* This one stays a viewport query, because it is about the device and not the
+   layout: mobile browsers zoom the page in when a focused control's text is
+   under 16px, and never zoom back out. Keyed to the container it would also
+   fire inside a narrow preview on a desktop, inflating the type in the one
+   place an author is trying to judge it. */
+@media (max-width: 767px) {
+  .nf input,
+  .nf select,
+  .nf textarea {
+    font-size: 16px;
   }
 }
 

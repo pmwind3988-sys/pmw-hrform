@@ -204,6 +204,12 @@ export const DEMO_FORM: Record<string, unknown> = {
               displayStyle: "currency",
               currency: "MYR",
               maximumFractionDigits: 2,
+              // `displayFormat` is the builder's own property name, and
+              // `mapFieldToSurveyJs` derives `displayStyle` from it on publish.
+              // Carrying both keeps the sample rendering as currency whether it
+              // is read straight off this file or after a trip through the
+              // builder, which is what the preview modal does.
+              displayFormat: "currency",
             },
             {
               type: "boolean",

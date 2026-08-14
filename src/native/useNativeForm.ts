@@ -97,8 +97,21 @@ function initialValues(form: NativeForm): ValueBag {
   return values;
 }
 
-export function useNativeForm(form: NativeForm, seed?: ValueBag): NativeFormRuntime {
-  const [values, setValues] = useState<ValueBag>(() => ({ ...initialValues(form), ...seed }));
+/**
+ * Answers to open the form with.
+ *
+ * A function is resolved at the moment it is needed rather than on the render
+ * that supplied it, which is what lets a caller seed from a mutable store — the
+ * builder's preview carries answers across a rebuilt form that way — without
+ * reading that store during render, where a concurrent re-render could hand the
+ * hook a value that is already stale.
+ */
+export type Seed = ValueBag | (() => ValueBag);
+
+const resolveSeed = (seed?: Seed): ValueBag => (typeof seed === "function" ? seed() : (seed ?? {}));
+
+export function useNativeForm(form: NativeForm, seed?: Seed): NativeFormRuntime {
+  const [values, setValues] = useState<ValueBag>(() => ({ ...initialValues(form), ...resolveSeed(seed) }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pageIndex, setPageIndex] = useState(0);
 
@@ -108,7 +121,7 @@ export function useNativeForm(form: NativeForm, seed?: ValueBag): NativeFormRunt
   useEffect(() => {
     if (formRef.current === form) return;
     formRef.current = form;
-    setValues({ ...initialValues(form), ...seed });
+    setValues({ ...initialValues(form), ...resolveSeed(seed) });
     setErrors({});
     setPageIndex(0);
   }, [form, seed]);
@@ -194,14 +207,11 @@ export function useNativeForm(form: NativeForm, seed?: ValueBag): NativeFormRunt
     });
   }, []);
 
-  const reset = useCallback(
-    (next?: ValueBag) => {
-      setValues({ ...initialValues(formRef.current), ...next });
-      setErrors({});
-      setPageIndex(0);
-    },
-    [],
-  );
+  const reset = useCallback((next?: ValueBag) => {
+    setValues({ ...initialValues(formRef.current), ...next });
+    setErrors({});
+    setPageIndex(0);
+  }, []);
 
   /** One question's error message, or "" when it passes. */
   const checkOne = useCallback(
