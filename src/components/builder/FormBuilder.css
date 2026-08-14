@@ -784,80 +784,6 @@ body {
   gap: 12px;
 }
 
-/* JSON Preview */
-.fb-json-preview {
-  border-top: 1px solid var(--fb-border);
-  background: var(--fb-ink);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition-property: height;
-  transition-duration: 220ms;
-  transition-timing-function: var(--fb-ease);
-}
-.fb-json-preview.collapsed { height: 38px; }
-.fb-json-preview.expanded { height: 220px; }
-.fb-json-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 14px;
-  height: 38px;
-  flex-shrink: 0;
-  cursor: pointer;
-}
-.fb-json-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.fb-json-header-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.68);
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-.fb-json-header-chars {
-  font-size: 10px;
-  color: rgba(255,255,255,0.3);
-}
-.fb-json-header-right {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.fb-json-copy-btn {
-  font-size: 10px;
-  background: rgba(255,255,255,0.08);
-  border: none;
-  border-radius: var(--fb-radius-control);
-  min-height: 28px;
-  padding: 3px 10px;
-  cursor: pointer;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-}
-.fb-json-copy-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.18);
-}
-.fb-json-copy-btn.copied { color: #6EE7B7; }
-.fb-json-toggle-icon {
-  transition-property: transform;
-  transition-duration: 200ms;
-  transition-timing-function: var(--fb-ease);
-}
-.fb-json-content {
-  flex: 1;
-  overflow-y: auto;
-  margin: 0;
-  padding: 0 14px 14px;
-  font-size: 11px;
-  font-family: monospace;
-  color: rgba(255,255,255,0.75);
-  line-height: 1.7;
-}
-
 /* Live Preview Modal */
 .fb-preview-modal-overlay {
   position: fixed;
@@ -1505,10 +1431,6 @@ body {
 
 .fb-add-choice-btn {
   border-color: var(--fb-border);
-}
-
-.fb-json-preview {
-  background: var(--fb-ink);
 }
 
 .fb-preview-modal {

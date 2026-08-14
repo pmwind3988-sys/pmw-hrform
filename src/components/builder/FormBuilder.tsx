@@ -31,7 +31,6 @@ import AddIcon from "@mui/icons-material/Add";
 import CodeIcon from "@mui/icons-material/Code";
 import TranslateIcon from "@mui/icons-material/Translate";
 import PaletteIcon from "@mui/icons-material/Palette";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 
 import TableChartIcon from "@mui/icons-material/TableChart";
@@ -2106,24 +2105,34 @@ function PropertyPanel({ field, allFields, onChange, onClose, token }: {
 }
 
 // ── JSON Preview ──────────────────────────────────────────────────────
-function JsonPreview({ json, collapsed, onToggle }: { json: SurveyJson; collapsed: boolean; onToggle: () => void }) {
+/**
+ * The SurveyJSON drawer, raised from Tools and dismissed by clicking its header.
+ *
+ * It has no collapsed state. It used to carry one — two heights and a 220ms
+ * `height` transition between them — but the drawer became a Tools row that is
+ * mounted only while open and passed `collapsed={false}`, so the closed half was
+ * unreachable: the transition never ran once, and dismissing it unmounts rather
+ * than collapses. What is left is the state that actually existed, with the
+ * animation of a layout property gone with it.
+ */
+function JsonPreview({ json, onClose }: { json: SurveyJson; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const text = useMemo(() => JSON.stringify(json, null, 2), [json]);
   const charCount = useMemo(() => JSON.stringify(json).length, [json]);
   const copy = () => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
-  return <div style={{ borderTop: `1px solid ${C.border}`, background: C.purpleDark, height: collapsed ? 38 : 220, display: "flex", flexDirection: "column", overflow: "hidden", transition: "height 220ms cubic-bezier(0.2, 0, 0, 1)" }}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 38, flexShrink: 0, cursor: "pointer" }} onClick={onToggle}>
+  return <div style={{ borderTop: `1px solid ${C.border}`, background: C.purpleDark, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 38, flexShrink: 0, cursor: "pointer" }} onClick={onClose} title="Hide the JSON drawer">
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <CodeIcon style={{ fontSize: 14, color: "rgba(255,255,255,0.68)" }} />
         <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.68)", textTransform: "uppercase", letterSpacing: 0 }}>SurveyJS JSON</span>
         <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{charCount} chars</span>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {!collapsed && <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 10, color: copied ? "#6EE7B7" : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>{copied ? "Copied!" : "Copy JSON"}</button>}
-        {collapsed ? <ExpandMoreIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} /> : <ExpandLessIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} />}
+        <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 10, color: copied ? "#6EE7B7" : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>{copied ? "Copied!" : "Copy JSON"}</button>
+        <ExpandLessIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} />
       </div>
     </div>
-    {!collapsed && <pre style={{ flex: 1, overflowY: "auto", margin: 0, padding: "0 14px 14px", fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.75)", lineHeight: 1.7 }}>{text}</pre>}
+    <pre style={{ height: 182, overflowY: "auto", margin: 0, padding: "0 14px 14px", fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.75)", lineHeight: 1.7 }}>{text}</pre>
   </div>;
 }
 
@@ -2970,7 +2979,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* The JSON drawer is now a Tools row, so it only exists once asked for. */}
       {!jsonCollapsed && (
         <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 2500, boxShadow: "0 -12px 32px rgba(26,31,43,0.22)" }}>
-          <JsonPreview json={surveyJson} collapsed={false} onToggle={() => setJsonCollapsed(true)} />
+          <JsonPreview json={surveyJson} onClose={() => setJsonCollapsed(true)} />
         </div>
       )}
       {showPreview && <LivePreviewModal json={surveyJson} onClose={() => setShowPreview(false)} showBanner={showBanner} meta={meta} device={previewDevice} />}
