@@ -396,7 +396,6 @@ export default function NativeFormView({
     node?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
   }, [errorKey]);
 
-  const percent = Math.round(runtime.progress * 100);
   const complete = runtime.required > 0 && runtime.answered >= runtime.required;
 
   const rail = (
@@ -408,8 +407,19 @@ export default function NativeFormView({
             {runtime.answered}
             <span> / {runtime.required}</span>
           </div>
-          <div className="nf-meter">
-            <div className="nf-meter-fill" data-complete={complete} style={{ width: `${percent}%` }} />
+          <div
+            className="nf-meter"
+            role="progressbar"
+            aria-valuenow={runtime.answered}
+            aria-valuemin={0}
+            aria-valuemax={runtime.required}
+            aria-label="Required questions answered"
+          >
+            <div
+              className="nf-meter-fill"
+              data-complete={complete}
+              style={{ transform: `scaleX(${runtime.progress})` }}
+            />
           </div>
         </div>
         {railSections.length > 1 && (

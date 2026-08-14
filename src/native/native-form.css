@@ -1044,11 +1044,17 @@
   overflow: hidden;
 }
 
+/* Scaled, not widened. The meter moves on every answered field — on a long form
+   that is a layout pass per keystroke in a sticky element beside a scrolling
+   column. `scaleX` is composited, so it costs a frame instead. The fill needs no
+   radius of its own: the track clips it, which also means the scale cannot
+   squash a rounded cap out of shape. */
 .nf-meter-fill {
   height: 100%;
-  border-radius: inherit;
+  width: 100%;
   background: var(--nf-brand);
-  transition: width 0.25s ease;
+  transform-origin: left center;
+  transition: transform 0.25s ease;
 }
 
 .nf-meter-fill[data-complete="true"] {
