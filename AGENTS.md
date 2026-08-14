@@ -6,7 +6,8 @@
 - Theme: `src/theme/index.ts` (MUI custom, `#0078D4` primary / `#6264A7` secondary). MUI v9 — **`Grid`** (not Grid2), **`slotProps`** replaces `PaperProps`.
 - **Sub-instructions** (keep updated if paths change):
   `src/utils/AGENTS.md`, `src/components/builder/AGENTS.md`, `src/pages/AGENTS.md`,
-  `api/AGENTS.md`, `src/components/auth/AGENTS.md`, `src/components/dashboard/AGENTS.md`
+  `api/AGENTS.md`, `src/components/auth/AGENTS.md`, `src/components/dashboard/AGENTS.md`,
+  `src/native/AGENTS.md`
 - **Only context**: `src/contexts/DashboardContext.tsx` — used by `AdminHomePage`; everything else uses local `useState`.
 
 ## Commands
@@ -27,6 +28,7 @@ npx vitest run     # ~77 unit tests in src/utils/__tests__/FormBuilderEngine.tes
 - `buffer` polyfill: `globalThis.Buffer = Buffer` in `main.tsx` (needed by some SP responses)
 - **MUI v9**, `@azure/msal-react`/`@azure/msal-browser`, **react-router-dom v7**
 - **SurveyJS v2.5** (`survey-core`, `survey-react-ui`) — Custom form builder (NOT SurveyJS Creator). CSS imported in `main.tsx`.
+- **Native form engine** (`src/native/`, no dependencies) — a second renderer for the *same* published SurveyJSON, evaluated at `/native/:formId`. Parallel to SurveyJS, not a replacement: `/form/:formId` is unchanged and is still the only route that submits. See `src/native/AGENTS.md`.
 - `@react-pdf/renderer` — generates PDF on client side. `src/utils/generateFormPdf.ts` handles PDF creation flow.
 - `react-dnd` v16 (HTML5 backend) — drag-drop canvas in form builder.
 - **API**: Vercel serverless functions in `api/` — **not Express**. Graph API client (`api/_utils/graphClient.ts`) for all list operations. No SP REST SDK — raw `fetch` to `graph.microsoft.com`.

@@ -289,6 +289,7 @@ const loadCareersPage = () => import("./pages/CareersPage");
 const loadJobApplyPage = () => import("./pages/JobApplyPage");
 const loadJobDetailsPage = () => import("./pages/JobDetailsPage");
 const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
+const loadNativeFormPreviewPage = () => import("./pages/NativeFormPreviewPage");
 const loadAdminJobsPage = () => import("./pages/AdminJobsPage");
 const loadAdminJobManagePage = () => import("./pages/AdminJobManagePage");
 const loadAdminCareerPortalCardsPage = () => import("./pages/AdminCareerPortalCardsPage");
@@ -301,6 +302,7 @@ function isPublicRoutePath(pathname: string): boolean {
     pathname === "/career-portal" ||
     pathname === "/careers" ||
     pathname.startsWith("/form/") ||
+    pathname.startsWith("/native/") ||
     pathname.startsWith("/eval/") ||
     pathname.startsWith("/approval/") ||
     pathname.startsWith("/career-portal/") ||
@@ -1359,6 +1361,16 @@ export default function App() {
                 <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                   <LazyRoute load={loadDynamicFormPage} fallback={<LoadingScreen status="Loading form..." />} />
                 </Box>
+              </ErrorBoundary>
+            }
+          />
+          {/* Same published form as /form/:formId, drawn by the native engine
+              instead of SurveyJS. Read-only by design — see the page header. */}
+          <Route
+            path="/native/:formId"
+            element={
+              <ErrorBoundary>
+                <LazyRoute load={loadNativeFormPreviewPage} fallback={<LoadingScreen status="Loading form..." />} />
               </ErrorBoundary>
             }
           />

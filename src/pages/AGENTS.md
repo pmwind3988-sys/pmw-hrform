@@ -11,6 +11,7 @@
 | Evaluator interface | `EvaluationPage.tsx` | Routes `/eval/:token` (public) and `/eval/:formSlug/:responseId/:layerNumber` (365). Auth gate, layer action (approve/signature/checkbox/reject/confirm). |
 | Approval workspace | `ApprovalDashboard.tsx` | Routes `/admin/submissions` and `/admin/approvals`. Both are Form Builder Superuser-only; distinct from `/eval/...`, which is the assigned reviewer action page. |
 | Approval routing | `AdminRoutingPage.tsx` | Route `/admin/routing`. Form Builder Superuser-only. Manages the `Approval Directory` list (who approves whom) that `chain` and `role-holder` layer assignees resolve against. Tabs: People (CRUD, CSV import/export), Trace, Problems. Panels live in `src/components/routing/`. |
+| Native renderer preview | `NativeFormPreviewPage.tsx` | Route `/native/:formId`, public. Same published form as `/form/:formId`, drawn by `src/native/` instead of SurveyJS. Read-only — validates and prints the payload rather than submitting. `?engine=surveyjs` draws the same JSON the old way for comparison; `/native/demo` uses a bundled sample and needs no backend. |
 | Privacy notice | `PrivacyNoticePage.tsx` | Route `/privacy`. Public page with PDPA privacy notice content. |
 | Job admin lists | `AdminJobsPage.tsx` | Route `/admin/career/applications`. Lists/manages job applications. |
 | Job admin manage | `AdminJobManagePage.tsx` | Route `/admin/career/opportunities`. CRUD for job listings. |
