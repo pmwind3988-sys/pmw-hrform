@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Model } from "survey-core";
 import { foldOtherAnswers } from "./surveyOtherAnswers";
 import { buildSurveyJson } from "./FormBuilderEngine";
+import { parseForm } from "../native/schema";
 
 describe("foldOtherAnswers", () => {
   it("replaces a single-select 'other' with what the respondent typed", () => {
@@ -48,6 +48,12 @@ describe("foldOtherAnswers", () => {
   });
 
   it("survives the whole chain: builder toggle to submitted answer", () => {
+    // The renderer half of this chain used to be driven through a real SurveyJS
+    // model. The native engine draws these forms now, and its `collect()` lives
+    // inside a hook that this suite cannot render — there is no jsdom and no
+    // React test renderer here. So the chain is checked in two pieces: the
+    // published JSON reaches the engine carrying the "other" option (below),
+    // and the value bag `collect()` emits for that state folds correctly.
     const json = buildSurveyJson([
       {
         _id: "1",
@@ -75,21 +81,30 @@ describe("foldOtherAnswers", () => {
     // A field nobody opted in stays exactly as it was.
     expect(elements[2].hasOther).toBeUndefined();
 
-    const survey = new Model(json as object);
-    const hazard = survey.getQuestionByName("Hazard");
-    expect(hazard.showOtherItem).toBe(true);
-    expect(hazard.otherText).toBe("Something else — I'll type it");
-    hazard.value = hazard.otherItem.value;
-    hazard.comment = "Loose floor tile";
+    const form = parseForm(json);
+    const hazard = form.byName.get("Hazard");
+    expect(hazard?.hasOther).toBe(true);
+    expect(hazard?.otherText).toBe("Something else — I'll type it");
 
-    const ppe = survey.getQuestionByName("Ppe");
-    expect(ppe.otherText).toBe("Other (describe)");
-    ppe.value = ["Helmet", ppe.otherItem.value];
-    ppe.comment = "Face shield";
+    const ppe = form.byName.get("Ppe");
+    expect(ppe?.hasOther).toBe(true);
+    expect(ppe?.otherText).toBe("Other (describe)");
 
-    survey.setValue("Plain", "A");
+    // A field nobody opted in offers no "other" row to pick.
+    expect(form.byName.get("Plain")?.hasOther).toBe(false);
 
-    expect(foldOtherAnswers(survey.data)).toEqual({
+    // What `collect()` produces once both "other" rows are chosen and typed
+    // into: the question holds the literal "other", the typed text travels
+    // beside it under `{name}-Comment`.
+    const submitted = {
+      Hazard: "other",
+      "Hazard-Comment": "Loose floor tile",
+      Ppe: ["Helmet", "other"],
+      "Ppe-Comment": "Face shield",
+      Plain: "A",
+    };
+
+    expect(foldOtherAnswers(submitted)).toEqual({
       Hazard: "Loose floor tile",
       Ppe: ["Helmet", "Face shield"],
       Plain: "A",

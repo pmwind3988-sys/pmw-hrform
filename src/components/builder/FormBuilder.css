@@ -639,6 +639,21 @@ body {
   text-transform: uppercase;
   color: var(--fb-muted);
 }
+/* The step number a rating label belongs to. Fixed width so the inputs beside
+   them line up whatever the scale counts to. */
+.fb-rate-step {
+  width: 32px;
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--fb-muted);
+}
+.fb-choice-head .fb-rate-step {
+  font-size: inherit;
+  font-weight: inherit;
+}
 .fb-choice-head-spacer {
   /* Matches the width of each row's remove button so the captions stay aligned. */
   width: 32px;

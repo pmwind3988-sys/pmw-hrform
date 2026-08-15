@@ -20,6 +20,16 @@ export function surveySnapshotKey(formVersion: string, publishKey: string): stri
   return `${formVersion}::${publishKey || DEFAULT_PUBLISH_KEY}`;
 }
 
+/**
+ * A query SharePoint rejected because it names something the list does not
+ * have. Read off `status` rather than by importing `SharePointHttpError`, which
+ * would give this module its first runtime dependency for one number.
+ */
+function isQueryMismatchError(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null | undefined)?.status;
+  return status === 400 || status === 404;
+}
+
 const EXCLUDE_ALWAYS = [
   "Style Library",
   "Site Assets",
@@ -160,10 +170,24 @@ export async function loadConfig(
   }
 
   try {
-    const versionItems = await spClient.queryList("Web Form Versions", {
-      select: ["FormTitle", "FormVersion", "PublishKey", "SurveyJSON"],
-      top: 5000,
-    });
+    // `PublishKey` is absent from lists provisioned before publish profiles
+    // existed, and SharePoint answers a $select naming an unknown column with a
+    // 400. Without the retry that 400 reaches the catch below and leaves every
+    // form without a snapshot — which reads downstream as "this submission has
+    // no schema", blanking answers an admin is looking at. Every other query
+    // against this list carries the same fallback; see formBuilderSP.ts.
+    const versionItems = await spClient
+      .queryList("Web Form Versions", {
+        select: ["FormTitle", "FormVersion", "PublishKey", "SurveyJSON"],
+        top: 5000,
+      })
+      .catch((error: unknown) => {
+        if (!isQueryMismatchError(error)) throw error;
+        return spClient.queryList("Web Form Versions", {
+          select: ["FormTitle", "FormVersion", "SurveyJSON"],
+          top: 5000,
+        });
+      });
 
     for (const item of versionItems) {
       const formTitle = String(item.FormTitle || "");

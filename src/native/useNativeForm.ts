@@ -110,7 +110,18 @@ export type Seed = ValueBag | (() => ValueBag);
 
 const resolveSeed = (seed?: Seed): ValueBag => (typeof seed === "function" ? seed() : (seed ?? {}));
 
-export function useNativeForm(form: NativeForm, seed?: Seed): NativeFormRuntime {
+export interface NativeFormOptions {
+  /**
+   * Show the answers without letting anyone change them.
+   *
+   * Applied where a question's `enabled` is decided, so it reaches every
+   * control — including the ones inside tables and repeaters — rather than
+   * each renderer having to remember to honour it.
+   */
+  readOnly?: boolean;
+}
+
+export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeFormOptions = {}): NativeFormRuntime {
   const [values, setValues] = useState<ValueBag>(() => ({ ...initialValues(form), ...resolveSeed(seed) }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pageIndex, setPageIndex] = useState(0);
@@ -132,6 +143,7 @@ export function useNativeForm(form: NativeForm, seed?: Seed): NativeFormRuntime 
    * because a `visibleIf` referencing a field two sections away would otherwise
    * be evaluated once for each question that shares the condition.
    */
+  const readOnlyForm = options.readOnly === true;
   const states = useMemo(() => {
     const map = new Map<string, FieldState>();
 
@@ -141,7 +153,7 @@ export function useNativeForm(form: NativeForm, seed?: Seed): NativeFormRuntime 
         const ownEnabled = el.enableIf ? evaluateCondition(el.enableIf, values) !== false : true;
         const state: FieldState = {
           visible: parentVisible && ownVisible,
-          enabled: parentEnabled && ownEnabled && !el.readOnly,
+          enabled: parentEnabled && ownEnabled && !el.readOnly && !readOnlyForm,
         };
         map.set(el.id, state);
         if (el.elements.length > 0 && el.kind === "section") {
@@ -152,11 +164,12 @@ export function useNativeForm(form: NativeForm, seed?: Seed): NativeFormRuntime 
 
     for (const page of form.pages) walk(page.elements, true, true);
     return map;
-  }, [form, values]);
+  }, [form, values, readOnlyForm]);
 
   const stateOf = useCallback(
-    (element: NativeElement): FieldState => states.get(element.id) ?? { visible: true, enabled: !element.readOnly },
-    [states],
+    (element: NativeElement): FieldState =>
+      states.get(element.id) ?? { visible: true, enabled: !element.readOnly && !readOnlyForm },
+    [states, readOnlyForm],
   );
 
   /**

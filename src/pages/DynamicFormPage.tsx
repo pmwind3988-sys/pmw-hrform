@@ -7,17 +7,16 @@ import type { Dispatch, SetStateAction } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { FunctionFactory, Model, Serializer } from "survey-core";
-import { Survey } from "survey-react-ui";
-import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
-import "survey-core/survey-core.min.css";
+import NativeFormView from "../native/NativeForm";
+import { parseForm, type NativeForm } from "../native/schema";
+import { useNativeForm } from "../native/useNativeForm";
+import "../native/native-form.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
-import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { loginRequest } from "../auth/msalConfig";
@@ -25,7 +24,6 @@ import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import Logo from "../components/Logo";
-import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
@@ -454,21 +452,17 @@ async function resolveLayerAssignee(
 }
 const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
 
-// ── Register custom SurveyJS widgets and properties ────────────────────
-registerSignaturePad();
-
-if (!FunctionFactory.Instance.hasFunction("now")) {
-  FunctionFactory.Instance.register("now", () => new Date());
-}
-
-if (!Serializer.findProperty("text", "autocapitalize")) {
-  Serializer.addProperty("text", {
-    name: "autocapitalize",
-    category: "general",
-    choices: ["none", "sentences", "words", "characters"],
-    default: "none",
-  });
-}
+/**
+ * The native engine needs no registration step.
+ *
+ * The SurveyJS build opened here by teaching the library three things it did
+ * not ship with: a signature question, a `now()` expression function, and an
+ * `autocapitalize` property on text questions. The native engine reads all
+ * three straight off the published JSON — signatures are a field kind,
+ * `now()` a default-value marker, `autocapitalize` a parsed property — so the
+ * form is drawn from what was published rather than from global side effects
+ * that had to run before the first render.
+ */
 
 // Theme tokens
 const LIGHT = {
@@ -496,11 +490,11 @@ const globalCss = (t: typeof LIGHT) => `
   @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-   .dfp-survey-wrap .sd-root-modern{background:transparent!important}
-.dfp-survey-wrap .sd-container-modern>.sd-title{text-align:center!important}
-.dfp-survey-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}
   .dfp-header{flex-wrap:nowrap}
-  .dfp-survey-wrap .sd-container-modern,.dfp-survey-wrap .sd-root-modern{max-width:100%!important}
+  /* The form already sits inside the page's own content column, which sets the
+     width and the side padding — so the shell keeps only its vertical rhythm
+     and lets the fields line up with everything above and below them. */
+  .dfp-survey-wrap .nf-shell{max-width:100%;padding:0 0 8px}
   .dfp-banner-logo img{max-height:48px!important}
   .dfp-doc-control{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid ${t.border};border-bottom:1px solid ${t.border};background:${t.cardBg}}
   .dfp-doc-cell{min-height:42px;padding:7px 8px;border-right:1px solid ${t.border};display:flex;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:${t.textPrimary};line-height:1.35}
@@ -563,7 +557,10 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   }, []);
   return (
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 3, zIndex: 9999, pointerEvents: "none" }}>
-      <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg,${t.purple},${t.purpleLight})`, transition: "width .1s linear", borderRadius: "0 2px 2px 0" }} />
+      {/* Scaled rather than widened: this updates on every scroll event, and
+          animating `width` there relayouts the page on each one. Same fix the
+          native engine's progress meter carries. */}
+      <div style={{ height: "100%", width: "100%", transform: `scaleX(${pct / 100})`, transformOrigin: "left center", background: `linear-gradient(90deg,${t.purple},${t.purpleLight})`, transition: "transform .1s linear", borderRadius: "0 2px 2px 0" }} />
     </div>
   );
 };
@@ -694,7 +691,6 @@ export default function DynamicFormPage() {
   const [submittedReference, setSubmittedReference] = useState("");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
-  const [isLastSurveyPage, setIsLastSurveyPage] = useState(true);
   const [companyChoiceValue, setCompanyChoiceValue] = useState("");
   const [companyChoiceError, setCompanyChoiceError] = useState("");
   const [resetKey, setResetKey] = useState(0);
@@ -1006,105 +1002,33 @@ export default function DynamicFormPage() {
     enrich().catch(() => setEnrichedSurveyJson(applyPrefill(baseJson)));
   }, [formData, prefilledQrPayload]);
 
-  const survey = useMemo(() => {
-    const json = enrichedSurveyJson;
-    if (!json) return null;
+  /**
+   * The published document, parsed into the native engine's shape.
+   *
+   * Everything the SurveyJS path had to bolt on afterwards is gone with it:
+   * formula fields are derived from their inputs on every render rather than
+   * written back on a `setTimeout` (which meant a submission fired in the same
+   * tick could carry a stale total), `autocapitalize` is a parsed property of
+   * the question, and MYR renders as "RM" inside the readout control.
+   *
+   * `resetKey` is a dependency so "submit another response" rebuilds the form
+   * and clears every answer with it.
+   */
+  const nativeForm = useMemo<NativeForm | null>(() => {
+    if (!enrichedSurveyJson) return null;
     try {
-      // Ensure old-format formula fields (type:"text" with _expression) have
-      // readOnly: false — SurveyJS blocks m.setValue() on readOnly questions, which
-      // prevents our custom recalcExpressions from updating the displayed value.
-      // New-format (type:"expression") already has readOnly:false from mapFieldToSurveyJs.
-      const ensureFormulaWritable = (els: Record<string, unknown>[]) => {
-        for (const el of els) {
-          if (el._expression && el.readOnly === true) {
-            el.readOnly = false;
-          }
-          if (el.elements) ensureFormulaWritable(el.elements as Record<string, unknown>[]);
-        }
-      };
-      for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
-        if (page.elements) ensureFormulaWritable(page.elements as Record<string, unknown>[]);
-      }
-
-      const m = new Model(json);
-      m.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless);
-      m.showCompletedPage = false;
-      m.showCompleteButton = false;
-      // Manually evaluate formula fields (stored as readOnly text with _expression)
-      // Build expression map from the source JSON — SurveyJS does NOT preserve
-      // custom JSON properties (_expression) on the question object in v2.5
-      const exprMap = new Map<string, string>();
-      const walkJson = (els: Record<string, unknown>[]) => {
-        for (const el of els) {
-          // Check custom _expression first, then fall back to native expression property
-          // (native expression may exist on forms published before _expression was introduced)
-          const expr = (el._expression as string) || (el.expression as string);
-          if (expr) exprMap.set(el.name as string, expr);
-          if (el.elements) walkJson(el.elements as Record<string, unknown>[]);
-        }
-      };
-      for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
-        if (page.elements) walkJson(page.elements as Record<string, unknown>[]);
-      }
-      const recalcExpressions = () => {
-        for (const q of m.getAllQuestions()) {
-          let expr = exprMap.get(q.name);
-          if (!expr) continue;
-          // Normalize corrupted expressions (e.g. `++` → `+`) for existing published forms
-          // that may have been saved with the old buggy regex.
-          expr = expr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
-          let compiled = expr;
-          // Replace ALL occurrences of each field reference (split/join replaces globally)
-          const refs = [...new Set(expr.match(/\{([^}]+)\}/g) || [])];
-          for (const ref of refs) {
-            const name = ref.slice(1, -1);
-            const srcQ = m.getQuestionByName(name);
-            const val = srcQ ? (srcQ.value as number | undefined) : undefined;
-            compiled = compiled.split(ref).join(String(Number(val) || 0));
-          }
-          try {
-            const result = safeEvalArithmetic(compiled);
-            if (typeof result === "number" && isFinite(result)) {
-              if (q.value !== result) m.setValue(q.name, result);
-            }
-          } catch {
-            // Leave the prior calculated value in place when an expression is invalid.
-          }
-        }
-      };
-      m.onValueChanged.add(() => setTimeout(recalcExpressions, 0));
-      setTimeout(recalcExpressions, 0);
-      m.onValueChanged.add((_, options) => {
-        const q = m.getQuestionByName(options.name);
-        if (!q || q.getType() !== "text") return;
-        const mode = (q as Record<string, unknown>).autocapitalize as string | undefined;
-        if (!mode || mode === "none") return;
-        const val = options.value;
-        if (typeof val !== "string") return;
-        const transform = (v: string) => {
-          switch (mode) {
-            case "words": return v.replace(/\b\w/g, c => c.toUpperCase());
-            case "sentences": return v.replace(/(^\w|[.!?]\s+\w)/g, c => c.toUpperCase());
-            case "characters": return v.toUpperCase();
-            default: return v;
-          }
-        };
-        const next = transform(val);
-        if (next !== val) {
-          q.value = next;
-        }
-      });
-      // Customise currency display for MYR → show "RM" symbol
-      m.onGetExpressionDisplayValue.add((_sender, options) => {
-        if (options.question && options.question.getType() === "expression" && (options.question as any).currency === "MYR") {
-          options.displayValue = "RM " + String(options.displayValue).replace(/^[^\d\s-]+/, "").trim();
-        }
-      });
-      return m;
-    } catch { return null; }
+      return parseForm(enrichedSurveyJson);
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enrichedSurveyJson, resetKey]);
 
-  useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
+  // A hook cannot be called conditionally, so a form that has not loaded yet
+  // runs an empty document rather than skipping the runtime entirely.
+  const placeholderForm = useMemo(() => parseForm(null), []);
+  const runtime = useNativeForm(nativeForm ?? placeholderForm);
+  const formReady = nativeForm !== null;
 
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
   const formIdValue = String(formData?.formConfig?.FormID || "");
@@ -1126,50 +1050,63 @@ export default function DynamicFormPage() {
 
   useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
 
+  // The banner's company chooser and the field inside the form are one answer
+  // shown in two places, so the banner follows whatever the form holds.
+  const companyFieldValue = companyFieldName ? runtime.values[companyFieldName] : undefined;
   useEffect(() => {
-    if (!showCompanyChoice || !survey || !companyFieldName) {
+    if (!showCompanyChoice || !formReady || !companyFieldName) {
       setCompanyChoiceValue("");
       setCompanyChoiceError("");
       return;
     }
-    const current = submittedValueToString(survey.getValue(companyFieldName));
+    const current = submittedValueToString(companyFieldValue);
     setCompanyChoiceValue(current);
-    const syncCompanyValue = (_sender: Model, options: { name: string; value: unknown }) => {
-      if (options.name !== companyFieldName) return;
-      setCompanyChoiceValue(submittedValueToString(options.value));
-      if (options.value) setCompanyChoiceError("");
-    };
-    survey.onValueChanged.add(syncCompanyValue);
-    return () => survey.onValueChanged.remove(syncCompanyValue);
-  }, [survey, showCompanyChoice, companyFieldName]);
+    if (current) setCompanyChoiceError("");
+  }, [companyFieldValue, showCompanyChoice, formReady, companyFieldName]);
 
-  const onCompleting = useCallback((sender: { data: Record<string, unknown> }, options: { allowComplete: boolean }) => {
+  /**
+   * The submit gate: the form's own validation first, then the two conditions
+   * that live outside the document — the privacy consent below it and the
+   * company chooser in the banner above it.
+   *
+   * Nothing here submits. It fills `lastDataRef` and raises the loading state,
+   * which is what `doSubmitForm` runs off, exactly as the SurveyJS
+   * `onCompleting` handler it replaces did.
+   */
+  const handleSubmit = useCallback(() => {
+    if (!formReady || submitStatus === "loading") return;
+
+    // The form view scrolls to the first failure and focuses it, so a rejected
+    // validation needs no message of its own here.
+    if (!runtime.validateAll().ok) return;
+
     if (!pdpaAccepted) {
-      options.allowComplete = false;
       setPdpaConsentError("Please read and accept the Privacy Notice before submitting this form.");
       document.querySelector(".dfp-pdpa-consent")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+
+    const data = runtime.collect();
+
     if (showCompanyChoice) {
-      const selectedCompany = submittedValueToString(sender.data[companyFieldName] ?? companyChoiceValue);
+      const selectedCompany = submittedValueToString(data[companyFieldName] ?? companyChoiceValue);
       if (!selectedCompany) {
-        options.allowComplete = false;
         setPdpaConsentError("");
         setCompanyChoiceError(COMPANY_CHOICE_REQUIRED_ERROR);
         document.querySelector(".dfp-banner")?.scrollIntoView({ behavior: "smooth", block: "start" });
         return;
       }
-      sender.data[companyFieldName] = selectedCompany;
-      if (survey?.getValue(companyFieldName) !== selectedCompany) {
-        survey?.setValue(companyFieldName, selectedCompany);
+      data[companyFieldName] = selectedCompany;
+      if (submittedValueToString(runtime.getValue(companyFieldName)) !== selectedCompany) {
+        runtime.setValue(companyFieldName, selectedCompany);
       }
     }
+
     setPdpaConsentError("");
     setCompanyChoiceError("");
-    lastDataRef.current = { ...sender.data };
-    options.allowComplete = false; // prevent survey auto-complete — we handle submission + success/error UI
+    lastDataRef.current = data;
     setSubmitStatus("loading");
-  }, [pdpaAccepted, showCompanyChoice, companyFieldName, companyChoiceValue, survey]);
+  }, [formReady, submitStatus, runtime, pdpaAccepted, showCompanyChoice, companyFieldName, companyChoiceValue]);
   const doSubmitForm = useCallback(async () => {
     // Collapse "other" + "{name}-Comment" pairs into the free text the respondent
     // typed, before uploads or column mapping read the answers.
@@ -1759,24 +1696,9 @@ export default function DynamicFormPage() {
       // Success — function returns normally; errors propagate to caller (useEffect)
   }, [formData, userEmail, accounts]);
 
-  useEffect(() => {
-    if (!survey) return;
-    survey.onCompleting.add(onCompleting);
-    // NOTE: onComplete is intentionally NOT registered — onCompleting prevents
-    // auto-completion and triggers submission via doSubmitForm + submitStatus effect
-    return () => { survey.onCompleting.remove(onCompleting); };
-  }, [survey, onCompleting]);
-
-  useEffect(() => {
-    if (!survey) {
-      setIsLastSurveyPage(true);
-      return;
-    }
-    const syncPageState = () => setIsLastSurveyPage(survey.isLastPage);
-    syncPageState();
-    survey.onCurrentPageChanged.add(syncPageState);
-    return () => { survey.onCurrentPageChanged.remove(syncPageState); };
-  }, [survey]);
+  // Which page the respondent is on is runtime state now, not something to
+  // mirror into React through event subscriptions.
+  const isLastSurveyPage = !formReady || runtime.isLastPage;
 
   // Run submission logic when onCompleting triggers the loading state
   useEffect(() => {
@@ -1923,12 +1845,12 @@ export default function DynamicFormPage() {
                     options={companyOptions}
                     value={companyChoiceValue}
                     error={companyChoiceError}
-                    disabled={!survey || prefilledQrPayload?.locked.includes(companyFieldName) === true}
+                    disabled={!formReady || prefilledQrPayload?.locked.includes(companyFieldName) === true}
                     onChange={value => {
                       if (prefilledQrPayload?.locked.includes(companyFieldName)) return;
                       setCompanyChoiceValue(value);
                       setCompanyChoiceError("");
-                      survey?.setValue(companyFieldName, value);
+                      runtime.setValue(companyFieldName, value);
                     }}
                     t={t}
                   />
@@ -1952,8 +1874,8 @@ export default function DynamicFormPage() {
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
               </div>
             )}
-            {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
-            {survey && isLastSurveyPage && (
+            {formReady ? <div className="dfp-survey-wrap"><NativeFormView runtime={runtime} dark={dark} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
+            {formReady && isLastSurveyPage && (
               <>
                 <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>
                   <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
@@ -1978,7 +1900,7 @@ export default function DynamicFormPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => survey.tryComplete()}
+                  onClick={handleSubmit}
                   disabled={submitStatus === "loading"}
                   style={{
                     width: "100%",
@@ -2001,7 +1923,7 @@ export default function DynamicFormPage() {
             {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 8, color: t.purple, fontSize: 13, fontWeight: 700 }}><Spinner size={14} t={t} /> Submitting your response...</div>}
             {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
               <div>Submission could not be completed. Your answers are still on this page; review them and try again.</div>
-              <button onClick={() => survey?.tryComplete()} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry submission</button>
+              <button onClick={handleSubmit} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry submission</button>
             </div>}
           </div>
         )}

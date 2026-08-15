@@ -3,14 +3,9 @@
  * Uses react-dnd for drag-drop. Outputs SurveyJS-compatible JSON.
  */
 import { useState, useCallback, useRef, useEffect, useMemo, Fragment } from "react";
-import { Survey } from "survey-react-ui";
-import { Model, Serializer } from "survey-core";
-import "survey-core/survey-core.min.css";
 import type { SurveyJson, FormBuilderField } from "../../types/index";
-import { QUESTION_TYPES, createQuestion, buildSurveyJson, validateFields, safeEvalArithmetic, schemaNameFromLabel, isSchemaNameDerivedFrom } from "../../utils/FormBuilderEngine";
+import { QUESTION_TYPES, createQuestion, buildSurveyJson, validateFields, schemaNameFromLabel, isSchemaNameDerivedFrom } from "../../utils/FormBuilderEngine";
 import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveFieldIntoPanel, addFieldToPanel, findFieldById, updateField, flattenFieldTree, reorderFieldsRecursive, moveFieldToRoot } from "../../utils/FormBuilderEngine";
-import { registerSignaturePad } from "../../utils/SignaturePad";
-import { registerDynamicMatrix } from "../../utils/DynamicMatrix";
 import NativeFormView from "../../native/NativeForm";
 import { parseForm } from "../../native/schema";
 import { useNativeForm } from "../../native/useNativeForm";
@@ -55,25 +50,10 @@ import ChromeReaderModeIcon from "@mui/icons-material/ChromeReaderMode";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 
 
-// ── Register autocapitalize as a custom SurveyJS property ─────────────────
-// ── Register custom SurveyJS widgets and properties ────────────────────
-registerSignaturePad();
-registerDynamicMatrix();
-
 const APP_FONT_NAME = "Inter";
-const APP_FONT_STACK = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
 
 /** What SurveyJS labels the "Other" row when the field leaves `otherText` unset. */
 const DEFAULT_OTHER_TEXT = "Other (describe)";
-
-if (!Serializer.findProperty("text", "autocapitalize")) {
-  Serializer.addProperty("text", {
-    name: "autocapitalize",
-    category: "general",
-    choices: ["none", "sentences", "words", "characters"],
-    default: "none",
-  });
-}
 
 // ── Atoms ─────────────────────────────────────────────────────────────
 const Pill = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) =>
@@ -332,62 +312,34 @@ function findCompanyChoiceElement(
   return null;
 }
 
-function PreviewCompanySelector({
+/**
+ * What the banner says beside the logo once the company chooser has moved into
+ * the form itself: the document's own identity. It mirrors the masthead on
+ * `/native/:formId` so an author sees the same header the standalone native
+ * route renders, rather than a third arrangement that exists only in the modal.
+ */
+function PreviewFormIdentity({
   title,
-  options,
-  value,
-  onChange,
-  compact,
+  description,
+  isoStandards,
 }: {
   title: string;
-  options: CompanyChoiceOption[];
-  value: string;
-  onChange: (value: string) => void;
-  compact: boolean;
+  description: string;
+  isoStandards: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>
+        {isoStandards}
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 800, color: C.textPrimary, lineHeight: 1.3, textWrap: "balance" }}>
         {title}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {options.map(option => {
-          const checked = value === option.value;
-          return (
-            <label
-              key={option.value}
-              style={{
-                minHeight: 40,
-                flex: compact ? "1 1 100%" : "1 1 220px",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 10px",
-                borderRadius: 8,
-                background: checked ? C.purplePale : C.white,
-                boxShadow: checked
-                  ? `0 0 0 1px ${C.purpleMid}, 0 8px 20px rgba(16,16,16,0.06)`
-                  : `0 0 0 1px ${C.border}`,
-                color: checked ? C.purple : C.textPrimary,
-                cursor: "pointer",
-                transition: "background-color .15s, box-shadow .15s, color .15s",
-              }}
-            >
-              <input
-                type="radio"
-                name="preview-company-choice"
-                value={option.value}
-                checked={checked}
-                onChange={() => onChange(option.value)}
-                style={{ width: 16, height: 16, accentColor: C.purple, flexShrink: 0 }}
-              />
-              <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 800, lineHeight: 1.35 }}>
-                {option.text}
-              </span>
-            </label>
-          );
-        })}
-      </div>
+      {description && (
+        <div style={{ fontSize: 12, fontWeight: 500, color: C.textSecond, lineHeight: 1.5, textWrap: "pretty" }}>
+          {description}
+        </div>
+      )}
     </div>
   );
 }
@@ -1284,6 +1236,74 @@ function ChoicesEditor({ choices, onChange }: { choices: (string | { value: stri
   </div>;
 }
 
+type RatingRange = Pick<FormBuilderField, "rateMin" | "rateMax">;
+
+/** The points a rating's min and max describe, capped the way the renderers cap them. */
+function ratingStepValues(field: RatingRange): number[] {
+  const from = Math.min(field.rateMin ?? 1, field.rateMax ?? 5);
+  const to = Math.max(field.rateMin ?? 1, field.rateMax ?? 5);
+  return Array.from({ length: Math.max(1, Math.min(to - from + 1, 21)) }, (_, i) => from + i);
+}
+
+/** The labels already written, keyed by the step they belong to. */
+function ratingLabelsByStep(rateValues: FormBuilderField["rateValues"]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const entry of rateValues ?? []) {
+    if (!entry || typeof entry !== "object") continue;
+    const value = String(entry.value ?? "");
+    const text = String(entry.text ?? "");
+    // A step whose label is its own number is unlabelled; it exists in the list
+    // only because a neighbour has words on it.
+    if (value && text && text !== value) out.set(value, text);
+  }
+  return out;
+}
+
+/** `rateValues` for a scale, or nothing at all when no step carries a label. */
+function buildRateValues(steps: number[], labels: Map<string, string>): FormBuilderField["rateValues"] {
+  if (steps.every(step => !labels.get(String(step)))) return undefined;
+  return steps.map(step => ({ value: step, text: labels.get(String(step)) || String(step) }));
+}
+
+/**
+ * A label for every point on a rating scale — "Disagree", "Fair", "Agree" —
+ * rather than only for its two ends.
+ *
+ * The rows are derived from the scale's own min and max instead of being a list
+ * the author maintains beside them, because the two can only ever disagree: a
+ * 1–5 scale carrying four labels renders as four steps, and nobody authored
+ * that. Widening the range keeps the words already written, since the labels are
+ * held by step value rather than by position.
+ */
+function RatingLabelsEditor({ field, onChange }: { field: FormBuilderField; onChange: (patch: Partial<FormBuilderField>) => void }) {
+  const steps = ratingStepValues(field);
+  const labels = ratingLabelsByStep(field.rateValues);
+
+  const setLabel = (step: number, text: string) => {
+    const next = new Map(labels);
+    if (text.trim()) next.set(String(step), text);
+    else next.delete(String(step));
+    onChange({ rateValues: buildRateValues(steps, next) });
+  };
+
+  return <div className="fb-choices-list">
+    <div className="fb-choice-row fb-choice-head">
+      <span className="fb-rate-step">Step</span>
+      <span className="fb-choice-input">Label</span>
+    </div>
+    {steps.map(step => <div key={step} className="fb-choice-row">
+      <span className="fb-rate-step">{step}</span>
+      <Input
+        value={labels.get(String(step)) ?? ""}
+        onChange={v => setLabel(step, v)}
+        placeholder="Optional"
+        className="fb-choice-input"
+        aria-label={`Label for rating ${step}`}
+      />
+    </div>)}
+  </div>;
+}
+
 function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onChange: (patch: Partial<FormBuilderField>) => void }) {
   const isDateType = field.type === "date";
   const isDateTimeType = field.type === "datetime";
@@ -1448,15 +1468,28 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
       <PropRow label="Rows"><Input type="number" value={field.rows || ""} onChange={v => onChange({ rows: v === "" ? undefined : Number(v) })} placeholder="4" /></PropRow>
     </>}
 
-    {/* Rating: rateMin / rateMax / descriptions */}
-    {field.type === "rating" && <>
-      <div style={{ display: "flex", gap: 8 }}>
-        <PropRow label="Min rate"><Input type="number" value={field.rateMin ?? ""} onChange={v => onChange({ rateMin: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
-        <PropRow label="Max rate"><Input type="number" value={field.rateMax ?? ""} onChange={v => onChange({ rateMax: v === "" ? undefined : Number(v) })} placeholder="5" /></PropRow>
-      </div>
-      <PropRow label="Min label"><Input value={field.minRateDescription || ""} onChange={v => onChange({ minRateDescription: v || undefined })} placeholder="e.g. Poor" /></PropRow>
-      <PropRow label="Max label"><Input value={field.maxRateDescription || ""} onChange={v => onChange({ maxRateDescription: v || undefined })} placeholder="e.g. Excellent" /></PropRow>
-    </>}
+    {/* Rating: rateMin / rateMax / per-step labels / end descriptions */}
+    {field.type === "rating" && (() => {
+      // Changing the range has to carry the labels with it. `rateValues` is what
+      // both renderers draw when it exists, so a range left out of step with it
+      // would show the old number of buttons and ignore the min and max the
+      // author just typed.
+      const setRange = (patch: RatingRange) => {
+        const next = { ...field, ...patch };
+        onChange({ ...patch, rateValues: buildRateValues(ratingStepValues(next), ratingLabelsByStep(field.rateValues)) });
+      };
+      return <>
+        <div style={{ display: "flex", gap: 8 }}>
+          <PropRow label="Min rate"><Input type="number" value={field.rateMin ?? ""} onChange={v => setRange({ rateMin: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
+          <PropRow label="Max rate"><Input type="number" value={field.rateMax ?? ""} onChange={v => setRange({ rateMax: v === "" ? undefined : Number(v) })} placeholder="5" /></PropRow>
+        </div>
+        <PropRow label="Label for each step" span>
+          <RatingLabelsEditor field={field} onChange={onChange} />
+        </PropRow>
+        <PropRow label="Min label"><Input value={field.minRateDescription || ""} onChange={v => onChange({ minRateDescription: v || undefined })} placeholder="e.g. Poor" /></PropRow>
+        <PropRow label="Max label"><Input value={field.maxRateDescription || ""} onChange={v => onChange({ maxRateDescription: v || undefined })} placeholder="e.g. Excellent" /></PropRow>
+      </>;
+    })()}
 
     {/* File / Image upload: acceptedTypes / maxSize / allowMultiple */}
     {fileTypes.includes(field.type) && <>
@@ -2136,128 +2169,7 @@ function JsonPreview({ json, onClose }: { json: SurveyJson; onClose: () => void 
   </div>;
 }
 
-function createLivePreviewModel(json: SurveyJson, dataRef: { current: Record<string, unknown> }): Model | null {
-  try {
-    const m = new Model(json);
-    for (const [key, val] of Object.entries(dataRef.current)) {
-      if (m.getQuestionByName(key)) {
-        m.setValue(key, val);
-      }
-    }
-    m.onValueChanged.add((_, options) => {
-      dataRef.current[options.name] = options.value;
-    });
-
-    const ensureFormulaWritable = (els: Record<string, unknown>[]) => {
-      for (const el of els) {
-        if (el._expression && el.readOnly === true) {
-          el.readOnly = false;
-        }
-        let rawExpr = (el._expression as string) || (el.expression as string);
-        if (rawExpr) {
-          const normalized = rawExpr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
-          if (normalized !== rawExpr) {
-            if (el._expression) el._expression = normalized;
-            if (el.expression) el.expression = normalized;
-          }
-        }
-        if (el.elements) ensureFormulaWritable(el.elements as Record<string, unknown>[]);
-      }
-    };
-    for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
-      if (page.elements) ensureFormulaWritable(page.elements as Record<string, unknown>[]);
-    }
-
-    const exprMap = new Map<string, string>();
-    const walkJson = (els: Record<string, unknown>[]) => {
-      for (const el of els) {
-        const expr = (el._expression as string) || (el.expression as string);
-        if (expr) exprMap.set(el.name as string, expr);
-        if (el.elements) walkJson(el.elements as Record<string, unknown>[]);
-      }
-    };
-    for (const page of (json as unknown as Record<string, unknown>).pages as Record<string, unknown>[] ?? []) {
-      if (page.elements) walkJson(page.elements as Record<string, unknown>[]);
-    }
-
-    for (const q of m.getAllQuestions()) {
-      if (q.getType() === "expression") {
-        const rawExpr = (q as any).expression as string;
-        if (rawExpr) {
-          const normalized = rawExpr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
-          if (normalized !== rawExpr) {
-            (q as any).expression = normalized;
-          }
-        }
-      }
-    }
-
-    const recalcExpressions = () => {
-      for (const q of m.getAllQuestions()) {
-        let expr = exprMap.get(q.name);
-        if (!expr) continue;
-        expr = expr.replace(/([+\-*/])\s+([+\-*/])/g, '$1').replace(/([+\-*/])\1+/g, '$1');
-        let compiled = expr;
-        const refs = [...new Set(expr.match(/\{([^}]+)\}/g) || [])];
-        for (const ref of refs) {
-          const name = ref.slice(1, -1);
-          const srcQ = m.getQuestionByName(name);
-          const val = srcQ ? (srcQ.value as number | undefined) : undefined;
-          compiled = compiled.split(ref).join(String(Number(val) || 0));
-        }
-        try {
-          const result = safeEvalArithmetic(compiled);
-          if (typeof result === "number" && isFinite(result)) {
-            if (q.value !== result) m.setValue(q.name, result);
-          }
-        } catch {
-          console.warn(`[Builder] Formula eval failed for "${q.name}"`);
-        }
-      }
-    };
-    m.onValueChanged.add(() => setTimeout(recalcExpressions, 0));
-    setTimeout(recalcExpressions, 0);
-
-    m.onValueChanged.add((_, options) => {
-      const q = m.getQuestionByName(options.name);
-      if (!q || q.getType() !== "text") return;
-      const mode = (q as Record<string, unknown>).autocapitalize as string | undefined;
-      if (!mode || mode === "none") return;
-      const val = options.value;
-      if (typeof val !== "string") return;
-      const transform = (v: string) => {
-        switch (mode) {
-          case "words": return v.replace(/\b\w/g, c => c.toUpperCase());
-          case "sentences": return v.replace(/(^\w|[.!?]\s+\w)/g, c => c.toUpperCase());
-          case "characters": return v.toUpperCase();
-          default: return v;
-        }
-      };
-      const next = transform(val);
-      if (next !== val) {
-        q.value = next;
-      }
-    });
-
-    m.onGetExpressionDisplayValue.add((_sender, options) => {
-      if (options.question && options.question.getType() === "expression" && (options.question as any).currency === "MYR") {
-        options.displayValue = "RM " + String(options.displayValue).replace(/^[^\d\s-]+/, "").trim();
-      }
-    });
-    if (json.labelPosition) {
-      m.questionTitleLocation = json.labelPosition as "top" | "bottom" | "left";
-    }
-    return m;
-  } catch (e) {
-    console.error("Preview model error:", e);
-    return null;
-  }
-}
-
-// ── Preview bodies ────────────────────────────────────────────────────
-
-/** Which renderer the preview modal is currently drawing with. */
-type PreviewEngine = "native" | "surveyjs";
+// ── Preview body ──────────────────────────────────────────────────────
 
 interface PreviewBodyProps {
   json: SurveyJson;
@@ -2338,119 +2250,17 @@ function NativePreviewBody({ json, dataRef, companyFieldName, companyValue, onCo
   );
 }
 
-function SurveyJsPreviewBody({ json, dataRef, companyFieldName, companyValue, onCompanyChange }: PreviewBodyProps) {
-  const [model, setModel] = useState<Model | null>(null);
-  const [surveyMountKey, setSurveyMountKey] = useState(0);
-  const jsonFingerprint = JSON.stringify(json);
-
-  // Create/dispose the Survey model in an effect so React Strict Mode remounts
-  // get a fresh model instead of reusing a disposed instance cached by useMemo.
-  useEffect(() => {
-    const nextModel = createLivePreviewModel(json, dataRef);
-    setModel(nextModel);
-    setSurveyMountKey(key => key + 1);
-    return () => {
-      nextModel?.dispose();
-      setModel(null);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jsonFingerprint]);
-
-  useEffect(() => {
-    if (!model || !companyFieldName) return;
-    if (companyValue && model.getValue(companyFieldName) !== companyValue) {
-      model.setValue(companyFieldName, companyValue);
-    }
-    const syncCompanyValue = (_sender: Model, options: { name: string; value: unknown }) => {
-      if (options.name === companyFieldName) {
-        onCompanyChange(typeof options.value === "string" ? options.value : "");
-      }
-    };
-    model.onValueChanged.add(syncCompanyValue);
-    return () => model.onValueChanged.remove(syncCompanyValue);
-  }, [model, companyFieldName, companyValue, onCompanyChange]);
-
-  if (!model) return null;
-
-  return (
-    <div className="fb-preview-wrap" style={{
-      padding: "20px 24px", maxHeight: "70vh", overflowY: "auto",
-      backgroundColor: json.backgroundColor || "#FFFFFF",
-      // SurveyJS v2 CSS custom properties for theming
-      ["--sjs-primary-backcolor" as string]: json.primaryColor || "#0078D4",
-      ["--sjs-primary-backcolor-light" as string]: json.primaryColor ? `${json.primaryColor}33` : "#7C3AED33",
-      ["--sjs-primary-backcolor-dark" as string]: json.primaryColor || "#3B0764",
-      ["--sjs-general-backcolor" as string]: json.backgroundColor || "#FFFFFF",
-      ["--sjs-general-backcolor-dim" as string]: json.backgroundColor || "#F8F7FF",
-      ["--sjs-general-forecolor" as string]: json.textColor || "#1A1F2B",
-      ["--sjs-general-dim-forecolor" as string]: json.textColor || "#1A1F2B",
-      ["--sjs-font-family" as string]: APP_FONT_STACK,
-      ["--sjs-border-default" as string]: json.primaryColor ? `${json.primaryColor}40` : "#DDD6FE",
-      ["--sjs-border-light" as string]: json.primaryColor ? `${json.primaryColor}20` : "#E5E3F0",
-      ["--sjs-questionpanel-cornerRadius" as string]: json.borderRadius || "8px",
-      ["--sjs-editorpanel-cornerRadius" as string]: json.borderRadius || "8px",
-      ["--sjs-error-backcolor" as string]: json.errorColor ? `${json.errorColor}1A` : "#FEE2E2",
-      ["--sjs-error-forecolor" as string]: json.errorColor || "#DC2626",
-    } as React.CSSProperties}><style>{`.fb-preview-wrap .sd-container-modern>.sd-title{text-align:center!important}
-.fb-preview-wrap .sd-row{display:flex!important;flex-wrap:wrap!important}`}</style><Survey key={surveyMountKey} model={model} /></div>
-  );
-}
-
-/**
- * Switches the preview between the two renderers.
- *
- * It is here rather than behind a setting because on this branch the two
- * disagree: the native engine is what the preview shows by default, but
- * `/form/:formId` still serves published forms through SurveyJS. An author about
- * to publish needs to be able to see the renderer their respondents will
- * actually get, and the footer text under each says which is which.
- */
-function EngineToggle({ engine, onChange }: { engine: PreviewEngine; onChange: (next: PreviewEngine) => void }) {
-  return (
-    <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 8, background: "rgba(255,255,255,0.15)" }}>
-      {([["native", "Native"], ["surveyjs", "SurveyJS"]] as const).map(([id, label]) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => onChange(id)}
-          aria-pressed={engine === id}
-          title={id === "native" ? "The new renderer" : "What a published form uses today"}
-          style={{
-            border: "none",
-            borderRadius: 6,
-            padding: "4px 10px",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontSize: 11,
-            fontWeight: 700,
-            background: engine === id ? C.white : "transparent",
-            color: engine === id ? C.purple : "rgba(255,255,255,0.75)",
-          }}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ── Live Preview Modal ────────────────────────────────────────────────
 function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" }: { json: SurveyJson; onClose: () => void; showBanner?: boolean; meta?: Record<string, unknown>; device?: "desktop" | "tablet" | "mobile" }) {
   const dataRef = useRef<Record<string, unknown>>({});
   const [previewCompany, setPreviewCompany] = useState("");
-  const [engine, setEngine] = useState<PreviewEngine>("native");
 
   const formTitle = json?.title || "Form Preview";
+  const formDescription = json?.description || "";
   const isoStandards = (meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
-  const companies = (meta?.companies as string) || "";
-  const companyLines = companies.split("\n").map(line => line.trim()).filter(Boolean);
-  const companySelector = findCompanyChoiceElement(json, meta);
-  const companyOptions = getCompanyChoiceOptions(
-    companySelector?.choices as FormBuilderField["choices"] | undefined,
-    companyLines
-  );
-  const companyFieldName = String(companySelector?.name || "");
-  const companyTitle = String(companySelector?.title || "Company");
+  // Only the field's name is needed now: the chooser is drawn inside the form,
+  // so the modal's job is to keep the answer, not to offer the choice.
+  const companyFieldName = String(findCompanyChoiceElement(json, meta)?.name || "");
   const logoUrl = (meta?.logoUrl as string) || "";
   // Desktop is 1180 because that is the width the native engine's own layout is
   // built around — at the old 760 the preview showed the stacked phone layout
@@ -2458,15 +2268,12 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
   const deviceWidth = device === "desktop" ? 1180 : device === "tablet" ? 500 : 340;
   const bannerLogoWidth = device === "desktop" ? 150 : device === "tablet" ? 132 : 104;
   const bannerLogoMaxHeight = device === "desktop" ? 48 : device === "tablet" ? 42 : 34;
-  const showHeaderBanner = showBanner || Boolean(companySelector);
-
-  const bodyProps = {
-    json,
-    dataRef,
-    companyFieldName,
-    companyValue: previewCompany,
-    onCompanyChange: setPreviewCompany,
-  };
+  // The banner carries the logo beside the form's own title and description.
+  // It used to hold a company chooser too, because SurveyJS could not draw that
+  // question — the managed field is published `visible: false`, so the banner
+  // was the only place to put it. The engine draws it inside the form now, and
+  // a second copy up here would only ask the same question twice.
+  const showHeaderBanner = showBanner;
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
@@ -2477,15 +2284,10 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
           <div style={{ fontSize: 14, color: C.white, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>How users will see this form</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <EngineToggle engine={engine} onChange={setEngine} />
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
         </div>
       </div>
       {showHeaderBanner && <div style={{ borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "16px 22px" }}>
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandards}</div>
-          <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 17, color: "#fff" }}>{formTitle}</div>
-        </div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <tbody>
             <tr style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -2493,27 +2295,21 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
                 <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: bannerLogoMaxHeight, objectFit: "contain" }} />
               </td>
               <td style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13, color: C.textPrimary }}>
-                {companySelector && companyOptions.length > 0
-                  ? <PreviewCompanySelector
-                      title={companyTitle}
-                      options={companyOptions}
-                      value={previewCompany}
-                      compact={device !== "desktop"}
-                      onChange={setPreviewCompany}
-                    />
-                  : companyLines.length > 0
-                  ? companyLines.map((line, i) => <div key={i} style={i > 0 ? { marginTop: 4 } : undefined}>{line}</div>)
-                  : "PMW INTERNATIONAL BERHAD"}
+                <PreviewFormIdentity title={formTitle} description={formDescription} isoStandards={isoStandards} />
               </td>
             </tr>
           </tbody>
         </table>
       </div>}
-      {engine === "native" ? <NativePreviewBody {...bodyProps} /> : <SurveyJsPreviewBody {...bodyProps} />}
+      <NativePreviewBody
+        json={json}
+        dataRef={dataRef}
+        companyFieldName={companyFieldName}
+        companyValue={previewCompany}
+        onCompanyChange={setPreviewCompany}
+      />
       <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>
-        {engine === "native"
-          ? "Preview only — nothing is saved. Published forms are still served by the SurveyJS renderer; switch above to check that."
-          : "Preview only. Submissions are not saved. This is the renderer a published form uses today."}
+        Preview only — nothing is saved. This is the renderer a published form uses.
       </div>
     </div>
   </div>;

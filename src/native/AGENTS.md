@@ -2,17 +2,26 @@
 
 **Scope:** A form renderer that reads published SurveyJSON and draws it without SurveyJS.
 
-**Status: parallel, not a replacement.** `/form/:formId` (`DynamicFormPage`) still runs
-SurveyJS and is still the only route that submits anything. This exists to answer one
-question — does a purpose-built renderer read better than a themed SurveyJS.
+**Status: this is the renderer.** Every surface that draws a form draws it with this
+engine — SurveyJS no longer renders anything in the app.
 
-Two places use it, neither of them a submit path:
-- `/native/:formId` — the standalone comparison route (`NativeFormPreviewPage`).
-- **The builder's live preview** — `LivePreviewModal` in `components/builder/FormBuilder.tsx`
-  draws with this engine by default, and its header carries a **Native / SurveyJS**
-  toggle. The toggle is not decoration: published forms are still served by SurveyJS, so
-  an author about to publish has to be able to see the renderer their respondents will get.
-  Both bodies share one answers store, so switching carries the filled-in state across.
+- `/form/:formId` (`DynamicFormPage`) — the live form, including the submit path.
+- `/eval/...` (`EvaluationPage`) and the approval dashboard — evaluation entry.
+- `ResponseViewer` — a submitted response, read-only (`useNativeForm(..., { readOnly: true })`).
+- **The builder's live preview** — `LivePreviewModal` in `components/builder/FormBuilder.tsx`.
+  Its banner carries the logo beside the form's title and description; the managed Company
+  question is published `visible: false` and this engine draws it inside the form, so a
+  chooser in the banner as well would ask the same question twice.
+- `/native/:formId` (`NativeFormPreviewPage`) — a read-only preview route that predates the
+  migration. It now renders the same thing `/form/:formId` does without submitting, and is
+  chiefly useful for `/native/demo`, which needs no tenant.
+
+`survey-core` and `survey-react-ui` are **uninstalled**, and the two files that registered
+SurveyJS question types are gone. What the approval pages actually used from them lives on
+as `utils/signatureCapture.tsx` (the signing control) and `utils/matrixData.ts` (reading a
+submitted matrix), neither of which has a SurveyJS dependency. Published forms are still
+SurveyJSON — that is the storage format, and `parseForm()` reads it — but no SurveyJS code
+runs anywhere in the app.
 
 ## WHERE TO LOOK
 | Task | File | Notes |
@@ -24,8 +33,9 @@ Two places use it, neither of them a submit path:
 | Layout, sections, rail, page nav | `NativeForm.tsx` | Default export `NativeFormView`. |
 | The entire visual system | `native-form.css` | Tokens under `.nf`, dark under `.nf[data-theme="dark"]`. |
 | Sample form for `/native/demo` | `demoForm.ts` | Not a fixture; no test asserts against it. |
-| Host page | `../pages/NativeFormPreviewPage.tsx` | Route `/native/:formId`, public. Read-only. |
-| Builder preview | `../components/builder/FormBuilder.tsx` | `NativePreviewBody` / `SurveyJsPreviewBody` / `EngineToggle`, used by `LivePreviewModal`. |
+| The live form and its submit path | `../pages/DynamicFormPage.tsx` | `handleSubmit` validates, then fills `lastDataRef` from `collect()`. |
+| Preview route | `../pages/NativeFormPreviewPage.tsx` | Route `/native/:formId`, public. Read-only. |
+| Builder preview | `../components/builder/FormBuilder.tsx` | `NativePreviewBody`, used by `LivePreviewModal`. |
 
 ## Commands
 ```bash
@@ -35,9 +45,9 @@ Visual check without a backend or a tenant:
 ```bash
 npm run dev
 ```
-then `/native/demo`, and `/native/demo?engine=surveyjs` for the same JSON under SurveyJS.
-`?theme=dark` on either. The builder's preview needs a signed-in session, so `/native/demo`
-is the quicker way to look at the engine itself.
+then `/native/demo`, optionally with `?theme=dark`. A real form needs a tenant, and the
+builder's preview needs a signed-in session, so `/native/demo` is the quicker way to look
+at the engine itself.
 
 ## Design rules the CSS enforces
 Breaking one of these is what makes a form look untidy, so they are worth restating:
@@ -101,19 +111,36 @@ inflate type inside a narrow preview, which is the one place an author is judgin
 The builder's desktop preview is 1180px wide for the same reason: at the old 760px it
 rendered the stacked layout and labelled it "desktop".
 
+### `rateValues` beats `rateMin`/`rateMax`
+A rating whose author wrote per-step labels is drawn from that list outright, and its
+`minRateDescription` / `maxRateDescription` are suppressed — they would repeat the first
+and last button word for word. The step's *value* stays a number when the published one
+is, because the SharePoint column behind a rating is a Number field; `NativeChoice` would
+have stringified it, which is why `NativeRateStep` exists as a separate shape. The
+builder's editor derives its rows from the range, so the two can never disagree.
+
+### The signing window is portalled, and carries `.nf` itself
+`SignatureControl` no longer draws on the form: a signature made inline is committed by
+the act of drawing it, and a stray touch while scrolling is the common case on a phone,
+not the unlucky one. Tapping opens a dialog whose stroke is provisional until confirmed.
+
+That dialog is portalled to `document.body` **with `className="nf"` on the fixed element
+itself**. Both halves matter: `.nf` declares `container-type: inline-size`, which makes it
+a containment root and therefore the containing block for any fixed-position descendant —
+a dialog rendered inside the form would be pinned to the form's box and land off-screen on
+a scrolled page — and portalling out of `.nf` would otherwise leave it with no tokens. The
+theme is read off the nearest `.nf` ancestor when the dialog opens, since it cannot inherit
+`data-theme` across the portal.
+
 ### CSP blocks `new Function()`
 Same constraint as the rest of the app. `expression.ts` reuses `safeEvalArithmetic` rather
 than growing a second evaluator — do not reach for `eval` or `Function` here.
 
 ## What is not implemented
-Deliberate omissions, all of which the SurveyJS path handles and the preview route does not:
-- **Submission.** The preview validates and prints the payload it would have sent.
-- **SharePoint choice enrichment** for signed-in users — the preview reads
-  `/api/form-config`, which resolves choices server-side, so `spChoicesSource` fields work
-  on the public path only.
-- **Prefilled QR links, the company selector, and version pinning beyond `?v=`.**
 - **Cross-field validations and `logicRules`** — `validators` and `visibleIf`/`enableIf`
   are read; the builder's richer rule objects are not.
+- On `/native/:formId` only: prefilled QR links, and version pinning beyond `?v=`. Both
+  work on `/form/:formId`, which owns them rather than the engine.
 
-Promoting this past a preview means wiring `NativeFormView` into `DynamicFormPage` behind a
-flag, not reimplementing the submit path here.
+Submission is not this directory's job and should stay that way. `DynamicFormPage` owns
+uploads, column mapping and workflow; the engine hands it a value bag from `collect()`.

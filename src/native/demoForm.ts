@@ -164,6 +164,20 @@ export const DEMO_FORM: Record<string, unknown> = {
               minRateDescription: "Can wait a quarter",
               maxRateDescription: "Blocking work now",
             },
+            {
+              // The labelled counterpart of the scale above, so both shapes a
+              // rating can take are on screen at once.
+              type: "rating",
+              name: "budgetConfidence",
+              title: "Confidence in the quoted cost",
+              description: "How firm is the figure you are about to enter?",
+              rateValues: [
+                { value: 1, text: "A rough guess" },
+                { value: 2, text: "An estimate" },
+                { value: 3, text: "A written quote" },
+                { value: 4, text: "A signed quote" },
+              ],
+            },
           ],
         },
         {

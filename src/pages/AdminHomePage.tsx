@@ -23,7 +23,7 @@ import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
-import { collectPublishProfiles, collectTrainingTitles } from "../utils/submissionFilters";
+import { collectFieldCatalog, collectFormTypes, collectPublishProfiles } from "../utils/submissionFilters";
 import { csvCell, downloadCsv } from "../utils/csv";
 import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
@@ -160,8 +160,9 @@ export default function AdminHomePage() {
   const workspaceLabel = isAdmin ? "Admin workspace" : "Employee workspace";
   const canHardDeleteSubmission = isAdmin || canUseFormBuilder;
   const canExportSubmissions = isAdmin || canUseFormBuilder;
-  const trainingTitleOptions = collectTrainingTitles(submissions);
-  const publishProfileOptions = collectPublishProfiles(submissions);
+  const formTypeOptions = collectFormTypes(submissions, visibleLists.map((list) => list.title));
+  const publishProfileOptions = collectPublishProfiles(submissions, filters.formType);
+  const fieldCatalog = collectFieldCatalog(submissions, filters.formType);
   const exportRows = exportScope === "all" ? submissions : sortedSubmissions;
   const dashboardSubtitle = isAdmin
     ? canUseFormBuilder
@@ -391,12 +392,12 @@ export default function AdminHomePage() {
             setFilters={setFilters}
             sortBy={sortBy}
             setSortBy={setSortBy}
-            trainingTitleOptions={trainingTitleOptions}
+            formTypeOptions={formTypeOptions}
             publishProfileOptions={publishProfileOptions}
+            fieldCatalog={fieldCatalog}
             isAdmin={isAdmin}
             canExportSubmissions={canExportSubmissions}
             onOpenExport={() => setExportOpen(true)}
-            visibleLists={visibleLists}
             total={submissions.length}
             filtered={sortedSubmissions.length}
           />

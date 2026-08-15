@@ -8,6 +8,15 @@
         "value": "inter",
         "createdAt": "2026-08-01T12:51:30.559Z",
         "reason": "Matches Microsoft 365 system faces; shared with pmw-hrform"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/builder/BuilderShell.css"
+        ],
+        "createdAt": "2026-08-14T11:41:24.357Z",
+        "reason": "Builder canvas list rows, not cards. The 3px left bar is transparent by default and encodes three states (is-selected / is-error / is-dropover), each paired with a background fill, so selection is never carried by colour alone."
       }
     ]
   }

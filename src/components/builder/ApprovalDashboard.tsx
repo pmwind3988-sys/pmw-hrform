@@ -5,13 +5,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { Model } from "survey-core";
-import { Survey } from "survey-react-ui";
-import { FlatLightPanelless } from "survey-core/themes";
-import "survey-core/survey-core.min.css";
+import NativeFormView from "../../native/NativeForm";
+import { parseForm, type NativeForm } from "../../native/schema";
+import { useNativeForm } from "../../native/useNativeForm";
+import "../../native/native-form.css";
 
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
-import { registerSignaturePad, SignatureCapture } from "../../utils/SignaturePad";
+import { SignatureCapture } from "../../utils/signatureCapture";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
@@ -21,6 +21,17 @@ import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
 import { LIFECYCLE_STAGES, lifecycleLabel, resolveLifecycleStage } from "../../utils/submissionLifecycle";
 import type { LifecycleStage } from "../../utils/submissionLifecycle";
+import SubmissionFilterPanel from "./SubmissionFilterPanel";
+import {
+  DEFAULT_PROFILE_KEY,
+  EMPTY_SUBMISSION_FILTERS,
+  recordMatchesFilters,
+  type FilterableRecord,
+  type FormTypeOption,
+  type SubmissionFilterState,
+} from "../../utils/submissionFilters";
+import { fieldsFromSurveyJson, mergeFieldCatalogs, mergeObservedValues } from "../../utils/formFieldCatalog";
+import type { FilterableField } from "../../utils/formFieldCatalog";
 import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import {
@@ -65,7 +76,6 @@ import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONFIGURED_SENDER_EMAIL = (
   import.meta.env.VITE_HR_FORM_EMAIL_FROM_ADDRESS ||
@@ -279,8 +289,6 @@ function needsBranchPick(item: PendingItem): boolean {
 // field (NOT the form/list name). This is the primary, user-facing way to
 // categorise submissions.
 const TRAINING_TITLE_FIELD = "trainingTitle";
-const ALL_TRAININGS = "__ALL_TRAININGS__";
-const NO_TRAINING_TITLE = "__NO_TRAINING_TITLE__";
 function getItemTrainingTitle(item: PendingItem): string {
   return (item.trainingTitle || "").trim();
 }
@@ -288,7 +296,6 @@ function getItemTrainingTitle(item: PendingItem): string {
 // Published profile (PublishKey) the submission was sent under. Empty on legacy
 // records that predate the profile column — grouped as the default profile.
 // Profile is developer-reference metadata only, not a user-facing category.
-const ALL_PROFILES = "__ALL__";
 function getItemProfileKey(item: PendingItem): string {
   return (item.PublishKey || "").trim();
 }
@@ -629,12 +636,13 @@ export default function ApprovalDashboard() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [stageFilter, setStageFilter] = useState<LifecycleStage>("pending");
-  const [titleFilter, setTitleFilter] = useState("");
-  const [submitterFilter, setSubmitterFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [trainingFilter, setTrainingFilter] = useState(ALL_TRAININGS);
-  const [profileFilter, setProfileFilter] = useState(ALL_PROFILES);
+  // One filter model, shared with the dashboard. The lifecycle tabs below own the
+  // stage instead of `filters.stage`, so the tab counts can ignore it.
+  const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
+  const [formFieldCatalogs, setFormFieldCatalogs] = useState<Record<string, FilterableField[]>>({});
+  // Submitted answers per form type, loaded on demand — see the effect below.
+  const [answersByForm, setAnswersByForm] = useState<Record<string, Record<number, Record<string, unknown>>>>({});
+  const [answersLoading, setAnswersLoading] = useState(false);
   const [workflowTypeFilter, setWorkflowTypeFilter] = useState<"all" | "approval" | "evaluation">("all");
   const [listPage, setListPage] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -660,8 +668,15 @@ export default function ApprovalDashboard() {
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
   const [currentLayerConfig, setCurrentLayerConfig] = useState<LayerConfigItem | null>(null);
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
-  const [evalSurveyModel, setEvalSurveyModel] = useState<Model | null>(null);
-  const [evalValid, setEvalValid] = useState(true);
+  // The questions the current evaluation layer asks, as a native document.
+  // Held as state rather than derived, because the layer it belongs to is
+  // resolved asynchronously when a submission is opened.
+  const [evalForm, setEvalForm] = useState<NativeForm | null>(null);
+  const placeholderForm = useMemo(() => parseForm(null), []);
+  const evalRuntime = useNativeForm(evalForm ?? placeholderForm);
+  // An approval layer asks nothing, so it is ready as soon as it opens; an
+  // evaluation layer is ready once every required question has an answer.
+  const evalValid = evalForm === null || evalRuntime.answered >= evalRuntime.required;
   const [actionSuccess, setActionSuccess] = useState<{
     type: "approved" | "rejected" | "confirmed";
     message: string;
@@ -676,29 +691,80 @@ export default function ApprovalDashboard() {
   } | null>(null);
 
 
+  /**
+   * The submitted answers, fetched only once a form type is chosen.
+   *
+   * The list queries above select a fixed set of workflow columns, so the answers
+   * are simply not in `pendingItems` — a field condition matched against them
+   * would quietly return nothing. They are also the one thing here that is
+   * per-form rather than per-workflow, so loading them up front would mean an
+   * all-columns read of every response list on every visit. Deferring it to the
+   * moment an admin scopes to a form keeps the page's first paint unchanged.
+   */
+  useEffect(() => {
+    const formType = filters.formType;
+    if (!formType || !token || answersByForm[formType]) return;
+    let cancelled = false;
+    setAnswersLoading(true);
+    (async () => {
+      let rows: Record<string, unknown>[] = [];
+      try {
+        // No $select: the answer columns differ per form, and naming one that
+        // does not exist makes SharePoint fail the whole request.
+        const res = await spGet(token,
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formType)}')/items?$orderby=Created desc&$top=100`
+        ) as { value?: Record<string, unknown>[] };
+        rows = res.value ?? [];
+      } catch {
+        // Leave an empty map behind so this is not retried on every keystroke.
+      }
+      if (cancelled) return;
+      const map: Record<number, Record<string, unknown>> = {};
+      for (const row of rows) {
+        const id = Number(row.Id);
+        if (Number.isFinite(id)) map[id] = row;
+      }
+      setAnswersByForm((prev) => ({ ...prev, [formType]: map }));
+      setAnswersLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [filters.formType, token, answersByForm]);
+
+  const answersReady = !!filters.formType && !!answersByForm[filters.formType];
+
+  const itemAnswers = useMemo(() => {
+    const map = new Map<string, Record<string, unknown>>();
+    const forForm = filters.formType ? answersByForm[filters.formType] : undefined;
+    if (!forForm) return map;
+    for (const item of pendingItems) {
+      if (item.Title !== filters.formType) continue;
+      const row = forForm[item.Id];
+      if (row) map.set(getPendingItemKey(item), row);
+    }
+    return map;
+  }, [pendingItems, filters.formType, answersByForm]);
+
+  const toFilterRecord = useCallback((item: PendingItem): FilterableRecord => ({
+    formType: item.Title,
+    profileKey: getItemProfileKey(item) || DEFAULT_PROFILE_KEY,
+    stage: getItemLifecycleStage(item),
+    submittedAt: item.SubmittedAt,
+    searchTexts: [item.Title, String(item.Id), getItemTrainingTitle(item)],
+    submitterTexts: [item.SubmittedBy],
+    data: itemAnswers.get(getPendingItemKey(item)) ?? {},
+  }), [itemAnswers]);
+
+  // Everything except the lifecycle stage, which the tabs own — their counts have
+  // to be computed over the items the other filters leave standing.
   const baseFilteredItems = useMemo(() => {
-    let items = pendingItems;
-
-    if (titleFilter.trim()) {
-      const q = titleFilter.trim().toLowerCase();
-      items = items.filter(i => getItemTrainingTitle(i).toLowerCase().includes(q));
-    }
-
-    if (submitterFilter.trim()) {
-      const q = submitterFilter.trim().toLowerCase();
-      items = items.filter(i => i.SubmittedBy.toLowerCase().includes(q));
-    }
-
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      items = items.filter(i => i.SubmittedAt && new Date(i.SubmittedAt) >= from);
-    }
-
-    if (dateTo) {
-      const to = new Date(dateTo);
-      to.setHours(23, 59, 59, 999); // end of day
-      items = items.filter(i => i.SubmittedAt && new Date(i.SubmittedAt) <= to);
-    }
+    // Hold the field conditions back until the answers land, so the list does not
+    // flash empty while they are in flight.
+    const withoutStage = {
+      ...filters,
+      stage: "all",
+      fieldFilters: answersReady ? filters.fieldFilters : [],
+    };
+    const items = pendingItems.filter(item => recordMatchesFilters(toFilterRecord(item), withoutStage));
 
     return [...items].sort((a, b) => {
       const bTime = b.SubmittedAt ? new Date(b.SubmittedAt).getTime() : 0;
@@ -706,7 +772,7 @@ export default function ApprovalDashboard() {
       if (bTime !== aTime) return bTime - aTime;
       return b.Id - a.Id;
     });
-  }, [pendingItems, titleFilter, submitterFilter, dateFrom, dateTo]);
+  }, [pendingItems, filters, toFilterRecord, answersReady]);
 
   const categoryItems = useMemo(() => {
     if (workflowTypeFilter === "all") return baseFilteredItems;
@@ -717,62 +783,46 @@ export default function ApprovalDashboard() {
     );
   }, [baseFilteredItems, itemCurrentTypes, workflowTypeFilter]);
 
-  // Distinct training titles (from each submission's `trainingTitle` field)
-  // present in the current category, for the primary categorisation filter.
-  const availableTitles = useMemo(() => {
-    const titles = new Set<string>();
-    for (const item of categoryItems) {
-      const training = getItemTrainingTitle(item);
-      if (training) titles.add(training);
-    }
-    return Array.from(titles).sort((a, b) => a.localeCompare(b));
-  }, [categoryItems]);
+  // Form types present, so the picker can be scoped before anything else.
+  const formTypeOptions = useMemo<FormTypeOption[]>(() => {
+    const counts = new Map<string, number>();
+    for (const item of pendingItems) counts.set(item.Title, (counts.get(item.Title) ?? 0) + 1);
+    return Array.from(counts, ([title, count]) => ({ title, count }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [pendingItems]);
 
-  // Whether any submission in the current category has no training title, so the
-  // dropdown can offer an explicit bucket for them.
-  const hasUncategorizedTraining = useMemo(
-    () => categoryItems.some(item => !getItemTrainingTitle(item)),
-    [categoryItems],
-  );
-
-  // Distinct published profiles present in the current category, for the filter.
+  // Profiles belong to a form, so they are only offered once one is chosen.
   const availableProfiles = useMemo(() => {
     const keys = new Set<string>();
-    for (const item of categoryItems) keys.add(getItemProfileKey(item));
+    for (const item of pendingItems) {
+      if (filters.formType && item.Title !== filters.formType) continue;
+      keys.add(getItemProfileKey(item) || DEFAULT_PROFILE_KEY);
+    }
     return Array.from(keys).sort((a, b) => a.localeCompare(b));
-  }, [categoryItems]);
+  }, [pendingItems, filters.formType]);
 
-  const filteredItems = useMemo(() => {
-    let items = categoryItems;
+  // The selected form type's own questions: its published schemas, widened by the
+  // answers actually recorded so SharePoint-backed choices still list options.
+  const fieldCatalog = useMemo(() => {
+    if (!filters.formType) return [];
+    const base = (formFieldCatalogs[filters.formType] ?? []).map((field) => ({
+      ...field,
+      choices: field.choices ? [...field.choices] : undefined,
+    }));
+    return mergeObservedValues(base, Array.from(itemAnswers.values()));
+  }, [filters.formType, formFieldCatalogs, itemAnswers]);
 
-    items = items.filter(i => getItemLifecycleStage(i) === stageFilter);
-
-    if (trainingFilter === NO_TRAINING_TITLE) {
-      items = items.filter(i => !getItemTrainingTitle(i));
-    } else if (trainingFilter !== ALL_TRAININGS) {
-      items = items.filter(i => getItemTrainingTitle(i) === trainingFilter);
-    }
-
-    if (profileFilter !== ALL_PROFILES) {
-      items = items.filter(i => getItemProfileKey(i) === profileFilter);
-    }
-
-    return items;
-  }, [categoryItems, stageFilter, trainingFilter, profileFilter]);
+  const filteredItems = useMemo(
+    () => categoryItems.filter(i => getItemLifecycleStage(i) === stageFilter),
+    [categoryItems, stageFilter],
+  );
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
 
   useEffect(() => {
     setListPage(1);
-  }, [workflowTypeFilter, stageFilter, titleFilter, submitterFilter, dateFrom, dateTo, trainingFilter, profileFilter]);
-
-  // A training title / profile selected in one category may not exist in
-  // another — reset both on switch.
-  useEffect(() => {
-    setTrainingFilter(ALL_TRAININGS);
-    setProfileFilter(ALL_PROFILES);
-  }, [workflowTypeFilter]);
+  }, [workflowTypeFilter, stageFilter, filters]);
 
   useEffect(() => {
     if (listPage > totalListPages) setListPage(totalListPages);
@@ -849,6 +899,9 @@ export default function ApprovalDashboard() {
               `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$select=FormTitle,FormVersion,SurveyJSON&$top=500`
             ) as { value?: { FormTitle: string; FormVersion: string; SurveyJSON: string }[] };
           }
+          // The same pass that reads layer configs also yields each form's
+          // questions — what the field conditions filter on.
+          const schemasByForm: Record<string, FilterableField[][]> = {};
           for (const v of allVersions?.value ?? []) {
             try {
               const parsed = JSON.parse(v.SurveyJSON);
@@ -856,8 +909,15 @@ export default function ApprovalDashboard() {
                 const key = getVersionLayerMapKey(v.FormTitle, v.FormVersion, v.PublishKey);
                 versionLayerMap[key] = parsed.layerConfig;
               }
+              const fields = fieldsFromSurveyJson(parsed);
+              if (fields.length) (schemasByForm[v.FormTitle] ??= []).push(fields);
             } catch { /* skip unparseable */ }
           }
+          setFormFieldCatalogs(
+            Object.fromEntries(
+              Object.entries(schemasByForm).map(([title, schemas]) => [title, mergeFieldCatalogs(schemas)]),
+            ),
+          );
         } catch { /* version list may not exist */ }
 
         const allItems: PendingItem[] = [];
@@ -1172,8 +1232,7 @@ export default function ApprovalDashboard() {
     setCurrentLayerType(null);
     setCurrentLayerConfig(null);
     setApprovalSignature(null);
-    setEvalSurveyModel(null);
-    setEvalValid(true);
+    setEvalForm(null);
     setCompletedLayers({});
     setSelectedActiveLayers([]);
     setSelectedLayerAccess(null);
@@ -1197,7 +1256,7 @@ export default function ApprovalDashboard() {
           setNeedsBranchSelection(true);
           setAvailableBranches(lcBranches);
           setCurrentLayerType(null);
-          setEvalSurveyModel(null);
+          setEvalForm(null);
         } else {
           setNeedsBranchSelection(false);
           setAvailableBranches([]);
@@ -1211,7 +1270,7 @@ export default function ApprovalDashboard() {
             setNeedsBranchSelection(true);
             setAvailableBranches(lcBranches);
             setCurrentLayerType(null);
-            setEvalSurveyModel(null);
+            setEvalForm(null);
           } else {
             setNeedsBranchSelection(false);
             setAvailableBranches([]);
@@ -1387,27 +1446,21 @@ export default function ApprovalDashboard() {
         if (pendingBranch) {
           setCurrentLayerType(null);
           setCurrentLayerConfig(null);
-          setEvalSurveyModel(null);
+          setEvalForm(null);
           return;
         }
 
         if (currentResolution.currentLayer?.type === "evaluation") {
           setCurrentLayerType("evaluation");
           const evalElements = (currentResolution.currentLayer as EvaluationLayerConfig).surveyElements || [];
-          if (evalElements.length > 0) {
-            const m = new Model(buildEvaluationSurveyJson(evalElements) as object);
-            m.applyTheme(FlatLightPanelless);
-            const checkValid = () => { setEvalValid(!m.hasErrors()); };
-            m.onValueChanged.add(checkValid);
-            setTimeout(checkValid, 0);
-            setEvalSurveyModel((prev) => { prev?.dispose(); return m; });
-          } else {
-            setEvalSurveyModel(null);
-            setEvalValid(false);
-          }
+          setEvalForm(
+            evalElements.length > 0
+              ? parseForm(buildEvaluationSurveyJson(evalElements))
+              : null,
+          );
         } else {
           setCurrentLayerType("approval");
-          setEvalSurveyModel(null);
+          setEvalForm(null);
         }
       }
     } catch (e) {
@@ -1422,11 +1475,9 @@ export default function ApprovalDashboard() {
       setError("This item is locked because the current layer is assigned to another approver.");
       return;
     }
-    // Validate required fields before submitting
-    if (evalSurveyModel) {
-      const valid = evalSurveyModel.validate();
-      if (!valid) { setEvalValid(false); return; }
-    }
+    // Validation paints the errors and focuses the first one, so a rejected
+    // submit leaves the approver looking at what still needs answering.
+    if (evalForm && !evalRuntime.validateAll().ok) return;
 
     setActionLoading(true);
     try {
@@ -1443,7 +1494,7 @@ export default function ApprovalDashboard() {
       const nextLayerNum = nextLayerConfig?.layerNumber ?? currLayerNum + 1;
       const isFinal = !nextLayerConfig && currLayerNum >= totalLayers;
 
-      const fields = evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data as Record<string, unknown>) : {};
+      const fields = evalForm ? foldOtherAnswers(evalRuntime.collect()) : {};
 
       await submitEvaluationData(token, listName, respId, currLayerNum, {
         confirmerEmail: accounts[0]?.username || "SYSTEM",
@@ -2171,7 +2222,7 @@ export default function ApprovalDashboard() {
         setSelectedItem(null);
         setSurveyJson(null);
         setResponseData(null);
-        setEvalSurveyModel(null);
+        setEvalForm(null);
         setCompletedLayers({});
       }
       setDeleteTarget(null);
@@ -2495,101 +2546,27 @@ export default function ApprovalDashboard() {
           </select>
         </div>
 
-        {/* Filters */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <input
-            type="text"
-            placeholder="Search training title..."
-            value={titleFilter}
-            onChange={e => setTitleFilter(e.target.value)}
-            style={{
-              flex: "1 1 180px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-              fontSize: 13, color: C.textPrimary, outline: "none", minWidth: 0,
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Filter by submitter email..."
-            value={submitterFilter}
-            onChange={e => setSubmitterFilter(e.target.value)}
-            style={{
-              flex: "1 1 180px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-              fontSize: 13, color: C.textPrimary, outline: "none", minWidth: 0,
-            }}
-          />
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-            <span style={{ fontSize: 12, color: C.textMuted }}>From</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              style={{
-                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                fontSize: 12, color: C.textPrimary, outline: "none",
-              }}
-            />
-            <span style={{ fontSize: 12, color: C.textMuted }}>To</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              style={{
-                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                fontSize: 12, color: C.textPrimary, outline: "none",
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-            <span style={{ fontSize: 12, color: C.textMuted }}>Training</span>
-            <select
-              value={trainingFilter}
-              onChange={e => setTrainingFilter(e.target.value)}
-              title="Categorise submissions by the training title captured inside each submission"
-              style={{
-                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                fontSize: 12, color: C.textPrimary, outline: "none", background: "#fff",
-                maxWidth: 220,
-              }}
-            >
-              <option value={ALL_TRAININGS}>All training titles</option>
-              {availableTitles.map((title) => (
-                <option key={title} value={title}>{title}</option>
-              ))}
-              {hasUncategorizedTraining && (
-                <option value={NO_TRAINING_TITLE}>— No training title —</option>
-              )}
-            </select>
-          </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-            <span style={{ fontSize: 12, color: C.textMuted }} title="Developer-reference metadata only">Profile</span>
-            <select
-              value={profileFilter}
-              onChange={e => setProfileFilter(e.target.value)}
-              title="Developer-reference metadata: the published profile a submission was sent under"
-              style={{
-                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                fontSize: 12, color: C.textMuted, outline: "none", background: "#fff",
-                maxWidth: 200,
-              }}
-            >
-              <option value={ALL_PROFILES}>All profiles</option>
-              {availableProfiles.map((key) => (
-                <option key={key || "__default__"} value={key}>{key || "Default"}</option>
-              ))}
-            </select>
-          </div>
-          {(titleFilter || submitterFilter || dateFrom || dateTo || trainingFilter !== ALL_TRAININGS || profileFilter !== ALL_PROFILES) && (
-            <button
-              onClick={() => { setTitleFilter(""); setSubmitterFilter(""); setDateFrom(""); setDateTo(""); setTrainingFilter(ALL_TRAININGS); setProfileFilter(ALL_PROFILES); }}
-              style={{
-                padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-                background: "transparent", color: C.textMuted, fontSize: 12, cursor: "pointer",
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
+        <SubmissionFilterPanel
+          filters={filters}
+          setFilters={setFilters}
+          formTypeOptions={formTypeOptions}
+          publishProfileOptions={availableProfiles}
+          fieldCatalog={fieldCatalog}
+          showStage={false}
+          fieldDataLoading={answersLoading}
+          total={pendingItems.length}
+          filtered={filteredItems.length}
+          palette={{
+            border: C.border,
+            cardBg: C.cardBg,
+            panelBg: C.bg,
+            textPrimary: C.textPrimary,
+            textSecond: C.textSecond,
+            textMuted: C.textMuted,
+            accent: C.purple,
+            accentPale: C.purplePale,
+          }}
+        />
 
         {/* Reject Reason Dialog */}
         {showRejectDialog && (
@@ -3166,13 +3143,13 @@ export default function ApprovalDashboard() {
                 )}
 
                 {/* Evaluation Form: editable SurveyJS for evaluation layers */}
-                {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) && evalSurveyModel && (
+                {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) && evalForm && (
                   <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
                       Evaluation Form
                     </div>
                     <div className="approval-survey-preview">
-                      <Survey model={evalSurveyModel} />
+                      <NativeFormView runtime={evalRuntime} />
                     </div>
                   </div>
                 )}
@@ -3191,11 +3168,11 @@ export default function ApprovalDashboard() {
 
                 <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, display: "flex", gap: 12 }}>
                   {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
-                    <button onClick={handleEvaluationSubmit} disabled={actionLoading || (!!evalSurveyModel && !evalValid)}
+                    <button onClick={handleEvaluationSubmit} disabled={actionLoading || (!!evalForm && !evalValid)}
                       style={{ flex: 1, padding: "12px 16px", borderRadius: 8, border: "none",
-                        background: (!evalSurveyModel || evalValid) ? C.purple : C.border, color: "#fff", fontWeight: 600,
-                        cursor: (actionLoading || (!!evalSurveyModel && !evalValid)) ? "not-allowed" : "pointer", opacity: (actionLoading || (!!evalSurveyModel && !evalValid)) ? 0.6 : 1 }}>
-                      {actionLoading ? "Submitting..." : evalSurveyModel && !evalValid ? "Fill required fields" : <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Submit Evaluation</>}
+                        background: (!evalForm || evalValid) ? C.purple : C.border, color: "#fff", fontWeight: 600,
+                        cursor: (actionLoading || (!!evalForm && !evalValid)) ? "not-allowed" : "pointer", opacity: (actionLoading || (!!evalForm && !evalValid)) ? 0.6 : 1 }}>
+                      {actionLoading ? "Submitting..." : evalForm && !evalValid ? "Fill required fields" : <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Submit Evaluation</>}
                     </button>
                   ) : getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
                     <>

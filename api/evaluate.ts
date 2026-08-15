@@ -631,6 +631,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // 3. Build update payload based on action
     const updates: Record<string, unknown> = {};
     let notificationNextLayer: Record<string, unknown> | undefined;
+    // Held out of `updates` deliberately — see the separate patch below.
+    let actedByEmail = "";
     const now = new Date().toISOString();
 
     if (action === "approve" || action === "confirm") {
@@ -647,7 +649,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         responseItem.fields[`L${layerNumber}_Emails`] || responseItem.fields[`L${layerNumber}_Email`],
       );
       if (layerActors.length === 1 && !responseItem.fields[`L${layerNumber}_ActedBy`]) {
-        updates[`L${layerNumber}_ActedBy`] = layerActors[0];
+        actedByEmail = layerActors[0];
       }
 
       // For evaluation layers: also write to EvaluationData JSON
@@ -700,6 +702,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // 4. Update the response item
     await updateListItemFields(graphToken, responseListName, responseItem.id, updates);
 
+    // Patched on its own, after the decision is safely recorded. `L{n}_ActedBy`
+    // is absent from response lists provisioned before multi-actor layers, and
+    // Graph fails an entire PATCH over one unknown column — so carrying this in
+    // `updates` would turn a missing column into a refused approval, for a form
+    // that was working fine yesterday. It stays in memory either way, so the
+    // next layer still routes from whoever acted even if the note did not land.
+    if (actedByEmail) {
+      await updateListItemFields(graphToken, responseListName, responseItem.id, {
+        [`L${layerNumber}_ActedBy`]: actedByEmail,
+      }).catch((error) => {
+        logWarn("api:evaluate", "Could not record who acted on the layer", {
+          formTitle,
+          layerNumber,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);
       // A layer routing from the previous layer's actor was left empty at
@@ -711,7 +731,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         responseItemId: responseItem.id,
         nextLayer: notificationNextLayer,
         item: responseItem.fields,
-        actedBy: String(updates[`L${layerNumber}_ActedBy`] || responseItem.fields[`L${layerNumber}_ActedBy`] || ""),
+        actedBy: actedByEmail || String(responseItem.fields[`L${layerNumber}_ActedBy`] || ""),
         previousLayerNumber: layerNumber,
         formTitle,
       });

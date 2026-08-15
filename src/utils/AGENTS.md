@@ -10,7 +10,10 @@
 | Config loader | `spConfig.ts` | `SP_STATIC` group names, `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`, `legacyToLayerConfig()` migration helper |
 | Form logic | `FormBuilderEngine.ts` | Pure functions: 57 question types, validation, survey JSON builder, versioning |
 | Status constants | `statusConstants.ts` | `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`, `layerColumn()` helper |
-| Custom widget | `DynamicMatrix.tsx` | Custom SurveyJS widget for matrix questions + `rowsToHtml()` matrix↔HTML conversion |
+| Submission filtering | `submissionFilters.ts` | `SubmissionFilterState` + `recordMatchesFilters` — the one engine behind the dashboard, approval workspace and response viewer. Pure. See `src/components/dashboard/AGENTS.md` for the model. |
+| Filterable questions | `formFieldCatalog.ts` | Turns published SurveyJSON into typed `FilterableField[]` (kind → allowed operators), and reads answers through SharePoint's escaped keys. Pure. |
+| Matrix answers | `matrixData.ts` | `getDynamicMatrixFields()` finds matrix questions in published JSON; `rowsToHtml()` renders rows for a SharePoint rich-text column. Pure. |
+| Signing control | `signatureCapture.tsx` | `SignatureCapture` (approver sign-off) and the `SignatureModal` drawing dialog. |
 | Auth persistence | `authDecision.ts` | `localStorage` helpers for `pmw_hr_auth_decision` |
 | PDPA compliance | `pdpa.ts` | Constants + helper for PDPA retention date, consent label, privacy notice sections |
 | Career API client | `careersService.ts` | Frontend fetch wrapper for `/api/jobs-list`, `/api/job-apply`, `/api/job-admin`. ~470 lines. |

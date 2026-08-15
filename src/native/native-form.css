@@ -591,6 +591,11 @@
 }
 
 .nf-rating button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   min-width: 40px;
   min-height: 38px;
   padding: 0 10px;
@@ -606,15 +611,57 @@
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
+/* A labelled scale is a row of captions, not of digits, so the steps share the
+   width evenly and each becomes a tappable block rather than a 40px square with
+   a word hanging off it. The cap keeps a two-point scale from becoming two
+   half-page buttons. */
+.nf-rating[data-labelled] button {
+  flex: 1 1 96px;
+  max-width: 240px;
+  min-height: 54px;
+  padding: 7px 10px;
+}
+
+.nf-rating-value {
+  color: var(--nf-ink);
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+}
+
+.nf-rating[data-labelled] .nf-rating-value {
+  color: var(--nf-ink-faint);
+  font-size: var(--nf-fs-help);
+  font-weight: 700;
+}
+
+.nf-rating-text {
+  color: var(--nf-ink-soft);
+  font-size: var(--nf-fs-help);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .nf-rating button[aria-pressed="true"] {
   border-color: var(--nf-brand);
   background: var(--nf-brand);
   color: #fff;
 }
 
+.nf-rating button[aria-pressed="true"] .nf-rating-value,
+.nf-rating button[aria-pressed="true"] .nf-rating-text {
+  color: inherit;
+}
+
 .nf-rating button:focus-visible {
   outline: none;
   box-shadow: var(--nf-ring);
+}
+
+.nf-rating button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .nf-scale-ends {
@@ -726,6 +773,8 @@
   white-space: nowrap;
 }
 
+/* ── Signature ──────────────────────────────────────────────────────────── */
+
 .nf-sign {
   border: 1px solid var(--nf-line-strong);
   border-radius: var(--nf-radius-sm);
@@ -733,12 +782,60 @@
   overflow: hidden;
 }
 
-.nf-sign canvas {
-  display: block;
+.nf-sign[data-invalid="true"] {
+  border-color: var(--nf-danger);
+}
+
+/* The field itself is a target, not a canvas: nothing drawn here can be
+   committed by accident, because nothing is drawn here at all. */
+.nf-sign-plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  touch-action: none;
-  cursor: crosshair;
-  background: var(--nf-panel);
+  min-height: 104px;
+  padding: 12px;
+  border: none;
+  background: var(--nf-sunken);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nf-sign[data-signed="true"] .nf-sign-plate {
+  /* Ink is dark and the stored PNG is transparent, so the plate holding a
+     signature stays paper-white in both themes or the signature vanishes. */
+  background: #ffffff;
+}
+
+.nf-sign-plate:hover:not(:disabled) {
+  background: var(--nf-brand-wash);
+}
+
+.nf-sign-plate:focus-visible {
+  outline: none;
+  box-shadow: inset var(--nf-ring);
+}
+
+.nf-sign-plate:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.nf-sign-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--nf-brand-ink);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  font-weight: 600;
+}
+
+.nf-sign-ink {
+  display: block;
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
 }
 
 .nf-sign-bar {
@@ -751,6 +848,121 @@
   background: var(--nf-sunken);
   font-size: var(--nf-fs-help);
   color: var(--nf-ink-faint);
+}
+
+.nf-sign-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+/* ── Signing window ─────────────────────────────────────────────────────── */
+
+/* Carries `.nf` itself: it is portalled out of the form, so it has to bring the
+   tokens with it, and it must be the fixed element rather than sit inside one
+   — `.nf` is a containment root, which would otherwise anchor it to the form. */
+.nf-sign-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(16, 24, 40, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.nf-sign-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+  padding: 18px;
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel);
+  box-shadow: 0 24px 60px rgba(16, 24, 40, 0.28);
+}
+
+.nf-sign-dialog-eyebrow {
+  display: block;
+  font-size: var(--nf-fs-help);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nf-ink-faint);
+}
+
+.nf-sign-dialog-title {
+  margin: 2px 0 0;
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+  color: var(--nf-ink);
+  text-wrap: balance;
+}
+
+/* Always white, in both themes: a signature is ink on paper, and the PNG this
+   produces is composited onto a white page in the PDF. */
+.nf-sign-paper {
+  position: relative;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.nf-sign-canvas {
+  display: block;
+  width: 100%;
+  height: 200px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* The line to sign on, the way a paper form gives you one. */
+.nf-sign-rule {
+  position: absolute;
+  right: 24px;
+  bottom: 44px;
+  left: 24px;
+  border-bottom: 1px dashed #cbd5e1;
+  pointer-events: none;
+}
+
+.nf-sign-note {
+  margin: 0;
+  font-size: var(--nf-fs-help);
+  color: var(--nf-ink-faint);
+}
+
+.nf-sign-dialog-foot {
+  display: flex;
+  gap: 8px;
+}
+
+.nf-sign-dialog-gap {
+  flex: 1;
+}
+
+@container nf (max-width: 420px) {
+  .nf-sign-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* The window is its own `nf` container — it is portalled out of the form and
+   sized to the viewport — so this stays a container query like every other
+   layout rule in the sheet, and still describes the screen it is drawn on. */
+@container nf (max-width: 480px) {
+  .nf-sign-canvas {
+    height: 160px;
+  }
+
+  .nf-sign-dialog-foot {
+    flex-wrap: wrap;
+  }
 }
 
 /* ── Table / matrix ─────────────────────────────────────────────────────── */

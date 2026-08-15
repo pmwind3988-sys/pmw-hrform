@@ -1,10 +1,12 @@
 /**
  * "Other — let me type my own" answers on dropdown / radio / checkbox questions.
  *
- * SurveyJS splits such an answer across two data keys: the question itself holds the
- * literal string `"other"`, and a companion `{name}-Comment` key holds what the
- * respondent actually typed. (survey-core 2.5 does this regardless of the survey's
- * `storeOthersAsComment` setting, so that property is not a way out.)
+ * Such an answer is split across two data keys: the question itself holds the literal
+ * string `"other"`, and a companion `{name}-Comment` key holds what the respondent
+ * actually typed. SurveyJS established that shape — unavoidably, since survey-core 2.5
+ * did it regardless of `storeOthersAsComment` — and the native engine's `collect()`
+ * deliberately still produces it, because submissions written either way have to fold
+ * through this one function.
  *
  * Neither half survives a SharePoint write. `{name}-Comment` matches no provisioned
  * column, so column resolution rejects the whole submission, and the question column

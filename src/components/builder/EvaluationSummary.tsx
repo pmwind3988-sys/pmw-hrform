@@ -3,6 +3,7 @@
  * Shows evaluator name, date, and field values.
  */
 import type { EvaluationLayerResult } from "../../types";
+import { ratingStepLabel } from "../../utils/ratingLabels";
 
 interface EvaluationSummaryProps {
   result: EvaluationLayerResult;
@@ -17,6 +18,7 @@ interface EvaluationFieldDefinition {
   type: string;
   rateMin?: number;
   rateMax?: number;
+  rateValues?: unknown[];
   minRateDescription?: string;
   maxRateDescription?: string;
   currency?: string;
@@ -100,6 +102,7 @@ function collectFieldDefinitions(elements: Record<string, unknown>[] | undefined
         type: typeof element.type === "string" ? element.type : "text",
         rateMin: typeof element.rateMin === "number" ? element.rateMin : undefined,
         rateMax: typeof element.rateMax === "number" ? element.rateMax : undefined,
+        rateValues: Array.isArray(element.rateValues) ? element.rateValues : undefined,
         minRateDescription: typeof element.minRateDescription === "string" ? element.minRateDescription : undefined,
         maxRateDescription: typeof element.maxRateDescription === "string" ? element.maxRateDescription : undefined,
         currency: typeof element.currency === "string" ? element.currency : undefined,
@@ -124,10 +127,14 @@ function RatingDisplay({ field, value }: { field: EvaluationFieldDefinition; val
   const min = field.rateMin ?? 1;
   const max = field.rateMax ?? 5;
   const percent = max > min ? ((Math.min(max, Math.max(min, rating)) - min) / (max - min)) * 100 : 100;
+  const chosen = ratingStepLabel(field.rateValues, rating);
 
   return (
     <div style={{ display: "grid", gap: 6, minWidth: 150 }}>
-      <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{rating} / {max}</div>
+      <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+        {chosen && <span style={{ marginRight: 6, fontWeight: 700 }}>{chosen}</span>}
+        {rating} / {max}
+      </div>
       <div style={{ height: 7, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
         <div style={{ width: `${percent}%`, height: "100%", background: "linear-gradient(90deg, #F7C948, #6264A7)" }} />
       </div>

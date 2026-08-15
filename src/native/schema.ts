@@ -48,6 +48,18 @@ export interface NativeChoice {
   text: string;
 }
 
+/**
+ * One step on a rating scale, with the label its author gave it.
+ *
+ * The value stays a number when the published one is. A rating answer lands in
+ * a SharePoint Number column, so turning `4` into `"4"` on the way through —
+ * which `NativeChoice` would, being all strings — would submit the wrong type.
+ */
+export interface NativeRateStep {
+  value: number | string;
+  text: string;
+}
+
 export interface NativeColumn {
   name: string;
   title: string;
@@ -83,6 +95,14 @@ export interface NativeElement {
   placeholder: string;
   rows: number;
   maxLength: number;
+  /**
+   * `words | sentences | characters`, or "" to leave typing alone.
+   *
+   * A custom property the builder registers on SurveyJS `text` questions, so it
+   * only ever appears on published JSON — but it appears on plenty of it, and a
+   * name field that stopped capitalising itself would be a visible regression.
+   */
+  autocapitalize: string;
   min?: number;
   max?: number;
   step?: number;
@@ -102,6 +122,8 @@ export interface NativeElement {
 
   rateMin: number;
   rateMax: number;
+  /** Per-step labels. Empty means the scale is drawn as bare numbers. */
+  rateValues: NativeRateStep[];
   minRateDescription: string;
   maxRateDescription: string;
 
@@ -200,6 +222,33 @@ function toChoices(raw: unknown): NativeChoice[] {
   return out;
 }
 
+/**
+ * SurveyJS's `rateValues` — the same three shapes `toChoices` accepts, but
+ * parsed separately so a numeric step keeps its number. See `NativeRateStep`.
+ */
+function toRateSteps(raw: unknown): NativeRateStep[] {
+  if (!Array.isArray(raw)) return [];
+  const out: NativeRateStep[] = [];
+  for (const entry of raw) {
+    if (entry === null || entry === undefined || entry === "") continue;
+    if (typeof entry === "number") {
+      out.push({ value: entry, text: String(entry) });
+      continue;
+    }
+    if (typeof entry === "object") {
+      const o = entry as Raw;
+      const declared = o.value ?? o.text;
+      if (declared === undefined || declared === null || declared === "") continue;
+      const value = typeof declared === "number" ? declared : String(declared);
+      out.push({ value, text: str(o.text ?? o.value, String(value)) });
+      continue;
+    }
+    const text = String(entry);
+    out.push({ value: text, text });
+  }
+  return out;
+}
+
 const CELL_TYPES: Record<string, NativeColumn["cellType"]> = {
   text: "text",
   comment: "text",
@@ -270,6 +319,17 @@ function toInputType(raw: Raw): NativeInputType {
     default:
       return "text";
   }
+}
+
+/**
+ * The capitalisation rule a `text` question was published with.
+ *
+ * "none" and anything unrecognised both mean leave typing alone, and are
+ * flattened to "" so the control has one thing to test rather than two.
+ */
+function toAutocapitalize(raw: Raw): string {
+  const declared = str(raw.autocapitalize).toLowerCase();
+  return ["words", "sentences", "characters"].includes(declared) ? declared : "";
 }
 
 function alertTone(raw: Raw): string {
@@ -364,6 +424,7 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
     inline: raw.startWithNewLine === false,
 
     inputType: toInputType(raw),
+    autocapitalize: toAutocapitalize(raw),
     placeholder: str(raw.placeholder ?? raw.placeHolder),
     rows: num(raw.rows, 4),
     maxLength: num(raw.maxLength, 0),
@@ -376,7 +437,11 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
     choices,
     colCount: num(raw.colCount, 1),
     hasOther: bool(raw.hasOther ?? raw.showOtherItem),
-    otherText: str(raw.otherText, "Other"),
+    // "Other (describe)" rather than "Other": an author who never set a label
+    // published no `otherText` at all and got SurveyJS's built-in default, so
+    // that string is what every such form has always shown. It is also what the
+    // builder puts on the row while the author is looking at it.
+    otherText: str(raw.otherText, "Other (describe)"),
     hasNone: bool(raw.hasNone ?? raw.showNoneItem),
     noneText: str(raw.noneText, "None"),
     maxSelections: num(raw.maxSelections, 0),
@@ -386,6 +451,7 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
 
     rateMin: num(raw.rateMin, 1),
     rateMax: num(raw.rateMax, 5),
+    rateValues: toRateSteps(raw.rateValues),
     minRateDescription: str(raw.minRateDescription),
     maxRateDescription: str(raw.maxRateDescription),
 

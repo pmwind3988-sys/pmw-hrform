@@ -1,6 +1,6 @@
 # AGENTS.md — src/components/builder/
 
-**Scope:** Custom drag-drop form builder (Form Builder Superuser-only). NOT SurveyJS Creator — bespoke UI over `survey-react-ui`.
+**Scope:** Custom drag-drop form builder (Form Builder Superuser-only). Never used SurveyJS Creator; it now emits SurveyJSON as a storage format only, and previews with the `src/native/` engine.
 
 ## WHERE TO LOOK
 | Task | File | Notes |
@@ -34,9 +34,8 @@ AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + 
   │     ├── FormSheet (WYSIWYG rows on a paper sheet, hover row tools)
   │     ├── PropertyPanel (.bx-propdock — mounted only while a field is selected)
   │     ├── JsonPreview (bottom drawer, opened from Tools → Survey JSON)
-  │     └── LivePreviewModal (device chrome + banner + Native/SurveyJS toggle)
-  │           ├── NativePreviewBody  (src/native engine — the default)
-  │           └── SurveyJsPreviewBody (survey-react-ui — what a published form uses)
+  │     └── LivePreviewModal (device chrome + banner)
+  │           └── NativePreviewBody (src/native engine — what a published form uses)
   ├── LayerConfigPanel (Workflow mode, full width — unchanged in function)
   │     ├── LayerCard[] (per-layer config)
   │     ├── EvalElementPicker (for evaluation layers)
@@ -71,7 +70,7 @@ AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + 
 - **SP Choice Source**: Choice fields (dropdown, radiogroup, checkbox, buttongroup) can pull values from existing SharePoint list columns via `spChoicesSource` property. Toggle "Manual" / "SharePoint List" in Options tab.
 - **"Other" (own answer)**: Choice fields have a "Let people enter their own answer" toggle in Options → `hasOther`, with an optional `otherText` label. Works with manual and SP-sourced choices. Publishing sets `FillInChoice` on the SharePoint column (and repairs it on columns that already exist), and `foldOtherAnswers` in `src/utils/surveyOtherAnswers.ts` collapses SurveyJS's `"other"` + `{name}-Comment` pair into the typed answer on submit — without it the `-Comment` key fails column resolution and the whole submission is rejected.
 - **Matrix Column Editor**: `dynamicmatrix` fields have a per-column editor in Options tab — set cell type (text/dropdown/date/number/checkbox/boolean), manual choices, or SP choice source per column.
-- **Signature Widget**: `signaturepad` uses a custom modal-based widget (`src/utils/SignaturePad.tsx`) registered via `ReactQuestionFactory`. Click to open modal → sign → save/lock. Image stored as base64, uploaded to `Signature Images` doc library on submit.
+- **Signature field**: `signaturepad` is drawn by the native engine's own signature control. Click to open a dialog → sign → save. Image stored as base64, uploaded to the `Signature Images` doc library on submit.
 - **Logo Setter**: Banner logo URL configurable in the form meta sidebar; defaults to `/logo-128.png`.
 - **Form Title Toggle**: "Show form title" toggle in Form Settings controls SurveyJS title visibility (sets `titleLocation: "hidden"`). Title is centered via CSS when visible.
 - **Public Layer Tokens**: Publish flow generates UUID tokens for public layers via `crypto.randomUUID()`. Each token grants access to exactly one layer.

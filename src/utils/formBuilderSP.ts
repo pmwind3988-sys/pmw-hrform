@@ -1772,7 +1772,7 @@ async function getFormVersionByTitle(token: string, listTitle: string, version: 
 
 // ── Matrix Child Lists ────────────────────────────────────────────────────
 
-/** Column definition for a dynamicmatrix child list — mirrors DynamicMatrix.tsx MatrixColumn */
+/** Column definition for a dynamicmatrix child list — mirrors `MatrixColumn` in matrixData.ts */
 export interface MatrixColumnDef {
   name: string;
   title: string;

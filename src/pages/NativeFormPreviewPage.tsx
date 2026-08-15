@@ -17,10 +17,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Model } from "survey-core";
-import { Survey } from "survey-react-ui";
-import { LayeredLightPanelless } from "survey-core/themes";
-import "survey-core/survey-core.min.css";
 import NativeFormView from "../native/NativeForm";
 import { parseForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
@@ -108,11 +104,6 @@ export default function NativeFormPreviewPage() {
   const pinVersion = searchParams.get("v") || searchParams.get("version") || "";
   const publishKey = searchParams.get("publish") || "";
   const dark = searchParams.get("theme") === "dark";
-  // `?engine=surveyjs` draws the same published JSON through the renderer this
-  // one is a candidate to replace. Same document, same page chrome, so the only
-  // variable left on screen is the engine.
-  const useSurveyJs = searchParams.get("engine") === "surveyjs";
-
   const [consent, setConsent] = useState(false);
   const [consentError, setConsentError] = useState("");
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
@@ -220,15 +211,13 @@ export default function NativeFormPreviewPage() {
 
   return (
     <div className="nf" data-theme={dark ? "dark" : "light"} style={{ background: "var(--nf-canvas)", minHeight: "100vh" }}>
-      <PreviewBar formId={formId} version={version} useSurveyJs={useSurveyJs} />
+      <PreviewBar formId={formId} version={version} />
 
       {showBanner && (
         <FormBanner title={title} isoStandards={isoStandards} logoUrl={logoUrl} header={documentHeader} />
       )}
 
-      {useSurveyJs ? (
-        <SurveyJsPreview surveyJson={loaded?.surveyJson ?? {}} />
-      ) : payload ? (
+      {payload ? (
         <div className="nf-shell">
           <section className="nf-section">
             <div className="nf-section-head">
@@ -301,37 +290,8 @@ export default function NativeFormPreviewPage() {
   );
 }
 
-/**
- * The same published JSON under SurveyJS, themed the way `DynamicFormPage`
- * themes it, so the comparison is against what is actually shipped rather than
- * against SurveyJS's defaults. Read-only: nothing here submits either.
- */
-function SurveyJsPreview({ surveyJson }: { surveyJson: Record<string, unknown> }) {
-  const model = useMemo(() => {
-    const m = new Model(surveyJson);
-    m.applyTheme(LayeredLightPanelless);
-    m.showCompletedPage = false;
-    m.showCompleteButton = false;
-    return m;
-  }, [surveyJson]);
-
-  return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 20px 40px" }}>
-      <Survey model={model} />
-    </div>
-  );
-}
-
 /** Names the route for what it is, and links straight to the form it mirrors. */
-function PreviewBar({
-  formId,
-  version,
-  useSurveyJs,
-}: {
-  formId: string;
-  version: string;
-  useSurveyJs: boolean;
-}) {
+function PreviewBar({ formId, version }: { formId: string; version: string }) {
   return (
     <div
       style={{
@@ -349,26 +309,20 @@ function PreviewBar({
         style={{
           padding: "3px 9px",
           borderRadius: 999,
-          background: useSurveyJs ? "var(--nf-sunken)" : "var(--nf-brand-wash)",
-          color: useSurveyJs ? "var(--nf-ink-soft)" : "var(--nf-brand-ink)",
+          background: "var(--nf-brand-wash)",
+          color: "var(--nf-brand-ink)",
           fontWeight: 700,
           letterSpacing: "0.04em",
           textTransform: "uppercase",
           fontSize: 10,
         }}
       >
-        {useSurveyJs ? "SurveyJS" : "Native engine"}
+        Native engine
       </span>
       <span style={{ color: "var(--nf-ink-soft)" }}>
         {formId} · v{version} · nothing is submitted from this route
       </span>
       <span style={{ marginLeft: "auto", display: "flex", gap: 14 }}>
-        <Link
-          to={useSurveyJs ? `/native/${formId}` : `/native/${formId}?engine=surveyjs`}
-          style={{ color: "var(--nf-brand-ink)", fontWeight: 700, textDecoration: "none" }}
-        >
-          {useSurveyJs ? "← Back to the native engine" : "Compare with SurveyJS →"}
-        </Link>
         {formId !== DEMO_SLUG && (
           <Link to={`/form/${formId}`} style={{ color: "var(--nf-ink-soft)", textDecoration: "none" }}>
             Open the live form

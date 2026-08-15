@@ -395,6 +395,13 @@ export interface FormBuilderField {
   hasNone?: boolean;
   rateMin?: number;
   rateMax?: number;
+  /**
+   * A label for each point on a rating scale (SurveyJS `rateValues`). Present
+   * only once an author has written at least one — a scale with none is a plain
+   * `rateMin`/`rateMax` range, and an empty list here would pin the renderers to
+   * a step list nobody authored.
+   */
+  rateValues?: { value: number | string; text: string }[];
   minRateDescription?: string;
   maxRateDescription?: string;
   labelTrue?: string;

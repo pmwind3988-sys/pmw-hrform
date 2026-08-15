@@ -2,14 +2,14 @@
  * ResponseViewer.tsx — Admin view for all form submissions
  * Route: /admin/responses/:formTitle
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { Model } from "survey-core";
-import { Survey } from "survey-react-ui";
-import { FlatLightPanelless } from "survey-core/themes";
-import "survey-core/survey-core.min.css";
+import NativeFormView from "../../native/NativeForm";
+import { parseForm } from "../../native/schema";
+import { useNativeForm } from "../../native/useNativeForm";
+import "../../native/native-form.css";
 
 import DOMPurify from "dompurify";
 import LockIcon from "@mui/icons-material/Lock";
@@ -20,8 +20,18 @@ import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { csvRow, downloadCsv } from "../../utils/csv";
-import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
+import { rowsToHtml, getDynamicMatrixFields } from "../../utils/matrixData";
 import { getSelectedCompany } from "../../utils/companySelection";
+import SubmissionFilterPanel from "./SubmissionFilterPanel";
+import {
+  DEFAULT_PROFILE_KEY,
+  EMPTY_SUBMISSION_FILTERS,
+  recordMatchesFilters,
+  type SubmissionFilterState,
+} from "../../utils/submissionFilters";
+import { fieldsFromSurveyJson, mergeFieldCatalogs, mergeObservedValues } from "../../utils/formFieldCatalog";
+import type { FilterableField } from "../../utils/formFieldCatalog";
+import { resolveLifecycleStage } from "../../utils/submissionLifecycle";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -54,10 +64,11 @@ interface MatrixTableEntry {
 
 interface SubmissionItem {
   Id: number;
-  Title: string;
-  SubmittedBy: string;
+  Title: string | null;
+  SubmittedBy: string | null;
   SubmittedAt: string;
-  Status: string;
+  /** Null on items whose Status column was never written. */
+  Status: string | null;
   CurrentApprovalLayer: number;
   CurrentLayer?: number;
   FormStatus?: string;
@@ -107,7 +118,9 @@ export default function ResponseViewer() {
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionItem | null>(null);
   const [selectedResponseData, setSelectedResponseData] = useState<Record<string, unknown> | null>(null);
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
+  /** This form's questions across every published version, for the filter panel. */
+  const [filterFields, setFilterFields] = useState<FilterableField[]>([]);
   const [matrixTables, setMatrixTables] = useState<Record<string, MatrixTableEntry>>({});
   const [matrixLoading, setMatrixLoading] = useState(false);
 
@@ -159,6 +172,24 @@ export default function ResponseViewer() {
         ) as { value?: SubmissionItem[] };
 
         setSubmissions(items.value || []);
+
+        // Every version this form has been published as, so the filter knows the
+        // questions before any submission is opened — `surveyJson` below is
+        // loaded per selected response and is null until then.
+        try {
+          const versions = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listName)}'&$select=SurveyJSON&$top=50`
+          ) as { value?: { SurveyJSON?: string }[] };
+          const schemas: FilterableField[][] = [];
+          for (const version of versions.value ?? []) {
+            if (!version.SurveyJSON) continue;
+            try {
+              schemas.push(fieldsFromSurveyJson(JSON.parse(version.SurveyJSON)));
+            } catch { /* skip unparseable snapshot */ }
+          }
+          setFilterFields(mergeFieldCatalogs(schemas));
+        } catch { /* version list may not exist — the catalogue stays empty */ }
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -262,50 +293,92 @@ export default function ResponseViewer() {
     downloadCsv(csv, `${formTitle}-submissions.csv`);
   };
 
-  // Filter submissions
-  const filteredSubmissions =
-    statusFilter === "all"
-      ? submissions
-      : submissions.filter((s) => s.Status.toLowerCase().includes(statusFilter.toLowerCase()));
+  // Answers parsed once, so the field conditions do not re-parse every keystroke.
+  const parsedItemData = useMemo(() => {
+    const map = new Map<number, Record<string, unknown>>();
+    for (const item of submissions) {
+      let data: Record<string, unknown> = {};
+      try {
+        const parsed: unknown = JSON.parse(item.RawJSON || "{}");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          data = parsed as Record<string, unknown>;
+        }
+      } catch { /* unparseable payload — no answers to filter on */ }
+      map.set(item.Id, data);
+    }
+    return map;
+  }, [submissions]);
 
-  const modelRef = useRef<Model | null>(null);
-  // Dispose model on unmount
-  useEffect(() => {
-    return () => modelRef.current?.dispose();
-  }, []);
+  /**
+   * This page is already scoped to one form, so the filter panel skips the form
+   * type step and goes straight to that form's own questions.
+   */
+  const fieldCatalog = useMemo(() => {
+    const base = filterFields.map((field) => ({
+      ...field,
+      choices: field.choices ? [...field.choices] : undefined,
+    }));
+    return mergeObservedValues(base, submissions.map((item) => parsedItemData.get(item.Id) ?? {}));
+  }, [filterFields, submissions, parsedItemData]);
 
-  // Render preview survey with data
-  const previewSurvey = useMemo(() => {
+  const filteredSubmissions = useMemo(
+    () =>
+      submissions.filter((item) =>
+        recordMatchesFilters(
+          {
+            formType: formTitle ?? "",
+            profileKey: DEFAULT_PROFILE_KEY,
+            stage: resolveLifecycleStage({
+              formStatus: item.FormStatus,
+              status: item.Status,
+            }),
+            submittedAt: item.SubmittedAt,
+            searchTexts: [item.Title ?? "", String(item.Id)],
+            submitterTexts: [item.SubmittedBy ?? ""],
+            data: parsedItemData.get(item.Id) ?? {},
+          },
+          filters,
+        ),
+      ),
+    [submissions, filters, formTitle, parsedItemData],
+  );
+
+  // The published document this response was answered against.
+  const previewForm = useMemo(() => {
     if (!surveyJson) return null;
     try {
-      const m = new Model(surveyJson as object);
-      m.applyTheme(FlatLightPanelless);
-      m.mode = "display";
-      // If there's a selected submission, load its data
-      if (selectedSubmission?.RawJSON) {
-        try {
-          const data = JSON.parse(selectedSubmission.RawJSON);
-          m.data = data;
-        } catch {
-          // Ignore parse errors
-        }
-      }
-      if (selectedResponseData) {
-        m.data = selectedResponseData;
-      }
-      modelRef.current?.dispose();
-      modelRef.current = m;
-      return m;
+      return parseForm(surveyJson);
     } catch {
       return null;
     }
-  }, [surveyJson, selectedSubmission?.RawJSON, selectedResponseData]);
+  }, [surveyJson]);
+
+  /**
+   * The answers to show in it. The response list's own columns win over
+   * `RawJSON`, which is the snapshot taken at submission time and can lag
+   * anything an approver corrected since.
+   */
+  const previewAnswers = useMemo<Record<string, unknown>>(() => {
+    if (selectedResponseData) return selectedResponseData as Record<string, unknown>;
+    if (selectedSubmission?.RawJSON) {
+      try {
+        return JSON.parse(selectedSubmission.RawJSON) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }, [selectedSubmission?.RawJSON, selectedResponseData]);
+
+  const placeholderForm = useMemo(() => parseForm(null), []);
+  const previewRuntime = useNativeForm(previewForm ?? placeholderForm, previewAnswers, { readOnly: true });
 
   const selectedCompany = getSelectedCompany(selectedResponseData, surveyJson);
 
-  // Status badge color
-  const getStatusColor = (status: string) => {
-    const s = status.toLowerCase();
+  // Status badge color. SharePoint returns null for a Status never written, so
+  // this cannot assume a string.
+  const getStatusColor = (status: string | null | undefined) => {
+    const s = (status ?? "").toLowerCase();
     if (s.includes("approved") || s.includes("submitted")) return { bg: C.greenPale, color: C.green };
     if (s.includes("pending")) return { bg: C.amberPale, color: C.amber };
     if (s.includes("rejected")) return { bg: C.redPale, color: C.red };
@@ -358,23 +431,6 @@ export default function ResponseViewer() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 12 }}>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: `1px solid ${C.border}`,
-                background: C.cardBg,
-                color: C.textPrimary,
-                fontSize: 13,
-              }}
-            >
-              <option value="all">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
             <button
               onClick={handleExportCSV}
               style={{
@@ -398,6 +454,24 @@ export default function ResponseViewer() {
             {error}
           </div>
         )}
+
+        <SubmissionFilterPanel
+          filters={filters}
+          setFilters={setFilters}
+          fieldCatalog={fieldCatalog}
+          total={submissions.length}
+          filtered={filteredSubmissions.length}
+          palette={{
+            border: C.border,
+            cardBg: C.cardBg,
+            panelBg: C.bg,
+            textPrimary: C.textPrimary,
+            textSecond: C.textSecond,
+            textMuted: C.textMuted,
+            accent: C.purple,
+            accentPale: C.purplePale,
+          }}
+        />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
           {/* Submissions List */}
@@ -518,9 +592,9 @@ export default function ResponseViewer() {
                 </div>
 
                 <div style={{ padding: 16, maxHeight: 500, overflow: "auto" }}>
-                  {previewSurvey ? (
+                  {previewForm ? (
                     <div className="response-survey-preview">
-                      <Survey model={previewSurvey} />
+                      <NativeFormView runtime={previewRuntime} />
                     </div>
                   ) : (
                     <div style={{ color: C.textMuted }}>Loading form preview...</div>

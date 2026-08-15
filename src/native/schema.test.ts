@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseForm, type NativeElement } from "./schema";
+import { applyAutocapitalize } from "./fields";
 
 /** Find a parsed question by name, failing loudly when it is missing. */
 function q(json: unknown, name: string): NativeElement {
@@ -175,6 +176,40 @@ describe("parseForm — choices", () => {
   });
 });
 
+describe("parseForm — rating steps", () => {
+  const stepsOf = (rateValues: unknown) =>
+    q({ pages: [{ name: "p", elements: [{ type: "rating", name: "x", rateValues }] }] }, "x").rateValues;
+
+  it("keeps a numeric step numeric, since the column behind it is a number", () => {
+    expect(stepsOf([{ value: 1, text: "Disagree" }, { value: 2, text: "Agree" }])).toEqual([
+      { value: 1, text: "Disagree" },
+      { value: 2, text: "Agree" },
+    ]);
+  });
+
+  it("labels a bare number with itself", () => {
+    expect(stepsOf([1, 2])).toEqual([
+      { value: 1, text: "1" },
+      { value: 2, text: "2" },
+    ]);
+  });
+
+  it("accepts a word-valued step", () => {
+    expect(stepsOf(["low", { value: "high", text: "Very high" }])).toEqual([
+      { value: "low", text: "low" },
+      { value: "high", text: "Very high" },
+    ]);
+  });
+
+  it("is empty for a scale authored as a plain min/max range", () => {
+    expect(stepsOf(undefined)).toEqual([]);
+  });
+
+  it("drops empty and malformed entries rather than rendering blank steps", () => {
+    expect(stepsOf([1, null, undefined, "", {}])).toEqual([{ value: 1, text: "1" }]);
+  });
+});
+
 describe("parseForm — table columns", () => {
   const columnsOf = (columns: unknown) =>
     q({ pages: [{ name: "p", elements: [{ type: "matrixdynamic", name: "x", columns }] }] }, "x").columns;
@@ -307,5 +342,33 @@ describe("parseForm — conditions and validators", () => {
     expect(q(json, "x").validators).toEqual([
       { type: "regex", text: "Digits only", regex: "^\\d+$", minValue: undefined, maxValue: undefined, minLength: undefined, maxLength: undefined },
     ]);
+  });
+});
+
+describe("autocapitalize", () => {
+  it("reads the rule, flattening 'none' and anything unrecognised to off", () => {
+    const build = (mode: unknown) => ({
+      pages: [{ name: "p", elements: [{ type: "text", name: "x", autocapitalize: mode }] }],
+    });
+    expect(q(build("words"), "x").autocapitalize).toBe("words");
+    expect(q(build("CHARACTERS"), "x").autocapitalize).toBe("characters");
+    expect(q(build("none"), "x").autocapitalize).toBe("");
+    expect(q(build("shouting"), "x").autocapitalize).toBe("");
+    expect(q(build(undefined), "x").autocapitalize).toBe("");
+  });
+
+  it("capitalises the way the SurveyJS build did", () => {
+    expect(applyAutocapitalize("words", "ali bin ahmad")).toBe("Ali Bin Ahmad");
+    expect(applyAutocapitalize("sentences", "one thing. then another")).toBe("One thing. Then another");
+    expect(applyAutocapitalize("characters", "mykad")).toBe("MYKAD");
+    expect(applyAutocapitalize("", "left alone")).toBe("left alone");
+  });
+
+  it("leaves a half-typed word alone rather than fighting the caret", () => {
+    // Each keystroke re-runs the transform, so what matters is that applying it
+    // to its own output does not keep changing the text.
+    const once = applyAutocapitalize("words", "ali b");
+    expect(once).toBe("Ali B");
+    expect(applyAutocapitalize("words", once)).toBe(once);
   });
 });

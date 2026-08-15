@@ -42,6 +42,7 @@ import EvaluationSummary from "../builder/EvaluationSummary";
 import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
+import { ratingStepLabel } from "../../utils/ratingLabels";
 import { loginRequest } from "../../auth/msalConfig";
 import {
   buildFormSubmissionSections,
@@ -714,6 +715,21 @@ function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
   );
 }
 
+/**
+ * What a rating answer should read as here.
+ *
+ * The stored value is the number the SharePoint column holds; on its own it
+ * makes the reader go back to the form to find out whether 3 of 4 was "Agree"
+ * or "Fair". When the author labelled the step, the word leads and the number
+ * stays behind it, since the number is still what any average is taken over.
+ */
+function displayedFieldValue(field: FormSubmissionField): unknown {
+  if (field.type !== "rating") return field.value;
+  const label = ratingStepLabel(field.rateValues, field.value);
+  if (!label) return field.value;
+  return field.rateMax ? `${label} (${field.value} of ${field.rateMax})` : `${label} (${field.value})`;
+}
+
 function DataPreviewSections({ sections }: { sections: FormSubmissionSection[] }) {
   return (
     <Stack spacing={2.5}>
@@ -736,7 +752,7 @@ function DataPreviewSections({ sections }: { sections: FormSubmissionSection[] }
                 {field.kind === "matrix" ? (
                   <MatrixFieldCard field={field} />
                 ) : (
-                  <FieldCard fieldKey={field.key} label={field.label} value={field.value} />
+                  <FieldCard fieldKey={field.key} label={field.label} value={displayedFieldValue(field)} />
                 )}
               </Grid>
             ))}

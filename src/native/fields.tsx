@@ -21,8 +21,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import DOMPurify from "dompurify";
-import type { NativeChoice, NativeElement } from "./schema";
+import type { NativeChoice, NativeElement, NativeRateStep } from "./schema";
 import { formatNumber } from "./expression";
 
 export interface ControlProps {
@@ -102,6 +103,26 @@ function formatBytes(bytes: number): string {
 
 /* ── Text ───────────────────────────────────────────────────────────────── */
 
+/**
+ * Applies a question's `autocapitalize` rule to what was just typed.
+ *
+ * Runs per keystroke, which is what makes it feel like the field is helping
+ * rather than correcting you afterwards — and matches how the SurveyJS build
+ * did it, so a form published years ago capitalises exactly as it used to.
+ */
+export function applyAutocapitalize(mode: string, text: string): string {
+  switch (mode) {
+    case "words":
+      return text.replace(/\b\w/g, (c) => c.toUpperCase());
+    case "sentences":
+      return text.replace(/(^\w|[.!?]\s+\w)/g, (c) => c.toUpperCase());
+    case "characters":
+      return text.toUpperCase();
+    default:
+      return text;
+  }
+}
+
 export function TextControl({ element, value, onChange, disabled, invalid, controlId }: ControlProps) {
   const input = (
     <input
@@ -116,7 +137,7 @@ export function TextControl({ element, value, onChange, disabled, invalid, contr
       min={element.min}
       max={element.max}
       step={element.step}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange(applyAutocapitalize(element.autocapitalize, e.target.value))}
     />
   );
 
@@ -364,30 +385,66 @@ export function BooleanControl({ element, value, onChange, disabled, controlId }
   );
 }
 
-export function RatingControl({ element, value, onChange, disabled, controlId }: ControlProps) {
-  const current = value === null || value === undefined || value === "" ? null : Number(value);
+/**
+ * The steps on a rating scale.
+ *
+ * An author who wrote `rateValues` has said what each point means, and those
+ * labels replace the derived range outright — the two can disagree, and the one
+ * with words on it is the one the respondent was meant to read.
+ */
+function ratingSteps(element: NativeElement): NativeRateStep[] {
+  if (element.rateValues.length > 0) return element.rateValues;
   const from = Math.min(element.rateMin, element.rateMax);
   const to = Math.max(element.rateMin, element.rateMax);
   // A runaway range would emit hundreds of buttons; no published form has a
   // scale wider than 10, so anything past that is a data error, not a design.
-  const steps = Math.min(to - from + 1, 21);
+  const count = Math.min(to - from + 1, 21);
+  return Array.from({ length: count }, (_, i) => ({ value: from + i, text: "" }));
+}
+
+export function RatingControl({ element, value, onChange, disabled, controlId }: ControlProps) {
+  // Compared as text, not as numbers: a step's value may be a word, and a saved
+  // answer read back from SharePoint can arrive as `"4"` for a numeric scale.
+  const current = value === null || value === undefined || value === "" ? "" : String(value);
+  const steps = ratingSteps(element);
+  // A scale is "labelled" once any step says something its own value does not.
+  // Then every button carries a caption, and a step the author left blank shows
+  // its number alone rather than dropping out of the row.
+  const labelled = steps.some((step) => step.text !== "" && step.text !== String(step.value));
 
   return (
     <>
-      <div className="nf-rating" role="radiogroup" aria-labelledby={`${controlId}-label`}>
-        {Array.from({ length: steps }, (_, i) => from + i).map((n) => (
-          <button
-            key={n}
-            type="button"
-            aria-pressed={current === n}
-            disabled={disabled}
-            onClick={() => onChange(current === n ? null : n)}
-          >
-            {n}
-          </button>
-        ))}
+      <div
+        className="nf-rating"
+        data-labelled={labelled || undefined}
+        role="radiogroup"
+        aria-labelledby={`${controlId}-label`}
+      >
+        {steps.map((step) => {
+          const selected = current === String(step.value);
+          const caption = step.text && step.text !== String(step.value) ? step.text : "";
+          return (
+            <button
+              key={String(step.value)}
+              type="button"
+              aria-pressed={selected}
+              disabled={disabled}
+              onClick={() => onChange(selected ? null : step.value)}
+            >
+              {/* A word-valued step has no number to show, so the label is the
+                  whole button rather than a caption under a repeat of itself. */}
+              {typeof step.value === "number" && <span className="nf-rating-value">{step.value}</span>}
+              {(caption || typeof step.value !== "number") && (
+                <span className="nf-rating-text">{caption || String(step.value)}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
-      {(element.minRateDescription || element.maxRateDescription) && (
+      {/* The end captions describe a bare numeric scale. Once every step is
+          labelled they repeat the first and last button word for word, so they
+          step aside rather than saying "Disagree" twice on the same row. */}
+      {!labelled && (element.minRateDescription || element.maxRateDescription) && (
         <div className="nf-scale-ends">
           <span>{element.minRateDescription}</span>
           <span>{element.maxRateDescription}</span>
@@ -545,32 +602,87 @@ export function FileControl({ element, value, onChange, disabled, invalid, contr
   );
 }
 
-export function SignatureControl({ value, onChange, disabled, controlId }: ControlProps) {
+/** Ink is always dark, because the paper it is drawn on is always white. */
+const SIGNATURE_INK = "#101828";
+
+function PenGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path
+        d="M2.5 15.5h3l8-8a2.12 2.12 0 0 0-3-3l-8 8v3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10.5 5.5l2 2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/**
+ * The signing window.
+ *
+ * Signing happens here rather than on the form because a signature drawn inline
+ * is committed by the act of drawing it: a stray touch while scrolling past the
+ * field is already a signature, and on a phone that is the common case, not the
+ * unlucky one. A window makes the stroke provisional until it is confirmed, and
+ * gives the drawing surface room it cannot have between two other questions.
+ *
+ * It is portalled to `document.body` and carries the `nf` class itself. `.nf`
+ * declares `container-type: inline-size`, which makes it the containing block
+ * for fixed-position descendants — a dialog rendered inside the form would be
+ * pinned to the form's box and could sit off-screen once the page had scrolled.
+ * Being the fixed element *and* the token scope is what keeps both true at once.
+ */
+function SignatureDialog({
+  title,
+  initial,
+  theme,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  initial: string;
+  theme: string;
+  onCancel: () => void;
+  onConfirm: (dataUrl: string) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
-  const dirty = useRef(false);
+  const [hasInk, setHasInk] = useState(initial !== "");
 
-  const stroke = value ? String(value) : "";
-
-  /** Size the backing store to the CSS box so strokes are not blurry. */
+  /** Size the backing store to the CSS box, so strokes are not blurry. */
   const fit = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ratio = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
-    const height = 160;
-    if (canvas.width === width * ratio && canvas.height === height * ratio) return;
-    canvas.width = width * ratio;
-    canvas.height = height * ratio;
-    canvas.style.height = `${height}px`;
+    const height = canvas.clientHeight;
+    if (!width || !height) return;
+    const backingWidth = Math.round(width * ratio);
+    const backingHeight = Math.round(height * ratio);
+    // Assigning either dimension clears the canvas, so a no-op resize — which
+    // every unrelated window event produces — must not touch them.
+    if (canvas.width === backingWidth && canvas.height === backingHeight) return;
+    canvas.width = backingWidth;
+    canvas.height = backingHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.scale(ratio, ratio);
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#101828";
-  }, []);
+    ctx.strokeStyle = SIGNATURE_INK;
+    // Editing starts from what is already signed, so a correction is a
+    // correction rather than a redraw from nothing.
+    if (initial) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, width, height);
+      img.src = initial;
+    }
+  }, [initial]);
 
   useEffect(() => {
     fit();
@@ -578,74 +690,166 @@ export function SignatureControl({ value, onChange, disabled, controlId }: Contr
     return () => window.removeEventListener("resize", fit);
   }, [fit]);
 
-  // Repaint a value that arrived from outside (a reset, or a prefilled link).
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    if (stroke && !dirty.current) {
-      const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0, canvas.clientWidth, 160);
-      img.src = stroke;
-    } else if (!stroke) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      dirty.current = false;
-    }
-  }, [stroke]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
 
   const pointAt = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  return (
-    <div className="nf-sign">
-      <canvas
-        ref={canvasRef}
-        id={controlId}
-        aria-label="Signature area"
-        onPointerDown={(e) => {
-          if (disabled) return;
-          const ctx = e.currentTarget.getContext("2d");
-          if (!ctx) return;
-          e.currentTarget.setPointerCapture(e.pointerId);
-          drawing.current = true;
-          dirty.current = true;
-          const { x, y } = pointAt(e);
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-        }}
-        onPointerMove={(e) => {
-          if (!drawing.current) return;
-          const ctx = e.currentTarget.getContext("2d");
-          if (!ctx) return;
-          const { x, y } = pointAt(e);
-          ctx.lineTo(x, y);
-          ctx.stroke();
-        }}
-        onPointerUp={(e) => {
-          if (!drawing.current) return;
-          drawing.current = false;
-          onChange(e.currentTarget.toDataURL("image/png"));
-        }}
-      />
-      <div className="nf-sign-bar">
-        <span>{stroke ? "Signed" : "Sign with a mouse, pen or finger"}</span>
-        <button
-          type="button"
-          className="nf-rowbtn"
-          disabled={disabled || !stroke}
-          onClick={() => {
-            const canvas = canvasRef.current;
-            const ctx = canvas?.getContext("2d");
-            if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-            dirty.current = false;
-            onChange(null);
-          }}
-        >
-          Clear
-        </button>
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasInk(false);
+  };
+
+  return createPortal(
+    <div
+      className="nf nf-sign-modal"
+      data-theme={theme}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Sign — ${title}`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className="nf-sign-dialog">
+        <div className="nf-sign-dialog-head">
+          <span className="nf-sign-dialog-eyebrow">Signature</span>
+          <h2 className="nf-sign-dialog-title">{title}</h2>
+        </div>
+        <div className="nf-sign-paper">
+          <canvas
+            ref={canvasRef}
+            className="nf-sign-canvas"
+            aria-label={`Signing area for ${title}`}
+            onPointerDown={(e) => {
+              const ctx = e.currentTarget.getContext("2d");
+              if (!ctx) return;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              drawing.current = true;
+              const { x, y } = pointAt(e);
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              // A tap with no drag is still a mark, so the dot it leaves counts
+              // as ink and Confirm is reachable from it.
+              ctx.lineTo(x, y);
+              ctx.stroke();
+              setHasInk(true);
+            }}
+            onPointerMove={(e) => {
+              if (!drawing.current) return;
+              const ctx = e.currentTarget.getContext("2d");
+              if (!ctx) return;
+              const { x, y } = pointAt(e);
+              ctx.lineTo(x, y);
+              ctx.stroke();
+            }}
+            onPointerUp={() => {
+              drawing.current = false;
+            }}
+            onPointerCancel={() => {
+              drawing.current = false;
+            }}
+          />
+          <span className="nf-sign-rule" aria-hidden="true" />
+        </div>
+        <p className="nf-sign-note">Sign with a mouse, pen or finger, then confirm.</p>
+        <div className="nf-sign-dialog-foot">
+          <button type="button" className="nf-btn" data-variant="ghost" disabled={!hasInk} onClick={clear}>
+            Clear
+          </button>
+          <span className="nf-sign-dialog-gap" />
+          <button type="button" className="nf-btn" data-variant="ghost" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="nf-btn"
+            data-variant="primary"
+            disabled={!hasInk}
+            onClick={() => {
+              const canvas = canvasRef.current;
+              if (canvas) onConfirm(canvas.toDataURL("image/png"));
+            }}
+          >
+            Confirm
+          </button>
+        </div>
       </div>
+    </div>,
+    document.body,
+  );
+}
+
+export function SignatureControl({ element, value, onChange, disabled, invalid, controlId }: ControlProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Non-null while the window is open, and carrying the theme the form was
+  // rendered in — the dialog leaves the form's subtree, so it cannot inherit it.
+  const [signing, setSigning] = useState<{ theme: string } | null>(null);
+
+  const stroke = value ? String(value) : "";
+  const title = element.title || "Signature";
+
+  const openDialog = () =>
+    setSigning({ theme: rootRef.current?.closest(".nf")?.getAttribute("data-theme") || "light" });
+
+  return (
+    <div className="nf-sign" ref={rootRef} data-signed={stroke !== ""} data-invalid={invalid}>
+      <button
+        type="button"
+        id={controlId}
+        className="nf-sign-plate"
+        disabled={disabled}
+        aria-label={stroke ? `${title} — signed. Open the signing window to change it.` : `${title} — tap to sign`}
+        onClick={openDialog}
+      >
+        {stroke ? (
+          <img className="nf-sign-ink" src={stroke} alt="" />
+        ) : (
+          <span className="nf-sign-cue">
+            <PenGlyph />
+            Tap to sign
+          </span>
+        )}
+      </button>
+      <div className="nf-sign-bar">
+        <span>{stroke ? "Signed — locked until you change it" : "Opens a signing window; nothing is kept until you confirm"}</span>
+        <span className="nf-sign-actions">
+          <button type="button" className="nf-rowbtn" disabled={disabled} onClick={openDialog}>
+            {stroke ? "Edit" : "Sign"}
+          </button>
+          <button
+            type="button"
+            className="nf-rowbtn"
+            data-tone="danger"
+            disabled={disabled || !stroke}
+            onClick={() => onChange(null)}
+          >
+            Clear
+          </button>
+        </span>
+      </div>
+      {signing && (
+        <SignatureDialog
+          title={title}
+          initial={stroke}
+          theme={signing.theme}
+          onCancel={() => setSigning(null)}
+          onConfirm={(dataUrl) => {
+            onChange(dataUrl);
+            setSigning(null);
+          }}
+        />
+      )}
     </div>
   );
 }
