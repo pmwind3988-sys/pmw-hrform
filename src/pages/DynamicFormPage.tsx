@@ -56,9 +56,6 @@ const CONFIGURED_MANUAL_PAPER_EMAIL = (
   import.meta.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS || ""
 ).trim().toLowerCase();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const COMPANY_FIELD_NAME = "company";
-const COMPANY_FIELD_LABEL = "Company";
-const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
 
 // Columns a submission tolerates being absent. ReferenceNo is here because a
 // list provisioned before reference numbers existed has no such column, and a
@@ -126,12 +123,6 @@ async function claimReferenceNumber(listTitle: string): Promise<string> {
   return data.enabled && typeof data.referenceNo === "string" ? data.referenceNo : "";
 }
 
-type CompanyChoiceOption = { value: string; text: string };
-
-function companyLinesFromText(value: string): string[] {
-  return value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-}
-
 function documentHeaderFromMeta(meta: Record<string, unknown> | undefined, formId: string, formVersion: string): Required<DocumentControlHeader> {
   const raw = meta?.documentHeader;
   const header = raw && typeof raw === "object" && !Array.isArray(raw)
@@ -191,54 +182,6 @@ function applyLoadedFormData(
   next: LoadedFormData,
 ): void {
   setFormData(prev => (prev && loadedFormDataEquals(prev, next) ? prev : next));
-}
-
-function companyChoiceFromUnknown(choice: unknown): CompanyChoiceOption | null {
-  if (typeof choice === "string") {
-    const trimmed = choice.trim();
-    return trimmed ? { value: trimmed, text: trimmed } : null;
-  }
-  if (!choice || typeof choice !== "object") return null;
-  const record = choice as Record<string, unknown>;
-  const value = String(record.value ?? record.text ?? "").trim();
-  const text = String(record.text ?? record.value ?? "").trim();
-  return value ? { value, text: text || value } : null;
-}
-
-function getCompanyChoiceOptions(choices: unknown, fallbackCompanyLines: string[]): CompanyChoiceOption[] {
-  const fromChoices = Array.isArray(choices)
-    ? choices.map(companyChoiceFromUnknown).filter((choice): choice is CompanyChoiceOption => Boolean(choice))
-    : [];
-  return fromChoices.length > 0 ? fromChoices : fallbackCompanyLines.map(value => ({ value, text: value }));
-}
-
-function findCompanyChoiceElement(
-  json: Record<string, unknown> | null | undefined,
-  meta: Record<string, unknown> | null | undefined,
-): Record<string, unknown> | null {
-  const enabledByMeta = meta?.companyChoiceEnabled === true;
-  const walk = (elements: Record<string, unknown>[]): Record<string, unknown> | null => {
-    for (const element of elements) {
-      if (
-        element.isManagedCompanyChoice === true ||
-        (enabledByMeta && element.name === COMPANY_FIELD_NAME && element.type === "radiogroup")
-      ) {
-        return element;
-      }
-      if (Array.isArray(element.elements)) {
-        const nested = walk(element.elements as Record<string, unknown>[]);
-        if (nested) return nested;
-      }
-    }
-    return null;
-  };
-  const pages = (json?.pages as { elements?: Record<string, unknown>[] }[] | undefined) ?? [];
-  for (const page of pages) {
-    if (!Array.isArray(page.elements)) continue;
-    const found = walk(page.elements);
-    if (found) return found;
-  }
-  return null;
 }
 
 function submittedValueToString(value: unknown): string {
@@ -496,19 +439,21 @@ const globalCss = (t: typeof LIGHT) => `
      and lets the fields line up with everything above and below them. */
   .dfp-survey-wrap .nf-shell{max-width:100%;padding:0 0 8px}
   .dfp-banner-logo img{max-height:48px!important}
-  .dfp-doc-control{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid ${t.border};border-bottom:1px solid ${t.border};background:${t.cardBg}}
-  .dfp-doc-cell{min-height:42px;padding:7px 8px;border-right:1px solid ${t.border};display:flex;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:${t.textPrimary};line-height:1.35}
+  /* The document control block is the banner row's flexible half, sitting to the
+     right of the logo rather than in a full-width band of its own. */
+  .dfp-doc-control{flex:1;min-width:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:${t.cardBg}}
+  .dfp-doc-cell{min-height:42px;padding:7px 8px;border-right:1px solid ${t.border};display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:${t.textPrimary};line-height:1.35}
   .dfp-doc-cell:last-child{border-right:none}
   .dfp-doc-label{font-weight:700}
   .dfp-doc-value{font-weight:600;color:${t.textSecond}}
-  .dfp-company-option span{text-wrap:pretty}
+  @media(max-width:1024px){
+    .dfp-doc-cell{font-size:11px;padding:6px}
+  }
   @media(max-width:768px){
     .dfp-banner-logo{width:116px!important}
     .dfp-banner-row{flex-direction:column!important}
-    .dfp-banner-logo{border-right:none!important;border-bottom:inherit;padding:10px 12px!important;width:100%!important;min-height:64px}
+    .dfp-banner-logo{border-right:none!important;border-bottom:1px solid ${t.border};padding:10px 12px!important;width:100%!important;min-height:64px}
     .dfp-banner-logo img{max-height:40px!important}
-    .dfp-banner-info{font-size:12px!important;padding:10px 12px!important}
-    .dfp-company-option{flex-basis:100%!important}
     .dfp-doc-control{grid-template-columns:1fr}
     .dfp-doc-cell{border-right:none;border-bottom:1px solid ${t.border};justify-content:flex-start;text-align:left;padding:8px 12px}
     .dfp-doc-cell:last-child{border-bottom:none}
@@ -565,78 +510,6 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
-function CompanySelector({
-  title,
-  options,
-  value,
-  error,
-  disabled,
-  onChange,
-  t,
-}: {
-  title: string;
-  options: CompanyChoiceOption[];
-  value: string;
-  error: string;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-  t: typeof LIGHT;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: t.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>
-        {title}
-      </div>
-      <div className="dfp-company-options" role="radiogroup" aria-label={title} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {options.map(option => {
-          const checked = value === option.value;
-          return (
-            <label
-              key={option.value}
-              className="dfp-company-option"
-              style={{
-                minHeight: 40,
-                flex: "1 1 220px",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 10px",
-                borderRadius: 8,
-                background: checked ? t.purplePale : t.cardBg,
-                boxShadow: checked
-                  ? `0 0 0 1px ${t.purpleMid}, 0 8px 20px rgba(16,16,16,0.06)`
-                  : `0 0 0 1px ${error ? t.red : t.border}`,
-                color: checked ? t.purple : t.textPrimary,
-                cursor: disabled ? "not-allowed" : "pointer",
-                opacity: disabled ? 0.6 : 1,
-                transition: "background-color .15s, box-shadow .15s, color .15s, opacity .15s",
-              }}
-            >
-              <input
-                type="radio"
-                name="pmw-company-choice"
-                value={option.value}
-                checked={checked}
-                disabled={disabled}
-                onChange={() => onChange(option.value)}
-                style={{ width: 16, height: 16, accentColor: t.purple, flexShrink: 0 }}
-              />
-              <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 800, lineHeight: 1.35 }}>
-                {option.text}
-              </span>
-            </label>
-          );
-        })}
-      </div>
-      {error && (
-        <div role="alert" style={{ color: t.red, fontSize: 12, fontWeight: 800, lineHeight: 1.4 }}>
-          {error}
-        </div>
-      )}
-    </div>
-  );
-}
-
 const SuccessScreen = ({ formTitle, referenceNo, onReset, t }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
@@ -691,8 +564,6 @@ export default function DynamicFormPage() {
   const [submittedReference, setSubmittedReference] = useState("");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
-  const [companyChoiceValue, setCompanyChoiceValue] = useState("");
-  const [companyChoiceError, setCompanyChoiceError] = useState("");
   const [resetKey, setResetKey] = useState(0);
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
@@ -1034,15 +905,6 @@ export default function DynamicFormPage() {
   const formIdValue = String(formData?.formConfig?.FormID || "");
   const showBanner = (formData?.meta?.showBanner as boolean) !== false;
   const isoStandardsText = (formData?.meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
-  const companiesText = (formData?.meta?.companies as string) || "";
-  const companyLines = companyLinesFromText(companiesText);
-  const companySelector = findCompanyChoiceElement(enrichedSurveyJson || formData?.surveyJson, formData?.meta);
-  const companyChoiceEnabled = formData?.meta?.companyChoiceEnabled === true;
-  const companyOptions = getCompanyChoiceOptions(companySelector?.choices, companyLines);
-  const companyFieldName = String(companySelector?.name || (companyChoiceEnabled ? COMPANY_FIELD_NAME : ""));
-  const companyTitle = String(companySelector?.title || COMPANY_FIELD_LABEL);
-  const showCompanyChoice = companyChoiceEnabled && companyOptions.length > 0 && !!companyFieldName;
-  const showHeaderBanner = showBanner || showCompanyChoice;
   const logoUrl = (formData?.meta?.logoUrl as string) || "";
   const isPublicForm = formData?.formConfig?.IsPublic !== false;
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
@@ -1050,24 +912,10 @@ export default function DynamicFormPage() {
 
   useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
 
-  // The banner's company chooser and the field inside the form are one answer
-  // shown in two places, so the banner follows whatever the form holds.
-  const companyFieldValue = companyFieldName ? runtime.values[companyFieldName] : undefined;
-  useEffect(() => {
-    if (!showCompanyChoice || !formReady || !companyFieldName) {
-      setCompanyChoiceValue("");
-      setCompanyChoiceError("");
-      return;
-    }
-    const current = submittedValueToString(companyFieldValue);
-    setCompanyChoiceValue(current);
-    if (current) setCompanyChoiceError("");
-  }, [companyFieldValue, showCompanyChoice, formReady, companyFieldName]);
-
   /**
-   * The submit gate: the form's own validation first, then the two conditions
-   * that live outside the document — the privacy consent below it and the
-   * company chooser in the banner above it.
+   * The submit gate: the form's own validation first, then the one condition
+   * that lives outside the document — the privacy consent below it. The company
+   * is a required question inside the form, so `validateAll` already covers it.
    *
    * Nothing here submits. It fills `lastDataRef` and raises the loading state,
    * which is what `doSubmitForm` runs off, exactly as the SurveyJS
@@ -1086,27 +934,10 @@ export default function DynamicFormPage() {
       return;
     }
 
-    const data = runtime.collect();
-
-    if (showCompanyChoice) {
-      const selectedCompany = submittedValueToString(data[companyFieldName] ?? companyChoiceValue);
-      if (!selectedCompany) {
-        setPdpaConsentError("");
-        setCompanyChoiceError(COMPANY_CHOICE_REQUIRED_ERROR);
-        document.querySelector(".dfp-banner")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
-      }
-      data[companyFieldName] = selectedCompany;
-      if (submittedValueToString(runtime.getValue(companyFieldName)) !== selectedCompany) {
-        runtime.setValue(companyFieldName, selectedCompany);
-      }
-    }
-
     setPdpaConsentError("");
-    setCompanyChoiceError("");
-    lastDataRef.current = data;
+    lastDataRef.current = runtime.collect();
     setSubmitStatus("loading");
-  }, [formReady, submitStatus, runtime, pdpaAccepted, showCompanyChoice, companyFieldName, companyChoiceValue]);
+  }, [formReady, submitStatus, runtime, pdpaAccepted]);
   const doSubmitForm = useCallback(async () => {
     // Collapse "other" + "{name}-Comment" pairs into the free text the respondent
     // typed, before uploads or column mapping read the answers.
@@ -1729,8 +1560,6 @@ export default function DynamicFormPage() {
     setSubmittedReference("");
     setPdpaAccepted(false);
     setPdpaConsentError("");
-    setCompanyChoiceValue("");
-    setCompanyChoiceError("");
     lastDataRef.current = null;
     setResetKey(k => k + 1);
   }, []);
@@ -1814,49 +1643,33 @@ export default function DynamicFormPage() {
         </div>
       </header>
 
-      {showHeaderBanner && (
+      {showBanner && (
         <div className="dfp-banner" style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
           <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "14px 20px" }}>
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandardsText}</div>
             <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 17, color: "#fff" }}>{formTitle}</div>
           </div>
-          <div className="dfp-doc-control" aria-label="Document control metadata">
-            {[
-              ["Document Number:", documentHeader.documentNumber],
-              ["Issue Number:", documentHeader.issueNumber],
-              ["Effective Date:", documentHeader.effectiveDate],
-              ["Revision Number:", documentHeader.revisionNumber],
-              ["Revision Date:", documentHeader.revisionDate],
-            ].map(([label, value]) => (
-              <div className="dfp-doc-cell" key={label}>
-                <span className="dfp-doc-label">{label}</span>
-                {value && <span className="dfp-doc-value">{value}</span>}
-              </div>
-            ))}
-          </div>
+          {/* Logo beside the document control block, the way the printed form
+              carries them. The company used to sit here, because SurveyJS could
+              not draw the managed field — the engine draws it inside the form
+              now, so a chooser up here would only ask the same question twice. */}
           <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${t.border}` }}>
             <div className="dfp-banner-logo" style={{ width: 150, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 48, objectFit: "contain" }} />
             </div>
-            <div className="dfp-banner-info" style={{ flex: 1, padding: "12px 16px", fontWeight: 700, fontSize: 13, color: t.textPrimary }}>
-              {showCompanyChoice
-                ? <CompanySelector
-                    title={companyTitle}
-                    options={companyOptions}
-                    value={companyChoiceValue}
-                    error={companyChoiceError}
-                    disabled={!formReady || prefilledQrPayload?.locked.includes(companyFieldName) === true}
-                    onChange={value => {
-                      if (prefilledQrPayload?.locked.includes(companyFieldName)) return;
-                      setCompanyChoiceValue(value);
-                      setCompanyChoiceError("");
-                      runtime.setValue(companyFieldName, value);
-                    }}
-                    t={t}
-                  />
-                : companyLines.length > 0
-                ? companyLines.map((line, i) => <div key={i} style={i > 0 ? { marginTop: 4 } : undefined}>{line}</div>)
-                : "PMW INTERNATIONAL BERHAD"}
+            <div className="dfp-doc-control" aria-label="Document control metadata">
+              {[
+                ["Document Number:", documentHeader.documentNumber],
+                ["Issue Number:", documentHeader.issueNumber],
+                ["Effective Date:", documentHeader.effectiveDate],
+                ["Revision Number:", documentHeader.revisionNumber],
+                ["Revision Date:", documentHeader.revisionDate],
+              ].map(([label, value]) => (
+                <div className="dfp-doc-cell" key={label}>
+                  <span className="dfp-doc-label">{label}</span>
+                  {value && <span className="dfp-doc-value">{value}</span>}
+                </div>
+              ))}
             </div>
           </div>
         </div>
