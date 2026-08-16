@@ -38,7 +38,7 @@ The API functions need these env vars to authenticate with SharePoint via client
 | `SYSTEM_CLIENT_SECRET` | App registration Client Secret |
 | `API_SECRET_KEY` / `VITE_API_SECRET_KEY` | Shared API key for frontend-to-API calls |
 | `CRON_SECRET` | Server-only bearer secret used by Vercel Cron for scheduled evaluator emails |
-| `INTERNAL_SESSION_SECRET` | **Server-only.** Signs portal-account sessions. Must be 32+ random characters, and must NOT reuse `API_SECRET_KEY` — that one ships to every browser as `VITE_API_SECRET_KEY`, so signing with it would let anyone mint a session for any login ID. Generate with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Until it is set, portal sign-in returns 503 and only Microsoft 365 works. Changing it signs everyone out. |
+| `INTERNAL_SESSION_SECRET` | **Server-only.** Signs portal-account sessions (served by `/api/learning-materials`, action `portal-sign-in` — see the 12-function limit in `api/AGENTS.md`). Must be 32+ random characters, and must NOT reuse `API_SECRET_KEY` — that one ships to every browser as `VITE_API_SECRET_KEY`, so signing with it would let anyone mint a session for any login ID. Generate with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Until it is set, portal sign-in returns 503 and only Microsoft 365 works. Changing it signs everyone out. |
 | `HR_FORM_EMAIL_FROM_ADDRESS` | Mail-enabled sender for HR form workflow and approval emails |
 | `JOB_APPLICATION_EMAIL_FROM_ADDRESS` | Mail-enabled sender for job application emails |
 | `HR_RECRUITMENT_EMAIL` | Recipient mailbox for job application notifications |

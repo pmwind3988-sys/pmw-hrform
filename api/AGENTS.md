@@ -2,6 +2,8 @@
 
 **Scope:** Vercel serverless functions. Run locally via `npm run dev:api`. Deployed to Vercel alongside the SPA.
 
+> **Hard limit: 12 functions.** Every `api/*.ts` file is one serverless function, and the Hobby plan refuses a deployment with more than twelve. `api/` sits at exactly twelve today, so **adding a file here breaks the deploy** — add an `action` to an existing endpoint instead, the way the `portal-*` actions live inside `learning-materials.ts`. Nothing local catches this on its own: the build succeeds and prints "Build Completed", then the *deployment* fails afterwards with no message in the build log. `_utils/deploymentLimits.test.ts` is the guard that turns that into a failing test instead of a failed deploy.
+
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
@@ -19,6 +21,7 @@
 | Job listings (public) | `jobs-list.ts` | `GET /api/jobs-list`. Lists active jobs from "Internal Job Listing" SP list with live applicant counts. Enforces career portal access — see below. |
 | Job applications | `job-apply.ts` | `POST /api/job-apply`. Creates "Job Applications" item, uploads files, sends HR email. See gotchas in root AGENTS.md. |
 | Job admin | `job-admin.ts` | `GET/PUT/DELETE /api/job-admin`. Admin CRUD for applications and job listings. All IDs validated as numeric before Graph `$filter`. |
+| Learning hub + portal accounts | `learning-materials.ts` | `GET /api/learning-materials` lists the library; `POST` carries an `action`. Three tiers on one function: `portal-sign-in` answers before anyone is signed in, `portal-*` admin actions and the library-editing actions need an HR Forms Owner, everything else needs any signed-in learner (M365 **or** portal account). The portal actions are here only because of the 12-function limit above — see `_utils/internalAccounts.ts`, `_utils/internalSession.ts`, `_utils/learningAccessLog.ts` for the substance. |
 | Graph client | `_utils/graphClient.ts` | Client-credentials token for `graph.microsoft.com/v1.0`. Exports: `queryListItems`, `createListItem`, `updateListItemFields`, `deleteListItem`, `queryListItemById`, `getListId`, etc. |
 | API auth | `_utils/auth.ts` | Validates `X-Api-Key` header against `API_SECRET_KEY` env var. Used by all routes. |
 | Career portal cards | `_utils/careerPortalCards.ts` | CRUD helpers for "Career Portal Cards" SP list. Used by jobs-list.ts and job-admin.ts. |

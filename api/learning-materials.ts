@@ -33,9 +33,31 @@ import {
   type TopicSettings,
   type ViewIndex,
 } from "./_utils/learningLibrary.js";
-import { isPortalSessionCurrent } from "./_utils/internalAccounts.js";
-import { recordAccessLogEntry } from "./_utils/learningAccessLog.js";
-import { looksLikePortalToken, verifyPortalSession } from "./_utils/internalSession.js";
+import {
+  authenticateAccount,
+  createAccount,
+  deleteAccount,
+  ensureInternalAccountsSchema,
+  isPortalSessionCurrent,
+  listAccounts,
+  normalizeLoginId,
+  resetAccountPassword,
+  setAccountStatus,
+  unlockAccount,
+  LOCKOUT_MINUTES,
+} from "./_utils/internalAccounts.js";
+import {
+  ensureLearningAccessLogSchema,
+  readAccessLog,
+  recordAccessLogEntry,
+} from "./_utils/learningAccessLog.js";
+import {
+  looksLikePortalToken,
+  portalSessionsEnabled,
+  signPortalSession,
+  verifyPortalSession,
+  PORTAL_SESSIONS_DISABLED_MESSAGE,
+} from "./_utils/internalSession.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -68,7 +90,36 @@ const ADMIN_ACTIONS = new Set([
   "update-topic",
   "move-material",
   "delete-material",
+  // Portal account management. Same gate, same token, same failure path as the
+  // library actions above — HR issues these accounts to reach this hub, so the
+  // people who may create one are exactly the people who may fill it.
+  "portal-ensure-schema",
+  "portal-list-accounts",
+  "portal-create-account",
+  "portal-reset-password",
+  "portal-set-status",
+  "portal-unlock-account",
+  "portal-delete-account",
+  "portal-view-log",
 ]);
+
+/**
+ * Portal accounts live on this endpoint rather than one of their own because
+ * Vercel's Hobby plan caps a deployment at 12 serverless functions and `api/`
+ * was already at 12. Grouping them here is the least arbitrary place to spend
+ * the budget: an HR-issued account exists to reach this library, its admin
+ * actions want the identical HR Forms Owner gate, and `record-view` already
+ * writes the access log these actions read back.
+ *
+ * `portal-sign-in` is the one action on this file that answers before anybody is
+ * signed in — it is the front door — so it is dispatched ahead of both the owner
+ * check and the learner check, and is protected by the password verification and
+ * per-account lockout alone.
+ */
+const PORTAL_SIGN_IN_ACTION = "portal-sign-in";
+
+/** How long a portal session lasts before the person signs in again. */
+const PORTAL_SESSION_TTL_HOURS = 12;
 
 function getHeader(headers: Record<string, string | string[] | undefined>, name: string): string {
   const lowerName = name.toLowerCase();
@@ -203,6 +254,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
+
+    // Ahead of every other check: this is how somebody with no Microsoft account
+    // proves who they are in the first place.
+    if (action === PORTAL_SIGN_IN_ACTION) {
+      if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+      // Credentials in, session out — never cached anywhere, by anyone.
+      res.setHeader("Cache-Control", "no-store");
+      return await handlePortalSignIn(req, res, token);
+    }
 
     if (isAdminAction) {
       const admin = await resolveHrFormsOwner(bearer);
@@ -400,6 +460,13 @@ async function handleAdminAction(
   const body = req.body || {};
 
   try {
+    if (action.startsWith("portal-")) {
+      // Portal account management never touches the document library, and its
+      // errors are written for the admin reading them, so it gets its own
+      // handler and its own catch rather than sharing the library's.
+      return await handlePortalAdminAction(req, res, token, action, adminEmail);
+    }
+
     if (action === "ensure-library") {
       await ensureLearningLibrary(token);
       return res.status(200).json({ success: true, libraryReady: true });
@@ -473,4 +540,139 @@ function adminErrorMessage(raw: string): string {
   if (raw.includes("404")) return "That folder or material no longer exists. Refresh and try again.";
   if (raw.includes("403")) return "SharePoint refused the change. Check the app's permissions on the library.";
   return "SharePoint rejected the change. Please try again.";
+}
+
+// ── Portal accounts ──────────────────────────────────────────────────────────
+
+async function handlePortalSignIn(req: ApiRequest, res: ApiResponse, graphToken: string): Promise<void> {
+  if (!portalSessionsEnabled()) {
+    // The fix is an environment variable, which is the admin's problem and not
+    // the visitor's — so the reason goes to the log, and the person at the
+    // sign-in box gets something they can actually act on. Admins see the real
+    // state on `portal-list-accounts`, which reports `sessionsConfigured`.
+    logWarn("api:learning", PORTAL_SESSIONS_DISABLED_MESSAGE, {});
+    return res.status(503).json({
+      error: "Portal account sign-in is unavailable right now. Use Microsoft 365, or contact HR.",
+    });
+  }
+
+  const loginId = normalizeLoginId(req.body?.loginId);
+  const password = String(req.body?.password ?? "");
+
+  const result = await authenticateAccount(graphToken, loginId, password);
+
+  if (!result.ok) {
+    if (result.reason === "locked") {
+      // Naming the lockout tells an attacker this login ID is real — but they
+      // already had to guess it five times to get here, and the person actually
+      // locked out otherwise has no idea why their correct password stopped
+      // working. The support call costs more than the hint does.
+      return res.status(429).json({
+        error: `Too many failed attempts. Try again in ${result.minutes || LOCKOUT_MINUTES} minutes, or ask HR to unlock the account.`,
+      });
+    }
+    if (result.reason === "disabled") {
+      return res.status(403).json({ error: "This portal account has been disabled. Contact HR." });
+    }
+    return res.status(401).json({ error: "That login ID and password do not match." });
+  }
+
+  const { token, expiresAt } = signPortalSession(
+    {
+      loginId: result.account.loginId,
+      fullName: result.account.fullName,
+      tokenVersion: result.account.tokenVersion,
+    },
+    PORTAL_SESSION_TTL_HOURS,
+  );
+
+  return res.status(200).json({
+    session: { token, loginId: result.account.loginId, fullName: result.account.fullName, expiresAt },
+  });
+}
+
+async function handlePortalAdminAction(
+  req: ApiRequest,
+  res: ApiResponse,
+  graphToken: string,
+  action: string,
+  adminEmail: string,
+): Promise<void> {
+  const body = req.body || {};
+  // Account state is not library state — never let it sit in a shared cache.
+  res.setHeader("Cache-Control", "no-store");
+
+  try {
+    if (action === "portal-ensure-schema") {
+      // Both lists, one button. An accounts list without its log would let HR
+      // issue accounts that quietly record nothing, and the promise made when
+      // the account is handed over is that the viewing *is* recorded.
+      const delegatedToken = getBearerToken(req.headers);
+      await ensureInternalAccountsSchema(graphToken, delegatedToken);
+      await ensureLearningAccessLogSchema(graphToken, delegatedToken);
+      return res.status(200).json({ success: true, sessionsConfigured: portalSessionsEnabled() });
+    }
+
+    if (action === "portal-list-accounts") {
+      // A missing list is the ordinary first-run state, not a failure: the admin
+      // screen turns `provisioned: false` into a "Set up" button. Reporting it as
+      // an error instead would greet every new deployment with a red banner
+      // describing a problem that has not happened yet.
+      const listed = await listAccounts(graphToken).catch(() => null);
+      return res.status(200).json({
+        accounts: listed ?? [],
+        provisioned: listed !== null,
+        sessionsConfigured: portalSessionsEnabled(),
+      });
+    }
+
+    if (action === "portal-view-log") {
+      return res.status(200).json({ entries: await readAccessLog(graphToken) });
+    }
+
+    if (action === "portal-create-account") {
+      const account = await createAccount(
+        graphToken,
+        {
+          loginId: String(body.loginId ?? ""),
+          fullName: String(body.fullName ?? ""),
+          password: String(body.password ?? ""),
+        },
+        adminEmail,
+      );
+      return res.status(200).json({ success: true, account });
+    }
+
+    if (action === "portal-reset-password") {
+      await resetAccountPassword(graphToken, normalizeLoginId(body.loginId), String(body.password ?? ""));
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === "portal-set-status") {
+      const status = String(body.status ?? "") === "disabled" ? "disabled" : "active";
+      await setAccountStatus(graphToken, normalizeLoginId(body.loginId), status);
+      return res.status(200).json({ success: true, status });
+    }
+
+    if (action === "portal-unlock-account") {
+      await unlockAccount(graphToken, normalizeLoginId(body.loginId));
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === "portal-delete-account") {
+      await deleteAccount(graphToken, normalizeLoginId(body.loginId));
+      return res.status(200).json({ success: true });
+    }
+
+    return res.status(400).json({ error: "Unknown action" });
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    logWarn("api:learning", "Portal account admin action failed", { action, errorMessage: raw });
+    // Validation messages are written for the admin reading them and pass
+    // through; a raw Graph failure carries site and drive ids and does not.
+    if (/^(Graph|SP REST) /.test(raw)) {
+      return res.status(400).json({ error: "SharePoint rejected the change. Please try again." });
+    }
+    return res.status(400).json({ error: raw.slice(0, 300) });
+  }
 }

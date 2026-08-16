@@ -2,12 +2,17 @@
  * Portal accounts — the HR-issued login-ID + password identities that let
  * someone without a PMW Microsoft 365 mailbox reach the learning hub.
  *
- * The server half of this lives in `api/internal-auth.ts`. Until that ships,
- * every call here fails with a message a person can act on rather than a stack
- * trace, so the sign-in panel is honest about being switched off.
+ * The server half lives in `api/learning-materials.ts` under the `portal-`
+ * actions, rather than an endpoint of its own: Vercel's Hobby plan caps a
+ * deployment at 12 serverless functions and `api/` is at exactly 12. Adding a
+ * thirteenth file builds fine and then fails at deploy, so new server-side
+ * surface has to join an existing endpoint until that plan changes.
  */
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
+
+/** Every portal action rides on the learning endpoint. See the note above. */
+const PORTAL_API = "/api/learning-materials";
 
 /** Where the signed session lives between page loads. */
 const SESSION_STORAGE_KEY = "pmw_portal_session";
@@ -48,10 +53,10 @@ export async function signInWithPortalAccount(
 ): Promise<PortalSession> {
   let response: Response;
   try {
-    response = await fetch("/api/internal-auth", {
+    response = await fetch(PORTAL_API, {
       method: "POST",
       headers: apiHeaders(),
-      body: JSON.stringify({ action: "sign-in", loginId, password }),
+      body: JSON.stringify({ action: "portal-sign-in", loginId, password }),
     });
   } catch {
     throw new PortalSignInError("Could not reach the sign-in service. Check your connection and try again.");
@@ -152,7 +157,7 @@ async function adminAction<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch("/api/internal-auth", {
+    response = await fetch(PORTAL_API, {
       method: "POST",
       headers: { ...apiHeaders(), Authorization: `Bearer ${spToken}` },
       body: JSON.stringify({ action, ...payload }),
@@ -177,7 +182,7 @@ async function adminAction<T>(
 /** Creates the accounts list and the access log. Safe to run repeatedly. */
 export async function ensurePortalAccountsSchema(spToken: string): Promise<{ sessionsConfigured: boolean }> {
   return adminAction<{ sessionsConfigured: boolean }>(
-    "ensure-schema",
+    "portal-ensure-schema",
     {},
     spToken,
     "Could not set up portal account storage.",
@@ -194,7 +199,7 @@ export interface PortalAccountsSnapshot {
 
 export async function listPortalAccounts(spToken: string): Promise<PortalAccountsSnapshot> {
   const data = await adminAction<Partial<PortalAccountsSnapshot>>(
-    "list-accounts",
+    "portal-list-accounts",
     {},
     spToken,
     "Could not load portal accounts.",
@@ -211,7 +216,7 @@ export async function createPortalAccount(
   spToken: string,
 ): Promise<PortalAccountSummary> {
   const data = await adminAction<{ account: PortalAccountSummary }>(
-    "create-account",
+    "portal-create-account",
     input,
     spToken,
     "Could not create the account.",
@@ -229,7 +234,7 @@ export async function resetPortalPassword(
   password: string,
   spToken: string,
 ): Promise<void> {
-  await adminAction("reset-password", { loginId, password }, spToken, "Could not reset the password.");
+  await adminAction("portal-reset-password", { loginId, password }, spToken, "Could not reset the password.");
 }
 
 export async function setPortalAccountStatus(
@@ -237,20 +242,20 @@ export async function setPortalAccountStatus(
   status: "active" | "disabled",
   spToken: string,
 ): Promise<void> {
-  await adminAction("set-status", { loginId, status }, spToken, "Could not change the account status.");
+  await adminAction("portal-set-status", { loginId, status }, spToken, "Could not change the account status.");
 }
 
 export async function unlockPortalAccount(loginId: string, spToken: string): Promise<void> {
-  await adminAction("unlock-account", { loginId }, spToken, "Could not unlock the account.");
+  await adminAction("portal-unlock-account", { loginId }, spToken, "Could not unlock the account.");
 }
 
 export async function deletePortalAccount(loginId: string, spToken: string): Promise<void> {
-  await adminAction("delete-account", { loginId }, spToken, "Could not delete the account.");
+  await adminAction("portal-delete-account", { loginId }, spToken, "Could not delete the account.");
 }
 
 export async function fetchPortalAccessLog(spToken: string): Promise<PortalAccessLogEntry[]> {
   const data = await adminAction<{ entries?: PortalAccessLogEntry[] }>(
-    "view-log",
+    "portal-view-log",
     {},
     spToken,
     "Could not load the access log.",
