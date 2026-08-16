@@ -25,6 +25,7 @@ import {
   readCareerPortalAccess,
   writeCareerPortalAccess,
 } from "./_utils/careerPortalAccess.js";
+import { isHrFormsOwner, resolveDelegatedUser } from "./_utils/hrFormsOwner.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   createListItemViaSPRest,
@@ -49,8 +50,6 @@ interface ApiResponse {
 
 const APPLICATION_LIST = "Job Applications";
 const JOB_LIST = "Internal Job Listing";
-const ADMIN_GROUP = "_HR_ Forms Owners";
-const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 const DEFAULT_APPLICATION_LIMIT = 500;
 const MAX_APPLICATION_LIMIT = 999;
 const TEXT_COMPATIBLE_FIELD_KINDS = new Set([2, 3, 6]);
@@ -58,17 +57,6 @@ const TEXT_COMPATIBLE_FIELD_KINDS = new Set([2, 3, 6]);
 interface JobDocumentLink {
   name: string;
   url: string;
-}
-
-interface SharePointUser {
-  Email?: string;
-  LoginName?: string;
-  UserPrincipalName?: string;
-}
-
-interface DelegatedUser {
-  email: string;
-  login: string;
 }
 
 interface ColumnMap {
@@ -505,70 +493,6 @@ function getBearerToken(headers: Record<string, string | string[] | undefined>):
   return authorization.slice(7).trim();
 }
 
-async function delegatedSharePointGet<T>(accessToken: string, path: string): Promise<T> {
-  if (!SP_SITE_URL) throw new Error("SharePoint site URL is not configured");
-  const response = await fetch(`${SP_SITE_URL}${path}`, {
-    headers: {
-      Accept: "application/json;odata=nometadata",
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`SharePoint GET ${response.status}`);
-  }
-
-  return await response.json() as T;
-}
-
-function normalizeDelegatedUser(user: SharePointUser): DelegatedUser | null {
-  const email = String(user.Email || user.UserPrincipalName || "").toLowerCase();
-  const login = String(user.LoginName || "").toLowerCase();
-  const loginEmail = login.split("|").pop() || "";
-  const resolvedEmail = email || loginEmail;
-  if (!resolvedEmail && !login) return null;
-  return { email: resolvedEmail, login };
-}
-
-async function resolveDelegatedUser(accessToken: string): Promise<DelegatedUser | null> {
-  try {
-    const currentUser = await delegatedSharePointGet<SharePointUser>(
-      accessToken,
-      "/_api/web/currentuser?$select=Email,UserPrincipalName,LoginName",
-    );
-    return normalizeDelegatedUser(currentUser);
-  } catch (error) {
-    logWarn("api:job-admin", "Failed to resolve delegated user", {
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
-async function isDelegatedAdmin(accessToken: string, user: DelegatedUser): Promise<boolean> {
-  try {
-    const members = await delegatedSharePointGet<{ value?: SharePointUser[] }>(
-      accessToken,
-      `/_api/web/sitegroups/getByName('${encodeURIComponent(ADMIN_GROUP)}')/users?$select=LoginName,Email,UserPrincipalName`,
-    );
-
-    return (members.value || []).some((member) => {
-      const memberUser = normalizeDelegatedUser(member);
-      if (!memberUser) return false;
-      return (
-        (user.email && memberUser.email === user.email) ||
-        (user.login && memberUser.login === user.login) ||
-        (user.email && memberUser.login.endsWith(user.email))
-      );
-    });
-  } catch (error) {
-    logWarn("api:job-admin", "Failed to verify admin group membership", {
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    return false;
-  }
-}
-
 async function getApplicationCountsByJob(token: string): Promise<Record<string, number>> {
   const allApps = await queryListItems(token, APPLICATION_LIST, { top: 999 });
   const applicationColumns = resolveApplicationColumns(await resolveColumnMap(token, APPLICATION_LIST));
@@ -591,10 +515,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const delegatedToken = getBearerToken(req.headers);
   if (!delegatedToken) return res.status(401).json({ error: "Missing delegated SharePoint token" });
 
+  // Resolved in two steps rather than through `resolveHrFormsOwner`, because a
+  // non-owner is not turned away here — they still get to read back their own
+  // applications, which needs their email whichever way the group check lands.
   const delegatedUser = await resolveDelegatedUser(delegatedToken);
   if (!delegatedUser) return res.status(401).json({ error: "Unable to verify signed-in user" });
 
-  const delegatedIsAdmin = await isDelegatedAdmin(delegatedToken, delegatedUser);
+  const delegatedIsAdmin = await isHrFormsOwner(delegatedToken, delegatedUser);
 
   try {
     const token = await getGraphToken();

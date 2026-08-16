@@ -5,6 +5,7 @@ import {
   queryListItems,
   updateListItemFields,
 } from "./_utils/graphClient.js";
+import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { ensureAdminPanelSettingsList } from "./_utils/provisioning.js";
 
@@ -30,13 +31,6 @@ interface DashboardBackgroundSetting {
   updatedAt?: string;
 }
 
-interface SharePointUser {
-  Email?: string;
-  LoginName?: string;
-}
-
-const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
-const ADMIN_GROUP = "_HR_ Forms Owners";
 const SETTINGS_LIST = "AdminPanelSettings";
 const SETTING_TITLE = "dashboard-background";
 const DEFAULT_SETTING: DashboardBackgroundSetting = {
@@ -159,55 +153,6 @@ function validateRequestedSetting(body: Record<string, unknown>): DashboardBackg
   };
 }
 
-async function delegatedSharePointGet<T>(accessToken: string, path: string): Promise<T> {
-  if (!SP_SITE_URL) throw new Error("SharePoint site URL is not configured");
-  const response = await fetch(`${SP_SITE_URL}${path}`, {
-    headers: {
-      Accept: "application/json;odata=nometadata",
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`SharePoint GET ${response.status}`);
-  }
-
-  return await response.json() as T;
-}
-
-async function verifyAdmin(accessToken: string): Promise<string | null> {
-  try {
-    const currentUser = await delegatedSharePointGet<SharePointUser>(
-      accessToken,
-      "/_api/web/currentuser?$select=Email,LoginName",
-    );
-    const members = await delegatedSharePointGet<{ value?: SharePointUser[] }>(
-      accessToken,
-      `/_api/web/sitegroups/getByName('${encodeURIComponent(ADMIN_GROUP)}')/users?$select=LoginName,Email`,
-    );
-    const currentEmail = String(currentUser.Email || "").toLowerCase();
-    const currentLogin = String(currentUser.LoginName || "").toLowerCase();
-
-    const isAdmin = (members.value || []).some((member) => {
-      const email = String(member.Email || "").toLowerCase();
-      const login = String(member.LoginName || "").toLowerCase();
-      const loginEmail = login.split("|").pop() || "";
-      return (
-        (currentEmail && email === currentEmail) ||
-        (currentEmail && loginEmail === currentEmail) ||
-        (currentLogin && login === currentLogin)
-      );
-    });
-
-    return isAdmin ? (currentEmail || currentLogin || "admin") : null;
-  } catch (error) {
-    logWarn("api:dashboard-background", "Failed to verify admin group membership", {
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
 async function ensureSettingsList(token: string): Promise<void> {
   await ensureAdminPanelSettingsList(token, SETTINGS_LIST);
 }
@@ -283,7 +228,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(401).json({ error: "Missing signed-in user token." });
     }
 
-    const updatedBy = await verifyAdmin(bearerToken);
+    // Doubles as the stamp on the setting: the group check has already resolved
+    // who the caller is, and that is exactly what `UpdatedBy` should record.
+    const updatedBy = await resolveHrFormsOwner(bearerToken);
     if (!updatedBy) {
       return res.status(403).json({ error: "Only admins can change the dashboard background." });
     }
