@@ -39,10 +39,13 @@ import { editorial, editorialShadow } from "../../theme/editorial";
 import {
   EMPTY_SUBMISSION_FILTERS,
   applyFormTypeChange,
+  applyFormVersionChange,
+  applyPublishProfileChange,
   countActiveFilters,
   describeFieldFilter,
   type FieldFilter,
   type FormTypeOption,
+  type FormVersionOption,
   type SubmissionFilterState,
 } from "../../utils/submissionFilters";
 import type { FilterableField } from "../../utils/formFieldCatalog";
@@ -56,7 +59,9 @@ interface ToolbarProps {
   setSortBy: (v: string) => void;
   formTypeOptions: FormTypeOption[];
   publishProfileOptions: string[];
-  /** Questions of the selected form type. Empty when no form type is chosen. */
+  /** Versions of the form and profile in scope. */
+  formVersionOptions: FormVersionOption[];
+  /** Questions of the form, profile and version in scope. Empty until a form is chosen. */
   fieldCatalog: FilterableField[];
   isAdmin: boolean;
   canExportSubmissions: boolean;
@@ -80,6 +85,7 @@ export default function Toolbar({
   setSortBy,
   formTypeOptions,
   publishProfileOptions,
+  formVersionOptions,
   fieldCatalog,
   isAdmin,
   canExportSubmissions,
@@ -151,7 +157,14 @@ export default function Toolbar({
     chips.push({
       key: "profile",
       label: `Profile: ${filters.publishProfile}`,
-      onDelete: () => patch({ publishProfile: "" }),
+      onDelete: () => setFilters(applyPublishProfileChange(filters, "")),
+    });
+  }
+  if (filters.formVersion) {
+    chips.push({
+      key: "version",
+      label: `Version: ${filters.formVersion}`,
+      onDelete: () => setFilters(applyFormVersionChange(filters, "")),
     });
   }
   if (filters.submitter) {
@@ -373,32 +386,68 @@ export default function Toolbar({
 
             <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px dashed ${editorial.border}` }}>
               <Typography sx={SECTION_LABEL_SX}>
-                {filters.formType ? `Only in ${filters.formType}` : "This form type's own fields"}
+                {filters.formType
+                  ? `Only in ${filters.formType}${filters.formVersion ? ` v${filters.formVersion}` : ""}`
+                  : "One form's own fields"}
               </Typography>
 
               {!filters.formType ? (
                 <Typography sx={{ mt: 1, fontSize: "0.85rem", color: editorial.muted }}>
-                  Pick a form type above to filter by its own questions — dates, titles, times, choices — and by
-                  the profile it was published under.
+                  Pick a form above to narrow to a profile and version, then filter by the questions that version
+                  asked — dates, titles, times, numbers, ratings, choices.
                 </Typography>
               ) : (
                 <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-                  <FormControl size="small" sx={{ minWidth: 0, maxWidth: { sm: 320 } }}>
-                    <InputLabel>Profile</InputLabel>
-                    <Select
-                      value={filters.publishProfile}
-                      label="Profile"
-                      onChange={(e) => patch({ publishProfile: e.target.value })}
-                      sx={selectSx}
-                    >
-                      <MenuItem value="">All profiles</MenuItem>
-                      {publishProfileOptions.map((profile) => (
-                        <MenuItem key={profile} value={profile}>
-                          {profile}
+                  {/* Profile, then version, then that version's own questions. */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                      gap: 2,
+                      maxWidth: { sm: 660 },
+                    }}
+                  >
+                    <FormControl size="small" sx={{ minWidth: 0 }}>
+                      <InputLabel>Profile</InputLabel>
+                      <Select
+                        value={filters.publishProfile}
+                        label="Profile"
+                        onChange={(e) => setFilters(applyPublishProfileChange(filters, e.target.value))}
+                        sx={selectSx}
+                      >
+                        <MenuItem value="">All profiles</MenuItem>
+                        {publishProfileOptions.map((profile) => (
+                          <MenuItem key={profile} value={profile}>
+                            {profile}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <FormControl size="small" sx={{ minWidth: 0 }} disabled={!formVersionOptions.length}>
+                      <InputLabel>Version</InputLabel>
+                      <Select
+                        value={filters.formVersion}
+                        label="Version"
+                        onChange={(e) => setFilters(applyFormVersionChange(filters, e.target.value))}
+                        sx={selectSx}
+                      >
+                        <MenuItem value="">
+                          {formVersionOptions.length ? "All versions" : "No versions yet"}
                         </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                        {formVersionOptions.map((option) => (
+                          <MenuItem key={option.version} value={option.version}>
+                            v{option.version}
+                            {option.count > 0 && (
+                              <Box component="span" sx={{ ml: 0.75, color: editorial.softMuted, fontVariantNumeric: "tabular-nums" }}>
+                                ({option.count})
+                              </Box>
+                            )}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
 
                   {filters.fieldFilters.map((fieldFilter) => (
                     <FieldConditionRow
@@ -417,7 +466,7 @@ export default function Toolbar({
 
                   {!fieldCatalog.length && (
                     <Typography sx={{ fontSize: "0.8rem", color: editorial.muted }}>
-                      No filterable questions found for this form type yet — its published schema loads with the
+                      No filterable questions found for this selection yet — its published schema loads with the
                       submissions.
                     </Typography>
                   )}

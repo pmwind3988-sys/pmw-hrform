@@ -6,10 +6,13 @@
  * than MUI. Each page passes the handful of tokens it uses, so the panel inherits
  * that page's look instead of importing a second one.
  *
- * Layout follows the same scope-then-refine order: form type first, then the
- * facets every submission has, then the chosen form type's own questions.
+ * The lower half is drawn as the hierarchy it is — form, then profile, then
+ * version, then that version's own questions — each step indented under the one
+ * it depends on and inert until its parent is chosen. The universal facets stay
+ * in the top row, outside the chain, because they apply to every submission
+ * whatever form it came from.
  */
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   OPS_BY_KIND,
   groupFieldsBySection,
@@ -20,13 +23,16 @@ import {
   type FilterableField,
 } from "../../utils/formFieldCatalog";
 import {
+  applyFormTypeChange,
+  applyFormVersionChange,
+  applyPublishProfileChange,
   createFieldFilter,
   describeFieldFilter,
   type FieldFilter,
   type FormTypeOption,
+  type FormVersionOption,
   type SubmissionFilterState,
 } from "../../utils/submissionFilters";
-import { applyFormTypeChange } from "../../utils/submissionFilters";
 import { LIFECYCLE_STAGES, lifecycleLabel } from "../../utils/submissionLifecycle";
 
 export interface FilterPanelPalette {
@@ -46,11 +52,13 @@ interface SubmissionFilterPanelProps {
   /** Omit on a single-form page — there is nothing to scope. */
   formTypeOptions?: FormTypeOption[];
   publishProfileOptions?: string[];
-  /** Questions of the form type in scope. */
+  /** Versions of the form (and profile) in scope. */
+  formVersionOptions?: FormVersionOption[];
+  /** Questions of the form, profile and version in scope. */
   fieldCatalog: FilterableField[];
   /** Off where the page already has its own lifecycle tabs. */
   showStage?: boolean;
-  /** True while this form type's answers are still being fetched. */
+  /** True while this form's answers are still being fetched. */
   fieldDataLoading?: boolean;
   palette: FilterPanelPalette;
   total: number;
@@ -76,6 +84,7 @@ export default function SubmissionFilterPanel({
   setFilters,
   formTypeOptions,
   publishProfileOptions = [],
+  formVersionOptions = [],
   fieldCatalog,
   showStage = true,
   fieldDataLoading = false,
@@ -87,6 +96,19 @@ export default function SubmissionFilterPanel({
   const fieldByKey = new Map(fieldCatalog.map((field) => [field.key, field]));
   const groups = groupFieldsBySection(fieldCatalog);
 
+  // A page scoped to one form (the response viewer) has no form picker, so every
+  // level below the form is immediately in scope.
+  const formChosen = !formTypeOptions || !!filters.formType;
+  // A single profile is not a choice, so that rung is dropped and the ones under
+  // it move up — the indentation always reflects the steps actually shown.
+  const showProfileStep = publishProfileOptions.length > 1;
+  const depth = {
+    form: 0,
+    profile: formTypeOptions ? 1 : 0,
+    version: (formTypeOptions ? 1 : 0) + (showProfileStep ? 1 : 0),
+    fields: (formTypeOptions ? 1 : 0) + (showProfileStep ? 1 : 0) + 1,
+  };
+
   const controlStyle: CSSProperties = {
     padding: "7px 10px",
     borderRadius: 8,
@@ -97,6 +119,12 @@ export default function SubmissionFilterPanel({
     background: palette.cardBg,
     minWidth: 0,
   };
+  const disabledControlStyle: CSSProperties = {
+    ...controlStyle,
+    color: palette.textMuted,
+    background: palette.panelBg,
+    cursor: "not-allowed",
+  };
   const labelStyle: CSSProperties = { fontSize: 12, color: palette.textMuted, whiteSpace: "nowrap" };
   const sectionLabelStyle: CSSProperties = {
     fontSize: 11,
@@ -105,6 +133,32 @@ export default function SubmissionFilterPanel({
     textTransform: "uppercase",
     color: palette.textMuted,
   };
+  const stepLabelStyle: CSSProperties = {
+    fontSize: 11,
+    fontWeight: 700,
+    color: palette.textSecond,
+    minWidth: 76,
+  };
+
+  /** One rung of the chain: indented under its parent and marked by a left rule. */
+  const step = (depth: number, label: string, hint: string, body: ReactNode) => (
+    <div
+      style={{
+        marginLeft: depth * 18,
+        paddingLeft: 12,
+        borderLeft: `2px solid ${depth === 0 ? palette.accent : palette.border}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={stepLabelStyle}>{label}</span>
+        {body}
+      </div>
+      {hint && <div style={{ fontSize: 11, color: palette.textMuted }}>{hint}</div>}
+    </div>
+  );
 
   const updateFieldFilter = (next: FieldFilter) => {
     patch({ fieldFilters: filters.fieldFilters.map((entry) => (entry.id === next.id ? next : entry)) });
@@ -194,6 +248,20 @@ export default function SubmissionFilterPanel({
       onClear: () => setFilters(applyFormTypeChange(filters, "")),
     });
   }
+  if (filters.publishProfile) {
+    activeChips.push({
+      key: "profile",
+      label: `Profile: ${filters.publishProfile}`,
+      onClear: () => setFilters(applyPublishProfileChange(filters, "")),
+    });
+  }
+  if (filters.formVersion) {
+    activeChips.push({
+      key: "version",
+      label: `Version: ${filters.formVersion}`,
+      onClear: () => setFilters(applyFormVersionChange(filters, "")),
+    });
+  }
   if (filters.submitter) {
     activeChips.push({ key: "submitter", label: `Submitter: ${filters.submitter}`, onClear: () => patch({ submitter: "" }) });
   }
@@ -202,13 +270,6 @@ export default function SubmissionFilterPanel({
       key: "dates",
       label: `Submitted ${filters.dateFrom || "…"} – ${filters.dateTo || "…"}`,
       onClear: () => patch({ dateFrom: "", dateTo: "" }),
-    });
-  }
-  if (filters.publishProfile) {
-    activeChips.push({
-      key: "profile",
-      label: `Profile: ${filters.publishProfile}`,
-      onClear: () => patch({ publishProfile: "" }),
     });
   }
   for (const fieldFilter of filters.fieldFilters) {
@@ -241,25 +302,6 @@ export default function SubmissionFilterPanel({
           style={{ ...controlStyle, flex: "1 1 220px", fontSize: 13, padding: "8px 12px" }}
         />
 
-        {formTypeOptions && (
-          <label style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-            <span style={labelStyle}>Form type</span>
-            <select
-              value={filters.formType}
-              onChange={(e) => setFilters(applyFormTypeChange(filters, e.target.value))}
-              style={{ ...controlStyle, maxWidth: 240 }}
-            >
-              <option value="">All form types</option>
-              {formTypeOptions.map((option) => (
-                <option key={option.title} value={option.title}>
-                  {option.title}
-                  {option.count > 0 ? ` (${option.count})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-
         {showStage && (
           <label style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
             <span style={labelStyle}>Status</span>
@@ -290,116 +332,84 @@ export default function SubmissionFilterPanel({
         </div>
       </div>
 
-      {/* Everything below belongs to the selected form type. */}
+      {/* The scope chain: each step narrows what the step below it can offer. */}
       <div style={{ borderTop: `1px dashed ${palette.border}`, paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={sectionLabelStyle}>
-            {formTypeOptions && !filters.formType ? "This form type's own fields" : "Fields in this form"}
-          </span>
+        <span style={sectionLabelStyle}>Narrow by form</span>
 
-          {publishProfileOptions.length > 1 && (!formTypeOptions || filters.formType) && (
-            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <span style={labelStyle} title="The published profile a submission was sent under">
-                Profile
-              </span>
-              <select
-                value={filters.publishProfile}
-                onChange={(e) => patch({ publishProfile: e.target.value })}
-                style={{ ...controlStyle, maxWidth: 200 }}
-              >
-                <option value="">All profiles</option>
-                {publishProfileOptions.map((profile) => (
-                  <option key={profile} value={profile}>
-                    {profile}
-                  </option>
-                ))}
-              </select>
-            </label>
+        {formTypeOptions &&
+          step(
+            depth.form,
+            "Form",
+            filters.formType ? "" : "Pick a form to reach its versions and its own questions.",
+            <select
+              value={filters.formType}
+              onChange={(e) => setFilters(applyFormTypeChange(filters, e.target.value))}
+              style={{ ...controlStyle, flex: "1 1 220px", maxWidth: 320 }}
+            >
+              <option value="">All forms</option>
+              {formTypeOptions.map((option) => (
+                <option key={option.title} value={option.title}>
+                  {option.title}
+                  {option.count > 0 ? ` (${option.count})` : ""}
+                </option>
+              ))}
+            </select>,
           )}
-        </div>
 
-        {formTypeOptions && !filters.formType ? (
-          <div style={{ fontSize: 12, color: palette.textSecond }}>
-            Pick a form type to filter by its own questions — dates, titles, times, choices — and by the profile it
-            was published under.
-          </div>
-        ) : (
-          <>
-            {filters.fieldFilters.map((fieldFilter) => (
-              <div
-                key={fieldFilter.id}
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  background: palette.cardBg,
-                  border: `1px solid ${palette.border}`,
-                  borderRadius: 8,
-                  padding: 8,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: palette.textPrimary,
-                    flex: "0 1 160px",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={fieldByKey.get(fieldFilter.key)?.label ?? fieldFilter.key}
-                >
-                  {fieldByKey.get(fieldFilter.key)?.label ?? fieldFilter.key}
-                </span>
+        {showProfileStep &&
+          step(
+            depth.profile,
+            "Profile",
+            "",
+            <select
+              value={filters.publishProfile}
+              disabled={!formChosen}
+              onChange={(e) => setFilters(applyPublishProfileChange(filters, e.target.value))}
+              style={{ ...(formChosen ? controlStyle : disabledControlStyle), flex: "1 1 180px", maxWidth: 260 }}
+              title="The published profile a submission was sent under"
+            >
+              <option value="">All profiles</option>
+              {publishProfileOptions.map((profile) => (
+                <option key={profile} value={profile}>
+                  {profile}
+                </option>
+              ))}
+            </select>,
+          )}
 
-                <select
-                  value={fieldFilter.op}
-                  onChange={(e) =>
-                    updateFieldFilter({
-                      ...fieldFilter,
-                      op: e.target.value as FieldFilterOp,
-                      value: "",
-                      value2: "",
-                      values: [],
-                    })
-                  }
-                  style={{ ...controlStyle, flex: "0 0 auto" }}
-                >
-                  {(OPS_BY_KIND[fieldFilter.kind] ?? OPS_BY_KIND.text).map((op) => (
-                    <option key={op} value={op}>
-                      {opLabel(op)}
-                    </option>
-                  ))}
-                </select>
-
-                {valueEditor(fieldFilter)}
-
-                <button
-                  type="button"
-                  onClick={() => removeFieldFilter(fieldFilter.id)}
-                  title="Remove condition"
-                  style={{
-                    marginLeft: "auto",
-                    border: `1px solid ${palette.border}`,
-                    background: "transparent",
-                    color: palette.textMuted,
-                    borderRadius: 6,
-                    padding: "4px 9px",
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
+        {step(
+          depth.version,
+          "Version",
+          filters.formVersion ? "Conditions below cover the questions this version asked." : "",
+          <select
+            value={filters.formVersion}
+            disabled={!formChosen || !formVersionOptions.length}
+            onChange={(e) => setFilters(applyFormVersionChange(filters, e.target.value))}
+            style={{
+              ...(formChosen && formVersionOptions.length ? controlStyle : disabledControlStyle),
+              flex: "1 1 180px",
+              maxWidth: 260,
+            }}
+          >
+            <option value="">{formVersionOptions.length ? "All versions" : "No versions yet"}</option>
+            {formVersionOptions.map((option) => (
+              <option key={option.version} value={option.version}>
+                v{option.version}
+                {option.count > 0 ? ` (${option.count})` : ""}
+              </option>
             ))}
+          </select>,
+        )}
 
-            {fieldDataLoading && (
-              <div style={{ fontSize: 12, color: palette.textSecond }}>Loading this form's answers…</div>
-            )}
-
+        {step(
+          depth.fields,
+          "Fields",
+          "",
+          !formChosen ? (
+            <span style={{ fontSize: 12, color: palette.textSecond }}>
+              Choose a form first — questions differ from one form to the next.
+            </span>
+          ) : (
             <select
               value=""
               disabled={!fieldCatalog.length || fieldDataLoading}
@@ -409,7 +419,6 @@ export default function SubmissionFilterPanel({
               }}
               style={{
                 ...controlStyle,
-                alignSelf: "flex-start",
                 borderStyle: "dashed",
                 color: palette.accent,
                 fontWeight: 600,
@@ -417,7 +426,11 @@ export default function SubmissionFilterPanel({
               }}
             >
               <option value="">
-                {fieldCatalog.length ? "+ Add field condition" : "No filterable questions found"}
+                {fieldDataLoading
+                  ? "Loading this form's answers…"
+                  : fieldCatalog.length
+                    ? "+ Add a condition on a field"
+                    : "No filterable questions found"}
               </option>
               {groups.map((group) => (
                 <optgroup key={group.section} label={group.section}>
@@ -429,8 +442,81 @@ export default function SubmissionFilterPanel({
                 </optgroup>
               ))}
             </select>
-          </>
+          ),
         )}
+
+        {formChosen &&
+          filters.fieldFilters.map((fieldFilter) => (
+            <div
+              key={fieldFilter.id}
+              style={{
+                marginLeft: depth.fields * 18 + 12,
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                flexWrap: "wrap",
+                background: palette.cardBg,
+                border: `1px solid ${palette.border}`,
+                borderRadius: 8,
+                padding: 8,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: palette.textPrimary,
+                  flex: "0 1 160px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={fieldByKey.get(fieldFilter.key)?.label ?? fieldFilter.key}
+              >
+                {fieldByKey.get(fieldFilter.key)?.label ?? fieldFilter.key}
+              </span>
+
+              <select
+                value={fieldFilter.op}
+                onChange={(e) =>
+                  updateFieldFilter({
+                    ...fieldFilter,
+                    op: e.target.value as FieldFilterOp,
+                    value: "",
+                    value2: "",
+                    values: [],
+                  })
+                }
+                style={{ ...controlStyle, flex: "0 0 auto" }}
+              >
+                {(OPS_BY_KIND[fieldFilter.kind] ?? OPS_BY_KIND.text).map((op) => (
+                  <option key={op} value={op}>
+                    {opLabel(op)}
+                  </option>
+                ))}
+              </select>
+
+              {valueEditor(fieldFilter)}
+
+              <button
+                type="button"
+                onClick={() => removeFieldFilter(fieldFilter.id)}
+                title="Remove condition"
+                style={{
+                  marginLeft: "auto",
+                  border: `1px solid ${palette.border}`,
+                  background: "transparent",
+                  color: palette.textMuted,
+                  borderRadius: 6,
+                  padding: "4px 9px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
       </div>
 
       {activeChips.length > 0 && (

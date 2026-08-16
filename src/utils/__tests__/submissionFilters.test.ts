@@ -3,8 +3,11 @@ import type { Submission, SurveyJson } from "../../types";
 import {
   EMPTY_SUBMISSION_FILTERS,
   applyFormTypeChange,
+  applyFormVersionChange,
+  applyPublishProfileChange,
   collectFieldCatalog,
   collectFormTypes,
+  collectFormVersions,
   collectPublishProfiles,
   countActiveFilters,
   createFieldFilter,
@@ -15,7 +18,7 @@ import {
   submissionMatchesFilters,
   type FieldFilter,
 } from "../submissionFilters";
-import { fieldsFromSurveyJson, type FilterFieldKind } from "../formFieldCatalog";
+import { fieldsFromResponses, fieldsFromSurveyJson, type FilterFieldKind } from "../formFieldCatalog";
 
 function makeSubmission(overrides: Partial<Submission> = {}): Submission {
   return {
@@ -81,6 +84,25 @@ describe("submissionMatchesFilters", () => {
     const item = makeSubmission();
     expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, formType: "Training Feedback" })).toBe(true);
     expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, formType: "Other Form" })).toBe(false);
+  });
+
+  it("filters by form version exactly", () => {
+    const item = makeSubmission({ formVersion: "2.0" });
+    expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, formVersion: "2.0" })).toBe(true);
+    expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, formVersion: "1.0" })).toBe(false);
+  });
+
+  it("ANDs the levels of the hierarchy together", () => {
+    const item = makeSubmission({ formVersion: "2.0", publishKey: "c-suite" });
+    const scoped = {
+      ...EMPTY_SUBMISSION_FILTERS,
+      formType: "Training Feedback",
+      publishProfile: "c-suite",
+      formVersion: "2.0",
+    };
+    expect(submissionMatchesFilters(item, scoped)).toBe(true);
+    expect(submissionMatchesFilters(item, { ...scoped, formVersion: "1.0" })).toBe(false);
+    expect(submissionMatchesFilters(item, { ...scoped, publishProfile: "production" })).toBe(false);
   });
 
   it("filters by lifecycle stage", () => {
@@ -156,6 +178,7 @@ describe("submissionMatchesFilters", () => {
     const record = {
       formType: "Training Feedback",
       profileKey: "production",
+      formVersion: "1.0",
       stage: "pending" as const,
       submittedAt: "2026-07-10T09:00:00.000Z",
       searchTexts: [null, undefined, "Item 1"],
@@ -336,6 +359,40 @@ describe("collectFieldCatalog", () => {
     expect(collectFieldCatalog(items, "")).toEqual([]);
   });
 
+  it("narrows to the questions one version asked", () => {
+    const items = [
+      makeSubmission({ formVersion: "1.0", surveyJson: surveyV1 }),
+      makeSubmission({ formVersion: "2.0", surveyJson: surveyV2 }),
+    ];
+    expect(collectFieldCatalog(items, "Training Feedback", { formVersion: "1.0" }).map((f) => f.key)).toEqual(["dept"]);
+    expect(collectFieldCatalog(items, "Training Feedback", { formVersion: "2.0" }).map((f) => f.key)).toEqual([
+      "dept",
+      "note",
+    ]);
+  });
+
+  it("narrows to the questions one profile published", () => {
+    const items = [
+      makeSubmission({ formVersion: "1.0", publishKey: "c-suite", surveyJson: surveyV1 }),
+      makeSubmission({ formVersion: "1.0", publishKey: "night-shift", surveyJson: surveyV2 }),
+    ];
+    expect(collectFieldCatalog(items, "Training Feedback", { publishProfile: "c-suite" }).map((f) => f.key)).toEqual([
+      "dept",
+    ]);
+  });
+
+  it("recovers a catalogue from the answers when no schema was snapshotted", () => {
+    const items = [
+      makeSubmission({ surveyJson: null, submissionData: { staffName: "Ahmad", score: 8, heldOn: "2026-07-10" } }),
+    ];
+    const catalog = collectFieldCatalog(items, "Training Feedback");
+    expect(Object.fromEntries(catalog.map((field) => [field.key, field.kind]))).toEqual({
+      heldOn: "date",
+      score: "number",
+      staffName: "text",
+    });
+  });
+
   it("unions the questions across the versions of one form type", () => {
     const items = [
       makeSubmission({ formVersion: "1.0", surveyJson: surveyV1 }),
@@ -396,25 +453,74 @@ describe("collectPublishProfiles", () => {
   });
 });
 
-describe("applyFormTypeChange", () => {
-  it("drops everything scoped to the form type that was replaced", () => {
-    const filters = {
-      ...EMPTY_SUBMISSION_FILTERS,
-      formType: "Training Feedback",
-      publishProfile: "c-suite",
-      search: "keep me",
-      fieldFilters: [condition("trainingTitle", "text", { op: "contains", value: "fire" })],
-    };
-    const next = applyFormTypeChange(filters, "Incident Report");
+describe("collectFormVersions", () => {
+  it("counts versions that have submissions, newest first", () => {
+    const items = [
+      makeSubmission({ formVersion: "1.0" }),
+      makeSubmission({ formVersion: "2.0" }),
+      makeSubmission({ formVersion: "10.0" }),
+      makeSubmission({ formVersion: "2.0" }),
+      makeSubmission({ listTitle: "Incident Report", formVersion: "5.0" }),
+    ];
+    expect(collectFormVersions(items, "Training Feedback")).toEqual([
+      { version: "10.0", count: 1 },
+      { version: "2.0", count: 2 },
+      { version: "1.0", count: 1 },
+    ]);
+  });
+
+  it("narrows to the profile above it", () => {
+    const items = [
+      makeSubmission({ formVersion: "1.0", publishKey: "c-suite" }),
+      makeSubmission({ formVersion: "2.0", publishKey: "night-shift" }),
+    ];
+    expect(collectFormVersions(items, "Training Feedback", "c-suite")).toEqual([{ version: "1.0", count: 1 }]);
+  });
+
+  it("returns nothing until a form is chosen", () => {
+    expect(collectFormVersions([makeSubmission()], "")).toEqual([]);
+  });
+});
+
+describe("walking the filter hierarchy", () => {
+  const scoped = {
+    ...EMPTY_SUBMISSION_FILTERS,
+    formType: "Training Feedback",
+    publishProfile: "c-suite",
+    formVersion: "2.0",
+    search: "keep me",
+    fieldFilters: [condition("trainingTitle", "text", { op: "contains", value: "fire" })],
+  };
+
+  it("drops profile, version and conditions when the form changes", () => {
+    const next = applyFormTypeChange(scoped, "Incident Report");
     expect(next.formType).toBe("Incident Report");
     expect(next.publishProfile).toBe("");
+    expect(next.formVersion).toBe("");
     expect(next.fieldFilters).toEqual([]);
     expect(next.search).toBe("keep me");
   });
 
-  it("leaves the state untouched when the form type did not change", () => {
-    const filters = { ...EMPTY_SUBMISSION_FILTERS, formType: "Training Feedback", publishProfile: "c-suite" };
-    expect(applyFormTypeChange(filters, "Training Feedback")).toBe(filters);
+  it("drops version and conditions when the profile changes, keeping the form", () => {
+    const next = applyPublishProfileChange(scoped, "night-shift");
+    expect(next.formType).toBe("Training Feedback");
+    expect(next.publishProfile).toBe("night-shift");
+    expect(next.formVersion).toBe("");
+    expect(next.fieldFilters).toEqual([]);
+  });
+
+  it("drops only the conditions when the version changes", () => {
+    const next = applyFormVersionChange(scoped, "3.0");
+    expect(next.formType).toBe("Training Feedback");
+    expect(next.publishProfile).toBe("c-suite");
+    expect(next.formVersion).toBe("3.0");
+    expect(next.fieldFilters).toEqual([]);
+  });
+
+  it("leaves the state untouched when a level is re-selected", () => {
+    expect(applyFormTypeChange(scoped, "Training Feedback")).toBe(scoped);
+    expect(applyPublishProfileChange(scoped, "c-suite")).toBe(scoped);
+    expect(applyFormVersionChange(scoped, "2.0")).toBe(scoped);
   });
 });
 
@@ -433,6 +539,58 @@ describe("sortSubmissions", () => {
     ];
     sortSubmissions(items, "newest");
     expect(items.map((i) => i.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("fieldsFromResponses", () => {
+  it("keeps answer columns and drops list plumbing and workflow bookkeeping", () => {
+    const rows = [
+      {
+        Id: 4,
+        Title: "Training Feedback",
+        FileSystemObjectType: 0,
+        OData__UIVersionString: "1.0",
+        L1_Status: "Approved",
+        attendees_Html: "<table/>",
+        RawJSON: "{}",
+        staffName: "Ahmad",
+      },
+    ];
+    expect(fieldsFromResponses(rows).map((field) => field.key)).toEqual(["staffName"]);
+  });
+
+  it("infers the kind that decides the operators offered", () => {
+    const rows = [
+      {
+        note: "hello",
+        score: 8,
+        certified: true,
+        heldOn: "2026-07-10",
+        loggedAt: "2026-07-10T09:00:00Z",
+        startsAt: "09:30",
+        depts: ["HR", "Ops"],
+      },
+    ];
+    expect(Object.fromEntries(fieldsFromResponses(rows).map((f) => [f.key, f.kind]))).toEqual({
+      note: "text",
+      score: "number",
+      certified: "boolean",
+      heldOn: "date",
+      loggedAt: "datetime",
+      startsAt: "time",
+      depts: "choice",
+    });
+  });
+
+  it("widens a column to text when its answers disagree on a kind", () => {
+    const rows = [{ ref: "2026-07-10" }, { ref: "TBC" }];
+    expect(fieldsFromResponses(rows)[0].kind).toBe("text");
+  });
+
+  it("reads a SharePoint-escaped column name as its readable label", () => {
+    const [field] = fieldsFromResponses([{ Staff_x0020_Name: "Ahmad" }]);
+    expect(field.key).toBe("Staff_x0020_Name");
+    expect(field.label).toBe("Staff Name");
   });
 });
 

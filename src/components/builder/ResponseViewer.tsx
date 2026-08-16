@@ -26,11 +26,18 @@ import SubmissionFilterPanel from "./SubmissionFilterPanel";
 import {
   DEFAULT_PROFILE_KEY,
   EMPTY_SUBMISSION_FILTERS,
+  compareVersionsDescending,
   recordMatchesFilters,
+  type FormVersionOption,
   type SubmissionFilterState,
 } from "../../utils/submissionFilters";
-import { fieldsFromSurveyJson, mergeFieldCatalogs, mergeObservedValues } from "../../utils/formFieldCatalog";
-import type { FilterableField } from "../../utils/formFieldCatalog";
+import {
+  fieldsFromResponses,
+  fieldsFromSurveyJson,
+  mergeObservedValues,
+  selectSnapshotFields,
+} from "../../utils/formFieldCatalog";
+import type { SchemaSnapshot } from "../../utils/formFieldCatalog";
 import { resolveLifecycleStage } from "../../utils/submissionLifecycle";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -119,8 +126,8 @@ export default function ResponseViewer() {
   const [selectedResponseData, setSelectedResponseData] = useState<Record<string, unknown> | null>(null);
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
-  /** This form's questions across every published version, for the filter panel. */
-  const [filterFields, setFilterFields] = useState<FilterableField[]>([]);
+  /** This form's questions, one entry per published version, for the filter panel. */
+  const [schemaSnapshots, setSchemaSnapshots] = useState<SchemaSnapshot[]>([]);
   const [matrixTables, setMatrixTables] = useState<Record<string, MatrixTableEntry>>({});
   const [matrixLoading, setMatrixLoading] = useState(false);
 
@@ -179,16 +186,20 @@ export default function ResponseViewer() {
         try {
           const versions = await spGet(
             token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listName)}'&$select=SurveyJSON&$top=50`
-          ) as { value?: { SurveyJSON?: string }[] };
-          const schemas: FilterableField[][] = [];
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(listName)}'&$select=FormVersion,SurveyJSON&$top=50`
+          ) as { value?: { FormVersion?: string; SurveyJSON?: string }[] };
+          const snapshots: SchemaSnapshot[] = [];
           for (const version of versions.value ?? []) {
             if (!version.SurveyJSON) continue;
             try {
-              schemas.push(fieldsFromSurveyJson(JSON.parse(version.SurveyJSON)));
+              snapshots.push({
+                formVersion: (version.FormVersion || "").trim(),
+                profileKey: DEFAULT_PROFILE_KEY,
+                fields: fieldsFromSurveyJson(JSON.parse(version.SurveyJSON)),
+              });
             } catch { /* skip unparseable snapshot */ }
           }
-          setFilterFields(mergeFieldCatalogs(schemas));
+          setSchemaSnapshots(snapshots);
         } catch { /* version list may not exist — the catalogue stays empty */ }
       } catch (e) {
         setError((e as Error).message);
@@ -309,17 +320,31 @@ export default function ResponseViewer() {
     return map;
   }, [submissions]);
 
+  /** Versions of this form that have submissions, newest first. */
+  const formVersionOptions = useMemo<FormVersionOption[]>(() => {
+    const counts = new Map<string, number>();
+    for (const item of submissions) {
+      const version = (item.FormVersion || "").trim();
+      if (!version) continue;
+      counts.set(version, (counts.get(version) ?? 0) + 1);
+    }
+    return Array.from(counts, ([version, count]) => ({ version, count }))
+      .sort((a, b) => compareVersionsDescending(a.version, b.version));
+  }, [submissions]);
+
   /**
    * This page is already scoped to one form, so the filter panel skips the form
-   * type step and goes straight to that form's own questions.
+   * step and starts at the version — then that version's own questions.
    */
   const fieldCatalog = useMemo(() => {
-    const base = filterFields.map((field) => ({
-      ...field,
-      choices: field.choices ? [...field.choices] : undefined,
-    }));
-    return mergeObservedValues(base, submissions.map((item) => parsedItemData.get(item.Id) ?? {}));
-  }, [filterFields, submissions, parsedItemData]);
+    const scopedItems = filters.formVersion
+      ? submissions.filter((item) => (item.FormVersion || "").trim() === filters.formVersion)
+      : submissions;
+    const answers = scopedItems.map((item) => parsedItemData.get(item.Id) ?? {});
+    const scoped = selectSnapshotFields(schemaSnapshots, { formVersion: filters.formVersion });
+    const base = scoped.length ? scoped : fieldsFromResponses(answers);
+    return mergeObservedValues(base, answers);
+  }, [schemaSnapshots, submissions, parsedItemData, filters.formVersion]);
 
   const filteredSubmissions = useMemo(
     () =>
@@ -328,6 +353,7 @@ export default function ResponseViewer() {
           {
             formType: formTitle ?? "",
             profileKey: DEFAULT_PROFILE_KEY,
+            formVersion: (item.FormVersion || "").trim(),
             stage: resolveLifecycleStage({
               formStatus: item.FormStatus,
               status: item.Status,
@@ -458,6 +484,7 @@ export default function ResponseViewer() {
         <SubmissionFilterPanel
           filters={filters}
           setFilters={setFilters}
+          formVersionOptions={formVersionOptions}
           fieldCatalog={fieldCatalog}
           total={submissions.length}
           filtered={filteredSubmissions.length}

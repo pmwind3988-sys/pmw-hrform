@@ -25,13 +25,15 @@ import SubmissionFilterPanel from "./SubmissionFilterPanel";
 import {
   DEFAULT_PROFILE_KEY,
   EMPTY_SUBMISSION_FILTERS,
+  compareVersionsDescending,
   recordMatchesFilters,
   type FilterableRecord,
   type FormTypeOption,
+  type FormVersionOption,
   type SubmissionFilterState,
 } from "../../utils/submissionFilters";
-import { fieldsFromSurveyJson, mergeFieldCatalogs, mergeObservedValues } from "../../utils/formFieldCatalog";
-import type { FilterableField } from "../../utils/formFieldCatalog";
+import { fieldsFromResponses, fieldsFromSurveyJson, mergeObservedValues, selectSnapshotFields } from "../../utils/formFieldCatalog";
+import type { SchemaSnapshot } from "../../utils/formFieldCatalog";
 import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import {
@@ -639,7 +641,9 @@ export default function ApprovalDashboard() {
   // One filter model, shared with the dashboard. The lifecycle tabs below own the
   // stage instead of `filters.stage`, so the tab counts can ignore it.
   const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
-  const [formFieldCatalogs, setFormFieldCatalogs] = useState<Record<string, FilterableField[]>>({});
+  // The published cuts of each form, keyed by form title. Held per version+profile
+  // rather than merged, so narrowing to one version narrows its questions too.
+  const [formSchemaSnapshots, setFormSchemaSnapshots] = useState<Record<string, SchemaSnapshot[]>>({});
   // Submitted answers per form type, loaded on demand — see the effect below.
   const [answersByForm, setAnswersByForm] = useState<Record<string, Record<number, Record<string, unknown>>>>({});
   const [answersLoading, setAnswersLoading] = useState(false);
@@ -727,7 +731,9 @@ export default function ApprovalDashboard() {
       setAnswersByForm((prev) => ({ ...prev, [formType]: map }));
       setAnswersLoading(false);
     })();
-    return () => { cancelled = true; };
+    // Switching form mid-flight abandons the response above, so the flag is
+    // cleared here too — otherwise the picker stays stuck on "loading".
+    return () => { cancelled = true; setAnswersLoading(false); };
   }, [filters.formType, token, answersByForm]);
 
   const answersReady = !!filters.formType && !!answersByForm[filters.formType];
@@ -747,6 +753,7 @@ export default function ApprovalDashboard() {
   const toFilterRecord = useCallback((item: PendingItem): FilterableRecord => ({
     formType: item.Title,
     profileKey: getItemProfileKey(item) || DEFAULT_PROFILE_KEY,
+    formVersion: (item.FormVersion || "").trim(),
     stage: getItemLifecycleStage(item),
     submittedAt: item.SubmittedAt,
     searchTexts: [item.Title, String(item.Id), getItemTrainingTitle(item)],
@@ -801,16 +808,45 @@ export default function ApprovalDashboard() {
     return Array.from(keys).sort((a, b) => a.localeCompare(b));
   }, [pendingItems, filters.formType]);
 
-  // The selected form type's own questions: its published schemas, widened by the
-  // answers actually recorded so SharePoint-backed choices still list options.
+  // Versions that actually have submissions under the form and profile in scope.
+  const formVersionOptions = useMemo<FormVersionOption[]>(() => {
+    if (!filters.formType) return [];
+    const counts = new Map<string, number>();
+    for (const item of pendingItems) {
+      if (item.Title !== filters.formType) continue;
+      if (filters.publishProfile && (getItemProfileKey(item) || DEFAULT_PROFILE_KEY) !== filters.publishProfile) continue;
+      const version = (item.FormVersion || "").trim();
+      if (!version) continue;
+      counts.set(version, (counts.get(version) ?? 0) + 1);
+    }
+    return Array.from(counts, ([version, count]) => ({ version, count }))
+      .sort((a, b) => compareVersionsDescending(a.version, b.version));
+  }, [pendingItems, filters.formType, filters.publishProfile]);
+
+  // The questions in scope: the published schemas of the selected form, narrowed
+  // to the chosen profile and version, then widened by the answers actually
+  // recorded so SharePoint-backed choices still list their options. A form with no
+  // usable snapshot falls back to the answer columns, so it is still filterable.
   const fieldCatalog = useMemo(() => {
     if (!filters.formType) return [];
-    const base = (formFieldCatalogs[filters.formType] ?? []).map((field) => ({
-      ...field,
-      choices: field.choices ? [...field.choices] : undefined,
-    }));
-    return mergeObservedValues(base, Array.from(itemAnswers.values()));
-  }, [filters.formType, formFieldCatalogs, itemAnswers]);
+    // Only the answers from the cut in scope, so the observed options offered on a
+    // single version are the ones that version actually collected.
+    const answers = pendingItems
+      .filter(
+        (item) =>
+          item.Title === filters.formType &&
+          (!filters.publishProfile || (getItemProfileKey(item) || DEFAULT_PROFILE_KEY) === filters.publishProfile) &&
+          (!filters.formVersion || (item.FormVersion || "").trim() === filters.formVersion),
+      )
+      .map((item) => itemAnswers.get(getPendingItemKey(item)))
+      .filter((row): row is Record<string, unknown> => !!row);
+    const scoped = selectSnapshotFields(formSchemaSnapshots[filters.formType] ?? [], {
+      profileKey: filters.publishProfile,
+      formVersion: filters.formVersion,
+    });
+    const base = scoped.length ? scoped : fieldsFromResponses(answers);
+    return mergeObservedValues(base, answers);
+  }, [pendingItems, filters.formType, filters.publishProfile, filters.formVersion, formSchemaSnapshots, itemAnswers]);
 
   const filteredItems = useMemo(
     () => categoryItems.filter(i => getItemLifecycleStage(i) === stageFilter),
@@ -901,7 +937,7 @@ export default function ApprovalDashboard() {
           }
           // The same pass that reads layer configs also yields each form's
           // questions — what the field conditions filter on.
-          const schemasByForm: Record<string, FilterableField[][]> = {};
+          const snapshotsByForm: Record<string, SchemaSnapshot[]> = {};
           for (const v of allVersions?.value ?? []) {
             try {
               const parsed = JSON.parse(v.SurveyJSON);
@@ -910,14 +946,16 @@ export default function ApprovalDashboard() {
                 versionLayerMap[key] = parsed.layerConfig;
               }
               const fields = fieldsFromSurveyJson(parsed);
-              if (fields.length) (schemasByForm[v.FormTitle] ??= []).push(fields);
+              if (fields.length) {
+                (snapshotsByForm[v.FormTitle] ??= []).push({
+                  formVersion: v.FormVersion,
+                  profileKey: (v.PublishKey || "").trim() || DEFAULT_PROFILE_KEY,
+                  fields,
+                });
+              }
             } catch { /* skip unparseable */ }
           }
-          setFormFieldCatalogs(
-            Object.fromEntries(
-              Object.entries(schemasByForm).map(([title, schemas]) => [title, mergeFieldCatalogs(schemas)]),
-            ),
-          );
+          setFormSchemaSnapshots(snapshotsByForm);
         } catch { /* version list may not exist */ }
 
         const allItems: PendingItem[] = [];
@@ -2551,6 +2589,7 @@ export default function ApprovalDashboard() {
           setFilters={setFilters}
           formTypeOptions={formTypeOptions}
           publishProfileOptions={availableProfiles}
+          formVersionOptions={formVersionOptions}
           fieldCatalog={fieldCatalog}
           showStage={false}
           fieldDataLoading={answersLoading}

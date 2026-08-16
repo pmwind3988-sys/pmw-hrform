@@ -23,7 +23,12 @@ import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
-import { collectFieldCatalog, collectFormTypes, collectPublishProfiles } from "../utils/submissionFilters";
+import {
+  collectFieldCatalog,
+  collectFormTypes,
+  collectFormVersions,
+  collectPublishProfiles,
+} from "../utils/submissionFilters";
 import { csvCell, downloadCsv } from "../utils/csv";
 import type { CareerPortalCard, HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
@@ -162,7 +167,11 @@ export default function AdminHomePage() {
   const canExportSubmissions = isAdmin || canUseFormBuilder;
   const formTypeOptions = collectFormTypes(submissions, visibleLists.map((list) => list.title));
   const publishProfileOptions = collectPublishProfiles(submissions, filters.formType);
-  const fieldCatalog = collectFieldCatalog(submissions, filters.formType);
+  const formVersionOptions = collectFormVersions(submissions, filters.formType, filters.publishProfile);
+  const fieldCatalog = collectFieldCatalog(submissions, filters.formType, {
+    publishProfile: filters.publishProfile,
+    formVersion: filters.formVersion,
+  });
   const exportRows = exportScope === "all" ? submissions : sortedSubmissions;
   const dashboardSubtitle = isAdmin
     ? canUseFormBuilder
@@ -394,6 +403,7 @@ export default function AdminHomePage() {
             setSortBy={setSortBy}
             formTypeOptions={formTypeOptions}
             publishProfileOptions={publishProfileOptions}
+            formVersionOptions={formVersionOptions}
             fieldCatalog={fieldCatalog}
             isAdmin={isAdmin}
             canExportSubmissions={canExportSubmissions}

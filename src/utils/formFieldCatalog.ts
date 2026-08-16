@@ -1,16 +1,17 @@
 /**
- * formFieldCatalog.ts — what a given form type can be filtered by.
+ * formFieldCatalog.ts — what a given form, at a given version, can be filtered by.
  *
  * A submission carries its own published schema (`Submission.surveyJson`), so the
- * set of questions an admin may filter on is derivable per form type without a
- * single extra network call. This module turns that schema into typed field
- * descriptors, and the descriptors decide which operators the UI offers.
+ * set of questions an admin may filter on is derivable per form without a single
+ * extra network call. This module turns that schema into typed field descriptors,
+ * and the descriptors decide which operators the UI offers.
  *
  * Schema first, data second: a form whose choices come from a SharePoint list has
- * no `choices` array in the published JSON, and submissions predating a schema
- * snapshot have no schema at all. Both still get a usable filter because
- * `mergeObservedValues` folds the values actually present in the responses into
- * the catalogue.
+ * no `choices` array in the published JSON, so `mergeObservedValues` folds the
+ * values actually present in the responses into the catalogue. And a form whose
+ * schema snapshot is missing entirely falls back to `fieldsFromResponses`, which
+ * reads the answer columns straight off the responses — without it those forms
+ * offer no field conditions at all, which reads as the feature being broken.
  */
 
 /** How a field is filtered, which is coarser than how it is rendered. */
@@ -338,9 +339,97 @@ export function mergeFieldCatalogs(catalogs: FilterableField[][]): FilterableFie
 }
 
 /**
+ * Columns that carry list plumbing or workflow bookkeeping rather than an answer.
+ * Only consulted when a catalogue is recovered from raw response rows, where the
+ * SharePoint REST payload mixes both together.
+ */
+const NON_ANSWER_KEYS = new Set([
+  // SharePoint REST plumbing
+  "Id", "ID", "GUID", "FileSystemObjectType", "ServerRedirectedEmbedUri", "ServerRedirectedEmbedUrl",
+  "ContentTypeId", "ContentType", "ComplianceAssetId", "Attachments", "AttachmentFiles", "PermMask",
+  "Created", "Modified", "Author", "Editor", "AuthorId", "EditorId", "Order",
+  // Response-list bookkeeping the workflow engine writes
+  "Title", "SubmittedBy", "SubmittedAt", "Status", "FormStatus", "FormVersion", "FormID", "RawJSON",
+  "CurrentLayer", "CurrentApprovalLayer", "SelectedBranch", "PublishKey", "PdfUrl",
+  "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
+  "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
+]);
+
+function isNonAnswerKey(key: string): boolean {
+  if (NON_ANSWER_KEYS.has(key)) return true;
+  // OData__UIVersionString, __metadata, odata.etag and friends.
+  if (key.startsWith("__") || key.startsWith("OData__") || key.startsWith("odata.")) return true;
+  // Per-layer workflow columns: L1_Status, L3_SignedAt, …
+  if (/^L\d+_/.test(key)) return true;
+  // The HTML mirror a dynamic matrix writes beside its child list.
+  if (key.endsWith("_Html")) return true;
+  // SharePoint's lookup shadow for a column it already returns expanded.
+  if (/^(Author|Editor)Id$/.test(key)) return true;
+  return false;
+}
+
+const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+const CLOCK_TIME = /^\d{1,2}:\d{2}(:\d{2})?$/;
+
+/** The narrowest kind an observed value is consistent with. */
+function kindForValue(value: unknown): FilterFieldKind | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value === "number") return "number";
+  if (Array.isArray(value)) return value.length ? "choice" : null;
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text) return null;
+  if (ISO_DATETIME.test(text)) return "datetime";
+  if (ISO_DATE_ONLY.test(text)) return "date";
+  if (CLOCK_TIME.test(text)) return "time";
+  return "text";
+}
+
+/**
+ * Widen two readings of the same column into one that fits both. Answers vary
+ * across submissions — one row leaves a date blank and stores "", the next
+ * stores a real stamp — so a column only keeps a specific kind while every
+ * value it holds agrees on it, and falls back to text otherwise.
+ */
+function widenKind(current: FilterFieldKind, next: FilterFieldKind): FilterFieldKind {
+  if (current === next) return current;
+  if ((current === "date" && next === "datetime") || (current === "datetime" && next === "date")) return "datetime";
+  return "text";
+}
+
+/**
+ * Recover a catalogue from the responses alone, for a form with no usable schema
+ * snapshot. Keys are both the label and the lookup key, since the question titles
+ * only exist in the schema that is missing.
+ */
+export function fieldsFromResponses(
+  responses: Record<string, unknown>[],
+  section = "Recorded answers",
+): FilterableField[] {
+  const kinds = new Map<string, FilterFieldKind>();
+  for (const response of responses) {
+    for (const [key, value] of Object.entries(response)) {
+      if (isNonAnswerKey(key)) continue;
+      const kind = kindForValue(value);
+      if (!kind) continue;
+      const existing = kinds.get(key);
+      kinds.set(key, existing ? widenKind(existing, kind) : kind);
+    }
+  }
+  return Array.from(kinds, ([key, kind]) => ({
+    key,
+    label: decodeSharePointKey(key),
+    section,
+    kind,
+    ...(kind === "choice" ? { choices: [] } : {}),
+  })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
  * Fold the answers actually present into the catalogue: fills the options of a
- * SharePoint-backed dropdown, and recovers fields from submissions whose schema
- * snapshot is missing entirely.
+ * SharePoint-backed dropdown whose choices live outside the published schema.
  */
 export function mergeObservedValues(
   catalog: FilterableField[],
@@ -383,6 +472,34 @@ export function mergeObservedValues(
   }
 
   return catalog;
+}
+
+/**
+ * One published cut of a form: the questions it asked, tagged with the version
+ * and profile it was published as. Filtering narrows to a single snapshot once an
+ * admin picks a version, and unions them while they have not.
+ */
+export interface SchemaSnapshot {
+  formVersion: string;
+  profileKey: string;
+  fields: FilterableField[];
+}
+
+/**
+ * The questions in scope for a profile/version selection. An empty selection is
+ * "every one of them", so the catalogue only narrows as the admin walks down the
+ * hierarchy rather than emptying out at the top of it.
+ */
+export function selectSnapshotFields(
+  snapshots: SchemaSnapshot[],
+  selection: { profileKey?: string; formVersion?: string } = {},
+): FilterableField[] {
+  const scoped = snapshots.filter(
+    (snapshot) =>
+      (!selection.profileKey || snapshot.profileKey === selection.profileKey) &&
+      (!selection.formVersion || snapshot.formVersion === selection.formVersion),
+  );
+  return mergeFieldCatalogs(scoped.map((snapshot) => snapshot.fields));
 }
 
 /** Group a catalogue by section, preserving the order questions appear in the form. */

@@ -1,12 +1,18 @@
 /**
  * submissionFilters.ts — one filter model for every place submissions are listed.
  *
- * The shape is scope-then-refine. `formType` picks a form; everything downstream
- * of it (the publish profile, and any number of `fieldFilters`) is interpreted
- * against that form's own questions. The universal facets — free-text search,
- * lifecycle stage, submitter, submitted-on range — stay available whether or not
- * a form type is chosen, because they exist on every submission regardless of
- * which questions it asked.
+ * The shape is a hierarchy, narrowed one level at a time:
+ *
+ *     form title  →  publish profile  →  version  →  conditions on its questions
+ *
+ * Each level is only meaningful inside the one above it. A profile belongs to a
+ * form, a version belongs to a (form, profile) pair, and a question belongs to
+ * the versions that asked it — so picking a new value at any level drops what was
+ * scoped beneath it rather than leaving conditions that silently match nothing.
+ *
+ * The universal facets — free-text search, lifecycle stage, submitter,
+ * submitted-on range — sit outside the hierarchy, because they exist on every
+ * submission regardless of which questions it asked.
  *
  * `fieldFilters` replaces what used to be a hardcoded `trainingTitle` select: one
  * form's question had been promoted into the global filter model, which left
@@ -21,14 +27,16 @@ import type { Submission } from "../types";
 import { resolveLifecycleStage, type LifecycleStage } from "./submissionLifecycle";
 import {
   defaultOpForKind,
+  fieldsFromResponses,
   fieldsFromSurveyJson,
-  mergeFieldCatalogs,
   mergeObservedValues,
   opLabel,
   readResponseValue,
+  selectSnapshotFields,
   type FieldFilterOp,
   type FilterFieldKind,
   type FilterableField,
+  type SchemaSnapshot,
 } from "./formFieldCatalog";
 
 /** Profile key used for submissions predating the PublishKey column. */
@@ -52,7 +60,7 @@ export interface FieldFilter {
 
 export interface SubmissionFilterState {
   search: string;
-  /** "" = every form type. The form/list title. */
+  /** Level 1. "" = every form. The form/list title. */
   formType: string;
   /** "all" or a LifecycleStage value. */
   stage: string;
@@ -61,9 +69,11 @@ export interface SubmissionFilterState {
   dateFrom: string;
   /** yyyy-mm-dd, inclusive to end of day. */
   dateTo: string;
-  /** "" = all, or a profile key. Scoped to the selected form type. */
+  /** Level 2. "" = all, or a profile key. Scoped to the selected form. */
   publishProfile: string;
-  /** Conditions on the selected form type's own questions, AND-ed together. */
+  /** Level 3. "" = all, or one version. Scoped to the selected form and profile. */
+  formVersion: string;
+  /** Level 4. Conditions on the questions in scope, AND-ed together. */
   fieldFilters: FieldFilter[];
 }
 
@@ -75,6 +85,7 @@ export const EMPTY_SUBMISSION_FILTERS: SubmissionFilterState = {
   dateFrom: "",
   dateTo: "",
   publishProfile: "",
+  formVersion: "",
   fieldFilters: [],
 };
 
@@ -85,6 +96,7 @@ export const EMPTY_SUBMISSION_FILTERS: SubmissionFilterState = {
 export interface FilterableRecord {
   formType: string;
   profileKey: string;
+  formVersion: string;
   stage: LifecycleStage;
   submittedAt: string | null;
   /** Values the free-text search scans (title, ids, reference number). */
@@ -366,6 +378,8 @@ export function recordMatchesFilters(record: FilterableRecord, filters: Submissi
 
   if (filters.publishProfile && record.profileKey !== filters.publishProfile) return false;
 
+  if (filters.formVersion && record.formVersion !== filters.formVersion) return false;
+
   for (const fieldFilter of filters.fieldFilters) {
     if (!fieldFilterMatches(readResponseValue(record.data, fieldFilter.key), fieldFilter)) return false;
   }
@@ -388,6 +402,7 @@ export function toFilterableRecord(item: Submission): FilterableRecord {
   return {
     formType: item.listTitle,
     profileKey: getSubmissionProfileKey(item),
+    formVersion: item.formVersion,
     stage: getSubmissionStage(item),
     submittedAt: item.submittedAt,
     searchTexts: [item.title, item.formId, item.submissionId, item.referenceNo ?? ""],
@@ -440,28 +455,100 @@ export function collectPublishProfiles(items: Submission[], formType = ""): stri
   return Array.from(profiles).sort((a, b) => a.localeCompare(b));
 }
 
+export interface FormVersionOption {
+  version: string;
+  count: number;
+}
+
 /**
- * The questions a form type can be filtered by, taken from the published schemas
- * riding on its own submissions and widened by the answers actually recorded.
- * Returns nothing until a form type is picked: field conditions are meaningless
- * across forms that ask different questions.
+ * Versions that actually have submissions, narrowed to the form and — when one
+ * is chosen — the profile above them. Newest first, by the numeric ordering
+ * "10.0" needs and a plain string sort would get wrong.
  */
-export function collectFieldCatalog(items: Submission[], formType: string): FilterableField[] {
+export function collectFormVersions(
+  items: Submission[],
+  formType: string,
+  publishProfile = "",
+): FormVersionOption[] {
   if (!formType) return [];
-  const scoped = items.filter((item) => item.listTitle === formType);
-  const schemas: FilterableField[][] = [];
-  const seenSchemas = new Set<string>();
-  for (const item of scoped) {
-    if (!item.surveyJson) continue;
-    // One schema per version+profile; a form type usually has a handful, while it
-    // may have thousands of submissions.
-    const snapshotKey = `${item.formVersion}::${getSubmissionProfileKey(item)}`;
-    if (seenSchemas.has(snapshotKey)) continue;
-    seenSchemas.add(snapshotKey);
-    schemas.push(fieldsFromSurveyJson(item.surveyJson));
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.listTitle !== formType) continue;
+    if (publishProfile && getSubmissionProfileKey(item) !== publishProfile) continue;
+    const version = (item.formVersion || "").trim();
+    if (!version) continue;
+    counts.set(version, (counts.get(version) ?? 0) + 1);
   }
-  const catalog = mergeFieldCatalogs(schemas);
-  return mergeObservedValues(catalog, scoped.map((item) => item.submissionData));
+  return Array.from(counts, ([version, count]) => ({ version, count })).sort((a, b) =>
+    compareVersionsDescending(a.version, b.version),
+  );
+}
+
+/** Newest-first ordering for dotted version strings, falling back to text. */
+export function compareVersionsDescending(a: string, b: string): number {
+  const partsA = a.split(".");
+  const partsB = b.split(".");
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i += 1) {
+    const numA = Number(partsA[i] ?? 0);
+    const numB = Number(partsB[i] ?? 0);
+    if (Number.isNaN(numA) || Number.isNaN(numB)) return b.localeCompare(a);
+    if (numA !== numB) return numB - numA;
+  }
+  return 0;
+}
+
+/**
+ * The published cuts of one form, one per version+profile pair. A form usually
+ * has a handful of these while it may have thousands of submissions, so the
+ * schemas are de-duplicated rather than re-parsed per row.
+ */
+export function collectSchemaSnapshots(items: Submission[], formType: string): SchemaSnapshot[] {
+  if (!formType) return [];
+  const snapshots: SchemaSnapshot[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (item.listTitle !== formType || !item.surveyJson) continue;
+    const profileKey = getSubmissionProfileKey(item);
+    const snapshotKey = `${item.formVersion}::${profileKey}`;
+    if (seen.has(snapshotKey)) continue;
+    seen.add(snapshotKey);
+    snapshots.push({ formVersion: item.formVersion, profileKey, fields: fieldsFromSurveyJson(item.surveyJson) });
+  }
+  return snapshots;
+}
+
+/**
+ * The questions in scope, taken from the published schemas riding on the form's
+ * own submissions and widened by the answers actually recorded. Returns nothing
+ * until a form is picked: field conditions are meaningless across forms that ask
+ * different questions.
+ *
+ * Narrowing to a profile or version narrows the questions with it, so an admin
+ * filtering one version is offered exactly what that version asked. With neither
+ * chosen the versions are unioned, because a question the form has since dropped
+ * still has historical answers worth finding.
+ */
+export function collectFieldCatalog(
+  items: Submission[],
+  formType: string,
+  selection: { publishProfile?: string; formVersion?: string } = {},
+): FilterableField[] {
+  if (!formType) return [];
+  const scoped = items.filter(
+    (item) =>
+      item.listTitle === formType &&
+      (!selection.publishProfile || getSubmissionProfileKey(item) === selection.publishProfile) &&
+      (!selection.formVersion || item.formVersion === selection.formVersion),
+  );
+  const answers = scoped.map((item) => item.submissionData);
+  const catalog = selectSnapshotFields(collectSchemaSnapshots(items, formType), {
+    profileKey: selection.publishProfile,
+    formVersion: selection.formVersion,
+  });
+  // No usable snapshot for this cut — read the questions off the answers instead,
+  // so a form whose schema never made it into the version list is still filterable.
+  if (!catalog.length) return mergeObservedValues(fieldsFromResponses(answers), answers);
+  return mergeObservedValues(catalog, answers);
 }
 
 // ── sorting and summaries ───────────────────────────────────────────────────
@@ -495,6 +582,7 @@ export function countActiveFilters(filters: SubmissionFilterState): number {
   if (filters.dateFrom !== EMPTY_SUBMISSION_FILTERS.dateFrom) count += 1;
   if (filters.dateTo !== EMPTY_SUBMISSION_FILTERS.dateTo) count += 1;
   if (filters.publishProfile !== EMPTY_SUBMISSION_FILTERS.publishProfile) count += 1;
+  if (filters.formVersion !== EMPTY_SUBMISSION_FILTERS.formVersion) count += 1;
   return count;
 }
 
@@ -502,17 +590,41 @@ export function hasActiveFilters(filters: SubmissionFilterState): boolean {
   return countActiveFilters(filters) > 0;
 }
 
-/**
- * Selecting a different form type invalidates everything scoped to the old one.
- * Keeping stale conditions would silently filter on questions the new form does
- * not ask, which reads as "the dashboard is broken".
- */
+// ── walking the hierarchy ───────────────────────────────────────────────────
+//
+// Each of these replaces one level and clears the levels beneath it. Keeping a
+// stale child would silently filter on a profile, version or question the new
+// parent does not have, which reads as "the dashboard is broken".
+
+/** Level 1. Replaces the form, and drops its profile, version and conditions. */
 export function applyFormTypeChange(
   filters: SubmissionFilterState,
   formType: string,
 ): SubmissionFilterState {
   if (filters.formType === formType) return filters;
-  return { ...filters, formType, publishProfile: "", fieldFilters: [] };
+  return { ...filters, formType, publishProfile: "", formVersion: "", fieldFilters: [] };
+}
+
+/** Level 2. Replaces the profile, and drops its version and conditions. */
+export function applyPublishProfileChange(
+  filters: SubmissionFilterState,
+  publishProfile: string,
+): SubmissionFilterState {
+  if (filters.publishProfile === publishProfile) return filters;
+  return { ...filters, publishProfile, formVersion: "", fieldFilters: [] };
+}
+
+/**
+ * Level 3. Replaces the version and drops its conditions — the catalogue narrows
+ * to that version's questions, so a condition on one the version never asked
+ * would match nothing and be impossible to see or correct.
+ */
+export function applyFormVersionChange(
+  filters: SubmissionFilterState,
+  formVersion: string,
+): SubmissionFilterState {
+  if (filters.formVersion === formVersion) return filters;
+  return { ...filters, formVersion, fieldFilters: [] };
 }
 
 /** One-line description of a condition, for the active-filter chips. */
