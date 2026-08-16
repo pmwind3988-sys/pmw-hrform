@@ -336,7 +336,7 @@ async function handleLearnerAction(
   const viewer = learner.key;
   if (action === "list") {
     if (!(await learningLibraryExists(token))) {
-      return res.status(200).json({ topics: [], materials: [], libraryReady: false });
+      return res.status(200).json({ topics: [], materials: [], libraryReady: false, viewsReady: false });
     }
 
     const [{ folders, files }, settings, views] = await Promise.all([
@@ -356,6 +356,11 @@ async function handleLearnerAction(
       topics: buildTopics(folders, files, settings.topics),
       materials,
       libraryReady: true,
+      // Separate from `libraryReady` on purpose. A library whose tracking list is
+      // missing still serves every material perfectly, so learners must not be
+      // told it is unavailable — but an admin has to be told, because until they
+      // provision it nothing is counted and no portal view is logged.
+      viewsReady: views.ready,
     });
   }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fileExtension,
   materialKind,
@@ -67,5 +67,86 @@ describe("viewerKey", () => {
     const key = viewerKey("person@pmw-group.com");
     expect(key).toMatch(/^[0-9a-f]{24}$/);
     expect(key).not.toContain("person");
+  });
+});
+
+describe("recording a view when the tracking list is missing", () => {
+  async function loadWithGraph(graph: Record<string, unknown>) {
+    vi.resetModules();
+    vi.doMock("./logger.js", () => ({ logWarn: vi.fn(), logError: vi.fn(), logInfo: vi.fn() }));
+    vi.doMock("./sharepointRest.js", () => ({ ensureListViaSPRest: vi.fn() }));
+    vi.doMock("./graphClient.js", () => ({
+      createListItem: vi.fn(),
+      getListDriveId: vi.fn(),
+      graphDelete: vi.fn(),
+      graphGet: vi.fn(),
+      graphGetRedirectUrl: vi.fn(),
+      graphPatch: vi.fn(),
+      graphPost: vi.fn(),
+      queryAllListItems: vi.fn(async () => []),
+      queryListItemByFields: vi.fn(async () => null),
+      queryListItems: vi.fn(async () => []),
+      updateListItemFields: vi.fn(),
+      ...graph,
+    }));
+    return import("./learningLibrary.js");
+  }
+
+  afterEach(() => {
+    vi.doUnmock("./graphClient.js");
+    vi.doUnmock("./logger.js");
+    vi.doUnmock("./sharepointRest.js");
+    vi.resetModules();
+  });
+
+  const missing = new Error('List "Learning Material Views" not found');
+
+  it("returns a zero count instead of failing the whole request", async () => {
+    // The caller writes the named access log *after* this. Throwing here used to
+    // cost a portal account its audit trail as well as its view count.
+    const { recordView } = await loadWithGraph({
+      createListItem: vi.fn(async () => {
+        throw missing;
+      }),
+      queryAllListItems: vi.fn(async () => {
+        throw missing;
+      }),
+    });
+
+    await expect(recordView("graph-token", "material-1", "abc123")).resolves.toBe(0);
+  });
+
+  it("still raises a failure that is not a missing list", async () => {
+    const { recordView } = await loadWithGraph({
+      createListItem: vi.fn(async () => {
+        throw new Error("Graph POST 503: service unavailable");
+      }),
+    });
+
+    await expect(recordView("graph-token", "material-1", "abc123")).rejects.toThrow(/503/);
+  });
+
+  it("reports the index as not ready so an admin is told to provision it", async () => {
+    const { readViewIndex } = await loadWithGraph({
+      queryAllListItems: vi.fn(async () => {
+        throw missing;
+      }),
+    });
+
+    const index = await readViewIndex("graph-token", "abc123");
+    // Unknown, not zero — the distinction the admin banner is built on.
+    expect(index.ready).toBe(false);
+    expect(index.counts).toEqual({});
+  });
+
+  it("reports a readable list as ready", async () => {
+    const { readViewIndex } = await loadWithGraph({
+      queryAllListItems: vi.fn(async () => [{ id: "1", fields: { Title: "material-1::abc123" } }]),
+    });
+
+    const index = await readViewIndex("graph-token", "abc123");
+    expect(index.ready).toBe(true);
+    expect(index.counts["material-1"]).toBe(1);
+    expect(index.viewedByMe.has("material-1")).toBe(true);
   });
 });

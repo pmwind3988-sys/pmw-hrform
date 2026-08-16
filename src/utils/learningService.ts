@@ -109,6 +109,7 @@ export async function fetchLearningLibrary(accessToken: string): Promise<Learnin
     topics: data.topics ?? [],
     materials: data.materials ?? [],
     libraryReady: data.libraryReady !== false,
+    viewsReady: data.viewsReady !== false,
   };
 }
 

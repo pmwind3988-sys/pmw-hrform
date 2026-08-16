@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import {
   createListItem,
-  ensureGenericList,
   getListDriveId,
   graphDelete,
   graphGet,
@@ -564,6 +563,18 @@ function viewItemTitle(materialId: string, viewer: string): string {
 export interface ViewIndex {
   counts: Record<string, number>;
   viewedByMe: Set<string>;
+  /**
+   * False when the tracking list could not be read at all, which means the
+   * counts are *unknown* rather than zero. The admin library screen turns this
+   * into an offer to provision; without it, a library whose tracking list was
+   * never created looks exactly like one nobody has opened yet.
+   */
+  ready: boolean;
+}
+
+/** The tracking list has never been provisioned, as opposed to being empty. */
+function isMissingViewsList(error: unknown): boolean {
+  return error instanceof Error && error.message.includes(`List "${LEARNING_VIEWS_LIST}" not found`);
 }
 
 /**
@@ -571,28 +582,29 @@ export interface ViewIndex {
  * because the hub re-reads it on every page load while the underlying number
  * changes slowly — a view is a rare, deliberate act, not a page impression.
  */
-let cachedViewRows: { rows: GraphListItem[]; expiresAt: number } | null = null;
+let cachedViewRows: { rows: GraphListItem[]; expiresAt: number; ready: boolean } | null = null;
 const VIEW_CACHE_MS = 30_000;
 
-async function readViewRows(token: string): Promise<GraphListItem[]> {
-  if (cachedViewRows && cachedViewRows.expiresAt > Date.now()) return cachedViewRows.rows;
+async function readViewRows(token: string): Promise<{ rows: GraphListItem[]; ready: boolean }> {
+  if (cachedViewRows && cachedViewRows.expiresAt > Date.now()) return cachedViewRows;
 
-  let rows: GraphListItem[];
+  let rows: GraphListItem[] = [];
+  let ready = true;
   try {
     rows = await queryAllListItems(token, LEARNING_VIEWS_LIST, { maxItems: 20000 });
   } catch (error) {
     logWarn("api:learning", "Could not read learning view rows", {
       errorMessage: error instanceof Error ? error.message : String(error),
     });
-    rows = [];
+    ready = false;
   }
 
-  cachedViewRows = { rows, expiresAt: Date.now() + VIEW_CACHE_MS };
-  return rows;
+  cachedViewRows = { rows, ready, expiresAt: Date.now() + VIEW_CACHE_MS };
+  return cachedViewRows;
 }
 
 export async function readViewIndex(token: string, viewer: string): Promise<ViewIndex> {
-  const rows = await readViewRows(token);
+  const { rows, ready } = await readViewRows(token);
   const counts: Record<string, number> = {};
   const seen = new Set<string>();
   const viewedByMe = new Set<string>();
@@ -613,7 +625,7 @@ export async function readViewIndex(token: string, viewer: string): Promise<View
     if (rowViewer === viewer) viewedByMe.add(materialId);
   }
 
-  return { counts, viewedByMe };
+  return { counts, viewedByMe, ready };
 }
 
 /**
@@ -631,20 +643,26 @@ export async function recordView(token: string, materialId: string, viewer: stri
   if (!existing) {
     try {
       await createListItem(token, LEARNING_VIEWS_LIST, { Title: title });
+      cachedViewRows = null;
     } catch (error) {
-      // One retry, for the transient case only. `ensureGenericList` resolves an
-      // existing list and gets the create moving again; it cannot *build* one,
-      // because this runs on a learner's request and only an admin's delegated
-      // token may create structure here (see `ensureListViaSPRest`). A library
-      // standing without its tracking list is fixed by an admin pressing "Set
-      // up", and until then this throws rather than pretending it counted.
-      logWarn("api:learning", "Retrying a view record against the tracking list", {
-        errorMessage: error instanceof Error ? error.message : String(error),
+      if (!isMissingViewsList(error)) throw error;
+
+      // A library standing without its tracking list, which happens when the
+      // document library was created by hand. Only an admin's delegated token
+      // can build it (see `ensureListViaSPRest`), and this runs on a learner's
+      // request — so there is nothing to retry and nothing to be gained by
+      // failing the call.
+      //
+      // Returning instead of throwing is the whole point: this used to take down
+      // the entire `record-view` request, and the named access log is written
+      // *after* the count. An unprovisioned counter was silently costing portal
+      // accounts their audit trail as well as their view.
+      logWarn("api:learning", "View not counted: the tracking list does not exist", {
+        list: LEARNING_VIEWS_LIST,
+        remedy: "An admin must open Manage Learning Materials and run Set up.",
       });
-      await ensureGenericList(token, LEARNING_VIEWS_LIST);
-      await createListItem(token, LEARNING_VIEWS_LIST, { Title: title });
+      return 0;
     }
-    cachedViewRows = null;
   }
 
   // A freshly created item can take a moment to show up in a list query. This

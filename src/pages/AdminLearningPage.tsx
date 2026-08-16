@@ -93,6 +93,7 @@ export default function AdminLearningPage() {
   const [topics, setTopics] = useState<LearningTopic[]>([]);
   const [materials, setMaterials] = useState<LearningMaterial[]>([]);
   const [libraryReady, setLibraryReady] = useState(true);
+  const [viewsReady, setViewsReady] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -128,6 +129,7 @@ export default function AdminLearningPage() {
         setTopics(data.topics);
         setMaterials(data.materials);
         setLibraryReady(data.libraryReady);
+        setViewsReady(data.viewsReady);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "The library could not be loaded.");
       } finally {
@@ -333,6 +335,34 @@ export default function AdminLearningPage() {
           {error && (
             <Alert severity="error" sx={{ mb: 2, borderRadius: "10px", fontWeight: 700 }}>
               {error}
+            </Alert>
+          )}
+
+          {/*
+            A library can be fully usable and still have no tracking list — the
+            document library was made by hand, or provisioning half-finished.
+            Nothing looks wrong from the outside: materials open, and every view
+            count sits at zero as though nobody had opened them. So it is said
+            plainly, next to the one button that fixes it.
+          */}
+          {!loading && libraryReady && !viewsReady && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  size="small"
+                  color="inherit"
+                  onClick={handleProvision}
+                  disabled={busy || !spToken}
+                >
+                  Set up
+                </Button>
+              }
+            >
+              Views are not being recorded. The "Learning Material Views" list is missing from SharePoint,
+              so every count stays at zero and nothing a portal account opens reaches the access log.
+              Materials still open normally.
             </Alert>
           )}
 

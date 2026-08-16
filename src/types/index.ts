@@ -1188,6 +1188,12 @@ export interface LearningLibraryData {
   materials: LearningMaterial[];
   /** False when the library has not been provisioned in SharePoint yet. */
   libraryReady: boolean;
+  /**
+   * False when the view-tracking list is missing. Materials still open normally,
+   * so this never stops a learner — but nothing is counted and no portal view is
+   * logged until an admin provisions it.
+   */
+  viewsReady: boolean;
 }
 
 /**
