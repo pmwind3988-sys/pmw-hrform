@@ -336,39 +336,47 @@ const theme = createTheme({
           boxShadow: alertSurfaceShadow,
           fontWeight: 700,
           opacity: 1,
-          "&.MuiAlert-standardSuccess, &.MuiAlert-outlinedSuccess": {
+          // Each severity is matched TWICE on purpose. MUI used to emit one
+          // fused class (`MuiAlert-standardError`); from v6 it emits the
+          // variant and the colour separately (`MuiAlert-standard` +
+          // `MuiAlert-colorError`). On v9 the fused selectors match nothing, so
+          // every Alert in the app fell back to MUI's defaults — which render
+          // standard-variant text at 12% alpha, i.e. all but invisible. Keep
+          // both shapes so the theme survives a version move in either
+          // direction.
+          "&.MuiAlert-standardSuccess, &.MuiAlert-outlinedSuccess, &.MuiAlert-colorSuccess.MuiAlert-standard, &.MuiAlert-colorSuccess.MuiAlert-outlined": {
             backgroundColor: "#F1FAF1",
             borderColor: "rgba(16, 124, 16, 0.38)",
             color: editorial.ink,
           },
-          "&.MuiAlert-standardWarning, &.MuiAlert-outlinedWarning": {
+          "&.MuiAlert-standardWarning, &.MuiAlert-outlinedWarning, &.MuiAlert-colorWarning.MuiAlert-standard, &.MuiAlert-colorWarning.MuiAlert-outlined": {
             backgroundColor: "#FFF3E0",
             borderColor: "rgba(177, 92, 0, 0.4)",
             color: editorial.ink,
           },
-          "&.MuiAlert-standardError, &.MuiAlert-outlinedError": {
+          "&.MuiAlert-standardError, &.MuiAlert-outlinedError, &.MuiAlert-colorError.MuiAlert-standard, &.MuiAlert-colorError.MuiAlert-outlined": {
             backgroundColor: "#FFF1F1",
             borderColor: "rgba(198, 40, 40, 0.4)",
             color: editorial.ink,
           },
-          "&.MuiAlert-standardInfo, &.MuiAlert-outlinedInfo": {
+          "&.MuiAlert-standardInfo, &.MuiAlert-outlinedInfo, &.MuiAlert-colorInfo.MuiAlert-standard, &.MuiAlert-colorInfo.MuiAlert-outlined": {
             backgroundColor: editorial.blueSoft,
             borderColor: editorial.pmwBlueSoft,
             color: editorial.ink,
           },
-          "&.MuiAlert-filledSuccess": {
+          "&.MuiAlert-filledSuccess, &.MuiAlert-colorSuccess.MuiAlert-filled": {
             backgroundColor: editorial.success,
             color: editorial.white,
           },
-          "&.MuiAlert-filledWarning": {
+          "&.MuiAlert-filledWarning, &.MuiAlert-colorWarning.MuiAlert-filled": {
             backgroundColor: editorial.warning,
             color: editorial.black,
           },
-          "&.MuiAlert-filledError": {
+          "&.MuiAlert-filledError, &.MuiAlert-colorError.MuiAlert-filled": {
             backgroundColor: editorial.error,
             color: editorial.white,
           },
-          "&.MuiAlert-filledInfo": {
+          "&.MuiAlert-filledInfo, &.MuiAlert-colorInfo.MuiAlert-filled": {
             backgroundColor: editorial.pmwBlue,
             color: editorial.white,
           },
