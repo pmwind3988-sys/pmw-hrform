@@ -12,6 +12,11 @@ interface LearningHeaderProps {
   backPath: string;
   backLabel: string;
   actions?: ReactNode;
+  /**
+   * Off for a portal account, which has no dashboard behind this page — a back
+   * arrow that only ever returns here is worse than no arrow.
+   */
+  showBack?: boolean;
 }
 
 export default function LearningHeader({
@@ -20,6 +25,7 @@ export default function LearningHeader({
   backPath,
   backLabel,
   actions,
+  showBack = true,
 }: LearningHeaderProps) {
   const navigate = useNavigate();
 
@@ -47,19 +53,21 @@ export default function LearningHeader({
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.5 }, minWidth: 0 }}>
-            <IconButton
-              onClick={() => navigate(backPath)}
-              aria-label={backLabel}
-              sx={{
-                color: editorial.pmwBlueDark,
-                flexShrink: 0,
-                transition: "transform 0.18s ease, background-color 0.18s ease",
-                "&:hover": { transform: "translateX(-2px)", backgroundColor: editorial.blueWash },
-                ...learningReduceMotionSx,
-              }}
-            >
-              <ArrowBack />
-            </IconButton>
+            {showBack && (
+              <IconButton
+                onClick={() => navigate(backPath)}
+                aria-label={backLabel}
+                sx={{
+                  color: editorial.pmwBlueDark,
+                  flexShrink: 0,
+                  transition: "transform 0.18s ease, background-color 0.18s ease",
+                  "&:hover": { transform: "translateX(-2px)", backgroundColor: editorial.blueWash },
+                  ...learningReduceMotionSx,
+                }}
+              >
+                <ArrowBack />
+              </IconButton>
+            )}
             <Box
               sx={{
                 width: { xs: 38, sm: 46 },

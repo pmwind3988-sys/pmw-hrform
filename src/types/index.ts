@@ -8,6 +8,12 @@ export const PAGE_STATES = {
   restricted: "restricted",
   wrongTenant: "wrong_tenant",
   error: "error",
+  /**
+   * Signed in on an HR-issued portal account rather than Microsoft 365. Reaches
+   * the learning hub and the public routes, and nothing else — see the separate
+   * route table App.tsx renders for this state.
+   */
+  portal: "portal",
 } as const;
 
 export type PageState = (typeof PAGE_STATES)[keyof typeof PAGE_STATES];
@@ -1182,6 +1188,18 @@ export interface LearningLibraryData {
   materials: LearningMaterial[];
   /** False when the library has not been provisioned in SharePoint yet. */
   libraryReady: boolean;
+}
+
+/**
+ * Only the view numbers, without the library tree around them — what the hub
+ * re-reads on a timer so a count that changes while someone is looking at the
+ * page catches up without a reload.
+ */
+export interface LearningViewCounts {
+  /** Distinct viewers, keyed by material id. A missing id means nobody yet. */
+  counts: Record<string, number>;
+  /** Material ids the requesting account is one of those viewers for. */
+  viewedByMe: string[];
 }
 
 /** What the viewer needs to render one material. */

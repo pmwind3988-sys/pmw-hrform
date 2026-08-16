@@ -18,8 +18,16 @@ Official references:
 - Security: API calls include the configured API key; API logs avoid raw personal data.
 - Data minimisation: PDPA metadata is treated as system metadata and hidden from normal dashboard/PDF display.
 - Access and correction: the notice identifies the HR contact email for requests.
+- Learning views by staff are not identifiable: the `Learning Material Views` list stores a one-way SHA-256 of the signer's address, so the feature can answer "how many distinct people" without holding who watched what.
+- Learning views by HR-issued portal accounts **are** identifiable, and deliberately so: the `Learning Access Log` list records login ID, full name, material name, and timestamp. These accounts are issued by HR to named individuals outside the company precisely so that receipt of the material can be evidenced. Data minimisation is applied within that purpose — the log holds no address, device, or IP data, and nothing about the M365 population.
+- Separation of the two: `resolveLearnerViewer` in `api/learning-materials.ts` only carries a name for portal accounts, so the named trail cannot silently widen to employees.
+- Passwords for portal accounts are stored as scrypt hashes with no read path anywhere in the codebase; admins reset them and can never view them.
 
 ## Operational Items Still Required
+
+- **Tell portal account holders about the access log at hand-over.** The log is lawful as a legitimate HR purpose, but Act 709's notice-and-choice principle expects the individual to know it exists. The account is handed over in person by HR, so this is a spoken/written step in that process, not something the app can do — and it is currently not written down anywhere.
+- Decide a retention period for `Learning Access Log` entries and who trims them. Nothing expires today, and the list keeps entries after the account itself is deleted (deliberately, so the evidence survives, but it needs an owner and an end date).
+- Consider whether the `/privacy` notice should name the learning access log for portal account holders.
 
 - Confirm the privacy notice wording with legal/HR.
 - Confirm whether the default 7-year retention marker matches PMW's HR, recruitment, tax, audit, and legal hold requirements.

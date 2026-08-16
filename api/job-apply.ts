@@ -1,6 +1,8 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getSharePointToken } from "./_utils/graphClient.js";
-import { readCareerPortalAccess, resolveTenantIdentity } from "./_utils/careerPortalAccess.js";
+import { readCareerPortalAccess } from "./_utils/careerPortalAccess.js";
+import { resolveSignedInViewer } from "./_utils/viewerIdentity.js";
+import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { logError, logInfo, logWarn } from "./_utils/logger.js";
 
 function errorMessage(error: unknown, maxLength?: number): string {
@@ -12,7 +14,6 @@ const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || 
 const APPLICATION_LIST = "Job Applications";
 const JOB_LIST = "Internal Job Listing";
 const DOC_LIB_NAME = "Job Applications Files";
-const HR_OWNER_GROUP = "_HR_ Forms Owners";
 const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
 
@@ -603,24 +604,6 @@ async function countApplicationsForJobViaSPRest(
   return items.filter((item) => String(item[statusField] || "").toLowerCase() !== "deleted").length;
 }
 
-async function isHrFormsOwner(token: string, authenticatedEmail: string): Promise<boolean> {
-  try {
-    const data = await spGet<{ value?: Array<{ Email?: string; UserPrincipalName?: string; LoginName?: string }> }>(
-      token,
-      `/_api/web/sitegroups/getByName('${encodeURIComponent(escapeODataString(HR_OWNER_GROUP))}')/users?$select=Email,UserPrincipalName,LoginName`,
-      "SP REST owner group",
-    );
-    return (data.value || []).some((user) => {
-      const email = (user.Email || user.UserPrincipalName || "").toLowerCase();
-      const login = (user.LoginName || "").toLowerCase();
-      return email === authenticatedEmail || login.includes(authenticatedEmail);
-    });
-  } catch (e) {
-    logWarn("api:job-apply", "Admin override check failed", { errorMessage: errorMessage(e, 200) });
-    return false;
-  }
-}
-
 /** The caller's Microsoft Graph token, sent only to prove they are signed in. */
 function getBearerToken(headers: Record<string, string | string[] | undefined>): string {
   const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === "authorization")?.[1];
@@ -679,12 +662,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // get one — so the Graph identity header, not the SP token, is what decides
     // whether they are signed in. The write itself still runs app-only below.
     try {
-      const portalAccess = await readCareerPortalAccess(await getGraphToken());
+      const graphToken = await getGraphToken();
+      const portalAccess = await readCareerPortalAccess(graphToken);
       if (!portalAccess.isPublic) {
-        const signedInEmail = await resolveTenantIdentity(getBearerToken(req.headers));
-        if (!signedInEmail) {
+        // `resolveSignedInViewer`, not `resolveTenantIdentity`: an HR-issued
+        // portal account has no Microsoft identity to resolve, and it must match
+        // what `jobs-list.ts` lets in — otherwise a portal account can read the
+        // whole opening and only find out it cannot apply after writing a cover
+        // letter.
+        const viewer = await resolveSignedInViewer(getBearerToken(req.headers), graphToken);
+        if (!viewer) {
           return res.status(403).json({
-            error: "The career portal is currently open to signed-in PMW accounts only.",
+            error: "The career portal is currently open to signed-in accounts only.",
             code: "career-portal-private",
           });
         }
@@ -799,9 +788,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         applicantEmail,
         authenticatedEmail,
       );
+      // A public submission cannot reach either branch — forceApply is refused
+      // above — so `spToken` here is always the caller's delegated token, which
+      // is what the group check reads the identity back out of.
       if (duplicate) {
         const isForceBypass = body.forceApply === true
-          ? await isHrFormsOwner(spToken, authenticatedEmail)
+          ? (await resolveHrFormsOwner(spToken)) !== null
           : false;
         if (!isForceBypass) {
           return res.status(409).json({
@@ -810,7 +802,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
         logInfo("api:job-apply", "Admin duplicate override accepted", { authenticatedEmail, jobListingId });
       } else if (body.forceApply === true) {
-        const isAdmin = await isHrFormsOwner(spToken, authenticatedEmail);
+        const isAdmin = (await resolveHrFormsOwner(spToken)) !== null;
         if (!isAdmin) return res.status(403).json({ error: "Only HR Forms Owners can submit a duplicate test application." });
       }
     }

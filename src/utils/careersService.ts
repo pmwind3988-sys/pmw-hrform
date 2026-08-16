@@ -1,4 +1,5 @@
 import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
+import { readStoredPortalSession } from "./internalAccountService";
 import type {
   JobListing,
   JobApplyRequest,
@@ -121,6 +122,13 @@ export async function acquireCareerPortalToken(
   instance: IPublicClientApplication,
   account: AccountInfo | null,
 ): Promise<string> {
+  // An HR-issued portal account has no Microsoft identity to ask for a token,
+  // so its own signed session stands in. Checked first because these visitors
+  // never have an MSAL account either — falling through would return "" and a
+  // private portal would turn them away.
+  const portalSession = readStoredPortalSession();
+  if (portalSession) return portalSession.token;
+
   if (!account) return "";
 
   try {

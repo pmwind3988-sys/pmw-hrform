@@ -16,6 +16,7 @@
 | Job admin lists | `AdminJobsPage.tsx` | Route `/admin/career/applications`. Lists/manages job applications. |
 | Job admin manage | `AdminJobManagePage.tsx` | Route `/admin/career/opportunities`. CRUD for job listings. |
 | Career portal cards | `AdminCareerPortalCardsPage.tsx` | Route `/admin/career/cards`. Manages career portal hero/feature cards. |
+| Portal accounts | `AdminPortalAccountsPage.tsx` | Route `/admin/portal-accounts`, HR Forms Owner-only. Create / reset / disable / unlock / delete the login-ID accounts, plus the named access log. Both credential dialogs are mounted only while open, so the generated password is new every time — do not convert them back to an `open` prop with a reset effect. |
 
 ## Conventions
 - **Prop-drilling**: `AdminHomePage` receives massive props from `App.tsx` — no context abstraction yet.

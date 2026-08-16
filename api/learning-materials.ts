@@ -17,6 +17,7 @@ import {
   readEmbedUrl,
   readLearningSettings,
   readLearningTree,
+  portalViewerKey,
   readViewIndex,
   recordView,
   renameFolder,
@@ -32,6 +33,10 @@ import {
   type TopicSettings,
   type ViewIndex,
 } from "./_utils/learningLibrary.js";
+import { isPortalSessionCurrent } from "./_utils/internalAccounts.js";
+import { recordAccessLogEntry } from "./_utils/learningAccessLog.js";
+import { looksLikePortalToken, verifyPortalSession } from "./_utils/internalSession.js";
+import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
 interface ApiRequest {
@@ -47,9 +52,6 @@ interface ApiResponse {
   setHeader(name: string, value: string): void;
   end(): void;
 }
-
-const ADMIN_GROUP = "_HR_ Forms Owners";
-const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
 /**
  * Actions that change the library. These carry a delegated **SharePoint** token
@@ -68,17 +70,6 @@ const ADMIN_ACTIONS = new Set([
   "delete-material",
 ]);
 
-interface SharePointUser {
-  Email?: string;
-  LoginName?: string;
-  UserPrincipalName?: string;
-}
-
-interface DelegatedUser {
-  email: string;
-  login: string;
-}
-
 function getHeader(headers: Record<string, string | string[] | undefined>, name: string): string {
   const lowerName = name.toLowerCase();
   for (const [key, value] of Object.entries(headers)) {
@@ -93,69 +84,6 @@ function getBearerToken(headers: Record<string, string | string[] | undefined>):
   const authorization = getHeader(headers, "authorization");
   if (!authorization.toLowerCase().startsWith("bearer ")) return "";
   return authorization.slice(7).trim();
-}
-
-async function delegatedSharePointGet<T>(accessToken: string, path: string): Promise<T> {
-  if (!SP_SITE_URL) throw new Error("SharePoint site URL is not configured");
-  const response = await fetch(`${SP_SITE_URL}${path}`, {
-    headers: {
-      Accept: "application/json;odata=nometadata",
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (!response.ok) throw new Error(`SharePoint GET ${response.status}`);
-  return (await response.json()) as T;
-}
-
-function normalizeDelegatedUser(user: SharePointUser): DelegatedUser | null {
-  const email = String(user.Email || user.UserPrincipalName || "").toLowerCase();
-  const login = String(user.LoginName || "").toLowerCase();
-  const loginEmail = login.split("|").pop() || "";
-  const resolvedEmail = email || loginEmail;
-  if (!resolvedEmail && !login) return null;
-  return { email: resolvedEmail, login };
-}
-
-async function resolveDelegatedAdmin(accessToken: string): Promise<DelegatedUser | null> {
-  if (!accessToken) return null;
-
-  let user: DelegatedUser | null;
-  try {
-    user = normalizeDelegatedUser(
-      await delegatedSharePointGet<SharePointUser>(
-        accessToken,
-        "/_api/web/currentuser?$select=Email,UserPrincipalName,LoginName",
-      ),
-    );
-  } catch (error) {
-    logWarn("api:learning", "Failed to resolve delegated user", {
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-  if (!user) return null;
-
-  try {
-    const members = await delegatedSharePointGet<{ value?: SharePointUser[] }>(
-      accessToken,
-      `/_api/web/sitegroups/getByName('${encodeURIComponent(ADMIN_GROUP)}')/users?$select=LoginName,Email,UserPrincipalName`,
-    );
-    const isAdmin = (members.value || []).some((member) => {
-      const memberUser = normalizeDelegatedUser(member);
-      if (!memberUser) return false;
-      return (
-        (user.email && memberUser.email === user.email) ||
-        (user.login && memberUser.login === user.login) ||
-        (user.email && memberUser.login.endsWith(user.email))
-      );
-    });
-    return isAdmin ? user : null;
-  } catch (error) {
-    logWarn("api:learning", "Failed to verify learning admin membership", {
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
 }
 
 // ── Response shaping ─────────────────────────────────────────────────────────
@@ -277,26 +205,65 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const token = await getGraphToken();
 
     if (isAdminAction) {
-      const admin = await resolveDelegatedAdmin(bearer);
+      const admin = await resolveHrFormsOwner(bearer);
       if (!admin) {
         return res.status(403).json({ error: "Managing learning materials is limited to HR Forms Owners." });
       }
-      return await handleAdminAction(req, res, token, action, admin.email);
+      return await handleAdminAction(req, res, token, action, admin);
     }
 
-    const signedInEmail = await resolveTenantIdentity(bearer);
-    if (!signedInEmail) {
+    const learner = await resolveLearnerViewer(bearer, token);
+    if (!learner) {
       return res.status(403).json({
-        error: "Sign in with your PMW Microsoft 365 account to open learning materials.",
+        error: "Sign in with your PMW Microsoft 365 account or portal account to open learning materials.",
         code: "learning-sign-in-required",
       });
     }
 
-    return await handleLearnerAction(req, res, token, action, signedInEmail);
+    return await handleLearnerAction(req, res, token, action, learner);
   } catch (e) {
     logError("api:learning", "Learning materials request failed", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
   }
+}
+
+/**
+ * Two ways to be a learner: a PMW Microsoft 365 account, and an HR-issued portal
+ * account. Both fold into the one opaque key the view index counts by, and only
+ * one of them carries a name.
+ */
+interface Learner {
+  /** What the view index counts. Never reversible to a person. */
+  key: string;
+  /**
+   * Set only for a portal account, and only because HR issues those to be
+   * followed up by name — it is what the access log writes. Staff signing in
+   * with Microsoft 365 resolve to `null` here, which is what keeps the named
+   * trail limited to the population that was told about it.
+   */
+  portal: { loginId: string; fullName: string } | null;
+}
+
+/**
+ * A portal token is checked first and answers without a network call, so an
+ * HR-issued account never pays for a Graph `/me` round trip that could not
+ * possibly recognise it. `isPortalSessionCurrent` is the second half of that
+ * check: the signature proves who they are, the account state proves they are
+ * still allowed in after a disable or a password reset.
+ */
+async function resolveLearnerViewer(bearer: string, graphToken: string): Promise<Learner | null> {
+  if (looksLikePortalToken(bearer)) {
+    const claims = verifyPortalSession(bearer);
+    if (!claims) return null;
+    if (!(await isPortalSessionCurrent(graphToken, claims.loginId, claims.tokenVersion))) return null;
+    return {
+      key: portalViewerKey(claims.loginId),
+      portal: { loginId: claims.loginId, fullName: claims.fullName },
+    };
+  }
+
+  const signedInEmail = await resolveTenantIdentity(bearer);
+  return signedInEmail ? { key: viewerKey(signedInEmail), portal: null } : null;
 }
 
 async function handleLearnerAction(
@@ -304,10 +271,9 @@ async function handleLearnerAction(
   res: ApiResponse,
   token: string,
   action: string,
-  signedInEmail: string,
+  learner: Learner,
 ): Promise<void> {
-  const viewer = viewerKey(signedInEmail);
-
+  const viewer = learner.key;
   if (action === "list") {
     if (!(await learningLibraryExists(token))) {
       return res.status(200).json({ topics: [], materials: [], libraryReady: false });
@@ -333,10 +299,23 @@ async function handleLearnerAction(
     });
   }
 
+  // Just the numbers behind the eye icons. The hub polls this while it is on
+  // screen, so it deliberately skips the library walk `list` does — one read of
+  // the views list, served from a short server-side cache.
+  if (action === "view-counts") {
+    const views = await readViewIndex(token, viewer);
+    return res.status(200).json({
+      counts: views.counts,
+      viewedByMe: Array.from(views.viewedByMe),
+    });
+  }
+
   if (action === "open-material" || action === "record-view") {
     const materialId = materialIdParam(req.body?.materialId);
     // Resolved through the learning library's own drive, so an id belonging to
-    // some other library simply is not found here.
+    // some other library simply is not found here. The `item.folder` test is
+    // what keeps a view attached to one material: a topic is a folder, and a
+    // folder is never openable and never viewable.
     const item = await readDriveItem(token, materialId);
     if (!item?.name || item.folder) {
       return res.status(404).json({ error: "This material is no longer available." });
@@ -345,6 +324,20 @@ async function handleLearnerAction(
 
     if (action === "record-view") {
       const viewCount = await recordView(token, materialId, viewer);
+
+      // Named trail for HR-issued accounts only, and written after the view has
+      // been counted so a log failure can never cost somebody their view. `item`
+      // is the material this endpoint already resolved and refused to treat as a
+      // folder, so the name recorded is the file they actually opened.
+      if (learner.portal) {
+        await recordAccessLogEntry(token, {
+          loginId: learner.portal.loginId,
+          viewerName: learner.portal.fullName,
+          materialId,
+          materialName: stripExtension(item.name),
+        });
+      }
+
       return res.status(200).json({ viewCount });
     }
 

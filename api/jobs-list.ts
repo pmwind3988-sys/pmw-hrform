@@ -1,7 +1,8 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getListColumns, graphFieldEquals, queryListItemById, queryListItems } from "./_utils/graphClient.js";
 import { listCareerPortalCards } from "./_utils/careerPortalCards.js";
-import { readCareerPortalAccess, resolveTenantIdentity } from "./_utils/careerPortalAccess.js";
+import { readCareerPortalAccess } from "./_utils/careerPortalAccess.js";
+import { resolveSignedInViewer } from "./_utils/viewerIdentity.js";
 import { parseJobCustomFields } from "./_utils/jobListingFields.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -111,10 +112,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     );
 
     if (!portalAccess.isPublic) {
-      const signedInEmail = await resolveTenantIdentity(getBearerToken(req.headers));
-      if (!signedInEmail) {
+      // Either kind of signed-in visitor passes: a PMW Microsoft 365 account, or
+      // an HR-issued portal account. A closed portal is closed to the public,
+      // not to the people HR deliberately let in.
+      const viewer = await resolveSignedInViewer(getBearerToken(req.headers), token);
+      if (!viewer) {
         return res.status(403).json({
-          error: "The career portal is currently open to signed-in PMW accounts only.",
+          error: "The career portal is currently open to signed-in accounts only.",
           code: "career-portal-private",
           portalAccess: { isPublic: false },
         } as unknown as Record<string, unknown>);

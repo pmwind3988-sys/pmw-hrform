@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import {
   useMsal,
   useIsAuthenticated,
@@ -8,6 +8,7 @@ import type { AccountInfo } from "@azure/msal-browser";
 import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
+import { usePortalSession } from "./auth/usePortalSession";
 import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
 import {
   AUTH_RECOVERY_REQUIRED_EVENT,
@@ -24,6 +25,7 @@ import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta, surveySnapshotKey } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
+import type { PortalSession } from "./utils/internalAccountService";
 import { normalizeLayerStatus } from "./utils/statusConstants";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
 import { isRejectedStatus, resolveWorkflowDisplayState } from "./utils/workflowStatus";
@@ -295,6 +297,7 @@ const loadAdminJobManagePage = () => import("./pages/AdminJobManagePage");
 const loadAdminCareerPortalCardsPage = () => import("./pages/AdminCareerPortalCardsPage");
 const loadLearningMaterialsPage = () => import("./pages/LearningMaterialsPage");
 const loadAdminLearningPage = () => import("./pages/AdminLearningPage");
+const loadAdminPortalAccountsPage = () => import("./pages/AdminPortalAccountsPage");
 
 function isPublicRoutePath(pathname: string): boolean {
   return (
@@ -650,6 +653,15 @@ export default function App() {
   const location = useLocation();
   const currentPath = location.pathname;
   const isPublicRoute = isPublicRoutePath(currentPath);
+
+  const { session: portalSession, signIn: signInPortal } = usePortalSession();
+  /**
+   * A Microsoft account always wins. The two identities can only coexist when
+   * someone signs in with M365 on a browser that still holds a portal session,
+   * and the richer identity is the right one to honour — the portal session
+   * stays stored and takes over again once they sign out of Microsoft.
+   */
+  const portalModeActive = Boolean(portalSession) && !isAuthenticated;
   const authProfileAccountRef = useRef("");
   const authProfileLoadingRef = useRef(false);
   const postAuthRedirectRef = useRef(false);
@@ -707,6 +719,13 @@ export default function App() {
       return;
     }
 
+    // A portal account is signed in, so this is not the sign-in gate — but it is
+    // not the dashboard either. `portal` renders its own small route table.
+    if (portalModeActive) {
+      setPageState("portal");
+      return;
+    }
+
     // Check for redirect result first before deciding page state
     const decision = getStoredAuthDecision();
     if (decision === "guest") {
@@ -714,7 +733,7 @@ export default function App() {
     } else {
       setPageState("choice");
     }
-  }, [isAuthenticated, inProgress, accountKey, isPublicRoute, authProfileReady, authProfileRestricted]);
+  }, [isAuthenticated, inProgress, accountKey, isPublicRoute, authProfileReady, authProfileRestricted, portalModeActive]);
 
   useEffect(() => {
     if (!isAuthenticated || inProgress !== "none" || !activeAccount) return;
@@ -1107,6 +1126,17 @@ export default function App() {
     setPageState("guest");
   };
 
+  const handlePortalSignIn = (session: PortalSession) => {
+    signInPortal(session);
+    setPageState("portal");
+    navigate("/learning", { replace: true });
+  };
+
+  // Signing out is not handled here on purpose. The learning hub owns that
+  // button, and `usePortalSession` broadcasts the change — which clears
+  // `portalModeActive`, re-runs the auth effect, and drops the whole portal
+  // route table back to the sign-in gate without a prop crossing the tree.
+
   const handleSwitchAccount = useCallback(() => {
     clearAuthTimeoutReloginAttempt();
     reauthRedirectInProgressRef.current = false;
@@ -1280,13 +1310,52 @@ export default function App() {
     );
   }
 
+  // ---- Portal accounts ----
+  //
+  // A separate route table rather than a flag threaded through the main one.
+  // The gate has to hold for every route that exists now and every route added
+  // later, and an allowlist of two cannot leak a dashboard the way twenty
+  // individually-guarded routes eventually would. Public routes never reach
+  // here — they are handled above, and they are public to everyone anyway.
+  if (pageState === "portal") {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ErrorBoundary>
+          <Routes>
+            <Route
+              path="/learning"
+              element={
+                <ErrorBoundary>
+                  <LazyRoute
+                    load={loadLearningMaterialsPage}
+                    fallback={<LoadingScreen status="Loading learning materials..." />}
+                  />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/privacy"
+              element={
+                <ErrorBoundary>
+                  <LazyRoute load={loadPrivacyNoticePage} fallback={<LoadingScreen status="Loading page..." />} />
+                </ErrorBoundary>
+              }
+            />
+            <Route path="*" element={<Navigate to="/learning" replace />} />
+          </Routes>
+        </ErrorBoundary>
+      </ThemeProvider>
+    );
+  }
+
   const showAuthGate = !isAuthenticated && !isPublicRoute;
 
   if (showAuthGate && pageState === "choice") {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <ChoiceScreen onLogin={handleLogin} onGuest={handleGuest} />
+        <ChoiceScreen onLogin={handleLogin} onGuest={handleGuest} onPortalSignIn={handlePortalSignIn} />
       </ThemeProvider>
     );
   }
@@ -1518,6 +1587,21 @@ export default function App() {
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadAdminLearningPage} fallback={<LoadingScreen status="Loading library manager..." />} />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/portal-accounts"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                    <LazyRoute
+                      load={loadAdminPortalAccountsPage}
+                      fallback={<LoadingScreen status="Loading portal accounts..." />}
+                    />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import {
@@ -19,6 +19,7 @@ import {
 import {
   HomeRounded,
   LibraryBooksOutlined,
+  LogoutOutlined,
   Refresh,
   SchoolOutlined,
   SearchOutlined,
@@ -44,8 +45,15 @@ import {
   isLearningSignInRequiredError,
 } from "../utils/learningService";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
+import { usePortalSession } from "../auth/usePortalSession";
+import { mergeViewCounts, useLearningViewCounts } from "../hooks/useLearningViewCounts";
 import { editorial, editorialHairline } from "../theme/editorial";
-import type { LearningMaterial, LearningMaterialKind, LearningTopic } from "../types";
+import type {
+  LearningMaterial,
+  LearningMaterialKind,
+  LearningTopic,
+  LearningViewCounts,
+} from "../types";
 
 type KindFilter = "all" | LearningMaterialKind;
 
@@ -69,6 +77,7 @@ export default function LearningMaterialsPage() {
   const navigate = useNavigate();
   const { instance } = useMsal();
   const isAdmin = useHrFormsOwner();
+  const { session: portalSession, signOut: signOutPortal } = usePortalSession();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [accessToken, setAccessToken] = useState("");
@@ -174,13 +183,30 @@ export default function LearningMaterialsPage() {
     );
   };
 
+  /**
+   * Someone else's view, arriving while this page is open. Only the numbers
+   * change — the material list itself is left as it is, so a poll never
+   * interrupts a video playing in the dialog behind it.
+   */
+  const applyLiveCounts = useCallback((data: LearningViewCounts) => {
+    setMaterials((current) => mergeViewCounts(current, data));
+    setOpenMaterial((current) => (current ? mergeViewCounts([current], data)[0] : current));
+  }, []);
+
+  useLearningViewCounts(accessToken, Boolean(accessToken) && !loading && libraryReady, applyLiveCounts);
+
   return (
     <Box sx={learningPageSx}>
       <LearningHeader
         title="Learning Materials"
-        subtitle="Training videos, guides, and reference documents for PMW Group staff."
+        subtitle={
+          portalSession
+            ? `Signed in as ${portalSession.fullName}`
+            : "Training videos, guides, and reference documents for PMW Group staff."
+        }
         backPath={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
         backLabel="Back to dashboard"
+        showBack={!portalSession}
         actions={
           <>
             <Button
@@ -191,6 +217,16 @@ export default function LearningMaterialsPage() {
             >
               Refresh
             </Button>
+            {portalSession && (
+              <Button
+                size="small"
+                startIcon={<LogoutOutlined />}
+                onClick={signOutPortal}
+                sx={{ ...learningButtonSx, color: editorial.pmwBlueDark }}
+              >
+                Sign out
+              </Button>
+            )}
             {isAdmin && (
               <Button
                 size="small"
@@ -266,8 +302,8 @@ export default function LearningMaterialsPage() {
               variant="h6"
               sx={{ color: editorial.muted, fontWeight: 700, mt: 1, maxWidth: 760, textWrap: "pretty" }}
             >
-              Browse by topic, open a material in place, and pick up where the team left off. View counts show how
-              many colleagues have opened each item.
+              Browse by topic, open a material in place, and pick up where the team left off. View counts are people,
+              not plays: one per colleague, however often they come back.
             </Typography>
           </Paper>
 

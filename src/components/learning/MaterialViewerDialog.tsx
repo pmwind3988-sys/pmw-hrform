@@ -36,6 +36,25 @@ import type { LearningMaterial, LearningMaterialOpenResult } from "../../types";
  */
 const VIDEO_VIEW_SECONDS = 5;
 
+/**
+ * How long anything else has to stay open before it counts. An image, a PDF and
+ * SharePoint's embedded player give no playback signal, so time on screen is the
+ * only evidence there is that someone actually looked.
+ *
+ * This is what keeps a view attached to the one material it belongs to. Holding
+ * the arrow key through a folder of images used to bank a view on every one of
+ * them on the way past; now a material has to be the one being looked at.
+ */
+const DWELL_VIEW_SECONDS = 4;
+
+/**
+ * The largest jump between two `timeupdate` events that still counts as
+ * playback. Real playback advances a fraction of a second at a time; dragging
+ * the scrubber to the end jumps by minutes, and skipping to the credits is not
+ * watching the material.
+ */
+const MAX_PLAYBACK_STEP_SECONDS = 1.5;
+
 interface MaterialViewerDialogProps {
   material: LearningMaterial | null;
   /** Same-kind neighbours the arrows step through — images in the same folder. */
@@ -68,6 +87,7 @@ export default function MaterialViewerDialog({
   const [embedFallbackId, setEmbedFallbackId] = useState("");
   const recordedRef = useRef<Set<string>>(new Set());
   const watchedSecondsRef = useRef(0);
+  const lastPlaybackTimeRef = useRef(0);
   const materialId = material?.id ?? "";
 
   useEffect(() => {
@@ -76,10 +96,12 @@ export default function MaterialViewerDialog({
     if (!materialId || !material) return;
 
     let cancelled = false;
+    let dwellTimer = 0;
     setLoading(true);
     setError("");
     setResult(null);
     watchedSecondsRef.current = 0;
+    lastPlaybackTimeRef.current = 0;
 
     const isVideo = material.kind === "video";
 
@@ -93,10 +115,14 @@ export default function MaterialViewerDialog({
         if (cancelled) return;
         setResult(opened);
 
-        // A document or an image is on screen the moment it opens, so that is
-        // the view. A video has only started buffering — see the timer below.
-        // An embedded player gives us no timer at all, so opening has to count.
-        if (!isVideo || opened.mode === "embed") void markViewed();
+        // A video counts on seconds actually played — see `handleTimeUpdate`.
+        // Everything else has no such signal, so it counts on time on screen.
+        if (!isVideo || opened.mode === "embed") {
+          dwellTimer = window.setTimeout(
+            () => void markViewed(materialId),
+            DWELL_VIEW_SECONDS * 1000,
+          );
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "This material could not be opened.");
@@ -109,25 +135,35 @@ export default function MaterialViewerDialog({
     void load();
     return () => {
       cancelled = true;
+      // Moving to the next material, or closing the dialog, cancels the pending
+      // view. Passing through is not viewing.
+      window.clearTimeout(dwellTimer);
     };
   }, [materialId, accessToken, embedFallbackId]);
 
-  async function markViewed() {
-    if (!materialId || recordedRef.current.has(materialId)) return;
-    recordedRef.current.add(materialId);
+  async function markViewed(id: string) {
+    if (!id || recordedRef.current.has(id)) return;
+    recordedRef.current.add(id);
     try {
-      const viewCount = await recordLearningView(materialId, accessToken);
-      onViewRecorded(materialId, viewCount);
+      const viewCount = await recordLearningView(id, accessToken);
+      onViewRecorded(id, viewCount);
     } catch {
       // A lost view count must never interrupt the person watching. Allow the
       // next open to try again.
-      recordedRef.current.delete(materialId);
+      recordedRef.current.delete(id);
     }
   }
 
   const handleTimeUpdate = (event: React.SyntheticEvent<HTMLVideoElement>) => {
-    watchedSecondsRef.current = event.currentTarget.currentTime;
-    if (watchedSecondsRef.current >= VIDEO_VIEW_SECONDS) void markViewed();
+    const position = event.currentTarget.currentTime;
+    const step = position - lastPlaybackTimeRef.current;
+    lastPlaybackTimeRef.current = position;
+
+    // Seeks are jumps, forwards or back, and neither one is time spent watching.
+    if (step > 0 && step <= MAX_PLAYBACK_STEP_SECONDS) {
+      watchedSecondsRef.current += step;
+    }
+    if (watchedSecondsRef.current >= VIDEO_VIEW_SECONDS) void markViewed(materialId);
   };
 
   async function handleDownload() {

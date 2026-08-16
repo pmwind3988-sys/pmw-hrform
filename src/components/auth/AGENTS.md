@@ -8,7 +8,8 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 
 | State | Component | Purpose |
 |-------|-----------|---------|
-| `choice` | `ChoiceScreen` | MSAL login vs guest decision (persisted to localStorage) |
+| `choice` | `ChoiceScreen` | Microsoft 365 sign-in, plus the portal-account (login ID + password) panel |
+| `portal` | *(inline in App.tsx)* | Signed in on an HR-issued portal account — its own two-route table, everything else redirects to `/learning` |
 | `guest` | `GuestLanding` | Guest mode entry point |
 | `loading` | `LoadingScreen` | Animated progress bar while fetching data |
 | `restricted` | `RestrictedAccessScreen` | Signed-in account lacks SharePoint site access |
@@ -20,7 +21,8 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 
 | Task | File | Notes |
 |------|------|-------|
-| Auth choice | `ChoiceScreen.tsx` | MSAL vs guest toggle — note: checkbox state is NOT wired (decision always persisted) |
+| Auth choice | `ChoiceScreen.tsx` | Microsoft 365 primary + portal-account panel. Fetches the admin background itself (unauthenticated read) since it renders before anyone is signed in |
+| Portal session | `../../auth/usePortalSession.ts` | Stored session, cross-tab sync, expiry timer. Broadcasts `pmw-portal-session-changed` so a sign-out anywhere collapses the portal route table |
 | Guest landing | `GuestLanding.tsx` | Public user landing page |
 | Loading indicator | `LoadingScreen.tsx` | `LinearProgress` with fade-in animation |
 | SharePoint access restriction | `RestrictedAccessScreen.tsx` | Shows site membership guidance with retry/switch/sign-out |

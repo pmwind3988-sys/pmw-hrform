@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import {
@@ -61,10 +61,11 @@ import {
   updateLearningMaterial,
   uploadLearningFile,
 } from "../utils/learningService";
+import { mergeViewCounts, useLearningViewCounts } from "../hooks/useLearningViewCounts";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { loginRequest } from "../auth/msalConfig";
 import { editorial } from "../theme/editorial";
-import type { LearningMaterial, LearningTopic } from "../types";
+import type { LearningMaterial, LearningTopic, LearningViewCounts } from "../types";
 
 type Feedback = { message: string; severity: "success" | "error" } | null;
 
@@ -141,6 +142,14 @@ export default function AdminLearningPage() {
   }, [instance, reloadKey]);
 
   const reload = () => setReloadKey((key) => key + 1);
+
+  // Engagement is the reason this list carries view counts at all, so they
+  // refresh on their own while the page is open rather than on a Refresh click.
+  const applyLiveCounts = useCallback((data: LearningViewCounts) => {
+    setMaterials((current) => mergeViewCounts(current, data));
+  }, []);
+
+  useLearningViewCounts(identityToken, Boolean(identityToken) && !loading, applyLiveCounts);
 
   async function runAction(operation: () => Promise<void>, successMessage: string) {
     setBusy(true);

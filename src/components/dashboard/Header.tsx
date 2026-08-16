@@ -16,6 +16,7 @@ import {
   AccountTree as RoutingIcon,
   AssignmentInd as ApplicationsIcon,
   AutoAwesome as CardsIcon,
+  BadgeOutlined as PortalAccountsIcon,
   Edit as EditIcon,
   Person as PersonIcon,
   LibraryBooksOutlined as LearningIcon,
@@ -285,6 +286,10 @@ export default function Header({
                         <LearningIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                         <Typography variant="body2">Manage Learning Materials</Typography>
                       </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/portal-accounts", handleMainMenuClose)} sx={menuItemSx}>
+                        <PortalAccountsIcon sx={menuIconSx(editorial.pmwPurple)} />
+                        <Typography variant="body2">Portal Accounts</Typography>
+                      </MenuItem>
                       <MenuItem onClick={() => openCareerPortalAccess(handleMainMenuClose)} sx={menuItemSx}>
                         <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                         <Typography variant="body2">Career Portal Access</Typography>
@@ -456,6 +461,10 @@ export default function Header({
                       <MenuItem onClick={() => navigateFromMenu("/admin/learning", handleProfileClose)} sx={menuItemSx}>
                         <LearningIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                         <Typography variant="body2">Manage Learning Materials</Typography>
+                      </MenuItem>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/portal-accounts", handleProfileClose)} sx={menuItemSx}>
+                        <PortalAccountsIcon sx={menuIconSx(editorial.pmwPurple)} />
+                        <Typography variant="body2">Portal Accounts</Typography>
                       </MenuItem>
                       <MenuItem onClick={() => openCareerPortalAccess(handleProfileClose)} sx={menuItemSx}>
                         <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />

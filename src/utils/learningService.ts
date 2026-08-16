@@ -1,8 +1,10 @@
 import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
+import { readStoredPortalSession } from "./internalAccountService";
 import type {
   LearningLibraryData,
   LearningMaterialOpenResult,
   LearningMaterialKind,
+  LearningViewCounts,
 } from "../types";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -81,6 +83,13 @@ export async function acquireLearningIdentityToken(
   instance: IPublicClientApplication,
   account: AccountInfo | null,
 ): Promise<string> {
+  // An HR-issued portal account proves itself with its own signed session
+  // instead of a Microsoft token. Checked first: these visitors have no MSAL
+  // account at all, so the branch below would hand back "" and the hub would
+  // ask them to sign in they already had.
+  const portalSession = readStoredPortalSession();
+  if (portalSession) return portalSession.token;
+
   if (!account) return "";
   try {
     const result = await instance.acquireTokenSilent({ scopes: ["User.Read"], account });
@@ -119,6 +128,21 @@ export function openLearningMaterial(
     accessToken,
     "Failed to open this material",
   );
+}
+
+/**
+ * The view numbers on their own. Cheap enough to ask for on a timer: it skips
+ * the SharePoint folder walk that `fetchLearningLibrary` does and reads one
+ * list, which the API serves from a short cache.
+ */
+export async function fetchLearningViewCounts(accessToken: string): Promise<LearningViewCounts> {
+  const data = await postAction<Partial<LearningViewCounts>>(
+    "view-counts",
+    {},
+    accessToken,
+    "Failed to refresh view counts",
+  );
+  return { counts: data.counts ?? {}, viewedByMe: data.viewedByMe ?? [] };
 }
 
 export async function recordLearningView(materialId: string, accessToken: string): Promise<number> {

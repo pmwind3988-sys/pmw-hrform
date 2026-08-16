@@ -538,6 +538,19 @@ export function viewerKey(email: string): string {
     .slice(0, 24);
 }
 
+/**
+ * The same idea for an HR-issued portal account, which has a login ID instead of
+ * an address. The `portal|` segment keeps the two namespaces apart: without it a
+ * login ID that happened to look like an address would hash into the same key as
+ * that person's M365 account and merge two different viewers into one.
+ */
+export function portalViewerKey(loginId: string): string {
+  return createHash("sha256")
+    .update(`learning-views|portal|${loginId.trim().toLowerCase()}`)
+    .digest("hex")
+    .slice(0, 24);
+}
+
 function viewItemTitle(materialId: string, viewer: string): string {
   return `${materialId}${VIEW_KEY_SEPARATOR}${viewer}`;
 }
@@ -598,7 +611,11 @@ export async function readViewIndex(token: string, viewer: string): Promise<View
 }
 
 /**
- * Records that this account has opened this material, once and only once.
+ * Records that this account has viewed this one material, once and only once.
+ * `materialId` is always a single file's drive item id — the caller resolves it
+ * against the library first and refuses folders, so a topic can never take a
+ * view of its own, and browsing one never spends a view on what is inside it.
+ *
  * Returns the material's resulting distinct-viewer count.
  */
 export async function recordView(token: string, materialId: string, viewer: string): Promise<number> {
@@ -621,8 +638,11 @@ export async function recordView(token: string, materialId: string, viewer: stri
     cachedViewRows = null;
   }
 
-  // A freshly created item can take a moment to show up in a list query, so a
-  // missing count here means "at least this viewer", never zero.
+  // A freshly created item can take a moment to show up in a list query. This
+  // caller has definitely viewed it, so count them whether or not their own row
+  // is back yet — otherwise the number would tick *down* for the one person who
+  // just added to it, and tick back up on the next refresh.
   const index = await readViewIndex(token, viewer);
-  return index.counts[materialId] ?? 1;
+  const counted = index.counts[materialId] ?? 0;
+  return index.viewedByMe.has(materialId) ? counted : counted + 1;
 }
