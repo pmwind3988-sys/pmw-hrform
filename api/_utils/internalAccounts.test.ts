@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   hashPassword,
   isLockedOut,
@@ -130,5 +130,96 @@ describe("lockout", () => {
 
   it("treats an unparseable lock timestamp as not locked", () => {
     expect(isLockedOut({ failedAttempts: 0, lockedUntil: "not a date" }, now)).toBe(false);
+  });
+});
+
+describe("finding an account by login ID", () => {
+  const row = {
+    id: "7",
+    fields: { Title: "nurul.aisyah", FullName: "Nurul Aisyah", PasswordHash: "scrypt$stored" },
+  };
+
+  async function loadWithGraph(graph: Record<string, unknown>) {
+    vi.resetModules();
+    vi.doMock("./logger.js", () => ({ logWarn: vi.fn(), logError: vi.fn(), logInfo: vi.fn() }));
+    vi.doMock("./graphClient.js", () => ({
+      createListItem: vi.fn(),
+      deleteListItem: vi.fn(),
+      updateListItemFields: vi.fn(),
+      queryListItemByFields: vi.fn(),
+      queryAllListItems: vi.fn(),
+      ...graph,
+    }));
+    return import("./internalAccounts.js");
+  }
+
+  afterEach(() => {
+    vi.doUnmock("./graphClient.js");
+    vi.doUnmock("./logger.js");
+    vi.resetModules();
+  });
+
+  it("uses the filtered read alone when it works", async () => {
+    const queryListItemByFields = vi.fn(async () => row);
+    const queryAllListItems = vi.fn(async () => [row]);
+    const { readAccountRow } = await loadWithGraph({ queryListItemByFields, queryAllListItems });
+
+    const found = await readAccountRow("graph-token", "nurul.aisyah");
+
+    expect(found?.account.loginId).toBe("nurul.aisyah");
+    expect(found?.passwordHash).toBe("scrypt$stored");
+    expect(queryAllListItems).not.toHaveBeenCalled();
+  });
+
+  it("scans the list when SharePoint refuses to filter on an unindexed column", async () => {
+    // What a brand-new list actually answers: Title carries no index yet.
+    const queryListItemByFields = vi.fn(async () => {
+      throw new Error(
+        "Graph GET 400: Field 'Title' cannot be referenced in filter or orderby as it is not indexed.",
+      );
+    });
+    const queryAllListItems = vi.fn(async () => [{ id: "1", fields: { Title: "someone.else" } }, row]);
+    const { readAccountRow } = await loadWithGraph({ queryListItemByFields, queryAllListItems });
+
+    const found = await readAccountRow("graph-token", "nurul.aisyah");
+
+    expect(found?.account.itemId).toBe("7");
+    expect(queryAllListItems).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not scan when the filter simply found nothing", async () => {
+    // Load-bearing: a scan only on the miss would make a login ID that does not
+    // exist answer slower than one that does, which is the enumeration signal
+    // `burnVerificationTime` exists to remove.
+    const queryListItemByFields = vi.fn(async () => null);
+    const queryAllListItems = vi.fn(async () => [row]);
+    const { readAccountRow } = await loadWithGraph({ queryListItemByFields, queryAllListItems });
+
+    expect(await readAccountRow("graph-token", "nurul.aisyah")).toBeNull();
+    expect(queryAllListItems).not.toHaveBeenCalled();
+  });
+
+  it("reports no account, not an error, before the list is provisioned", async () => {
+    const missing = async () => {
+      throw new Error('List "Internal Accounts" not found');
+    };
+    const { readAccountRow } = await loadWithGraph({
+      queryListItemByFields: vi.fn(missing),
+      queryAllListItems: vi.fn(missing),
+    });
+
+    expect(await readAccountRow("graph-token", "nurul.aisyah")).toBeNull();
+  });
+
+  it("surfaces a genuine read failure rather than calling the account missing", async () => {
+    const queryListItemByFields = vi.fn(async () => {
+      throw new Error("Graph GET 400: bad filter");
+    });
+    const queryAllListItems = vi.fn(async () => {
+      throw new Error("Graph GET 503: service unavailable");
+    });
+    const { readAccountRow } = await loadWithGraph({ queryListItemByFields, queryAllListItems });
+
+    await expect(readAccountRow("graph-token", "nurul.aisyah")).rejects.toThrow(/503/);
   });
 });

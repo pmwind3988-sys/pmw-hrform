@@ -456,6 +456,16 @@ export async function queryAllListItems(
   return items;
 }
 
+/**
+ * Finds the one item whose columns match, or null.
+ *
+ * `preferNonIndexed` is always on. Graph refuses `$filter` outright on a column
+ * SharePoint has not indexed, and **`Title` is not indexed on a freshly created
+ * list** — so every caller here is one new list away from a 400 that reads as
+ * "no such item". That is not hypothetical: it broke portal sign-in on the first
+ * account ever issued. The header's warning is about large lists failing
+ * randomly, which is strictly better than small ones failing every time.
+ */
 export async function queryListItemByFields(
   token: string,
   listDisplayName: string,
@@ -465,6 +475,7 @@ export async function queryListItemByFields(
   const items = await queryListItems(token, listDisplayName, {
     filter: filters.join(" and "),
     top: 1,
+    preferNonIndexed: true,
   });
   return items[0] ?? null;
 }

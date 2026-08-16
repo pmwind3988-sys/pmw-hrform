@@ -274,13 +274,54 @@ export async function ensureInternalAccountsSchema(delegatedToken: string): Prom
 
 // ── Reads and writes ─────────────────────────────────────────────────────────
 
+/** The list has never been provisioned — the caller's "no such account" is right. */
+function isMissingList(error: unknown): boolean {
+  return error instanceof Error && error.message.includes(`List "${INTERNAL_ACCOUNTS_LIST}" not found`);
+}
+
+/**
+ * Finds one account's list item, or null if there genuinely is not one.
+ *
+ * The filtered read is the fast path and stays the only path when it works. What
+ * it must never again do is *fail silently*: this used to end in `.catch(() =>
+ * null)`, so a Graph refusal and an absent account were indistinguishable, and
+ * the first portal account ever issued could be created and then neither signed
+ * into ("that login ID and password do not match") nor reset ("that portal
+ * account no longer exists") — both describing a row that was sitting there.
+ *
+ * The scan runs only when the filter *errored*, never when it returned nothing.
+ * That distinction is load-bearing twice over: a scan per failed sign-in attempt
+ * would be wasteful, and — since a real account resolves on the fast path — it
+ * would also make a nonexistent login ID answer measurably slower than a real
+ * one, handing back exactly the enumeration signal `burnVerificationTime` exists
+ * to remove.
+ */
+async function findAccountItem(graphToken: string, loginId: string): Promise<GraphListItem | null> {
+  try {
+    return await queryListItemByFields(graphToken, INTERNAL_ACCOUNTS_LIST, { Title: loginId });
+  } catch (error) {
+    if (isMissingList(error)) return null;
+    logWarn("api:internal-auth", "Filtered account lookup failed; scanning the list instead", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  try {
+    // Affordable precisely here: portal accounts are issued one at a time, by
+    // hand, to people who have no mailbox. This is not a list that grows with use.
+    const items = await queryAllListItems(graphToken, INTERNAL_ACCOUNTS_LIST, { maxItems: 2000 });
+    return items.find((item) => String(item.fields?.Title ?? "") === loginId) ?? null;
+  } catch (error) {
+    if (isMissingList(error)) return null;
+    throw error;
+  }
+}
+
 export async function readAccountRow(
   graphToken: string,
   loginId: string,
 ): Promise<{ account: InternalAccount; passwordHash: string } | null> {
-  const item = await queryListItemByFields(graphToken, INTERNAL_ACCOUNTS_LIST, { Title: loginId }).catch(
-    () => null,
-  );
+  const item = await findAccountItem(graphToken, loginId);
   if (!item) return null;
   return { account: toAccount(item), passwordHash: String(item.fields?.[COLUMN_PASSWORD_HASH] || "") };
 }
