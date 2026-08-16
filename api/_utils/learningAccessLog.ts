@@ -104,6 +104,9 @@ export async function recordAccessLogEntry(
     // was never provisioned, and the second one is fixed by an admin pressing
     // "Set up" on the Portal Accounts screen — not by anything this path can do.
     logWarn("api:learning", "Could not record a portal access log entry", {
+      list: LEARNING_ACCESS_LOG_LIST,
+      loginId: entry.loginId,
+      materialId: entry.materialId,
       errorMessage: error instanceof Error ? error.message : String(error),
     });
   }
@@ -137,18 +140,27 @@ export function sortAccessLogEntries(entries: AccessLogEntry[]): AccessLogEntry[
   });
 }
 
-/** The whole trail, newest first. */
+/**
+ * The whole trail, newest first.
+ *
+ * A list that was never provisioned reads as an empty trail, because that is
+ * what it is. Any *other* failure is raised, and deliberately so: this used to
+ * answer `[]` for both, so a log that could not be read was indistinguishable
+ * from a log with nothing in it — and the screen would calmly report that nobody
+ * had opened anything, which is the single most misleading thing an audit trail
+ * can say.
+ */
 export async function readAccessLog(graphToken: string): Promise<AccessLogEntry[]> {
   let items: GraphListItem[];
   try {
     items = await queryAllListItems(graphToken, LEARNING_ACCESS_LOG_LIST, { maxItems: MAX_LOG_ROWS });
   } catch (error) {
-    // An empty trail and an unprovisioned list look the same to the screen, and
-    // both are honest: nothing has been logged yet.
-    logWarn("api:learning", "Could not read the portal access log", {
-      errorMessage: error instanceof Error ? error.message : String(error),
+    const message = error instanceof Error ? error.message : String(error);
+    logWarn("api:learning", "Could not read the portal access log", { errorMessage: message });
+    if (message.includes(`List "${LEARNING_ACCESS_LOG_LIST}" not found`)) return [];
+    throw new Error("The access log could not be read from SharePoint. Try again, or run Set up.", {
+      cause: error,
     });
-    return [];
   }
 
   return sortAccessLogEntries(items.map(toEntry).filter((entry) => entry.loginId && entry.materialId));

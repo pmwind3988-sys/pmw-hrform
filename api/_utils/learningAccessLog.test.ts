@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { sortAccessLogEntries, type AccessLogEntry } from "./learningAccessLog.js";
 
 function entry(loginId: string, viewedAt: string): AccessLogEntry {
@@ -40,5 +40,54 @@ describe("access log ordering", () => {
     const input = [entry("ali", "2026-03-01T08:00:00.000Z"), entry("siti", "2026-03-05T08:00:00.000Z")];
     sortAccessLogEntries(input);
     expect(input.map((row) => row.loginId)).toEqual(["ali", "siti"]);
+  });
+});
+
+describe("reading the access log", () => {
+  async function loadWithRows(queryAllListItems: () => Promise<unknown>) {
+    vi.resetModules();
+    vi.doMock("./logger.js", () => ({ logWarn: vi.fn(), logError: vi.fn(), logInfo: vi.fn() }));
+    vi.doMock("./graphClient.js", () => ({ createListItem: vi.fn(), queryAllListItems }));
+    vi.doMock("./sharepointRest.js", () => ({
+      ensureListViaSPRest: vi.fn(),
+      ensureTextFieldViaSPRest: vi.fn(),
+    }));
+    return import("./learningAccessLog.js");
+  }
+
+  afterEach(() => {
+    vi.doUnmock("./graphClient.js");
+    vi.doUnmock("./logger.js");
+    vi.doUnmock("./sharepointRest.js");
+    vi.resetModules();
+  });
+
+  it("reads an unprovisioned list as an empty trail", async () => {
+    const { readAccessLog } = await loadWithRows(async () => {
+      throw new Error('List "Learning Access Log" not found');
+    });
+
+    expect(await readAccessLog("graph-token")).toEqual([]);
+  });
+
+  it("raises any other failure instead of reporting that nobody opened anything", async () => {
+    // The dangerous case: an audit trail that answers "no entries" when what it
+    // means is "I could not look".
+    const { readAccessLog } = await loadWithRows(async () => {
+      throw new Error("Graph GET 503: service unavailable");
+    });
+
+    await expect(readAccessLog("graph-token")).rejects.toThrow(/could not be read from SharePoint/);
+  });
+
+  it("drops rows missing the fields that identify a view", async () => {
+    const { readAccessLog } = await loadWithRows(async () => [
+      { id: "1", fields: { Title: "nurul.aisyah", MaterialId: "m1", MaterialName: "Fire Safety", ViewedAt: "2026-03-03T01:00:00.000Z" } },
+      { id: "2", fields: { Title: "", MaterialId: "m2" } },
+    ]);
+
+    const entries = await readAccessLog("graph-token");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].materialName).toBe("Fire Safety");
   });
 });

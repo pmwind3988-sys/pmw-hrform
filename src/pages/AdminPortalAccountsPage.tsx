@@ -127,7 +127,9 @@ export default function AdminPortalAccountsPage() {
   const [provisioned, setProvisioned] = useState(true);
   const [sessionsConfigured, setSessionsConfigured] = useState(true);
   const [log, setLog] = useState<PortalAccessLogEntry[]>([]);
-  const [logLoaded, setLogLoaded] = useState(false);
+  /** When the entries on screen were read. Bumping the key re-reads them. */
+  const [logReadAt, setLogReadAt] = useState<Date | null>(null);
+  const [logRefreshKey, setLogRefreshKey] = useState(0);
 
   const [tab, setTab] = useState<"accounts" | "log">("accounts");
   const [loading, setLoading] = useState(true);
@@ -181,12 +183,18 @@ export default function AdminPortalAccountsPage() {
   }, [instance, load]);
 
   /**
-   * The log is fetched the first time its tab is opened rather than alongside
-   * the accounts. It is the larger read of the two and most visits here are to
-   * create or reset an account, not to read history.
+   * The log is fetched when its tab is opened rather than alongside the accounts:
+   * it is the larger read of the two and most visits here are to create or reset
+   * an account, not to read history.
+   *
+   * **Every** time the tab is opened, though, and never once per page load. A
+   * trail is read to find out what has happened since last time, so an admin who
+   * checks it, has somebody open a material, and comes back to look is asking a
+   * new question — and answering it from a cached empty list is how you conclude
+   * that logging is broken when it is working perfectly.
    */
   useEffect(() => {
-    if (tab !== "log" || logLoaded || !spToken) return;
+    if (tab !== "log" || !spToken) return;
 
     let cancelled = false;
     (async () => {
@@ -195,7 +203,7 @@ export default function AdminPortalAccountsPage() {
         const entries = await fetchPortalAccessLog(spToken);
         if (cancelled) return;
         setLog(entries);
-        setLogLoaded(true);
+        setLogReadAt(new Date());
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load the access log.");
       } finally {
@@ -206,7 +214,7 @@ export default function AdminPortalAccountsPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, logLoaded, spToken]);
+  }, [tab, spToken, logRefreshKey]);
 
   const runAction = useCallback(
     async (work: () => Promise<void>, successMessage: string) => {
@@ -493,14 +501,34 @@ export default function AdminPortalAccountsPage() {
                       Every material opened by a portal account, newest first. Staff signing in with
                       Microsoft 365 are not listed here — their views stay anonymous.
                     </Typography>
-                    <TextField
-                      size="small"
-                      fullWidth
-                      value={logFilter}
-                      onChange={(event) => setLogFilter(event.target.value)}
-                      placeholder="Filter by person or material"
-                      sx={{ maxWidth: 420 }}
-                    />
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1.5}
+                      sx={{ alignItems: { sm: "center" } }}
+                    >
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={logFilter}
+                        onChange={(event) => setLogFilter(event.target.value)}
+                        placeholder="Filter by person or material"
+                        sx={{ maxWidth: 420 }}
+                      />
+                      <Button
+                        size="small"
+                        startIcon={<Refresh />}
+                        disabled={busy}
+                        onClick={() => setLogRefreshKey((key) => key + 1)}
+                        sx={learningButtonSx}
+                      >
+                        Refresh
+                      </Button>
+                      {logReadAt && (
+                        <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700 }}>
+                          Read at {logReadAt.toLocaleTimeString()}
+                        </Typography>
+                      )}
+                    </Stack>
                   </Box>
                   {filteredLog.length === 0 ? (
                     <Box sx={{ px: { xs: 2, sm: 3 }, pb: 4 }}>
