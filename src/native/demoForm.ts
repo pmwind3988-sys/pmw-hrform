@@ -7,8 +7,9 @@
  * shape `buildSurveyJson` emits, including the parts that are easy to get wrong
  * from a type definition alone: `startWithNewLine: false` for side-by-side
  * fields, `_expression` for formulas, `visibleIf` conditions, choices in both
- * the bare-string and `{value, text}` forms, and a `matrixdynamic` with mixed
- * cell types.
+ * the bare-string and `{value, text}` forms, a `matrixdynamic` with mixed cell
+ * types, and a top-level question sitting between two panels rather than inside
+ * either of them.
  *
  * It is not a fixture — no test asserts against it. It is the sample a person
  * looks at when deciding whether this reads better than what it replaces, so it
@@ -260,6 +261,20 @@ export const DEMO_FORM: Record<string, unknown> = {
               ],
             },
           ],
+        },
+        {
+          // A question at the top level, sitting between two panels. It belongs
+          // to neither, and it is drawn where it was written rather than being
+          // gathered up with the other loose fields at the top of the form.
+          type: "radiogroup",
+          name: "urgency",
+          title: "How soon is this needed?",
+          choices: [
+            { value: "urgent", text: "Urgent — within the month" },
+            { value: "quarter", text: "This quarter" },
+            { value: "cycle", text: "Next training cycle" },
+          ],
+          isRequired: true,
         },
         {
           type: "panel",

@@ -12,6 +12,7 @@
 | Status constants | `statusConstants.ts` | `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`, `layerColumn()` helper |
 | Submission filtering | `submissionFilters.ts` | `SubmissionFilterState` + `recordMatchesFilters` — the one engine behind the dashboard, approval workspace and response viewer. Pure. See `src/components/dashboard/AGENTS.md` for the model. |
 | Filterable questions | `formFieldCatalog.ts` | Turns published SurveyJSON into typed `FilterableField[]` (kind → allowed operators), and reads answers through SharePoint's escaped keys. Pure. |
+| Submission layout | `formSubmissionLayout.ts` | `buildFormSubmissionSections()` — published JSON + a response → the sections the detail modal and the PDF print. Pure. Sections are opened **in document order**: a panel opens one, and a run of fields resuming after a panel opens another, untitled, so it reads as the continuation it is. Do not key them by title again — that pulled a question asked between two panels back into the section above both. |
 | Matrix answers | `matrixData.ts` | `getDynamicMatrixFields()` finds matrix questions in published JSON; `rowsToHtml()` renders rows for a SharePoint rich-text column. Pure. |
 | Signing control | `signatureCapture.tsx` | `SignatureCapture` (approver sign-off) and the `SignatureModal` drawing dialog. |
 | Auth persistence | `authDecision.ts` | `localStorage` helpers for `pmw_hr_auth_decision` |

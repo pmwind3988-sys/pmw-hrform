@@ -99,6 +99,15 @@ elements with `startWithNewLine: false` into one row; tables, repeaters and nest
 always take a row alone regardless, because an author sets the flag on the field *before*
 the one it affects and cannot see what follows.
 
+### Cards follow document order, panels and loose fields alike
+`NativeFormView` walks `page.elements` once and cuts it into cards: a top-level panel is a
+numbered section, and each *run* of elements between panels becomes one untitled card drawn
+where that run sits. It used to sort instead — every non-panel element hoisted into a single
+leading card — which reordered any form whose author put a question between two sections,
+so the rendered form disagreed with the builder. Do not group by kind here; group by
+position. Section numbers count only the sections actually on screen, so a panel hidden by
+`visibleIf` closes the gap rather than leaving one.
+
 ### Layout is `@container`, not `@media`
 `.nf` declares `container-type: inline-size`, and every layout breakpoint queries that box
 rather than the viewport. This is what makes the builder's device preview honest: a 340px

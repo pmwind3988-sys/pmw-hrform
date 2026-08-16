@@ -735,17 +735,21 @@ function DataPreviewSections({ sections }: { sections: FormSubmissionSection[] }
     <Stack spacing={2.5}>
       {sections.map((section) => (
         <Box key={section.id}>
-          <Typography
-            variant="body1"
-            sx={{
-              color: editorial.ink,
-              fontWeight: 900,
-              mb: 1.25,
-              textWrap: "balance",
-            }}
-          >
-            {section.title}
-          </Typography>
+          {/* An untitled section is the rest of the one above it, resumed after
+              a nested panel, so it carries no second heading of its own. */}
+          {section.title && (
+            <Typography
+              variant="body1"
+              sx={{
+                color: editorial.ink,
+                fontWeight: 900,
+                mb: 1.25,
+                textWrap: "balance",
+              }}
+            >
+              {section.title}
+            </Typography>
+          )}
           <Grid container spacing={2}>
             {section.fields.map((field) => (
               <Grid size={{ xs: 12, sm: isHtmlValue(field.key, field.value) || field.kind === "matrix" ? 12 : 6 }} key={field.key}>

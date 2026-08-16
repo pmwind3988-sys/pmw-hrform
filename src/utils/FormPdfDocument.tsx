@@ -659,7 +659,9 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
           ) : (
             formSections.map((section) => (
               <View key={section.id} style={S.formSection}>
-                <Text style={S.subSectionLabel}>{section.title}</Text>
+                {/* A section carrying no title is the rest of the one above it,
+                    resumed after a nested panel — it prints no second heading. */}
+                {section.title ? <Text style={S.subSectionLabel}>{section.title}</Text> : null}
                 {section.fields.map((field, fieldIndex) => {
                   if (field.kind === "matrix") {
                     return <View key={field.key} wrap={false}>{renderMatrixField(field)}</View>;

@@ -314,6 +314,14 @@ function Section({
   );
 }
 
+/**
+ * One card on the page: a panel the author drew, or a run of elements that sit
+ * between panels and share the untitled card they land in.
+ */
+type PageBlock =
+  | { kind: "loose"; id: string; elements: NativeElement[] }
+  | { kind: "section"; id: string; element: NativeElement };
+
 export interface NativeFormProps {
   runtime: NativeFormRuntime;
   /**
@@ -339,18 +347,56 @@ export default function NativeFormView({
 }: NativeFormProps) {
   const { form, page, pageIndex, pageCount, isLastPage, isFirstPage } = runtime;
 
-  // The page's top-level panels become the numbered sections; everything not in
-  // a panel is gathered into one leading section so a flat form still reads as
-  // a document rather than as loose fields on a page.
-  const { loose, sections } = useMemo(() => {
-    const looseElements: NativeElement[] = [];
-    const sectionElements: NativeElement[] = [];
+  /**
+   * The page cut into cards, **in the order it was authored**.
+   *
+   * Each top-level panel is a numbered section; each run of elements between
+   * two panels becomes one untitled card of its own, so a flat form still reads
+   * as a document rather than as loose fields on a page.
+   *
+   * A run is drawn where it sits. Gathering every run into one leading card —
+   * what this did before — silently reordered the form: a question the author
+   * placed between two sections jumped above both of them, and the order on
+   * screen stopped matching the order in the builder.
+   */
+  const blocks = useMemo(() => {
+    const out: PageBlock[] = [];
     for (const el of page.elements) {
-      if (el.kind === "section") sectionElements.push(el);
-      else looseElements.push(el);
+      if (el.kind === "section") {
+        out.push({ kind: "section", id: el.id, element: el });
+        continue;
+      }
+      const last = out[out.length - 1];
+      if (last?.kind === "loose") last.elements.push(el);
+      else out.push({ kind: "loose", id: `loose-${el.id}`, elements: [el] });
     }
-    return { loose: looseElements, sections: sectionElements };
+    return out;
   }, [page]);
+
+  const sections = useMemo(
+    () => blocks.flatMap((block) => (block.kind === "section" ? [block.element] : [])),
+    [blocks],
+  );
+
+  /**
+   * The blocks that have something to show, numbered as they will be seen: a
+   * section hidden by a rule takes its number with it rather than leaving a gap
+   * in the sequence, and a run whose every field is hidden draws no empty card.
+   */
+  const drawn = useMemo(() => {
+    const out: { block: PageBlock; number?: number }[] = [];
+    let numbered = 0;
+    for (const block of blocks) {
+      if (block.kind === "section") {
+        if (!runtime.stateOf(block.element).visible) continue;
+        out.push({ block, number: numbered });
+        numbered += 1;
+        continue;
+      }
+      if (block.elements.some((el) => runtime.stateOf(el).visible)) out.push({ block });
+    }
+    return out;
+  }, [blocks, runtime]);
 
   /**
    * The rail's dots. A dot is only worth drawing if it says something, so each
@@ -492,19 +538,19 @@ export default function NativeFormView({
             </div>
           )}
 
-          {loose.length > 0 && (
-            <section className="nf-section">
-              <div className="nf-section-body">
-                <Rows elements={loose} runtime={runtime} depth={0} />
+          {drawn.map(({ block, number }) =>
+            block.kind === "section" ? (
+              <div key={block.id} id={block.element.id}>
+                <Section element={block.element} runtime={runtime} depth={0} index={number} />
               </div>
-            </section>
+            ) : (
+              <section className="nf-section" key={block.id}>
+                <div className="nf-section-body">
+                  <Rows elements={block.elements} runtime={runtime} depth={0} />
+                </div>
+              </section>
+            ),
           )}
-
-          {sections.map((section, i) => (
-            <div key={section.id} id={section.id}>
-              <Section element={section} runtime={runtime} depth={0} index={i} />
-            </div>
-          ))}
 
           {footer}
 

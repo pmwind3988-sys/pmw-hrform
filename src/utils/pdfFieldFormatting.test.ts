@@ -112,6 +112,74 @@ describe("PDF field formatting", () => {
     ]);
   });
 
+  // The page's own questions used to share one section per title, so a question
+  // asked after a panel was pulled back up into the section its page opened
+  // before that panel — printing it above answers that were given first.
+  it("keeps questions asked between panels between them", () => {
+    const sections = buildFormSubmissionSections({
+      pages: [{
+        name: "page1",
+        elements: [
+          { type: "text", name: "trainingDate", title: "Training Date" },
+          { type: "panel", name: "employee", title: "Employee Details", elements: [
+            { type: "text", name: "employeeName", title: "Employee Name" },
+          ] },
+          { type: "radiogroup", name: "overallRating", title: "Overall Rating" },
+          { type: "comment", name: "comments", title: "Comments / Feedback" },
+          { type: "panel", name: "ack", title: "Acknowledgement", elements: [
+            { type: "signaturepad", name: "employeeSignature", title: "Employee Signature" },
+          ] },
+        ],
+      }],
+    }, {
+      trainingDate: "2026-06-17",
+      employeeName: "Aisyah",
+      overallRating: "Excellent",
+      comments: "Well run.",
+      employeeSignature: "signature.png",
+    }, {
+      fallbackSectionTitle: "Main Page",
+      includeAdditionalFields: false,
+    });
+
+    expect(sections.map((section) => [section.title, section.fields.map((field) => field.key)])).toEqual([
+      ["Main Page", ["trainingDate"]],
+      ["Employee Details", ["employeeName"]],
+      ["", ["overallRating", "comments"]],
+      ["Acknowledgement", ["employeeSignature"]],
+    ]);
+  });
+
+  it("resumes a panel after a nested one without repeating its heading", () => {
+    const sections = buildFormSubmissionSections({
+      pages: [{
+        name: "page1",
+        elements: [
+          { type: "panel", name: "training", title: "Training", elements: [
+            { type: "text", name: "courseTitle", title: "Course title" },
+            { type: "panel", name: "effectiveness", title: "Effectiveness", elements: [
+              { type: "rating", name: "objectivesMet", title: "Objectives met" },
+            ] },
+            { type: "text", name: "trainer", title: "Trainer" },
+          ] },
+        ],
+      }],
+    }, {
+      courseTitle: "Forklift safety",
+      objectivesMet: 4,
+      trainer: "Lim",
+    }, {
+      includeAdditionalFields: false,
+    });
+
+    expect(sections.map((section) => [section.title, section.fields.map((field) => field.key)])).toEqual([
+      ["Training", ["courseTitle"]],
+      ["Effectiveness", ["objectivesMet"]],
+      ["", ["trainer"]],
+    ]);
+    expect(new Set(sections.map((section) => section.id)).size).toBe(sections.length);
+  });
+
   it("uses Main Page instead of default SurveyJS page names", () => {
     const sections = buildFormSubmissionSections({
       pages: [{

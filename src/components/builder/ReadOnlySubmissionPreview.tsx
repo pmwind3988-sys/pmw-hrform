@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
+import {
+  collectPreviewSections,
+  formatFieldLabel,
+  isRecord,
+  type SubmissionPreviewField as PreviewField,
+  type SubmissionPreviewSection as PreviewSection,
+} from "../../utils/submissionPreviewSections";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -16,30 +23,6 @@ const C = {
   red: "#DC2626",
 } as const;
 
-interface PreviewField {
-  name: string;
-  title: string;
-  type: string;
-  inputType?: string;
-  choices?: unknown[];
-  rateValues?: unknown[];
-  columns?: unknown[];
-  rateMin?: number;
-  rateMax?: number;
-  minRateDescription?: string;
-  maxRateDescription?: string;
-  currency?: string;
-  currencySymbol?: string;
-  locale?: string;
-  decimalPlaces?: number;
-  displayFormat?: string;
-}
-
-interface PreviewSection {
-  title: string;
-  fields: PreviewField[];
-}
-
 interface ReadOnlySubmissionPreviewProps {
   surveyJson: unknown;
   data: Record<string, unknown> | null;
@@ -47,10 +30,6 @@ interface ReadOnlySubmissionPreviewProps {
   mediaSrcByField?: Record<string, string | string[]>;
   fallbackData?: Record<string, unknown>;
   compact?: boolean;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeMaybeJson(value: unknown): unknown {
@@ -64,89 +43,6 @@ function normalizeMaybeJson(value: unknown): unknown {
   }
 }
 
-function formatFieldLabel(key: string): string {
-  return key
-    .replace(/_x0020_/gi, " ")
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim() || key;
-}
-
-function fieldTitle(element: Record<string, unknown>): string {
-  const title = element.title;
-  if (typeof title === "string" && title.trim()) return title.trim();
-  const name = element.name;
-  return typeof name === "string" ? formatFieldLabel(name) : "Untitled field";
-}
-
-function sectionTitle(element: Record<string, unknown>, fallback: string): string {
-  const title = element.title;
-  if (typeof title === "string" && title.trim()) return title.trim();
-  const name = element.name;
-  return typeof name === "string" && name.trim() ? formatFieldLabel(name) : fallback;
-}
-
-function getSurveyRoot(surveyJson: unknown): Record<string, unknown> | null {
-  if (!isRecord(surveyJson)) return null;
-  if (isRecord(surveyJson.surveyJson)) return surveyJson.surveyJson;
-  return surveyJson;
-}
-
-function collectPreviewSections(surveyJson: unknown, data: Record<string, unknown> | null): PreviewSection[] {
-  const root = getSurveyRoot(surveyJson);
-  const pages = root && Array.isArray(root.pages) ? root.pages : [];
-  const sections: PreviewSection[] = [];
-  const dataKeys = new Set(Object.keys(data ?? {}));
-
-  const collectFields = (elements: unknown, target: PreviewField[]) => {
-    if (!Array.isArray(elements)) return;
-    for (const raw of elements) {
-      if (!isRecord(raw)) continue;
-      const type = typeof raw.type === "string" ? raw.type : "";
-      if (type === "panel") {
-        const panelFields: PreviewField[] = [];
-        collectFields(raw.elements, panelFields);
-        if (panelFields.length > 0) {
-          sections.push({ title: sectionTitle(raw, "Section"), fields: panelFields });
-        }
-        continue;
-      }
-      if (type === "html" || type === "expression" || type === "formula") continue;
-      const name = typeof raw.name === "string" ? raw.name : "";
-      if (!name || !dataKeys.has(name)) continue;
-      target.push({
-        name,
-        title: fieldTitle(raw),
-        type,
-        inputType: typeof raw.inputType === "string" ? raw.inputType : undefined,
-        choices: Array.isArray(raw.choices) ? raw.choices : undefined,
-        rateValues: Array.isArray(raw.rateValues) ? raw.rateValues : undefined,
-        columns: Array.isArray(raw.columns) ? raw.columns : undefined,
-        rateMin: typeof raw.rateMin === "number" ? raw.rateMin : undefined,
-        rateMax: typeof raw.rateMax === "number" ? raw.rateMax : undefined,
-        minRateDescription: typeof raw.minRateDescription === "string" ? raw.minRateDescription : undefined,
-        maxRateDescription: typeof raw.maxRateDescription === "string" ? raw.maxRateDescription : undefined,
-        currency: typeof raw.currency === "string" ? raw.currency : undefined,
-        currencySymbol: typeof raw.currencySymbol === "string" ? raw.currencySymbol : undefined,
-        locale: typeof raw.locale === "string" ? raw.locale : undefined,
-        decimalPlaces: typeof raw.decimalPlaces === "number" ? raw.decimalPlaces : undefined,
-        displayFormat: typeof raw.displayFormat === "string" ? raw.displayFormat : undefined,
-      });
-    }
-  };
-
-  for (const page of pages) {
-    if (!isRecord(page)) continue;
-    const fields: PreviewField[] = [];
-    collectFields(page.elements, fields);
-    if (fields.length > 0) {
-      sections.push({ title: sectionTitle(page, "Submitted Form"), fields });
-    }
-  }
-
-  return sections;
-}
 
 function choiceLabel(choice: unknown, value: unknown): string | null {
   if (typeof choice === "string" || typeof choice === "number" || typeof choice === "boolean") {
@@ -540,9 +436,11 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
             padding: compact ? 12 : 16,
           }}
         >
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, marginBottom: 6 }}>
-            {section.title}
-          </div>
+          {section.title && (
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, marginBottom: 6 }}>
+              {section.title}
+            </div>
+          )}
           <div>
             {section.fields.map((field) => (
               <div key={field.name} style={fieldRowStyle}>
