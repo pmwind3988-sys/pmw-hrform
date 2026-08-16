@@ -2,14 +2,13 @@ import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:cry
 import { promisify } from "node:util";
 import {
   createListItem,
-  ensureGenericList,
   queryAllListItems,
   queryListItemByFields,
   updateListItemFields,
   deleteListItem,
   type GraphListItem,
 } from "./graphClient.js";
-import { ensureTextFieldViaSPRest } from "./sharepointRest.js";
+import { ensureListViaSPRest, ensureTextFieldViaSPRest } from "./sharepointRest.js";
 import { logWarn } from "./logger.js";
 
 /**
@@ -261,15 +260,13 @@ export function toAccountSummary(account: InternalAccount, now: Date = new Date(
 // ── Provisioning ─────────────────────────────────────────────────────────────
 
 /**
- * Creates the list app-only, then its columns with the admin's own delegated
- * token over SharePoint REST — the app-only principal is refused column
- * creation on this tenant, exactly as in `ensureCareerPortalAccessSchema`.
+ * Creates the list and its columns with the admin's own delegated token over
+ * SharePoint REST. Both halves, not just the columns: the app-only principal is
+ * refused list creation on this tenant as well, so a Graph `POST /sites/{id}/lists`
+ * here came back `403 accessDenied` and the "Set up" button did nothing.
  */
-export async function ensureInternalAccountsSchema(
-  graphToken: string,
-  delegatedToken: string,
-): Promise<void> {
-  await ensureGenericList(graphToken, INTERNAL_ACCOUNTS_LIST);
+export async function ensureInternalAccountsSchema(delegatedToken: string): Promise<void> {
+  await ensureListViaSPRest(delegatedToken, INTERNAL_ACCOUNTS_LIST);
   for (const column of ACCOUNT_COLUMNS) {
     await ensureTextFieldViaSPRest(delegatedToken, INTERNAL_ACCOUNTS_LIST, column, column);
   }

@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import {
   createListItem,
-  ensureDocLibrary,
   ensureGenericList,
   getListDriveId,
   graphDelete,
@@ -15,6 +14,7 @@ import {
   updateListItemFields,
   type GraphListItem,
 } from "./graphClient.js";
+import { ensureListViaSPRest } from "./sharepointRest.js";
 import { logWarn } from "./logger.js";
 
 /**
@@ -190,9 +190,15 @@ function isSystemFolder(name: string): boolean {
 
 // ── Provisioning ─────────────────────────────────────────────────────────────
 
-export async function ensureLearningLibrary(token: string): Promise<void> {
-  await ensureDocLibrary(token, LEARNING_LIBRARY);
-  await ensureGenericList(token, LEARNING_VIEWS_LIST);
+/**
+ * Runs as the signed-in admin, not as the application: this tenant refuses the
+ * app-only principal `POST /sites/{id}/lists`, so building either of these
+ * through Graph fails with `403 accessDenied` on a site that does not have them
+ * yet. See `ensureListViaSPRest`.
+ */
+export async function ensureLearningLibrary(delegatedToken: string): Promise<void> {
+  await ensureListViaSPRest(delegatedToken, LEARNING_LIBRARY, "documentLibrary");
+  await ensureListViaSPRest(delegatedToken, LEARNING_VIEWS_LIST);
 }
 
 export async function learningLibraryExists(token: string): Promise<boolean> {
@@ -626,10 +632,13 @@ export async function recordView(token: string, materialId: string, viewer: stri
     try {
       await createListItem(token, LEARNING_VIEWS_LIST, { Title: title });
     } catch (error) {
-      // The library can exist without the tracking list — someone created the
-      // document library by hand in SharePoint, or provisioning half-finished.
-      // Build it on the first view rather than losing the view.
-      logWarn("api:learning", "Creating the view-tracking list before recording", {
+      // One retry, for the transient case only. `ensureGenericList` resolves an
+      // existing list and gets the create moving again; it cannot *build* one,
+      // because this runs on a learner's request and only an admin's delegated
+      // token may create structure here (see `ensureListViaSPRest`). A library
+      // standing without its tracking list is fixed by an admin pressing "Set
+      // up", and until then this throws rather than pretending it counted.
+      logWarn("api:learning", "Retrying a view record against the tracking list", {
         errorMessage: error instanceof Error ? error.message : String(error),
       });
       await ensureGenericList(token, LEARNING_VIEWS_LIST);

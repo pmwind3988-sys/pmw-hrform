@@ -468,7 +468,7 @@ async function handleAdminAction(
     }
 
     if (action === "ensure-library") {
-      await ensureLearningLibrary(token);
+      await ensureLearningLibrary(getBearerToken(req.headers));
       return res.status(200).json({ success: true, libraryReady: true });
     }
 
@@ -607,9 +607,11 @@ async function handlePortalAdminAction(
       // Both lists, one button. An accounts list without its log would let HR
       // issue accounts that quietly record nothing, and the promise made when
       // the account is handed over is that the viewing *is* recorded.
+      // The admin's own token, not the application's: SharePoint refuses the
+      // app-only principal both the lists and their columns.
       const delegatedToken = getBearerToken(req.headers);
-      await ensureInternalAccountsSchema(graphToken, delegatedToken);
-      await ensureLearningAccessLogSchema(graphToken, delegatedToken);
+      await ensureInternalAccountsSchema(delegatedToken);
+      await ensureLearningAccessLogSchema(delegatedToken);
       return res.status(200).json({ success: true, sessionsConfigured: portalSessionsEnabled() });
     }
 

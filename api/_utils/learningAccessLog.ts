@@ -1,10 +1,9 @@
 import {
   createListItem,
-  ensureGenericList,
   queryAllListItems,
   type GraphListItem,
 } from "./graphClient.js";
-import { ensureTextFieldViaSPRest } from "./sharepointRest.js";
+import { ensureListViaSPRest, ensureTextFieldViaSPRest } from "./sharepointRest.js";
 import { logWarn } from "./logger.js";
 
 /**
@@ -62,11 +61,9 @@ function clip(value: string): string {
   return value.length > MAX_TEXT ? value.slice(0, MAX_TEXT) : value;
 }
 
-export async function ensureLearningAccessLogSchema(
-  graphToken: string,
-  delegatedToken: string,
-): Promise<void> {
-  await ensureGenericList(graphToken, LEARNING_ACCESS_LOG_LIST);
+/** Delegated throughout — the app-only principal may create neither the list nor its columns. */
+export async function ensureLearningAccessLogSchema(delegatedToken: string): Promise<void> {
+  await ensureListViaSPRest(delegatedToken, LEARNING_ACCESS_LOG_LIST);
   for (const column of LOG_COLUMNS) {
     await ensureTextFieldViaSPRest(delegatedToken, LEARNING_ACCESS_LOG_LIST, column, column);
   }
@@ -101,20 +98,14 @@ export async function recordAccessLogEntry(
   try {
     await createListItem(graphToken, LEARNING_ACCESS_LOG_LIST, fields);
   } catch (error) {
-    // The list can be absent on the very first view after a deploy — provisioning
-    // half-finished, or someone created the accounts list by hand. Build it and
-    // retry once, exactly as `recordView` does, rather than losing the entry.
-    logWarn("api:learning", "Creating the access log list before recording", {
+    // No self-healing here, unlike the view counter: creating the list needs an
+    // admin's delegated token and this runs on the learner's request, which never
+    // carries one. A failure means either a transient Graph hiccup or a list that
+    // was never provisioned, and the second one is fixed by an admin pressing
+    // "Set up" on the Portal Accounts screen — not by anything this path can do.
+    logWarn("api:learning", "Could not record a portal access log entry", {
       errorMessage: error instanceof Error ? error.message : String(error),
     });
-    try {
-      await ensureGenericList(graphToken, LEARNING_ACCESS_LOG_LIST);
-      await createListItem(graphToken, LEARNING_ACCESS_LOG_LIST, fields);
-    } catch (retryError) {
-      logWarn("api:learning", "Could not record a portal access log entry", {
-        errorMessage: retryError instanceof Error ? retryError.message : String(retryError),
-      });
-    }
   }
 }
 
