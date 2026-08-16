@@ -18,13 +18,19 @@ import {
   Close,
   DownloadOutlined,
   LockOutlined,
+  LockPersonOutlined,
+  VisibilityOffOutlined,
   VisibilityOutlined,
 } from "@mui/icons-material";
+import { InputAdornment, TextField } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import {
   formatViewCount,
+  isLearningLockedError,
+  learningLockLabel,
   openLearningMaterial,
   recordLearningView,
+  unlockLearningMaterial,
 } from "../../utils/learningService";
 import { kindStyle, learningButtonSx } from "./learningUi";
 import type { LearningMaterial, LearningMaterialOpenResult } from "../../types";
@@ -60,6 +66,12 @@ interface MaterialViewerDialogProps {
   /** Same-kind neighbours the arrows step through — images in the same folder. */
   siblings: LearningMaterial[];
   accessToken: string;
+  /**
+   * Unlock passes for the topics this visit has opened. They travel with every
+   * request because a material inside a locked topic is guarded by that topic's
+   * password — having walked into the folder is what lets its files open.
+   */
+  topicPasses: string[];
   onClose: () => void;
   onNavigate: (material: LearningMaterial) => void;
   onViewRecorded: (materialId: string, viewCount: number) => void;
@@ -69,6 +81,7 @@ export default function MaterialViewerDialog({
   material,
   siblings,
   accessToken,
+  topicPasses,
   onClose,
   onNavigate,
   onViewRecorded,
@@ -80,6 +93,26 @@ export default function MaterialViewerDialog({
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
   /**
+   * Set when the API refused this material for want of a password, and the
+   * dialog shows the gate instead of a player. What the password *is* attached
+   * to — this file, or a topic above it — is the server's decision; the label is
+   * simply what it named.
+   */
+  const [lockLabel, setLockLabel] = useState("");
+  /**
+   * The pass earned by typing the password, tagged with the material it was
+   * earned for. Deliberately not a plain string: tagging is what makes it expire
+   * the moment the viewer moves on, and clearing it on close is what makes the
+   * password get asked for again on the very next open.
+   */
+  const [materialPass, setMaterialPass] = useState<{ id: string; pass: string } | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordShown, setPasswordShown] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+  /** Bumped to re-run the open after an unlock that issued no pass of its own. */
+  const [retryKey, setRetryKey] = useState(0);
+  /**
    * The material whose `<video>` refused to play, so the reload asks for
    * SharePoint's player instead. Holding the id rather than a flag means moving
    * to another material starts fresh without a reset.
@@ -90,6 +123,35 @@ export default function MaterialViewerDialog({
   const lastPlaybackTimeRef = useRef(0);
   const materialId = material?.id ?? "";
 
+  /** "" once the viewer moves to another material — a pass is never reused. */
+  const activePass = materialPass?.id === materialId ? materialPass.pass : "";
+  /** Everything this viewer can prove right now: the topic's, plus its own. */
+  const activePasses = activePass ? [...topicPasses, activePass] : topicPasses;
+  // A joined string rather than the array itself, so a parent re-render with an
+  // equal-but-new array does not reload a video that is already playing.
+  const topicPassKey = topicPasses.join("|");
+
+  /**
+   * Leaving a material throws its pass away — closing the viewer, or stepping to
+   * the next image. That is the contract this feature is built on: nothing about
+   * having unlocked something outlives looking at it, so coming back to it asks
+   * for the password again.
+   */
+  const leaveMaterial = () => {
+    setMaterialPass(null);
+    setLockLabel("");
+  };
+
+  const handleClose = () => {
+    leaveMaterial();
+    onClose();
+  };
+
+  const handleNavigate = (next: LearningMaterial) => {
+    leaveMaterial();
+    onNavigate(next);
+  };
+
   useEffect(() => {
     // Closing leaves the last result in place rather than clearing it: nothing
     // renders it while the dialog is shut, and the next open resets it anyway.
@@ -99,11 +161,14 @@ export default function MaterialViewerDialog({
     let dwellTimer = 0;
     setLoading(true);
     setError("");
+    setLockLabel("");
     setResult(null);
     watchedSecondsRef.current = 0;
     lastPlaybackTimeRef.current = 0;
 
     const isVideo = material.kind === "video";
+    const title = material.title;
+    const passes = activePasses;
 
     async function load() {
       try {
@@ -111,6 +176,7 @@ export default function MaterialViewerDialog({
           materialId,
           accessToken,
           embedFallbackId === materialId,
+          passes,
         );
         if (cancelled) return;
         setResult(opened);
@@ -119,14 +185,21 @@ export default function MaterialViewerDialog({
         // Everything else has no such signal, so it counts on time on screen.
         if (!isVideo || opened.mode === "embed") {
           dwellTimer = window.setTimeout(
-            () => void markViewed(materialId),
+            () => void markViewed(materialId, passes),
             DWELL_VIEW_SECONDS * 1000,
           );
         }
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "This material could not be opened.");
+        if (cancelled) return;
+        // Being asked for a password is the feature working, not a failure, so
+        // it renders as a gate rather than as a red error box.
+        if (isLearningLockedError(err)) {
+          setLockLabel(learningLockLabel(err) || title);
+          setPassword("");
+          setUnlockError("");
+          return;
         }
+        setError(err instanceof Error ? err.message : "This material could not be opened.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -139,13 +212,41 @@ export default function MaterialViewerDialog({
       // view. Passing through is not viewing.
       window.clearTimeout(dwellTimer);
     };
-  }, [materialId, accessToken, embedFallbackId]);
+  }, [materialId, accessToken, embedFallbackId, activePass, topicPassKey, retryKey]);
 
-  async function markViewed(id: string) {
+  /**
+   * Trades the typed password for a pass, which re-runs the load effect above.
+   * The material is named, never the lock: the server decides whether it is this
+   * file's own password or the one on the topic holding it.
+   */
+  async function handleUnlock() {
+    if (!password || unlocking || !materialId) return;
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      const { pass } = await unlockLearningMaterial(materialId, password, accessToken);
+      setPassword("");
+      setMaterialPass(pass ? { id: materialId, pass } : null);
+      setLockLabel("");
+      // An `alreadyOpen` answer carries no pass — the lock was lifted while the
+      // prompt was on screen — so nothing in the load effect's inputs would have
+      // changed and the material would sit there refusing to open.
+      setRetryKey((key) => key + 1);
+    } catch (err) {
+      setUnlockError(err instanceof Error ? err.message : "That password could not be checked.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
+  // `passes` travels here too: the API records a view on a locked material only
+  // for a caller who got through its password, so a row in the named access log
+  // means what it says.
+  async function markViewed(id: string, passes: string[]) {
     if (!id || recordedRef.current.has(id)) return;
     recordedRef.current.add(id);
     try {
-      const viewCount = await recordLearningView(id, accessToken);
+      const viewCount = await recordLearningView(id, accessToken, passes);
       onViewRecorded(id, viewCount);
     } catch {
       // A lost view count must never interrupt the person watching. Allow the
@@ -163,7 +264,7 @@ export default function MaterialViewerDialog({
     if (step > 0 && step <= MAX_PLAYBACK_STEP_SECONDS) {
       watchedSecondsRef.current += step;
     }
-    if (watchedSecondsRef.current >= VIDEO_VIEW_SECONDS) void markViewed(materialId);
+    if (watchedSecondsRef.current >= VIDEO_VIEW_SECONDS) void markViewed(materialId, activePasses);
   };
 
   async function handleDownload() {
@@ -209,7 +310,7 @@ export default function MaterialViewerDialog({
   return (
     <Dialog
       open={Boolean(material)}
-      onClose={onClose}
+      onClose={handleClose}
       fullScreen={fullScreen}
       maxWidth="lg"
       fullWidth
@@ -306,7 +407,7 @@ export default function MaterialViewerDialog({
           </Button>
         )}
 
-        <IconButton onClick={onClose} aria-label="Close viewer" sx={{ color: editorial.muted, flexShrink: 0 }}>
+        <IconButton onClick={handleClose} aria-label="Close viewer" sx={{ color: editorial.muted, flexShrink: 0 }}>
           <Close />
         </IconButton>
       </Box>
@@ -317,7 +418,12 @@ export default function MaterialViewerDialog({
           position: "relative",
           flexGrow: 1,
           minHeight: { xs: "60vh", md: 520 },
-          backgroundColor: material?.kind === "video" || material?.kind === "image" ? editorial.ink : editorial.paper,
+          // The ink backdrop belongs to a picture or a player. While the gate is
+          // up there is neither, and dark-on-dark would swallow the prompt.
+          backgroundColor:
+            !lockLabel && (material?.kind === "video" || material?.kind === "image")
+              ? editorial.ink
+              : editorial.paper,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -331,7 +437,90 @@ export default function MaterialViewerDialog({
           </Alert>
         )}
 
-        {!loading && !error && result && material && (
+        {/* The gate. It replaces the player rather than covering it, because
+            there is nothing underneath to cover: the API sent no URL. */}
+        {!loading && !error && lockLabel && (
+          <Box sx={{ px: 3, py: 5, maxWidth: 380, width: "100%", textAlign: "center" }}>
+            <Box
+              sx={{
+                width: 56,
+                height: 56,
+                mx: "auto",
+                mb: 2,
+                borderRadius: "14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: editorial.blueWash,
+                color: editorial.pmwBlueDark,
+                "& .MuiSvgIcon-root": { fontSize: 28 },
+              }}
+            >
+              <LockPersonOutlined />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, textWrap: "balance" }}>
+              Password required
+            </Typography>
+            <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 600, mt: 0.75 }}>
+              {lockLabel} is protected. The password is needed every time it is opened.
+            </Typography>
+
+            {unlockError && (
+              <Alert severity="error" sx={{ mt: 2, borderRadius: "10px", fontWeight: 700, textAlign: "left" }}>
+                {unlockError}
+              </Alert>
+            )}
+
+            <TextField
+              autoFocus
+              fullWidth
+              size="small"
+              type={passwordShown ? "text" : "password"}
+              label="Password"
+              value={password}
+              disabled={unlocking}
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void handleUnlock();
+              }}
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        edge="end"
+                        onClick={() => setPasswordShown((shown) => !shown)}
+                        aria-label={passwordShown ? "Hide password" : "Show password"}
+                      >
+                        {passwordShown ? (
+                          <VisibilityOffOutlined fontSize="small" />
+                        ) : (
+                          <VisibilityOutlined fontSize="small" />
+                        )}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+                htmlInput: { autoComplete: "off" },
+              }}
+              sx={{ mt: 2.5, backgroundColor: editorial.white, borderRadius: "10px" }}
+            />
+
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => void handleUnlock()}
+              disabled={!password || unlocking}
+              startIcon={unlocking ? <CircularProgress size={14} color="inherit" /> : <LockOutlined />}
+              sx={{ ...learningButtonSx, mt: 1.5 }}
+            >
+              Unlock
+            </Button>
+          </Box>
+        )}
+
+        {!loading && !error && !lockLabel && result && material && (
           <>
             {result.mode === "media" && material.kind === "image" && (
               <Box
@@ -388,14 +577,14 @@ export default function MaterialViewerDialog({
             {hasSiblings && (
               <>
                 <IconButton
-                  onClick={() => previousSibling && onNavigate(previousSibling)}
+                  onClick={() => previousSibling && handleNavigate(previousSibling)}
                   aria-label="Previous item"
                   sx={viewerArrowSx("left")}
                 >
                   <ChevronLeftRounded />
                 </IconButton>
                 <IconButton
-                  onClick={() => nextSibling && onNavigate(nextSibling)}
+                  onClick={() => nextSibling && handleNavigate(nextSibling)}
                   aria-label="Next item"
                   sx={viewerArrowSx("right")}
                 >

@@ -4,6 +4,7 @@ import type {
   LearningLibraryData,
   LearningMaterialOpenResult,
   LearningMaterialKind,
+  LearningUnlockResult,
   LearningViewCounts,
 } from "../types";
 
@@ -31,6 +32,31 @@ export function isLearningSignInRequiredError(error: unknown): boolean {
   return error instanceof LearningSignInRequiredError;
 }
 
+/**
+ * The material is behind a password that has not been given. Its own type so the
+ * viewer can put a password box on screen instead of an error — being asked for
+ * a password is the feature working, not something going wrong.
+ */
+export class LearningLockedError extends Error {
+  /** What the password belongs to: this material, or the topic guarding it. */
+  readonly lockLabel: string;
+
+  constructor(message: string, lockLabel: string) {
+    super(message);
+    this.name = "LearningLockedError";
+    this.lockLabel = lockLabel;
+  }
+}
+
+export function isLearningLockedError(error: unknown): boolean {
+  return error instanceof LearningLockedError;
+}
+
+/** What the refused password belongs to, or "" for anything else. */
+export function learningLockLabel(error: unknown): string {
+  return error instanceof LearningLockedError ? error.lockLabel : "";
+}
+
 function apiHeaders(accessToken?: string): Record<string, string> {
   return {
     "Content-Type": "application/json",
@@ -42,16 +68,21 @@ function apiHeaders(accessToken?: string): Record<string, string> {
 async function readApiError(response: Response, fallback: string): Promise<Error> {
   let detail = "";
   let code = "";
+  let lockLabel = "";
   try {
-    const body = (await response.json()) as { error?: unknown; code?: unknown };
+    const body = (await response.json()) as { error?: unknown; code?: unknown; lockLabel?: unknown };
     if (typeof body.error === "string" && body.error.trim()) detail = body.error.trim();
     if (typeof body.code === "string") code = body.code;
+    if (typeof body.lockLabel === "string") lockLabel = body.lockLabel;
   } catch {
     // Some failures come back with an empty or non-JSON body.
   }
 
   if (code === "learning-sign-in-required") {
     return new LearningSignInRequiredError(detail || "Sign in with your PMW account to open learning materials.");
+  }
+  if (code === "learning-locked") {
+    return new LearningLockedError(detail || "This material is password protected.", lockLabel);
   }
   return new Error(detail || `${fallback} (${response.status})`);
 }
@@ -101,10 +132,23 @@ export async function acquireLearningIdentityToken(
 
 // ── Learner API ──────────────────────────────────────────────────────────────
 
-export async function fetchLearningLibrary(accessToken: string): Promise<LearningLibraryData> {
-  const response = await fetch("/api/learning-materials", { headers: apiHeaders(accessToken) });
-  if (!response.ok) throw await readApiError(response, "Failed to load learning materials");
-  const data = (await response.json()) as LearningLibraryData;
+/**
+ * `passes` are the topic unlocks this browser is currently holding. They travel
+ * on every read because the server decides what to send from them: a topic whose
+ * pass is missing has no materials, no subtopics and no cover in the answer at
+ * all. A POST rather than a GET for exactly that reason — the passes are part of
+ * the question, and they do not belong in a URL.
+ */
+export async function fetchLearningLibrary(
+  accessToken: string,
+  passes: string[] = [],
+): Promise<LearningLibraryData> {
+  const data = await postAction<Partial<LearningLibraryData>>(
+    "list",
+    { passes },
+    accessToken,
+    "Failed to load learning materials",
+  );
   return {
     topics: data.topics ?? [],
     materials: data.materials ?? [],
@@ -117,18 +161,60 @@ export async function fetchLearningLibrary(accessToken: string): Promise<Learnin
  * `preferEmbed` asks for SharePoint's own viewer instead of the raw bytes. The
  * dialog sets it after a `<video>` has failed, which is the only reliable signal
  * that this browser cannot decode the container someone uploaded.
+ *
+ * `passes` carries the one-shot unlock the viewer was just issued. Without it a
+ * locked material answers 403 `learning-locked` and nothing playable is sent.
  */
 export function openLearningMaterial(
   materialId: string,
   accessToken: string,
   preferEmbed = false,
+  passes: string[] = [],
 ): Promise<LearningMaterialOpenResult> {
   return postAction<LearningMaterialOpenResult>(
     "open-material",
-    { materialId, preferEmbed },
+    { materialId, preferEmbed, passes },
     accessToken,
     "Failed to open this material",
   );
+}
+
+/**
+ * Trades a password for a short-lived pass. Two scopes, and the caller names the
+ * thing rather than the lock: a material inside a locked topic is unlocked with
+ * that topic's password, and the server is what decides which lock applies.
+ */
+async function unlock(
+  payload: Record<string, unknown>,
+  accessToken: string,
+): Promise<LearningUnlockResult> {
+  const data = await postAction<{ pass?: string; expiresAt?: string; alreadyOpen?: boolean }>(
+    "unlock",
+    payload,
+    accessToken,
+    "That password could not be checked",
+  );
+  return {
+    pass: data.pass ?? "",
+    expiresAt: data.expiresAt ?? "",
+    alreadyOpen: data.alreadyOpen === true,
+  };
+}
+
+export function unlockLearningTopic(
+  path: string,
+  password: string,
+  accessToken: string,
+): Promise<LearningUnlockResult> {
+  return unlock({ scope: "topic", path, password }, accessToken);
+}
+
+export function unlockLearningMaterial(
+  materialId: string,
+  password: string,
+  accessToken: string,
+): Promise<LearningUnlockResult> {
+  return unlock({ scope: "material", materialId, password }, accessToken);
 }
 
 /**
@@ -146,10 +232,19 @@ export async function fetchLearningViewCounts(accessToken: string): Promise<Lear
   return { counts: data.counts ?? {}, viewedByMe: data.viewedByMe ?? [] };
 }
 
-export async function recordLearningView(materialId: string, accessToken: string): Promise<number> {
+/**
+ * `passes` for the same reason `openLearningMaterial` takes them: a view on a
+ * locked material is only recorded for someone who got through its password. The
+ * named access log is an audit trail, and a row in it has to mean what it says.
+ */
+export async function recordLearningView(
+  materialId: string,
+  accessToken: string,
+  passes: string[] = [],
+): Promise<number> {
   const data = await postAction<{ viewCount?: number }>(
     "record-view",
-    { materialId },
+    { materialId, passes },
     accessToken,
     "Failed to record the view",
   );
@@ -157,6 +252,27 @@ export async function recordLearningView(materialId: string, accessToken: string
 }
 
 // ── Admin API (delegated SharePoint token) ───────────────────────────────────
+
+/**
+ * The management view of the same library: locked topics and materials come back
+ * whole, covers included, and each carries its lock state so the switches can
+ * show it. An HR Forms Owner sets these passwords — being shut out of a folder
+ * by one they just typed in would make the screen unusable.
+ */
+export async function fetchLearningLibraryForAdmin(spToken: string): Promise<LearningLibraryData> {
+  const data = await postAction<Partial<LearningLibraryData>>(
+    "admin-list",
+    {},
+    spToken,
+    "Failed to load learning materials",
+  );
+  return {
+    topics: data.topics ?? [],
+    materials: data.materials ?? [],
+    libraryReady: data.libraryReady !== false,
+    viewsReady: data.viewsReady !== false,
+  };
+}
 
 export function ensureLearningLibraryProvisioned(spToken: string): Promise<{ success: boolean }> {
   return postAction<{ success: boolean }>("ensure-library", {}, spToken, "Failed to prepare the library");
@@ -196,6 +312,37 @@ export function updateLearningMaterial(
     { materialId, ...data },
     spToken,
     "Failed to save the material",
+  );
+}
+
+/**
+ * Sets, replaces, or removes a password — an empty string removes it. There is
+ * no counterpart that reads one back: the server stores a one-way hash, so an
+ * admin replaces a forgotten password rather than looking it up.
+ */
+export function setLearningMaterialPassword(
+  materialId: string,
+  password: string,
+  spToken: string,
+): Promise<{ locked: boolean }> {
+  return postAction<{ locked: boolean }>(
+    "set-material-password",
+    { materialId, password },
+    spToken,
+    "Failed to save the password",
+  );
+}
+
+export function setLearningTopicPassword(
+  path: string,
+  password: string,
+  spToken: string,
+): Promise<{ locked: boolean }> {
+  return postAction<{ locked: boolean }>(
+    "set-topic-password",
+    { path, password },
+    spToken,
+    "Failed to save the password",
   );
 }
 

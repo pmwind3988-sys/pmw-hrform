@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Box, Stack, Typography } from "@mui/material";
-import { FolderOutlined, LayersOutlined, PlayLessonOutlined } from "@mui/icons-material";
+import { FolderOutlined, LayersOutlined, LockOutlined, PlayLessonOutlined } from "@mui/icons-material";
 import { editorial, editorialHairline, editorialShadow, editorialShadowHover } from "../../theme/editorial";
 import { learningReduceMotionSx } from "./learningUi";
 import type { LearningTopic } from "../../types";
@@ -20,6 +20,8 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
   const [hovering, setHovering] = useState(false);
   const [coverIndex, setCoverIndex] = useState(0);
   const covers = topic.coverThumbnails.filter(Boolean);
+  /** Protected *and* still shut — a topic already opened stays badged, not barred. */
+  const needsPassword = topic.locked && !topic.unlocked;
 
   useEffect(() => {
     if (!hovering || covers.length < 2) return;
@@ -45,7 +47,7 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
       }}
       onFocus={() => setHovering(true)}
       onBlur={() => setHovering(false)}
-      aria-label={`Open topic ${topic.name}`}
+      aria-label={needsPassword ? `Unlock topic ${topic.name}` : `Open topic ${topic.name}`}
       sx={{
         position: "relative",
         display: "flex",
@@ -95,8 +97,39 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
         }}
       />
 
+      {/* A locked topic has no cover to cycle — the server sends none — so the
+          badge is the only thing that says why the card looks bare. It stays on
+          after the password is given, because "this topic is protected" is worth
+          knowing even once you are inside. */}
+      {topic.locked && (
+        <Stack
+          direction="row"
+          spacing={0.5}
+          sx={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            alignItems: "center",
+            px: 0.9,
+            py: 0.4,
+            borderRadius: "999px",
+            backgroundColor: "rgba(255, 255, 255, 0.94)",
+            color: needsPassword ? editorial.pmwBlueDark : editorial.success,
+          }}
+        >
+          <LockOutlined sx={{ fontSize: 14 }} />
+          <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1 }}>
+            {needsPassword ? "Locked" : "Unlocked"}
+          </Typography>
+        </Stack>
+      )}
+
       <Box sx={{ position: "relative", minWidth: 0 }}>
-        <FolderOutlined sx={{ fontSize: 22, opacity: 0.9, mb: 0.5 }} />
+        {needsPassword ? (
+          <LockOutlined sx={{ fontSize: 22, opacity: 0.9, mb: 0.5 }} />
+        ) : (
+          <FolderOutlined sx={{ fontSize: 22, opacity: 0.9, mb: 0.5 }} />
+        )}
         <Typography
           variant="subtitle1"
           sx={{

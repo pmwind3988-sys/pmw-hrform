@@ -36,10 +36,12 @@ import {
   EditOutlined,
   FolderOutlined,
   LibraryBooksOutlined,
+  LockOutlined,
   Refresh,
   VisibilityOutlined,
 } from "@mui/icons-material";
 import LearningHeader from "../components/learning/LearningHeader";
+import SetLockPasswordDialog from "../components/learning/SetLockPasswordDialog";
 import {
   LearningEmptyState,
   kindStyle,
@@ -54,10 +56,12 @@ import {
   deleteLearningFolder,
   deleteLearningMaterial,
   ensureLearningLibraryProvisioned,
-  fetchLearningLibrary,
+  fetchLearningLibraryForAdmin,
   formatFileSize,
   moveLearningMaterial,
   renameLearningFolder,
+  setLearningMaterialPassword,
+  setLearningTopicPassword,
   updateLearningMaterial,
   uploadLearningFile,
 } from "../utils/learningService";
@@ -107,6 +111,14 @@ export default function AdminLearningPage() {
   const [draft, setDraft] = useState<MaterialDraft>({ title: "", description: "", downloadable: false, sortOrder: 0 });
   const [upload, setUpload] = useState<UploadState | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  /**
+   * Which thing is having a password set, or null. Held as the target rather
+   * than a boolean so the dialog can be mounted only while it is open — a
+   * password must not sit in state after the dialog that collected it is gone.
+   */
+  const [passwordTarget, setPasswordTarget] = useState<
+    { scope: "material"; material: LearningMaterial } | { scope: "topic"; topic: LearningTopic } | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,7 +136,10 @@ export default function AdminLearningPage() {
         setSpToken(sharePointToken);
         setIdentityToken(graphToken);
 
-        const data = await fetchLearningLibrary(graphToken);
+        // The owner's view, on the SharePoint token: password-locked topics come
+        // back whole here, which is the only way their contents can be managed
+        // from the screen the passwords are set on.
+        const data = await fetchLearningLibraryForAdmin(sharePointToken);
         if (cancelled) return;
         setTopics(data.topics);
         setMaterials(data.materials);
@@ -225,6 +240,56 @@ export default function AdminLearningPage() {
     }, downloadable ? "Download enabled." : "Download disabled.");
   };
 
+  /**
+   * The lock switch, deliberately shaped like the download switch next to it:
+   * on opens the password dialog, off removes the password after a confirmation.
+   * Turning it on is the only half that needs a value, so it is the only half
+   * that asks for one.
+   */
+  const handleToggleLock = (material: LearningMaterial, locked: boolean) => {
+    if (locked) {
+      setPasswordTarget({ scope: "material", material });
+      return;
+    }
+    if (!window.confirm(`Remove the password from "${material.title}"? Anyone signed in will be able to open it.`)) {
+      return;
+    }
+    void runAction(async () => {
+      await setLearningMaterialPassword(material.id, "", spToken);
+    }, "Password removed.");
+  };
+
+  const handleToggleTopicLock = (topic: LearningTopic, locked: boolean) => {
+    if (locked) {
+      setPasswordTarget({ scope: "topic", topic });
+      return;
+    }
+    if (
+      !window.confirm(
+        `Remove the password from "${topic.name}"? Everything inside it becomes visible to anyone signed in.`,
+      )
+    ) {
+      return;
+    }
+    void runAction(async () => {
+      await setLearningTopicPassword(topic.path, "", spToken);
+    }, "Password removed.");
+  };
+
+  const savePassword = (password: string) => {
+    const target = passwordTarget;
+    if (!target) return;
+    setPasswordTarget(null);
+
+    void runAction(async () => {
+      if (target.scope === "material") {
+        await setLearningMaterialPassword(target.material.id, password, spToken);
+      } else {
+        await setLearningTopicPassword(target.topic.path, password, spToken);
+      }
+    }, "Password saved. Share it with the people who need it — it cannot be looked up again.");
+  };
+
   const handleMoveMaterial = (material: LearningMaterial, targetPath: string) => {
     void runAction(async () => {
       await moveLearningMaterial(material.id, targetPath, spToken);
@@ -301,7 +366,7 @@ export default function AdminLearningPage() {
     <Box sx={learningPageSx}>
       <LearningHeader
         title="Manage learning materials"
-        subtitle="Organise topics, upload files, and control who can download what."
+        subtitle="Organise topics, upload files, and control who can download or open what."
         backPath="/learning"
         backLabel="Back to the learning hub"
         actions={
@@ -473,6 +538,42 @@ export default function AdminLearningPage() {
                       </Button>
                       {selectedTopic && (
                         <>
+                          {/* The topic's own lock, in the same shape as the
+                              per-material switch below: on asks for a password,
+                              off removes one. Everything inside — subtopics
+                              included — is hidden from the hub while it is on. */}
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                            <Tooltip
+                              title={
+                                selectedTopic.locked
+                                  ? "Password protected — switch off to remove"
+                                  : "Password protect this topic and everything in it"
+                              }
+                            >
+                              <Switch
+                                size="small"
+                                color="warning"
+                                checked={selectedTopic.locked}
+                                disabled={busy}
+                                onChange={(event) => handleToggleTopicLock(selectedTopic, event.target.checked)}
+                                slotProps={{ input: { "aria-label": `Password protect ${selectedTopic.name}` } }}
+                              />
+                            </Tooltip>
+                            <Typography variant="caption" sx={{ fontWeight: 800, color: editorial.muted }}>
+                              Password
+                            </Typography>
+                            {selectedTopic.locked && (
+                              <Button
+                                size="small"
+                                startIcon={<LockOutlined />}
+                                disabled={busy}
+                                onClick={() => setPasswordTarget({ scope: "topic", topic: selectedTopic })}
+                                sx={{ ...learningButtonSx, color: editorial.pmwBlueDark }}
+                              >
+                                Change
+                              </Button>
+                            )}
+                          </Stack>
                           <Button
                             size="small"
                             startIcon={<DriveFileRenameOutline />}
@@ -538,7 +639,9 @@ export default function AdminLearningPage() {
 
                   <Alert severity="info" sx={{ mt: 2, borderRadius: "10px", fontWeight: 600 }}>
                     Uploaded files are view-only by default. Turn on Download for anything staff should be able to keep
-                    a copy of. Files go straight from this browser to SharePoint, so large videos are fine.
+                    a copy of, and the lock switch for anything that needs a password — a locked material shows no
+                    thumbnail and no preview until the password is entered, every time. Files go straight from this
+                    browser to SharePoint, so large videos are fine.
                   </Alert>
                 </Paper>
 
@@ -637,6 +740,30 @@ export default function AdminLearningPage() {
                                   disabled={busy}
                                   onChange={(event) => handleToggleDownloadable(material, event.target.checked)}
                                   slotProps={{ input: { "aria-label": `Allow download of ${material.title}` } }}
+                                />
+                              </Tooltip>
+                              {/* Same control as the one beside it, because it is
+                                  the same kind of decision: one switch per
+                                  material, on or off, no menu to go hunting in.
+                                  A material inside a locked topic shows the
+                                  switch off and says where its lock comes from —
+                                  there is no password here to turn off. */}
+                              <Tooltip
+                                title={
+                                  material.lockOwn
+                                    ? "Password protected — click to remove"
+                                    : material.locked
+                                      ? `Protected by the topic ${material.lockLabel}`
+                                      : "Open to everyone signed in"
+                                }
+                              >
+                                <Switch
+                                  size="small"
+                                  color="warning"
+                                  checked={material.lockOwn}
+                                  disabled={busy}
+                                  onChange={(event) => handleToggleLock(material, event.target.checked)}
+                                  slotProps={{ input: { "aria-label": `Password protect ${material.title}` } }}
                                 />
                               </Tooltip>
                               <FormControl size="small" sx={{ minWidth: 132 }}>
@@ -769,6 +896,39 @@ export default function AdminLearningPage() {
                 </Typography>
               </Box>
             </Stack>
+
+            {/* Set and replace live here rather than on the row switch, which
+                only knows on and off. Both act immediately — a password is not
+                part of the draft above and is never saved with it. */}
+            <Divider />
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink }}>
+                  Password protection
+                </Typography>
+                <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 600 }}>
+                  {editing?.lockOwn
+                    ? "Protected. Staff enter this password every time they open it."
+                    : editing?.locked
+                      ? `Protected by the topic ${editing.lockLabel}.`
+                      : "Open to everyone signed in."}
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                startIcon={<LockOutlined />}
+                disabled={busy}
+                onClick={() => {
+                  const material = editing;
+                  if (!material) return;
+                  setEditing(null);
+                  setPasswordTarget({ scope: "material", material });
+                }}
+                sx={{ ...learningButtonSx, color: editorial.pmwBlueDark, flexShrink: 0 }}
+              >
+                {editing?.lockOwn ? "Change" : "Set"}
+              </Button>
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -780,6 +940,23 @@ export default function AdminLearningPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Mounted only while open, so the typed password never outlives it. */}
+      {passwordTarget && (
+        <SetLockPasswordDialog
+          scope={passwordTarget.scope}
+          label={
+            passwordTarget.scope === "material"
+              ? passwordTarget.material.title
+              : passwordTarget.topic.path.replace(/\//g, " › ")
+          }
+          replacing={
+            passwordTarget.scope === "material" ? passwordTarget.material.lockOwn : passwordTarget.topic.locked
+          }
+          onSave={savePassword}
+          onClose={() => setPasswordTarget(null)}
+        />
+      )}
 
       <Snackbar
         open={Boolean(feedback)}

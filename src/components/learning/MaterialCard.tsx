@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Chip, Stack, Typography } from "@mui/material";
 import {
   CheckCircle,
+  LockOutlined,
   PlayArrowRounded,
   VisibilityOutlined,
 } from "@mui/icons-material";
@@ -116,7 +117,7 @@ export default function MaterialCard({
       onMouseLeave={stopPreview}
       onFocus={startPreview}
       onBlur={stopPreview}
-      aria-label={`Open ${material.title}`}
+      aria-label={material.locked ? `Unlock ${material.title}` : `Open ${material.title}`}
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -176,12 +177,15 @@ export default function MaterialCard({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: style.color,
+              color: material.locked ? editorial.pmwBlueDark : style.color,
               opacity: 0.65,
               "& .MuiSvgIcon-root": { fontSize: 48 },
             }}
           >
-            {style.icon}
+            {/* Nothing to show, by design: the server withholds the thumbnail
+                for a material whose password has not been given, so a locked
+                card cannot preview even a frame of what it is holding. */}
+            {material.locked ? <LockOutlined /> : style.icon}
           </Box>
         )}
 
@@ -256,7 +260,31 @@ export default function MaterialCard({
           }}
         />
 
-        {material.viewedByMe && (
+        {material.locked && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 0.5,
+              px: 0.9,
+              py: 0.35,
+              borderRadius: "999px",
+              backgroundColor: "rgba(255, 255, 255, 0.94)",
+              border: `1px solid ${editorial.pmwBlueSoft}`,
+              color: editorial.pmwBlueDark,
+            }}
+          >
+            <LockOutlined sx={{ fontSize: 14 }} />
+            <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1 }}>
+              Locked
+            </Typography>
+          </Box>
+        )}
+
+        {material.viewedByMe && !material.locked && (
           <Box
             sx={{
               position: "absolute",

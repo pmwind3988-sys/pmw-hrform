@@ -1149,8 +1149,20 @@ export interface LearningTopic {
   /** Materials in this folder and every folder below it. */
   totalMaterialCount: number;
   subtopicCount: number;
-  /** Up to a few thumbnails from inside, for the folder card slideshow. */
+  /** Up to a few thumbnails from inside, for the folder card slideshow. Empty
+   * while the topic is locked — a cover is a preview of what is inside it. */
   coverThumbnails: string[];
+  /**
+   * A password is set on this topic. Stays true after somebody opens it — it
+   * describes the topic, not the caller.
+   */
+  locked: boolean;
+  /**
+   * Whether this caller may look inside right now. While false, nothing within
+   * the topic is in the response at all: no materials, no subtopics, no cover.
+   * `locked && !unlocked` is what puts the password box on screen.
+   */
+  unlocked: boolean;
 }
 
 export interface LearningMaterial {
@@ -1181,6 +1193,37 @@ export interface LearningMaterial {
   viewCount: number;
   /** Whether the requesting account is one of them. */
   viewedByMe: boolean;
+  /**
+   * A password has to be typed before this opens — **every time**, with nothing
+   * remembered between opens. Set either by the material's own password or by
+   * the nearest locked topic above it.
+   *
+   * While the guarding password is still outstanding the server also withholds
+   * `thumbnailUrl`, `mediaUrl` and `description`, so a locked card has nothing
+   * to preview rather than merely declining to play.
+   */
+  locked: boolean;
+  /**
+   * The password is set on this material itself rather than inherited from the
+   * topic holding it. What the admin screen's lock switch reflects — a material
+   * inside a locked topic is protected without having one of its own to remove.
+   */
+  lockOwn: boolean;
+  /** What the password belongs to — this material, or a topic named for the prompt. */
+  lockLabel: string;
+}
+
+/** What the server hands back when the right password is typed. */
+export interface LearningUnlockResult {
+  /**
+   * Short-lived, signed, and bound to the caller. Held in memory for as long as
+   * it is needed and never persisted — a pass in `localStorage` would be exactly
+   * the "stay unlocked" this feature exists not to have.
+   */
+  pass: string;
+  expiresAt: string;
+  /** The lock was already gone by the time the password was typed. */
+  alreadyOpen: boolean;
 }
 
 export interface LearningLibraryData {

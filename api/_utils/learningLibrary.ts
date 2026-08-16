@@ -62,11 +62,20 @@ export interface MaterialSettings {
   description?: string;
   downloadable?: boolean;
   sortOrder?: number;
+  /**
+   * A scrypt string when this material is password-locked, absent when it is
+   * not. Server-side only — `buildMaterial` turns it into a boolean and the hash
+   * itself never leaves this process. Set through `saveMaterialPassword`, never
+   * through the settings the admin screen posts (see `parseMaterialSettingsInput`).
+   */
+  passwordHash?: string;
 }
 
 export interface TopicSettings {
   description?: string;
   sortOrder?: number;
+  /** As above, for a whole topic folder and everything inside it. */
+  passwordHash?: string;
 }
 
 interface LearningSettings {
@@ -79,7 +88,6 @@ export interface LearningFolder {
   path: string;
   name: string;
   parentPath: string;
-  childThumbnails: string[];
 }
 
 export interface LearningFile {
@@ -105,6 +113,7 @@ interface DriveItemResponse {
   lastModifiedDateTime?: string;
   folder?: { childCount?: number };
   file?: { mimeType?: string };
+  parentReference?: { path?: string };
   "@microsoft.graph.downloadUrl"?: string;
   thumbnails?: Array<{ large?: { url?: string }; medium?: { url?: string }; small?: { url?: string } }>;
 }
@@ -227,6 +236,11 @@ async function readChildren(token: string, driveId: string, path: string): Promi
 /**
  * Walks the whole library once. Folder count is what drives the request count,
  * and topics are curated by hand — a handful of folders, not thousands.
+ *
+ * Returns the tree flat and unfiltered. Folder covers are *not* aggregated here
+ * any more: a topic's cover is made of thumbnails from inside it, and password
+ * locks are known only to the caller — so a lock that hides a folder's contents
+ * would otherwise have gone on advertising them from the parent's cover.
  */
 export async function readLearningTree(
   token: string,
@@ -235,9 +249,8 @@ export async function readLearningTree(
   const folders: LearningFolder[] = [];
   const files: LearningFile[] = [];
 
-  async function walk(path: string, depth: number): Promise<string[]> {
+  async function walk(path: string, depth: number): Promise<void> {
     const children = await readChildren(token, driveId, path);
-    const thumbnailsHere: string[] = [];
 
     for (const child of children) {
       const name = String(child.name || "");
@@ -246,20 +259,11 @@ export async function readLearningTree(
       if (child.folder) {
         if (isSystemFolder(name) || depth >= MAX_FOLDER_DEPTH) continue;
         const childPath = joinPath(path, name);
-        const folder: LearningFolder = {
-          id: child.id,
-          path: childPath,
-          name,
-          parentPath: path,
-          childThumbnails: [],
-        };
-        folders.push(folder);
-        folder.childThumbnails = await walk(childPath, depth + 1);
-        thumbnailsHere.push(...folder.childThumbnails);
+        folders.push({ id: child.id, path: childPath, name, parentPath: path });
+        await walk(childPath, depth + 1);
         continue;
       }
 
-      const thumbnail = thumbnailUrl(child);
       files.push({
         id: child.id,
         name,
@@ -267,19 +271,48 @@ export async function readLearningTree(
         extension: fileExtension(name),
         kind: materialKind(name),
         sizeBytes: Number(child.size) || 0,
-        thumbnailUrl: thumbnail,
+        thumbnailUrl: thumbnailUrl(child),
         downloadUrl: String(child["@microsoft.graph.downloadUrl"] || ""),
         createdAt: String(child.createdDateTime || ""),
         modifiedAt: String(child.lastModifiedDateTime || ""),
       });
-      if (thumbnail) thumbnailsHere.push(thumbnail);
     }
-
-    return thumbnailsHere.slice(0, COVER_THUMBNAIL_COUNT);
   }
 
   await walk("", 0);
   return { folders, files };
+}
+
+/**
+ * Up to a few thumbnails from inside a folder, for its card. Descends into
+ * subfolders but stops at any the caller may not browse, so a cover never shows
+ * a frame of something behind a password.
+ */
+export function collectCoverThumbnails(
+  path: string,
+  folders: LearningFolder[],
+  files: LearningFile[],
+  canBrowse: (folderPath: string) => boolean,
+): string[] {
+  const covers: string[] = [];
+
+  function gather(current: string): void {
+    if (covers.length >= COVER_THUMBNAIL_COUNT || !canBrowse(current)) return;
+
+    for (const file of files) {
+      if (file.folderPath !== current || !file.thumbnailUrl) continue;
+      covers.push(file.thumbnailUrl);
+      if (covers.length >= COVER_THUMBNAIL_COUNT) return;
+    }
+    for (const folder of folders) {
+      if (folder.parentPath !== current) continue;
+      gather(folder.path);
+      if (covers.length >= COVER_THUMBNAIL_COUNT) return;
+    }
+  }
+
+  gather(path);
+  return covers;
 }
 
 export async function resolveFolderId(token: string, path: string): Promise<string> {
@@ -296,10 +329,32 @@ export async function readDriveItem(token: string, itemId: string): Promise<Driv
     return (await graphGet(
       token,
       `/drives/${driveId}/items/${encodeURIComponent(itemId)}` +
-        "?$select=id,name,size,webUrl,folder,file,createdDateTime,lastModifiedDateTime",
+        "?$select=id,name,size,webUrl,folder,file,parentReference,createdDateTime,lastModifiedDateTime",
     )) as DriveItemResponse;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The library-relative folder a drive item sits in, read back off the item
+ * itself. Which topic a material belongs to is what decides whether a topic
+ * password applies to it, and `open-material` resolves one item by id without
+ * ever walking the tree — so the answer has to come from the item.
+ *
+ * Graph reports this as `/drives/{id}/root:/Safety/Fire%20Drill`, percent-encoded,
+ * and as `/drives/{id}/root:` for the library root.
+ */
+export function driveItemFolderPath(item: DriveItemResponse | null): string {
+  const raw = String(item?.parentReference?.path || "");
+  const marker = "/root:";
+  const index = raw.indexOf(marker);
+  if (index < 0) return "";
+
+  try {
+    return decodeURIComponent(raw.slice(index + marker.length)).replace(/^\/+/, "");
+  } catch {
+    return raw.slice(index + marker.length).replace(/^\/+/, "");
   }
 }
 
@@ -413,6 +468,7 @@ function parseMaterialSettings(raw: unknown): MaterialSettings {
   if (typeof value.description === "string") settings.description = value.description.slice(0, MAX_DESCRIPTION_LENGTH);
   if (value.downloadable !== undefined) settings.downloadable = value.downloadable === true;
   if (Number.isFinite(Number(value.sortOrder))) settings.sortOrder = Number(value.sortOrder);
+  if (typeof value.passwordHash === "string" && value.passwordHash) settings.passwordHash = value.passwordHash;
   return settings;
 }
 
@@ -421,15 +477,31 @@ function parseTopicSettings(raw: unknown): TopicSettings {
   const settings: TopicSettings = {};
   if (typeof value.description === "string") settings.description = value.description.slice(0, MAX_DESCRIPTION_LENGTH);
   if (Number.isFinite(Number(value.sortOrder))) settings.sortOrder = Number(value.sortOrder);
+  if (typeof value.passwordHash === "string" && value.passwordHash) settings.passwordHash = value.passwordHash;
   return settings;
 }
 
+/**
+ * The request-body versions, and the reason the two are not the same function:
+ * `passwordHash` is readable in the stored blob but must never be settable from
+ * a request. Letting one through here would turn "save this material's title"
+ * into a way to install a password hash of the caller's choosing — or, with an
+ * empty string, to quietly unlock somebody else's material.
+ */
 export function parseMaterialSettingsInput(raw: Record<string, unknown>): MaterialSettings {
-  return parseMaterialSettings(raw);
+  const { passwordHash: _ignored, ...settings } = parseMaterialSettings(raw);
+  return settings;
 }
 
 export function parseTopicSettingsInput(raw: Record<string, unknown>): TopicSettings {
-  return parseTopicSettings(raw);
+  const { passwordHash: _ignored, ...settings } = parseTopicSettings(raw);
+  return settings;
+}
+
+/** Everything an admin screen may see — the hash is not part of it. */
+export function publicMaterialSettings(settings: MaterialSettings): Record<string, unknown> {
+  const { passwordHash, ...rest } = settings;
+  return { ...rest, locked: Boolean(passwordHash) };
 }
 
 /**
@@ -517,6 +589,50 @@ export async function saveTopicSettings(
 ): Promise<void> {
   const settings = await readLearningSettings(token);
   settings.topics[path] = { ...settings.topics[path], ...input };
+  await writeLearningSettings(token, settings, updatedBy);
+}
+
+/**
+ * Sets or removes a material's password. Separate from `saveMaterialSettings`
+ * because removing one has to *delete* the key rather than merge an empty value
+ * over it — a `passwordHash: ""` left in the blob would read back as a lock with
+ * a password nothing can ever match.
+ */
+export async function saveMaterialPassword(
+  token: string,
+  materialId: string,
+  passwordHash: string,
+  updatedBy: string,
+): Promise<void> {
+  const settings = await readLearningSettings(token);
+  const existing = settings.materials[materialId] ?? {};
+
+  if (passwordHash) {
+    settings.materials[materialId] = { ...existing, passwordHash };
+  } else {
+    delete existing.passwordHash;
+    settings.materials[materialId] = existing;
+  }
+
+  await writeLearningSettings(token, settings, updatedBy);
+}
+
+export async function saveTopicPassword(
+  token: string,
+  path: string,
+  passwordHash: string,
+  updatedBy: string,
+): Promise<void> {
+  const settings = await readLearningSettings(token);
+  const existing = settings.topics[path] ?? {};
+
+  if (passwordHash) {
+    settings.topics[path] = { ...existing, passwordHash };
+  } else {
+    delete existing.passwordHash;
+    settings.topics[path] = existing;
+  }
+
   await writeLearningSettings(token, settings, updatedBy);
 }
 

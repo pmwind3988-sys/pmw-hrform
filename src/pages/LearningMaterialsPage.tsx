@@ -19,6 +19,7 @@ import {
 import {
   HomeRounded,
   LibraryBooksOutlined,
+  LockOutlined,
   LogoutOutlined,
   Refresh,
   SchoolOutlined,
@@ -30,6 +31,7 @@ import LearningHeader from "../components/learning/LearningHeader";
 import MaterialCard from "../components/learning/MaterialCard";
 import MaterialViewerDialog from "../components/learning/MaterialViewerDialog";
 import TopicCard from "../components/learning/TopicCard";
+import UnlockPasswordDialog from "../components/learning/UnlockPasswordDialog";
 import {
   LearningEmptyState,
   LearningSectionLabel,
@@ -43,6 +45,7 @@ import {
   acquireLearningIdentityToken,
   fetchLearningLibrary,
   isLearningSignInRequiredError,
+  unlockLearningTopic,
 } from "../utils/learningService";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
 import { usePortalSession } from "../auth/usePortalSession";
@@ -92,6 +95,23 @@ export default function LearningMaterialsPage() {
   const [openMaterial, setOpenMaterial] = useState<LearningMaterial | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  /**
+   * Unlock passes for the topics opened during this visit, keyed by path.
+   *
+   * React state and nothing else — not `localStorage`, not `sessionStorage`, not
+   * a cookie. A reload, a new tab, or coming back tomorrow all start locked
+   * again, which is the point: the password is what opens the topic, and there
+   * is no "remember this device" hiding anywhere.
+   */
+  const [topicPasses, setTopicPasses] = useState<Record<string, string>>({});
+  const [topicPrompt, setTopicPrompt] = useState<LearningTopic | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+  const passList = Object.values(topicPasses);
+  // Joined so the load effect below reacts to a pass being *added*, not to the
+  // new array identity every render produces.
+  const passKey = passList.join("|");
+
   // The folder being browsed lives in the URL, so a topic can be linked to and
   // the back button walks back up the tree instead of leaving the hub.
   const currentPath = searchParams.get("topic") ?? "";
@@ -110,7 +130,7 @@ export default function LearningMaterialsPage() {
       setAccessToken(token);
 
       try {
-        const data = await fetchLearningLibrary(token);
+        const data = await fetchLearningLibrary(token, passList);
         if (cancelled) return;
         setTopics(data.topics);
         setMaterials(data.materials);
@@ -131,7 +151,10 @@ export default function LearningMaterialsPage() {
     return () => {
       cancelled = true;
     };
-  }, [instance, reloadKey]);
+    // `passKey` and not `passList`: unlocking a topic has to re-ask the server,
+    // because what is inside it was never sent in the first place.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instance, reloadKey, passKey]);
 
   const term = search.trim().toLowerCase();
   const searching = term.length > 0;
@@ -145,12 +168,59 @@ export default function LearningMaterialsPage() {
   const totalViews = materials.reduce((sum, material) => sum + material.viewCount, 0);
   const breadcrumbSegments = currentPath ? currentPath.split("/") : [];
 
+  const currentTopic = topics.find((topic) => topic.path === currentPath) ?? null;
+  /**
+   * A link straight into a topic whose parent is still locked. The server does
+   * not send such a topic at all, so there is nothing here to render and nothing
+   * that says why — hence a state of its own rather than "Nothing here yet".
+   */
+  const pathOutOfReach = Boolean(currentPath) && !currentTopic && !loading && libraryReady;
+
   const goToPath = (path: string) => {
     const next = new URLSearchParams(searchParams);
     if (path) next.set("topic", path);
     else next.delete("topic");
     setSearchParams(next);
   };
+
+  const promptForTopic = (topic: LearningTopic) => {
+    setUnlockError("");
+    setTopicPrompt(topic);
+  };
+
+  const openTopic = (topic: LearningTopic) => {
+    // Already unlocked this visit, so straight in. `locked` alone would send
+    // somebody back to the password box on every hop through the topic.
+    if (topic.locked && !topic.unlocked) {
+      promptForTopic(topic);
+      return;
+    }
+    goToPath(topic.path);
+  };
+
+  /**
+   * Trades the typed password for a pass, which lands in `topicPasses` and makes
+   * the library re-read with the topic's contents included. Navigating happens
+   * only after the pass is in hand, so nobody is dropped into a folder that is
+   * about to come back empty.
+   */
+  async function submitTopicPassword(password: string) {
+    const topic = topicPrompt;
+    if (!topic) return;
+
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      const { pass } = await unlockLearningTopic(topic.path, password, accessToken);
+      if (pass) setTopicPasses((current) => ({ ...current, [topic.path]: pass }));
+      setTopicPrompt(null);
+      goToPath(topic.path);
+    } catch (err) {
+      setUnlockError(err instanceof Error ? err.message : "That password could not be checked.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   /**
    * Images in the same folder, this one first — the card's hover slideshow.
@@ -456,6 +526,33 @@ export default function LearningMaterialsPage() {
                 ) : undefined
               }
             />
+          ) : pathOutOfReach ? (
+            <LearningEmptyState
+              icon={<LockOutlined />}
+              title="This topic is not open"
+              description="It sits inside a password-protected topic, so it is not listed until that password is entered. Go back to the topic list and open it from there."
+              action={
+                <Button variant="contained" onClick={() => goToPath("")} sx={learningButtonSx}>
+                  Back to all topics
+                </Button>
+              }
+            />
+          ) : currentTopic?.locked && !currentTopic.unlocked && !searching ? (
+            <LearningEmptyState
+              icon={<LockOutlined />}
+              title={`${currentTopic.name} is locked`}
+              description="Enter the topic password to see what is inside. Nothing is remembered between visits — it is asked for again next time."
+              action={
+                <Button
+                  variant="contained"
+                  startIcon={<LockOutlined />}
+                  onClick={() => promptForTopic(currentTopic)}
+                  sx={learningButtonSx}
+                >
+                  Enter password
+                </Button>
+              }
+            />
           ) : (
             <>
               {!searching && childTopics.length > 0 && (
@@ -475,7 +572,7 @@ export default function LearningMaterialsPage() {
                     }}
                   >
                     {childTopics.map((topic) => (
-                      <TopicCard key={topic.path} topic={topic} onOpen={(next) => goToPath(next.path)} />
+                      <TopicCard key={topic.path} topic={topic} onOpen={openTopic} />
                     ))}
                   </Box>
                 </Box>
@@ -548,10 +645,24 @@ export default function LearningMaterialsPage() {
         material={openMaterial}
         siblings={viewerSiblings}
         accessToken={accessToken}
+        topicPasses={passList}
         onClose={() => setOpenMaterial(null)}
         onNavigate={setOpenMaterial}
         onViewRecorded={applyViewCount}
       />
+
+      {/* Mounted only while open, so the field is empty every time it appears
+          and no typed password outlives the prompt. */}
+      {topicPrompt && (
+        <UnlockPasswordDialog
+          label={topicPrompt.path.replace(/\//g, " › ")}
+          scope="topic"
+          busy={unlocking}
+          error={unlockError}
+          onSubmit={(password) => void submitTopicPassword(password)}
+          onClose={() => setTopicPrompt(null)}
+        />
+      )}
     </Box>
   );
 }
