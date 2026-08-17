@@ -25,7 +25,9 @@ import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../ut
 import IosShareIcon from "@mui/icons-material/IosShare";
 import Logo from "../components/Logo";
 import type { PdfFormData } from "../utils/FormPdfDocument";
-import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
+import { getPdpaNoticeVersion, getPdpaRetentionUntil } from "../utils/pdpa";
+import { usePdpaLocale } from "../hooks/usePdpaLocale";
+import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { buildWorkflowReviewLink } from "../utils/workflowLink";
@@ -547,6 +549,7 @@ export default function DynamicFormPage() {
   const pinVersion = searchParams.get("version");
   const publishKey = searchParams.get("publish") || searchParams.get("batch");
   const prefilledQrPayload = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
+  const { locale: pdpaLocale, setLocale: setPdpaLocale, content: pdpa } = usePdpaLocale();
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -929,7 +932,7 @@ export default function DynamicFormPage() {
     if (!runtime.validateAll().ok) return;
 
     if (!pdpaAccepted) {
-      setPdpaConsentError("Please read and accept the Privacy Notice before submitting this form.");
+      setPdpaConsentError(pdpa.ui.consentRequired);
       document.querySelector(".dfp-pdpa-consent")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -937,7 +940,7 @@ export default function DynamicFormPage() {
     setPdpaConsentError("");
     lastDataRef.current = runtime.collect();
     setSubmitStatus("loading");
-  }, [formReady, submitStatus, runtime, pdpaAccepted]);
+  }, [formReady, submitStatus, runtime, pdpaAccepted, pdpa.ui.consentRequired]);
   const doSubmitForm = useCallback(async () => {
     // Collapse "other" + "{name}-Comment" pairs into the free text the respondent
     // typed, before uploads or column mapping read the answers.
@@ -1106,7 +1109,7 @@ export default function DynamicFormPage() {
       body.PublishKey = cfg.CurrentPublishKey || publishKey || "production";
       body.FormID = cfg.FormID;
       body.PDPAConsent = "Accepted";
-      body.PDPANoticeVersion = PDPA_NOTICE_VERSION;
+      body.PDPANoticeVersion = getPdpaNoticeVersion(pdpaLocale);
       body.PDPAConsentAt = new Date().toISOString();
       body.RetentionUntil = getPdpaRetentionUntil(new Date(body.PDPAConsentAt as string));
       body.SubmittedBy = token ? (userEmail || accounts[0]?.username || "authenticated-user") : "GUEST";
@@ -1508,7 +1511,7 @@ export default function DynamicFormPage() {
             body,
             matrixData: Object.keys(matrixData).length > 0 ? matrixData : undefined,
             pdpaConsent: true,
-            pdpaNoticeVersion: PDPA_NOTICE_VERSION,
+            pdpaNoticeVersion: getPdpaNoticeVersion(pdpaLocale),
             pdpaConsentedAt: body.PDPAConsentAt,
             retentionUntil: body.RetentionUntil,
           }),
@@ -1525,7 +1528,9 @@ export default function DynamicFormPage() {
         }
       }
       // Success — function returns normally; errors propagate to caller (useEffect)
-  }, [formData, userEmail, accounts]);
+      // pdpaLocale must stay in the deps: a stale closure would stamp the consent
+      // record with a language the respondent was no longer reading.
+  }, [formData, userEmail, accounts, pdpaLocale]);
 
   // Which page the respondent is on is runtime state now, not something to
   // mirror into React through event subscriptions.
@@ -1701,11 +1706,19 @@ export default function DynamicFormPage() {
                       }}
                       style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}
                     />
-                    <span style={{ fontSize: 12, lineHeight: 1.7, color: t.textSecond }}>
-                      <strong style={{ color: t.textPrimary }}>{PDPA_CONSENT_LABEL}</strong><br />
-                      {PDPA_SUMMARY}{" "}
+                    <span style={{ fontSize: 12, lineHeight: 1.7, color: t.textSecond }} lang={pdpaLocale}>
+                      <span style={{ display: "block", marginBottom: 6 }}>
+                        <PdpaLanguageToggle
+                          locale={pdpaLocale}
+                          onChange={setPdpaLocale}
+                          color={t.purple}
+                          mutedColor={t.textMuted}
+                        />
+                      </span>
+                      <strong style={{ color: t.textPrimary }}>{pdpa.consentLabel}</strong><br />
+                      {pdpa.summary}{" "}
                       <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: t.purple, fontWeight: 700 }}>
-                        View Privacy Notice
+                        {pdpa.ui.viewNotice}
                       </a>
                     </span>
                   </label>

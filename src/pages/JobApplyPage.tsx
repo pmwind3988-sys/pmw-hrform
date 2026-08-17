@@ -51,7 +51,9 @@ import {
 import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGate";
 import type { JobListing, CustomFieldDefinition } from "../types";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
-import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
+import { getPdpaNoticeVersion, getPdpaRetentionUntil } from "../utils/pdpa";
+import { usePdpaLocale } from "../hooks/usePdpaLocale";
+import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import { CareerErrorState, careerActionButtonSx, careerPageSx, careerPanelSx, getCareerErrorMessage } from "../components/careers/careerUi";
 import { editorial } from "../theme/editorial";
@@ -480,6 +482,7 @@ export default function JobApplyPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { locale: pdpaLocale, setLocale: setPdpaLocale, content: pdpa } = usePdpaLocale();
   const profile = useUserProfile();
   const { instance, accounts } = useMsal();
   const activeAccount = instance.getActiveAccount() ?? accounts[0];
@@ -779,7 +782,7 @@ export default function JobApplyPage() {
         forceApply,
         submissionRef,
         pdpaConsent: true,
-        pdpaNoticeVersion: PDPA_NOTICE_VERSION,
+        pdpaNoticeVersion: getPdpaNoticeVersion(pdpaLocale),
         pdpaConsentedAt: new Date().toISOString(),
         retentionUntil: getPdpaRetentionUntil(),
       }, { accessToken: identityToken });
@@ -1343,19 +1346,31 @@ export default function JobApplyPage() {
                       }
                       sx={{ alignItems: "flex-start", m: 0 }}
                       label={
-                        <Box sx={{ pt: 0.5 }}>
+                        <Box sx={{ pt: 0.5 }} lang={pdpaLocale}>
+                          <Box sx={{ mb: 0.75 }}>
+                            <PdpaLanguageToggle
+                              locale={pdpaLocale}
+                              onChange={setPdpaLocale}
+                              color={editorial.pmwBlue}
+                              mutedColor={editorial.muted}
+                            />
+                          </Box>
                           <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800, lineHeight: 1.6 }}>
-                            {PDPA_CONSENT_LABEL}
+                            {pdpa.consentLabel}
                           </Typography>
                           <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.5, lineHeight: 1.7 }}>
-                            {PDPA_SUMMARY}{" "}
+                            {pdpa.summary}{" "}
                             <Link component={RouterLink} to="/privacy" target="_blank" rel="noopener noreferrer" sx={{ fontWeight: 700 }}>
-                              View Privacy Notice
+                              {pdpa.ui.viewNotice}
                             </Link>
+                          </Typography>
+                          {/* Clause F(2): the applicant is the one who has to have asked their referees. */}
+                          <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.5, lineHeight: 1.7 }}>
+                            {pdpa.thirdPartyConfirmation}
                           </Typography>
                           {pdpaTouched && !pdpaAccepted && (
                             <Typography variant="caption" sx={{ color: editorial.error, display: "block", mt: 0.75, fontWeight: 700 }}>
-                              Consent is required before submission.
+                              {pdpa.ui.consentRequired}
                             </Typography>
                           )}
                         </Box>
@@ -1404,7 +1419,7 @@ export default function JobApplyPage() {
                   </Button>
 
                   <Typography variant="caption" sx={{ color: editorial.muted, textAlign: "center" }}>
-                    Notice version {PDPA_NOTICE_VERSION}. Your consent record is stored with this application.
+                    {pdpa.ui.consentRecordNote(getPdpaNoticeVersion(pdpaLocale))}
                   </Typography>
                 </Box>
               </form>

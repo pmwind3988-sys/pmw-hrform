@@ -57,7 +57,9 @@ import {
 //                    "Description": "Signature" } }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
+// Fallback when the client does not send one. Keep in step with
+// PDPA_NOTICE_VERSION in src/utils/pdpa.ts.
+const PDPA_NOTICE_VERSION = "PMW-PRIVACY-NOTICE-020126";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
 const LAYER_PENDING_STATUS = "Pending";
 /**

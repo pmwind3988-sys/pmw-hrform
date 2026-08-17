@@ -16,7 +16,8 @@
 | Matrix answers | `matrixData.ts` | `getDynamicMatrixFields()` finds matrix questions in published JSON; `rowsToHtml()` renders rows for a SharePoint rich-text column. Pure. |
 | Signing control | `signatureCapture.tsx` | `SignatureCapture` (approver sign-off) and the `SignatureModal` drawing dialog. |
 | Auth persistence | `authDecision.ts` | `localStorage` helpers for `pmw_hr_auth_decision` |
-| PDPA compliance | `pdpa.ts` | Constants + helper for PDPA retention date, consent label, privacy notice sections |
+| PDPA compliance | `pdpa.ts` | Public surface: version, contact, locale helpers, retention date. `PDPA_NOTICE_VERSION` is duplicated as a fallback in `api/submit-form.ts` and `api/job-apply.ts`; change all three together. |
+| PDPA notice text | `pdpaContent.en.ts`, `pdpaContent.ms.ts` | **Verbatim legal wording** of revision `020126` — do not reword or summarise. Act 709 s.7(3) requires both languages, so the two files are revised together. Types in `pdpaTypes.ts`. |
 | Career API client | `careersService.ts` | Frontend fetch wrapper for `/api/jobs-list`, `/api/job-apply`, `/api/job-admin`. ~470 lines. |
 | Dashboard backgrounds | `dashboardBackgrounds.ts` | Predefined background gradient/image definitions + CSS variable binding |
 | Dashboard background API | `dashboardBackgroundService.ts` | Frontend fetch wrapper for `/api/dashboard-background` |

@@ -21,7 +21,8 @@ import NativeFormView from "../native/NativeForm";
 import { parseForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
-import { PDPA_CONSENT_LABEL, PDPA_SUMMARY } from "../utils/pdpa";
+import { usePdpaLocale } from "../hooks/usePdpaLocale";
+import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
 import { DEMO_FORM } from "../native/demoForm";
 import type { DocumentControlHeader } from "../types";
 
@@ -104,6 +105,7 @@ export default function NativeFormPreviewPage() {
   const pinVersion = searchParams.get("v") || searchParams.get("version") || "";
   const publishKey = searchParams.get("publish") || "";
   const dark = searchParams.get("theme") === "dark";
+  const { locale: pdpaLocale, setLocale: setPdpaLocale, content: pdpa } = usePdpaLocale();
   const [consent, setConsent] = useState(false);
   const [consentError, setConsentError] = useState("");
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
@@ -173,7 +175,7 @@ export default function NativeFormPreviewPage() {
   const handleSubmit = () => {
     const { ok } = runtime.validateAll();
     if (!consent) {
-      setConsentError("Accept the Privacy Notice before submitting.");
+      setConsentError(pdpa.ui.consentRequired);
       if (ok) document.querySelector(".nf-consent")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -269,12 +271,15 @@ export default function NativeFormPreviewPage() {
                   if (e.target.checked) setConsentError("");
                 }}
               />
-              <span>
-                <strong>{PDPA_CONSENT_LABEL}</strong>
+              <span lang={pdpaLocale}>
+                <span style={{ display: "block", marginBottom: 6 }}>
+                  <PdpaLanguageToggle locale={pdpaLocale} onChange={setPdpaLocale} />
+                </span>
+                <strong>{pdpa.consentLabel}</strong>
                 <br />
-                {PDPA_SUMMARY}{" "}
+                {pdpa.summary}{" "}
                 <a href="/privacy" target="_blank" rel="noopener noreferrer">
-                  View Privacy Notice
+                  {pdpa.ui.viewNotice}
                 </a>
                 {consentError && (
                   <span className="nf-error" style={{ marginTop: 6 }}>

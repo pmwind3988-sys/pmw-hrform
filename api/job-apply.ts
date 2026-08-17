@@ -14,7 +14,9 @@ const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || 
 const APPLICATION_LIST = "Job Applications";
 const JOB_LIST = "Internal Job Listing";
 const DOC_LIB_NAME = "Job Applications Files";
-const PDPA_NOTICE_VERSION = "PDPA-MY-HR-2026-05-22";
+// Fallback when the client does not send one. Keep in step with
+// PDPA_NOTICE_VERSION in src/utils/pdpa.ts.
+const PDPA_NOTICE_VERSION = "PMW-PRIVACY-NOTICE-020126";
 const PDPA_RETENTION_YEARS = Number(process.env.PDPA_RETENTION_YEARS || "7");
 
 function resolveJobApplicationSender(): string {
