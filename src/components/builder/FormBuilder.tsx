@@ -1357,7 +1357,12 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
 
 /** Renders type-specific configuration controls in the General tab */
 function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderField; onChange: (patch: Partial<FormBuilderField>) => void; allFields: FormBuilderField[] }) {
+  // A plain Text field switched to the Number input type is a numeric field in
+  // every way that matters, so it gets the same min / max / step controls — it
+  // used to be the one way to author a bound that nothing in the panel could
+  // then show you.
   const numericTypes = ["number", "slider", "counter", "currency"];
+  const isNumeric = numericTypes.includes(field.type) || field.inputType === "number";
   const dateTypes = ["date", "datetime"];
   const commentTypes = ["comment", "jsoneditor"];
   const fileTypes = ["file", "imageupload"];
@@ -1367,7 +1372,7 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
 
   return <>
     {/* Numeric: min / max / step */}
-    {numericTypes.includes(field.type) && <>
+    {isNumeric && <>
       <div style={{ display: "flex", gap: 8 }}>
         <PropRow label="Min"><Input type="number" value={field.min ?? ""} onChange={v => onChange({ min: v === "" ? undefined : Number(v) })} placeholder="No min" /></PropRow>
         <PropRow label="Max"><Input type="number" value={field.max ?? ""} onChange={v => onChange({ max: v === "" ? undefined : Number(v) })} placeholder="No max" /></PropRow>
@@ -1581,19 +1586,19 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
     </>}
 
     {/* Text: email variant */}
-    {field.type === "text" && field.inputType === "email" && <>
+    {field.inputType === "email" && <>
       <Toggle checked={!!(field as unknown as Record<string, unknown>).allowMultipleEmails} onChange={v => onChange({ allowMultipleEmails: v } as unknown as Partial<FormBuilderField>)} label="Allow multiple emails" />
     </>}
 
     {/* Text: tel variant */}
-    {field.type === "text" && field.inputType === "tel" && <>
+    {field.inputType === "tel" && <>
       <PropRow label="Validation pattern">
         <Input value={(field as unknown as Record<string, unknown>).validationPattern as string || ""} onChange={v => onChange({ validationPattern: v || undefined } as unknown as Partial<FormBuilderField>)} placeholder="e.g. ^\+?[0-9]{7,15}$" />
       </PropRow>
     </>}
 
     {/* Text: password variant */}
-    {field.type === "text" && field.inputType === "password" && <>
+    {(field.type === "password" || field.inputType === "password") && <>
       <PropRow label="Pattern validation">
         <Input value={(field as unknown as Record<string, unknown>).passwordPattern as string || ""} onChange={v => onChange({ passwordPattern: v || undefined } as unknown as Partial<FormBuilderField>)} placeholder="e.g. ^(?=.*[A-Z])(?=.*\d)" />
       </PropRow>
