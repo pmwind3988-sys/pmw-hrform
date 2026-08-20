@@ -152,13 +152,27 @@ describe("resolveLayerAssignee — distribution list", () => {
     expect(result.emails).toEqual(["ali@pmw.com", "siti@pmw.com"]);
   });
 
-  it("blocks a signed-in layer when the list expands to nobody", async () => {
+  it("parks a signed-in layer when the list expands to nobody, rather than losing the submission", async () => {
     const result = await resolveLayerAssignee(
       layer({ assignee: { type: "distribution-list", value: "safety@pmw.com" } }),
       {},
       expanding([]),
     );
-    expect(result.error).toContain("returned no members");
+    // A directory problem is an admin's question, not a reason to refuse a
+    // submission somebody has already filled in.
+    expect(result.error).toBeUndefined();
+    expect(result.parked?.reason).toContain("returned no members");
+  });
+
+  it("still mails the list itself so the team sees the submission arrive", async () => {
+    const result = await resolveLayerAssignee(
+      layer({ assignee: { type: "distribution-list", value: "safety@pmw.com" } }),
+      {},
+      expanding([]),
+    );
+    expect(result.deliverTo).toEqual(["safety@pmw.com"]);
+    // Nobody may *act*: an address nobody can sign in as must not become an actor.
+    expect(result.emails).toEqual([]);
   });
 
   it("uses the caller's wording for an empty list when given one", async () => {
@@ -168,7 +182,7 @@ describe("resolveLayerAssignee — distribution list", () => {
       expanding([]),
       { emptyDistributionListError: (_label, address) => `Group.Read.All missing for ${address}` },
     );
-    expect(result.error).toBe("Group.Read.All missing for safety@pmw.com");
+    expect(result.parked?.reason).toBe("Group.Read.All missing for safety@pmw.com");
   });
 
   it("falls back to mailing the list itself on a public layer", async () => {

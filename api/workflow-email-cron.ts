@@ -1,7 +1,7 @@
 import { setCorsHeaders, validateApiKey } from "./_utils/auth.js";
 import {
   getGraphToken,
-  queryListItems,
+  queryAllListItems,
   updateListItemFields,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
@@ -14,6 +14,16 @@ import {
 } from "./_utils/workflowEmail.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
+
+/**
+ * How long one run may spend scanning before it stops and says so.
+ *
+ * A run killed by the platform timeout mid-scan leaves no record of how far it
+ * got, so the same forms are scanned first every day and the ones behind them
+ * are never reached at all. Stopping deliberately, with a count of what is
+ * left, at least makes that visible. Kept under the function's maxDuration.
+ */
+const SCAN_BUDGET_MS = 50_000;
 
 function scheduledRecipients(recipient: string): string | string[] {
   const parsed = parseValidEmailList(recipient);
@@ -49,24 +59,37 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (!isAuthorized(req)) return res.status(401).json({ error: "Unauthorized" });
 
+  const startedAt = Date.now();
   try {
     const token = await getGraphToken();
-    const forms = await queryListItems(token, "Master Form", { top: 500 });
+    // Paged, not `queryListItems(..., { top: 500 })`: that reads one page, so a
+    // response list past its first 500 rows had its scheduled notifications
+    // silently skipped forever.
+    const forms = await queryAllListItems(token, "Master Form");
     let sent = 0;
     let failed = 0;
     let examined = 0;
+    let remainingForms = 0;
 
-    for (const form of forms) {
+    for (const [index, form] of forms.entries()) {
+      if (Date.now() - startedAt > SCAN_BUDGET_MS) {
+        remainingForms = forms.length - index;
+        break;
+      }
       const formTitle = typeof form.fields.Title === "string" ? form.fields.Title.trim() : "";
       if (!formTitle) continue;
       let items;
       try {
-        items = await queryListItems(token, formTitle, { top: 500 });
+        items = await queryAllListItems(token, formTitle);
       } catch {
         continue;
       }
 
       for (const item of items) {
+        if (Date.now() - startedAt > SCAN_BUDGET_MS) {
+          remainingForms = forms.length - index;
+          break;
+        }
         const dueEntries = getDueWorkflowEmailSchedules(item.fields.WorkflowEmailSchedule);
         for (const entry of dueEntries) {
           examined++;
@@ -75,7 +98,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
           const schedule = setWorkflowEmailSchedule(
             parseWorkflowEmailSchedule(item.fields.WorkflowEmailSchedule),
-            { ...entry, status: "sending", updatedAt: new Date().toISOString() },
+            {
+              ...entry,
+              status: "sending",
+              updatedAt: new Date().toISOString(),
+              // Counted at claim time so a row that keeps failing eventually
+              // stops being retried, even if the run never gets to record why.
+              attempts: (entry.attempts ?? 0) + 1,
+            },
           );
           await updateListItemFields(token, formTitle, item.id, {
             WorkflowEmailSchedule: JSON.stringify(schedule),
@@ -113,7 +143,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    return res.status(200).json({ ok: true, examined, sent, failed });
+    return res.status(200).json({ ok: true, examined, sent, failed, remainingForms });
   } catch (error) {
     logError("api:workflow-email-cron", "Scheduled workflow email run failed", error);
     return res.status(500).json({ error: "Internal server error. Please try again." });

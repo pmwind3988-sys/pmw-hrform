@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLayerNeedsRoutingEmail,
   buildManualPaperWorkflowEmail,
   buildWorkflowActionEmail,
   recordWorkflowEmailAttempt,
   resolveWorkflowEmailDueAt,
   getDueWorkflowEmailSchedules,
+  WORKFLOW_EMAIL_MAX_ATTEMPTS,
   setWorkflowEmailSchedule,
 } from "./workflowEmail.js";
 
@@ -152,5 +154,98 @@ describe("workflow email schedules", () => {
 
     expect(getDueWorkflowEmailSchedules(raw, new Date("2026-06-24T08:00:00.000Z")))
       .toHaveLength(1);
+  });
+});
+
+describe("the cron picks up deliveries that stalled", () => {
+  const BASE = {
+    layer: 1,
+    recipient: "evaluator@example.com",
+    dueAt: "2026-06-24T00:00:00.000Z",
+    layerType: "evaluation" as const,
+    totalLayers: 2,
+    reviewLink: "https://example.com/1",
+    submittedBy: "submitter@example.com",
+  };
+  const NOW = new Date("2026-06-24T08:00:00.000Z");
+
+  function entry(overrides: Record<string, unknown>): string {
+    return JSON.stringify({ "1": { ...BASE, ...overrides } });
+  }
+
+  it("retries a delivery that failed, instead of abandoning it forever", () => {
+    const due = getDueWorkflowEmailSchedules(
+      entry({ status: "failed", updatedAt: "2026-06-24T00:05:00.000Z" }),
+      NOW,
+    );
+    expect(due).toHaveLength(1);
+    expect(due[0].recipient).toBe("evaluator@example.com");
+  });
+
+  it("retries a row left mid-send by a cron run that died", () => {
+    const due = getDueWorkflowEmailSchedules(
+      entry({ status: "sending", updatedAt: "2026-06-24T00:05:00.000Z" }),
+      NOW,
+    );
+    expect(due).toHaveLength(1);
+  });
+
+  it("leaves a row alone while another run is still sending it", () => {
+    const due = getDueWorkflowEmailSchedules(
+      entry({ status: "sending", updatedAt: "2026-06-24T07:59:00.000Z" }),
+      NOW,
+    );
+    expect(due).toEqual([]);
+  });
+
+  it("gives up on an address that has failed too many times", () => {
+    const due = getDueWorkflowEmailSchedules(
+      entry({ status: "failed", updatedAt: "2026-06-24T00:05:00.000Z", attempts: WORKFLOW_EMAIL_MAX_ATTEMPTS }),
+      NOW,
+    );
+    expect(due).toEqual([]);
+  });
+
+  it("still never re-sends one that already went out", () => {
+    const due = getDueWorkflowEmailSchedules(
+      entry({ status: "sent", updatedAt: "2026-06-24T00:05:00.000Z" }),
+      NOW,
+    );
+    expect(due).toEqual([]);
+  });
+});
+
+describe("the notice for a layer that could not be routed", () => {
+  const PARAMS = {
+    formTitle: "Incident Report",
+    submittedBy: "ahmad@example.com",
+    responseItemId: 42,
+    layer: 1,
+    totalLayers: 2,
+    recipient: "safety@example.com",
+    layerType: "approval" as const,
+    reason: "the distribution list safety@example.com returned no members",
+    referenceNo: "OSH-040826-0007",
+  };
+
+  it("tells the team the submission arrived without promising them an action link", () => {
+    const message = buildLayerNeedsRoutingEmail(PARAMS);
+    expect(message.subject).toContain("Incident Report");
+    expect(message.body).not.toContain("<a href");
+  });
+
+  it("carries the reason so whoever reads the mailbox knows what to fix", () => {
+    expect(buildLayerNeedsRoutingEmail(PARAMS).body)
+      .toContain("returned no members");
+  });
+
+  it("keeps the reference searchable in the subject, like the other notices", () => {
+    expect(buildLayerNeedsRoutingEmail(PARAMS).subject).toContain("[OSH-040826-0007]");
+  });
+
+  it("escapes the reason rather than trusting a directory string", () => {
+    const message = buildLayerNeedsRoutingEmail({ ...PARAMS, reason: "<script>x</script>" });
+    expect(message.body).not.toContain("<script>");
+    expect(message.body).toContain("&lt;script&gt;");
   });
 });

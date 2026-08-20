@@ -15,6 +15,8 @@ import EvalElementPicker from "./EvalElementPicker";
 import PublicLinkDisplay from "./PublicLinkDisplay";
 import DepartmentDirectoryPanel from "./DepartmentDirectoryPanel";
 import { validateLayerConfig } from "./layerValidation";
+import { useRecipientSearch } from "../../hooks/useRecipientSearch";
+import { cannotAct, type RecipientKind, type RecipientMatch } from "../../utils/recipientDirectory";
 import { DEPARTMENT_APPROVER_DEFAULTS, createDepartmentApproverAssignee, getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import type { LayerFieldOption } from "./layerValidation";
 import type {
@@ -508,30 +510,69 @@ function DepartmentLookupSettings({
  * Editable address chips. Used both for a layer shared by several reviewers and
  * for the notification-only mailboxes, so the two read the same way.
  */
+const KIND_BADGE: Record<RecipientKind, { label: string; bg: string; fg: string }> = {
+  user: { label: "Person", bg: C.purplePale, fg: C.purple },
+  group: { label: "Distribution list", bg: C.greenPale, fg: C.green },
+  shared: { label: "Shared mailbox", bg: C.amberPale, fg: C.amber },
+};
+
 function EmailChipInput({
   emails,
   siteUsers,
   placeholder,
   emptyHint,
   onChange,
+  warnOnCannotAct = false,
 }: {
   emails: string[];
   siteUsers: { email: string; name: string }[];
   placeholder: string;
   emptyHint: string;
   onChange: (emails: string[]) => void;
+  /**
+   * Set on the *assignee* picker. A shared mailbox there strands the layer -
+   * mail arrives but nobody can sign in as it to act. On the notify picker a
+   * shared mailbox is exactly the point, so it must not be flagged.
+   */
+  warnOnCannotAct?: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  const [kinds, setKinds] = useState<Record<string, RecipientKind>>({});
   const lowered = new Set(emails.map(entry => entry.toLowerCase()));
   const query = draft.trim().toLowerCase();
-  const suggestions = siteUsers
-    .filter(user => !lowered.has(user.email.toLowerCase()))
+  const directory = useRecipientSearch(draft);
+
+  const local: RecipientMatch[] = siteUsers
     .filter(user => !query || user.email.toLowerCase().includes(query) || user.name.toLowerCase().includes(query))
-    .slice(0, 4);
+    .map(user => ({ ...user, kind: "user" as RecipientKind }));
+
+  const seen = new Set<string>();
+  const suggestions = [...local, ...directory]
+    .filter(match => {
+      const key = match.email.toLowerCase();
+      if (lowered.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
+
+  const stranded = warnOnCannotAct
+    ? emails.filter(entry => cannotAct(kinds[entry.toLowerCase()] ?? "user"))
+    : [];
 
   const commit = (value: string) => {
     const added = parseEmailList(value).filter(entry => !lowered.has(entry.toLowerCase()));
-    if (added.length > 0) onChange([...emails, ...added]);
+    if (added.length > 0) {
+      // Recorded here, at the moment a kind is actually chosen, so a chip can
+      // still say what it is once the dropdown has closed.
+      const learned: Record<string, RecipientKind> = {};
+      for (const entry of added) {
+        const match = directory.find(m => m.email.toLowerCase() === entry.toLowerCase());
+        if (match) learned[entry.toLowerCase()] = match.kind;
+      }
+      if (Object.keys(learned).length > 0) setKinds(previous => ({ ...previous, ...learned }));
+      onChange([...emails, ...added]);
+    }
     setDraft("");
   };
 
@@ -606,21 +647,154 @@ function EmailChipInput({
             <div
               key={user.email}
               onMouseDown={e => { e.preventDefault(); commit(user.email); }}
-              style={{ padding: "6px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+              style={{ padding: "6px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}
               onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
-              <div style={{ fontSize: 11, fontWeight: 500 }}>{user.name}</div>
-              <div style={{ fontSize: 9, color: C.textMuted }}>{user.email}</div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
+                <div style={{ fontSize: 9, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
+              </div>
+              <span style={{
+                flexShrink: 0,
+                fontSize: 8,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: ".04em",
+                borderRadius: 999,
+                padding: "2px 6px",
+                background: KIND_BADGE[user.kind].bg,
+                color: KIND_BADGE[user.kind].fg,
+              }}>
+                {KIND_BADGE[user.kind].label}
+              </span>
             </div>
           ))}
         </div>
       )}
 
+      {stranded.length > 0 && (
+        <div style={{ fontSize: 10, color: C.amber, marginTop: 6, lineHeight: 1.5 }}>
+          <strong>{stranded.join(", ")}</strong>{stranded.length > 1 ? " are shared mailboxes" : " is a shared mailbox"} —
+          nobody can sign in as {stranded.length > 1 ? "them" : "it"}, so this layer would never be actionable.
+          Put the mailbox under <strong>Notify also</strong> instead and name the people who may act here.
+        </div>
+      )}
+
       <div style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
-        {emails.length === 0 ? emptyHint : "Press Enter, comma or semicolon to add another address."}
+        {emails.length === 0 ? emptyHint : "Press Enter, comma or semicolon to add another address. People, distribution lists and shared mailboxes are all searchable."}
       </div>
     </div>
+  );
+}
+
+/** How many names either picker offers at once. */
+const MAX_SUGGESTIONS = 6;
+
+/**
+ * Site users first, then whatever the tenant directory adds, deduped by address.
+ *
+ * Local matches are already in memory so they appear the instant a key lands;
+ * the directory results arrive a moment later and fill in everyone the site
+ * list has never heard of - which is most of the tenant, and every group.
+ */
+function mergeRecipientSuggestions(
+  siteUsers: { email: string; name: string }[],
+  directory: RecipientMatch[],
+  query: string,
+): RecipientMatch[] {
+  const lowered = query.trim().toLowerCase();
+  const local: RecipientMatch[] = (lowered
+    ? siteUsers.filter(u => u.email.toLowerCase().includes(lowered) || u.name.toLowerCase().includes(lowered))
+    : siteUsers
+  ).map(user => ({ ...user, kind: "user" as RecipientKind }));
+
+  const seen = new Set<string>();
+  return [...local, ...directory]
+    .filter(match => {
+      const key = match.email.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, MAX_SUGGESTIONS);
+}
+
+/**
+ * Address input for a distribution-list layer, with the tenant's mail-enabled
+ * groups suggested as you type.
+ *
+ * This used to be a bare text box, so an author had to know the exact address by
+ * heart - and a wrong one surfaced only at submit time. It also flags the near
+ * miss that looks identical but behaves nothing like it: a *shared mailbox*
+ * typed here is not a group, so it expands to no members at all.
+ */
+function DistributionListPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const matches = useRecipientSearch(value);
+  const groups = matches.filter(match => match.kind === "group");
+  const typedIsMailbox = matches.some(
+    match => match.kind === "shared" && match.email.toLowerCase() === value.trim().toLowerCase(),
+  );
+
+  return (
+    <>
+      <div style={{ position: "relative" }}>
+        <input
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          placeholder="team-dl@company.com"
+          style={inp}
+        />
+        {open && groups.length > 0 && (
+          <div style={{
+            position: "absolute",
+            top: "calc(100% + 3px)",
+            left: 0,
+            right: 0,
+            zIndex: 200,
+            background: C.white,
+            border: `1px solid ${C.border}`,
+            borderRadius: 9,
+            boxShadow: C.shadowMd,
+            overflow: "hidden",
+          }}>
+            {groups.map(group => (
+              <div
+                key={group.email}
+                onMouseDown={e => { e.preventDefault(); onChange(group.email); setOpen(false); }}
+                style={{ padding: "7px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+                onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ fontSize: 11, fontWeight: 500 }}>{group.name}</div>
+                <div style={{ fontSize: 9, color: C.textMuted }}>{group.email}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {typedIsMailbox ? (
+        <div style={{ fontSize: 10, color: C.amber, marginTop: 4, lineHeight: 1.5 }}>
+          <strong>{value.trim()}</strong> is a shared mailbox, not a distribution list — it has no members to expand,
+          so this layer would arrive with nobody assigned. Use <strong>Notify also</strong> to mail the mailbox, and
+          name the people who may act separately.
+        </div>
+      ) : (
+        <div style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+          Members are read from the group when a form is submitted, and any one of them can complete this layer.
+          Needs the <strong>Group.Read.All</strong> Graph permission on the app registration.
+        </div>
+      )}
+    </>
   );
 }
 
@@ -641,6 +815,7 @@ function MultiUserAssigneeEditor({
         siteUsers={siteUsers}
         placeholder="email@company.com"
         emptyHint="Add every person who may act on this layer."
+        warnOnCannotAct
         onChange={next => onChange({ type: "users", value: joinEmailList(next) })}
       />
       {emails.length > 1 && (
@@ -900,14 +1075,13 @@ export default function LayerConfigPanel({
     updateBranches(branches.map((b, i) => i !== bi ? b : { ...b, layers: b.layers.map((l, j) => j === li ? { ...l, ...patch } as LayerConfigItem : l) }));
   };
 
-  // Search suggestions for assignee
-  const suggestions = searchQ
-    ? siteUsers.filter(u => u.email.toLowerCase().includes(searchQ.toLowerCase()) || u.name.toLowerCase().includes(searchQ.toLowerCase())).slice(0, 5)
-    : siteUsers.slice(0, 5);
+  // Search suggestions for assignee. Site users answer instantly but only cover
+  // people already added to this site; the directory covers the tenant.
+  const directoryMatches = useRecipientSearch(searchQ);
+  const branchDirectoryMatches = useRecipientSearch(branchSearchQ);
 
-  const branchSuggestions = branchSearchQ
-    ? siteUsers.filter(u => u.email.toLowerCase().includes(branchSearchQ.toLowerCase()) || u.name.toLowerCase().includes(branchSearchQ.toLowerCase())).slice(0, 5)
-    : siteUsers.slice(0, 5);
+  const suggestions = mergeRecipientSuggestions(siteUsers, directoryMatches, searchQ);
+  const branchSuggestions = mergeRecipientSuggestions(siteUsers, branchDirectoryMatches, branchSearchQ);
 
   const renderAssigneeEditor = (
     layer: LayerConfigItem,
@@ -917,7 +1091,7 @@ export default function LayerConfigPanel({
       open: () => void;
       close: () => void;
       setQuery: (query: string) => void;
-      suggestions: { email: string; name: string }[];
+      suggestions: RecipientMatch[];
     },
   ) => (
     <div>
@@ -991,12 +1165,27 @@ export default function LayerConfigPanel({
                     search.close();
                     search.setQuery("");
                   }}
-                  style={{ padding: "7px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+                  style={{ padding: "7px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}
                   onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 500 }}>{u.name}</div>
-                  <div style={{ fontSize: 9, color: C.textMuted }}>{u.email}</div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</div>
+                    <div style={{ fontSize: 9, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
+                  </div>
+                  <span style={{
+                    flexShrink: 0,
+                    fontSize: 8,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: ".04em",
+                    borderRadius: 999,
+                    padding: "2px 6px",
+                    background: KIND_BADGE[u.kind].bg,
+                    color: KIND_BADGE[u.kind].fg,
+                  }}>
+                    {KIND_BADGE[u.kind].label}
+                  </span>
                 </div>
               ))}
             </div>
@@ -1005,18 +1194,10 @@ export default function LayerConfigPanel({
       ) : layer.assignee.type === "users" ? (
         <MultiUserAssigneeEditor assignee={layer.assignee} siteUsers={siteUsers} onChange={onAssigneeChange} />
       ) : layer.assignee.type === "distribution-list" ? (
-        <>
-          <input
-            value={layer.assignee.value}
-            onChange={e => onAssigneeChange({ type: "distribution-list", value: e.target.value })}
-            placeholder="team-dl@company.com"
-            style={inp}
-          />
-          <div style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
-            Members are read from the group when a form is submitted, and any one of them can complete this layer.
-            Needs the <strong>Group.Read.All</strong> Graph permission on the app registration.
-          </div>
-        </>
+        <DistributionListPicker
+          value={layer.assignee.value}
+          onChange={next => onAssigneeChange({ type: "distribution-list", value: next })}
+        />
       ) : layer.assignee.type === "field-reference" ? (
         <>
           <select

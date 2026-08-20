@@ -3,6 +3,7 @@ import {
   queryListItemById,
   updateListItemFields,
 } from "./graphClient.js";
+import { logWarn } from "./logger.js";
 
 export type WorkflowEmailDeliveryStatus = "sent" | "failed";
 
@@ -31,6 +32,12 @@ export interface WorkflowEmailScheduleEntry {
   dueAt: string;
   status: WorkflowEmailScheduleStatus;
   updatedAt: string;
+  /**
+   * Delivery attempts so far, carried over from the delivery log. Bounds the
+   * cron's retries so one permanently bad address cannot be re-tried daily
+   * forever.
+   */
+  attempts?: number;
   layerType: "approval" | "evaluation";
   totalLayers: number;
   reviewLink: string;
@@ -160,13 +167,39 @@ export function setWorkflowEmailSchedule(
   };
 }
 
+/** How many delivery attempts one layer's notification gets before we stop. */
+export const WORKFLOW_EMAIL_MAX_ATTEMPTS = 5;
+
+/**
+ * How long a row may sit in "sending" before another run may claim it.
+ *
+ * The cron marks a row "sending" *before* it sends, so a run killed in between
+ * (a timeout, a redeploy) leaves the row claimed by a process that is never
+ * coming back. Without a staleness window nothing would ever move it out of
+ * "sending", and the notification would be stranded permanently.
+ */
+export const WORKFLOW_EMAIL_SENDING_STALE_MS = 15 * 60 * 1000;
+
+/**
+ * The schedule rows a cron run should attempt now.
+ *
+ * Deliberately wider than "scheduled": a "failed" row is a delivery that still
+ * has not happened, and abandoning it is why one transient sendMail failure
+ * used to lose the notification outright. "sent" is the only finished status.
+ */
 export function getDueWorkflowEmailSchedules(
   raw: unknown,
   now = new Date(),
 ): WorkflowEmailScheduleEntry[] {
   const nowTime = now.getTime();
   return Object.values(parseWorkflowEmailSchedule(raw)).filter((entry) => {
-    if (entry.status !== "scheduled") return false;
+    if (entry.status === "sent") return false;
+    if ((entry.attempts ?? 0) >= WORKFLOW_EMAIL_MAX_ATTEMPTS) return false;
+    if (entry.status === "sending") {
+      const claimedAt = Date.parse(entry.updatedAt);
+      return Number.isFinite(claimedAt)
+        && nowTime - claimedAt >= WORKFLOW_EMAIL_SENDING_STALE_MS;
+    }
     const dueTime = Date.parse(entry.dueAt);
     return Number.isFinite(dueTime) && dueTime <= nowTime;
   });
@@ -293,6 +326,9 @@ async function persistWorkflowEmailAttempt(
       ...scheduledEntry,
       status: attempt.status,
       updatedAt: attempt.attemptedAt,
+      // Taken from the delivery log so the cron's retry cap counts every
+      // attempt, including whichever one was made inline at submit time.
+      attempts: log[String(context.layer)]?.attempts ?? scheduledEntry.attempts,
     }));
   }
   await updateListItemFields(
@@ -321,6 +357,14 @@ export async function persistWorkflowEmailSchedule(
   return schedule[String(entry.layer)];
 }
 
+/**
+ * Sends a layer's notification now, or parks it until its due date.
+ *
+ * An immediate notification is **sent before anything is written to the list**.
+ * The reverse order cost three list round-trips before the mail even left, and
+ * if the request died in between, the row was left "scheduled" for the next cron
+ * run to find - which is how an immediate notification arrived a day late.
+ */
 export async function scheduleOrDeliverWorkflowEmail(
   token: string,
   message: WorkflowEmailMessage,
@@ -330,20 +374,52 @@ export async function scheduleOrDeliverWorkflowEmail(
 ): Promise<WorkflowEmailScheduleEntry> {
   const now = new Date();
   const recipient = typeof message.to === "string" ? message.to : message.to.join(", ");
-  const entry: WorkflowEmailScheduleEntry = {
-    ...details,
-    layer: context.layer,
-    recipient,
-    dueAt: resolveWorkflowEmailDueAt(config, now),
-    status: "scheduled",
-    updatedAt: now.toISOString(),
-  };
-  await persistWorkflowEmailSchedule(token, context, entry);
-  if (!config || config.mode === "immediate") {
-    await deliverWorkflowEmail(token, message, context);
-    return { ...entry, status: "sent", updatedAt: new Date().toISOString() };
+  const base = { ...details, layer: context.layer, recipient };
+
+  // Only a deferred send needs a row to wait in.
+  if (config && config.mode !== "immediate") {
+    const entry: WorkflowEmailScheduleEntry = {
+      ...base,
+      dueAt: resolveWorkflowEmailDueAt(config, now),
+      status: "scheduled",
+      updatedAt: now.toISOString(),
+    };
+    await persistWorkflowEmailSchedule(token, context, entry);
+    return entry;
   }
-  return entry;
+
+  try {
+    await deliverWorkflowEmail(token, message, context);
+    return { ...base, dueAt: now.toISOString(), status: "sent", updatedAt: new Date().toISOString() };
+  } catch (error) {
+    // The mail arrived and only the bookkeeping failed: queueing a retry would
+    // deliver the same notification twice.
+    if (error instanceof WorkflowEmailRecordError) throw error;
+    // Best effort - the point is to leave the cron something to retry from, and
+    // the caller needs to hear about the send failure either way.
+    await persistWorkflowEmailSchedule(token, context, {
+      ...base,
+      dueAt: now.toISOString(),
+      status: "failed",
+      updatedAt: new Date().toISOString(),
+      attempts: 1,
+    }).catch(() => { /* the thrown send error is the signal that matters */ });
+    throw error;
+  }
+}
+
+/**
+ * Thrown when the mail went out but recording it did not.
+ *
+ * Distinct from a send failure because the two want opposite handling: a send
+ * failure should be queued for retry, while re-sending a mail that already
+ * arrived would deliver the notification twice.
+ */
+export class WorkflowEmailRecordError extends Error {
+  constructor(detail: string) {
+    super(`Workflow email was sent but could not be recorded: ${detail}`);
+    this.name = "WorkflowEmailRecordError";
+  }
 }
 
 export async function deliverWorkflowEmail(
@@ -353,8 +429,10 @@ export async function deliverWorkflowEmail(
 ): Promise<WorkflowEmailEntry> {
   const recipient = typeof message.to === "string" ? message.to : message.to.join(", ");
   const attemptedAt = new Date().toISOString();
+  let sent = false;
   try {
     await sendGraphEmail(token, message);
+    sent = true;
     return await persistWorkflowEmailAttempt(token, context, {
       layer: context.layer,
       recipient,
@@ -362,6 +440,9 @@ export async function deliverWorkflowEmail(
       attemptedAt,
     });
   } catch (error) {
+    if (sent) {
+      throw new WorkflowEmailRecordError(error instanceof Error ? error.message : String(error));
+    }
     await persistWorkflowEmailAttempt(token, context, {
       layer: context.layer,
       recipient,
@@ -426,6 +507,55 @@ export function buildManualPaperWorkflowEmail(
   };
 }
 
+export interface LayerNeedsRoutingEmailParams {
+  formTitle: string;
+  submittedBy: string;
+  responseItemId: string | number;
+  layer: number;
+  totalLayers: number;
+  recipient: string | string[];
+  layerType: "approval" | "evaluation";
+  /** Why routing could not be decided, in the resolver's own words. */
+  reason: string;
+  referenceNo?: string;
+}
+
+/**
+ * The notice for a layer that arrived but could not be routed to anybody.
+ *
+ * Deliberately has **no action link**. The layer has no actors, so any link
+ * would be refused by the access check the moment somebody clicked it; telling
+ * the team the submission exists and what needs fixing is the honest message.
+ */
+export function buildLayerNeedsRoutingEmail(
+  params: LayerNeedsRoutingEmailParams,
+): WorkflowEmailMessage {
+  const noun = params.layerType === "evaluation" ? "evaluation" : "approval";
+  return {
+    to: params.recipient,
+    subject: `Awaiting routing: ${params.formTitle} ${noun} layer ${params.layer}${referenceSuffix(params.referenceNo)}`,
+    body: `<!doctype html>
+<html>
+<body style="margin:0;padding:24px;background:#f3f6fa;font-family:'Segoe UI',Arial,sans-serif;color:#111827">
+  <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px">
+    <div style="font-size:12px;font-weight:700;color:#0078d4;text-transform:uppercase;letter-spacing:.08em">PMW HR Form</div>
+    <h1 style="font-size:22px;line-height:28px;margin:12px 0 8px">${escapeHtml(params.formTitle)} is waiting to be routed</h1>
+    <p style="font-size:14px;line-height:22px;color:#4b5563">This submission has been saved, but the ${escapeHtml(noun)} layer below could not be assigned to anyone automatically. An administrator needs to route it before it can be actioned — there is nothing to click yet.</p>
+    <table style="width:100%;border-collapse:collapse;margin:20px 0">
+      ${referenceRow(params.referenceNo)}
+      <tr><td style="padding:8px 0;color:#6b7280">Submission ID</td><td style="padding:8px 0;font-weight:600">#${escapeHtml(String(params.responseItemId))}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Submitted by</td><td style="padding:8px 0;font-weight:600">${escapeHtml(params.submittedBy)}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280">Workflow stage</td><td style="padding:8px 0;font-weight:600">Layer ${params.layer} of ${params.totalLayers}</td></tr>
+    </table>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;font-size:13px;line-height:20px;color:#92400e">
+      <strong>Why it stopped:</strong> ${escapeHtml(params.reason)}
+    </div>
+  </div>
+</body>
+</html>`,
+  };
+}
+
 export function buildWorkflowActionEmail(
   params: WorkflowActionEmailParams,
 ): WorkflowEmailMessage {
@@ -454,10 +584,26 @@ export function buildWorkflowActionEmail(
   };
 }
 
+/** Last-resort origin, correct only for the HR deployment. */
+const FALLBACK_APP_BASE_URL = "https://pmw-hrform.vercel.app";
+
+/**
+ * The origin every review link in an outgoing email is built from.
+ *
+ * Worth being fussy about, because OSHES forms are served by a *different*
+ * deployment from HR's: a link built with the wrong origin sends the reviewer to
+ * an app where their submission does not exist. The last resort below is the HR
+ * app, so any other deployment that reaches it is misconfigured - and it says so
+ * rather than quietly mailing links into the wrong app.
+ */
 export function getApplicationBaseUrl(): string {
   const configured = process.env.APP_BASE_URL || process.env.VITE_APP_BASE_URL;
   if (configured) return configured.replace(/\/$/, "");
   const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
   if (vercelUrl) return `https://${vercelUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
-  return "https://pmw-hrform.vercel.app";
+  logWarn("api:workflow-email", "No application base URL configured; guessing", {
+    guessed: FALLBACK_APP_BASE_URL,
+    fix: "Set APP_BASE_URL to this deployment's own origin - required on any deployment that is not PMW HR.",
+  });
+  return FALLBACK_APP_BASE_URL;
 }

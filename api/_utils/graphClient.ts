@@ -268,11 +268,21 @@ export async function getListId(token: string, displayName: string): Promise<str
 
 // --- Low-level Graph helpers ---
 
-export async function graphGet(token: string, path: string): Promise<unknown> {
+/**
+ * `headers` carries Graph's advanced-query opt-in where a caller needs it
+ * (`ConsistencyLevel: eventual`, alongside `$count=true` in the path). Filters
+ * that use a lambda over a multi-valued property are refused without it.
+ */
+export async function graphGet(
+  token: string,
+  path: string,
+  headers?: Record<string, string>,
+): Promise<unknown> {
   const res = await fetch(`${GRAPH_BASE}${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
+      ...headers,
     },
   });
   if (!res.ok) {

@@ -40,17 +40,65 @@ function memberAddress(member: GraphMember): string {
 }
 
 /**
+ * `findGroupIdByMail` with the Graph failure translated into something an
+ * operator can act on. A refused lookup and an address that simply is not a
+ * group are very different problems, and both used to read "returned no
+ * members".
+ */
+async function findGroupId(token: string, address: string): Promise<string> {
+  try {
+    return await findGroupIdByMail(token, address);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (detail.includes("403")) {
+      throw new Error(
+        `Reading the members of ${address} was refused. Grant Group.Read.All as a `
+        + "Microsoft Graph *application* permission on the app registration and "
+        + "admin-consent it — granting it under SharePoint has no effect here.",
+        { cause: error },
+      );
+    }
+    throw new Error(
+      `Could not look up the distribution list ${address}: ${detail}`,
+      { cause: error },
+    );
+  }
+}
+
+/**
  * Resolves the group's object id from its mail address. Covers M365 groups,
  * mail-enabled security groups and classic distribution groups, all of which
  * live under `/groups`.
  */
 async function findGroupIdByMail(token: string, address: string): Promise<string> {
-  const escaped = escapeGraphODataString(address);
-  const response = await graphGet(
+  const escaped = encodeURIComponent(escapeGraphODataString(address));
+
+  // `mail eq` on its own is a basic query every tenant answers.
+  const byMail = await graphGet(
     token,
-    `/groups?$filter=mail eq '${encodeURIComponent(escaped)}' or proxyAddresses/any(p:p eq 'smtp:${encodeURIComponent(escaped)}')&$select=id,mail&$top=1`,
+    `/groups?$filter=mail eq '${escaped}'&$select=id,mail&$top=1`,
   ) as GraphCollection<GraphGroupRef>;
-  return response.value?.[0]?.id?.trim() || "";
+  const primary = byMail.value?.[0]?.id?.trim();
+  if (primary) return primary;
+
+  // A lambda over the multi-valued `proxyAddresses` is an *advanced* query, and
+  // Graph rejects one outright unless it is asked for with `$count=true` plus
+  // `ConsistencyLevel: eventual`. OR-ing it into the filter above is what made
+  // every list expansion fail with 400 before reaching a single member — so it
+  // is a second request, and only for addresses the primary lookup missed.
+  try {
+    const byAlias = await graphGet(
+      token,
+      `/groups?$count=true&$filter=proxyAddresses/any(p:p eq 'smtp:${escaped}')&$select=id,mail&$top=1`,
+      { ConsistencyLevel: "eventual" },
+    ) as GraphCollection<GraphGroupRef>;
+    return byAlias.value?.[0]?.id?.trim() || "";
+  } catch {
+    // The primary lookup already succeeded, so this is not a permission or
+    // connectivity problem — only the alias form is unavailable. "Not a group"
+    // is a legitimate answer and the caller knows what to do with it.
+    return "";
+  }
 }
 
 /**
@@ -65,7 +113,7 @@ export async function expandDistributionList(token: string, address: string): Pr
   const normalized = address.trim();
   if (!normalized) return [];
 
-  const groupId = await findGroupIdByMail(token, normalized);
+  const groupId = await findGroupId(token, normalized);
   if (!groupId) return [];
 
   const members: string[] = [];

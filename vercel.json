@@ -6,6 +6,9 @@
   "crons": [
     { "path": "/api/workflow-email-cron", "schedule": "0 0 * * *" }
   ],
+  "functions": {
+    "api/workflow-email-cron.ts": { "maxDuration": 60 }
+  },
   "rewrites": [
     { "source": "/((?!api/|assets/|favicon|src/|@vite/|@react-refresh|.*\\.).*)", "destination": "/index.html" }
   ],

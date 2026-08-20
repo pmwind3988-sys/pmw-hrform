@@ -31,6 +31,7 @@ import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import {
   buildWorkflowActionEmail,
+  buildLayerNeedsRoutingEmail,
   buildManualPaperWorkflowEmail,
   getApplicationBaseUrl,
   resolveHrFormSender,
@@ -40,6 +41,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { expandDistributionList } from "./_utils/groupMembers.js";
 import {
+  joinEmailList,
   parseValidEmailList,
   writeLayerRecipientFields,
   type NotifyRecipientMode,
@@ -1207,6 +1209,7 @@ async function resolveLayerAssignee(
     email: resolved.email,
     name: resolved.name,
     emails: resolved.emails,
+    deliverTo: resolved.deliverTo,
     parkedReason: resolved.parked?.reason,
   };
 }
@@ -1275,6 +1278,19 @@ function isManualPaperLayerStatus(value: unknown): boolean {
   return normalized === "manual evaluation required" || normalized === "manual approval required";
 }
 
+function isNeedsRoutingLayerStatus(value: unknown): boolean {
+  return valueToText(value).trim().toLowerCase() === LAYER_NEEDS_ROUTING_STATUS.toLowerCase();
+}
+
+/** The parked reason recorded for one layer, for the routing notice to quote. */
+function routingReasonForLayer(formBody: Record<string, unknown>, layerNumber: number): string {
+  const prefix = `Layer ${layerNumber}: `;
+  const line = valueToText(formBody.RoutingNotes)
+    .split(/\r?\n/)
+    .find((entry) => entry.startsWith(prefix));
+  return line ? line.slice(prefix.length) : "the layer could not be routed automatically";
+}
+
 function shouldUseManualPaperForSender(layer: ApiLayerConfigItem, email: string): boolean {
   if (layer.manualPaperWhenSenderEmail === false) return false;
   const sentinel = normalizeEmail(resolveManualPaperAddress());
@@ -1330,6 +1346,13 @@ async function applyLayerConfigWorkflow(
       parkedReasons.push(`Layer ${layerNumber}: ${resolved.parkedReason}`);
       formBody[`L${layerNumber}_Status`] = LAYER_NEEDS_ROUTING_STATUS;
       writeLayerRecipientFields(formBody, layer, []);
+      // No actors, but there can still be somewhere worth telling. A list that
+      // could not be expanded is written to the notify column only, so the team
+      // hears about the submission without anyone gaining the right to act.
+      const deliverTo = parseValidEmailList(resolved.deliverTo);
+      if (deliverTo.length > 0) {
+        formBody[`L${layerNumber}_NotifyEmails`] = joinEmailList(deliverTo);
+      }
       continue;
     }
 
@@ -1650,7 +1673,33 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         try {
           const submittedBy = valueToText(submissionBody.SubmittedBy) || "Public respondent";
           const totalLayers = parsedLayerConfig?.layers?.length ?? 1;
-          if (isManualPaperLayerStatus(submissionBody[`L${firstLayer.layerNumber}_Status`])) {
+          if (isNeedsRoutingLayerStatus(submissionBody[`L${firstLayer.layerNumber}_Status`])) {
+            // Parked: there is nobody to action it, so the notice says so
+            // rather than handing out a link the access check would refuse.
+            await scheduleOrDeliverWorkflowEmail(
+              token,
+              buildLayerNeedsRoutingEmail({
+                formTitle: listTitle,
+                submittedBy,
+                responseItemId: parentId,
+                layer: firstLayer.layerNumber,
+                totalLayers,
+                recipient,
+                layerType: firstLayer.type,
+                reason: routingReasonForLayer(submissionBody, firstLayer.layerNumber),
+                referenceNo,
+              }),
+              { listTitle, responseItemId: parentId, layer: firstLayer.layerNumber },
+              undefined,
+              {
+                layer: firstLayer.layerNumber,
+                layerType: firstLayer.type,
+                totalLayers,
+                reviewLink: "",
+                submittedBy,
+              },
+            );
+          } else if (isManualPaperLayerStatus(submissionBody[`L${firstLayer.layerNumber}_Status`])) {
             await sendManualPaperWorkflowEmail(token, {
               listTitle,
               responseItemId: parentId,

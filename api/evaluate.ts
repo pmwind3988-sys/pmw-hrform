@@ -3,6 +3,7 @@ import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, q
 import { logError, logWarn } from "./_utils/logger.js";
 import {
   buildWorkflowActionEmail,
+  buildLayerNeedsRoutingEmail,
   buildManualPaperWorkflowEmail,
   getApplicationBaseUrl,
   scheduleOrDeliverWorkflowEmail,
@@ -10,7 +11,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
+import { joinEmailList, parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
 import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
@@ -64,6 +65,19 @@ function isTerminalFormStatus(value: unknown): boolean {
 function isManualPaperLayerStatus(value: unknown): boolean {
   const normalized = String(value || "").trim().toLowerCase();
   return normalized === "manual evaluation required" || normalized === "manual approval required";
+}
+
+function isNeedsRoutingLayerStatus(value: unknown): boolean {
+  return String(value || "").trim().toLowerCase() === "needs routing";
+}
+
+/** The parked reason recorded for one layer, for the routing notice to quote. */
+function routingReasonForLayer(fields: Record<string, unknown>, layerNumber: number): string {
+  const prefix = `Layer ${layerNumber}: `;
+  const line = String(fields.RoutingNotes || "")
+    .split(/\r?\n/)
+    .find((entry) => entry.startsWith(prefix));
+  return line ? line.slice(prefix.length) : "the layer could not be routed automatically";
 }
 
 function layerSurveyElements(layer: Record<string, unknown>): Record<string, unknown>[] {
@@ -203,6 +217,12 @@ async function resolveDeferredNextLayer(params: {
           [`L${layerNumber}_Status`]: "Needs Routing",
           RoutingNotes: `Layer ${layerNumber}: ${resolved.parked.reason}`,
         };
+        // No actors, but a list that could not be expanded is still worth
+        // telling. Notify-only, so nobody gains the right to act.
+        const deliverTo = parseValidEmailList(resolved.deliverTo);
+        if (deliverTo.length > 0) {
+          patch[`L${layerNumber}_NotifyEmails`] = joinEmailList(deliverTo);
+        }
         await updateListItemFields(graphToken, params.responseListName, params.responseItemId, patch)
           .catch(() => {
             // RoutingNotes is absent on lists provisioned before it existed.
@@ -760,10 +780,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const totalLayerCount = activeLayers.length;
           const submittedBy = String(responseItem.fields.SubmittedBy || "Public respondent");
           const referenceNo = String(responseItem.fields[REFERENCE_NO_FIELD] || "");
-          const manualPaper = isManualPaperLayerStatus(responseItem.fields[`L${nextLayerNumber}_Status`]);
+          const nextStatus = responseItem.fields[`L${nextLayerNumber}_Status`];
+          const manualPaper = isManualPaperLayerStatus(nextStatus);
           await scheduleOrDeliverWorkflowEmail(
             graphToken,
-            manualPaper
+            isNeedsRoutingLayerStatus(nextStatus)
+              // Parked: an action link would be refused by the access check the
+              // moment anyone clicked it, so say what is actually true.
+              ? buildLayerNeedsRoutingEmail({
+                  formTitle,
+                  submittedBy,
+                  responseItemId: safeResponseItemId,
+                  layer: nextLayerNumber,
+                  totalLayers: totalLayerCount,
+                  recipient,
+                  layerType,
+                  reason: routingReasonForLayer(responseItem.fields, nextLayerNumber),
+                  referenceNo,
+                })
+              : manualPaper
               ? buildManualPaperWorkflowEmail({
                   formTitle,
                   submittedBy,

@@ -83,6 +83,15 @@ export interface ResolvedLayerActors {
   /** Operator-facing reason the layer has no usable actor. */
   error?: string;
   /**
+   * Where to send this layer's notice when there is no actor to address it to.
+   *
+   * Kept separate from `emails` on purpose: a distribution list that could not
+   * be expanded is still worth mailing so the team sees the submission arrive,
+   * but it is not a sign-in identity, so it must never become someone who can
+   * approve. Actors and recipients are different questions.
+   */
+  deliverTo?: string[];
+  /**
    * Set when routing could not be decided but the submission must still be
    * kept. Distinct from `error`: a parked layer is a question for an admin, not
    * a broken submission, and the record is saved either way.
@@ -133,7 +142,10 @@ export interface ResolveAssigneeOptions {
    * clearing it, so the dashboard can still show what was configured.
    */
   keepInvalidDistributionListAddress?: boolean;
-  /** Wording when a list expands to nobody; the server names the Graph grant. */
+  /**
+   * Wording when a list expands to nobody; the server names the Graph grant.
+   * Becomes the layer's parked reason rather than a hard failure.
+   */
   emptyDistributionListError?: (label: string, address: string) => string;
   /** Identities chain routing needs that the form body does not carry. */
   context?: ResolutionContext;
@@ -457,10 +469,17 @@ export async function resolveLayerAssignee(
       const members = await ports.expandDistributionList(layer, address);
       if (members.length === 0) {
         if (layer.authMode === "365") {
-          return failure(
-            options.emptyDistributionListError?.(label, address)
-              ?? `${label}: the distribution list ${address} returned no members.`,
-          );
+          // Parked, not failed: a list that reads empty is a directory problem,
+          // and refusing the submission would throw away work someone has
+          // already done. The address still gets the notice, so the team learns
+          // the submission exists while an admin routes the layer once.
+          return {
+            ...parked(
+              options.emptyDistributionListError?.(label, address)
+                ?? `${label}: the distribution list ${address} returned no members.`,
+            ),
+            deliverTo: [address],
+          };
         }
         // Public layers act through a token rather than an identity check, so
         // mailing the list address itself is still a workable delivery target.

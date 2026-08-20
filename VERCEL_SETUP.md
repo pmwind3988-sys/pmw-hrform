@@ -109,7 +109,8 @@ All are **Application** permissions (client credentials, no signed-in user) — 
 |---|---|---|
 | `Sites.Selected` | **Microsoft Graph** | All Graph list reads/writes. Grants nothing on its own — each site must additionally be granted to the app (see note) |
 | `Mail.Send` | **Microsoft Graph** | Workflow, approval and job application emails |
-| `Group.Read.All` | **Microsoft Graph** | Expanding a distribution-list layer assignee — see below |
+| `Group.Read.All` | **Microsoft Graph** | Expanding a distribution-list layer assignee, and finding groups in the builder's recipient picker — see below |
+| `User.Read.All` | **Microsoft Graph** | Finding people in the builder's recipient picker |
 | `AuditLog.Read.All` | **Microsoft Graph** | Currently granted; not required by any route in this repo |
 
 > **`Sites.Selected` is not `Sites.Read.All`.** It authorises nothing until a specific site is granted to the app registration (via Graph `sites/{id}/permissions` or PnP `Grant-PnPAzureADAppSitePermission`). If Graph list calls start returning 403 for a *new* SharePoint site, this is why — the app needs that site added, not a broader permission.
@@ -138,6 +139,37 @@ Which token uses which: SharePoint REST calls go through `getSharePointToken()` 
 | CORS errors | `vercel.json` headers not applied | Make sure `vercel.json` is in project root |
 | API returns HTML instead of JSON | Using `npm run dev` instead of `vercel dev` | Run `vercel dev` |
 | "Could not expand the distribution list" on submit | `Group.Read.All` not granted, or the address is not a mail-enabled group | Grant `Group.Read.All` with admin consent; confirm the address resolves under Entra ID → Groups |
+| A layer shows **Needs Routing** and the team got an "awaiting routing" email | The distribution list resolved to no members. The submission is deliberately kept rather than refused | Read the reason in the item's `RoutingNotes`, then route the layer from the approvals dashboard |
+| Workflow emails never arrive at all | No sender configured — `resolveHrFormSender()` found none of `HR_FORM_EMAIL_FROM_ADDRESS`, `EMAIL_FROM_ADDRESS` or their `VITE_` forms | Set `HR_FORM_EMAIL_FROM_ADDRESS` on **this** deployment |
+| A deferred evaluation email is late by up to a day | It is waiting for the cron, which runs `0 0 * * *` (08:00 MYT) | Expected for `three_months` / `custom_days` schedules. *Immediate* layers send inline and never wait for the cron |
+| Cron response shows `remainingForms` above 0 | One run could not scan every form inside its time budget | Not data loss — the rest are picked up next run. If it stays high, raise the cron's `maxDuration` in `vercel.json` and the matching `SCAN_BUDGET_MS` |
+| Review links in emails point at the wrong app | `APP_BASE_URL` unset and the platform vars missing, so the origin fell back to the HR app | Set `APP_BASE_URL`; the server logs a warning naming it whenever it has to guess |
+
+---
+
+## 7b. Second deployment (PMW OSHES)
+
+OSHES forms are authored from the HR builder but **served by their own Vercel
+project** (`pmw-oshes.vercel.app` by default — see `src/config/sites.ts`). It runs
+the same code against a different SharePoint site, so it needs its own copy of
+every server-side value; nothing is shared at runtime. Easy to miss, because the
+builder will happily publish an OSHES form from a correctly configured HR
+deployment while the OSHES one is silently unable to send mail.
+
+On the OSHES project specifically, confirm:
+
+| Variable | Why it matters there |
+|---|---|
+| `VITE_SP_SITE_URL` | Must be the **OSHES** site. This is the site the API reads and writes |
+| `APP_BASE_URL` | The OSHES origin. Without it, review links can fall back to the HR app, where the submission does not exist |
+| `HR_FORM_EMAIL_FROM_ADDRESS` | No sender means no workflow email at all — `sendGraphEmail` throws before sending |
+| `CRON_SECRET` | The cron is per-project. Without it (and the `crons` entry in `vercel.json`) deferred evaluation emails never fire on OSHES |
+| `API_SECRET_KEY` / `VITE_API_SECRET_KEY` | Its own pair |
+| `INTERNAL_SESSION_SECRET` | Its own, if portal accounts are used there |
+
+The app registration also needs the **OSHES site** granted for `Sites.Selected` —
+granting the HR site does not cover it. That failure looks like 403s on every
+Graph list call for OSHES forms only.
 
 ---
 
