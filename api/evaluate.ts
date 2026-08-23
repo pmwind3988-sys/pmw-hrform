@@ -19,6 +19,9 @@ import {
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import { expandDistributionList } from "./_utils/groupMembers.js";
+import {
+  denyLayerItemAccess,
+} from "./_utils/layerItemAccess.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -50,16 +53,6 @@ const SYSTEM_FIELDS = new Set([
 
 function isWorkflowField(key: string): boolean {
   return SYSTEM_FIELDS.has(key) || /^L\d+_/.test(key);
-}
-
-function isTerminalLayerStatus(value: unknown): boolean {
-  const normalized = String(value || "").trim().toLowerCase().replace(/[\s_-]/g, "");
-  return ["approved", "confirmed", "rejected", "skipped", "cancelled"].includes(normalized) || normalized.includes("reject");
-}
-
-function isTerminalFormStatus(value: unknown): boolean {
-  const normalized = String(value || "").trim().toLowerCase().replace(/[\s_-]/g, "");
-  return ["completed", "rejected", "cancelled", "fullyapproved"].includes(normalized);
 }
 
 function isManualPaperLayerStatus(value: unknown): boolean {
@@ -451,6 +444,31 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // The token names a layer; the item id arrived beside it in the query
+    // string. Nothing tied the two together, so one review link could read
+    // every other submission to the same form by counting the id up. Same
+    // rule the act path below applies, so a link cannot show what it could
+    // not approve.
+    const viewDenial = denyLayerItemAccess({
+      layerNumber: foundLayerNumber,
+      currentLayer: allFields.CurrentLayer || allFields.CurrentApprovalLayer,
+      layerStatus: allFields[`L${foundLayerNumber}_Status`],
+      formStatus: allFields.FormStatus || allFields.Status,
+    });
+    if (viewDenial) {
+      logWarn("api:evaluate:get", "Refused a review link for a submission it does not cover", {
+        layerNumber: foundLayerNumber,
+        responseItemId,
+        reason: viewDenial,
+      });
+      return res.status(403).json({
+        error:
+          viewDenial === "already-completed"
+            ? "This review has already been completed. Ask HR if you need to see the submission again."
+            : "This review link is not active for this submission.",
+      });
+    }
+
     // Filter fields based on layer visibility
     const visibleFields: Record<string, unknown> = {};
     const selectedBranch = typeof allFields.SelectedBranch === "string" ? allFields.SelectedBranch.trim().toLowerCase() : "";
@@ -628,12 +646,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Token has expired" });
     }
 
-    const latestCurrentLayer = Number(responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer || 0);
-    const latestLayerStatus = responseItem.fields[`L${layerNumber}_Status`];
-    if (isTerminalFormStatus(responseItem.fields.FormStatus || responseItem.fields.Status) || isTerminalLayerStatus(latestLayerStatus)) {
+    // Shared with the read path above so what a link may show and what it may
+    // approve cannot drift apart. See _utils/layerItemAccess.ts.
+    const actDenial = denyLayerItemAccess({
+      layerNumber,
+      currentLayer: responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer,
+      layerStatus: responseItem.fields[`L${layerNumber}_Status`],
+      formStatus: responseItem.fields.FormStatus || responseItem.fields.Status,
+    });
+    if (actDenial === "already-completed") {
       return res.status(409).json({ error: "This layer has already been completed and cannot be submitted again." });
     }
-    if (latestCurrentLayer && latestCurrentLayer !== layerNumber) {
+    if (actDenial === "not-current-layer") {
       return res.status(409).json({ error: "This evaluation link is no longer active for the current workflow layer." });
     }
 

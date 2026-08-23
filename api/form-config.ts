@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryMasterFormBySlug, queryWebFormVersion, getListColumnChoices, getListColumnValues } from "./_utils/graphClient.js";
+import { redactLayerConfigForPublic } from "./_utils/publicLayerConfig.js";
 import { logError } from "./_utils/logger.js";
 
 // Minimal Vercel request/response types
@@ -265,7 +266,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         CurrentVersion: targetVersion,
         CurrentPublishKey: targetPublishKey,
         CurrentPublishLabel: publishLabel,
-        LayerConfig: versionLayerConfig ? JSON.stringify(versionLayerConfig) : formConfig.LayerConfig,
+        // Served with the approval tokens and approver mailboxes removed: this
+        // endpoint answers to the API key that ships in the browser bundle, so
+        // its response is public. See _utils/publicLayerConfig.ts.
+        LayerConfig: redactLayerConfigForPublic(versionLayerConfig ?? formConfig.LayerConfig),
       },
       surveyJson,
       meta,
