@@ -1708,8 +1708,11 @@ export default function LayerConfigPanel({
             appOrigin={appOrigin}
             publicToken={layer.publicToken || ""}
             tokenExpiresAt={layer.tokenExpiresAt || ""}
+            tokenExpiry={layer.tokenExpiry}
+            formFields={formFields}
             onTokenChange={t => patchLayer(idx, { publicToken: t })}
             onExpiryChange={d => patchLayer(idx, { tokenExpiresAt: d })}
+            onTokenExpiryChange={e => patchLayer(idx, { tokenExpiry: e })}
           />
         )}
       </div>
@@ -1947,8 +1950,11 @@ export default function LayerConfigPanel({
             appOrigin={appOrigin}
             publicToken={layer.publicToken || ""}
             tokenExpiresAt={layer.tokenExpiresAt || ""}
+            tokenExpiry={layer.tokenExpiry}
+            formFields={formFields}
             onTokenChange={t => patchBranchLayer(bi, li, { publicToken: t })}
             onExpiryChange={d => patchBranchLayer(bi, li, { tokenExpiresAt: d })}
+            onTokenExpiryChange={e => patchBranchLayer(bi, li, { tokenExpiry: e })}
           />
         )}
       </div>

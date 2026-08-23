@@ -22,6 +22,27 @@ import { expandDistributionList } from "./_utils/groupMembers.js";
 import {
   denyLayerItemAccess,
 } from "./_utils/layerItemAccess.js";
+import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
+import { reissueReviewLink } from "./_utils/linkReissue.js";
+
+/**
+ * What an old link is told. Deliberately the same answer whether the
+ * submission exists, sits at another layer, or was never the clicker's to
+ * see — a reply that varied would restore the id-counting this replaced.
+ */
+const LINK_REPLACED_MESSAGE =
+  "This review link has been replaced. A fresh link has been sent to the address this review was assigned to — please use the newest email."; 
+
+/** What a link that does not belong to the submission it named is told. */
+const LINK_MISMATCH_MESSAGE = "This review link does not open this submission.";
+
+const LINK_EXPIRED_MESSAGE = "This review link has expired.";
+
+/** Query values arrive as string | string[] depending on the runtime. */
+function firstQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return typeof value[0] === "string" ? value[0].trim() : "";
+  return typeof value === "string" ? value.trim() : "";
+}
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -411,9 +432,9 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     }
 
     if (!foundToken) return res.status(404).json({ error: "Token not found" });
-    if (foundToken.tokenExpiresAt && new Date(foundToken.tokenExpiresAt as string) < new Date()) {
-      return res.status(403).json({ error: "Token has expired" });
-    }
+    // Expiry is no longer a property of the layer alone — a layer may read its
+    // deadline out of the submission's own answers — so it is settled below,
+    // once the record is in hand, by denyLayerItemAccess.
 
     // The caller must provide the response item ID
     const responseItemId = req.query.responseItemId ? Number(req.query.responseItemId) : undefined;
@@ -421,8 +442,9 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
 
     const responseListName = `${foundFormTitle} Responses`;
     const responseItem = await queryListItemById(graphToken, responseListName, String(responseItemId));
-    if (!responseItem) return res.status(404).json({ error: "Response item not found" });
-    const allFields = responseItem.fields || {};
+    // A missing record is not answered yet: an old link has to be told the same
+    // thing whether or not the id it carried was real.
+    const allFields = responseItem?.fields || {};
     const formVersion = String(allFields.FormVersion || "");
     const responsePublishKey = String(allFields.PublishKey || "");
     let parsedResponseVersion = { surveyJson: null as unknown, meta: {} as Record<string, unknown>, layerConfig: null as Record<string, unknown> | null };
@@ -449,12 +471,45 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     // every other submission to the same form by counting the id up. Same
     // rule the act path below applies, so a link cannot show what it could
     // not approve.
-    const viewDenial = denyLayerItemAccess({
-      layerNumber: foundLayerNumber,
-      currentLayer: allFields.CurrentLayer || allFields.CurrentApprovalLayer,
-      layerStatus: allFields[`L${foundLayerNumber}_Status`],
-      formStatus: allFields.FormStatus || allFields.Status,
-    });
+    // A link minted before review links were bound to their submission carries
+    // no `k`, and cannot be given one now. Rather than strand the reviewer, mail
+    // a fresh bound link to the address this layer was actually sent to and show
+    // the clicker nothing — the id they arrived with is the untrusted part, so it
+    // decides only who is written to. Same reply either way; see _utils/linkReissue.ts.
+    const linkToken = firstQueryValue(req.query.k);
+    if (!linkToken) {
+      if (responseItem) {
+        await reissueReviewLink({
+          graphToken,
+          responseListName,
+          responseItemId: responseItem.id,
+          fields: allFields,
+          layerNumber: foundLayerNumber,
+          layer: foundToken,
+          formTitle: foundFormTitle,
+          formSlug: "",
+          totalLayers: layerConfig?.layers?.length ?? 0,
+          baseUrl: getApplicationBaseUrl(),
+        });
+      }
+      return res.status(410).json({ error: LINK_REPLACED_MESSAGE, linkReplaced: true });
+    }
+
+    // Past here a record that does not exist and one the link does not cover are
+    // told the same thing, so the id cannot be probed for which rows are real.
+    const viewDenial = !responseItem
+      ? "link-mismatch" as const
+      : denyLayerItemAccess({
+        layerNumber: foundLayerNumber,
+        intent: "read",
+        linkToken,
+        storedLinkToken: readLinkToken(allFields, foundLayerNumber),
+        layer: foundToken,
+        fields: allFields,
+        currentLayer: allFields.CurrentLayer || allFields.CurrentApprovalLayer,
+        layerStatus: allFields[`L${foundLayerNumber}_Status`],
+        formStatus: allFields.FormStatus || allFields.Status,
+      });
     if (viewDenial) {
       logWarn("api:evaluate:get", "Refused a review link for a submission it does not cover", {
         layerNumber: foundLayerNumber,
@@ -463,9 +518,9 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       });
       return res.status(403).json({
         error:
-          viewDenial === "already-completed"
-            ? "This review has already been completed. Ask HR if you need to see the submission again."
-            : "This review link is not active for this submission.",
+          viewDenial === "expired"
+            ? LINK_EXPIRED_MESSAGE
+            : LINK_MISMATCH_MESSAGE,
       });
     }
 
@@ -586,7 +641,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { token, layerNumber, formTitle, responseItemId, fields, action, signature, rejection } = req.body;
+  const { token, layerNumber, formTitle, responseItemId, fields, action, signature, rejection, linkToken } = req.body;
+  // The page was opened with `k` in its URL and hands it back here, so acting
+  // is held to the same binding as looking. A post without one came from a page
+  // loaded before links were bound; it is refused rather than trusted.
+  const suppliedLinkToken = typeof linkToken === "string" ? linkToken.trim() : "";
   const safeResponseItemId = Number(responseItemId);
   if (!safeResponseItemId) return res.status(400).json({ error: "Invalid responseItemId" });
 
@@ -641,19 +700,34 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const layer = searchableLayers.find((l) => l.layerNumber === layerNumber && l.publicToken === token) as Record<string, unknown> | undefined;
     if (!layer) return res.status(404).json({ error: `Layer ${layerNumber} not found in config` });
 
-    // Validate the token
-    if (layer.tokenExpiresAt && new Date(layer.tokenExpiresAt as string) < new Date()) {
-      return res.status(403).json({ error: "Token has expired" });
-    }
+    // Expiry may be read from the submission's own answers rather than the
+    // layer, so it is settled by denyLayerItemAccess below with the record in hand.
 
     // Shared with the read path above so what a link may show and what it may
     // approve cannot drift apart. See _utils/layerItemAccess.ts.
     const actDenial = denyLayerItemAccess({
       layerNumber,
+      intent: "act",
+      linkToken: suppliedLinkToken,
+      storedLinkToken: readLinkToken(responseItem.fields, layerNumber),
+      layer,
+      fields: responseItem.fields,
       currentLayer: responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer,
       layerStatus: responseItem.fields[`L${layerNumber}_Status`],
       formStatus: responseItem.fields.FormStatus || responseItem.fields.Status,
     });
+    if (actDenial === "link-mismatch") {
+      logWarn("api:evaluate", "Refused an action from a link that does not cover this submission", {
+        layerNumber,
+        responseItemId: safeResponseItemId,
+      });
+      return res.status(403).json({
+        error: suppliedLinkToken ? LINK_MISMATCH_MESSAGE : LINK_REPLACED_MESSAGE,
+      });
+    }
+    if (actDenial === "expired") {
+      return res.status(403).json({ error: LINK_EXPIRED_MESSAGE });
+    }
     if (actDenial === "already-completed") {
       return res.status(409).json({ error: "This layer has already been completed and cannot be submitted again." });
     }
@@ -723,6 +797,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         updates.CurrentLayer = nextLayer.layerNumber;
         updates.CurrentApprovalLayer = nextLayer.layerNumber;
         updates.FormStatus = "In Review";
+        // The link the next reviewer is about to be emailed is bound to this
+        // submission, so its binding is written in the same breath as the
+        // advance — the record can never be waiting at a public layer that has
+        // no token for it. Re-minted per layer: finishing one does not open the
+        // next.
+        if (String(nextLayer.authMode || "") === "public" && String(nextLayer.publicToken || "").trim()) {
+          updates[linkTokenField(Number(nextLayer.layerNumber))] = mintLinkToken();
+        }
       } else {
         updates.FormStatus = "Completed";
         updates.CurrentLayer = layerNumber;
@@ -798,6 +880,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           formSlug,
           responseItemId: safeResponseItemId,
           layerNumber: nextLayerNumber,
+          // Written into `updates` above, so read from there rather than from the
+          // copy of the item fetched before the advance.
+          linkToken: String(updates[linkTokenField(nextLayerNumber)] || readLinkToken(responseItem.fields, nextLayerNumber)),
         });
         try {
           const layerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";

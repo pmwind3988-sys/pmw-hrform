@@ -396,12 +396,20 @@ export default function EvaluationPage() {
           const params = new URLSearchParams(window.location.search);
           const itemId = params.get("item");
           if (!itemId) { setError("Missing response item ID."); setLoading(false); return; }
+          // `k` binds this link to one submission. Sent as given — including not
+          // at all, which is how a link issued before bindings existed asks the
+          // server to mail its reviewer a fresh one.
+          const linkToken = params.get("k") || "";
 
-          const res = await fetch(`/api/evaluate?token=${encodeURIComponent(routeToken || "")}&responseItemId=${itemId}`, {
-            headers: {
-              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+          const res = await fetch(
+            `/api/evaluate?token=${encodeURIComponent(routeToken || "")}&responseItemId=${itemId}`
+            + (linkToken ? `&k=${encodeURIComponent(linkToken)}` : ""),
+            {
+              headers: {
+                ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+              },
             },
-          });
+          );
           const json = await res.json();
           if (!json.success) { setError(json.error || "Failed to load data."); setLoading(false); return; }
 
@@ -550,6 +558,9 @@ export default function EvaluationPage() {
         const params = new URLSearchParams(window.location.search);
         const itemId = Number(params.get("item"));
         if (!routeToken || !itemId || !currentLayer) throw new Error("This evaluation link is missing required details.");
+        // Acting is held to the same binding as looking, so the link's `k` is
+        // handed back with the decision.
+        const linkToken = params.get("k") || "";
         const res = await fetch("/api/evaluate", {
           method: "POST",
           headers: {
@@ -560,6 +571,7 @@ export default function EvaluationPage() {
             token: routeToken,
             formTitle,
             responseItemId: itemId,
+            linkToken,
             layerNumber: currentLayer.layerNumber,
             action,
             fields: evalForm ? foldOtherAnswers(evalRuntime.collect()) : {},

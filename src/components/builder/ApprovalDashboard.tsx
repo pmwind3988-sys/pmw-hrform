@@ -45,6 +45,7 @@ import {
 } from "./workflowChainContext";
 import { getSelectedCompany } from "../../utils/companySelection";
 import { buildWorkflowReviewLink } from "../../utils/workflowLink";
+import { ensureLinkToken } from "../../utils/linkToken";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
@@ -1823,6 +1824,10 @@ export default function ApprovalDashboard() {
           updatedAt,
         ));
       }
+      // Reuses the binding the record already carries, so resending a notice does
+      // not kill the link the reviewer is holding; mints one only when there is
+      // none, which is how a submission from before bindings existed gets one.
+      const resendLinkToken = ensureLinkToken(currentLayer, rawItem, currentLayerNumber, patchBody);
       await ensureWorkflowColumns(token, item.Title, Math.max(currentLayerNumber, activeLayers.length || 0));
       await spPatch(token, itemUrl, patchBody);
 
@@ -1837,6 +1842,7 @@ export default function ApprovalDashboard() {
         formSlug,
         responseItemId: item.Id,
         layerNumber: currentLayerNumber,
+        linkToken: resendLinkToken,
       });
 
       const currentLayerStatus = valueToText(rawItem[`L${currentLayerNumber}_Status`]);
@@ -2112,6 +2118,10 @@ export default function ApprovalDashboard() {
       const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
       const publicToken = currentLayer.publicToken || "";
       const formSlug = valueToText(cfg?.Slug);
+      // The scheduled mail may go out weeks from now, so the link it carries has
+      // to be bound before it is written into the schedule.
+      const scheduleLinkPatch: Record<string, unknown> = {};
+      const scheduleLinkToken = ensureLinkToken(currentLayer, rawItem, currentLayerNumber, scheduleLinkPatch);
       const reviewLink = buildWorkflowReviewLink({
         baseUrl: window.location.origin,
         layerType: currentLayer.type,
@@ -2120,6 +2130,7 @@ export default function ApprovalDashboard() {
         formSlug,
         responseItemId: selectedItem.Id,
         layerNumber: currentLayerNumber,
+        linkToken: scheduleLinkToken,
       });
       const updatedAt = new Date().toISOString();
       // Typing a recipient here names one evaluator; otherwise keep the actor
@@ -2151,6 +2162,7 @@ export default function ApprovalDashboard() {
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`,
         {
           ...scheduleRecipientPatch,
+          ...scheduleLinkPatch,
           WorkflowEmailSchedule: JSON.stringify(schedule),
         },
       );

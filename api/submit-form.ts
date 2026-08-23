@@ -16,6 +16,7 @@ import {
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
+import { linkTokenField, mintLinkToken } from "./_utils/linkToken.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import {
   isDeferredAssignee,
@@ -1551,6 +1552,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // The first reviewer's link opens this submission and no other, so the value
+    // that binds it is written as part of the record itself rather than patched
+    // in afterwards. A response list provisioned before this existed has nowhere
+    // to put it — republishing the form adds the column — and the link then goes
+    // out unbound rather than carrying a `k` the record could not store, which
+    // would refuse the very reviewer it was sent to.
+    const firstWorkflowLayer = parsedLayerConfig?.layers?.[0];
+    let firstLayerLinkToken = "";
+    if (
+      firstWorkflowLayer
+      && String(firstWorkflowLayer.authMode || "") === "public"
+      && String(firstWorkflowLayer.publicToken || "").trim()
+      && resolveColumnKey(linkTokenField(Number(firstWorkflowLayer.layerNumber)))
+    ) {
+      firstLayerLinkToken = mintLinkToken();
+      submissionBody[linkTokenField(Number(firstWorkflowLayer.layerNumber))] = firstLayerLinkToken;
+    }
+
     // Image column fields (urlFieldPatches) are excluded from the Graph create
     // payload — they have never been writable via Graph PATCH on Image columns.
     const createBody = omitUrlPatchFields(submissionBody, submission.urlFieldPatches);
@@ -1718,6 +1737,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               formSlug,
               responseItemId: parentId,
               layerNumber: firstLayer.layerNumber,
+              linkToken: firstLayerLinkToken,
             });
             await scheduleOrDeliverWorkflowEmail(
               token,
