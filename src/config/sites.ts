@@ -12,7 +12,7 @@
  * different host would need their own consent and are deliberately not supported.
  */
 
-export type SiteKey = "hr" | "oshes";
+export type SiteKey = "hr" | "oshes" | "qaqc";
 
 export interface SiteDefinition {
   key: SiteKey;
@@ -54,11 +54,16 @@ const OSHES_ADMIN_GROUP = (import.meta.env.VITE_OSHES_ADMIN_GROUP || "").trim();
  */
 const OSHES_APP_URL = trimUrl(import.meta.env.VITE_APP_URL_OSHES) || "https://pmw-oshes.vercel.app";
 
+/** QA/QC, on the same terms as OSHES above — see the note on OSHES_APP_URL. */
+const QAQC_SITE_URL = trimUrl(import.meta.env.VITE_SP_SITE_URL_QAQC);
+const QAQC_ADMIN_GROUP = (import.meta.env.VITE_QAQC_ADMIN_GROUP || "").trim();
+const QAQC_APP_URL = trimUrl(import.meta.env.VITE_APP_URL_QAQC) || "https://pmw-qaqc.vercel.app";
+
 export const HOME_SITE_KEY: SiteKey = "hr";
 
 /**
- * OSHES is absent rather than empty when unconfigured, so a deployment that has
- * not opted in has no second site to switch to at all.
+ * A secondary site is absent rather than empty when unconfigured, so a
+ * deployment that has not opted in has no second site to switch to at all.
  */
 const SITES: Partial<Record<SiteKey, SiteDefinition>> = {
   hr: { key: "hr", label: "PMW HR", url: HOME_SITE_URL },
@@ -73,10 +78,21 @@ const SITES: Partial<Record<SiteKey, SiteDefinition>> = {
         },
       }
     : {}),
+  ...(QAQC_SITE_URL
+    ? {
+        qaqc: {
+          key: "qaqc" as const,
+          label: "PMW QA/QC",
+          url: QAQC_SITE_URL,
+          adminGroup: QAQC_ADMIN_GROUP || undefined,
+          appUrl: QAQC_APP_URL,
+        },
+      }
+    : {}),
 };
 
 export function isSiteKey(value: string | undefined): value is SiteKey {
-  return value === "hr" || value === "oshes";
+  return value === "hr" || value === "oshes" || value === "qaqc";
 }
 
 /**
@@ -96,7 +112,8 @@ export function resolveSite(key: string | undefined): SiteDefinition {
   if (!site) {
     throw new Error(
       `SharePoint site "${resolvedKey}" is not configured for this deployment. ` +
-        `Set VITE_SP_SITE_URL_OSHES to enable it.`,
+        `Set VITE_SP_SITE_URL_${resolvedKey.toUpperCase()} to enable it, then rebuild — ` +
+        `it is a VITE_ variable, so restarting is not enough.`,
     );
   }
   if (!site.url) {
