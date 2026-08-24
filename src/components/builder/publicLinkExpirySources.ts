@@ -43,9 +43,15 @@ export interface ExpirySourceForm {
  */
 export function isDateProducingField(field: LayerFieldOption | undefined): boolean {
   if (!field) return false;
-  if (field.type === "datepicker" || field.type === "date") return true;
+  // The builder's own date questions. A Date & Time field is `type: "datetime"`
+  // while it is being authored and only becomes `datetime-local` once the form
+  // is published, so both spellings have to count — the link reads the date part
+  // and ignores the time regardless.
+  if (field.type === "datepicker" || field.type === "date" || field.type === "datetime") return true;
   return field.type === "text"
-    && (field.inputType === "date" || field.inputType === "datetime-local");
+    && (field.inputType === "date"
+      || field.inputType === "datetime-local"
+      || field.inputType === "datetime");
 }
 
 /** Date questions first, so the answer the author almost certainly wants is on top. */

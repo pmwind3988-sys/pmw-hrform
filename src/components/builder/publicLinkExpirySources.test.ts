@@ -51,6 +51,15 @@ describe("isDateProducingField", () => {
     expect(isDateProducingField({ name: "a", type: "text", inputType: "datetime-local" })).toBe(true);
   });
 
+  it("accepts the builder's own Date & Time question, drafted or published", () => {
+    // In the builder a Date & Time field is `type: "datetime"` with
+    // `inputType: "datetime"`; only its published copy says `datetime-local`.
+    // The link reads only the date part, so the time never matters here.
+    expect(isDateProducingField({ name: "a", type: "datetime", inputType: "datetime" })).toBe(true);
+    expect(isDateProducingField({ name: "a", type: "datetime" })).toBe(true);
+    expect(isDateProducingField({ name: "a", type: "text", inputType: "datetime" })).toBe(true);
+  });
+
   it("rejects everything else", () => {
     expect(isDateProducingField({ name: "a", type: "text" })).toBe(false);
     expect(isDateProducingField({ name: "a", type: "rating" })).toBe(false);
