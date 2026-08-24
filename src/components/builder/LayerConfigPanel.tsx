@@ -517,6 +517,23 @@ const KIND_BADGE: Record<RecipientKind, { label: string; bg: string; fg: string 
   shared: { label: "Shared mailbox", bg: C.amberPale, fg: C.amber },
 };
 
+/**
+ * The layer-type choice is the first thing this panel asks and the least
+ * self-evident: the words "approval" and "evaluation" do not say that only one
+ * of them can turn a submission down. Stated once here, used by both the main
+ * sequence and the branch editors so they cannot drift apart.
+ */
+const APPROVAL_TYPE_HINT = "They approve or reject it. Rejecting stops the submission and asks for a reason.";
+const EVALUATION_TYPE_HINT = "They fill in questions you set for this step. There is no reject — an evaluation cannot turn a submission down.";
+
+function LayerTypeHint({ isEval }: { isEval: boolean }) {
+  return (
+    <p style={{ fontSize: 11, lineHeight: 1.45, color: C.textSecond, margin: "5px 0 0" }}>
+      {isEval ? EVALUATION_TYPE_HINT : APPROVAL_TYPE_HINT}
+    </p>
+  );
+}
+
 function EmailChipInput({
   emails,
   siteUsers,
@@ -1540,7 +1557,7 @@ export default function LayerConfigPanel({
                 allowRejectionReason: true,
               };
               patchLayer(idx, converted as unknown as Record<string, unknown>);
-            }} style={TOGGLE_BTN(isApproval)}>Approval</button>
+            }} style={TOGGLE_BTN(isApproval)} title={APPROVAL_TYPE_HINT}>Approval</button>
             <button onClick={() => {
               if (isEval) return;
               const converted: EvaluationLayerConfig = {
@@ -1559,8 +1576,9 @@ export default function LayerConfigPanel({
                 emailSchedule: { mode: "immediate" },
               };
               patchLayer(idx, converted as unknown as Record<string, unknown>);
-            }} style={TOGGLE_BTN(isEval)}>Evaluation</button>
+            }} style={TOGGLE_BTN(isEval)} title={EVALUATION_TYPE_HINT}>Evaluation</button>
           </div>
+          <LayerTypeHint isEval={isEval} />
         </div>
 
         {/* Auth mode toggle */}
@@ -1782,7 +1800,7 @@ export default function LayerConfigPanel({
                 allowRejectionReason: true,
               };
               patchBranchLayer(bi, li, converted as unknown as Record<string, unknown>);
-            }} style={TOGGLE_BTN(isApproval)}>Approval</button>
+            }} style={TOGGLE_BTN(isApproval)} title={APPROVAL_TYPE_HINT}>Approval</button>
             <button onClick={() => {
               if (isEval) return;
               const converted: EvaluationLayerConfig = {
@@ -1801,8 +1819,9 @@ export default function LayerConfigPanel({
                 emailSchedule: { mode: "immediate" },
               };
               patchBranchLayer(bi, li, converted as unknown as Record<string, unknown>);
-            }} style={TOGGLE_BTN(isEval)}>Evaluation</button>
+            }} style={TOGGLE_BTN(isEval)} title={EVALUATION_TYPE_HINT}>Evaluation</button>
           </div>
+          <LayerTypeHint isEval={isEval} />
         </div>
 
         {/* Auth mode toggle */}
