@@ -76,7 +76,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
-import { isLayerActor, parseValidEmailList, writeLayerRecipientFields } from "../../utils/layerRecipients";
+import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1557,13 +1557,17 @@ export default function ApprovalDashboard() {
       await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`, evalPatch);
 
       let nextApproverEmail = "";
+      // Where the next layer's notice is actually aimed. For a notify-only layer
+      // this is the shared mailbox alone, so the actor is never emailed.
+      let nextRecipients: string[] = [];
       if (nextLayerConfig) {
         try {
           const itemEmail = await spGet(
             token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})?$select=L${nextLayerNum}_Email`
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})?$select=L${nextLayerNum}_Email,L${nextLayerNum}_NotifyEmails`
           ) as Record<string, unknown>;
           nextApproverEmail = valueToText(itemEmail[`L${nextLayerNum}_Email`]);
+          nextRecipients = readLayerDeliveryRecipients(itemEmail, nextLayerNum);
         } catch {
           nextApproverEmail = "";
         }
@@ -1585,7 +1589,7 @@ export default function ApprovalDashboard() {
           nextApproverEmail = result.email;
           if (nextApproverEmail) {
             const nextLayerPatch: Record<string, unknown> = {};
-            writeLayerRecipientFields(nextLayerPatch, nextLayerConfig, result.emails, nextApproverEmail);
+            nextRecipients = writeLayerRecipientFields(nextLayerPatch, nextLayerConfig, result.emails, nextApproverEmail);
             await spPatch(
               token,
               `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`,
@@ -1620,6 +1624,7 @@ export default function ApprovalDashboard() {
         totalLayers,
         action: "approve",
         nextApproverEmail,
+        ...(nextRecipients.length ? { nextRecipients } : {}),
         ...(nextLayerConfig?.type ? { nextLayerType: nextLayerConfig.type } : {}),
         ...(nextLayerConfig?.layerNumber ? { nextLayerNumber: nextLayerConfig.layerNumber } : {}),
         ...(nextLayerConfig?.type === "evaluation" ? { nextEmailSchedule: nextLayerConfig.emailSchedule } : {}),
@@ -1727,6 +1732,9 @@ export default function ApprovalDashboard() {
 
       const firstApproverEmail = resolvedEmails[firstLayerNumber] || "";
       if (firstApproverEmail) {
+        // Where the first layer's notice is aimed — the shared mailbox alone for
+        // a notify-only layer — read back from the fields just written above.
+        const firstRecipients = readLayerDeliveryRecipients(patchBody, firstLayerNumber);
         await triggerApprovalNotification(token, {
           formTitle: selectedItem.Title,
           submittedBy: selectedItem.SubmittedBy,
@@ -1735,6 +1743,7 @@ export default function ApprovalDashboard() {
           totalLayers: bLayers.length,
           action: "submit",
           nextApproverEmail: firstApproverEmail,
+          ...(firstRecipients.length ? { nextRecipients: firstRecipients } : {}),
           ...(bLayers[0]?.type ? { nextLayerType: bLayers[0].type } : {}),
           ...(bLayers[0]?.type === "evaluation" ? { nextEmailSchedule: bLayers[0].emailSchedule } : {}),
           reviewLink: `${window.location.origin}/admin/submissions?form=${encodeURIComponent(listName)}&item=${respId}`,
@@ -2312,13 +2321,17 @@ export default function ApprovalDashboard() {
 
       // Get next approver email
       let nextApproverEmail = "";
+      // Where the next layer's notice is actually aimed. For a notify-only layer
+      // this is the shared mailbox alone, so the actor is never emailed.
+      let nextRecipients: string[] = [];
       if (!isFinal) {
         try {
           const itemEmail = await spGet(
             token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})?$select=L${nextLayerNumber}_Email`
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})?$select=L${nextLayerNumber}_Email,L${nextLayerNumber}_NotifyEmails`
           ) as Record<string, unknown>;
           nextApproverEmail = valueToText(itemEmail[`L${nextLayerNumber}_Email`]);
+          nextRecipients = readLayerDeliveryRecipients(itemEmail, nextLayerNumber);
         } catch {
           nextApproverEmail = "";
         }
@@ -2340,7 +2353,7 @@ export default function ApprovalDashboard() {
           nextApproverEmail = result.email;
           if (nextApproverEmail) {
             const nextLayerPatch: Record<string, unknown> = {};
-            writeLayerRecipientFields(nextLayerPatch, nextLayer, result.emails, nextApproverEmail);
+            nextRecipients = writeLayerRecipientFields(nextLayerPatch, nextLayer, result.emails, nextApproverEmail);
             await spPatch(
               token,
               `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
@@ -2398,6 +2411,7 @@ export default function ApprovalDashboard() {
         totalLayers,
         action: "approve",
         nextApproverEmail,
+        ...(nextRecipients.length ? { nextRecipients } : {}),
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
         ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),

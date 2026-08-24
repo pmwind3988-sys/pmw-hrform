@@ -6,6 +6,7 @@ import {
   joinEmailList,
   parseEmailList,
   parseValidEmailList,
+  readLayerDeliveryRecipients,
   resolveLayerRecipients,
   writeLayerRecipientFields,
 } from "./layerRecipients";
@@ -149,6 +150,25 @@ describe("writeLayerRecipientFields", () => {
 
     expect(target.L1_Emails).toBe("new@x.com");
     expect(isLayerActor("b@x.com", target.L1_Emails)).toBe(false);
+  });
+});
+
+describe("readLayerDeliveryRecipients", () => {
+  it("reads the notify-only shared mailbox a layer was aimed at, not its actor", () => {
+    // What a notify-only layer looks like once written to a submission: the
+    // decision belongs to the actor, but the mail is aimed only at the mailbox.
+    const fields = { L2_Email: "actor@x.com", L2_NotifyEmails: "shared@x.com" };
+    expect(readLayerDeliveryRecipients(fields, 2)).toEqual(["shared@x.com"]);
+  });
+
+  it("returns every recorded recipient for a fan-out layer", () => {
+    const fields = { L2_NotifyEmails: "a@x.com; b@x.com; shared@x.com" };
+    expect(readLayerDeliveryRecipients(fields, 2)).toEqual(["a@x.com", "b@x.com", "shared@x.com"]);
+  });
+
+  it("returns nothing when the layer has no recorded delivery list", () => {
+    expect(readLayerDeliveryRecipients({ L2_Email: "actor@x.com" }, 2)).toEqual([]);
+    expect(readLayerDeliveryRecipients(undefined, 2)).toEqual([]);
   });
 });
 

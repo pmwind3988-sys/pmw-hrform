@@ -57,6 +57,19 @@ export function parseValidEmailList(value: unknown): string[] {
   return parseEmailList(value).filter(isLayerEmail);
 }
 
+/**
+ * The delivery list already recorded for a layer, read back from a submission's
+ * columns. `L{n}_NotifyEmails` is the address the notice was aimed at — it holds
+ * the shared mailbox alone for a "notify-only" layer, so anyone re-sending that
+ * layer's mail must address it here rather than to the actor in `L{n}_Email`.
+ */
+export function readLayerDeliveryRecipients(
+  fields: Record<string, unknown> | undefined | null,
+  layerNumber: number,
+): string[] {
+  return parseValidEmailList(fields?.[`L${layerNumber}_NotifyEmails`]);
+}
+
 /** Canonical storage form for the `L{n}_Emails` / `L{n}_NotifyEmails` columns. */
 export function joinEmailList(emails: readonly string[]): string {
   return emails.join("; ");
