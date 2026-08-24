@@ -718,9 +718,10 @@ function LogicRulesEditor({ field, allFields, onChange }: {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      {/* Legacy compatibility - keep existing editors working */}
-      <ConditionEditor label="Visibility (legacy)" value={field.visibleIf || ""} onChange={v => onChange({ visibleIf: v || undefined })} allFields={priorFields} />
-      <ConditionEditor label="Enable (legacy)" value={field.enableIf || ""} onChange={v => onChange({ enableIf: v || undefined })} allFields={priorFields} />
+      {/* The single-condition editors. Named for what they do rather than "(legacy)" —
+          these are the working controls, and "legacy" read as deprecated to admins. */}
+      <ConditionEditor label="Show this field when" value={field.visibleIf || ""} onChange={v => onChange({ visibleIf: v || undefined })} allFields={priorFields} />
+      <ConditionEditor label="Allow editing when" value={field.enableIf || ""} onChange={v => onChange({ enableIf: v || undefined })} allFields={priorFields} />
       
       <div style={{ marginTop: 16 }}>
         <RulesSection rules={visibilityRules} ruleType="visibility" title="Show/Hide Rules" icon={<VisibilityIcon style={{ fontSize: 15 }} />} color={C.green} allFields={priorFields} onChange={updateVisibilityRules} />
@@ -2546,6 +2547,13 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     setFields(withManagedCompanyChoice(newFields));
   }, [withManagedCompanyChoice]);
 
+  /** Undo and redo can remove the field the properties panel is editing — undoing a
+   *  duplicate is the common case. Drop the selection when the restored schema no
+   *  longer holds it, so the panel closes instead of editing a field that is gone. */
+  const keepSelectionIfPresent = useCallback((restoredFields: FormBuilderField[]) => {
+    setSelectedId(current => (current && findFieldById(restoredFields, current) ? current : null));
+  }, []);
+
   // Undo handler
   const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
@@ -2553,7 +2561,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     setRedoStack(prev => [...prev, fieldsRef.current]);
     setUndoStack(prev => prev.slice(0, -1));
     setFields(withManagedCompanyChoice(previousFields));
-  }, [undoStack, withManagedCompanyChoice]);
+    keepSelectionIfPresent(previousFields);
+  }, [undoStack, withManagedCompanyChoice, keepSelectionIfPresent]);
 
   // Redo handler
   const handleRedo = useCallback(() => {
@@ -2562,7 +2571,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     setUndoStack(prev => [...prev, fieldsRef.current]);
     setRedoStack(prev => prev.slice(0, -1));
     setFields(withManagedCompanyChoice(nextFields));
-  }, [redoStack, withManagedCompanyChoice]);
+    keepSelectionIfPresent(nextFields);
+  }, [redoStack, withManagedCompanyChoice, keepSelectionIfPresent]);
 
   const selectedField = findFieldById(fields, selectedId || "") || null;
   // Stable ref for PropertyPanel fallback during state transitions

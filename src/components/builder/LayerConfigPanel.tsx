@@ -513,7 +513,7 @@ function DepartmentLookupSettings({
  */
 const KIND_BADGE: Record<RecipientKind, { label: string; bg: string; fg: string }> = {
   user: { label: "Person", bg: C.purplePale, fg: C.purple },
-  group: { label: "Distribution list", bg: C.greenPale, fg: C.green },
+  group: { label: "Group email", bg: C.greenPale, fg: C.green },
   shared: { label: "Shared mailbox", bg: C.amberPale, fg: C.amber },
 };
 
@@ -1103,33 +1103,64 @@ export default function LayerConfigPanel({
           top row is addresses typed here, the bottom row addresses resolved
           from the submission. Also keeps the last row from ending in a gap. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4, marginBottom: 4 }}>
-        <button onClick={() => onAssigneeChange(toUserAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "user")}>
-          Fixed user
+        <button
+          onClick={() => onAssigneeChange(toUserAssignee(layer.assignee))}
+          style={TOGGLE_BTN(layer.assignee.type === "user")}
+          title="One person you name here, the same for every submission."
+        >
+          One named person
         </button>
-        <button onClick={() => onAssigneeChange(toMultiUserAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "users")}>
+        <button
+          onClick={() => onAssigneeChange(toMultiUserAssignee(layer.assignee))}
+          style={TOGGLE_BTN(layer.assignee.type === "users")}
+          title="Several people you name here — whichever one acts first completes this step."
+        >
           Several people
         </button>
-        <button onClick={() => onAssigneeChange(toDistributionListAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "distribution-list")}>
-          Distribution list
+        <button
+          onClick={() => onAssigneeChange(toDistributionListAssignee(layer.assignee))}
+          style={TOGGLE_BTN(layer.assignee.type === "distribution-list")}
+          title="A group email address — anyone on the list can act on it."
+        >
+          A group email
         </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, marginBottom: 4 }}>
-        <button onClick={() => onAssigneeChange(toFieldReferenceAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "field-reference")}>
-          Form field email
+        <button
+          onClick={() => onAssigneeChange(toFieldReferenceAssignee(layer.assignee))}
+          style={TOGGLE_BTN(layer.assignee.type === "field-reference")}
+          title="Uses an email address the submitter typed into a question on the form."
+        >
+          Email from the form
         </button>
-        <button onClick={() => onAssigneeChange(toDepartmentApproverAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "department-approver")}>
-          Department HOD
+        <button
+          onClick={() => onAssigneeChange(toDepartmentApproverAssignee(layer.assignee))}
+          style={TOGGLE_BTN(layer.assignee.type === "department-approver")}
+          title="Looks up the submitter's department in your department list, and uses the approver set against it."
+        >
+          Their department's approver
         </button>
       </div>
       {/* The directory-driven modes sit on their own row: they answer a
           different question from the four above, which all name an address
-          here or read one off the submission. */}
+          here or read one off the submission.
+          These three used to read "Department HOD", "Reporting line" and "Head
+          of department" — two of which are the same words, and none of which
+          said which mechanism it used. Named for the person they resolve to. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
-        <button onClick={() => onAssigneeChange(toChainAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "chain")}>
-          Reporting line
+        <button
+          onClick={() => onAssigneeChange(toChainAssignee(layer.assignee))}
+          style={TOGGLE_BTN(layer.assignee.type === "chain")}
+          title="Walks up the reporting chain from whoever submitted the form, to their direct manager."
+        >
+          Their direct manager
         </button>
-        <button onClick={() => onAssigneeChange(toRoleHolderAssignee(layer.assignee))} style={TOGGLE_BTN(layer.assignee.type === "role-holder")}>
-          Head of department
+        <button
+          onClick={() => onAssigneeChange(toRoleHolderAssignee(layer.assignee))}
+          style={TOGGLE_BTN(layer.assignee.type === "role-holder")}
+          title="Uses whoever currently holds a named role in the staff directory, whatever the submitter's department."
+        >
+          Whoever holds a role
         </button>
       </div>
 
@@ -1460,7 +1491,7 @@ export default function LayerConfigPanel({
                 style={{ ...inp, height: 30, fontSize: 11 }}
               >
                 <option value="assign-evaluator">Different assignee</option>
-                <option value="send-to-configured-sender">Send to EMAIL_FROM_ADDRESS</option>
+                <option value="send-to-configured-sender">Send to the portal's sending mailbox</option>
                 <option value="manual-paper">Manual paper / no online assignee</option>
               </select>
             </div>
@@ -1585,7 +1616,7 @@ export default function LayerConfigPanel({
                 style={{ width: 14, height: 14, accentColor: C.purple, marginTop: 1 }}
               />
               <span style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.45 }}>
-                Treat the configured sender email as paper/manual. If this layer resolves to EMAIL_FROM_ADDRESS, no online evaluator link is sent and the manual approval/evaluation notice goes to that mailbox.
+                Handle this layer on paper. When it resolves to the portal's own sending mailbox, no approval link is sent — the notice goes to that mailbox to be signed off by hand.
               </span>
             </label>
             {renderSubmitterRoutingRules(
@@ -1827,7 +1858,7 @@ export default function LayerConfigPanel({
                 style={{ width: 14, height: 14, accentColor: C.purple, marginTop: 1 }}
               />
               <span style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.45 }}>
-                Treat the configured sender email as paper/manual. If this layer resolves to EMAIL_FROM_ADDRESS, no online evaluator link is sent and the manual approval/evaluation notice goes to that mailbox.
+                Handle this layer on paper. When it resolves to the portal's own sending mailbox, no approval link is sent — the notice goes to that mailbox to be signed off by hand.
               </span>
             </label>
             {renderSubmitterRoutingRules(

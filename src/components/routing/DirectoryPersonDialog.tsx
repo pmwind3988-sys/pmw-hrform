@@ -56,7 +56,7 @@ const HELP: Record<string, string> = {
   personEmail: "Their work email. This is what a submission is matched on, so it has to be exact.",
   approverEmail: "Who signs off this person's forms. Leave empty if nobody is above them.",
   department: "Used when a form routes to a whole department's head rather than to this person's own approver.",
-  position: "Their job title. A form set to 'Head of department' looks for the title you type here, such as HOD.",
+  position: "Their job title. A form set to 'Whoever holds a role' looks for the title you type here, such as HOD.",
   employeeId: "Their ID in whichever system HR keys off. Free text; nothing routes on it.",
 };
 

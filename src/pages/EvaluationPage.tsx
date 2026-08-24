@@ -310,6 +310,9 @@ export default function EvaluationPage() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  /** Set when the link itself is fine but this account is not the approver.
+   *  A different situation from a broken link, and different advice. */
+  const [notYourRequest, setNotYourRequest] = useState(false);
 
   const [responseData, setResponseData] = useState<Record<string, unknown> | null>(null);
   const [currentLayer, setCurrentLayer] = useState<LayerConfigItem | null>(null);
@@ -395,7 +398,7 @@ export default function EvaluationPage() {
         try {
           const params = new URLSearchParams(window.location.search);
           const itemId = params.get("item");
-          if (!itemId) { setError("Missing response item ID."); setLoading(false); return; }
+          if (!itemId) { setError("the link does not say which submission it is for"); setLoading(false); return; }
           // `k` binds this link to one submission. Sent as given — including not
           // at all, which is how a link issued before bindings existed asks the
           // server to mail its reviewer a fresh one.
@@ -466,7 +469,7 @@ export default function EvaluationPage() {
       return; // Skip the 365 load path
     }
     if (!formSlug || !responseId || !displayLayerNumber) {
-      setError("Invalid URL parameters.");
+      setError("the link is incomplete");
       setLoading(false);
       return;
     }
@@ -480,11 +483,11 @@ export default function EvaluationPage() {
         });
         const slugJson = await slugData.json();
         const resolvedTitle = slugJson.value?.[0]?.Title;
-        if (!resolvedTitle) { setError("Form not found."); setLoading(false); return; }
+        if (!resolvedTitle) { setError("the form this request belongs to no longer exists"); setLoading(false); return; }
         setFormTitle(resolvedTitle);
 
         const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
-        if (!data) { setError("Could not load evaluation data."); setLoading(false); return; }
+        if (!data) { setError("the details for this request could not be loaded"); setLoading(false); return; }
         // A layer can be assigned to several people (or an expanded distribution
         // list) — any one of them may act. L{n}_Emails carries the full set;
         // older submissions only have the single L{n}_Email.
@@ -497,7 +500,8 @@ export default function EvaluationPage() {
             data.responseFields[`L${displayLayerNumber}_Email`],
           )
         ) {
-          setError("This approval layer is not assigned to your account.");
+          setNotYourRequest(true);
+          setError("this request is waiting for someone else");
           setLoading(false);
           return;
         }
@@ -757,10 +761,40 @@ export default function EvaluationPage() {
   if (error) {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
+        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "48px 44px", maxWidth: 460, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.red, marginBottom: 8 }}>Error</div>
-          <p style={{ color: COLORS.textSecond, fontSize: 13 }}>{error}</p>
+          {/* The people who land here are approvers following a link from an
+              email, not staff who can read a status code. Say what happened and
+              what to do next; the raw reason stays last, for whoever they ask. */}
+          <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.red, marginBottom: 10 }}>
+            {notYourRequest ? "This request is not yours to approve" : "This approval link could not be opened"}
+          </div>
+          {notYourRequest ? (
+            <>
+              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
+                You are signed in as <strong>{userEmail || "this account"}</strong>, and this request is
+                waiting on a different approver. Nothing is wrong with the link.
+              </p>
+              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>
+                If you were expecting to approve this, you may be signed in with the wrong account —
+                sign out and back in with the address the request was sent to, or ask HR to reassign it.
+              </p>
+            </>
+          ) : (
+            <>
+              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
+                The link may have expired, been used already, or been cut short by your email app.
+                Nothing has been approved or rejected, and nothing you do here can go wrong.
+              </p>
+              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>
+                Please ask the HR team to send you a fresh approval link. Forwarding them this page
+                helps them find the request.
+              </p>
+            </>
+          )}
+          <p style={{ color: COLORS.textSecond, fontSize: 12, opacity: 0.8, margin: 0, paddingTop: 14, borderTop: `1px solid ${COLORS.border}` }}>
+            Reason: {error}
+          </p>
         </div>
       </div>
     );

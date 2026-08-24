@@ -1707,6 +1707,7 @@ export default function AdminFormBuilder() {
     { id: "publish", label: "Publish", icon: "rocket", hint: "Review, then make it live" },
   ];
   const modeHint = MODES.find(m => m.id === mode)?.hint ?? "";
+  const modeLabel = MODES.find(m => m.id === mode)?.label ?? "";
 
   const TOOL_GROUPS: { name: string; items: { key: BuilderToolKey; label: string; hint: string }[] }[] = [
     {
@@ -1746,12 +1747,17 @@ export default function AdminFormBuilder() {
         ? { text: "Nothing saved yet", color: C.textMuted }
         : { text: "All changes saved", color: C.purple };
 
+  const effectiveLayerCount = getEffectiveLayerCount(layerConfig, numLayers);
+
   const readiness = [
     { label: "Form title", value: meta.formTitle || "Not set", done: !!meta.formTitle.trim() },
     { label: "Form ID / document no.", value: meta.formId || "Not set", done: !!meta.formId.trim() },
     { label: "Route slug", value: meta.slug ? `/form/${meta.slug}` : "Not set", done: !!meta.slug.trim() && !slugError },
     { label: "Fields on the form", value: String(fieldCount), done: fieldCount > 0 },
-    { label: "Workflow layers", value: numLayers ? String(numLayers) : "None (files direct)", done: true },
+    // Read the live layer config, not the legacy `numLayers` counter — that one is
+    // only written on load and never re-synced when the Workflow tab edits layers,
+    // so it reported "None (files direct)" for forms that do have approvers.
+    { label: "Workflow layers", value: effectiveLayerCount ? String(effectiveLayerCount) : "None (files direct)", done: true },
   ];
 
   return (
@@ -2008,9 +2014,18 @@ export default function AdminFormBuilder() {
       )}
 
       {/* ── Work area ────────────────────────────────────────────────── */}
-      <div className="bx-work">
+      {/* A <main> landmark, and an h1 that names the page for screen readers.
+          The visible form title is an editable input, so it cannot be the
+          heading itself — without this the outline started at h2. */}
+      <main className="bx-work">
+        <h1 className="bx-sr">
+          {`Form builder — ${meta.formTitle || "untitled form"} — ${modeLabel}`}
+        </h1>
 
         <div style={{ display: mode === "build" ? "flex" : "none", flex: 1, minWidth: 0 }}>
+          {/* The other three modes carry a visible h2; this one is the canvas
+              itself, so the heading is for the outline only. */}
+          <h2 className="bx-sr">Fields, labels and layout</h2>
           <FormBuilder
             key={formBuilderKey}
             initialJson={viewingOld?.json || initialJson}
@@ -2495,7 +2510,7 @@ export default function AdminFormBuilder() {
             </div>
           </div>
         )}
-      </div>
+      </main>
 
       {docHeaderProfile && (
         <div

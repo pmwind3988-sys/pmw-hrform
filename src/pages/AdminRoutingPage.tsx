@@ -92,8 +92,8 @@ const ALL_DEPARTMENTS = "__all__";
  */
 const MISSING_COLUMN_EFFECT: Record<string, string> = {
   [APPROVAL_DIRECTORY_COLUMNS.personName]: "the table and form dropdowns show email addresses instead of names",
-  [APPROVAL_DIRECTORY_COLUMNS.department]: 'forms set to "Head of department" have nothing to match on',
-  [APPROVAL_DIRECTORY_COLUMNS.position]: 'forms set to "Head of department" cannot tell who holds the post',
+  [APPROVAL_DIRECTORY_COLUMNS.department]: 'forms set to "Whoever holds a role" have nothing to match on',
+  [APPROVAL_DIRECTORY_COLUMNS.position]: 'forms set to "Whoever holds a role" cannot tell who holds the post',
   [APPROVAL_DIRECTORY_COLUMNS.employeeId]: "staff numbers are not kept; nothing routes on them",
   [APPROVAL_DIRECTORY_COLUMNS.isActive]: "somebody who has left can only be removed, not switched off",
 };
@@ -593,7 +593,7 @@ export default function AdminRoutingPage() {
                 <Box sx={{ p: 3 }}>
                   <Typography sx={{ fontSize: "0.85rem", color: editorial.muted, mb: 2, maxWidth: 640 }}>
                     Pick somebody to see where their forms would go, before anybody submits one. A form layer set
-                    to "Reporting line, one step" sends to the second name below; two steps sends to the third.
+                    to "Their direct manager, one step" sends to the second name below; two steps sends to the third.
                   </Typography>
                   <Autocomplete
                     freeSolo
