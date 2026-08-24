@@ -225,6 +225,13 @@ export type LayerAssignee =
  */
 export interface PublicLinkExpiry {
   mode: "fixed" | "field";
+  /**
+   * Which form carries the question. 0 (or absent) is the submitted form; any
+   * higher number is an earlier review layer, whose answers live in the
+   * record's `EvaluationData`. Layer 2 can therefore expire off a date that
+   * layer 1's evaluator filled in. Field mode only.
+   */
+  sourceLayer?: number;
   /** Question name carrying the date. Field mode only. */
   field?: string;
   /** Days of grace after that date. Field mode only. */

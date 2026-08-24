@@ -15,6 +15,7 @@ import EvalElementPicker from "./EvalElementPicker";
 import PublicLinkDisplay from "./PublicLinkDisplay";
 import DepartmentDirectoryPanel from "./DepartmentDirectoryPanel";
 import { validateLayerConfig } from "./layerValidation";
+import { expirySourceForms } from "./publicLinkExpirySources";
 import { useRecipientSearch } from "../../hooks/useRecipientSearch";
 import { cannotAct, type RecipientKind, type RecipientMatch } from "../../utils/recipientDirectory";
 import { DEPARTMENT_APPROVER_DEFAULTS, createDepartmentApproverAssignee, getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
@@ -1709,7 +1710,7 @@ export default function LayerConfigPanel({
             publicToken={layer.publicToken || ""}
             tokenExpiresAt={layer.tokenExpiresAt || ""}
             tokenExpiry={layer.tokenExpiry}
-            formFields={formFields}
+            expirySources={expirySourceForms(layers, idx, formFields)}
             onTokenChange={t => patchLayer(idx, { publicToken: t })}
             onExpiryChange={d => patchLayer(idx, { tokenExpiresAt: d })}
             onTokenExpiryChange={e => patchLayer(idx, { tokenExpiry: e })}
@@ -1951,7 +1952,7 @@ export default function LayerConfigPanel({
             publicToken={layer.publicToken || ""}
             tokenExpiresAt={layer.tokenExpiresAt || ""}
             tokenExpiry={layer.tokenExpiry}
-            formFields={formFields}
+            expirySources={expirySourceForms(branches[bi]?.layers ?? [], li, formFields)}
             onTokenChange={t => patchBranchLayer(bi, li, { publicToken: t })}
             onExpiryChange={d => patchBranchLayer(bi, li, { tokenExpiresAt: d })}
             onTokenExpiryChange={e => patchBranchLayer(bi, li, { tokenExpiry: e })}

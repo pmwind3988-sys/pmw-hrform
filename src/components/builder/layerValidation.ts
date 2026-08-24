@@ -1,5 +1,10 @@
 import type { LayerConfig, LayerConfigItem, ManualBranch } from "../../types";
 import { parseEmailList } from "../../utils/layerRecipients";
+import {
+  expirySourceForms,
+  findExpirySourceForm,
+  isDateProducingField,
+} from "./publicLinkExpirySources";
 
 export interface LayerFieldOption {
   name: string;
@@ -16,17 +21,15 @@ export interface LayerValidationResult {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Question types whose answer can be read as a date.
- *
- * Mirrors isDateProducingField in PublicLinkDisplay. Selecting anything else
- * is a warning rather than an error: a form may keep a date in a plain column,
- * and the runtime simply leaves the link open when it cannot read one.
+ * What a layer needs in order to be checked. `siblings` is the sequence the
+ * layer sits in — its own branch, or the main one — because a public link may
+ * take its expiry date from an earlier layer's review form, and only its
+ * siblings can say whether that layer asks the question named.
  */
-function isDateProducingField(field: LayerFieldOption | undefined): boolean {
-  if (!field) return false;
-  if (field.type === "datepicker" || field.type === "date") return true;
-  return field.type === "text"
-    && (field.inputType === "date" || field.inputType === "datetime-local");
+interface LayerValidationContext {
+  fields: LayerFieldOption[];
+  fieldNames: Set<string>;
+  siblings: LayerConfigItem[];
 }
 
 export function isValidLayerEmail(value: string): boolean {
@@ -41,9 +44,9 @@ function validateLayer(
   layer: LayerConfigItem,
   index: number,
   scope: string,
-  fieldNames: Set<string>,
-  fieldsByName: Map<string, LayerFieldOption>,
+  context: LayerValidationContext,
 ): LayerValidationResult {
+  const { fieldNames } = context;
   const errors: string[] = [];
   const warnings: string[] = [];
   const label = displayLayerLabel(scope, layer, index);
@@ -118,18 +121,32 @@ function validateLayer(
     }
     if (layer.tokenExpiry?.mode === "field") {
       // A field-driven expiry has no single date to check, so what is validated
-      // is that the question exists and can plausibly hold a date. The runtime
-      // leaves a link open when it cannot read one, which is worth saying at
-      // publish time rather than leaving to be discovered per submission.
+      // is that the question exists in the form it is read from and can
+      // plausibly hold a date. The runtime leaves a link open when it cannot
+      // read one, which is worth saying at publish time rather than leaving to
+      // be discovered per submission.
       const fieldName = layer.tokenExpiry.field?.trim() || "";
-      const field = fieldsByName.get(fieldName);
+      const sourceLayer = Number(layer.tokenExpiry.sourceLayer) > 0
+        ? Number(layer.tokenExpiry.sourceLayer)
+        : 0;
+      const source = findExpirySourceForm(
+        expirySourceForms(context.siblings, index, context.fields),
+        sourceLayer,
+      );
+      const field = source?.questions.find((question) => question.name === fieldName);
       const offsetDays = layer.tokenExpiry.offsetDays ?? 0;
       if (!fieldName) {
         errors.push(`${label}: public link expiry reads a form field, but no field is chosen.`);
-      } else if (!fieldNames.has(fieldName)) {
-        errors.push(`${label}: public link expiry field "${fieldName}" does not exist in the form.`);
+      } else if (!source) {
+        // A source that is gone reads as a missing field when it is the
+        // submitted form, and as a bad layer choice when it is a layer.
+        errors.push(sourceLayer === 0
+          ? `${label}: public link expiry field "${fieldName}" does not exist in the form.`
+          : `${label}: public link expiry reads from layer ${sourceLayer}, which is not an earlier layer that collects answers.`);
+      } else if (!field) {
+        errors.push(`${label}: public link expiry field "${fieldName}" does not exist in ${source.description}.`);
       } else if (!isDateProducingField(field)) {
-        warnings.push(`${label}: public link expiry field "${field?.title || fieldName}" is not a date question; a submission whose answer cannot be read as a date gets a link that never expires.`);
+        warnings.push(`${label}: public link expiry field "${field.title || fieldName}" is not a date question; a submission whose answer cannot be read as a date gets a link that never expires.`);
       }
       if (!Number.isInteger(offsetDays) || offsetDays < 0) {
         errors.push(`${label}: public link expiry grace must be a whole number of days, or zero.`);
@@ -180,8 +197,7 @@ function validateLayer(
 function validateBranch(
   branch: ManualBranch,
   index: number,
-  fieldNames: Set<string>,
-  fieldsByName: Map<string, LayerFieldOption>,
+  formContext: Omit<LayerValidationContext, "siblings">,
 ): LayerValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -195,7 +211,12 @@ function validateBranch(
   }
 
   branch.layers.forEach((layer, layerIndex) => {
-    const result = validateLayer(layer, layerIndex, branchLabel, fieldNames, fieldsByName);
+    // A branch layer reads only from its own branch: a layer in a branch the
+    // submission did not take never ran for it.
+    const result = validateLayer(layer, layerIndex, branchLabel, {
+      ...formContext,
+      siblings: branch.layers,
+    });
     errors.push(...result.errors);
     warnings.push(...result.warnings);
   });
@@ -212,7 +233,6 @@ export function validateLayerConfig(
   const errors: string[] = [];
   const warnings: string[] = [];
   const fieldNames = new Set(fields.map((field) => field.name).filter(Boolean));
-  const fieldsByName = new Map(fields.filter((field) => field.name).map((field) => [field.name, field]));
   const branches = config.manualBranches ?? [];
 
   if (config.manualBranches && branches.length === 0) {
@@ -220,7 +240,11 @@ export function validateLayerConfig(
   }
 
   config.layers.forEach((layer, index) => {
-    const result = validateLayer(layer, index, "Main sequence", fieldNames, fieldsByName);
+    const result = validateLayer(layer, index, "Main sequence", {
+      fields,
+      fieldNames,
+      siblings: config.layers,
+    });
     errors.push(...result.errors);
     warnings.push(...result.warnings);
   });
@@ -236,7 +260,7 @@ export function validateLayerConfig(
         seen.add(normalizedName);
       }
 
-      const result = validateBranch(branch, index, fieldNames, fieldsByName);
+      const result = validateBranch(branch, index, { fields, fieldNames });
       errors.push(...result.errors);
       warnings.push(...result.warnings);
     });

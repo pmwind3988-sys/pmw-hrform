@@ -198,3 +198,154 @@ describe("validateLayerConfig — head of department", () => {
     expect(result.errors).toEqual([]);
   });
 });
+
+describe("validateLayerConfig — public link expiry from a form answer", () => {
+  const FORM_FIELDS = [
+    { name: "requesterName", title: "Requester", type: "text" },
+    { name: "permitEnd", title: "Permit End Date", type: "date" },
+  ];
+
+  function publicLayer(layerNumber: number, overrides: Partial<LayerConfigItem> = {}): LayerConfigItem {
+    return approvalLayer({
+      layerNumber,
+      authMode: "public",
+      publicToken: `token-${layerNumber}`,
+      tokenExpiresAt: "2099-09-01T00:00:00Z",
+      ...overrides,
+    });
+  }
+
+  function evaluationLayer(layerNumber: number, surveyElements: Record<string, unknown>[]): LayerConfigItem {
+    return {
+      layerNumber,
+      type: "evaluation",
+      authMode: "365",
+      assignee: { type: "user", value: "e@x.com" },
+      title: "Site inspection",
+      surveyElements,
+    } as LayerConfigItem;
+  }
+
+  function sequence(layers: LayerConfigItem[]): LayerConfig {
+    return { version: "1.0", layers };
+  }
+
+  it("accepts a date question on the submitted form", () => {
+    const result = validateLayerConfig(
+      sequence([publicLayer(1, { tokenExpiry: { mode: "field", field: "permitEnd", offsetDays: 3 } })]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("accepts a date question from an earlier layer's own form", () => {
+    const result = validateLayerConfig(
+      sequence([
+        evaluationLayer(1, [{ name: "eval_date_1", title: "Inspected On", type: "date" }]),
+        publicLayer(2, { tokenExpiry: { mode: "field", sourceLayer: 1, field: "eval_date_1" } }),
+      ]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("refuses a question the named layer does not ask", () => {
+    const result = validateLayerConfig(
+      sequence([
+        evaluationLayer(1, [{ name: "eval_date_1", type: "date" }]),
+        publicLayer(2, { tokenExpiry: { mode: "field", sourceLayer: 1, field: "permitEnd" } }),
+      ]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([
+      'Main sequence layer 2: public link expiry field "permitEnd" does not exist in layer 1\'s form.',
+    ]);
+  });
+
+  it("refuses a date read from this layer or a later one", () => {
+    const result = validateLayerConfig(
+      sequence([
+        publicLayer(1, { tokenExpiry: { mode: "field", sourceLayer: 2, field: "eval_date_2" } }),
+        evaluationLayer(2, [{ name: "eval_date_2", type: "date" }]),
+      ]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([
+      "Main sequence layer 1: public link expiry reads from layer 2, which is not an earlier layer that collects answers.",
+    ]);
+  });
+
+  it("keeps the old wording when the submitted form lacks the question", () => {
+    const result = validateLayerConfig(
+      sequence([publicLayer(1, { tokenExpiry: { mode: "field", field: "nosuch" } })]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([
+      'Main sequence layer 1: public link expiry field "nosuch" does not exist in the form.',
+    ]);
+  });
+
+  it("still refuses field mode with no question chosen", () => {
+    const result = validateLayerConfig(
+      sequence([publicLayer(1, { tokenExpiry: { mode: "field" } })]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([
+      "Main sequence layer 1: public link expiry reads a form field, but no field is chosen.",
+    ]);
+  });
+
+  it("warns about an earlier layer's question that is not a date", () => {
+    const result = validateLayerConfig(
+      sequence([
+        evaluationLayer(1, [{ name: "eval_notes", title: "Notes", type: "comment" }]),
+        publicLayer(2, { tokenExpiry: { mode: "field", sourceLayer: 1, field: "eval_notes" } }),
+      ]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.join(" ")).toContain("is not a date question");
+  });
+
+  it("refuses grace that is not a whole number of days", () => {
+    const result = validateLayerConfig(
+      sequence([publicLayer(1, { tokenExpiry: { mode: "field", field: "permitEnd", offsetDays: -2 } })]),
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([
+      "Main sequence layer 1: public link expiry grace must be a whole number of days, or zero.",
+    ]);
+  });
+
+  it("resolves a branch layer against its own branch, not the main sequence", () => {
+    const result = validateLayerConfig(
+      {
+        version: "1.0",
+        layers: [evaluationLayer(1, [{ name: "main_date", type: "date" }])],
+        manualBranches: [
+          {
+            name: "urgent",
+            label: "Urgent",
+            layers: [
+              evaluationLayer(1, [{ name: "branch_date", type: "date" }]),
+              publicLayer(2, { tokenExpiry: { mode: "field", sourceLayer: 1, field: "main_date" } }),
+            ],
+          },
+        ],
+      },
+      FORM_FIELDS,
+    );
+    expect(result.errors).toEqual([
+      'Urgent layer 2: public link expiry field "main_date" does not exist in layer 1\'s form.',
+    ]);
+  });
+
+  it("leaves a plain fixed-date public layer alone", () => {
+    expect(validateLayerConfig(sequence([publicLayer(1)]), FORM_FIELDS).errors).toEqual([]);
+    expect(validateLayerConfig(sequence([publicLayer(1, { tokenExpiresAt: "" })]), FORM_FIELDS).errors).toEqual([
+      "Main sequence layer 1: public layers need an expiry date.",
+    ]);
+  });
+});

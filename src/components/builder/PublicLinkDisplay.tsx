@@ -3,26 +3,15 @@
  */
 import { useState, type CSSProperties } from "react";
 import { C } from "./constants";
-import type { LayerFieldOption } from "./layerValidation";
+import {
+  findExpirySourceForm,
+  isDateProducingField,
+  SUBMITTED_FORM_SOURCE_LAYER,
+} from "./publicLinkExpirySources";
+import type { ExpirySourceForm } from "./publicLinkExpirySources";
 import type { PublicLinkExpiry } from "../../types";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import WarningIcon from "@mui/icons-material/Warning";
-
-/**
- * Question types whose answer can be read as a date.
- *
- * A layer may expire on an answer rather than on one date the author picks, and
- * pointing that at a free-text question produces a link that never expires —
- * see `api/_utils/layerExpiry.ts`. Anything else stays selectable but is
- * labelled, because a form may hold a date in a plain column for reasons this
- * component cannot see.
- */
-function isDateProducingField(field: LayerFieldOption | undefined): boolean {
-  if (!field) return false;
-  if (field.type === "datepicker" || field.type === "date") return true;
-  return field.type === "text"
-    && (field.inputType === "date" || field.inputType === "datetime-local");
-}
 
 interface PublicLinkDisplayProps {
   slug: string;
@@ -35,23 +24,26 @@ interface PublicLinkDisplayProps {
   tokenExpiresAt: string;
   /** Absent means the fixed date above. See `PublicLinkExpiry`. */
   tokenExpiry?: PublicLinkExpiry;
-  /** The form's questions, for a layer that expires on one of its answers. */
-  formFields: LayerFieldOption[];
+  /**
+   * The forms this layer may read an expiry date from — the submitted form and
+   * any earlier layer that collects answers. See `publicLinkExpirySources.ts`.
+   */
+  expirySources: ExpirySourceForm[];
   onTokenChange: (token: string) => void;
   onExpiryChange: (date: string) => void;
   onTokenExpiryChange: (expiry: PublicLinkExpiry | undefined) => void;
 }
 
-const modeButton = (active: boolean): CSSProperties => ({
+const modeButton = (active: boolean, available = true): CSSProperties => ({
   flex: 1,
   height: 24,
   border: `1px solid ${active ? C.purple : C.border}`,
   borderRadius: 6,
   background: active ? C.purplePale : C.white,
-  color: active ? C.purple : C.textMuted,
+  color: active ? C.purple : available ? C.textMuted : C.border,
   fontSize: 10,
   fontWeight: 600,
-  cursor: "pointer",
+  cursor: available ? "pointer" : "not-allowed",
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   transition: "all .15s",
 });
@@ -81,7 +73,7 @@ export default function PublicLinkDisplay({
   publicToken,
   tokenExpiresAt,
   tokenExpiry,
-  formFields,
+  expirySources,
   onTokenChange,
   onExpiryChange,
   onTokenExpiryChange,
@@ -92,16 +84,34 @@ export default function PublicLinkDisplay({
   const url = `${appOrigin}/form/${slug}?eval=${publicToken}`;
 
   const isFieldMode = tokenExpiry?.mode === "field";
-  const selectedField = formFields.find((field) => field.name === tokenExpiry?.field);
+  const sourceLayer = Number(tokenExpiry?.sourceLayer) > 0
+    ? Number(tokenExpiry?.sourceLayer)
+    : SUBMITTED_FORM_SOURCE_LAYER;
+  const source = findExpirySourceForm(expirySources, sourceLayer);
+  // A layer since reordered or emptied is still shown, flagged, rather than
+  // silently swapped for another form's questions.
+  const sourceMissing = isFieldMode && !source;
+  const selectedField = source?.questions.find((field) => field.name === tokenExpiry?.field);
   const selectedFieldLabel = selectedField?.title || tokenExpiry?.field || "";
+  const fieldMissing = isFieldMode && !!tokenExpiry?.field && !selectedField;
   const offsetDays = tokenExpiry?.offsetDays ?? 0;
+  const hasSources = expirySources.length > 0;
 
   const setFieldExpiry = (patch: Partial<PublicLinkExpiry>) =>
     onTokenExpiryChange({
       mode: "field",
+      sourceLayer,
       field: tokenExpiry?.field || "",
       offsetDays,
       ...patch,
+    });
+
+  // The question belongs to the form that asks it, so changing forms cannot
+  // keep the previous choice.
+  const chooseSource = (nextLayer: number) =>
+    setFieldExpiry({
+      sourceLayer: nextLayer,
+      field: findExpirySourceForm(expirySources, nextLayer)?.questions[0]?.name ?? "",
     });
 
   const handleCopy = async () => {
@@ -203,21 +213,56 @@ export default function PublicLinkDisplay({
         <button onClick={() => onTokenExpiryChange(undefined)} style={modeButton(!isFieldMode)}>
           Fixed date
         </button>
-        <button onClick={() => setFieldExpiry({})} style={modeButton(isFieldMode)}>
+        <button
+          onClick={() => {
+            if (!hasSources) return;
+            const first = expirySources[0];
+            setFieldExpiry({ sourceLayer: first.sourceLayer, field: first.questions[0]?.name ?? "" });
+          }}
+          disabled={!hasSources}
+          title={hasSources ? undefined : "No form questions to read a date from yet"}
+          style={modeButton(isFieldMode, hasSources)}
+        >
           From a form field
         </button>
       </div>
 
       {isFieldMode ? (
         <div style={{ marginBottom: 8 }}>
+          {/*
+            Which form the date comes from. Only the submitted form and earlier
+            layers are on offer — a later layer has answered nothing while this
+            link is live. See publicLinkExpirySources.ts.
+          */}
+          <select
+            value={sourceLayer}
+            onChange={(e) => chooseSource(Number(e.target.value))}
+            style={{ ...inputBox, width: "100%", marginBottom: 6, borderColor: sourceMissing ? C.red : C.border }}
+          >
+            {sourceMissing && (
+              <option value={sourceLayer}>
+                {sourceLayer === SUBMITTED_FORM_SOURCE_LAYER
+                  ? "Submitted form (no questions yet)"
+                  : `Layer ${sourceLayer} (no longer available)`}
+              </option>
+            )}
+            {expirySources.map((form) => (
+              <option key={form.sourceLayer} value={form.sourceLayer}>{form.label}</option>
+            ))}
+          </select>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <select
               value={tokenExpiry?.field || ""}
               onChange={(e) => setFieldExpiry({ field: e.target.value })}
-              style={{ ...inputBox, flex: 1 }}
+              style={{ ...inputBox, flex: 1, borderColor: fieldMissing ? C.red : C.border }}
             >
               <option value="">- Select date field -</option>
-              {formFields.map((field) => (
+              {fieldMissing && (
+                <option value={tokenExpiry?.field}>
+                  {`${tokenExpiry?.field} (not in this form)`}
+                </option>
+              )}
+              {(source?.questions ?? []).map((field) => (
                 <option key={field.name} value={field.name}>
                   {field.title || field.name}
                   {isDateProducingField(field) ? "" : " (not a date field)"}
@@ -237,12 +282,28 @@ export default function PublicLinkDisplay({
           <div style={hintText}>
             {selectedFieldLabel
               ? `Each submission's link closes at the end of its "${selectedFieldLabel}"${
+                  sourceLayer === SUBMITTED_FORM_SOURCE_LAYER ? "" : ` from layer ${sourceLayer}`
+                }${
                   offsetDays > 0 ? ` plus ${offsetDays} day${offsetDays === 1 ? "" : "s"}` : ""
                 }, Malaysian time.`
               : "Pick the question holding the date each submission's link should expire on."}
           </div>
 
-          {tokenExpiry?.field && !isDateProducingField(selectedField) && (
+          {sourceLayer !== SUBMITTED_FORM_SOURCE_LAYER && !!tokenExpiry?.field && (
+            <div style={hintText}>
+              Layer {sourceLayer} is answered before this one, so until it is
+              completed this link has no expiry date to read yet and stays open.
+            </div>
+          )}
+
+          {fieldMissing && (
+            <div style={{ ...hintText, color: C.red }}>
+              This form does not ask that question. Pick one it does, or the link
+              will have no date to read and will never expire.
+            </div>
+          )}
+
+          {tokenExpiry?.field && !fieldMissing && !isDateProducingField(selectedField) && (
             <div style={{ ...hintText, color: C.amber }}>
               This question is not a date field. Any submission whose answer cannot be
               read as a date gets a link that never expires.
