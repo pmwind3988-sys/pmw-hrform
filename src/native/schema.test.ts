@@ -345,6 +345,25 @@ describe("parseForm — conditions and validators", () => {
   });
 });
 
+describe("parseForm — hidden titles", () => {
+  it("carries the builder's \"Hide title\" tick through to the rendered field", () => {
+    const json = {
+      pages: [
+        {
+          elements: [
+            { type: "text", name: "shown", title: "Shown" },
+            { type: "text", name: "quiet", title: "Quiet", titleLocation: "hidden" },
+          ],
+        },
+      ],
+    };
+    expect(q(json, "shown").hideTitle).toBe(false);
+    expect(q(json, "quiet").hideTitle).toBe(true);
+    // The title itself survives, so the label stays available to screen readers.
+    expect(q(json, "quiet").title).toBe("Quiet");
+  });
+});
+
 describe("autocapitalize", () => {
   it("reads the rule, flattening 'none' and anything unrecognised to off", () => {
     const build = (mode: unknown) => ({

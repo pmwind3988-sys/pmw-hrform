@@ -261,6 +261,19 @@
   line-height: 1.4;
 }
 
+/* "Hide title" in the builder: off the screen, still on the accessibility tree. */
+.nf-label-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .nf-req {
   color: var(--nf-danger);
   margin-left: 2px;

@@ -84,6 +84,12 @@ export interface NativeElement {
   /** Data key. Empty for static content, which stores nothing. */
   name: string;
   title: string;
+  /**
+   * The author ticked "Hide title" in the builder (SurveyJS
+   * `titleLocation: "hidden"`). The label stays in the markup for screen
+   * readers; it is only taken off the screen.
+   */
+  hideTitle: boolean;
   description: string;
   required: boolean;
   requiredMessage: string;
@@ -426,6 +432,7 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
     kind,
     name: kind === "static" || kind === "section" ? "" : name,
     title: str(raw.title, name),
+    hideTitle: str(raw.titleLocation) === "hidden",
     description: str(raw.description),
     required: bool(raw.isRequired),
     requiredMessage: str(raw.requiredErrorText),

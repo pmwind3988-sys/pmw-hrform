@@ -132,7 +132,11 @@ function FieldBlock({ element, runtime, depth, scope }: BlockProps) {
 
   return (
     <div className="nf-field" data-name={element.name} id={`field-${element.name}`}>
-      <label className="nf-label" id={`${controlId}-label`} htmlFor={controlId}>
+      <label
+        className={`nf-label${element.hideTitle ? " nf-label-hidden" : ""}`}
+        id={`${controlId}-label`}
+        htmlFor={controlId}
+      >
         {element.title}
         {element.required && (
           <span className="nf-req" aria-hidden="true">
@@ -212,7 +216,7 @@ function Repeater({ element, runtime, depth }: BlockProps) {
 
   return (
     <div className="nf-field" data-full="true" id={`field-${element.name}`}>
-      <label className="nf-label">
+      <label className={`nf-label${element.hideTitle ? " nf-label-hidden" : ""}`}>
         {element.title}
         {element.required && <span className="nf-req">*</span>}
       </label>
@@ -280,7 +284,7 @@ function Section({
     <>
       {index !== undefined && <span className="nf-section-index">{String(index + 1).padStart(2, "0")}</span>}
       <div className="nf-section-heading">
-        <h2 className="nf-section-title">{element.title || "Details"}</h2>
+        {!element.hideTitle && <h2 className="nf-section-title">{element.title || "Details"}</h2>}
         {element.description && <p className="nf-section-desc">{element.description}</p>}
       </div>
     </>
@@ -288,7 +292,7 @@ function Section({
 
   return (
     <section className="nf-section" data-tone={depth > 0 ? "nested" : undefined}>
-      {(element.title || element.description) &&
+      {((element.title && !element.hideTitle) || element.description) &&
         (element.collapsible ? (
           <button
             type="button"
