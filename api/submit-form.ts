@@ -27,7 +27,9 @@ import {
   type ResolvedLayerActors,
 } from "./_utils/resolveAssignee.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
-import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
+import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
+import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
+import { handleMintTestTicket } from "./_utils/testRunActions.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import {
@@ -1436,6 +1438,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  if (req.method === "POST" && (req.body as Record<string, unknown>)?.action === "mint-test-ticket") {
+    const result = await handleMintTestTicket(req.body as Record<string, unknown>, {
+      resolveOwner: resolveHrFormsOwner,
+      ensureColumn: (token, listTitle, column) => ensureTextFieldViaSPRest(token, listTitle, column, column),
+    });
+    return res.status(result.status).json(result.payload);
+  }
 
   const {
     listTitle,
