@@ -7,6 +7,7 @@ import {
   type WorkflowEmailAttachment,
   type WorkflowEmailContext,
 } from "./_utils/workflowEmail.js";
+import { applySendEmailTestRun } from "./_utils/sendEmailTestRun.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -51,7 +52,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { to, subject, body, workflow, sendToConfiguredSender, attachments } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow, sendToConfiguredSender, attachments, testTicket, slug } = req.body as Record<string, unknown>;
   const configuredSender = process.env.HR_FORM_EMAIL_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "";
 
   const recipients = sendToConfiguredSender === true && configuredSender
@@ -76,12 +77,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments.map(normalizeAttachment).filter((attachment): attachment is WorkflowEmailAttachment => attachment !== null)
       : [];
-    const message = {
-      to: recipients,
-      subject,
-      body,
-      ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
-    };
+    const message = applySendEmailTestRun(
+      {
+        to: recipients,
+        subject,
+        body,
+        ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
+      },
+      testTicket,
+      slug,
+    );
     if (
       workflow &&
       typeof workflow === "object" &&
