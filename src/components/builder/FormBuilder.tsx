@@ -844,7 +844,7 @@ function choiceTexts(field: FormBuilderField): string[] {
   const texts = raw
     .map(c => (typeof c === "string" ? c : (c as { text?: string; value?: string })?.text || (c as { value?: string })?.value || ""))
     .filter(Boolean);
-  if (texts.length) return texts.slice(0, 6);
+  if (texts.length) return texts;
   if (field.spChoicesSource?.list || field.spFilteredListSource?.list) return ["Loaded from SharePoint"];
   return ["Option 1", "Option 2", "Option 3"];
 }
@@ -860,6 +860,9 @@ function wysPlaceholder(field: FormBuilderField): string {
   if (field.type === "number" || field.type === "currency" || field.type === "counter") return "0";
   return "Short answer…";
 }
+
+/** How many options one field's canvas card previews before it summarises the rest. */
+const WYS_CHOICE_PREVIEW_LIMIT = 6;
 
 function WysControl({ field, children }: { field: FormBuilderField; children?: React.ReactNode }) {
   const kind = wysKind(field.type);
@@ -879,9 +882,15 @@ function WysControl({ field, children }: { field: FormBuilderField; children?: R
   }
   if (kind === "choice") {
     const round = hasRoundMark(field.type);
+    // A long option list is trimmed so one field cannot swallow the canvas, but
+    // the managed Company selector is drawn in full: it is edited elsewhere, and
+    // a silently clipped list reads as "my new company was not saved".
+    const allTexts = choiceTexts(field);
+    const shown = isManagedCompanyChoice(field) ? allTexts : allTexts.slice(0, WYS_CHOICE_PREVIEW_LIMIT);
+    const hiddenCount = allTexts.length - shown.length;
     return (
       <div className="bx-wys-choices">
-        {choiceTexts(field).map((text, i) => (
+        {shown.map((text, i) => (
           <div key={`${text}-${i}`} className="bx-wys-choice">
             <span className={`bx-wys-mark${round ? " is-round" : ""}`} />
             {text}
@@ -892,6 +901,9 @@ function WysControl({ field, children }: { field: FormBuilderField; children?: R
             <span className={`bx-wys-mark${round ? " is-round" : ""}`} />
             {field.otherText || DEFAULT_OTHER_TEXT}
           </div>
+        )}
+        {hiddenCount > 0 && (
+          <div className="bx-wys-choice-more">+{hiddenCount} more option{hiddenCount === 1 ? "" : "s"}</div>
         )}
       </div>
     );

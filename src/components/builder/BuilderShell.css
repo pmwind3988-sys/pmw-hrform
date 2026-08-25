@@ -1193,6 +1193,12 @@ textarea.bx-input {
   font-weight: 400;
   color: var(--bx-n800);
 }
+.bx-wys-choice-more {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bx-n500);
+  padding-left: 28px;
+}
 .bx-wys-mark {
   width: 17px;
   height: 17px;
