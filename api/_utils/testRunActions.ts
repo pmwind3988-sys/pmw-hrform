@@ -12,7 +12,8 @@
  */
 import { mintTestTicket } from "./testRun.js";
 import { TEST_EMAIL_FIELD, TEST_FLAG_FIELD } from "./testRun.js";
-import { TEST_RUN_LOG_FIELD } from "./testRunTrail.js";
+import { appendTestRunStep, TEST_RUN_LOG_FIELD, type TestRunStep } from "./testRunTrail.js";
+import { logWarn } from "./logger.js";
 
 export const TEST_RUN_COLUMNS = [TEST_FLAG_FIELD, TEST_EMAIL_FIELD, TEST_RUN_LOG_FIELD];
 
@@ -57,4 +58,36 @@ export async function handleMintTestTicket(
   }
 
   return { status: 200, payload: { ticket: mintTestTicket({ slug, testEmail, issuedBy: owner }) } };
+}
+
+export interface TestRunStepDeps {
+  readItem(token: string, listTitle: string, itemId: string): Promise<{ fields: Record<string, unknown> } | null>;
+  updateFields(token: string, listTitle: string, itemId: string, fields: Record<string, unknown>): Promise<unknown>;
+}
+
+/**
+ * Appends one step to a run's trail, and swallows anything that goes wrong.
+ *
+ * The trail is a report on the submission, not part of it. A failure to write
+ * the report must never be the reason the submission it describes fails.
+ */
+export async function recordTestRunStep(
+  token: string,
+  listTitle: string,
+  itemId: string,
+  step: Omit<TestRunStep, "at">,
+  deps: TestRunStepDeps,
+): Promise<void> {
+  try {
+    const item = await deps.readItem(token, listTitle, itemId);
+    await deps.updateFields(token, listTitle, itemId, {
+      [TEST_RUN_LOG_FIELD]: appendTestRunStep(item?.fields?.[TEST_RUN_LOG_FIELD], step),
+    });
+  } catch (error) {
+    logWarn("api:test-run", "Could not record a test run step", {
+      listTitle,
+      step: step.step,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

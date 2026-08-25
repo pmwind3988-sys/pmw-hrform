@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handleMintTestTicket, TEST_RUN_COLUMNS } from "./testRunActions.js";
+import { handleMintTestTicket, recordTestRunStep, TEST_RUN_COLUMNS } from "./testRunActions.js";
 import { verifyTestTicket } from "./testRun.js";
+import { parseTestRunTrail } from "./testRunTrail.js";
 
 function deps(owner: string | null = "hr@pmw-group.com") {
   return {
@@ -63,5 +64,38 @@ describe("minting a test ticket", () => {
     const result = await handleMintTestTicket(BODY, d);
     expect(result.status).toBe(500);
     expect(result.payload.ticket).toBeUndefined();
+  });
+});
+
+describe("recording a step on a run", () => {
+  function trailDeps(existing = "") {
+    const written: Record<string, unknown>[] = [];
+    return {
+      written,
+      readItem: vi.fn(async () => ({ fields: { TestRunLog: existing } })),
+      updateFields: vi.fn(async (_t: string, _l: string, _i: string, fields: Record<string, unknown>) => {
+        written.push(fields);
+      }),
+    };
+  }
+
+  it("adds the step to the run's trail", async () => {
+    const d = trailDeps();
+    await recordTestRunStep("token", "Leave Application", "42", { step: "row", label: "Response row created", status: "pass", order: 4 }, d);
+    expect(parseTestRunTrail(d.written[0].TestRunLog).row.status).toBe("pass");
+  });
+
+  it("keeps the steps already recorded", async () => {
+    const d = trailDeps(JSON.stringify({ ticket: { step: "ticket", label: "Ticket validated", status: "pass", at: "", order: 1 } }));
+    await recordTestRunStep("token", "Leave Application", "42", { step: "row", label: "Response row created", status: "pass", order: 4 }, d);
+    expect(Object.keys(parseTestRunTrail(d.written[0].TestRunLog)).sort()).toEqual(["row", "ticket"]);
+  });
+
+  it("never fails the submission it is only reporting on", async () => {
+    const d = trailDeps();
+    d.updateFields.mockRejectedValueOnce(new Error("SharePoint said no"));
+    await expect(
+      recordTestRunStep("token", "Leave Application", "42", { step: "row", label: "l", status: "pass", order: 4 }, d),
+    ).resolves.toBeUndefined();
   });
 });
