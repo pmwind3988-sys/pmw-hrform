@@ -88,3 +88,47 @@ export function verifyTestTicket(
     return null;
   }
 }
+
+export const TEST_SUBJECT_PREFIX = "[TEST] ";
+
+export interface TestRunRedirect {
+  testEmail: string;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
+ * Rewrites one outbound message for a test run.
+ *
+ * The production addresses are not merely dropped — they are printed in the
+ * banner. Seeing "would have gone to hod-finance@…" is the single most useful
+ * thing a test run tells a builder, and it is the part a redirect would
+ * otherwise destroy.
+ */
+export function redirectTestMessage<T extends { to: string | string[]; subject: string; body: string }>(
+  message: T,
+  redirect: TestRunRedirect,
+): T {
+  const intended = (Array.isArray(message.to) ? message.to : [message.to]).filter((entry) => entry.trim());
+  const banner =
+    `<div style="border:2px solid #b91c1c;background:#fef2f2;color:#7f1d1d;padding:12px;margin:0 0 16px;border-radius:6px;font-family:sans-serif">` +
+    `<strong>TEST RUN — this is not a real submission.</strong><br>` +
+    `In production this email would have gone to: ${intended.map((entry) => escapeHtml(entry)).join(", ") || "nobody"}.` +
+    `</div>`;
+
+  return {
+    ...message,
+    to: redirect.testEmail,
+    subject: message.subject.startsWith(TEST_SUBJECT_PREFIX)
+      ? message.subject
+      : `${TEST_SUBJECT_PREFIX}${message.subject}`,
+    body: `${banner}${message.body}`,
+  };
+}

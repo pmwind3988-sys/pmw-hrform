@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { mintTestTicket, verifyTestTicket, TEST_TICKET_TTL_MS } from "./testRun.js";
+import { mintTestTicket, verifyTestTicket, TEST_TICKET_TTL_MS, redirectTestMessage, TEST_SUBJECT_PREFIX } from "./testRun.js";
 
 const NOW = new Date("2026-08-26T09:00:00Z");
 
@@ -58,5 +58,63 @@ describe("test ticket", () => {
 
   it("refuses to mint without an address to redirect to", () => {
     expect(() => mintTestTicket({ slug: "x", testEmail: "not-an-email", issuedBy: "hr@pmw-group.com" }, NOW)).toThrow();
+  });
+});
+
+describe("test-run redirect", () => {
+  const redirect = { testEmail: "tester@pmw-group.com" };
+
+  it("sends a message addressed to one person to the test address instead", () => {
+    const out = redirectTestMessage(
+      { to: "hod-finance@pmw-group.com", subject: "Approval needed", body: "<p>Hi</p>" },
+      redirect,
+    );
+    expect(out.to).toBe("tester@pmw-group.com");
+  });
+
+  it("collapses a fan-out to the single test address", () => {
+    const out = redirectTestMessage(
+      { to: ["siti@pmw-group.com", "hr-inbox@pmw-group.com"], subject: "s", body: "b" },
+      redirect,
+    );
+    expect(out.to).toBe("tester@pmw-group.com");
+  });
+
+  it("marks the subject so a test mail is never mistaken for a real one", () => {
+    const out = redirectTestMessage({ to: "a@b.com", subject: "Approval needed", body: "b" }, redirect);
+    expect(out.subject).toBe(`${TEST_SUBJECT_PREFIX}Approval needed`);
+  });
+
+  it("does not double-prefix a subject that is already marked", () => {
+    const once = redirectTestMessage({ to: "a@b.com", subject: "s", body: "b" }, redirect);
+    const twice = redirectTestMessage(once, redirect);
+    expect(twice.subject).toBe(`${TEST_SUBJECT_PREFIX}s`);
+  });
+
+  it("names in the body who the mail was diverted from", () => {
+    const out = redirectTestMessage(
+      { to: ["siti@pmw-group.com", "hod@pmw-group.com"], subject: "s", body: "<p>Body</p>" },
+      redirect,
+    );
+    expect(out.body).toContain("siti@pmw-group.com");
+    expect(out.body).toContain("hod@pmw-group.com");
+    expect(out.body).toContain("Body");
+  });
+
+  it("escapes the diverted addresses rather than trusting them as markup", () => {
+    const out = redirectTestMessage(
+      { to: '<img src=x onerror=alert(1)>@b.com', subject: "s", body: "b" },
+      redirect,
+    );
+    expect(out.body).not.toContain("<img");
+    expect(out.body).toContain("&lt;img");
+  });
+
+  it("leaves every other property of the message alone", () => {
+    const out = redirectTestMessage(
+      { to: "a@b.com", subject: "s", body: "b", attachments: [{ name: "form.pdf" }] },
+      redirect,
+    );
+    expect(out.attachments).toEqual([{ name: "form.pdf" }]);
   });
 });
