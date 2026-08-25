@@ -23,6 +23,7 @@ import { ensureWorkflowColumns } from "./provisioning.js";
 import { parseValidEmailList } from "./layerRecipients.js";
 import { logWarn } from "./logger.js";
 import { REFERENCE_NO_FIELD } from "./referenceNumber.js";
+import { readTestRunRedirect, redirectTestMessage } from "./testRun.js";
 import {
   LINK_REISSUE_LOG_FIELD,
   isReissueAllowed,
@@ -121,7 +122,7 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
     );
 
     const layerType = params.layer?.type === "evaluation" ? "evaluation" : "approval";
-    await sendGraphEmail(params.graphToken, buildWorkflowActionEmail({
+    const message = buildWorkflowActionEmail({
       formTitle: params.formTitle,
       submittedBy: String(params.fields.SubmittedBy || "Public respondent"),
       responseItemId: params.responseItemId,
@@ -140,7 +141,9 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
         linkToken: plan.linkToken,
       }),
       referenceNo: String(params.fields[REFERENCE_NO_FIELD] || ""),
-    }));
+    });
+    const testRun = readTestRunRedirect(params.fields);
+    await sendGraphEmail(params.graphToken, testRun ? redirectTestMessage(message, testRun) : message);
   } catch (err) {
     logWarn("api:evaluate:reissue", "Could not replace an unbound review link", {
       layerNumber: params.layerNumber,

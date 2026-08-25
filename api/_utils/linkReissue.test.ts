@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { planLinkReissue } from "./linkReissue.js";
 import { LINK_REISSUE_LOG_FIELD, recordReissue } from "./linkToken.js";
+
+vi.mock("./graphClient.js", () => ({
+  updateListItemFields: vi.fn(async () => ({})),
+}));
+vi.mock("./provisioning.js", () => ({
+  ensureWorkflowColumns: vi.fn(async () => {}),
+}));
+
+const { reissueReviewLink } = await import("./linkReissue.js");
 
 /**
  * A link issued before review links were bound to their submission carries no
@@ -72,5 +81,60 @@ describe("planLinkReissue", () => {
     const plan = planLinkReissue(activated, 2, NOW);
     const log = JSON.parse(String(plan?.updates[LINK_REISSUE_LOG_FIELD])) as Record<string, string>;
     expect(log["2"]).toBe(NOW.toISOString());
+  });
+});
+
+describe("reissueReviewLink and test runs", () => {
+  function baseParams(fields: Record<string, unknown>) {
+    return {
+      graphToken: "tok",
+      responseListName: "Incident Report",
+      responseItemId: "7",
+      fields,
+      layerNumber: 2,
+      layer: { type: "approval", authMode: "public", publicToken: "pub-tok" },
+      formTitle: "Incident Report",
+      formSlug: "incident-report",
+      totalLayers: 3,
+      baseUrl: "https://example.com",
+      now: NOW,
+    };
+  }
+
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends a reissued link on a test-flagged row to the test address instead", async () => {
+    const sendMail = vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) }));
+    vi.stubGlobal("fetch", sendMail);
+    process.env.HR_FORM_EMAIL_FROM_ADDRESS = "noreply@example.com";
+
+    await reissueReviewLink(baseParams({
+      ...activated,
+      IsTest: "true",
+      TestEmail: "tester@pmw-group.com",
+    }));
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(sendMail.mock.calls[0][1].body));
+    expect(body.message.toRecipients).toEqual([{ emailAddress: { address: "tester@pmw-group.com" } }]);
+    expect(body.message.subject).toContain("[TEST]");
+  });
+
+  it("leaves an ordinary row's reissued link completely unchanged", async () => {
+    const sendMail = vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) }));
+    vi.stubGlobal("fetch", sendMail);
+    process.env.HR_FORM_EMAIL_FROM_ADDRESS = "noreply@example.com";
+
+    await reissueReviewLink(baseParams({ ...activated }));
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(sendMail.mock.calls[0][1].body));
+    expect(body.message.toRecipients).toEqual([
+      { emailAddress: { address: "reviewer@contractor.example" } },
+      { emailAddress: { address: "safety@contractor.example" } },
+    ]);
+    expect(body.message.subject).not.toContain("[TEST]");
   });
 });
