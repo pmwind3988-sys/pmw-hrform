@@ -6,6 +6,8 @@
  * at all, and a run that ran out of time left no trace of what it had skipped.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { redirectTestMessage } from "./testRun.js";
+import type { WorkflowEmailContext, WorkflowEmailMessage } from "./workflowEmail.js";
 
 const graph = vi.hoisted(() => ({
   queryAllListItems: vi.fn(),
@@ -61,6 +63,38 @@ function res() {
 
 const REQ = { method: "GET", headers: {} as Record<string, string> };
 
+/**
+ * Drives the handler with one due schedule entry on one response item, and
+ * returns what actually went out — applying the same redirect
+ * `deliverWorkflowEmail` would, since that function is mocked here.
+ */
+async function runCronWith(options: {
+  fields: Record<string, unknown>;
+  schedule: Record<string, unknown>;
+}): Promise<{ to: string }[]> {
+  const sent: { to: string }[] = [];
+  (mail.deliverWorkflowEmail as unknown as {
+    mockImplementation(fn: (token: string, message: WorkflowEmailMessage, context: WorkflowEmailContext) => Promise<Record<string, never>>): void;
+  }).mockImplementation(async (_token, message, context) => {
+    const outgoing = context.testRun ? redirectTestMessage(message, context.testRun) : message;
+    sent.push({ to: Array.isArray(outgoing.to) ? outgoing.to.join(", ") : outgoing.to });
+    return {};
+  });
+  graph.queryAllListItems.mockImplementation(async (_t: string, list: string) =>
+    list === "Master Form"
+      ? [{ id: "f1", fields: { Title: "Incident Report" } }]
+      : [{
+        id: "1",
+        fields: {
+          ...options.fields,
+          WorkflowEmailSchedule: JSON.stringify(options.schedule),
+        },
+      }]);
+
+  await handler(REQ, res());
+  return sent;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   graph.updateListItemFields.mockResolvedValue({});
@@ -111,5 +145,36 @@ describe("the cron scan", () => {
     vi.useRealTimers();
 
     expect(r.result.body?.remainingForms).toBeGreaterThan(0);
+  });
+
+  it("still redirects a deferred test-run email, long after the ticket expired", async () => {
+    // A row flagged as a test, with a schedule entry due now and no ticket anywhere.
+    const sent = await runCronWith({
+      fields: { IsTest: "true", TestEmail: "tester@pmw-group.com" },
+      schedule: {
+        "2": {
+          layer: 2, recipient: "hod@pmw-group.com",
+          dueAt: "2020-01-01T00:00:00.000Z", status: "scheduled",
+          updatedAt: "2020-01-01T00:00:00.000Z", layerType: "evaluation",
+          totalLayers: 2, reviewLink: "https://example.com/2", submittedBy: "s@example.com",
+        },
+      },
+    });
+    expect(sent[0].to).toBe("tester@pmw-group.com");
+  });
+
+  it("leaves a production deferred email addressed to its real recipient", async () => {
+    const sent = await runCronWith({
+      fields: {},
+      schedule: {
+        "2": {
+          layer: 2, recipient: "hod@pmw-group.com",
+          dueAt: "2020-01-01T00:00:00.000Z", status: "scheduled",
+          updatedAt: "2020-01-01T00:00:00.000Z", layerType: "evaluation",
+          totalLayers: 2, reviewLink: "https://example.com/2", submittedBy: "s@example.com",
+        },
+      },
+    });
+    expect(sent[0].to).toBe("hod@pmw-group.com");
   });
 });

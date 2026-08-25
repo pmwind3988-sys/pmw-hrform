@@ -14,6 +14,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
+import { readTestRunRedirect } from "./_utils/testRun.js";
 
 /**
  * How long one run may spend scanning before it stops and says so.
@@ -127,7 +128,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 reviewLink: entry.reviewLink,
                 referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
               }),
-              { listTitle: formTitle, responseItemId: item.id, layer: entry.layer },
+              {
+                listTitle: formTitle,
+                responseItemId: item.id,
+                layer: entry.layer,
+                testRun: readTestRunRedirect(item.fields),
+              },
             );
             sent++;
           } catch (error) {

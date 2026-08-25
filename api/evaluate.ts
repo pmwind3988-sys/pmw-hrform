@@ -24,6 +24,9 @@ import {
 } from "./_utils/layerItemAccess.js";
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
+import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
+import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
+import type { TestRunStep } from "./_utils/testRunTrail.js";
 
 /**
  * What an old link is told. Deliberately the same answer whether the
@@ -675,6 +678,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const responseListName = `${formTitle} Responses`;
     const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
+    // A ticket signed at submit time expires in hours; a run can sit at a later
+    // layer for days or months. The redirect is therefore recovered off the
+    // stored row, never off the request.
+    const testRun = readTestRunRedirect(responseItem.fields);
+    const trailDeps: TestRunStepDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
     const itemFormVersion = String(responseItem.fields.FormVersion || formConfig.CurrentVersion || "1.0");
     const itemPublishKey = String(responseItem.fields.PublishKey || formConfig.CurrentPublishKey || "");
     const versionRow = itemFormVersion
@@ -846,6 +854,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       });
     }
 
+    if (testRun) {
+      const decisionSteps: Omit<TestRunStep, "at">[] = [
+        {
+          step: `layer-${layerNumber}-decision`,
+          label: `Layer ${layerNumber} decision recorded`,
+          status: "pass",
+          detail: `${action} by ${actedByEmail || String(responseItem.fields[`L${layerNumber}_ActedBy`] || "") || "the tester"}`,
+          order: 10 * layerNumber + 2,
+        },
+      ];
+      if (!notificationNextLayer) {
+        decisionSteps.push({
+          step: "final-status",
+          label: "Final status set",
+          status: "pass",
+          detail: String(updates.FormStatus || ""),
+          order: 1000,
+        });
+      }
+      await recordTestRunSteps(graphToken, responseListName, String(responseItem.id), decisionSteps, trailDeps);
+    }
+
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);
       // A layer routing from the previous layer's actor was left empty at
@@ -868,7 +898,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         || responseItem.fields[`L${nextLayerNumber}_Email`],
       );
       const recipient = recipients.length === 1 ? recipients[0] : recipients;
-      if (recipients.length > 0) {
+      if (isTestRow(responseItem.fields) && !testRun) {
+        // A test row with no usable redirect address. The alternative —
+        // falling back to the real assignee — would mail a real approver from
+        // a run the builder believes is a rehearsal, so the mail simply does
+        // not go out.
+        logWarn("api:evaluate", "Test run has no usable redirect address; refusing to send the next layer's email rather than mailing a real approver", {
+          formTitle,
+          responseItemId: safeResponseItemId,
+          layer: nextLayerNumber,
+        });
+      } else if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
         const publicToken = String(notificationNextLayer.publicToken || "").trim();
@@ -935,6 +975,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               listTitle: responseListName,
               responseItemId: responseItem.id,
               layer: nextLayerNumber,
+              testRun,
             },
             notificationNextLayer.type === "evaluation"
               ? notificationNextLayer.emailSchedule as WorkflowEmailScheduleConfig | undefined
