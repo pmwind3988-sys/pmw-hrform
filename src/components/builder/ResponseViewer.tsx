@@ -179,10 +179,30 @@ export default function ResponseViewer() {
         const listName = formTitle;
         const items = await spGet(
           token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON,PdfUrl,IsTest&$orderby=SubmittedAt desc&$top=100`
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON,PdfUrl&$orderby=SubmittedAt desc&$top=100`
         ) as { value?: SubmissionItem[] };
 
-        setSubmissions(items.value || []);
+        const loadedItems = items.value || [];
+
+        // IsTest is provisioned lazily — it only exists on a list once someone
+        // has minted a test ticket for that form — so it is fetched separately
+        // and merged in. A list that has never been rehearsed 400s on this
+        // query, which must not sink the submissions load above.
+        try {
+          const testData = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=SubmittedAt desc&$top=100`
+          ) as { value?: { Id: number; IsTest?: string | boolean }[] };
+          const testMap = new Map<number, string | boolean | undefined>();
+          for (const row of testData.value || []) testMap.set(row.Id, row.IsTest);
+          for (const item of loadedItems) {
+            if (testMap.has(item.Id)) item.IsTest = testMap.get(item.Id);
+          }
+        } catch {
+          // Column does not exist on this list — every row here reads as production.
+        }
+
+        setSubmissions(loadedItems);
 
         // Every version this form has been published as, so the filter knows the
         // questions before any submission is opened — `surveyJson` below is

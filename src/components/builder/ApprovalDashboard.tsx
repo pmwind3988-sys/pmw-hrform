@@ -1094,12 +1094,32 @@ export default function ApprovalDashboard() {
                   // Forms without a `trainingTitle` field simply have no value here.
                 }
               };
+              // IsTest is provisioned lazily — it only exists on a list once someone
+              // has minted a test ticket for that form — so, like the other optional
+              // columns above, it is fetched separately rather than named in the
+              // required tier selects. A list that has never been rehearsed 400s on
+              // this query alone, and every row on it correctly reads as production.
+              const attachTestFlags = async (itemsToUpdate: PendingItem[]): Promise<void> => {
+                try {
+                  const testData = await spGet(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=Created desc&$top=100`
+                  ) as { value?: { Id: number; IsTest?: string | boolean }[] };
+                  const testMap = new Map(
+                    (testData.value ?? []).map((current) => [current.Id, current.IsTest]),
+                  );
+                  for (const current of itemsToUpdate) {
+                    if (testMap.has(current.Id)) current.IsTest = testMap.get(current.Id);
+                  }
+                } catch {
+                  // Column does not exist on this list — every row here reads as production.
+                }
+              };
 
               // Tier 1: core columns only (no CurrentLayer/SelectedBranch — may not exist on older lists)
               const tier1 = await (async () => {
                 try {
                   return await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,PdfUrl,IsTest&$orderby=Created desc&$top=100`
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,PdfUrl&$orderby=Created desc&$top=100`
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
@@ -1140,6 +1160,7 @@ export default function ApprovalDashboard() {
                 await attachPublishKeys(tier1.value || []);
                 await attachLayerStatuses(tier1.value || []);
                 await attachTrainingTitles(tier1.value || []);
+                await attachTestFlags(tier1.value || []);
                 // SelectedBranch (only if the form has manual branches)
                 if (hasBranches) {
                   try {
@@ -1164,7 +1185,7 @@ export default function ApprovalDashboard() {
               const tier2 = await (async () => {
                 try {
                   return await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,IsTest&$orderby=Created desc&$top=100`
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status&$orderby=Created desc&$top=100`
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
@@ -1174,6 +1195,7 @@ export default function ApprovalDashboard() {
                 await attachPublishKeys(tier2.value || []);
                 await attachLayerStatuses(tier2.value || []);
                 await attachTrainingTitles(tier2.value || []);
+                await attachTestFlags(tier2.value || []);
                 return tier2;
               }
 

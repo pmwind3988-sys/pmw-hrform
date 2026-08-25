@@ -598,6 +598,7 @@ export function countActiveFilters(filters: SubmissionFilterState): number {
   if (filters.dateTo !== EMPTY_SUBMISSION_FILTERS.dateTo) count += 1;
   if (filters.publishProfile !== EMPTY_SUBMISSION_FILTERS.publishProfile) count += 1;
   if (filters.formVersion !== EMPTY_SUBMISSION_FILTERS.formVersion) count += 1;
+  if (filters.includeTestRuns !== EMPTY_SUBMISSION_FILTERS.includeTestRuns) count += 1;
   return count;
 }
 
