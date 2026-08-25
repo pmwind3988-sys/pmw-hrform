@@ -498,6 +498,66 @@ export function queryMasterFormBySlug(token: string, slug: string): Promise<Grap
   return queryListItemByFields(token, "Master Form", { Slug: slug });
 }
 
+const DEFAULT_PUBLISH_KEY = "production";
+
+function parseVersionPayload(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A publish profile is the same version with a different workflow, so it has to
+ * ask the same questions as the form it belongs to.
+ *
+ * Each profile is stored as its own row and so carries its own copy of the
+ * survey and its meta - a copy taken when the profile was last saved and never
+ * moved since. Serving that copy is what left `?publish=...` links offering an
+ * out-of-date company list while `/form/{slug}` offered the current one. The
+ * questions and the banner meta therefore come from the default profile of the
+ * same version, while everything a profile is actually for - its workflow, its
+ * label, its status and its expiry - stays on the profile's own row.
+ *
+ * This mirrors `getFormVersion` in `src/utils/formBuilderSP.ts`, which does the
+ * same for signed-in readers. Both paths have to agree, or a public visitor and
+ * an authenticated one see different forms behind one link.
+ */
+async function withDefaultProfileContent(
+  token: string,
+  formTitle: string,
+  formVersion: string,
+  publishKey: string,
+  item: GraphListItem | null,
+): Promise<GraphListItem | null> {
+  if (!item || publishKey === DEFAULT_PUBLISH_KEY) return item;
+  const profile = parseVersionPayload(item.fields?.SurveyJSON);
+  if (!profile) return item;
+  const baseItem = await queryListItemByFields(token, "Web Form Versions", {
+    FormTitle: formTitle,
+    FormVersion: formVersion,
+    PublishKey: DEFAULT_PUBLISH_KEY,
+  }).catch(() => null);
+  const base = parseVersionPayload(baseItem?.fields?.SurveyJSON);
+  if (!base?.surveyJson) return item;
+  return {
+    ...item,
+    fields: {
+      ...item.fields,
+      SurveyJSON: JSON.stringify({
+        ...profile,
+        surveyJson: base.surveyJson,
+        meta: base.meta ?? profile.meta,
+      }),
+    },
+  };
+}
+
 export function queryWebFormVersion(
   token: string,
   formTitle: string,
@@ -511,13 +571,14 @@ export function queryWebFormVersion(
       PublishKey: publishKey,
     });
     return keyed.then(async (item) => {
-      if (item || publishKey !== "production") return item;
+      if (item) return withDefaultProfileContent(token, formTitle, formVersion, publishKey, item);
+      if (publishKey !== DEFAULT_PUBLISH_KEY) return item;
       return queryListItemByFields(token, "Web Form Versions", {
         FormTitle: formTitle,
         FormVersion: formVersion,
       });
     }).catch(async () => {
-      if (publishKey !== "production") return null;
+      if (publishKey !== DEFAULT_PUBLISH_KEY) return null;
       return queryListItemByFields(token, "Web Form Versions", {
         FormTitle: formTitle,
         FormVersion: formVersion,
