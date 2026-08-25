@@ -13,6 +13,7 @@ import {
   uploadFileToDriveItem,
   deleteListItem,
   deleteDocLibraryFile,
+  queryListItemById,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
@@ -29,7 +30,8 @@ import {
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
-import { handleMintTestTicket } from "./_utils/testRunActions.js";
+import { handleMintTestTicket, recordTestRunStep } from "./_utils/testRunActions.js";
+import { verifyTestTicket, testRunFieldsFor, type TestRunRedirect } from "./_utils/testRun.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import {
@@ -914,6 +916,7 @@ function mapToExistingColumns(
   fields: Record<string, unknown>,
   resolveColumnKey: (fieldName: string) => string | null,
   listTitle: string,
+  droppedFieldNames?: string[],
 ): Record<string, unknown> {
   const mapped: Record<string, unknown> = {};
   for (const [fieldName, value] of Object.entries(fields)) {
@@ -924,6 +927,7 @@ function mapToExistingColumns(
           listTitle,
           fieldName,
         });
+        droppedFieldNames?.push(fieldName);
         continue;
       }
       logWarn("api:submit-form", "Submitted field missing from response list schema", { listTitle, fieldName });
@@ -1385,6 +1389,7 @@ async function sendManualPaperWorkflowEmail(
     layer: ApiLayerConfigItem;
     totalLayers: number;
     referenceNo: string;
+    testRun?: TestRunRedirect;
   },
 ): Promise<void> {
   await scheduleOrDeliverWorkflowEmail(
@@ -1405,6 +1410,7 @@ async function sendManualPaperWorkflowEmail(
       listTitle: params.listTitle,
       responseItemId: params.responseItemId,
       layer: params.layer.layerNumber,
+      testRun: params.testRun,
     },
     params.layer.type === "evaluation" ? params.layer.emailSchedule : undefined,
     {
@@ -1496,6 +1502,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Form is not public" });
     }
 
+    const testTicket = verifyTestTicket((req.body as Record<string, unknown>)?.testTicket, valueToText(formConfig.Slug));
+    const testRedirect: TestRunRedirect | undefined = testTicket ? { testEmail: testTicket.testEmail } : undefined;
+    const trailDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
+
     const targetVersion = typeof formVersion === "string" && formVersion.trim()
       ? formVersion.trim()
       : valueToText(formConfig.CurrentVersion) || "1.0";
@@ -1540,6 +1550,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     submissionBody.PDPAConsentAt = consentedAt;
     submissionBody.RetentionUntil = retentionDate;
 
+    // IsTest/TestEmail land on the row as it is created rather than in a later
+    // patch that could fail after the mail has already gone out.
+    if (testTicket) Object.assign(submissionBody, testRunFieldsFor(testTicket));
+
     const parsedLayerConfig = parseLayerConfig(formConfig.LayerConfig);
     await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig);
 
@@ -1553,7 +1567,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const referenceConfig = parseReferenceNumberConfig(formConfig.ReferenceConfig);
     if (referenceConfig.enabled) {
       if (resolveColumnKey(REFERENCE_NO_FIELD)) {
-        referenceNo = await allocateReferenceNumber({ formTitle: listTitle, config: referenceConfig });
+        referenceNo = await allocateReferenceNumber({
+          formTitle: listTitle,
+          config: referenceConfig,
+          isTest: Boolean(testTicket),
+        });
         submissionBody[REFERENCE_NO_FIELD] = referenceNo;
       } else {
         logWarn("api:submit-form", "Reference numbers are on but the response list has no ReferenceNo column", {
@@ -1583,18 +1601,102 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // Image column fields (urlFieldPatches) are excluded from the Graph create
     // payload — they have never been writable via Graph PATCH on Image columns.
     const createBody = omitUrlPatchFields(submissionBody, submission.urlFieldPatches);
-    const writableBody = mapToExistingColumns(createBody, resolveColumnKey, listTitle);
+    const droppedFieldNames: string[] = [];
+    const writableBody = mapToExistingColumns(createBody, resolveColumnKey, listTitle, droppedFieldNames);
 
     const result = await createResponseItem(token, listTitle, writableBody);
     const parentId = result.id;
+
+    if (testTicket) {
+      await recordTestRunStep(token, listTitle, String(parentId), {
+        step: "ticket",
+        label: "Test ticket validated",
+        status: "pass",
+        detail: `Issued by ${testTicket.issuedBy}`,
+        order: 1,
+      }, trailDeps);
+      await recordTestRunStep(token, listTitle, String(parentId), {
+        step: "answers",
+        label: "Answers accepted",
+        status: "pass",
+        order: 2,
+      }, trailDeps);
+      await recordTestRunStep(token, listTitle, String(parentId), {
+        step: "reference",
+        label: "Reference number allocated",
+        status: "pass",
+        detail: referenceNo || undefined,
+        order: 3,
+      }, trailDeps);
+      await recordTestRunStep(token, listTitle, String(parentId), {
+        step: "row",
+        label: "Response row created",
+        status: "pass",
+        detail: `Item ${parentId}`,
+        order: 4,
+      }, trailDeps);
+      await recordTestRunStep(token, listTitle, String(parentId), {
+        step: "fields",
+        label: "All answers stored",
+        status: droppedFieldNames.length > 0 ? "warn" : "pass",
+        detail: droppedFieldNames.length > 0 ? droppedFieldNames.join(", ") : undefined,
+        order: 5,
+      }, trailDeps);
+      if (parsedLayerConfig?.layers) {
+        for (const layer of parsedLayerConfig.layers) {
+          const n = layer.layerNumber;
+          const addresses = parseValidEmailList(
+            submissionBody[`L${n}_NotifyEmails`] || submissionBody[`L${n}_Email`],
+          );
+          await recordTestRunStep(token, listTitle, String(parentId), {
+            step: `layer-${n}-routing`,
+            label: `Layer ${n} routed`,
+            status: "pass",
+            detail: addresses.length > 0 ? addresses.join(", ") : undefined,
+            order: 10 * n,
+          }, trailDeps);
+        }
+      }
+    }
 
     let childItemIds: Record<string, number[]> = {};
     const childItemRefs: ApiCreatedListItemRef[] = [];
     try {
       // ── Write Image/Hyperlink columns via SharePoint REST AFTER item creation ──
-      await applyUrlFieldPatches(listTitle, parentId, submission.urlFieldPatches, resolveColumnKey);
+      try {
+        await applyUrlFieldPatches(listTitle, parentId, submission.urlFieldPatches, resolveColumnKey);
+        if (testTicket) {
+          await recordTestRunStep(token, listTitle, String(parentId), {
+            step: "attachments",
+            label: "Attachments and signature stored",
+            status: submission.urlFieldPatches.length === 0 ? "skip" : "pass",
+            order: 6,
+          }, trailDeps);
+        }
+      } catch (attachError) {
+        if (testTicket) {
+          await recordTestRunStep(token, listTitle, String(parentId), {
+            step: "attachments",
+            label: "Attachments and signature stored",
+            status: "fail",
+            detail: errorMessage(attachError),
+            order: 6,
+          }, trailDeps);
+        }
+        throw attachError;
+      }
+
+      if (testTicket && (!matrixData || Object.keys(matrixData).length === 0)) {
+        await recordTestRunStep(token, listTitle, String(parentId), {
+          step: "matrix",
+          label: "Matrix rows written",
+          status: "skip",
+          order: 7,
+        }, trailDeps);
+      }
 
       if (matrixData && parentId) {
+       try {
         const matrixSpecs = new Map(schema.matrices.map((matrix) => [matrix.name, matrix]));
         for (const [fieldName, data] of Object.entries(matrixData)) {
           const matrixSpec = matrixSpecs.get(fieldName);
@@ -1680,6 +1782,27 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             throw new PublicSubmissionError("Could not save matrix row references. Please try again.", 500);
           }
         }
+
+        if (testTicket) {
+          await recordTestRunStep(token, listTitle, String(parentId), {
+            step: "matrix",
+            label: "Matrix rows written",
+            status: "pass",
+            order: 7,
+          }, trailDeps);
+        }
+       } catch (matrixError) {
+        if (testTicket) {
+          await recordTestRunStep(token, listTitle, String(parentId), {
+            step: "matrix",
+            label: "Matrix rows written",
+            status: "fail",
+            detail: errorMessage(matrixError),
+            order: 7,
+          }, trailDeps);
+        }
+        throw matrixError;
+       }
       }
     } catch (postCreateError) {
       cleanupHandled = true;
@@ -1718,7 +1841,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 reason: routingReasonForLayer(submissionBody, firstLayer.layerNumber),
                 referenceNo,
               }),
-              { listTitle, responseItemId: parentId, layer: firstLayer.layerNumber },
+              { listTitle, responseItemId: parentId, layer: firstLayer.layerNumber, testRun: testRedirect },
               undefined,
               {
                 layer: firstLayer.layerNumber,
@@ -1737,6 +1860,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               layer: firstLayer,
               totalLayers,
               referenceNo,
+              testRun: testRedirect,
             });
           } else {
             const reviewLink = buildWorkflowReviewLink({
@@ -1766,6 +1890,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 listTitle,
                 responseItemId: parentId,
                 layer: firstLayer.layerNumber,
+                testRun: testRedirect,
               },
               firstLayer.type === "evaluation" ? firstLayer.emailSchedule : undefined,
               {
@@ -1777,6 +1902,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               },
             );
           }
+          if (testTicket) {
+            await recordTestRunStep(token, listTitle, String(parentId), {
+              step: `layer-${firstLayer.layerNumber}-email`,
+              label: `Layer ${firstLayer.layerNumber} email sent`,
+              status: "pass",
+              detail: `to ${testTicket.testEmail}`,
+              order: 10 * firstLayer.layerNumber + 1,
+            }, trailDeps);
+          }
         } catch (emailError) {
           logWarn("api:submit-form", "Initial workflow email delivery failed", {
             listTitle,
@@ -1784,6 +1918,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             layer: firstLayer.layerNumber,
             errorMessage: emailError instanceof Error ? emailError.message : String(emailError),
           });
+          if (testTicket) {
+            await recordTestRunStep(token, listTitle, String(parentId), {
+              step: `layer-${firstLayer.layerNumber}-email`,
+              label: `Layer ${firstLayer.layerNumber} email sent`,
+              status: "fail",
+              detail: errorMessage(emailError),
+              order: 10 * firstLayer.layerNumber + 1,
+            }, trailDeps);
+          }
         }
       }
     }
