@@ -4,6 +4,7 @@ import {
   updateListItemFields,
 } from "./graphClient.js";
 import { logWarn } from "./logger.js";
+import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
 
 export type WorkflowEmailDeliveryStatus = "sent" | "failed";
 
@@ -71,6 +72,12 @@ export interface WorkflowEmailContext {
   listTitle: string;
   responseItemId: string | number;
   layer: number;
+  /**
+   * Set only on a test run. Present here rather than at each call site because
+   * this is the one place every workflow email passes through — a redirect that
+   * a future caller could forget to apply would mail a real approver.
+   */
+  testRun?: TestRunRedirect;
 }
 
 export interface WorkflowActionEmailParams {
@@ -427,11 +434,12 @@ export async function deliverWorkflowEmail(
   message: WorkflowEmailMessage,
   context: WorkflowEmailContext,
 ): Promise<WorkflowEmailEntry> {
-  const recipient = typeof message.to === "string" ? message.to : message.to.join(", ");
+  const outgoing = context.testRun ? redirectTestMessage(message, context.testRun) : message;
+  const recipient = typeof outgoing.to === "string" ? outgoing.to : outgoing.to.join(", ");
   const attemptedAt = new Date().toISOString();
   let sent = false;
   try {
-    await sendGraphEmail(token, message);
+    await sendGraphEmail(token, outgoing);
     sent = true;
     return await persistWorkflowEmailAttempt(token, context, {
       layer: context.layer,

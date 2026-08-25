@@ -15,7 +15,7 @@ vi.mock("./graphClient.js", () => ({
   updateListItemFields: vi.fn(async () => { calls.push("updateListItemFields"); return {}; }),
 }));
 
-const { scheduleOrDeliverWorkflowEmail, WorkflowEmailRecordError } = await import("./workflowEmail.js");
+const { scheduleOrDeliverWorkflowEmail, deliverWorkflowEmail, WorkflowEmailRecordError } = await import("./workflowEmail.js");
 
 const MESSAGE = { to: ["a@example.com", "b@example.com"], subject: "s", body: "b" };
 const CONTEXT = { listTitle: "Incident Report", responseItemId: "7", layer: 1 };
@@ -92,5 +92,60 @@ describe("a deferred notification", () => {
       "tok", MESSAGE, CONTEXT, { mode: "custom_days", customDays: 7 }, DETAILS,
     );
     expect(entry.recipient).toBe("a@example.com, b@example.com");
+  });
+});
+
+describe("test-run delivery", () => {
+  function stubSendMailCapture() {
+    const sent: { to: string; subject: string; body: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      calls.push("sendMail");
+      const payload = JSON.parse(String(init.body));
+      sent.push({
+        to: payload.message.toRecipients.map((r: { emailAddress: { address: string } }) => r.emailAddress.address).join(", "),
+        subject: payload.message.subject,
+        body: payload.message.body.content,
+      });
+      return { ok: true, status: 202, json: async () => ({}) };
+    }));
+    return sent;
+  }
+
+  it("sends a test run's layer email to the test address, not the assignee", async () => {
+    const sent = stubSendMailCapture();
+    await deliverWorkflowEmail(
+      "token",
+      { to: "hod-finance@pmw-group.com", subject: "Approval needed", body: "<p>x</p>" },
+      { listTitle: "Leave Application", responseItemId: "42", layer: 2, testRun: { testEmail: "tester@pmw-group.com" } },
+    );
+    expect(sent[0].to).toBe("tester@pmw-group.com");
+    expect(sent[0].subject).toContain("[TEST]");
+    expect(sent[0].body).toContain("hod-finance@pmw-group.com");
+  });
+
+  it("records the delivery against the test address that actually received it", async () => {
+    stubSendMailCapture();
+    const { updateListItemFields } = await import("./graphClient.js");
+    vi.mocked(updateListItemFields).mockClear();
+    await deliverWorkflowEmail(
+      "token",
+      { to: "hod-finance@pmw-group.com", subject: "s", body: "b" },
+      { listTitle: "Leave Application", responseItemId: "42", layer: 2, testRun: { testEmail: "tester@pmw-group.com" } },
+    );
+    const fields = vi.mocked(updateListItemFields).mock.calls[0][3] as Record<string, unknown>;
+    const log = JSON.parse(String(fields.WorkflowEmailLog));
+    expect(log["2"].recipient).toBe("tester@pmw-group.com");
+  });
+
+  it("leaves a production delivery exactly as it was", async () => {
+    const sent = stubSendMailCapture();
+    await deliverWorkflowEmail(
+      "token",
+      { to: "hod-finance@pmw-group.com", subject: "Approval needed", body: "<p>x</p>" },
+      { listTitle: "Leave Application", responseItemId: "42", layer: 2 },
+    );
+    expect(sent[0].to).toBe("hod-finance@pmw-group.com");
+    expect(sent[0].subject).toBe("Approval needed");
+    expect(sent[0].body).toBe("<p>x</p>");
   });
 });
