@@ -132,3 +132,29 @@ export function redirectTestMessage<T extends { to: string | string[]; subject: 
     body: `${banner}${message.body}`,
   };
 }
+
+export const TEST_FLAG_FIELD = "IsTest";
+export const TEST_EMAIL_FIELD = "TestEmail";
+
+export function testRunFieldsFor(payload: TestTicketPayload): Record<string, string> {
+  return { [TEST_FLAG_FIELD]: "true", [TEST_EMAIL_FIELD]: payload.testEmail };
+}
+
+export function isTestRow(fields: Record<string, unknown> | undefined): boolean {
+  const flag = fields?.[TEST_FLAG_FIELD];
+  return flag === true || String(flag ?? "").trim().toLowerCase() === "true";
+}
+
+/**
+ * A flagged row with no usable address gets no redirect. The alternative —
+ * falling back to the real assignee — would mail a real approver from a run the
+ * builder believes is a rehearsal, which is the one outcome this feature exists
+ * to prevent. The mail simply does not go out, and the trail records why.
+ */
+export function readTestRunRedirect(
+  fields: Record<string, unknown> | undefined,
+): TestRunRedirect | undefined {
+  if (!isTestRow(fields)) return undefined;
+  const testEmail = String(fields?.[TEST_EMAIL_FIELD] ?? "").trim().toLowerCase();
+  return EMAIL_RE.test(testEmail) ? { testEmail } : undefined;
+}

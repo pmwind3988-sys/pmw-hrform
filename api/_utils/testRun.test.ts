@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { mintTestTicket, verifyTestTicket, TEST_TICKET_TTL_MS, redirectTestMessage, TEST_SUBJECT_PREFIX } from "./testRun.js";
+import { isTestRow, readTestRunRedirect, testRunFieldsFor } from "./testRun.js";
 
 const NOW = new Date("2026-08-26T09:00:00Z");
 
@@ -116,5 +117,39 @@ describe("test-run redirect", () => {
       redirect,
     );
     expect(out.attachments).toEqual([{ name: "form.pdf" }]);
+  });
+});
+
+describe("reading a test run back off its row", () => {
+  it("stamps the flag and the address the run redirects to", () => {
+    expect(testRunFieldsFor({
+      slug: "leave-application",
+      testEmail: "tester@pmw-group.com",
+      issuedBy: "hr@pmw-group.com",
+      expiresAt: 0,
+    })).toEqual({ IsTest: "true", TestEmail: "tester@pmw-group.com" });
+  });
+
+  it("recovers the redirect from a stored row long after the ticket expired", () => {
+    expect(readTestRunRedirect({ IsTest: "true", TestEmail: "tester@pmw-group.com" }))
+      .toEqual({ testEmail: "tester@pmw-group.com" });
+  });
+
+  it("treats an ordinary submission as no redirect at all", () => {
+    expect(readTestRunRedirect({})).toBeUndefined();
+    expect(readTestRunRedirect(undefined)).toBeUndefined();
+    expect(isTestRow({})).toBe(false);
+  });
+
+  it("refuses to redirect a flagged row with no usable address, rather than guessing", () => {
+    expect(readTestRunRedirect({ IsTest: "true", TestEmail: "" })).toBeUndefined();
+    expect(readTestRunRedirect({ IsTest: "true", TestEmail: "not-an-email" })).toBeUndefined();
+    expect(readTestRunRedirect({ IsTest: "true" })).toBeUndefined();
+  });
+
+  it("still knows such a row is a test one, so it stays out of production views", () => {
+    expect(isTestRow({ IsTest: "true" })).toBe(true);
+    expect(isTestRow({ IsTest: "TRUE" })).toBe(true);
+    expect(isTestRow({ IsTest: true })).toBe(true);
   });
 });
