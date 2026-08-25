@@ -16,6 +16,7 @@ import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrl
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
+import { planLayerRouting } from "../utils/layerRoutingPlan";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
@@ -1040,10 +1041,9 @@ export default function DynamicFormPage() {
       if (rawLayerConfig && rawLayerConfig.trim()) {
         try { layerConfigParsed = JSON.parse(rawLayerConfig); } catch {}
       }
-      const hasManualBranches = (layerConfigParsed?.manualBranches?.length ?? 0) > 0;
-      const hasDepartmentApproverLayers = (layerConfigParsed?.layers ?? [])
-        .some((layer) => layer.assignee.type === "department-approver");
-      const deferDepartmentApproverLookupToApi = !token && hasDepartmentApproverLayers;
+      // A public respondent's config has no assignees in it to read, so the API
+      // routes their submission from the server's own copy. See planLayerRouting.
+      const { deferToApi: deferLayerRoutingToApi, hasManualBranches } = planLayerRouting(layerConfigParsed, { hasToken: Boolean(token) });
 
       if (hasManualBranches) {
         // Manual branch workflows start only after an HR Forms Owner chooses a branch.
@@ -1051,7 +1051,7 @@ export default function DynamicFormPage() {
         activeLayers = [];
       } else if (layerConfigParsed?.layers?.length) {
         resolvedLayerCount = layerConfigParsed.layers.length;
-        if (!deferDepartmentApproverLookupToApi) {
+        if (!deferLayerRoutingToApi) {
           const configSlug = (cfg.Slug as string) || (cfg.slug as string) || formId || "";
           // Matches what body.SubmittedBy is set to below; chain layers need it
           // before the body is assembled.
@@ -1127,7 +1127,7 @@ export default function DynamicFormPage() {
 
       // Step 4: Write layer status columns
       const routingNotes: string[] = [];
-      if (layerConfigParsed?.layers?.length && !deferDepartmentApproverLookupToApi) {
+      if (layerConfigParsed?.layers?.length && !deferLayerRoutingToApi) {
         // Enhanced path — use new constants
         for (let index = 0; index < layerConfigParsed.layers.length; index++) {
           const layer = layerConfigParsed.layers[index];
