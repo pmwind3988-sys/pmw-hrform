@@ -64,13 +64,26 @@ export class ReferenceAllocationError extends Error {
   }
 }
 
-function counterTitleKey(formTitle: string): string {
-  return formTitle.trim().toLowerCase();
+/**
+ * Test runs count on their own row. Sharing the production counter would burn
+ * real numbers and leave gaps in a sequence people treat as a primary ID.
+ */
+function counterTitleKey(formTitle: string, isTest = false): string {
+  const key = formTitle.trim().toLowerCase();
+  return isTest ? `${key}::test` : key;
 }
 
 function toPositiveInt(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 0;
+}
+
+/** A reference nobody can mistake for a production one. */
+function testReferenceConfig(
+  config: Pick<ReferenceNumberConfig, "prefix" | "pad">,
+): Pick<ReferenceNumberConfig, "prefix" | "pad"> {
+  const prefix = (config.prefix ?? "").trim();
+  return { ...config, prefix: prefix ? `TEST-${prefix}` : "TEST" };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -118,6 +131,8 @@ export interface AllocateReferenceParams {
   config: Pick<ReferenceNumberConfig, "prefix" | "pad">;
   /** Injectable for tests; defaults to now. */
   now?: Date;
+  /** Allocate from the form's TEST- series instead of its live one. */
+  isTest?: boolean;
 }
 
 /**
@@ -133,7 +148,9 @@ export async function allocateReferenceNumber(params: AllocateReferenceParams): 
   await ensureReferenceCounterList();
 
   const token = await getSharePointToken();
-  const titleKey = counterTitleKey(formTitle);
+  const isTest = params.isTest === true;
+  const titleKey = counterTitleKey(formTitle, isTest);
+  const referenceConfig = isTest ? testReferenceConfig(config) : config;
   const dateKey = malaysiaDateKey(params.now ?? new Date());
 
   let created = false;
@@ -149,7 +166,7 @@ export async function allocateReferenceNumber(params: AllocateReferenceParams): 
           `The reference counter for "${formTitle}" was created but could not be read back.`,
         );
       }
-      await createCounterItem(token, formTitle, titleKey);
+      await createCounterItem(token, isTest ? `${formTitle} (test)` : formTitle, titleKey);
       created = true;
       continue;
     }
@@ -171,7 +188,7 @@ export async function allocateReferenceNumber(params: AllocateReferenceParams): 
       { LastDateKey: dateKey, LastNumber: next },
       current.etag,
     );
-    if (written) return formatReferenceNumber(dateKey, next, config);
+    if (written) return formatReferenceNumber(dateKey, next, referenceConfig);
 
     logWarn("api:reference-counter", "Reference counter contended; retrying", { formTitle, attempt });
     await sleep(backoffDelay(attempt));
@@ -182,4 +199,4 @@ export async function allocateReferenceNumber(params: AllocateReferenceParams): 
   );
 }
 
-export const __test__ = { backoffDelay, counterTitleKey, toPositiveInt };
+export const __test__ = { backoffDelay, counterTitleKey, toPositiveInt, testReferenceConfig };
