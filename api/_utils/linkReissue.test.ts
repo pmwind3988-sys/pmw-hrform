@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { planLinkReissue } from "./linkReissue.js";
+import { planLinkReissue, reissueReviewLink } from "./linkReissue.js";
 import { LINK_REISSUE_LOG_FIELD, recordReissue } from "./linkToken.js";
 
 vi.mock("./graphClient.js", () => ({
@@ -9,8 +9,6 @@ vi.mock("./graphClient.js", () => ({
 vi.mock("./provisioning.js", () => ({
   ensureWorkflowColumns: vi.fn(async () => {}),
 }));
-
-const { reissueReviewLink } = await import("./linkReissue.js");
 
 /**
  * A link issued before review links were bound to their submission carries no
@@ -103,12 +101,13 @@ describe("reissueReviewLink and test runs", () => {
 
   beforeEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("sends a reissued link on a test-flagged row to the test address instead", async () => {
-    const sendMail = vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) }));
+    const sendMail = vi.fn(async (_url: string, _init: { body: string }) => ({ ok: true, status: 202, json: async () => ({}) }));
     vi.stubGlobal("fetch", sendMail);
-    process.env.HR_FORM_EMAIL_FROM_ADDRESS = "noreply@example.com";
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
 
     await reissueReviewLink(baseParams({
       ...activated,
@@ -123,9 +122,9 @@ describe("reissueReviewLink and test runs", () => {
   });
 
   it("leaves an ordinary row's reissued link completely unchanged", async () => {
-    const sendMail = vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) }));
+    const sendMail = vi.fn(async (_url: string, _init: { body: string }) => ({ ok: true, status: 202, json: async () => ({}) }));
     vi.stubGlobal("fetch", sendMail);
-    process.env.HR_FORM_EMAIL_FROM_ADDRESS = "noreply@example.com";
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
 
     await reissueReviewLink(baseParams({ ...activated }));
 
@@ -136,5 +135,19 @@ describe("reissueReviewLink and test runs", () => {
       { emailAddress: { address: "safety@contractor.example" } },
     ]);
     expect(body.message.subject).not.toContain("[TEST]");
+  });
+
+  it("sends no email at all for a test-flagged row with no usable redirect address", async () => {
+    const sendMail = vi.fn(async (_url: string, _init: { body: string }) => ({ ok: true, status: 202, json: async () => ({}) }));
+    vi.stubGlobal("fetch", sendMail);
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
+
+    await reissueReviewLink(baseParams({
+      ...activated,
+      IsTest: "true",
+      TestEmail: "not-an-email",
+    }));
+
+    expect(sendMail).not.toHaveBeenCalled();
   });
 });

@@ -23,7 +23,7 @@ import { ensureWorkflowColumns } from "./provisioning.js";
 import { parseValidEmailList } from "./layerRecipients.js";
 import { logWarn } from "./logger.js";
 import { REFERENCE_NO_FIELD } from "./referenceNumber.js";
-import { readTestRunRedirect, redirectTestMessage } from "./testRun.js";
+import { isTestRow, readTestRunRedirect, redirectTestMessage } from "./testRun.js";
 import {
   LINK_REISSUE_LOG_FIELD,
   isReissueAllowed,
@@ -142,8 +142,19 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
       }),
       referenceNo: String(params.fields[REFERENCE_NO_FIELD] || ""),
     });
-    const testRun = readTestRunRedirect(params.fields);
-    await sendGraphEmail(params.graphToken, testRun ? redirectTestMessage(message, testRun) : message);
+    if (isTestRow(params.fields)) {
+      const testRun = readTestRunRedirect(params.fields);
+      if (!testRun) {
+        logWarn("api:evaluate:reissue", "Test run has no usable redirect address; refusing to reissue rather than mailing a real approver", {
+          layerNumber: params.layerNumber,
+          responseItemId: params.responseItemId,
+        });
+        return;
+      }
+      await sendGraphEmail(params.graphToken, redirectTestMessage(message, testRun));
+    } else {
+      await sendGraphEmail(params.graphToken, message);
+    }
   } catch (err) {
     logWarn("api:evaluate:reissue", "Could not replace an unbound review link", {
       layerNumber: params.layerNumber,
