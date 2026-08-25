@@ -330,6 +330,17 @@ export default function SubmissionFilterPanel({
           <span style={labelStyle}>To</span>
           <input type="date" value={filters.dateTo} onChange={(e) => patch({ dateTo: e.target.value })} style={controlStyle} />
         </div>
+
+        {/* Universal, not part of the form → profile → version chain: a test run
+            belongs to no particular form and stays hidden until asked for. */}
+        <label style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={filters.includeTestRuns}
+            onChange={(e) => patch({ includeTestRuns: e.target.checked })}
+          />
+          <span style={labelStyle}>Show test runs</span>
+        </label>
       </div>
 
       {/* The scope chain: each step narrows what the step below it can offer. */}

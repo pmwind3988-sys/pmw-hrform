@@ -75,6 +75,12 @@ export interface SubmissionFilterState {
   formVersion: string;
   /** Level 4. Conditions on the questions in scope, AND-ed together. */
   fieldFilters: FieldFilter[];
+  /**
+   * Universal, and outside the hierarchy: whether test-run rehearsals are shown
+   * alongside production submissions. Default-off, because a real approver
+   * opening the dashboard must not be offered a rehearsal to act on.
+   */
+  includeTestRuns: boolean;
 }
 
 export const EMPTY_SUBMISSION_FILTERS: SubmissionFilterState = {
@@ -87,6 +93,7 @@ export const EMPTY_SUBMISSION_FILTERS: SubmissionFilterState = {
   publishProfile: "",
   formVersion: "",
   fieldFilters: [],
+  includeTestRuns: false,
 };
 
 /**
@@ -105,6 +112,8 @@ export interface FilterableRecord {
   submitterTexts: (string | null | undefined)[];
   /** The submitted answers, keyed by question name. */
   data: Record<string, unknown>;
+  /** Whether this row is a rehearsal — see `isTestRow` in `./testRun`. */
+  isTest: boolean;
 }
 
 let fieldFilterSeq = 0;
@@ -346,6 +355,11 @@ function endOfDay(value: string): Date | null {
 }
 
 export function recordMatchesFilters(record: FilterableRecord, filters: SubmissionFilterState): boolean {
+  // Universal, and outside the form → profile → version hierarchy: a test run is
+  // hidden regardless of which form it belongs to. Default-off because a real
+  // approver opening the dashboard must not be offered a rehearsal to act on.
+  if (record.isTest && !filters.includeTestRuns) return false;
+
   if (filters.search) {
     // Reference numbers are the ID people actually quote, so they are matched
     // with separators stripped too — someone searching "0408260001" or pasting
@@ -413,6 +427,7 @@ export function toFilterableRecord(item: Submission): FilterableRecord {
       item.createdByEmail ?? "",
     ],
     data: item.submissionData,
+    isTest: item.isTest,
   };
 }
 

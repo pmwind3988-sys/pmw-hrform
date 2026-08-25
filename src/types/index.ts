@@ -55,6 +55,8 @@ export interface Submission {
   layerConfig?: LayerConfig | null;
   /** Published form schema for ordering submitted answers in dashboard/PDF views */
   surveyJson?: SurveyJson | null;
+  /** Whether this row is a test-run rehearsal rather than a production submission. */
+  isTest: boolean;
 }
 
 export interface HardDeleteSubmissionResult {

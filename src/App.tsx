@@ -37,6 +37,7 @@ import {
 } from "./utils/submissionFilters";
 import type { SubmissionFilterState } from "./utils/submissionFilters";
 import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
+import { isTestRow } from "./utils/testRun";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -572,7 +573,10 @@ function mapSubmission(
       key === "RetentionUntil" ||
       // Surfaced as the submission's own identifier, not as one answer among many.
       key === REFERENCE_NO_FIELD ||
-      key === "AuthorId";
+      key === "AuthorId" ||
+      key === "IsTest" ||
+      key === "TestEmail" ||
+      key === "TestRunLog";
 
     if (isDashboardInternalField && !DETAIL_PASSTHROUGH_FIELDS.has(key)) {
       continue;
@@ -609,6 +613,7 @@ function mapSubmission(
     enhancedLayers: enhancedLayers.length > 0 ? enhancedLayers : undefined,
     layerConfig: cfg,
     surveyJson,
+    isTest: isTestRow(raw),
   };
 }
 

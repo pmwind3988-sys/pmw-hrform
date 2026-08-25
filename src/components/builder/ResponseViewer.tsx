@@ -39,6 +39,8 @@ import {
 } from "../../utils/formFieldCatalog";
 import type { SchemaSnapshot } from "../../utils/formFieldCatalog";
 import { resolveLifecycleStage } from "../../utils/submissionLifecycle";
+import { isTestRow } from "../../utils/testRun";
+import Chip from "@mui/material/Chip";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -82,6 +84,8 @@ interface SubmissionItem {
   FormVersion: string;
   RawJSON: string;
   PdfUrl?: string;
+  /** Tolerant reading via `isTestRow` — see `../../utils/testRun`. */
+  IsTest?: string | boolean;
 }
 
 interface FormConfig {
@@ -97,7 +101,7 @@ const SYSTEM_FIELDS = new Set([
   "L1_Status", "L1_Email", "L1_SignedAt", "L1_Rejection", "L1_Signature",
   "L2_Status", "L2_Email", "L2_SignedAt", "L2_Rejection", "L2_Signature",
   "L3_Status", "L3_Email", "L3_SignedAt", "L3_Rejection", "L3_Signature",
-  "SelectedBranch",
+  "SelectedBranch", "IsTest", "TestEmail", "TestRunLog",
 ]);
 
 function extractResponseFields(item: Record<string, unknown>): Record<string, unknown> {
@@ -175,7 +179,7 @@ export default function ResponseViewer() {
         const listName = formTitle;
         const items = await spGet(
           token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON,PdfUrl&$orderby=SubmittedAt desc&$top=100`
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON,PdfUrl,IsTest&$orderby=SubmittedAt desc&$top=100`
         ) as { value?: SubmissionItem[] };
 
         setSubmissions(items.value || []);
@@ -362,6 +366,7 @@ export default function ResponseViewer() {
             searchTexts: [item.Title ?? "", String(item.Id)],
             submitterTexts: [item.SubmittedBy ?? ""],
             data: parsedItemData.get(item.Id) ?? {},
+            isTest: isTestRow(item as unknown as Record<string, unknown>),
           },
           filters,
         ),
@@ -525,7 +530,12 @@ export default function ResponseViewer() {
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, color: C.textMuted }}>#{item.Id}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 12, color: C.textMuted }}>#{item.Id}</span>
+                          {isTestRow(item as unknown as Record<string, unknown>) && (
+                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 10, fontWeight: 700 }} />
+                          )}
+                        </span>
                         <span
                           style={{
                             fontSize: 10,

@@ -35,6 +35,7 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
     layers: [],
     meta: { icon: "", color: "", pale: "", category: "HR" },
     submissionData: {},
+    isTest: false,
     ...overrides,
   };
 }
@@ -184,6 +185,7 @@ describe("submissionMatchesFilters", () => {
       searchTexts: [null, undefined, "Item 1"],
       submitterTexts: [null],
       data: {},
+      isTest: false,
     };
     expect(recordMatchesFilters(record, { ...EMPTY_SUBMISSION_FILTERS, search: "item" })).toBe(true);
     expect(recordMatchesFilters(record, { ...EMPTY_SUBMISSION_FILTERS, search: "nope" })).toBe(false);
@@ -194,6 +196,33 @@ describe("submissionMatchesFilters", () => {
     const item = makeSubmission({ submissionData: { Staff_x0020_Name: "Ahmad" } });
     const filter = condition("Staff Name", "text", { op: "contains", value: "ahmad" });
     expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, fieldFilters: [filter] })).toBe(true);
+  });
+
+  describe("test runs", () => {
+    it("hides a test run from an ordinary listing", () => {
+      const item = makeSubmission({ isTest: true });
+      expect(submissionMatchesFilters(item, EMPTY_SUBMISSION_FILTERS)).toBe(false);
+    });
+
+    it("shows production submissions as it always did", () => {
+      const item = makeSubmission({ isTest: false });
+      expect(submissionMatchesFilters(item, EMPTY_SUBMISSION_FILTERS)).toBe(true);
+    });
+
+    it("shows test runs once they are asked for", () => {
+      const item = makeSubmission({ isTest: true });
+      expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, includeTestRuns: true })).toBe(true);
+    });
+
+    it("keeps showing production submissions alongside them", () => {
+      const item = makeSubmission({ isTest: false });
+      expect(submissionMatchesFilters(item, { ...EMPTY_SUBMISSION_FILTERS, includeTestRuns: true })).toBe(true);
+    });
+
+    it("treats a submission from before the column existed as production", () => {
+      const item = makeSubmission({ isTest: undefined as unknown as boolean });
+      expect(submissionMatchesFilters(item, EMPTY_SUBMISSION_FILTERS)).toBe(true);
+    });
   });
 });
 

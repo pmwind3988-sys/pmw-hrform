@@ -78,6 +78,8 @@ import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
+import { isTestRow } from "../../utils/testRun";
+import Chip from "@mui/material/Chip";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONFIGURED_SENDER_EMAIL = (
@@ -91,6 +93,9 @@ const CONFIGURED_MANUAL_PAPER_EMAIL = (
   import.meta.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS || ""
 ).trim().toLowerCase();
 const SUBMISSIONS_PER_PAGE = 12;
+// The real assignee addresses stay in the layer columns on a test run — a
+// production approver who reaches the row must not action a rehearsal.
+const TEST_RUN_ACTION_BLOCKED_MESSAGE = 'This is a test run. Turn on "Show test runs" to act on it.';
 
 // Theme
 const C = {
@@ -137,6 +142,8 @@ interface PendingItem {
   trainingTitle?: string;
   /** Raw L{n}_Status by layer number, loaded via a tolerant tier query. */
   layerStatuses?: Record<number, string>;
+  /** Tolerant reading via `isTestRow` — see `../../utils/testRun`. */
+  IsTest?: string | boolean;
 }
 
 /**
@@ -760,6 +767,7 @@ export default function ApprovalDashboard() {
     searchTexts: [item.Title, String(item.Id), getItemTrainingTitle(item)],
     submitterTexts: [item.SubmittedBy],
     data: itemAnswers.get(getPendingItemKey(item)) ?? {},
+    isTest: isTestRow(item as unknown as Record<string, unknown>),
   }), [itemAnswers]);
 
   // Everything except the lifecycle stage, which the tabs own — their counts have
@@ -1091,7 +1099,7 @@ export default function ApprovalDashboard() {
               const tier1 = await (async () => {
                 try {
                   return await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,PdfUrl&$orderby=Created desc&$top=100`
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,PdfUrl,IsTest&$orderby=Created desc&$top=100`
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
@@ -1156,7 +1164,7 @@ export default function ApprovalDashboard() {
               const tier2 = await (async () => {
                 try {
                   return await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status&$orderby=Created desc&$top=100`
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,IsTest&$orderby=Created desc&$top=100`
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
@@ -1512,6 +1520,10 @@ export default function ApprovalDashboard() {
     if (!token || !selectedItem || !formConfig) return;
     if (selectedLayerAccess && !selectedLayerAccess.allowed) {
       setError("This item is locked because the current layer is assigned to another approver.");
+      return;
+    }
+    if (isTestRow(selectedItem as unknown as Record<string, unknown>) && !filters.includeTestRuns) {
+      setError(TEST_RUN_ACTION_BLOCKED_MESSAGE);
       return;
     }
     // Validation paints the errors and focuses the first one, so a rejected
@@ -2269,6 +2281,7 @@ export default function ApprovalDashboard() {
         submissionData,
         currentLayer: deleteTarget.CurrentLayer,
         selectedBranch: deleteTarget.SelectedBranch,
+        isTest: isTestRow(rawItem),
       });
 
       setPendingItems((prev) => prev.filter((item) => !(item.Id === deleteTarget.Id && item.Title === deleteTarget.Title)));
@@ -2301,6 +2314,10 @@ export default function ApprovalDashboard() {
     if (!token || !selectedItem || !formConfig) return;
     if (selectedLayerAccess && !selectedLayerAccess.allowed) {
       setError("This item is locked because the current layer is assigned to another approver.");
+      return;
+    }
+    if (isTestRow(selectedItem as unknown as Record<string, unknown>) && !filters.includeTestRuns) {
+      setError(TEST_RUN_ACTION_BLOCKED_MESSAGE);
       return;
     }
 
@@ -2438,6 +2455,10 @@ export default function ApprovalDashboard() {
     if (!token || !selectedItem || !formConfig) return;
     if (selectedLayerAccess && !selectedLayerAccess.allowed) {
       setError("This item is locked because the current layer is assigned to another approver.");
+      return;
+    }
+    if (isTestRow(selectedItem as unknown as Record<string, unknown>) && !filters.includeTestRuns) {
+      setError(TEST_RUN_ACTION_BLOCKED_MESSAGE);
       return;
     }
 
@@ -2804,7 +2825,12 @@ export default function ApprovalDashboard() {
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
-                        <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4 }}>{item.Title}</div>
+                        <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                          {item.Title}
+                          {isTestRow(item as unknown as Record<string, unknown>) && (
+                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 10, fontWeight: 700 }} />
+                          )}
+                        </div>
                         {getItemTrainingTitle(item) && (
                           <div style={{
                             display: "inline-block", marginBottom: 4,
