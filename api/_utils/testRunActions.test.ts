@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handleMintTestTicket, recordTestRunStep, TEST_RUN_COLUMNS } from "./testRunActions.js";
+import { handleMintTestTicket, recordTestRunStep, recordTestRunSteps, TEST_RUN_COLUMNS } from "./testRunActions.js";
 import { verifyTestTicket } from "./testRun.js";
 import { parseTestRunTrail } from "./testRunTrail.js";
 
@@ -97,5 +97,77 @@ describe("recording a step on a run", () => {
     await expect(
       recordTestRunStep("token", "Leave Application", "42", { step: "row", label: "l", status: "pass", order: 4 }, d),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("recording several steps on a run at once", () => {
+  function trailDeps(existing = "") {
+    const written: Record<string, unknown>[] = [];
+    return {
+      written,
+      readItem: vi.fn(async () => ({ fields: { TestRunLog: existing } })),
+      updateFields: vi.fn(async (_t: string, _l: string, _i: string, fields: Record<string, unknown>) => {
+        written.push(fields);
+      }),
+    };
+  }
+
+  it("folds every step into a single write", async () => {
+    const d = trailDeps();
+    await recordTestRunSteps(
+      "token",
+      "Leave Application",
+      "42",
+      [
+        { step: "ticket", label: "Test ticket validated", status: "pass", order: 1 },
+        { step: "answers", label: "Answers accepted", status: "pass", order: 2 },
+        { step: "reference", label: "Reference number allocated", status: "pass", order: 3 },
+        { step: "row", label: "Response row created", status: "pass", order: 4 },
+        { step: "fields", label: "All answers stored", status: "pass", order: 5 },
+      ],
+      d,
+    );
+    expect(d.readItem).toHaveBeenCalledTimes(1);
+    expect(d.updateFields).toHaveBeenCalledTimes(1);
+    const trail = parseTestRunTrail(d.written[0].TestRunLog);
+    expect(Object.keys(trail).sort()).toEqual(["answers", "fields", "reference", "row", "ticket"]);
+  });
+
+  it("keeps each step's own order value so the checklist still reads in run order", async () => {
+    const d = trailDeps();
+    await recordTestRunSteps(
+      "token",
+      "Leave Application",
+      "42",
+      [
+        { step: "row", label: "Response row created", status: "pass", order: 4 },
+        { step: "ticket", label: "Test ticket validated", status: "pass", order: 1 },
+      ],
+      d,
+    );
+    const trail = parseTestRunTrail(d.written[0].TestRunLog);
+    expect(trail.row.order).toBe(4);
+    expect(trail.ticket.order).toBe(1);
+  });
+
+  it("never fails the submission it is only reporting on", async () => {
+    const d = trailDeps();
+    d.updateFields.mockRejectedValueOnce(new Error("SharePoint said no"));
+    await expect(
+      recordTestRunSteps(
+        "token",
+        "Leave Application",
+        "42",
+        [{ step: "row", label: "l", status: "pass", order: 4 }],
+        d,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does nothing for an empty batch", async () => {
+    const d = trailDeps();
+    await recordTestRunSteps("token", "Leave Application", "42", [], d);
+    expect(d.readItem).not.toHaveBeenCalled();
+    expect(d.updateFields).not.toHaveBeenCalled();
   });
 });

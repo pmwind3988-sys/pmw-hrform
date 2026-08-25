@@ -30,8 +30,9 @@ import {
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
-import { handleMintTestTicket, recordTestRunStep } from "./_utils/testRunActions.js";
+import { handleMintTestTicket, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
 import { verifyTestTicket, testRunFieldsFor, type TestRunRedirect } from "./_utils/testRun.js";
+import type { TestRunStep } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import {
@@ -1608,55 +1609,70 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const parentId = result.id;
 
     if (testTicket) {
-      await recordTestRunStep(token, listTitle, String(parentId), {
-        step: "ticket",
-        label: "Test ticket validated",
-        status: "pass",
-        detail: `Issued by ${testTicket.issuedBy}`,
-        order: 1,
-      }, trailDeps);
-      await recordTestRunStep(token, listTitle, String(parentId), {
-        step: "answers",
-        label: "Answers accepted",
-        status: "pass",
-        order: 2,
-      }, trailDeps);
-      await recordTestRunStep(token, listTitle, String(parentId), {
-        step: "reference",
-        label: "Reference number allocated",
-        status: "pass",
-        detail: referenceNo || undefined,
-        order: 3,
-      }, trailDeps);
-      await recordTestRunStep(token, listTitle, String(parentId), {
-        step: "row",
-        label: "Response row created",
-        status: "pass",
-        detail: `Item ${parentId}`,
-        order: 4,
-      }, trailDeps);
-      await recordTestRunStep(token, listTitle, String(parentId), {
-        step: "fields",
-        label: "All answers stored",
-        status: droppedFieldNames.length > 0 ? "warn" : "pass",
-        detail: droppedFieldNames.length > 0 ? droppedFieldNames.join(", ") : undefined,
-        order: 5,
-      }, trailDeps);
+      // These are all already known by the time the row exists, so they are
+      // folded into one read/write instead of one round trip per step — a
+      // rehearsal that fanned this out one-at-a-time could plausibly add
+      // enough extra Graph calls to trip the serverless function timeout.
+      const postCreateSteps: Omit<TestRunStep, "at">[] = [
+        {
+          step: "ticket",
+          label: "Test ticket validated",
+          status: "pass",
+          detail: `Issued by ${testTicket.issuedBy}`,
+          order: 1,
+        },
+        {
+          step: "answers",
+          label: "Answers accepted",
+          status: "pass",
+          order: 2,
+        },
+        referenceConfig.enabled
+          ? {
+              step: "reference",
+              label: "Reference number allocated",
+              status: "pass",
+              detail: referenceNo || undefined,
+              order: 3,
+            }
+          : {
+              step: "reference",
+              label: "Reference number allocated",
+              status: "skip",
+              detail: "This form does not use reference numbers",
+              order: 3,
+            },
+        {
+          step: "row",
+          label: "Response row created",
+          status: "pass",
+          detail: `Item ${parentId}`,
+          order: 4,
+        },
+        {
+          step: "fields",
+          label: "All answers stored",
+          status: droppedFieldNames.length > 0 ? "warn" : "pass",
+          detail: droppedFieldNames.length > 0 ? droppedFieldNames.join(", ") : undefined,
+          order: 5,
+        },
+      ];
       if (parsedLayerConfig?.layers) {
         for (const layer of parsedLayerConfig.layers) {
           const n = layer.layerNumber;
           const addresses = parseValidEmailList(
             submissionBody[`L${n}_NotifyEmails`] || submissionBody[`L${n}_Email`],
           );
-          await recordTestRunStep(token, listTitle, String(parentId), {
+          postCreateSteps.push({
             step: `layer-${n}-routing`,
             label: `Layer ${n} routed`,
             status: "pass",
             detail: addresses.length > 0 ? addresses.join(", ") : undefined,
             order: 10 * n,
-          }, trailDeps);
+          });
         }
       }
+      await recordTestRunSteps(token, listTitle, String(parentId), postCreateSteps, trailDeps);
     }
 
     let childItemIds: Record<string, number[]> = {};

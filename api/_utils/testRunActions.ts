@@ -78,15 +78,43 @@ export async function recordTestRunStep(
   step: Omit<TestRunStep, "at">,
   deps: TestRunStepDeps,
 ): Promise<void> {
+  return recordTestRunSteps(token, listTitle, itemId, [step], deps);
+}
+
+/**
+ * Appends several steps to a run's trail in one read and one write.
+ *
+ * Recording steps one at a time — a read/write round trip per step — is what
+ * `recordTestRunStep` does, and it is fine for steps that happen at genuinely
+ * different moments. But a batch of steps that are all already known by the
+ * time any of them is recorded (the post-create steps, in particular) gain
+ * nothing from being written separately, and each extra round trip is a
+ * SharePoint call a rehearsal can least afford: enough of them stacked up
+ * inside one request can trip the serverless function timeout, failing a
+ * test run whose only purpose is to prove the real thing won't fail.
+ *
+ * Same never-throws contract as `recordTestRunStep`: the trail is a report on
+ * the submission, not part of it.
+ */
+export async function recordTestRunSteps(
+  token: string,
+  listTitle: string,
+  itemId: string,
+  steps: Omit<TestRunStep, "at">[],
+  deps: TestRunStepDeps,
+): Promise<void> {
+  if (steps.length === 0) return;
   try {
     const item = await deps.readItem(token, listTitle, itemId);
-    await deps.updateFields(token, listTitle, itemId, {
-      [TEST_RUN_LOG_FIELD]: appendTestRunStep(item?.fields?.[TEST_RUN_LOG_FIELD], step),
-    });
+    let raw: unknown = item?.fields?.[TEST_RUN_LOG_FIELD];
+    for (const step of steps) {
+      raw = appendTestRunStep(raw, step);
+    }
+    await deps.updateFields(token, listTitle, itemId, { [TEST_RUN_LOG_FIELD]: raw });
   } catch (error) {
-    logWarn("api:test-run", "Could not record a test run step", {
+    logWarn("api:test-run", "Could not record test run steps", {
       listTitle,
-      step: step.step,
+      steps: steps.map((step) => step.step).join(", "),
       errorMessage: error instanceof Error ? error.message : String(error),
     });
   }
