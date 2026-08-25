@@ -14,7 +14,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
-import { readTestRunRedirect } from "./_utils/testRun.js";
+import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
 
 /**
  * How long one run may spend scanning before it stops and says so.
@@ -97,6 +97,37 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const currentLayer = Number(item.fields.CurrentLayer || item.fields.CurrentApprovalLayer || 0);
           if (currentLayer && currentLayer !== entry.layer) continue;
 
+          const testRun = readTestRunRedirect(item.fields);
+          if (isTestRow(item.fields) && !testRun) {
+            // The row was flagged for a rehearsal, but by delivery time —
+            // possibly months after the ticket that started it expired — its
+            // redirect address is gone or corrupt. The alternative, falling
+            // back to `entry.recipient`, would silently mail a real approver
+            // from a run the builder believes is a rehearsal. Marked "failed"
+            // (not left "scheduled") so the existing attempts cap eventually
+            // stops retrying it, the same as any other delivery that cannot
+            // succeed.
+            failed++;
+            logWarn("api:workflow-email-cron", "Test run has no usable redirect address; refusing to deliver rather than mailing a real approver", {
+              formTitle,
+              itemId: item.id,
+              layer: entry.layer,
+            });
+            const skippedSchedule = setWorkflowEmailSchedule(
+              parseWorkflowEmailSchedule(item.fields.WorkflowEmailSchedule),
+              {
+                ...entry,
+                status: "failed",
+                updatedAt: new Date().toISOString(),
+                attempts: (entry.attempts ?? 0) + 1,
+              },
+            );
+            await updateListItemFields(token, formTitle, item.id, {
+              WorkflowEmailSchedule: JSON.stringify(skippedSchedule),
+            });
+            continue;
+          }
+
           const schedule = setWorkflowEmailSchedule(
             parseWorkflowEmailSchedule(item.fields.WorkflowEmailSchedule),
             {
@@ -132,7 +163,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 listTitle: formTitle,
                 responseItemId: item.id,
                 layer: entry.layer,
-                testRun: readTestRunRedirect(item.fields),
+                testRun,
               },
             );
             sent++;

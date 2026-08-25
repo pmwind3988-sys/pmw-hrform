@@ -177,4 +177,23 @@ describe("the cron scan", () => {
     });
     expect(sent[0].to).toBe("hod@pmw-group.com");
   });
+
+  it("refuses to deliver a deferred test-run email once its redirect address has gone stale", async () => {
+    // IsTest survived, but TestEmail was cleared or corrupted sometime during
+    // the months the entry sat waiting - exactly the staleness a ticket-based
+    // redirect cannot outlive.
+    const sent = await runCronWith({
+      fields: { IsTest: "true", TestEmail: "not-an-email" },
+      schedule: {
+        "2": {
+          layer: 2, recipient: "hod@pmw-group.com",
+          dueAt: "2020-01-01T00:00:00.000Z", status: "scheduled",
+          updatedAt: "2020-01-01T00:00:00.000Z", layerType: "evaluation",
+          totalLayers: 2, reviewLink: "https://example.com/2", submittedBy: "s@example.com",
+        },
+      },
+    });
+    expect(sent).toHaveLength(0);
+    expect(mail.deliverWorkflowEmail).not.toHaveBeenCalled();
+  });
 });
