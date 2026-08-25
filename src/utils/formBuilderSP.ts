@@ -769,14 +769,25 @@ export async function getFormLog(token: string, listTitle: string): Promise<Form
   return data.value || [];
 }
 
-export async function getFormVersion(
+export interface FormVersionData {
+  surveyJson: unknown;
+  meta: unknown;
+  layerConfig?: unknown;
+  publishKey?: string;
+  publishLabel?: string;
+  publishStatus?: string;
+  publishExpiresAt?: string;
+  version?: string;
+}
+
+/** Read one saved row of `Web Form Versions`, exactly as it was written. */
+async function readFormVersionRow(
   token: string,
   listTitle: string,
   version: string,
-  publishKey?: string | null
-): Promise<{ surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishKey?: string; publishLabel?: string; publishStatus?: string; publishExpiresAt?: string; version?: string } | null> {
+  normalizedPublishKey: string
+): Promise<FormVersionData | null> {
   const baseFilter = `FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'`;
-  const normalizedPublishKey = publishKey ? normalizePublishKey(publishKey) : "";
   const query = normalizedPublishKey
     ? `${baseFilter} and PublishKey eq '${encodeURIComponent(sanitizeODataValue(normalizedPublishKey))}'`
     : baseFilter;
@@ -801,6 +812,35 @@ export async function getFormVersion(
   } catch {
     return null;
   }
+}
+
+/**
+ * A publish profile is the same version with a different workflow, so it has to
+ * ask the same questions as the form it belongs to.
+ *
+ * Every profile is stored as its own row and so carries its own copy of the
+ * survey and its meta - a copy taken when the profile was last saved and never
+ * moved since. Serving that copy is what left `?publish=...` links showing an
+ * out-of-date company list while `/form/{slug}` showed the current one. The
+ * questions, the choices and the banner meta now come from the default profile
+ * of the same version; the profile row keeps only what a profile is for: its
+ * own workflow, its label, and whether it is still open.
+ *
+ * A profile whose version has no default row keeps its own content, so no link
+ * that works today can lose its questions to this.
+ */
+export async function getFormVersion(
+  token: string,
+  listTitle: string,
+  version: string,
+  publishKey?: string | null
+): Promise<FormVersionData | null> {
+  const normalizedPublishKey = publishKey ? normalizePublishKey(publishKey) : "";
+  const profile = await readFormVersionRow(token, listTitle, version, normalizedPublishKey);
+  if (!profile || !normalizedPublishKey || normalizedPublishKey === DEFAULT_PUBLISH_KEY) return profile;
+  const base = await readFormVersionRow(token, listTitle, version, DEFAULT_PUBLISH_KEY).catch(() => null);
+  if (!base?.surveyJson) return profile;
+  return { ...profile, surveyJson: base.surveyJson, meta: base.meta ?? profile.meta };
 }
 
 /**
@@ -1724,7 +1764,7 @@ export async function getLatestFormBySlug(token: string, slug: string, publishKe
   if (!form.IsPublished) return null;
 
   const activePublishKey = normalizePublishKey(publishKey || form.CurrentPublishKey);
-  const versionData = await getFormVersionByTitle(token, form.Title, form.CurrentVersion || '1.0', activePublishKey);
+  const versionData = await getFormVersion(token, form.Title, form.CurrentVersion || '1.0', activePublishKey);
   if (versionData?.publishStatus === 'off' || isPublishExpired(versionData?.publishExpiresAt)) return null;
   const layerConfig = versionData?.layerConfig
     ? JSON.stringify(versionData.layerConfig)
@@ -1739,35 +1779,6 @@ export async function getLatestFormBySlug(token: string, slug: string, publishKe
     surveyJson: versionData?.surveyJson || null,
     meta: versionData?.meta || {},
   };
-}
-
-async function getFormVersionByTitle(token: string, listTitle: string, version: string, publishKey?: string | null): Promise<{ surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishKey?: string; publishLabel?: string; publishStatus?: string; publishExpiresAt?: string } | null> {
-  const baseFilter = `FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'`;
-  const normalizedPublishKey = publishKey ? normalizePublishKey(publishKey) : "";
-  const query = normalizedPublishKey
-    ? `${baseFilter} and PublishKey eq '${encodeURIComponent(sanitizeODataValue(normalizedPublishKey))}'`
-    : baseFilter;
-  let data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${query}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy,PublishKey,PublishLabel,PublishStatus,PublishExpiresAt&$orderby=PublishedAt desc&$top=1`)
-    .catch(async (error: unknown) => {
-      if (!isQueryMismatchError(error)) throw error;
-      if (!normalizedPublishKey || normalizedPublishKey !== DEFAULT_PUBLISH_KEY) return { value: [] };
-      return spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`);
-    }) as { value?: { SurveyJSON?: string }[] };
-  if (normalizedPublishKey === DEFAULT_PUBLISH_KEY && !data.value?.length) {
-    data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`).catch(emptyOnQueryMismatch) as { value?: { SurveyJSON?: string }[] };
-  }
-  const row = data.value?.[0];
-  if (!row?.SurveyJSON) return null;
-  try {
-    const parsed = JSON.parse(row.SurveyJSON);
-    return {
-      ...parsed,
-      publishStatus: (row as { PublishStatus?: string }).PublishStatus || parsed.publishStatus,
-      publishExpiresAt: (row as { PublishExpiresAt?: string }).PublishExpiresAt || parsed.publishExpiresAt,
-    };
-  } catch {
-    return null;
-  }
 }
 
 // ── Matrix Child Lists ────────────────────────────────────────────────────
