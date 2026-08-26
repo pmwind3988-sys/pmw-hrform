@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { C } from "./constants";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
+import { sharePointManageScope } from "../../utils/sharePointScope";
 import { spGet, getFormConfigByTitle } from "../../utils/formBuilderSP";
 import { isTestRow } from "../../utils/testRun";
 import {
@@ -37,6 +38,11 @@ interface TestRunPanelProps {
   open: boolean;
   onClose: () => void;
   form: { Title: string; Slug?: string };
+  /**
+   * The SharePoint site this form lives on — see `sharePointManageScope`. Asking
+   * for a token against the app's own origin instead answers AADSTS500011.
+   */
+  siteUrl?: string;
 }
 
 interface TestRunRow {
@@ -191,7 +197,7 @@ const OUTCOME_LABEL: Record<ReturnType<typeof testRunOutcome>, { text: string; b
   running: { text: "Running", bg: C.purplePale, fg: C.purple },
 };
 
-export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps) {
+export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPanelProps) {
   const { instance, accounts } = useMsal();
   const [rows, setRows] = useState<TestRunRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -205,12 +211,11 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
   const [rowsTruncated, setRowsTruncated] = useState(false);
 
   const getDelegatedToken = useCallback(async (): Promise<string> => {
-    const origin = window.location.origin;
     return acquireAccessTokenSilentOrRedirect(instance, {
-      scopes: [`${origin}/AllSites.Manage`],
+      scopes: [sharePointManageScope(siteUrl)],
       account: accounts[0],
     });
-  }, [instance, accounts]);
+  }, [instance, accounts, siteUrl]);
 
   // Pages through every page of the response list's IsTest rows rather than
   // stopping at the first one — a `$top` cap here would make the panel quietly

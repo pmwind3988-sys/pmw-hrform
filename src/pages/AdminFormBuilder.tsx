@@ -2858,6 +2858,7 @@ export default function AdminFormBuilder() {
           open={testRunOpen}
           onClose={() => setTestRunOpen(false)}
           form={{ Title: meta.formTitle, Slug: meta.slug }}
+          siteUrl={activeSite?.url}
         />
       )}
 
@@ -2866,6 +2867,7 @@ export default function AdminFormBuilder() {
           open={testRunPanelOpen}
           onClose={() => setTestRunPanelOpen(false)}
           form={{ Title: meta.formTitle, Slug: meta.slug }}
+          siteUrl={activeSite?.url}
         />
       )}
     </div>

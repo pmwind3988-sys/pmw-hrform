@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { C } from "./constants";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
+import { sharePointManageScope } from "../../utils/sharePointScope";
 import { testRunFormUrl } from "../../utils/testRunLaunch";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -20,9 +21,17 @@ interface TestRunLauncherProps {
   open: boolean;
   onClose: () => void;
   form: { Title: string; Slug?: string };
+  /**
+   * The SharePoint site this form lives on. The delegated token must be asked
+   * for against SharePoint's origin, never the app's own — requesting
+   * `https://<app>/AllSites.Manage` makes Azure answer AADSTS500011, because no
+   * resource by that name exists in the tenant. Passed in rather than read from
+   * the environment so a form on a secondary site asks for the right site.
+   */
+  siteUrl?: string;
 }
 
-export default function TestRunLauncher({ open, onClose, form }: TestRunLauncherProps) {
+export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRunLauncherProps) {
   const { instance, accounts } = useMsal();
   const defaultEmail = accounts[0]?.username || "";
   const [email, setEmail] = useState(defaultEmail);
@@ -48,9 +57,8 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
     setBusy(true);
     try {
       const account = accounts[0];
-      const origin = window.location.origin;
       const delegatedToken = await acquireAccessTokenSilentOrRedirect(instance, {
-        scopes: [`${origin}/AllSites.Manage`],
+        scopes: [sharePointManageScope(siteUrl)],
         account,
       });
       const res = await fetch("/api/submit-form", {
