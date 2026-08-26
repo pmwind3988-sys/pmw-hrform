@@ -6,6 +6,9 @@ import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 import { SharePointHttpError } from "./sharepointClient";
 import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
 import { joinEmailList, parseValidEmailList } from "./layerRecipients";
+import { buildWorkflowReviewLink } from "./workflowLink";
+import { selectWorkflowLayer } from "./workflowReviewLink";
+import { ensureLinkToken } from "./linkToken";
 import { listChoiceValues, toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions";
 import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
 
@@ -2595,6 +2598,76 @@ function manualPaperEmailBody(params: {
 }
 
 /**
+ * The action link a workflow notice should carry, worked out from the record.
+ *
+ * Callers that already know the layer they are mailing pass `reviewLink`
+ * themselves. This is for the ones that do not, and it exists because the old
+ * answer for those was the Form Builder admin workspace — a superuser-only page
+ * that an approver or evaluator cannot open at all, addressed by form name and
+ * item id, which is to say by two values the recipient can retype. Approvers
+ * were being mailed a link to somebody else's console.
+ *
+ * What is returned instead is the same `/approval/...` or `/eval/...` link the
+ * rest of the workflow issues: built from the layer as the form actually
+ * configured it, and, for a public layer, bound to this one submission by the
+ * `k` value stored on the record. See `workflowLink.ts`.
+ *
+ * Returns "" when the layer cannot be identified with certainty, which drops
+ * the button from the email rather than pointing it somewhere unintended.
+ */
+async function resolveWorkflowReviewLink(
+  token: string,
+  params: {
+    formTitle: string;
+    responseListTitle: string;
+    responseItemId: number;
+    layerNumber: number;
+    totalLayers: number;
+  },
+): Promise<string> {
+  try {
+    const cfg = await getFormConfigByTitle(token, params.formTitle);
+    if (!cfg) return "";
+    const formSlug = String(cfg.Slug || "").trim();
+
+    const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(params.responseListTitle)}')/items(${params.responseItemId})`;
+    const item = await spGet(token, itemUrl) as Record<string, unknown>;
+    const selectedBranch = typeof item.SelectedBranch === "string" ? item.SelectedBranch : "";
+    const layer = selectWorkflowLayer(cfg.LayerConfig, selectedBranch, params.layerNumber);
+    if (!layer) return "";
+
+    // A public layer's link is refused at the far end unless the record carries
+    // the matching binding, so mint and store one when this submission reached
+    // the layer without going through a path that already did.
+    const patch: Record<string, unknown> = {};
+    const linkToken = ensureLinkToken(layer, item, params.layerNumber, patch);
+    if (Object.keys(patch).length) {
+      await ensureWorkflowColumns(token, params.responseListTitle, Math.max(params.totalLayers, params.layerNumber));
+      await spPatch(token, itemUrl, patch);
+    }
+    // A public layer with no binding available cannot be linked to safely.
+    if (layer.authMode === "public" && !linkToken) return "";
+    // A sign-in layer is addressed by slug; without one there is no route.
+    if (layer.authMode !== "public" && !formSlug) return "";
+
+    return buildWorkflowReviewLink({
+      baseUrl: window.location.origin,
+      layerType: layer.type,
+      authMode: layer.authMode,
+      publicToken: layer.publicToken,
+      formSlug,
+      responseItemId: params.responseItemId,
+      layerNumber: params.layerNumber,
+      linkToken,
+    });
+  } catch {
+    // A notice that goes out without a button still tells the reviewer they
+    // have something waiting; one that does not go out at all does not.
+    return "";
+  }
+}
+
+/**
  * Triggers email notifications for approval workflow.
  * Handles: new submission, layer approved, final approval, rejection.
  */
@@ -2620,7 +2693,24 @@ export async function triggerApprovalNotification(
   // Empty detail values are dropped by emailBody, so this row simply disappears
   // on forms that do not issue references.
   const referenceDetail: EmailDetail = { label: 'Reference no.', value: referenceNo };
-  const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
+  // The link is per target layer: a "submit" notice is about `layer`, an
+  // "approve" notice about the layer the submission has just moved on to.
+  // Resolved once each and reused, so one notice costs at most one lookup.
+  const resolvedLinks = new Map<number, string>();
+  const linkForLayer = async (targetLayer: number): Promise<string> => {
+    if (reviewLink) return reviewLink;
+    const cached = resolvedLinks.get(targetLayer);
+    if (cached !== undefined) return cached;
+    const resolved = await resolveWorkflowReviewLink(token, {
+      formTitle,
+      responseListTitle,
+      responseItemId,
+      layerNumber: targetLayer,
+      totalLayers,
+    });
+    resolvedLinks.set(targetLayer, resolved);
+    return resolved;
+  };
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const persistSchedule = async (recipients: string | string[], targetLayer: number, targetLink: string) => {
     const recipient = Array.isArray(recipients) ? joinEmailList(recipients) : recipients;
@@ -2663,7 +2753,8 @@ export async function triggerApprovalNotification(
       if (targetEmail) {
         const targetLayerStatus = await getLayerStatusForNotification(token, responseListTitle, responseItemId, layer);
         const submitRecipients = deliveryList(targetEmail);
-        await persistSchedule(submitRecipients, layer, requestLink);
+        const submitLink = await linkForLayer(layer);
+        await persistSchedule(submitRecipients, layer, submitLink);
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
             testRun,
@@ -2714,7 +2805,7 @@ export async function triggerApprovalNotification(
               { label: 'Workflow stage', value: `Layer ${layer} of ${totalLayers}` },
               { label: 'Current status', value: 'Submitted' },
             ],
-            link: requestLink,
+            link: submitLink,
             linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
             note: 'Please complete this step when you have enough context to make the decision.',
           }),
@@ -2725,7 +2816,8 @@ export async function triggerApprovalNotification(
         // Notify next layer approver
         const targetLayerStatus = await getLayerStatusForNotification(token, responseListTitle, responseItemId, displayNextLayerNumber);
         const nextLayerRecipients = deliveryList(nextApproverEmail);
-        await persistSchedule(nextLayerRecipients, displayNextLayerNumber, requestLink);
+        const nextLayerLink = await linkForLayer(displayNextLayerNumber);
+        await persistSchedule(nextLayerRecipients, displayNextLayerNumber, nextLayerLink);
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
             testRun,
@@ -2776,7 +2868,7 @@ export async function triggerApprovalNotification(
               { label: 'Completed step', value: `Layer ${layer} of ${totalLayers}` },
               { label: 'Current step', value: workflowStage },
             ],
-            link: requestLink,
+            link: nextLayerLink,
             linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
             pdfUrl,
             note: 'Only the assigned reviewer or an authorized superuser should act on this workflow step.',

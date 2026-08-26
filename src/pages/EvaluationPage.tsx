@@ -491,13 +491,30 @@ export default function EvaluationPage() {
 
         const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
         if (!data) { setError("the details for this request could not be loaded"); setLoading(false); return; }
+        // Everything in this route — the slug, the id, the layer number — is
+        // typed into the address bar, so none of it decides what may be opened.
+        // The record does.
+        //
+        // A public layer is not reachable this way at all. Its link is
+        // `/eval/<layer token>?item=…&k=…`, where `k` is the value minted for
+        // that one submission and checked by the server before a field is
+        // returned. Accepting the slug form for such a layer would be a way
+        // round that check: any signed-in account could walk the ids. The
+        // reviewer's own emailed link works; this shape never was one.
+        if (data.currentLayer?.authMode === "public") {
+          setNotYourRequest(true);
+          setError("this request can only be opened from the link that was emailed to its reviewer");
+          setLoading(false);
+          return;
+        }
         // A layer can be assigned to several people (or an expanded distribution
         // list) — any one of them may act. L{n}_Emails carries the full set;
-        // older submissions only have the single L{n}_Email.
+        // older submissions only have the single L{n}_Email. Changing the id to
+        // a neighbouring submission, or the layer number to another step, lands
+        // on a record that does not name you and stops here.
         const signedInEmail = (userEmail || "").trim();
         if (
-          data.currentLayer?.authMode !== "public"
-          && !isLayerActor(
+          !isLayerActor(
             signedInEmail,
             data.responseFields[`L${displayLayerNumber}_Emails`],
             data.responseFields[`L${displayLayerNumber}_Email`],
@@ -536,15 +553,41 @@ export default function EvaluationPage() {
     load();
   }, [authState, isPublic, formSlug, responseId, displayLayerNumber, token, userEmail]);
 
+  /**
+   * The gate on a signed-in decision, re-read from SharePoint at the moment it
+   * is recorded rather than trusted from the page load.
+   *
+   * Every part of a sign-in review link — the form, the submission id, the
+   * layer number — sits in the address bar where the reviewer can edit it, so
+   * none of it may be taken as proof of anything. What decides is the record:
+   * the layer the submission is actually on, and whether the signed-in address
+   * is one this layer was assigned to. Editing the id to a neighbouring
+   * submission, or the layer number to somebody else's step, lands on a record
+   * that does not name you and is refused here.
+   *
+   * The page load applies the same assignee check before showing anything. This
+   * repeats it against fresh data because the two are answering different
+   * questions: what may be looked at, and what may be written — and an
+   * assignment can be changed, or the submission moved on, in between.
+   */
   const assertSignedInLayerCanSubmit = async (listTitle: string, respId: number, layer: number): Promise<void> => {
     if (!token) throw new Error("Missing SharePoint token.");
+    // The whole row rather than a $select list, because SharePoint rejects a
+    // $select naming a column the list does not have, and a response list
+    // created before layers could fan out has no L{n}_Emails. The read path
+    // fetches the row the same way for the same reason.
     const item = await spGet(
       token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})?$select=Id,Status,FormStatus,CurrentLayer,CurrentApprovalLayer,L${layer}_Status`
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`
     ) as Record<string, unknown>;
     const latestStatus = item[`L${layer}_Status`];
     const latestCurrentLayer = Number(item.CurrentLayer || item.CurrentApprovalLayer || 0);
 
+    // A layer may be shared by several people, or by an expanded distribution
+    // list; L{n}_Emails carries the full set and L{n}_Email only the primary.
+    if (!isLayerActor((userEmail || "").trim(), item[`L${layer}_Emails`], item[`L${layer}_Email`])) {
+      throw new Error("This request is assigned to someone else, so it cannot be submitted from your account.");
+    }
     if (isTerminalFormStatus(item.FormStatus || item.Status) || isTerminalLayerStatus(latestStatus)) {
       throw new Error("This layer has already been completed. Refresh the submissions page to see the latest status.");
     }

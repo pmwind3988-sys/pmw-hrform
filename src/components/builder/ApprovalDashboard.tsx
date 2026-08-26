@@ -1813,7 +1813,12 @@ export default function ApprovalDashboard() {
           ...(firstRecipients.length ? { nextRecipients: firstRecipients } : {}),
           ...(bLayers[0]?.type ? { nextLayerType: bLayers[0].type } : {}),
           ...(bLayers[0]?.type === "evaluation" ? { nextEmailSchedule: bLayers[0].emailSchedule } : {}),
-          reviewLink: `${window.location.origin}/admin/submissions?form=${encodeURIComponent(listName)}&item=${respId}`,
+          responseListTitle: listName,
+          // No reviewLink: the notification resolves the first layer's own
+          // /approval or /eval link from the record it has just written,
+          // including the binding a public layer needs. This used to send the
+          // admin workspace URL, which the reviewer cannot open and which
+          // named the submission by an id they could retype.
         });
       }
 
