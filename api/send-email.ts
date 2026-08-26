@@ -104,7 +104,35 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // this route safe for the browser-driven decision links (approve/reject
       // from an emailed review link), which carry no ticket at all: the row
       // is the only source of truth for whether this is a rehearsal.
-      const responseItem = await queryListItemById(token, listTitle, String(responseItemId));
+      //
+      // The lookup is wrapped rather than left to throw: `queryListItemById`
+      // itself degrades a missing ITEM to `null` (handled below, same as
+      // before), but `getListId` underneath it THROWS for a list name that
+      // does not resolve. Most callers omit `responseListTitle` and fall back
+      // to `formTitle` (see `triggerApprovalNotification` in
+      // `src/utils/formBuilderSP.ts`), so any form whose response list name
+      // does not exactly match its title would otherwise 500 this handler and
+      // lose the notification outright — a production regression for people
+      // who never touch test runs. Before this redirect existed, the same
+      // mismatch only broke the post-send log write; the mail still went out.
+      // So ANY failure to resolve the list or read the row is treated as
+      // "cannot tell — send it exactly as an ordinary production message
+      // would have sent before this change", logged so it stays visible. The
+      // one case that still refuses to send is the one already handled below:
+      // the row loaded fine, it is a test row, and it has no usable redirect.
+      let responseItem: Awaited<ReturnType<typeof queryListItemById>> = null;
+      try {
+        responseItem = await queryListItemById(token, listTitle, String(responseItemId));
+      } catch (lookupError) {
+        logWarn("api:send-email", "Could not resolve the workflow row to check for a test-run redirect; sending as an ordinary message", {
+          listTitle,
+          responseItemId,
+          layer,
+          errorMessage: lookupError instanceof Error ? lookupError.message : String(lookupError),
+        });
+        await sendGraphEmail(token, rawMessage);
+        return res.status(200).json({ ok: true });
+      }
       const testRun = readTestRunRedirect(responseItem?.fields);
       if (isTestRow(responseItem?.fields) && !testRun) {
         // Flagged for a rehearsal but with no usable redirect address. The
