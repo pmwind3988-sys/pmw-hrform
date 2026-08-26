@@ -4,9 +4,13 @@ import { handleMintTestTicket, handleStampTestRun, handleDeleteTestRuns, recordT
 import { mintTestTicket, verifyTestTicket } from "./testRun.js";
 import { parseTestRunTrail } from "./testRunTrail.js";
 
-function deps(owner: string | null = "hr@pmw-group.com") {
+function deps(
+  owner: string | null = "hr@pmw-group.com",
+  registry: Record<string, string> = { "leave-application": "Leave Application" },
+) {
   return {
     resolveOwner: vi.fn(async () => owner),
+    resolveListTitleForSlug: vi.fn(async (slug: string) => registry[slug] ?? null),
     ensureColumn: vi.fn(async () => {}),
   };
 }
@@ -64,6 +68,27 @@ describe("minting a test ticket", () => {
     const result = await handleMintTestTicket(BODY, d);
     expect(result.status).toBe(500);
     expect(result.payload.ticket).toBeUndefined();
+  });
+
+  it("refuses a slug that resolves to no form, without provisioning any columns", async () => {
+    // Catching this at mint time means a ticket is never handed out for a
+    // slug that would only be noticed as broken later, when `stamp-test-run`
+    // tries and fails to resolve the same slug.
+    const d = deps("hr@pmw-group.com", {});
+    const result = await handleMintTestTicket(BODY, d);
+    expect(result.status).toBe(400);
+    expect(result.payload.ticket).toBeUndefined();
+    expect(d.ensureColumn).not.toHaveBeenCalled();
+  });
+
+  it("ignores a caller-supplied listTitle and provisions the slug's own resolved list", async () => {
+    // Without this, an HR Forms Owner authorised for one form could provision
+    // the test columns on an arbitrary list simply by naming it in the body.
+    const d = deps("hr@pmw-group.com", { "leave-application": "Leave Application" });
+    await handleMintTestTicket({ ...BODY, listTitle: "Some Other List" }, d);
+    for (const column of TEST_RUN_COLUMNS) {
+      expect(d.ensureColumn).toHaveBeenCalledWith("delegated", "Leave Application", column);
+    }
   });
 });
 
@@ -181,11 +206,19 @@ describe("stamping a row the signed-in path already wrote", () => {
   // the same lookup `handleStampTestRun` uses to derive the list to write to
   // from the ticket's own slug, so the caller's `body.listTitle` is never
   // the thing that decides which row gets stamped.
-  function stampDeps(registry: Record<string, string> = { "leave-application": "Leave Application", "travel-claim": "Travel Claim" }) {
+  function stampDeps(
+    registry: Record<string, string> = { "leave-application": "Leave Application", "travel-claim": "Travel Claim" },
+    rowsById: Record<string, { fields: Record<string, unknown> } | null> = {},
+  ) {
     const written: { listTitle: string; itemId: string; fields: Record<string, unknown> }[] = [];
     return {
       written,
       resolveListTitleForSlug: vi.fn(async (slug: string) => registry[slug] ?? null),
+      // Defaults to a plausible row — submitted by the same address every
+      // test in this suite issues its ticket to — so tests that are not
+      // exercising the row-binding check itself do not need to think about it.
+      readItem: vi.fn(async (_t: string, _listTitle: string, itemId: string) =>
+        itemId in rowsById ? rowsById[itemId] : { fields: { SubmittedBy: "hr@pmw-group.com" } }),
       updateFields: vi.fn(async (_t: string, listTitle: string, itemId: string, fields: Record<string, unknown>) => {
         written.push({ listTitle, itemId, fields });
       }),
@@ -311,6 +344,50 @@ describe("stamping a row the signed-in path already wrote", () => {
     const result = await handleStampTestRun(
       "token",
       { itemId: "1", slug: "ghost-form", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("refuses to stamp a row that does not exist in the ticket's own list", async () => {
+    // Binding the list alone still leaves the ticket a capability over every
+    // row in it; the row must be read back and checked, not assumed to exist.
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps(undefined, { "404": null });
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "404", slug: "leave-application", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("refuses to stamp a row submitted by someone other than the ticket holder", async () => {
+    // Without this check a ticket minted for one HR Forms Owner's own
+    // rehearsal would remain a capability to flag any row in the list —
+    // including a colleague's real submission — for the ticket's whole
+    // 4-hour, not-single-use lifetime.
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps(undefined, { "42": { fields: { SubmittedBy: "someone-else@pmw-group.com" } } });
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("refuses to re-stamp a row that is already flagged as a test run", async () => {
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps(undefined, {
+      "42": { fields: { SubmittedBy: "hr@pmw-group.com", IsTest: "true", TestEmail: "someone-else@pmw-group.com" } },
+    });
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: ticket },
       d,
     );
     expect(result.status).toBe(400);

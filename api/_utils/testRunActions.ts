@@ -21,6 +21,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface MintTestTicketDeps {
   resolveOwner(delegatedToken: string): Promise<string | null>;
+  /**
+   * Resolves the response list a slug's form actually writes to — the same
+   * lookup `handleStampTestRun` uses. `body.slug` and `body.listTitle` are
+   * both caller-supplied and neither is trusted on its own: without this, an
+   * HR Forms Owner authorised for one form could provision the test columns
+   * on an arbitrary list by naming it directly, or mint a ticket for a slug
+   * that resolves to nothing — a mistake `handleStampTestRun` would only
+   * notice later, when the submission it was meant to flag has already gone
+   * through as ordinary production traffic.
+   */
+  resolveListTitleForSlug(slug: string): Promise<string | null>;
   ensureColumn(delegatedToken: string, listTitle: string, column: string): Promise<void>;
 }
 
@@ -35,12 +46,18 @@ export async function handleMintTestTicket(
   if (!owner) return { status: 403, payload: { error: "Only an HR Forms Owner can start a test run." } };
 
   const slug = String(body.slug ?? "").trim();
-  const listTitle = String(body.listTitle ?? "").trim();
-  if (!slug || !listTitle) return { status: 400, payload: { error: "A form is required to start a test run." } };
+  if (!slug) return { status: 400, payload: { error: "A form is required to start a test run." } };
 
   const testEmail = String(body.testEmail ?? "").trim().toLowerCase();
   if (!EMAIL_RE.test(testEmail)) {
     return { status: 400, payload: { error: "Enter a valid email address to receive the test run." } };
+  }
+
+  // Resolved from the slug, exactly the way `handleStampTestRun` resolves its
+  // list — never taken from `body.listTitle` directly.
+  const listTitle = await deps.resolveListTitleForSlug(slug);
+  if (!listTitle) {
+    return { status: 400, payload: { error: "This form could not be found." } };
   }
 
   try {
@@ -67,6 +84,13 @@ export interface StampTestRunDeps {
    * its SharePoint list. Returns `null` if the slug names no form.
    */
   resolveListTitleForSlug(slug: string): Promise<string | null>;
+  /**
+   * Reads the row back so it can be checked before it is stamped. Bounding
+   * the LIST alone still leaves the ticket a capability over every row in
+   * that list for its whole 4-hour, not-single-use life — this is what lets
+   * the row itself be verified too.
+   */
+  readItem(token: string, listTitle: string, itemId: string): Promise<{ fields: Record<string, unknown> } | null>;
   updateFields(token: string, listTitle: string, itemId: string, fields: Record<string, unknown>): Promise<unknown>;
 }
 
@@ -95,6 +119,17 @@ export interface StampTestRunDeps {
  * its approval mail. So the list is re-derived here from the ticket's own
  * (verified) slug, exactly the way the rest of the app maps a form's public
  * identity to its SharePoint list; `body.listTitle` is ignored entirely.
+ *
+ * The ROW is bound too, not just the list. A ticket lives 4 hours and is not
+ * single-use, so binding only the list would still leave it a capability to
+ * flag ANY row in that form's list — including a colleague's real submission,
+ * which would hide it from production listings and redirect its remaining
+ * approval mail. The row is re-read from SharePoint and accepted only if it
+ * plausibly belongs to the ticket holder's own rehearsal: submitted by the
+ * same person the ticket was issued to, and not already flagged. Anything
+ * else — a missing row, a mismatched submitter, a row already stamped —
+ * is refused rather than silently re-stamped or stamped on someone else's
+ * behalf.
  */
 export async function handleStampTestRun(
   token: string,
@@ -109,12 +144,39 @@ export async function handleStampTestRun(
 
   const ticket = verifyTestTicket(body.testTicket, slug);
   if (!ticket) {
+    // The one authorization refusal in this feature — worth an audit trail,
+    // same as the other refusals below.
+    logWarn("api:test-run", "Refused to stamp a test run: the test ticket is invalid or expired", { slug });
     return { status: 400, payload: { error: "This test ticket is invalid or has expired." } };
   }
 
   const listTitle = await deps.resolveListTitleForSlug(ticket.slug);
   if (!listTitle) {
     return { status: 400, payload: { error: "This test ticket's form could not be found." } };
+  }
+
+  const row = await deps.readItem(token, listTitle, itemId);
+  if (!row) {
+    logWarn("api:test-run", "Refused to stamp a test run: the row does not exist in the ticket's own list", {
+      listTitle,
+      itemId,
+    });
+    return { status: 400, payload: { error: "That submission could not be found in this form's response list." } };
+  }
+  if (isTestRow(row.fields)) {
+    logWarn("api:test-run", "Refused to stamp a test run: the row is already flagged", {
+      listTitle,
+      itemId,
+    });
+    return { status: 400, payload: { error: "That submission is already marked as a test run." } };
+  }
+  const submittedBy = String(row.fields.SubmittedBy ?? "").trim().toLowerCase();
+  if (submittedBy !== ticket.issuedBy) {
+    logWarn("api:test-run", "Refused to stamp a test run: the row was not submitted by the ticket holder", {
+      listTitle,
+      itemId,
+    });
+    return { status: 400, payload: { error: "That submission does not belong to this test run." } };
   }
 
   await deps.updateFields(token, listTitle, itemId, testRunFieldsFor(ticket));

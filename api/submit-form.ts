@@ -1476,8 +1476,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   if (req.method === "POST" && (req.body as Record<string, unknown>)?.action === "mint-test-ticket") {
+    const appToken = await getGraphToken();
     const result = await handleMintTestTicket(req.body as Record<string, unknown>, {
       resolveOwner: resolveHrFormsOwner,
+      resolveListTitleForSlug: async (slug) => {
+        const form = await queryMasterFormBySlug(appToken, slug);
+        const title = form?.fields?.Title;
+        return typeof title === "string" && title.trim() ? title.trim() : null;
+      },
       ensureColumn: (token, listTitle, column) => ensureTextFieldViaSPRest(token, listTitle, column, column),
     });
     return res.status(result.status).json(result.payload);
@@ -1497,6 +1503,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const title = form?.fields?.Title;
           return typeof title === "string" && title.trim() ? title.trim() : null;
         },
+        readItem: queryListItemById,
         updateFields: updateListItemFields,
       });
       return res.status(result.status).json(result.payload);
