@@ -21,6 +21,8 @@
 | Approver input (legacy) | `ApproverRow.tsx` | User search + assignee input with static/field-reference modes |
 | Response viewer | `ResponseViewer.tsx` | Route `/admin/responses/:formTitle`. Renders submissions with SurveyJS read-only, matrix data, PDF generation. ~567 lines. |
 | Publish overlay | `ProvisionOverlay.tsx` | SharePoint list provisioning status spinner |
+| Test run launcher | `TestRunLauncher.tsx` | Mints a signed test ticket (`mint-test-ticket` action on `submit-form.ts`), lets the tester pick the redirect address, and opens the public form with it. |
+| Test run panel | `TestRunPanel.tsx` | Lists a form's `IsTest` response rows and each run's pass/fail checklist from `TestRunLog`, ending in a PDF rendered client-side (`@react-pdf/renderer` has no server equivalent). Deletion re-checks `IsTest` server-side; this panel's own filter is a display convenience, not the security boundary. Note: a **signed-in** test submission never calls `api/submit-form.ts` — the browser writes the response row directly, then calls the `stamp-test-run` action, which verifies the ticket server-side and stamps `IsTest`/`TestEmail`. Test mode is never asserted by the client. |
 | Barrel exports | `index.ts` | Only barrel export in the entire app |
 | Colors | `constants.ts` | `C` color object — inline styles, NOT MUI theme |
 

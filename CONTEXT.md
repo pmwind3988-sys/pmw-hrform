@@ -43,3 +43,11 @@ _Avoid_: Treating a Public Respondent as a tenant user or resolving tenant ident
 **Public Submission Signature Link**:
 The response-list value that points from a Public Respondent's signature field to the stored signature image. The signature is incomplete unless this link is saved on the submitted response.
 _Avoid_: Treating an uploaded signature image by itself as a saved response signature
+
+**Test Run**:
+A rehearsal submission through a form's real layer sequence, where every email is
+redirected to one address the tester nominates. It is flagged on the response
+row, hidden from production listings by default, and carries a pass/fail
+checklist of every step it took.
+_Avoid_: Treating a test run as a real submission, or calling a preview of the
+form a test run
