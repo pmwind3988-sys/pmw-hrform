@@ -83,6 +83,11 @@ export function orderedTestRunSteps(trail: TestRunTrail): TestRunStep[] {
 export function testRunOutcome(trail: TestRunTrail): "passed" | "failed" | "running" {
   const steps = Object.values(trail);
   if (steps.some((step) => step.status === "fail")) return "failed";
+  // An empty trail means nothing has been recorded yet — not that everything
+  // recorded passed. Reporting "passed" here would show a green checkmark for
+  // a run whose steps never wrote, which is the worst possible failure mode
+  // for a feature whose entire output is a pass/fail verdict.
+  if (steps.length === 0) return "running";
   if (steps.some((step) => step.status === "pending")) return "running";
   return "passed";
 }

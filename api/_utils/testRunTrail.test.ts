@@ -72,6 +72,13 @@ describe("test run trail", () => {
     expect(testRunOutcome(parseTestRunTrail(raw))).toBe("passed");
   });
 
+  it("does not call an empty trail passed", () => {
+    // A trail that never wrote a step is not evidence of a pass — showing
+    // green here would be the false positive this feature exists to avoid.
+    expect(testRunOutcome({})).toBe("running");
+    expect(testRunOutcome(parseTestRunTrail(undefined))).toBe("running");
+  });
+
   it("drops entries that are not steps rather than rendering junk", () => {
     expect(parseTestRunTrail(JSON.stringify({ ok: { step: "ok" }, bad: 7 }))).toEqual({});
   });
