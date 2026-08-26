@@ -201,6 +201,8 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
   const [busyAll, setBusyAll] = useState(false);
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
   const [pdfErrorById, setPdfErrorById] = useState<Record<string, string>>({});
+  /** True if the listing stopped before exhausting every page — shown so "N test runs" never silently understates what's really there. */
+  const [rowsTruncated, setRowsTruncated] = useState(false);
 
   const getDelegatedToken = useCallback(async (): Promise<string> => {
     const origin = window.location.origin;
@@ -210,20 +212,35 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
     });
   }, [instance, accounts]);
 
+  // Pages through every page of the response list's IsTest rows rather than
+  // stopping at the first one — a `$top` cap here would make the panel quietly
+  // under-report how many test runs exist on a busy list. `PAGE_SAFETY_CAP` is
+  // a last-resort guard against a runaway loop, not a normal ceiling: if it is
+  // ever hit, the panel says so instead of pretending the list shown is complete.
   const loadRows = useCallback(async () => {
     if (!form.Title) return;
     setLoading(true);
     setError("");
+    setRowsTruncated(false);
     try {
       const delegatedToken = await getDelegatedToken();
-      const data = await spGet(
-        delegatedToken,
-        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(form.Title)}')/items?$filter=IsTest eq 'true'&$orderby=Id desc&$top=200`,
-      ) as { value?: Record<string, unknown>[] };
-      const items = (data.value || [])
-        .map((fields) => ({ id: String(fields.Id ?? ""), fields }))
-        .filter((row) => row.id && isTestRow(row.fields));
+      const PAGE_SIZE = 500;
+      const PAGE_SAFETY_CAP = 40; // 40 * 500 = 20,000 rows before we give up and say so
+      const items: TestRunRow[] = [];
+      let nextUrl: string | null =
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(form.Title)}')/items?$filter=IsTest eq 'true'&$orderby=Id desc&$top=${PAGE_SIZE}`;
+      let truncated = false;
+      for (let page = 0; nextUrl && page < PAGE_SAFETY_CAP; page++) {
+        const data = await spGet(delegatedToken, nextUrl) as { value?: Record<string, unknown>[]; "odata.nextLink"?: string };
+        for (const fields of data.value || []) {
+          const id = String(fields.Id ?? "");
+          if (id && isTestRow(fields)) items.push({ id, fields });
+        }
+        nextUrl = data["odata.nextLink"] || null;
+        if (nextUrl && page === PAGE_SAFETY_CAP - 1) truncated = true;
+      }
       setRows(items);
+      setRowsTruncated(truncated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load test runs.");
     } finally {
@@ -239,12 +256,13 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
   if (!open) return null;
 
   const deleteOne = async (itemId: string) => {
+    if (!form.Slug) { setError("This form has no published slug yet — publish it before managing test runs."); return; }
     if (!window.confirm("Delete this test run? This cannot be undone.")) return;
     setBusyRowId(itemId);
     setError("");
     try {
       const delegatedToken = await getDelegatedToken();
-      await callTestRunAction({ action: "delete-test-runs", listTitle: form.Title, itemId, delegatedToken });
+      await callTestRunAction({ action: "delete-test-runs", slug: form.Slug, itemId, delegatedToken });
       setRows((prev) => prev.filter((row) => row.id !== itemId));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete this test run.");
@@ -255,13 +273,20 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
 
   const clearAll = async () => {
     if (rows.length === 0) return;
-    if (!window.confirm(`Delete all ${rows.length} test run(s) for this form? This cannot be undone.`)) return;
+    if (!form.Slug) { setError("This form has no published slug yet — publish it before managing test runs."); return; }
+    const countLabel = rowsTruncated ? `at least ${rows.length}` : String(rows.length);
+    if (!window.confirm(`Delete all ${countLabel} test run(s) for this form? This cannot be undone.`)) return;
     setBusyAll(true);
     setError("");
     try {
       const delegatedToken = await getDelegatedToken();
-      await callTestRunAction({ action: "delete-test-runs", listTitle: form.Title, delegatedToken });
-      setRows([]);
+      // The server pages through the whole list (see api/_utils/testRunActions.ts),
+      // so this deletes every IsTest row regardless of what this panel had
+      // managed to list — report what it actually says it deleted, honestly.
+      const result = await callTestRunAction({ action: "delete-test-runs", slug: form.Slug, delegatedToken });
+      const deletedIds = Array.isArray(result.deleted) ? (result.deleted as unknown[]).map(String) : [];
+      setRows((prev) => prev.filter((row) => !deletedIds.includes(row.id)));
+      setRowsTruncated(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not clear test runs.");
     } finally {
@@ -270,6 +295,10 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
   };
 
   const renderPdf = async (row: TestRunRow) => {
+    if (!form.Slug) {
+      setPdfErrorById((prev) => ({ ...prev, [row.id]: "This form has no published slug yet — publish it before recording this step." }));
+      return;
+    }
     setPdfBusyId(row.id);
     setPdfErrorById((prev) => ({ ...prev, [row.id]: "" }));
     try {
@@ -282,7 +311,7 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
       });
       window.open(pdfUrl, "_blank", "noopener");
       const step: Omit<TestRunStep, "at"> = { step: "pdf", label: "PDF rendered", status: "pass", order: 1100, detail: `${bytes} bytes` };
-      await callTestRunAction({ action: "record-test-run-step", listTitle: form.Title, itemId: row.id, delegatedToken, step });
+      await callTestRunAction({ action: "record-test-run-step", slug: form.Slug, itemId: row.id, delegatedToken, step });
       setRows((prev) => prev.map((candidate) => (
         candidate.id === row.id
           ? { ...candidate, fields: { ...candidate.fields, [TEST_RUN_LOG_FIELD]: JSON.stringify({ ...parseTestRunTrail(candidate.fields[TEST_RUN_LOG_FIELD]), pdf: { ...step, at: new Date().toISOString() } }) } }
@@ -294,7 +323,7 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
       try {
         const delegatedToken = await getDelegatedToken();
         const step: Omit<TestRunStep, "at"> = { step: "pdf", label: "PDF rendered", status: "fail", order: 1100, detail: message };
-        await callTestRunAction({ action: "record-test-run-step", listTitle: form.Title, itemId: row.id, delegatedToken, step });
+        await callTestRunAction({ action: "record-test-run-step", slug: form.Slug, itemId: row.id, delegatedToken, step });
       } catch {
         // Reporting the failure is best-effort; the inline message above already tells the builder.
       }
@@ -338,6 +367,12 @@ export default function TestRunPanel({ open, onClose, form }: TestRunPanelProps)
         {error && (
           <div style={{ margin: "0 22px 10px", fontSize: 12, color: C.red, background: C.redPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
             {error}
+          </div>
+        )}
+
+        {!loading && rowsTruncated && (
+          <div style={{ margin: "0 22px 10px", fontSize: 12, color: C.amber, background: C.amberPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
+            Showing the first {rows.length} test runs — this form has more than the panel could list. "Clear all test runs" still deletes every one of them.
           </div>
         )}
 

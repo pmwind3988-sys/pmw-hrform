@@ -15,7 +15,7 @@ import {
   deleteListItem,
   deleteDocLibraryFile,
   queryListItemById,
-  queryListItems,
+  queryAllListItems,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
@@ -34,7 +34,7 @@ import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/shar
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { handleMintTestTicket, handleStampTestRun, handleDeleteTestRuns, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
 import { verifyTestTicket, testRunFieldsFor, isTestRow, type TestRunRedirect } from "./_utils/testRun.js";
-import type { TestRunStep } from "./_utils/testRunTrail.js";
+import type { TestRunStep, TestRunStepStatus } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import {
@@ -758,6 +758,33 @@ function errorMessage(error: unknown, maxLength = 250): string {
   return error instanceof Error ? error.message.slice(0, maxLength) : String(error).slice(0, maxLength);
 }
 
+const TEST_RUN_STEP_STATUSES: TestRunStepStatus[] = ["pass", "fail", "warn", "skip", "pending"];
+
+/**
+ * Whitelists the shape and status of a `record-test-run-step` request body
+ * before it ever reaches `appendTestRunStep`. That function writes whatever
+ * it is given verbatim into the row's TestRunLog JSON; without this check, a
+ * malformed or unrecognised `status` from the browser (a typo, a stale
+ * client, or a request crafted by hand) would be stored as-is and later trip
+ * up the panel's status-dot lookup, which only knows the five real statuses.
+ */
+function validateTestRunStepInput(value: unknown): Omit<TestRunStep, "at"> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.step !== "string" || !record.step.trim()) return null;
+  if (typeof record.label !== "string" || !record.label.trim()) return null;
+  if (typeof record.status !== "string" || !TEST_RUN_STEP_STATUSES.includes(record.status as TestRunStepStatus)) return null;
+  if (record.detail !== undefined && typeof record.detail !== "string") return null;
+  if (record.order !== undefined && (typeof record.order !== "number" || !Number.isFinite(record.order))) return null;
+  return {
+    step: record.step,
+    label: record.label,
+    status: record.status as TestRunStepStatus,
+    detail: typeof record.detail === "string" ? record.detail : undefined,
+    order: typeof record.order === "number" ? record.order : 0,
+  };
+}
+
 function graphUrlFieldValue(url: string, description: string): string {
   const label = description.trim() || url;
   return `${url}, ${label}`;
@@ -1479,14 +1506,32 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
   }
 
+  // Resolves the response list a slug's form actually writes to — the same
+  // lookup `handleStampTestRun` already uses. Shared by both actions below so
+  // that neither one ever takes a list name straight from the caller: a token
+  // scoped to one form must not be able to reach a different form's list by
+  // simply naming it in the request body.
+  const resolveListTitleForSlug = async (token: string, slug: string): Promise<string | null> => {
+    const form = await queryMasterFormBySlug(token, slug);
+    const title = form?.fields?.Title;
+    return typeof title === "string" && title.trim() ? title.trim() : null;
+  };
+
   // Destructive: an item id from the browser, gated on `isTestRow` inside
-  // `handleDeleteTestRuns` so this can never delete a production submission.
+  // `handleDeleteTestRuns` so this can never delete a production submission,
+  // and on a slug-resolved list so a caller cannot reach a different form's
+  // list by naming it directly (the app-only Graph token below can reach
+  // every list on the site).
   if (req.method === "POST" && (req.body as Record<string, unknown>)?.action === "delete-test-runs") {
     try {
       const token = await getGraphToken();
       const result = await handleDeleteTestRuns(req.body as Record<string, unknown>, {
         resolveOwner: resolveHrFormsOwner,
-        listRows: (listTitle) => queryListItems(token, listTitle),
+        resolveListTitleForSlug: (slug) => resolveListTitleForSlug(token, slug),
+        // Pages through the full list rather than stopping at Graph's first
+        // page — "Clear all test runs" must not silently leave rows behind
+        // on a busy response list.
+        listRows: (listTitle) => queryAllListItems(token, listTitle),
         deleteRow: (_delegatedToken, listTitleForDelete, id) => deleteListItem(token, listTitleForDelete, id),
       });
       return res.status(result.status).json(result.payload);
@@ -1498,7 +1543,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   // The browser records the one step it alone can perform — rendering the
   // submission PDF. Gated the same way as the neighbouring test-run actions:
-  // an HR Forms Owner, and only ever against a row already flagged IsTest.
+  // an HR Forms Owner, a slug-resolved list (never the caller's own
+  // `listTitle`), and only ever against a row already flagged IsTest.
   if (req.method === "POST" && (req.body as Record<string, unknown>)?.action === "record-test-run-step") {
     const body = req.body as Record<string, unknown>;
     const delegatedToken = String(body.delegatedToken ?? "").trim();
@@ -1507,15 +1553,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const owner = await resolveHrFormsOwner(delegatedToken);
     if (!owner) return res.status(403).json({ error: "Only an HR Forms Owner can record a test run step." });
 
-    const targetListTitle = String(body.listTitle ?? "").trim();
+    const slug = String(body.slug ?? "").trim();
     const itemId = String(body.itemId ?? "").trim();
-    const step = body.step as Omit<TestRunStep, "at"> | undefined;
-    if (!targetListTitle || !itemId || !step) {
-      return res.status(400).json({ error: "A response row and step are required to record a test run step." });
+    const step = validateTestRunStepInput(body.step);
+    if (!slug || !itemId || !step) {
+      return res.status(400).json({ error: "A response row and a valid step are required to record a test run step." });
     }
 
     try {
       const token = await getGraphToken();
+      const targetListTitle = await resolveListTitleForSlug(token, slug);
+      if (!targetListTitle) return res.status(400).json({ error: "This form could not be found." });
+
       const item = await queryListItemById(token, targetListTitle, itemId);
       if (!item || !isTestRow(item.fields)) {
         return res.status(400).json({ error: "That submission is not a test run." });

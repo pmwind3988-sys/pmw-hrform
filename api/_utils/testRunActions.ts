@@ -183,6 +183,12 @@ export async function recordTestRunSteps(
 
 export interface DeleteTestRunsDeps {
   resolveOwner(delegatedToken: string): Promise<string | null>;
+  /**
+   * Resolves the response list a slug's form actually writes to — the same
+   * lookup `handleStampTestRun` uses. The caller's own `body.listTitle` is
+   * never trusted for this; see the note below.
+   */
+  resolveListTitleForSlug(slug: string): Promise<string | null>;
   listRows(listTitle: string): Promise<{ id: string; fields: Record<string, unknown> }[]>;
   deleteRow(delegatedToken: string, listTitle: string, id: string): Promise<void>;
 }
@@ -197,6 +203,15 @@ export interface DeleteTestRunsDeps {
  * the list — production or not — simply by naming its row id. So the row is
  * always re-read from SharePoint and re-checked here; the caller's belief
  * that a row is a test run is never trusted on its own.
+ *
+ * The response list to operate on is also never taken from the caller. This
+ * handler runs on an app-only Graph token that can reach every list on the
+ * site — trusting `body.listTitle` directly would let an HR Forms Owner
+ * authorised for one form permanently delete rows in, or overwrite trail
+ * JSON on, an entirely different form's list simply by naming it. So the
+ * list is re-derived here from the caller's own `slug`, exactly the way
+ * `handleStampTestRun` re-derives its list from a verified ticket's slug;
+ * `body.listTitle` is ignored entirely.
  */
 export async function handleDeleteTestRuns(
   body: Record<string, unknown>,
@@ -208,8 +223,11 @@ export async function handleDeleteTestRuns(
   const owner = await deps.resolveOwner(delegatedToken);
   if (!owner) return { status: 403, payload: { error: "Only an HR Forms Owner can delete test runs." } };
 
-  const listTitle = String(body.listTitle ?? "").trim();
-  if (!listTitle) return { status: 400, payload: { error: "A form is required to delete test runs." } };
+  const slug = String(body.slug ?? "").trim();
+  if (!slug) return { status: 400, payload: { error: "A form is required to delete test runs." } };
+
+  const listTitle = await deps.resolveListTitleForSlug(slug);
+  if (!listTitle) return { status: 400, payload: { error: "This form could not be found." } };
 
   const itemId = typeof body.itemId === "string" ? body.itemId.trim() : "";
 

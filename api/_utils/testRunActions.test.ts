@@ -318,47 +318,85 @@ describe("stamping a row the signed-in path already wrote", () => {
   });
 });
 
-function deleteDeps(rows: { id: string; fields: Record<string, unknown> }[], owner: string | null = "hr@pmw-group.com") {
-  const deleted: string[] = [];
+function deleteDeps(
+  rowsByList: Record<string, { id: string; fields: Record<string, unknown> }[]>,
+  owner: string | null = "hr@pmw-group.com",
+  registry: Record<string, string> = { "leave-application": "Leave Application", "travel-claim": "Travel Claim" },
+) {
+  const deleted: { listTitle: string; id: string }[] = [];
   return {
     deleted,
     resolveOwner: vi.fn(async () => owner),
-    listRows: vi.fn(async () => rows),
-    deleteRow: vi.fn(async (_t: string, _l: string, id: string) => { deleted.push(id); }),
+    resolveListTitleForSlug: vi.fn(async (slug: string) => registry[slug] ?? null),
+    listRows: vi.fn(async (listTitle: string) => rowsByList[listTitle] ?? []),
+    deleteRow: vi.fn(async (_t: string, listTitle: string, id: string) => { deleted.push({ listTitle, id }); }),
   };
 }
 
 describe("deleting test runs", () => {
-  const rows = [
-    { id: "1", fields: { IsTest: "true" } },
-    { id: "2", fields: {} },
-    { id: "3", fields: { IsTest: "true" } },
-  ];
+  const rowsByList = {
+    "Leave Application": [
+      { id: "1", fields: { IsTest: "true" } },
+      { id: "2", fields: {} },
+      { id: "3", fields: { IsTest: "true" } },
+    ],
+    "Travel Claim": [
+      { id: "9", fields: { IsTest: "true" } },
+    ],
+  };
 
   it("deletes only the runs that are flagged as tests", async () => {
-    const d = deleteDeps(rows);
-    const result = await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t" }, d);
+    const d = deleteDeps(rowsByList);
+    const result = await handleDeleteTestRuns({ slug: "leave-application", delegatedToken: "t" }, d);
     expect(result.status).toBe(200);
-    expect(d.deleted.sort()).toEqual(["1", "3"]);
+    expect(d.deleted.map((x) => x.id).sort()).toEqual(["1", "3"]);
+    expect(d.deleted.every((x) => x.listTitle === "Leave Application")).toBe(true);
   });
 
   it("deletes one named run when asked for one", async () => {
-    const d = deleteDeps(rows);
-    await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t", itemId: "3" }, d);
-    expect(d.deleted).toEqual(["3"]);
+    const d = deleteDeps(rowsByList);
+    await handleDeleteTestRuns({ slug: "leave-application", delegatedToken: "t", itemId: "3" }, d);
+    expect(d.deleted).toEqual([{ listTitle: "Leave Application", id: "3" }]);
   });
 
   it("refuses to delete a production submission even when named directly", async () => {
-    const d = deleteDeps(rows);
-    const result = await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t", itemId: "2" }, d);
+    const d = deleteDeps(rowsByList);
+    const result = await handleDeleteTestRuns({ slug: "leave-application", delegatedToken: "t", itemId: "2" }, d);
     expect(result.status).toBe(400);
     expect(d.deleted).toEqual([]);
   });
 
   it("refuses anyone who is not an HR Forms Owner", async () => {
-    const d = deleteDeps(rows, null);
-    const result = await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t" }, d);
+    const d = deleteDeps(rowsByList, null);
+    const result = await handleDeleteTestRuns({ slug: "leave-application", delegatedToken: "t" }, d);
     expect(result.status).toBe(403);
     expect(d.deleted).toEqual([]);
+  });
+
+  it("refuses when the slug names no form", async () => {
+    const d = deleteDeps(rowsByList);
+    const result = await handleDeleteTestRuns({ slug: "ghost-form", delegatedToken: "t" }, d);
+    expect(result.status).toBe(400);
+    expect(d.deleted).toEqual([]);
+  });
+
+  it("ignores a caller-supplied listTitle for a form other than the caller's own slug", async () => {
+    // Authorised only for "leave-application" via slug — a spoofed
+    // body.listTitle naming Travel Claim's list must not steer anything.
+    // The list operated on is derived from the slug alone.
+    const d = deleteDeps(rowsByList);
+    const result = await handleDeleteTestRuns(
+      { slug: "leave-application", listTitle: "Travel Claim", delegatedToken: "t" },
+      d,
+    );
+    expect(result.status).toBe(200);
+    expect(d.deleted.map((x) => x.id).sort()).toEqual(["1", "3"]);
+    expect(d.deleted.every((x) => x.listTitle === "Leave Application")).toBe(true);
+  });
+
+  it("a request naming form B's list while authorised for form A affects nothing in form B", async () => {
+    const d = deleteDeps(rowsByList);
+    await handleDeleteTestRuns({ slug: "leave-application", listTitle: "Travel Claim", delegatedToken: "t" }, d);
+    expect(d.deleted.some((x) => x.listTitle === "Travel Claim")).toBe(false);
   });
 });
