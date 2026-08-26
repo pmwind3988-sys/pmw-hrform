@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handleMintTestTicket, recordTestRunStep, recordTestRunSteps, TEST_RUN_COLUMNS } from "./testRunActions.js";
-import { verifyTestTicket } from "./testRun.js";
+import { handleMintTestTicket, handleStampTestRun, recordTestRunStep, recordTestRunSteps, TEST_RUN_COLUMNS } from "./testRunActions.js";
+import { mintTestTicket, verifyTestTicket } from "./testRun.js";
 import { parseTestRunTrail } from "./testRunTrail.js";
 
 function deps(owner: string | null = "hr@pmw-group.com") {
@@ -168,6 +168,102 @@ describe("recording several steps on a run at once", () => {
     const d = trailDeps();
     await recordTestRunSteps("token", "Leave Application", "42", [], d);
     expect(d.readItem).not.toHaveBeenCalled();
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+});
+
+describe("stamping a row the signed-in path already wrote", () => {
+  beforeEach(() => {
+    process.env.API_SECRET_KEY = "secret-for-tests";
+  });
+
+  function stampDeps() {
+    const written: { listTitle: string; itemId: string; fields: Record<string, unknown> }[] = [];
+    return {
+      written,
+      updateFields: vi.fn(async (_t: string, listTitle: string, itemId: string, fields: Record<string, unknown>) => {
+        written.push({ listTitle, itemId, fields });
+      }),
+    };
+  }
+
+  it("stamps both IsTest and TestEmail on the named row for a valid ticket", async () => {
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(200);
+    expect(d.written).toEqual([
+      { listTitle: "Leave Application", itemId: "42", fields: { IsTest: "true", TestEmail: "tester@pmw-group.com" } },
+    ]);
+  });
+
+  it("stamps nothing for a ticket that was never signed", async () => {
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: "not-a-ticket" },
+      d,
+    );
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("stamps nothing for a ticket that has been tampered with", async () => {
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const [body, signature] = ticket.split(".");
+    const forgedBody = Buffer.from(
+      JSON.stringify({ slug: "leave-application", testEmail: "attacker@evil.com", issuedBy: "hr@pmw-group.com", expiresAt: Date.now() + 1e9 }),
+    ).toString("base64url");
+    const tampered = `${forgedBody}.${signature}`;
+    void body;
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: tampered },
+      d,
+    );
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("stamps nothing for a ticket that has expired", async () => {
+    // mintTestTicket sets expiresAt = now + TTL (4h), so minting as of five
+    // hours ago yields a ticket that is already expired relative to the real
+    // "now" verifyTestTicket checks against below.
+    const ticket = mintTestTicket(
+      { slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" },
+      new Date(Date.now() - 5 * 60 * 60 * 1000),
+    );
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("stamps nothing when the ticket was minted for a different form", async () => {
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Travel Claim", itemId: "42", slug: "travel-claim", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("refuses without touching the row when the row identity is incomplete", async () => {
+    const d = stampDeps();
+    const result = await handleStampTestRun("token", { listTitle: "Leave Application", slug: "leave-application" }, d);
+    expect(result.status).toBe(400);
     expect(d.updateFields).not.toHaveBeenCalled();
   });
 });

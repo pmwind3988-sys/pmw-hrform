@@ -30,7 +30,7 @@ import {
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
-import { handleMintTestTicket, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
+import { handleMintTestTicket, handleStampTestRun, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
 import { verifyTestTicket, testRunFieldsFor, type TestRunRedirect } from "./_utils/testRun.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
@@ -1452,6 +1452,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ensureColumn: (token, listTitle, column) => ensureTextFieldViaSPRest(token, listTitle, column, column),
     });
     return res.status(result.status).json(result.payload);
+  }
+
+  // Flags a row the signed-in submission path already wrote directly to
+  // SharePoint (it never goes through the guest flow below, which stamps
+  // IsTest/TestEmail at create time). The ticket is re-verified here against
+  // the server's own signing key — never trusted from the caller — so this
+  // can only ever mark a row that a real mint-test-ticket call produced.
+  if (req.method === "POST" && (req.body as Record<string, unknown>)?.action === "stamp-test-run") {
+    try {
+      const token = await getGraphToken();
+      const result = await handleStampTestRun(token, req.body as Record<string, unknown>, {
+        updateFields: updateListItemFields,
+      });
+      return res.status(result.status).json(result.payload);
+    } catch (error) {
+      logError("api:submit-form", "Failed to stamp test run", error);
+      return res.status(500).json({ error: "Could not mark this submission as a test run." });
+    }
   }
 
   const {

@@ -14,6 +14,7 @@ import AuditLog from "../components/builder/AuditLog";
 import ProvisionOverlay from "../components/builder/ProvisionOverlay";
 import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import PrefilledQrPanel from "../components/builder/PrefilledQrPanel";
+import TestRunLauncher from "../components/builder/TestRunLauncher";
 import { C } from "../components/builder/constants";
 import { Icon } from "../components/builder/BuilderIcons";
 import type { BuilderMode, BuilderToolCommand, BuilderToolKey } from "../components/builder/builderTheme";
@@ -623,6 +624,8 @@ export default function AdminFormBuilder() {
   /** Which of the four modes owns the work area. Chrome stays constant. */
   const [mode, setMode] = useState<BuilderMode>("build");
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [isFormBuilderSuperuser, setIsFormBuilderSuperuser] = useState(false);
+  const [testRunOpen, setTestRunOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [previewMenuOpen, setPreviewMenuOpen] = useState(false);
   const [toolCommand, setToolCommand] = useState<BuilderToolCommand | null>(null);
@@ -772,6 +775,10 @@ export default function AdminFormBuilder() {
         return;
       }
       setAuthChecked(true);
+      // Reaching this point already required `builderSuperuser` above (the
+      // redirect a few lines up fires otherwise), so this just makes that
+      // membership available to gate UI, rather than re-deriving it.
+      setIsFormBuilderSuperuser(true);
       const origin = new URL(activeSite.url || "https://placeholder.sharepoint.com").origin;
       try {
         const token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
@@ -1887,6 +1894,20 @@ export default function AdminFormBuilder() {
           <span className="bx-tag bx-tag-outline">Admin</span>
           {isEditing && <span className="bx-tag bx-tag-neutral bx-chip-sec">v{meta.formVersion}</span>}
           {isDraft && <span className="bx-tag bx-tag-warn bx-chip-sec">Draft</span>}
+          {/* Rehearse this form's approval workflow with every email redirected
+              to one nominated address. Enabled for drafts as well as published
+              forms — only a form that has never been saved (nothing loaded
+              into `meta` yet) has nothing to test. */}
+          {isFormBuilderSuperuser && isEditing && (
+            <button
+              type="button"
+              className="bx-btn bx-btn-sm"
+              title="Rehearse this form's approval workflow — every email goes only to the address you enter"
+              onClick={() => setTestRunOpen(true)}
+            >
+              Test workflow
+            </button>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }} />
@@ -2817,6 +2838,14 @@ export default function AdminFormBuilder() {
             setProvisioning(false);
             if (provOk) navigate(builderPath(meta.formTitle));
           }}
+        />
+      )}
+
+      {testRunOpen && (
+        <TestRunLauncher
+          open={testRunOpen}
+          onClose={() => setTestRunOpen(false)}
+          form={{ Title: meta.formTitle, Slug: meta.slug }}
         />
       )}
     </div>

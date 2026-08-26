@@ -10,7 +10,7 @@
  * signed-in admin's delegated SharePoint token can, and a mint request is the
  * one moment in the feature where such a token is in hand.
  */
-import { mintTestTicket } from "./testRun.js";
+import { mintTestTicket, verifyTestTicket, testRunFieldsFor } from "./testRun.js";
 import { TEST_EMAIL_FIELD, TEST_FLAG_FIELD } from "./testRun.js";
 import { appendTestRunStep, TEST_RUN_LOG_FIELD, type TestRunStep } from "./testRunTrail.js";
 import { logWarn } from "./logger.js";
@@ -58,6 +58,47 @@ export async function handleMintTestTicket(
   }
 
   return { status: 200, payload: { ticket: mintTestTicket({ slug, testEmail, issuedBy: owner }) } };
+}
+
+export interface StampTestRunDeps {
+  updateFields(token: string, listTitle: string, itemId: string, fields: Record<string, unknown>): Promise<unknown>;
+}
+
+/**
+ * Flags a just-created response row as a test run — the only place `IsTest`/
+ * `TestEmail` are ever written.
+ *
+ * The signed-in submission path writes its row straight to SharePoint (it
+ * never goes through the guest `mint-test-ticket`/submit flow that stamps
+ * these fields at create time), so this is a second, narrower door onto the
+ * same two columns. It exists only because the browser must never be trusted
+ * to assert test-ness itself — a client that could set `IsTest: true` with an
+ * arbitrary `TestEmail` on any submission could redirect a real approval's
+ * mail. So the only fields this ever writes are re-derived from a ticket this
+ * function verifies itself, server-side, against the slug the caller claims;
+ * a ticket that is missing, tampered, expired, or minted for a different form
+ * changes nothing and the row is left exactly as `createListItem` left it —
+ * ordinary production traffic, the safe direction to fail.
+ */
+export async function handleStampTestRun(
+  token: string,
+  body: Record<string, unknown>,
+  deps: StampTestRunDeps,
+): Promise<{ status: number; payload: Record<string, unknown> }> {
+  const listTitle = String(body.listTitle ?? "").trim();
+  const itemId = String(body.itemId ?? "").trim();
+  const slug = String(body.slug ?? "").trim();
+  if (!listTitle || !itemId || !slug) {
+    return { status: 400, payload: { error: "A form, response row and slug are required to mark a test run." } };
+  }
+
+  const ticket = verifyTestTicket(body.testTicket, slug);
+  if (!ticket) {
+    return { status: 400, payload: { error: "This test ticket is invalid or has expired." } };
+  }
+
+  await deps.updateFields(token, listTitle, itemId, testRunFieldsFor(ticket));
+  return { status: 200, payload: { ok: true } };
 }
 
 export interface TestRunStepDeps {

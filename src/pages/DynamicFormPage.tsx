@@ -514,8 +514,13 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
-const SuccessScreen = ({ formTitle, referenceNo, onReset, t }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT }) => (
+const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
+    {isTestRun && (
+      <div role="status" style={{ maxWidth: 420, margin: "0 auto 20px", padding: "10px 16px", background: "#B91C1C", color: "#fff", borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+        TEST RUN — this was a rehearsal, not a real submission. Every email it generated went only to {testEmailDisplay || "the nominated test address"}.
+      </div>
+    )}
     <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
     <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary, marginBottom: 10 }}>Submission received</div>
     <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.8, maxWidth: 420, margin: "0 auto 10px" }}>Your response for <strong>{formTitle}</strong> has been recorded.</p>
@@ -1255,6 +1260,43 @@ export default function DynamicFormPage() {
           }
         }
 
+        // A signed-in submission writes its row straight to SharePoint above,
+        // never through the guest `/api/submit-form` flow that stamps
+        // IsTest/TestEmail at create time. Everything downstream — the
+        // approval dashboard, the evaluation page, the cron — decides
+        // test-ness by reading those two columns off the row, so a
+        // rehearsal that skips this call is indistinguishable from a real
+        // submission the moment anyone approves layer 1. The server
+        // re-verifies the ticket itself before writing anything; this call
+        // only ever succeeds in flagging a row that a genuine mint-test-ticket
+        // ticket authorises, never anything the browser asserts on its own.
+        //
+        // Unlike the trail-writing calls elsewhere in this flow, a failure
+        // here is NOT swallowed: an unmarked row would go on to mail a real
+        // layer-2+ approver the moment it is approved, which is worse than
+        // telling the tester their rehearsal did not start cleanly.
+        if (isTestRun && result?.Id) {
+          const stampRes = await fetch("/api/submit-form", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "XMLHttpRequest",
+              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+            },
+            body: JSON.stringify({
+              action: "stamp-test-run",
+              listTitle: cfg.Title,
+              itemId: String(result.Id),
+              slug: (cfg.Slug as string) || (cfg.slug as string) || formId || "",
+              testTicket,
+            }),
+          });
+          if (!stampRes.ok) {
+            const stampData = await stampRes.json().catch(() => ({})) as { error?: string };
+            throw new Error(stampData.error || "Could not mark this submission as a test run — stopped before any approver could be notified.");
+          }
+        }
+
         if (result?.Id && urlFieldPatches.length > 0) {
           for (const patch of urlFieldPatches) {
             const patchFieldName = resolveColumnKey(patch.fieldName);
@@ -1648,49 +1690,58 @@ export default function DynamicFormPage() {
     <div style={{ minHeight: "100vh", background: t.bg }}>
       <style>{globalCss(t)}</style>
       <ScrollProgress t={t} />
-      {isTestRun && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 10001,
-            background: "#B91C1C",
-            color: "#fff",
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: ".02em",
-            textAlign: "center",
-            padding: "8px 12px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-          }}
-        >
-          TEST RUN — emails go only to {testEmailDisplay || "the nominated test address"}
-        </div>
-      )}
-      <div style={{ height: isTestRun ? 34 : 0 }} />
-      <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", position: "sticky", top: 0, zIndex: 50, gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>
-        <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <Logo size={{ xs: 26, sm: 28, md: 32 }} />
-          <span className="dfp-title" style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 15, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
-          {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
-          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>Private</span>}
-        </div>
-        <div className="dfp-header-right" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
-          {isAuthenticated ? (
-            <>
-              <div className="dfp-user-badge" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: t.textSecond }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
-                <span className="dfp-user-name">{userEmail?.split("@")[0]}</span>
-              </div>
-              <button onClick={handleSignOut} style={{ height: 30, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
-            </>
-          ) : (<button onClick={handleSignIn} style={{ height: 30, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
-          <span className="dfp-version" style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap" }}>v{formVersion}</span>
-        </div>
-      </header>
+      {/*
+        The test-run banner and the header stick together as one block
+        rather than the banner being `position: fixed` over a hardcoded
+        spacer. A hardcoded spacer height silently stops matching the
+        banner's real height the moment the banner wraps to two lines (e.g.
+        on a narrow viewport with a long test address) — the header would
+        then sit half-covered. Stacking both inside one `position: sticky`
+        container means the header is simply pushed down by however tall
+        the banner actually rendered, on any viewport, with no height to
+        keep in sync.
+      */}
+      <div style={{ position: "sticky", top: 0, zIndex: 50 }}>
+        {isTestRun && (
+          <div
+            role="status"
+            style={{
+              background: "#B91C1C",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: ".02em",
+              textAlign: "center",
+              padding: "10px 12px",
+              lineHeight: 1.4,
+              boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+            }}
+          >
+            TEST RUN — emails go only to {testEmailDisplay || "the nominated test address"}
+          </div>
+        )}
+        <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>
+          <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <Logo size={{ xs: 26, sm: 28, md: 32 }} />
+            <span className="dfp-title" style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 15, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
+            {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
+            {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>Private</span>}
+          </div>
+          <div className="dfp-header-right" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
+            {isAuthenticated ? (
+              <>
+                <div className="dfp-user-badge" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: t.textSecond }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
+                  <span className="dfp-user-name">{userEmail?.split("@")[0]}</span>
+                </div>
+                <button onClick={handleSignOut} style={{ height: 30, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
+              </>
+            ) : (<button onClick={handleSignIn} style={{ height: 30, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
+            <span className="dfp-version" style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap" }}>v{formVersion}</span>
+          </div>
+        </header>
+      </div>
 
       {showBanner && (
         <div className="dfp-banner" style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
@@ -1726,7 +1777,7 @@ export default function DynamicFormPage() {
 
       <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
-          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} />
+          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} />
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (
@@ -1739,6 +1790,11 @@ export default function DynamicFormPage() {
             {formReady ? <div className="dfp-survey-wrap"><NativeFormView runtime={runtime} dark={dark} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
             {formReady && isLastSurveyPage && (
               <>
+                {isTestRun && (
+                  <div role="status" style={{ marginTop: 18, padding: "12px 16px", background: "#FEE2E2", border: "1px solid #B91C1C", borderRadius: 8, color: "#7F1D1D", fontSize: 13, fontWeight: 700, textAlign: "center" }}>
+                    You are about to submit a TEST RUN, not a real request. Every email it generates will go only to {testEmailDisplay || "the nominated test address"}.
+                  </div>
+                )}
                 <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>
                   <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
                     <input
