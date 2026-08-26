@@ -37,6 +37,7 @@ import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referen
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 import {
+  DirectoryGapError,
   isDeferredAssignee,
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolutionContext,
@@ -326,7 +327,7 @@ async function resolveDepartmentApproverEmail(
     throw new Error(`${label} needs a department field before this form can be submitted.`);
   }
   if (!department) {
-    throw new Error(`${label} needs a department value before this form can be submitted.`);
+    throw new DirectoryGapError(`${label} has no department to look an approver up with.`);
   }
 
   const config = getDepartmentApproverLookupConfig(layer.assignee);
@@ -339,21 +340,30 @@ async function resolveDepartmentApproverEmail(
   params.set("$select", [config.departmentColumn, config.emailColumn, config.nameColumn].join(","));
   params.set("$top", "2");
 
-  const data = await spGet(
-    token,
-    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(config.listName)}')/items?${params.toString()}`,
-  ) as { value?: Record<string, unknown>[] };
+  // A directory that cannot be read is a directory with no answer: park, so a
+  // missing list or a transient SharePoint failure never costs somebody their form.
+  let data: { value?: Record<string, unknown>[] };
+  try {
+    data = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(config.listName)}')/items?${params.toString()}`,
+    ) as { value?: Record<string, unknown>[] };
+  } catch (error) {
+    throw new DirectoryGapError(
+      `${label} could not read the "${config.listName}" list: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   const matches = data.value ?? [];
   if (matches.length === 0) {
-    throw new Error(`${label} could not find ${config.roleValue || "an approver"} for department "${department}".`);
+    throw new DirectoryGapError(`${label} could not find ${config.roleValue || "an approver"} for department "${department}".`);
   }
   if (matches.length > 1) {
-    throw new Error(`${label} found more than one ${config.roleValue || "approver"} for department "${department}".`);
+    throw new DirectoryGapError(`${label} found more than one ${config.roleValue || "approver"} for department "${department}".`);
   }
 
   const email = submittedValueToString(matches[0][config.emailColumn]);
   if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
-    throw new Error(`${label} found an invalid approver email for department "${department}".`);
+    throw new DirectoryGapError(`${label} found an invalid approver email for department "${department}".`);
   }
 
   return {

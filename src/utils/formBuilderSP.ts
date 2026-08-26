@@ -2394,6 +2394,13 @@ interface ApprovalNotificationParams {
   responseListTitle?: string;
   throwOnEmailError?: boolean;
   nextEmailSchedule?: EvaluationEmailSchedule;
+  /**
+   * When the target layer went live, as an ISO timestamp. A delayed evaluation
+   * counts its wait from here rather than from now, so a layer an admin routed
+   * late still comes due on the date it would have if it had routed itself.
+   * Omitted by every caller that notifies a layer at the moment it activates.
+   */
+  scheduleAnchor?: string;
   attachments?: WorkflowEmailAttachment[];
   /** Present only while a test run is in progress; forwarded to every `sendSpEmail` call below. */
   testRun?: { ticket: string; slug: string };
@@ -2595,7 +2602,7 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, attachments, testRun } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, scheduleAnchor, attachments, testRun } = params;
   // One address stays a plain string so existing single-assignee mail is byte
   // for byte unchanged; only fan-out layers become an array.
   const deliveryList = (primary: string): string | string[] => {
@@ -2621,10 +2628,12 @@ export async function triggerApprovalNotification(
     const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})`;
     const item = await spGet(token, `${itemUrl}?$select=WorkflowEmailSchedule`) as { WorkflowEmailSchedule?: string };
     const now = new Date();
+    const anchored = scheduleAnchor ? new Date(scheduleAnchor) : null;
+    const activatedAt = anchored && !Number.isNaN(anchored.getTime()) ? anchored : now;
     const schedule = setScheduledWorkflowEmail(item.WorkflowEmailSchedule, {
       layer: targetLayer,
       recipient,
-      dueAt: resolveEvaluationEmailDueAt(nextLayerType === "evaluation" ? nextEmailSchedule : undefined, now),
+      dueAt: resolveEvaluationEmailDueAt(nextLayerType === "evaluation" ? nextEmailSchedule : undefined, activatedAt),
       status: "scheduled",
       updatedAt: now.toISOString(),
       layerType: nextLayerType,

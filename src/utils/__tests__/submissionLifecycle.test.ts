@@ -5,6 +5,7 @@ import {
   isManualPaperStatus,
   isNeedsRoutingStatus,
   lifecycleLabel,
+  removeRoutingNoteForLayer,
   resolveLifecycleStage,
 } from "../submissionLifecycle";
 
@@ -106,5 +107,29 @@ describe("lifecycleLabel", () => {
       expect(lifecycleLabel(stage).length).toBeGreaterThan(0);
     }
     expect(lifecycleLabel("manual_paper")).toBe("Manual / paper");
+  });
+});
+
+describe("removeRoutingNoteForLayer", () => {
+  it("drops the routed layer's reason and keeps the rest", () => {
+    const notes = [
+      "Layer 1: could not find HOD for department \"Finance\".",
+      "Layer 2: could not find HOD for department \"Finance\".",
+    ].join("\n");
+    expect(removeRoutingNoteForLayer(notes, 1))
+      .toBe("Layer 2: could not find HOD for department \"Finance\".");
+  });
+
+  it("empties the field when the last parked layer is routed", () => {
+    expect(removeRoutingNoteForLayer("Layer 1: no approver.", 1)).toBe("");
+  });
+
+  it("does not confuse layer 1 with layer 10", () => {
+    expect(removeRoutingNoteForLayer("Layer 10: no approver.", 1)).toBe("Layer 10: no approver.");
+  });
+
+  it("is empty for a record that never carried notes", () => {
+    expect(removeRoutingNoteForLayer(undefined, 1)).toBe("");
+    expect(removeRoutingNoteForLayer("", 1)).toBe("");
   });
 });

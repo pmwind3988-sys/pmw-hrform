@@ -2100,6 +2100,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 }
 
 export const __test__ = {
+  applyLayerConfigWorkflow,
   applyUrlFieldPatches,
   buildSubmissionFields,
   collectSubmissionSchema,

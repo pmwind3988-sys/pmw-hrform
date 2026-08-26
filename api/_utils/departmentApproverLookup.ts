@@ -1,4 +1,5 @@
 import { queryListItems } from "./graphClient.js";
+import { DirectoryGapError } from "./resolveAssignee.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -61,7 +62,7 @@ export async function resolveDepartmentApproverFromList(
     throw new Error(`${layerLabel} needs a department field before the workflow can start.`);
   }
   if (!department) {
-    throw new Error(`${layerLabel} needs a department value before the workflow can start.`);
+    throw new DirectoryGapError(`${layerLabel} has no department to look an approver up with.`);
   }
 
   const listName = trimmedOrDefault(assignee.listName, DEPARTMENT_APPROVER_DEFAULTS.listName);
@@ -76,23 +77,32 @@ export async function resolveDepartmentApproverFromList(
     filters.push(`fields/${roleColumn} eq '${escapeGraphODataString(roleValue)}'`);
   }
 
-  const matches = await queryListItems(token, listName, {
-    filter: filters.join(" and "),
-    top: 2,
-    preferNonIndexed: true,
-  });
+  // A directory that cannot be read is a directory with no answer: park, so a
+  // missing list or a transient Graph failure never costs somebody their form.
+  let matches;
+  try {
+    matches = await queryListItems(token, listName, {
+      filter: filters.join(" and "),
+      top: 2,
+      preferNonIndexed: true,
+    });
+  } catch (error) {
+    throw new DirectoryGapError(
+      `${layerLabel} could not read the "${listName}" list: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   if (matches.length === 0) {
-    throw new Error(`${layerLabel} could not find ${roleValue || "an approver"} for department "${department}".`);
+    throw new DirectoryGapError(`${layerLabel} could not find ${roleValue || "an approver"} for department "${department}".`);
   }
   if (matches.length > 1) {
-    throw new Error(`${layerLabel} found more than one ${roleValue || "approver"} for department "${department}". Keep the directory exact and unique.`);
+    throw new DirectoryGapError(`${layerLabel} found more than one ${roleValue || "approver"} for department "${department}". Keep the directory exact and unique.`);
   }
 
   const fields = matches[0].fields;
   const email = valueToText(fields[emailColumn]);
   if (!EMAIL_RE.test(email)) {
-    throw new Error(`${layerLabel} found an invalid approver email for department "${department}".`);
+    throw new DirectoryGapError(`${layerLabel} found an invalid approver email for department "${department}".`);
   }
 
   return {

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  DirectoryGapError,
+  isDirectoryGap,
   resolveLayerAssignee,
   stripFieldReference,
   valueToText,
@@ -236,17 +238,84 @@ describe("resolveLayerAssignee — department directory", () => {
     expect(result).toEqual({ email: "siti@pmw.com", name: "Siti", emails: ["siti@pmw.com"] });
   });
 
-  it("reports a directory miss rather than throwing at the caller", async () => {
+  it("parks a submission the directory has no answer for, rather than refusing it", async () => {
     const result = await resolveLayerAssignee(
       layer({ assignee: { type: "department-approver", value: "department" } }),
       { department: "Marketing" },
       {
         ...NEVER_CALLED,
-        lookupDepartmentApprover: async () => { throw new Error('No HOD for department "Marketing".'); },
+        lookupDepartmentApprover: async () => {
+          throw new DirectoryGapError('No HOD for department "Marketing".');
+        },
       },
     );
-    expect(result.error).toBe('No HOD for department "Marketing".');
+    // Parked, not failed: the person filling the form cannot fix an empty
+    // directory, and losing their submission over it is the worst outcome.
+    expect(result.parked?.reason).toBe('No HOD for department "Marketing".');
+    expect(result.error).toBeUndefined();
     expect(result.emails).toEqual([]);
+  });
+
+  it("still refuses a layer the form itself misconfigured", async () => {
+    const result = await resolveLayerAssignee(
+      layer({ assignee: { type: "department-approver", value: "" } }),
+      { department: "Marketing" },
+      {
+        ...NEVER_CALLED,
+        lookupDepartmentApprover: async () => {
+          throw new Error("Layer 1 needs a department field before the workflow can start.");
+        },
+      },
+    );
+    expect(result.error).toBe("Layer 1 needs a department field before the workflow can start.");
+    expect(result.parked).toBeUndefined();
+    expect(result.emails).toEqual([]);
+  });
+});
+
+describe("resolveLayerAssignee — an unreadable directory", () => {
+  it("parks a chain layer rather than letting the read failure escape", async () => {
+    const result = await resolveLayerAssignee(
+      layer({ assignee: { type: "chain", value: "", startFrom: "submitter", hops: 1 } }),
+      {},
+      {
+        ...NEVER_CALLED,
+        lookupPerson: async () => { throw new Error("Graph 503"); },
+      },
+      { context: { submitterEmail: "ali@pmw.com" } },
+    );
+    // An exception here would abort the whole submission; parking keeps it.
+    expect(result.parked?.reason).toContain("Graph 503");
+    expect(result.error).toBeUndefined();
+  });
+
+  it("parks a role-holder layer rather than letting the read failure escape", async () => {
+    const result = await resolveLayerAssignee(
+      layer({ assignee: { type: "role-holder", value: "Finance", department: "fixed", role: "HOD" } }),
+      {},
+      {
+        ...NEVER_CALLED,
+        lookupRoleHolder: async () => { throw new Error("Graph 503"); },
+      },
+    );
+    expect(result.parked?.reason).toContain("Graph 503");
+    expect(result.error).toBeUndefined();
+  });
+});
+
+describe("isDirectoryGap", () => {
+  it("recognises a directory gap by its marker, not its prototype", () => {
+    // The client and server copies of this module are separate classes at
+    // runtime, so an instanceof check would answer differently depending on
+    // which copy threw. The marker travels with the object.
+    expect(isDirectoryGap(new DirectoryGapError("no row"))).toBe(true);
+    expect(isDirectoryGap({ directoryGap: true, message: "no row" })).toBe(true);
+  });
+
+  it("does not mistake an ordinary failure for a directory gap", () => {
+    expect(isDirectoryGap(new Error("Graph 403"))).toBe(false);
+    expect(isDirectoryGap(null)).toBe(false);
+    expect(isDirectoryGap("no row")).toBe(false);
   });
 });
 
