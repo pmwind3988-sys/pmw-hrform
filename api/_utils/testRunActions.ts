@@ -61,6 +61,12 @@ export async function handleMintTestTicket(
 }
 
 export interface StampTestRunDeps {
+  /**
+   * Resolves the response list a slug's form actually writes to — the same
+   * lookup the rest of the app uses to go from a form's public identity to
+   * its SharePoint list. Returns `null` if the slug names no form.
+   */
+  resolveListTitleForSlug(slug: string): Promise<string | null>;
   updateFields(token: string, listTitle: string, itemId: string, fields: Record<string, unknown>): Promise<unknown>;
 }
 
@@ -79,22 +85,36 @@ export interface StampTestRunDeps {
  * a ticket that is missing, tampered, expired, or minted for a different form
  * changes nothing and the row is left exactly as `createListItem` left it —
  * ordinary production traffic, the safe direction to fail.
+ *
+ * The response list to write to is never taken from the caller either. A
+ * ticket is a capability scoped to one form, not to a response list name the
+ * caller can put in the request body — trusting `body.listTitle` directly
+ * would let anyone holding any one valid ticket flag an arbitrary row in an
+ * arbitrary list (the ticket lives for hours and is not single-use), pulling
+ * someone else's real submission out of production listings and redirecting
+ * its approval mail. So the list is re-derived here from the ticket's own
+ * (verified) slug, exactly the way the rest of the app maps a form's public
+ * identity to its SharePoint list; `body.listTitle` is ignored entirely.
  */
 export async function handleStampTestRun(
   token: string,
   body: Record<string, unknown>,
   deps: StampTestRunDeps,
 ): Promise<{ status: number; payload: Record<string, unknown> }> {
-  const listTitle = String(body.listTitle ?? "").trim();
   const itemId = String(body.itemId ?? "").trim();
   const slug = String(body.slug ?? "").trim();
-  if (!listTitle || !itemId || !slug) {
-    return { status: 400, payload: { error: "A form, response row and slug are required to mark a test run." } };
+  if (!itemId || !slug) {
+    return { status: 400, payload: { error: "A response row and slug are required to mark a test run." } };
   }
 
   const ticket = verifyTestTicket(body.testTicket, slug);
   if (!ticket) {
     return { status: 400, payload: { error: "This test ticket is invalid or has expired." } };
+  }
+
+  const listTitle = await deps.resolveListTitleForSlug(ticket.slug);
+  if (!listTitle) {
+    return { status: 400, payload: { error: "This test ticket's form could not be found." } };
   }
 
   await deps.updateFields(token, listTitle, itemId, testRunFieldsFor(ticket));

@@ -177,10 +177,15 @@ describe("stamping a row the signed-in path already wrote", () => {
     process.env.API_SECRET_KEY = "secret-for-tests";
   });
 
-  function stampDeps() {
+  // A slug -> list-title registry standing in for `queryMasterFormBySlug`:
+  // the same lookup `handleStampTestRun` uses to derive the list to write to
+  // from the ticket's own slug, so the caller's `body.listTitle` is never
+  // the thing that decides which row gets stamped.
+  function stampDeps(registry: Record<string, string> = { "leave-application": "Leave Application", "travel-claim": "Travel Claim" }) {
     const written: { listTitle: string; itemId: string; fields: Record<string, unknown> }[] = [];
     return {
       written,
+      resolveListTitleForSlug: vi.fn(async (slug: string) => registry[slug] ?? null),
       updateFields: vi.fn(async (_t: string, listTitle: string, itemId: string, fields: Record<string, unknown>) => {
         written.push({ listTitle, itemId, fields });
       }),
@@ -263,6 +268,51 @@ describe("stamping a row the signed-in path already wrote", () => {
   it("refuses without touching the row when the row identity is incomplete", async () => {
     const d = stampDeps();
     const result = await handleStampTestRun("token", { listTitle: "Leave Application", slug: "leave-application" }, d);
+    expect(result.status).toBe(400);
+    expect(d.updateFields).not.toHaveBeenCalled();
+  });
+
+  it("ignores a caller-supplied listTitle for a form other than the ticket's own", async () => {
+    // A ticket minted for "leave-application" is a capability over that form
+    // alone. If `body.listTitle` were trusted, this call would stamp a row
+    // in Travel Claim's list — someone else's real submission — using a
+    // ticket that was never issued for that form. The list the row is
+    // written to must come only from the ticket's own (verified) slug.
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { listTitle: "Travel Claim", itemId: "99", slug: "leave-application", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(200);
+    expect(d.written).toEqual([
+      { listTitle: "Leave Application", itemId: "99", fields: { IsTest: "true", TestEmail: "tester@pmw-group.com" } },
+    ]);
+  });
+
+  it("still stamps a row in the ticket's own form when no listTitle is spoofed", async () => {
+    const ticket = mintTestTicket({ slug: "travel-claim", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { itemId: "7", slug: "travel-claim", testTicket: ticket },
+      d,
+    );
+    expect(result.status).toBe(200);
+    expect(d.written).toEqual([
+      { listTitle: "Travel Claim", itemId: "7", fields: { IsTest: "true", TestEmail: "tester@pmw-group.com" } },
+    ]);
+  });
+
+  it("refuses when the ticket's own slug names no form", async () => {
+    const ticket = mintTestTicket({ slug: "ghost-form", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps();
+    const result = await handleStampTestRun(
+      "token",
+      { itemId: "1", slug: "ghost-form", testTicket: ticket },
+      d,
+    );
     expect(result.status).toBe(400);
     expect(d.updateFields).not.toHaveBeenCalled();
   });

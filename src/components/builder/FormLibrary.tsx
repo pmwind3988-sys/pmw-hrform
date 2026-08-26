@@ -1,25 +1,18 @@
 /**
  * FormLibrary.tsx - Sidebar component showing list of forms
  */
-import { useState } from "react";
 import { C } from "./constants";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import TestRunLauncher from "./TestRunLauncher";
-
-type FormEntry = { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean };
 
 interface FormLibraryProps {
-  forms: FormEntry[];
+  forms: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean }[];
   onEdit: (f: { Title: string }) => void;
   onNew: () => void;
-  onDelete: (f: FormEntry) => void;
-  onHardDelete?: (f: FormEntry) => void;
+  onDelete: (f: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean }) => void;
+  onHardDelete?: (f: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean }) => void;
   current: string;
-  /** Only a Form Builder Superuser may start a test run — enabled for drafts too. */
-  isFormBuilderSuperuser?: boolean;
 }
 
 const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) => (
@@ -35,8 +28,7 @@ const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: Reac
   }}>{children}</span>
 );
 
-export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDelete, current, isFormBuilderSuperuser }: FormLibraryProps) {
-  const [testRunForm, setTestRunForm] = useState<FormEntry | null>(null);
+export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDelete, current }: FormLibraryProps) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{
@@ -172,45 +164,6 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
                 <DeleteSweepIcon style={{ fontSize: 14 }} />
               </button>
             )}
-            {/* Test workflow — Form Builder Superuser only, enabled for drafts too */}
-            {isFormBuilderSuperuser && (
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setTestRunForm(f);
-                }}
-                title="Start a test run of this form's workflow"
-                style={{
-                  position: "absolute",
-                  top: 6,
-                  right: onHardDelete ? 54 : 30,
-                  width: 22,
-                  height: 22,
-                  border: "none",
-                  borderRadius: 5,
-                  background: "transparent",
-                  color: C.textMuted,
-                  fontSize: 12,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                  transition: "all .13s",
-                }}
-                onMouseEnter={e => {
-                  e.stopPropagation();
-                  e.currentTarget.style.background = C.purplePale;
-                  e.currentTarget.style.color = C.purple;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = C.textMuted;
-                }}
-              >
-                <PlayArrowIcon style={{ fontSize: 14 }} />
-              </button>
-            )}
             <div style={{ fontSize: 12, fontWeight: 600, color: f.Title === current ? C.purple : C.textPrimary, marginBottom: 2, paddingRight: 22 }}>
               {f.Title}
             </div>
@@ -227,9 +180,6 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
           </div>
         ))}
       </div>
-      {testRunForm && (
-        <TestRunLauncher open={!!testRunForm} onClose={() => setTestRunForm(null)} form={testRunForm} />
-      )}
     </div>
   );
 }

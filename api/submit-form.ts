@@ -3,6 +3,7 @@ import {
   getGraphToken,
   getSharePointToken,
   queryMasterFormByTitle,
+  queryMasterFormBySlug,
   queryWebFormVersion,
   createListItem,
   updateListItemFields,
@@ -1463,6 +1464,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     try {
       const token = await getGraphToken();
       const result = await handleStampTestRun(token, req.body as Record<string, unknown>, {
+        resolveListTitleForSlug: async (slug) => {
+          const form = await queryMasterFormBySlug(token, slug);
+          const title = form?.fields?.Title;
+          return typeof title === "string" && title.trim() ? title.trim() : null;
+        },
         updateFields: updateListItemFields,
       });
       return res.status(result.status).json(result.payload);
