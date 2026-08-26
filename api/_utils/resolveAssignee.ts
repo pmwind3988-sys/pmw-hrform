@@ -183,6 +183,36 @@ function failure(error: string, email = ""): ResolvedLayerActors {
   return { email, name: "", emails: [], error };
 }
 
+/**
+ * Thrown by a directory lookup that simply has no answer yet: no row for the
+ * department, two rows where one was expected, a row whose address is unusable,
+ * or no department value to look one up with.
+ *
+ * Deliberately distinct from an ordinary error. A gap in the directory is an
+ * everyday state while the org chart is still being filled in, and the person
+ * filling the form cannot fix it — so the submission is kept and the layer
+ * parks for an admin to route once. A form that is genuinely misconfigured (no
+ * department field chosen, a malformed assignee address) still fails, because
+ * that is a builder mistake worth surfacing at the moment it bites.
+ */
+export class DirectoryGapError extends Error {
+  readonly directoryGap = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "DirectoryGapError";
+  }
+}
+
+/**
+ * True for a `DirectoryGapError`. Reads a marker rather than the prototype so
+ * the answer does not depend on which of this module's two copies threw.
+ */
+export function isDirectoryGap(error: unknown): boolean {
+  return !!error
+    && typeof error === "object"
+    && (error as { directoryGap?: unknown }).directoryGap === true;
+}
+
 function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
@@ -432,12 +462,25 @@ export async function resolveLayerAssignee(
   const suffix = options.blockedSuffix ?? "before the workflow can start.";
   const context = options.context ?? {};
 
+  // Chain and role-holder routing both read the directory mid-walk, and a read
+  // that throws — the list missing, a transient Graph or SharePoint failure —
+  // would otherwise escape as an exception and take the whole submission with
+  // it. Parking keeps the work and asks an admin, which is what an unanswerable
+  // directory deserves either way.
   if (layer.assignee.type === "chain") {
-    return resolveChain(layer, submittedData, ports, context);
+    try {
+      return await resolveChain(layer, submittedData, ports, context);
+    } catch (error) {
+      return parked(`${label} could not be routed: ${errorText(error, "the approval directory could not be read")}.`);
+    }
   }
 
   if (layer.assignee.type === "role-holder") {
-    return resolveRoleHolder(layer, submittedData, ports, context);
+    try {
+      return await resolveRoleHolder(layer, submittedData, ports, context);
+    } catch (error) {
+      return parked(`${label} could not be routed: ${errorText(error, "the approval directory could not be read")}.`);
+    }
   }
 
   if (layer.assignee.type === "department-approver") {
@@ -445,7 +488,10 @@ export async function resolveLayerAssignee(
       const resolved = await ports.lookupDepartmentApprover(layer, submittedData);
       return toResolvedActors(resolved.email, resolved.name);
     } catch (error) {
-      return failure(errorText(error, `${label} could not resolve the department approver.`));
+      const message = errorText(error, `${label} could not resolve the department approver.`);
+      // A directory with no answer parks and waits for an admin; a layer the
+      // form itself never configured properly still refuses the submission.
+      return isDirectoryGap(error) ? parked(message) : failure(message);
     }
   }
 

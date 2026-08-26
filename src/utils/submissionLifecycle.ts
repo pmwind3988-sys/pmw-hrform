@@ -49,6 +49,23 @@ export function isNeedsRoutingStatus(value: string | null | undefined): boolean 
 }
 
 /**
+ * Drops one layer's line from the recorded routing reasons.
+ *
+ * Called when an admin names the person the directory could not supply: the
+ * reason explained why the layer was waiting, and once it is no longer waiting
+ * the explanation is stale. Any other layer's reason is left untouched, because
+ * a submission can park on more than one layer at a time.
+ */
+export function removeRoutingNoteForLayer(raw: unknown, layerNumber: number): string {
+  if (typeof raw !== "string" || !raw.trim()) return "";
+  const prefix = `Layer ${layerNumber}: `;
+  return raw
+    .split(/\r?\n/)
+    .filter((line) => line.trim() && !line.startsWith(prefix))
+    .join("\n");
+}
+
+/**
  * Collapse a submission's workflow state into one housekeeping stage.
  * Terminal states win, then offline handling, then progress.
  */

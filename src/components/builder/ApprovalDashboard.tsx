@@ -19,7 +19,13 @@ import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
-import { LIFECYCLE_STAGES, lifecycleLabel, resolveLifecycleStage } from "../../utils/submissionLifecycle";
+import {
+  LIFECYCLE_STAGES,
+  isNeedsRoutingStatus,
+  lifecycleLabel,
+  removeRoutingNoteForLayer,
+  resolveLifecycleStage,
+} from "../../utils/submissionLifecycle";
 import type { LifecycleStage } from "../../utils/submissionLifecycle";
 import SubmissionFilterPanel from "./SubmissionFilterPanel";
 import {
@@ -46,8 +52,10 @@ import {
 import { getSelectedCompany } from "../../utils/companySelection";
 import { buildWorkflowReviewLink } from "../../utils/workflowLink";
 import { ensureLinkToken } from "../../utils/linkToken";
+import { resolveLayerActivatedAt } from "../../utils/layerActivation";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import {
+  DirectoryGapError,
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
@@ -510,7 +518,7 @@ async function resolveDepartmentApproverEmail(
     throw new Error(`${layerLabel} needs a department field before the workflow can start.`);
   }
   if (!department) {
-    throw new Error(`${layerLabel} needs a department value before the workflow can start.`);
+    throw new DirectoryGapError(`${layerLabel} has no department to look an approver up with.`);
   }
 
   const config = getDepartmentApproverLookupConfig(layer.assignee);
@@ -523,21 +531,30 @@ async function resolveDepartmentApproverEmail(
   params.set("$select", [config.departmentColumn, config.emailColumn, config.nameColumn].join(","));
   params.set("$top", "2");
 
-  const data = await spGet(
-    token,
-    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(config.listName)}')/items?${params.toString()}`,
-  ) as { value?: Record<string, unknown>[] };
+  // A directory that cannot be read is a directory with no answer: park, so a
+  // missing list or a transient SharePoint failure never costs somebody their form.
+  let data: { value?: Record<string, unknown>[] };
+  try {
+    data = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(config.listName)}')/items?${params.toString()}`,
+    ) as { value?: Record<string, unknown>[] };
+  } catch (error) {
+    throw new DirectoryGapError(
+      `${layerLabel} could not read the "${config.listName}" list: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   const matches = data.value ?? [];
   if (matches.length === 0) {
-    throw new Error(`${layerLabel} could not find ${config.roleValue || "an approver"} for department "${department}".`);
+    throw new DirectoryGapError(`${layerLabel} could not find ${config.roleValue || "an approver"} for department "${department}".`);
   }
   if (matches.length > 1) {
-    throw new Error(`${layerLabel} found more than one ${config.roleValue || "approver"} for department "${department}".`);
+    throw new DirectoryGapError(`${layerLabel} found more than one ${config.roleValue || "approver"} for department "${department}".`);
   }
 
   const email = valueToText(matches[0][config.emailColumn]);
   if (!EMAIL_RE.test(email)) {
-    throw new Error(`${layerLabel} found an invalid approver email for department "${department}".`);
+    throw new DirectoryGapError(`${layerLabel} found an invalid approver email for department "${department}".`);
   }
   return {
     email,
@@ -2002,20 +2019,36 @@ export default function ApprovalDashboard() {
         },
       });
       const isManualPaperAssignment = shouldUseManualPaperForSender(targetLayer, email);
+      // Parked because the directory had no approver for this submitter. Naming
+      // one is what the layer was waiting for, so it starts here rather than
+      // staying flagged with nobody ever told about it.
+      const wasParked = isNeedsRoutingStatus(valueToText(rawItem[`L${input.layer}_Status`]));
       const patchBody: Record<string, unknown> = {
         WorkflowAssignmentData: JSON.stringify(assignmentData),
       };
       // Naming one person replaces the layer's whole actor set: anyone who
       // shared it (co-evaluators, an expanded distribution list) must lose
       // access, not merely stop being the primary.
-      writeLayerRecipientFields(patchBody, targetLayer, [email], email);
+      const assignedRecipients = writeLayerRecipientFields(patchBody, targetLayer, [email], email);
       if (isManualPaperAssignment) {
         // Assigned to the paper/manual mailbox — flag this layer for paper handling.
         patchBody[`L${input.layer}_Status`] = manualPaperStatusForLayer(targetLayer);
-      } else if (isManualPaperWorkflowStatus(rawItem[`L${input.layer}_Status`])) {
-        // Reassigned away from the paper mailbox — return the layer to a normal pending review.
+      } else if (isManualPaperWorkflowStatus(rawItem[`L${input.layer}_Status`]) || wasParked) {
+        // Reassigned away from the paper mailbox, or routed at last — either way
+        // the layer becomes an ordinary pending review.
         patchBody[`L${input.layer}_Status`] = SP_LAYER_STATUS.PENDING;
       }
+      if (wasParked && "RoutingNotes" in rawItem) {
+        // The reason explained why the layer was waiting; it no longer is. Guarded
+        // on the column existing, since lists provisioned before it do not have it
+        // and patching an unknown field would fail the whole save.
+        patchBody.RoutingNotes = removeRoutingNoteForLayer(valueToText(rawItem.RoutingNotes), input.layer);
+      }
+      // A parked layer never had an action link minted for it, because there was
+      // nobody to send one to. Mint it now, in the same write as the assignment.
+      const assignedLinkToken = wasParked && input.layer === currentLayerNumber
+        ? ensureLinkToken(targetLayer, rawItem, input.layer, patchBody)
+        : "";
       if (getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, input.layer)) {
         patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
           rawItem.WorkflowEmailSchedule,
@@ -2074,9 +2107,54 @@ export default function ApprovalDashboard() {
         // The active layer now routes to the paper/manual mailbox — deliver the
         // manual approval/evaluation notice with the generated PDF straight away.
         await handleForceResend(selectedItem, email);
+      } else if (wasParked && input.layer === currentLayerNumber) {
+        // Start the layer exactly as it would have started at submission time if
+        // the directory had held an answer: same notice, same link, and the same
+        // delay setting — an evaluation set to "3 months" is scheduled, not sent.
+        const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
+        const reviewLink = buildWorkflowReviewLink({
+          baseUrl: window.location.origin,
+          layerType: targetLayer.type,
+          authMode: targetLayer.authMode,
+          publicToken: targetLayer.publicToken || "",
+          formSlug: valueToText(cfg?.Slug),
+          responseItemId: selectedItem.Id,
+          layerNumber: input.layer,
+          linkToken: assignedLinkToken,
+        });
+        // The wait is measured from when the layer went live, not from this
+        // click, so an admin's delay cannot move a real evaluation date.
+        const previousLayerNumber = selectedActiveLayers
+          .map((layer) => layer.layerNumber)
+          .filter((layerNumber) => layerNumber < input.layer)
+          .sort((a, b) => a - b)
+          .pop();
+        const emailSchedule = targetLayer.type === "evaluation" ? targetLayer.emailSchedule : undefined;
+        await triggerApprovalNotification(token, {
+          formTitle: selectedItem.Title,
+          submittedBy: selectedItem.SubmittedBy,
+          responseItemId: selectedItem.Id,
+          layer: input.layer,
+          totalLayers: selectedActiveLayers.length || selectedItem.totalLayers || input.layer,
+          action: "submit",
+          nextApproverEmail: email,
+          ...(assignedRecipients.length ? { nextRecipients: assignedRecipients } : {}),
+          nextLayerType: targetLayer.type,
+          reviewLink,
+          ...(emailSchedule ? { nextEmailSchedule: emailSchedule } : {}),
+          scheduleAnchor: resolveLayerActivatedAt(rawItem, previousLayerNumber).toISOString(),
+          responseListTitle: selectedItem.Title,
+          throwOnEmailError: true,
+        });
+        const scheduled = emailSchedule && emailSchedule.mode !== "immediate";
+        setEmailNotice(
+          scheduled
+            ? `Layer ${input.layer} routed to ${email}. The evaluation email is scheduled, not sent now — same wait as any other submission of this form.`
+            : `Layer ${input.layer} routed to ${email}, and the notice has been sent.`,
+        );
       } else {
         setEmailNotice(
-          `Layer ${input.layer} ${targetLayer.type === "evaluation" ? "evaluator" : "approver"} updated${isManualPaperAssignment ? " and flagged for manual/paper handling" : ""} for this submission only.`,
+          `Layer ${input.layer} ${targetLayer.type === "evaluation" ? "evaluator" : "approver"} updated${isManualPaperAssignment ? " and flagged for manual/paper handling" : ""}${wasParked ? " and routed" : ""} for this submission only.`,
         );
       }
     } catch (error) {
