@@ -10,7 +10,7 @@
  * signed-in admin's delegated SharePoint token can, and a mint request is the
  * one moment in the feature where such a token is in hand.
  */
-import { mintTestTicket, verifyTestTicket, testRunFieldsFor } from "./testRun.js";
+import { mintTestTicket, verifyTestTicket, testRunFieldsFor, isTestRow } from "./testRun.js";
 import { TEST_EMAIL_FIELD, TEST_FLAG_FIELD } from "./testRun.js";
 import { appendTestRunStep, TEST_RUN_LOG_FIELD, type TestRunStep } from "./testRunTrail.js";
 import { logWarn } from "./logger.js";
@@ -179,4 +179,54 @@ export async function recordTestRunSteps(
       errorMessage: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+export interface DeleteTestRunsDeps {
+  resolveOwner(delegatedToken: string): Promise<string | null>;
+  listRows(listTitle: string): Promise<{ id: string; fields: Record<string, unknown> }[]>;
+  deleteRow(delegatedToken: string, listTitle: string, id: string): Promise<void>;
+}
+
+/**
+ * Deletes test-run rows from a form's response list, either all of them or
+ * one named row.
+ *
+ * This is a genuinely destructive action driven entirely by an id the browser
+ * sends. Without the `isTestRow` check below, `itemId` would be a way for
+ * anyone who can reach this endpoint to permanently delete any submission in
+ * the list — production or not — simply by naming its row id. So the row is
+ * always re-read from SharePoint and re-checked here; the caller's belief
+ * that a row is a test run is never trusted on its own.
+ */
+export async function handleDeleteTestRuns(
+  body: Record<string, unknown>,
+  deps: DeleteTestRunsDeps,
+): Promise<{ status: number; payload: Record<string, unknown> }> {
+  const delegatedToken = String(body.delegatedToken ?? "").trim();
+  if (!delegatedToken) return { status: 401, payload: { error: "Sign in to delete test runs." } };
+
+  const owner = await deps.resolveOwner(delegatedToken);
+  if (!owner) return { status: 403, payload: { error: "Only an HR Forms Owner can delete test runs." } };
+
+  const listTitle = String(body.listTitle ?? "").trim();
+  if (!listTitle) return { status: 400, payload: { error: "A form is required to delete test runs." } };
+
+  const itemId = typeof body.itemId === "string" ? body.itemId.trim() : "";
+
+  const rows = await deps.listRows(listTitle);
+
+  if (itemId) {
+    const row = rows.find((candidate) => candidate.id === itemId);
+    if (!row || !isTestRow(row.fields)) {
+      return { status: 400, payload: { error: "That submission is not a test run and cannot be deleted here." } };
+    }
+    await deps.deleteRow(delegatedToken, listTitle, itemId);
+    return { status: 200, payload: { deleted: [itemId] } };
+  }
+
+  const testRows = rows.filter((row) => isTestRow(row.fields));
+  for (const row of testRows) {
+    await deps.deleteRow(delegatedToken, listTitle, row.id);
+  }
+  return { status: 200, payload: { deleted: testRows.map((row) => row.id) } };
 }

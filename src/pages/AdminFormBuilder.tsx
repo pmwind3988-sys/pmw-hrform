@@ -15,6 +15,7 @@ import ProvisionOverlay from "../components/builder/ProvisionOverlay";
 import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import PrefilledQrPanel from "../components/builder/PrefilledQrPanel";
 import TestRunLauncher from "../components/builder/TestRunLauncher";
+import TestRunPanel from "../components/builder/TestRunPanel";
 import { C } from "../components/builder/constants";
 import { Icon } from "../components/builder/BuilderIcons";
 import type { BuilderMode, BuilderToolCommand, BuilderToolKey } from "../components/builder/builderTheme";
@@ -626,6 +627,7 @@ export default function AdminFormBuilder() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [isFormBuilderSuperuser, setIsFormBuilderSuperuser] = useState(false);
   const [testRunOpen, setTestRunOpen] = useState(false);
+  const [testRunPanelOpen, setTestRunPanelOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [previewMenuOpen, setPreviewMenuOpen] = useState(false);
   const [toolCommand, setToolCommand] = useState<BuilderToolCommand | null>(null);
@@ -1908,6 +1910,16 @@ export default function AdminFormBuilder() {
               Test workflow
             </button>
           )}
+          {isFormBuilderSuperuser && isEditing && (
+            <button
+              type="button"
+              className="bx-btn bx-btn-sm"
+              title="See past test runs, their checklists, and render each one's PDF"
+              onClick={() => setTestRunPanelOpen(true)}
+            >
+              Test runs
+            </button>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }} />
@@ -2845,6 +2857,14 @@ export default function AdminFormBuilder() {
         <TestRunLauncher
           open={testRunOpen}
           onClose={() => setTestRunOpen(false)}
+          form={{ Title: meta.formTitle, Slug: meta.slug }}
+        />
+      )}
+
+      {testRunPanelOpen && (
+        <TestRunPanel
+          open={testRunPanelOpen}
+          onClose={() => setTestRunPanelOpen(false)}
           form={{ Title: meta.formTitle, Slug: meta.slug }}
         />
       )}

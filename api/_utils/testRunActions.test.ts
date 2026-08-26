@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handleMintTestTicket, handleStampTestRun, recordTestRunStep, recordTestRunSteps, TEST_RUN_COLUMNS } from "./testRunActions.js";
+import { handleMintTestTicket, handleStampTestRun, handleDeleteTestRuns, recordTestRunStep, recordTestRunSteps, TEST_RUN_COLUMNS } from "./testRunActions.js";
 import { mintTestTicket, verifyTestTicket } from "./testRun.js";
 import { parseTestRunTrail } from "./testRunTrail.js";
 
@@ -315,5 +315,50 @@ describe("stamping a row the signed-in path already wrote", () => {
     );
     expect(result.status).toBe(400);
     expect(d.updateFields).not.toHaveBeenCalled();
+  });
+});
+
+function deleteDeps(rows: { id: string; fields: Record<string, unknown> }[], owner: string | null = "hr@pmw-group.com") {
+  const deleted: string[] = [];
+  return {
+    deleted,
+    resolveOwner: vi.fn(async () => owner),
+    listRows: vi.fn(async () => rows),
+    deleteRow: vi.fn(async (_t: string, _l: string, id: string) => { deleted.push(id); }),
+  };
+}
+
+describe("deleting test runs", () => {
+  const rows = [
+    { id: "1", fields: { IsTest: "true" } },
+    { id: "2", fields: {} },
+    { id: "3", fields: { IsTest: "true" } },
+  ];
+
+  it("deletes only the runs that are flagged as tests", async () => {
+    const d = deleteDeps(rows);
+    const result = await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t" }, d);
+    expect(result.status).toBe(200);
+    expect(d.deleted.sort()).toEqual(["1", "3"]);
+  });
+
+  it("deletes one named run when asked for one", async () => {
+    const d = deleteDeps(rows);
+    await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t", itemId: "3" }, d);
+    expect(d.deleted).toEqual(["3"]);
+  });
+
+  it("refuses to delete a production submission even when named directly", async () => {
+    const d = deleteDeps(rows);
+    const result = await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t", itemId: "2" }, d);
+    expect(result.status).toBe(400);
+    expect(d.deleted).toEqual([]);
+  });
+
+  it("refuses anyone who is not an HR Forms Owner", async () => {
+    const d = deleteDeps(rows, null);
+    const result = await handleDeleteTestRuns({ listTitle: "Leave Application", delegatedToken: "t" }, d);
+    expect(result.status).toBe(403);
+    expect(d.deleted).toEqual([]);
   });
 });

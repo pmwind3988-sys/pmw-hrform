@@ -15,6 +15,7 @@ import {
   deleteListItem,
   deleteDocLibraryFile,
   queryListItemById,
+  queryListItems,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
@@ -31,8 +32,8 @@ import {
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
-import { handleMintTestTicket, handleStampTestRun, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
-import { verifyTestTicket, testRunFieldsFor, type TestRunRedirect } from "./_utils/testRun.js";
+import { handleMintTestTicket, handleStampTestRun, handleDeleteTestRuns, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
+import { verifyTestTicket, testRunFieldsFor, isTestRow, type TestRunRedirect } from "./_utils/testRun.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
@@ -1475,6 +1476,58 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     } catch (error) {
       logError("api:submit-form", "Failed to stamp test run", error);
       return res.status(500).json({ error: "Could not mark this submission as a test run." });
+    }
+  }
+
+  // Destructive: an item id from the browser, gated on `isTestRow` inside
+  // `handleDeleteTestRuns` so this can never delete a production submission.
+  if (req.method === "POST" && (req.body as Record<string, unknown>)?.action === "delete-test-runs") {
+    try {
+      const token = await getGraphToken();
+      const result = await handleDeleteTestRuns(req.body as Record<string, unknown>, {
+        resolveOwner: resolveHrFormsOwner,
+        listRows: (listTitle) => queryListItems(token, listTitle),
+        deleteRow: (_delegatedToken, listTitleForDelete, id) => deleteListItem(token, listTitleForDelete, id),
+      });
+      return res.status(result.status).json(result.payload);
+    } catch (error) {
+      logError("api:submit-form", "Failed to delete test runs", error);
+      return res.status(500).json({ error: "Could not delete these test runs." });
+    }
+  }
+
+  // The browser records the one step it alone can perform — rendering the
+  // submission PDF. Gated the same way as the neighbouring test-run actions:
+  // an HR Forms Owner, and only ever against a row already flagged IsTest.
+  if (req.method === "POST" && (req.body as Record<string, unknown>)?.action === "record-test-run-step") {
+    const body = req.body as Record<string, unknown>;
+    const delegatedToken = String(body.delegatedToken ?? "").trim();
+    if (!delegatedToken) return res.status(401).json({ error: "Sign in to record a test run step." });
+
+    const owner = await resolveHrFormsOwner(delegatedToken);
+    if (!owner) return res.status(403).json({ error: "Only an HR Forms Owner can record a test run step." });
+
+    const targetListTitle = String(body.listTitle ?? "").trim();
+    const itemId = String(body.itemId ?? "").trim();
+    const step = body.step as Omit<TestRunStep, "at"> | undefined;
+    if (!targetListTitle || !itemId || !step) {
+      return res.status(400).json({ error: "A response row and step are required to record a test run step." });
+    }
+
+    try {
+      const token = await getGraphToken();
+      const item = await queryListItemById(token, targetListTitle, itemId);
+      if (!item || !isTestRow(item.fields)) {
+        return res.status(400).json({ error: "That submission is not a test run." });
+      }
+      await recordTestRunStep(token, targetListTitle, itemId, step, {
+        readItem: queryListItemById,
+        updateFields: updateListItemFields,
+      });
+      return res.status(200).json({ ok: true });
+    } catch (error) {
+      logError("api:submit-form", "Failed to record test run step", error);
+      return res.status(500).json({ error: "Could not record this test run step." });
     }
   }
 
