@@ -32,6 +32,7 @@ import WarningIcon from "@mui/icons-material/Warning";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
+import { approverDisplayName } from "../utils/approverIdentity";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -358,6 +359,8 @@ export default function EvaluationPage() {
 
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
+  /** The reject dialog is opened by the Reject button and closed only by Cancel. */
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [checkboxApproved, setCheckboxApproved] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
@@ -821,6 +824,12 @@ export default function EvaluationPage() {
   const isLayerAlreadyComplete = isTerminalLayerStatus(currentLayerStatus) || isTerminalFormStatus(formStatus);
   const currentLayerLabel = currentLayerStatus || (isLayerAlreadyComplete ? "Completed" : "Pending");
   const effectiveLayerNumber = currentLayer?.layerNumber || displayLayerNumber;
+  // Who is signing, printed under the signature so the record says it and not
+  // only the audit trail. A public link has no signed-in account to name.
+  const signedInApprover = isPublic ? "" : approverDisplayName(accounts[0]?.name, userEmail);
+  const approverRoleLabel = currentLayer?.title || `Layer ${effectiveLayerNumber}`;
+  const approverActionLabel = currentLayer?.description?.trim()
+    || (isEvaluation ? "Confirmed By" : "Approved By");
 
   return (
     <div className="eval-page" style={{ minHeight: "100vh", background: COLORS.bg, padding: "clamp(16px, 3vw, 32px) 16px" }}>
@@ -855,10 +864,10 @@ export default function EvaluationPage() {
               {isEvaluation ? "Evaluation Review" : "Approval Review"}
             </div>
             <h1 style={{ fontSize: "clamp(22px, 3vw, 32px)", lineHeight: 1.15, fontWeight: 800, color: COLORS.textPrimary, margin: 0 }}>
-              {currentLayer?.title || formTitle || (isEvaluation ? "Evaluation" : "Approval")}
+              {formTitle || currentLayer?.title || (isEvaluation ? "Evaluation" : "Approval")}
             </h1>
             <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 8 }}>
-              {formTitle || "Form"} / Layer {effectiveLayerNumber}
+              {currentLayer?.title ? `${currentLayer.title} / ` : ""}Layer {effectiveLayerNumber}
               {currentLayer?.description && <div style={{ marginTop: 4 }}>{currentLayer.description}</div>}
             </div>
           </div>
@@ -1027,28 +1036,18 @@ export default function EvaluationPage() {
                 </label>
               )}
 
-              {/* Rejection reason (always available for approval layers) */}
-              {!isEvaluation && (
+              {/* Who is signing: what they are doing, their name, their role. */}
+              {signedInApprover && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
-                    Rejection Reason <span style={{ fontWeight: 400, color: COLORS.textMuted }}>(optional)</span>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
+                    {approverActionLabel}
                   </div>
-                  <textarea
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="Enter reason if rejecting..."
-                    style={{
-                      width: "100%",
-                      minHeight: 72,
-                      padding: 10,
-                      borderRadius: 8,
-                      border: `1px solid ${COLORS.border}`,
-                      fontSize: 13,
-                      fontFamily: "inherit",
-                      resize: "vertical",
-                      outline: "none",
-                    }}
-                  />
+                  <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>
+                    {signedInApprover}
+                  </div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 2 }}>
+                    {approverRoleLabel}
+                  </div>
                 </div>
               )}
 
@@ -1073,7 +1072,7 @@ export default function EvaluationPage() {
                     >
                       {actionState === "submitting" ? "Submitting..." : isSignatureRequired && !signatureData ? "Signature required" : "Approve"}
                     </button>
-                    <button className="eval-action-button" onClick={() => handleSubmit("reject")} style={btnOutline} disabled={actionState === "submitting"}>
+                    <button className="eval-action-button" onClick={() => setRejectDialogOpen(true)} style={btnOutline} disabled={actionState === "submitting"}>
                       Reject
                     </button>
                   </>
@@ -1083,6 +1082,85 @@ export default function EvaluationPage() {
           )}
         </div>
       </div>
+
+      {/* Reject dialog — a rejection ends the submission, so it is confirmed on
+          purpose: the backdrop ignores clicks and only Cancel closes it. */}
+      {rejectDialogOpen && (
+        <div
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(16, 24, 40, 0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eval-reject-title"
+            style={{
+              background: COLORS.cardBg,
+              borderRadius: 14,
+              padding: 24,
+              width: "100%",
+              maxWidth: 460,
+              boxShadow: "0 24px 48px rgba(16, 24, 40, 0.28)",
+            }}
+          >
+            <div id="eval-reject-title" style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 6 }}>
+              Reject this submission?
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.textSecond, marginBottom: 16 }}>
+              The submitter is told it was rejected and the workflow stops here.
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
+              Rejection Reason <span style={{ fontWeight: 400, color: COLORS.textMuted }}>(optional)</span>
+            </div>
+            <textarea
+              autoFocus
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Enter reason if rejecting..."
+              disabled={actionState === "submitting"}
+              style={{
+                width: "100%",
+                minHeight: 96,
+                padding: 10,
+                borderRadius: 8,
+                border: `1px solid ${COLORS.border}`,
+                fontSize: 13,
+                fontFamily: "inherit",
+                resize: "vertical",
+                outline: "none",
+                marginBottom: 20,
+              }}
+            />
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button
+                className="eval-action-button"
+                onClick={() => setRejectDialogOpen(false)}
+                style={{ ...btnPrimary, background: "transparent", border: `1px solid ${COLORS.border}`, color: COLORS.textSecond }}
+                disabled={actionState === "submitting"}
+              >
+                Cancel
+              </button>
+              <button
+                className="eval-action-button"
+                onClick={() => { setRejectDialogOpen(false); void handleSubmit("reject"); }}
+                style={{ ...btnPrimary, background: COLORS.red, opacity: actionState === "submitting" ? 0.6 : 1 }}
+                disabled={actionState === "submitting"}
+              >
+                {actionState === "submitting" ? "Submitting..." : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
