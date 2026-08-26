@@ -1,6 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken } from "./_utils/graphClient.js";
-import { logError } from "./_utils/logger.js";
+import { getGraphToken, queryListItemById } from "./_utils/graphClient.js";
+import { logError, logWarn } from "./_utils/logger.js";
 import {
   deliverWorkflowEmail,
   sendGraphEmail,
@@ -8,6 +8,7 @@ import {
   type WorkflowEmailContext,
 } from "./_utils/workflowEmail.js";
 import { applySendEmailTestRun } from "./_utils/sendEmailTestRun.js";
+import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -77,16 +78,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments.map(normalizeAttachment).filter((attachment): attachment is WorkflowEmailAttachment => attachment !== null)
       : [];
-    const message = applySendEmailTestRun(
-      {
-        to: recipients,
-        subject,
-        body,
-        ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
-      },
-      testTicket,
-      slug,
-    );
+    const rawMessage = {
+      to: recipients,
+      subject,
+      body,
+      ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
+    };
     if (
       workflow &&
       typeof workflow === "object" &&
@@ -95,8 +92,44 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         typeof (workflow as Record<string, unknown>).responseItemId === "number") &&
       typeof (workflow as Record<string, unknown>).layer === "number"
     ) {
-      await deliverWorkflowEmail(token, message, workflow as unknown as WorkflowEmailContext);
+      const workflowFields = workflow as Record<string, unknown>;
+      const listTitle = workflowFields.listTitle as string;
+      const responseItemId = workflowFields.responseItemId as string | number;
+      const layer = workflowFields.layer as number;
+
+      // The redirect is derived server-side from the row itself — never from
+      // anything the request supplies (in particular, never from a client
+      // `testTicket`/`slug` — see below) — so a caller cannot drive it by
+      // simply sending a `workflow.testRun` object. This is also what makes
+      // this route safe for the browser-driven decision links (approve/reject
+      // from an emailed review link), which carry no ticket at all: the row
+      // is the only source of truth for whether this is a rehearsal.
+      const responseItem = await queryListItemById(token, listTitle, String(responseItemId));
+      const testRun = readTestRunRedirect(responseItem?.fields);
+      if (isTestRow(responseItem?.fields) && !testRun) {
+        // Flagged for a rehearsal but with no usable redirect address. The
+        // alternative — falling back to the real assignee baked into the
+        // message — would mail a real approver from a run the builder believes
+        // is a rehearsal, so the mail simply does not go out.
+        logWarn("api:send-email", "Test run has no usable redirect address; refusing to send rather than mailing a real approver", {
+          listTitle,
+          responseItemId,
+          layer,
+        });
+        return res.status(200).json({ ok: true, skipped: "test-run-redirect-unusable" });
+      }
+
+      // The ticket-based redirect (`applySendEmailTestRun`) is deliberately
+      // NOT applied here even if the caller also sent a `testTicket`: it would
+      // redirect a message that is about to be redirected again below, which
+      // stamps a second "would have gone to…" banner on top of the first,
+      // naming the test address instead of the real approver.
+      const context: WorkflowEmailContext = { listTitle, responseItemId, layer, testRun };
+      await deliverWorkflowEmail(token, rawMessage, context);
     } else {
+      // No workflow row to derive a redirect from (a plain confirmation email,
+      // for instance) — fall back to the ticket the caller forwarded, if any.
+      const message = applySendEmailTestRun(rawMessage, testTicket, slug);
       await sendGraphEmail(token, message);
     }
 

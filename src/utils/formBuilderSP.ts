@@ -2779,6 +2779,11 @@ export async function triggerApprovalNotification(
           testRun,
           to: submittedBy,
           subject: `Status update: ${formTitle} approved${refSuffix}`,
+          workflow: {
+            listTitle: responseListTitle,
+            responseItemId,
+            layer,
+          },
           body: emailBody({
             title: `${formTitle} has been approved`,
             subtitle: 'All required workflow steps have been completed. No further action is needed from you at this time.',
@@ -2805,6 +2810,11 @@ export async function triggerApprovalNotification(
         testRun,
         to: submittedBy,
         subject: `Status update: ${formTitle} not approved${refSuffix}`,
+        workflow: {
+          listTitle: responseListTitle,
+          responseItemId,
+          layer,
+        },
         body: emailBody({
           title: `${formTitle} was not approved`,
           subtitle: 'The workflow has been closed at the current step. Open the request record to review the outcome details and any recorded reason.',
