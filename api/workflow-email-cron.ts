@@ -15,6 +15,7 @@ import {
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
+import { withWorkflowRoutePrefix } from "./_utils/workflowLink.js";
 
 /**
  * How long one run may spend scanning before it stops and says so.
@@ -156,7 +157,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 // split it back out so Graph gets separate recipients.
                 recipient: scheduledRecipients(entry.recipient),
                 layerType: entry.layerType,
-                reviewLink: entry.reviewLink,
+                // The stored string is posted as it stands, so a link written
+                // before approval and evaluation prefixes were split still says
+                // `/eval/...` whatever its layer is. Correct it on the way out:
+                // the reviewer page refuses a link whose prefix disagrees with
+                // the step it opens.
+                reviewLink: entry.reviewLink ? withWorkflowRoutePrefix(entry.reviewLink, entry.layerType) : entry.reviewLink,
                 referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
               }),
               {

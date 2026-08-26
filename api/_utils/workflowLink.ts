@@ -50,3 +50,24 @@ export function buildWorkflowReviewLink(params: WorkflowReviewLinkParams): strin
   }
   return `${params.baseUrl}/${prefix}/${encodeURIComponent(params.formSlug)}/${itemId}/${params.layerNumber}`;
 }
+
+/**
+ * The same link with its prefix corrected to match the layer type.
+ *
+ * A scheduled evaluation email stores its link in SharePoint and the cron posts
+ * that stored string as it stands, months later. Links written before approval
+ * and evaluation prefixes were split all say `/eval/...`, so without this the
+ * cron keeps delivering the old shape long after the split — and the reviewer
+ * page now refuses a link whose prefix disagrees with its layer.
+ *
+ * Only the two known prefixes are rewritten. Anything else is left exactly as
+ * stored: it is not a link this function understands, and guessing at it would
+ * be worse than passing it through.
+ */
+export function withWorkflowRoutePrefix(link: string, layerType: string | undefined): string {
+  const prefix = workflowRoutePrefix(layerType);
+  return link.replace(
+    /^((?:https?:\/\/[^/]+)?)\/(?:approval|eval)\//,
+    (_match, origin: string) => `${origin}/${prefix}/`,
+  );
+}

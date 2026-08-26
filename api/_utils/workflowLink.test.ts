@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowReviewLink, workflowRoutePrefix } from "./workflowLink.js";
+import { buildWorkflowReviewLink, workflowRoutePrefix, withWorkflowRoutePrefix } from "./workflowLink.js";
 
 const base = {
   baseUrl: "https://forms.example.com",
@@ -100,5 +100,25 @@ describe("buildWorkflowReviewLink", () => {
       authMode: "365",
       publicToken: undefined,
     })).toBe("https://forms.example.com/approval/annual%20leave%2F2026/42/3");
+  });
+});
+
+describe("withWorkflowRoutePrefix", () => {
+  it("corrects a stored link the cron is about to re-send", () => {
+    // Written before the prefixes were split: an approval layer on /eval.
+    expect(withWorkflowRoutePrefix("https://forms.example.com/eval/leave-application/42/1", "approval"))
+      .toBe("https://forms.example.com/approval/leave-application/42/1");
+    expect(withWorkflowRoutePrefix("https://forms.example.com/approval/leave-application/42/3", "evaluation"))
+      .toBe("https://forms.example.com/eval/leave-application/42/3");
+  });
+
+  it("keeps a public link's item and binding intact", () => {
+    expect(withWorkflowRoutePrefix("https://forms.example.com/eval/tok?item=42&k=bind", "approval"))
+      .toBe("https://forms.example.com/approval/tok?item=42&k=bind");
+  });
+
+  it("passes through a stored string that is not one of the two shapes", () => {
+    const stored = "https://forms.example.com/admin/submissions?form=Leave&item=42";
+    expect(withWorkflowRoutePrefix(stored, "evaluation")).toBe(stored);
   });
 });

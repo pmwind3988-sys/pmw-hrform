@@ -3,7 +3,7 @@
  * Route: /eval/:token (public) or /eval/:formSlug/:responseId/:layerNumber (365)
  */
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import NativeFormView from "../native/NativeForm";
@@ -14,7 +14,7 @@ import "../native/native-form.css";
 import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS, normalizeLayerStatus } from "../utils/statusConstants";
-import { buildRejectedWorkflowPatch } from "../utils/workflowStatus";
+import { buildRejectedWorkflowPatch, firstUnfinishedEarlierLayer } from "../utils/workflowStatus";
 import { buildSurveyJson } from "../utils/FormBuilderEngine";
 import type { LayerConfigItem, EvaluationDataEntry, EvaluationLayerConfig, FormBuilderField } from "../types";
 import DOMPurify from "dompurify";
@@ -32,6 +32,12 @@ import WarningIcon from "@mui/icons-material/Warning";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
+import {
+  denySignedInLayerLink,
+  routePrefixAllowsLayerType,
+  selectWorkflowLayer,
+  type SignedInLinkDenial,
+} from "../utils/workflowReviewLink";
 import { approverDisplayName } from "../utils/approverIdentity";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -295,6 +301,14 @@ function surveyElementsForLayer(layerSequence: LayerConfigItem[], layerNumber: u
   return layer?.type === "evaluation" ? (layer as EvaluationLayerConfig).surveyElements || [] : [];
 }
 
+/** What the reviewer is told when a link may not open the record it names. */
+const WRONG_SHAPE_MESSAGE = "this link does not match the step it points at — please use the link that was emailed to you";
+const LINK_DENIAL_MESSAGE: Record<SignedInLinkDenial, string> = {
+  "public-shape": "this request can only be opened from the link that was emailed to its reviewer",
+  "wrong-shape": WRONG_SHAPE_MESSAGE,
+  "not-assigned": "this request is waiting for someone else",
+};
+
 // ── Component ──
 export default function EvaluationPage() {
   const { token: routeToken, formSlug, responseId, layerNumber } = useParams<{
@@ -365,6 +379,14 @@ export default function EvaluationPage() {
   const [checkboxApproved, setCheckboxApproved] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
 
+  /**
+   * Which of the two link shapes was opened. Both mount this page, so the
+   * prefix is not routing — it is a claim about what the recipient was asked
+   * for, checked against the layer once the record says what it really is.
+   */
+  const { pathname } = useLocation();
+  const routePrefix = pathname.startsWith("/approval/") ? "approval" as const : "eval" as const;
+
   const isPublic = !!routeToken;
   const displayLayerNumber = isPublic
     ? 1  // Will be resolved from token
@@ -418,6 +440,17 @@ export default function EvaluationPage() {
           );
           const json = await res.json();
           if (!json.success) { setError(json.error || "Failed to load data."); setLoading(false); return; }
+
+          // An approval link must not open an evaluation step, nor the reverse.
+          // The layer number sits in the address next to the prefix, so editing
+          // it onto a step of the other kind makes the link disagree with
+          // itself — and that is refused before any of the record is shown.
+          if (!routePrefixAllowsLayerType(routePrefix, valueToText(json.data.layerType))) {
+            setNotYourRequest(true);
+            setError(WRONG_SHAPE_MESSAGE);
+            setLoading(false);
+            return;
+          }
 
           setFormTitle(json.data.formTitle);
           setResponseData(json.data.fields);
@@ -489,41 +522,81 @@ export default function EvaluationPage() {
         if (!resolvedTitle) { setError("the form this request belongs to no longer exists"); setLoading(false); return; }
         setFormTitle(resolvedTitle);
 
-        const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
-        if (!data) { setError("the details for this request could not be loaded"); setLoading(false); return; }
-        // Everything in this route — the slug, the id, the layer number — is
-        // typed into the address bar, so none of it decides what may be opened.
-        // The record does.
+        const signedInEmail = (userEmail || "").trim();
+        const respItemId = parseInt(responseId, 10);
+
+        // Ask for the few fields that decide whether this link may be opened,
+        // and nothing else, before asking for the submission itself. A refusal
+        // is only worth having if it happens before the thing being refused has
+        // been handed over: fetching the whole record first and checking second
+        // puts somebody else's answers in this browser whatever the page then
+        // chooses to draw.
         //
-        // A public layer is not reachable this way at all. Its link is
-        // `/eval/<layer token>?item=…&k=…`, where `k` is the value minted for
-        // that one submission and checked by the server before a field is
-        // returned. Accepting the slug form for such a layer would be a way
-        // round that check: any signed-in account could walk the ids. The
-        // reviewer's own emailed link works; this shape never was one.
-        if (data.currentLayer?.authMode === "public") {
+        // Best effort. A response list old enough to lack L{n}_Emails makes
+        // SharePoint reject the $select naming it, and there is no narrow
+        // question to ask such a list — so it falls through to the full read
+        // and the same gate below, which is where this page has always
+        // decided. Nothing is skipped either way; the difference is only how
+        // much has been fetched by the time it is decided.
+        let gate: SignedInLinkDenial | null = null;
+        let gateSettled = false;
+        try {
+          const preflight = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(resolvedTitle)}')/items(${respItemId})`
+            + `?$select=Id,SelectedBranch,L${displayLayerNumber}_Email,L${displayLayerNumber}_Emails`
+          ) as Record<string, unknown>;
+          const preflightLayer = selectWorkflowLayer(
+            slugJson.value?.[0]?.LayerConfig,
+            valueToText(preflight.SelectedBranch),
+            displayLayerNumber,
+          );
+          if (preflightLayer) {
+            gate = denySignedInLayerLink({
+              routePrefix,
+              layerType: preflightLayer.type,
+              layerAuthMode: preflightLayer.authMode,
+              signedInEmail,
+              layerEmails: preflight[`L${displayLayerNumber}_Emails`],
+              layerEmail: preflight[`L${displayLayerNumber}_Email`],
+            });
+            gateSettled = true;
+          }
+        } catch {
+          // Narrow read unavailable on this list; the full read below decides.
+        }
+        if (gate) {
           setNotYourRequest(true);
-          setError("this request can only be opened from the link that was emailed to its reviewer");
+          setError(LINK_DENIAL_MESSAGE[gate]);
           setLoading(false);
           return;
         }
-        // A layer can be assigned to several people (or an expanded distribution
-        // list) — any one of them may act. L{n}_Emails carries the full set;
-        // older submissions only have the single L{n}_Email. Changing the id to
-        // a neighbouring submission, or the layer number to another step, lands
-        // on a record that does not name you and stops here.
-        const signedInEmail = (userEmail || "").trim();
-        if (
-          !isLayerActor(
+
+        const data = await getLayerResponseData(token, resolvedTitle, respItemId, displayLayerNumber);
+        if (!data) { setError("the details for this request could not be loaded"); setLoading(false); return; }
+        // Everything in this route — the slug, the id, the layer number, the
+        // prefix — is typed into the address bar, so none of it decides what
+        // may be opened. The record does, and `denySignedInLayerLink` is where
+        // that is settled.
+        //
+        // Already answered above on any list that could serve the narrow read.
+        // This is the same gate over the full record, for the lists that could
+        // not: the decision never depends on which of the two got there first.
+        if (!gateSettled) {
+          const fullDenial = denySignedInLayerLink({
+            routePrefix,
+            layerType: data.currentLayer?.type,
+            layerAuthMode: data.currentLayer?.authMode,
             signedInEmail,
-            data.responseFields[`L${displayLayerNumber}_Emails`],
-            data.responseFields[`L${displayLayerNumber}_Email`],
-          )
-        ) {
-          setNotYourRequest(true);
-          setError("this request is waiting for someone else");
-          setLoading(false);
-          return;
+            layerEmails: data.responseFields[`L${displayLayerNumber}_Emails`],
+            layerEmail: data.responseFields[`L${displayLayerNumber}_Email`],
+          });
+          if (fullDenial) {
+            setNotYourRequest(true);
+            setError(LINK_DENIAL_MESSAGE[fullDenial]);
+            setLoading(false);
+            return;
+          }
         }
         setResponseData(data.responseFields);
         setCurrentLayer(data.currentLayer || null);
@@ -551,7 +624,7 @@ export default function EvaluationPage() {
       setLoading(false);
     };
     load();
-  }, [authState, isPublic, formSlug, responseId, displayLayerNumber, token, userEmail]);
+  }, [authState, isPublic, routePrefix, formSlug, responseId, displayLayerNumber, token, userEmail]);
 
   /**
    * The gate on a signed-in decision, re-read from SharePoint at the moment it
@@ -591,8 +664,32 @@ export default function EvaluationPage() {
     if (isTerminalFormStatus(item.FormStatus || item.Status) || isTerminalLayerStatus(latestStatus)) {
       throw new Error("This layer has already been completed. Refresh the submissions page to see the latest status.");
     }
-    if (latestCurrentLayer && latestCurrentLayer !== layer) {
-      throw new Error("This link is no longer active because the submission has moved to another layer.");
+    if (latestCurrentLayer) {
+      if (latestCurrentLayer !== layer) {
+        throw new Error("This link is no longer active because the submission has moved to another layer.");
+      }
+    } else {
+      // No CurrentLayer on this row, so the order has to be read back out of
+      // the layer statuses. Without this, editing the layer number in the
+      // address is a way past every earlier step on exactly the rows that
+      // cannot answer where they have got to. See firstUnfinishedEarlierLayer.
+      const sequence = layerSequence.length
+        ? layerSequence.map((entry) => Number(entry.layerNumber))
+        // The layer config did not load; fall back to whichever layers the row
+        // itself carries a status for.
+        : Object.keys(item)
+          .map((key) => Number(/^L(\d+)_Status$/.exec(key)?.[1] ?? 0))
+          .filter((layerNumber) => layerNumber > 0);
+      const blockedBy = firstUnfinishedEarlierLayer(
+        sequence.map((layerNumber) => ({
+          layerNumber,
+          status: valueToText(item[`L${layerNumber}_Status`]),
+        })),
+        layer,
+      );
+      if (blockedBy !== null) {
+        throw new Error(`Layer ${blockedBy} has not been completed yet, so this step cannot be submitted.`);
+      }
     }
   };
 
