@@ -24,5 +24,23 @@ export default defineConfig({
      * Raise this only on a machine with the memory to back it.
      */
     maxWorkers: 4,
+    /**
+     * Five test files used to fail before running a single test, with
+     * `SharePoint site "hr" has no URL configured.` They import modules that
+     * resolve the home site at load time, and `resolveSite` throws rather than
+     * guessing a URL — deliberately, because a wrong URL would point the
+     * builder at the real HR lists with full write authority.
+     *
+     * That left the suite depending on whoever ran it having a local `.env`.
+     * A unit test should not need one, so the runner supplies its own.
+     *
+     * The host is `.invalid`, which RFC 2606 reserves and no DNS will ever
+     * resolve: it satisfies the config check while guaranteeing that a test
+     * which accidentally reaches the network fails loudly instead of quietly
+     * talking to a real tenant.
+     */
+    env: {
+      VITE_SP_SITE_URL: 'https://sharepoint.invalid/sites/test',
+    },
   },
 })
