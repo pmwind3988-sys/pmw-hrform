@@ -28,6 +28,7 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
   const [email, setEmail] = useState(defaultEmail);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [blockedUrl, setBlockedUrl] = useState("");
 
   if (!open) return null;
 
@@ -35,6 +36,7 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
 
   const startTestRun = async () => {
     setError("");
+    setBlockedUrl("");
     if (!slug) {
       setError("This form has no published slug yet — publish it before starting a test run.");
       return;
@@ -74,8 +76,16 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
       }
       const url = testRunFormUrl({ slug, ticket: data.ticket });
       const withDisplayEmail = `${url}&testEmail=${encodeURIComponent(email.trim().toLowerCase())}`;
-      window.open(withDisplayEmail, "_blank", "noopener");
+      const popup = window.open(withDisplayEmail, "_blank", "noopener");
       setBusy(false);
+      if (!popup) {
+        // The run is already minted and the columns are already provisioned —
+        // only the popup failed. Closing the dialog here would strand the
+        // tester with no way back to a run that already exists, so the dialog
+        // stays open and hands them the link to open themselves.
+        setBlockedUrl(withDisplayEmail);
+        return;
+      }
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start a test run.");
@@ -121,6 +131,14 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
         {error && (
           <div style={{ fontSize: 12, color: C.red, background: C.redPale, borderRadius: 7, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
             {error}
+          </div>
+        )}
+        {blockedUrl && (
+          <div style={{ fontSize: 12, color: C.textSecond, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 7, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
+            The test run started, but your browser blocked the popup. Open it yourself:{" "}
+            <a href={blockedUrl} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600, wordBreak: "break-all" }}>
+              {blockedUrl}
+            </a>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>

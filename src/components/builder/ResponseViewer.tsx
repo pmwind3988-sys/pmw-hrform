@@ -40,6 +40,7 @@ import {
 import type { SchemaSnapshot } from "../../utils/formFieldCatalog";
 import { resolveLifecycleStage } from "../../utils/submissionLifecycle";
 import { isTestRow } from "../../utils/testRun";
+import { isTestColumnKnownMissing, setTestColumnKnownMissing } from "../../utils/testColumnProbeCache";
 import Chip from "@mui/material/Chip";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -187,19 +188,26 @@ export default function ResponseViewer() {
         // IsTest is provisioned lazily — it only exists on a list once someone
         // has minted a test ticket for that form — so it is fetched separately
         // and merged in. A list that has never been rehearsed 400s on this
-        // query, which must not sink the submissions load above.
-        try {
-          const testData = await spGet(
-            token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=SubmittedAt desc&$top=100`
-          ) as { value?: { Id: number; IsTest?: string | boolean }[] };
-          const testMap = new Map<number, string | boolean | undefined>();
-          for (const row of testData.value || []) testMap.set(row.Id, row.IsTest);
-          for (const item of loadedItems) {
-            if (testMap.has(item.Id)) item.IsTest = testMap.get(item.Id);
+        // query, which must not sink the submissions load above. The failure is
+        // memoised per list (isTestColumnKnownMissing) so this guaranteed-failing
+        // request is not repeated on every future load of a form that has never
+        // been rehearsed.
+        if (!isTestColumnKnownMissing(listName)) {
+          try {
+            const testData = await spGet(
+              token,
+              `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=SubmittedAt desc&$top=100`
+            ) as { value?: { Id: number; IsTest?: string | boolean }[] };
+            setTestColumnKnownMissing(listName, false);
+            const testMap = new Map<number, string | boolean | undefined>();
+            for (const row of testData.value || []) testMap.set(row.Id, row.IsTest);
+            for (const item of loadedItems) {
+              if (testMap.has(item.Id)) item.IsTest = testMap.get(item.Id);
+            }
+          } catch {
+            // Column does not exist on this list — every row here reads as production.
+            setTestColumnKnownMissing(listName, true);
           }
-        } catch {
-          // Column does not exist on this list — every row here reads as production.
         }
 
         setSubmissions(loadedItems);

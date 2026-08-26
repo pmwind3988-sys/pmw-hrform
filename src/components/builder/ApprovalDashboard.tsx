@@ -20,6 +20,7 @@ import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
 import { LIFECYCLE_STAGES, lifecycleLabel, resolveLifecycleStage } from "../../utils/submissionLifecycle";
+import { isTestColumnKnownMissing, setTestColumnKnownMissing } from "../../utils/testColumnProbeCache";
 import type { LifecycleStage } from "../../utils/submissionLifecycle";
 import SubmissionFilterPanel from "./SubmissionFilterPanel";
 import {
@@ -1100,10 +1101,12 @@ export default function ApprovalDashboard() {
               // required tier selects. A list that has never been rehearsed 400s on
               // this query alone, and every row on it correctly reads as production.
               const attachTestFlags = async (itemsToUpdate: PendingItem[]): Promise<void> => {
+                if (isTestColumnKnownMissing(listName)) return;
                 try {
                   const testData = await spGet(token,
                     `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=Created desc&$top=100`
                   ) as { value?: { Id: number; IsTest?: string | boolean }[] };
+                  setTestColumnKnownMissing(listName, false);
                   const testMap = new Map(
                     (testData.value ?? []).map((current) => [current.Id, current.IsTest]),
                   );
@@ -1111,7 +1114,10 @@ export default function ApprovalDashboard() {
                     if (testMap.has(current.Id)) current.IsTest = testMap.get(current.Id);
                   }
                 } catch {
-                  // Column does not exist on this list — every row here reads as production.
+                  // Column does not exist on this list — every row here reads as
+                  // production. Remembered so this guaranteed-failing request is
+                  // not repeated on every future load.
+                  setTestColumnKnownMissing(listName, true);
                 }
               };
 
@@ -1200,6 +1206,16 @@ export default function ApprovalDashboard() {
               }
 
               // Tier 3: without FormStatus too
+              //
+              // This tier (and tier 4 below) never calls attachTestFlags, so a row
+              // that is actually a test run reads here as an ordinary production
+              // submission — IsTest is left undefined and defaults to "not a test".
+              // That is failing OPEN, not "failing safe": a rehearsal on a list this
+              // old would show up in the production listing instead of being hidden
+              // or labelled, the opposite of the safe direction. It is tolerated only
+              // because these tiers are for lists so old they predate the workflow
+              // columns entirely, which in practice means no test run has ever run
+              // against them.
               const tier3 = await (async () => {
                 try {
                   return await spGet(token,
