@@ -59,6 +59,14 @@ export interface NativeFormRuntime {
 
   /** Validate everything visible. Populates `errors` and returns the first. */
   validateAll: () => { ok: boolean; firstErrorName: string };
+  /** Name of the topmost question that failed the last validation, or "". */
+  firstError: string;
+  /**
+   * Bumped every time a validation run rejects the form. The view watches it so
+   * a second press of Submit with the same answers still sends the respondent
+   * back to the same failing question, instead of doing nothing visible.
+   */
+  errorSignal: number;
   /** Visible answers only, shaped exactly as the SurveyJS renderer produced. */
   collect: () => ValueBag;
   clearError: (name: string) => void;
@@ -222,6 +230,8 @@ export function checkAnswer(q: NativeElement, value: unknown, stage: CheckStage 
 export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeFormOptions = {}): NativeFormRuntime {
   const [values, setValues] = useState<ValueBag>(() => ({ ...initialValues(form), ...resolveSeed(seed) }));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [firstError, setFirstError] = useState("");
+  const [errorSignal, setErrorSignal] = useState(0);
   const [pageIndex, setPageIndex] = useState(0);
 
   // Reseeding on identity rather than on the object lets a caller pass a fresh
@@ -232,6 +242,7 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
     formRef.current = form;
     setValues({ ...initialValues(form), ...resolveSeed(seed) });
     setErrors({});
+    setFirstError("");
     setPageIndex(0);
   }, [form, seed]);
 
@@ -379,6 +390,8 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
   const validateAll = useCallback(() => {
     const { ok, firstErrorName, found } = validate();
     setErrors(found);
+    setFirstError(firstErrorName);
+    if (!ok) setErrorSignal((n) => n + 1);
     return { ok, firstErrorName };
   }, [validate]);
 
@@ -394,9 +407,11 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
   );
 
   const nextPage = useCallback(() => {
-    const { ok, found } = validate(safeIndex);
+    const { ok, found, firstErrorName } = validate(safeIndex);
     if (!ok) {
       setErrors((prev) => ({ ...prev, ...found }));
+      setFirstError(firstErrorName);
+      setErrorSignal((n) => n + 1);
       return false;
     }
     if (safeIndex >= pageCount - 1) return false;
@@ -468,6 +483,8 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
     required,
     progress: required === 0 ? 1 : answered / required,
     validateAll,
+    firstError,
+    errorSignal,
     collect,
     clearError,
   };
