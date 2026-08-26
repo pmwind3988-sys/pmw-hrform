@@ -45,6 +45,7 @@ import {
 } from "../utils/resolveAssignee";
 import { createApprovalDirectoryReader } from "../utils/approvalDirectory";
 import { NEEDS_ROUTING_LAYER_STATUS } from "../utils/submissionLifecycle";
+import { sampleAnswersFor } from "../utils/testRunLaunch";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -550,6 +551,14 @@ export default function DynamicFormPage() {
   const pinVersion = searchParams.get("version");
   const publishKey = searchParams.get("publish") || searchParams.get("batch");
   const prefilledQrPayload = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
+  // A test run in progress: the ticket is what the server verifies before it
+  // redirects any email this submission generates. `testEmail` is display-only
+  // — it came back from the mint call and is shown in the banner below, but
+  // the server never trusts it; it re-derives the real address from the
+  // signed ticket alone.
+  const testTicket = searchParams.get("testTicket") || "";
+  const testEmailDisplay = searchParams.get("testEmail") || "";
+  const isTestRun = testTicket.length > 0;
   const { locale: pdpaLocale, setLocale: setPdpaLocale, content: pdpa } = usePdpaLocale();
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -902,7 +911,15 @@ export default function DynamicFormPage() {
   // A hook cannot be called conditionally, so a form that has not loaded yet
   // runs an empty document rather than skipping the runtime entirely.
   const placeholderForm = useMemo(() => parseForm(null), []);
-  const runtime = useNativeForm(nativeForm ?? placeholderForm);
+  // A test run prefills recognisably-fake answers so the tester is not
+  // required to type through every field by hand; anything the sampler does
+  // not confidently understand (signatures, file uploads) is left for them.
+  const testRunSeed = useMemo(
+    () => (isTestRun && enrichedSurveyJson ? sampleAnswersFor(enrichedSurveyJson as Record<string, unknown>) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isTestRun, enrichedSurveyJson],
+  );
+  const runtime = useNativeForm(nativeForm ?? placeholderForm, testRunSeed);
   const formReady = nativeForm !== null;
 
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
@@ -1345,6 +1362,7 @@ export default function DynamicFormPage() {
               nextLayerType: layerConfigParsed.layers[0].type,
               nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule,
               reviewLink,
+              ...(isTestRun ? { testRun: { ticket: testTicket, slug: formSlug } } : {}),
             });
           } else if (resolvedLayerCount > 0) {
             await triggerApprovalNotification(token, {
@@ -1360,6 +1378,7 @@ export default function DynamicFormPage() {
               ...(layerConfigParsed?.layers?.[0]?.type === "evaluation"
                 ? { nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule }
                 : {}),
+              ...(isTestRun ? { testRun: { ticket: testTicket, slug: formSlug } } : {}),
             });
           }
         }
@@ -1447,6 +1466,7 @@ export default function DynamicFormPage() {
               });
               if (hasManualPaperWorkflow) {
                 const pdfLink = pdfUrl.startsWith("http") ? pdfUrl : `${new URL(SP_SITE_URL).origin}${pdfUrl}`;
+                const manualNoticeSlug = (cfg.Slug as string) || (cfg.slug as string) || formId || "";
                 await fetch("/api/send-email", {
                   method: "POST",
                   headers: {
@@ -1458,6 +1478,7 @@ export default function DynamicFormPage() {
                     sendToConfiguredSender: true,
                     subject: `Manual workflow PDF ready: ${cfg.Title as string}`,
                     body: `A submission matched a manual paper workflow rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/>The manual evaluation/approval PDF is attached.<br/><a href="${pdfLink}">Open generated PDF record</a>`,
+                    ...(isTestRun ? { testTicket, slug: manualNoticeSlug } : {}),
                     attachments: manualPdfAttachment ? [manualPdfAttachment] : undefined,
                   }),
                 });
@@ -1514,6 +1535,7 @@ export default function DynamicFormPage() {
             pdpaNoticeVersion: getPdpaNoticeVersion(pdpaLocale),
             pdpaConsentedAt: body.PDPAConsentAt,
             retentionUntil: body.RetentionUntil,
+            ...(isTestRun ? { testTicket } : {}),
           }),
         });
         const resData = await res.json().catch(() => ({})) as { id?: string; referenceNo?: string; error?: string };
@@ -1626,6 +1648,28 @@ export default function DynamicFormPage() {
     <div style={{ minHeight: "100vh", background: t.bg }}>
       <style>{globalCss(t)}</style>
       <ScrollProgress t={t} />
+      {isTestRun && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10001,
+            background: "#B91C1C",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: ".02em",
+            textAlign: "center",
+            padding: "8px 12px",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+          }}
+        >
+          TEST RUN — emails go only to {testEmailDisplay || "the nominated test address"}
+        </div>
+      )}
+      <div style={{ height: isTestRun ? 34 : 0 }} />
       <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", position: "sticky", top: 0, zIndex: 50, gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>
         <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Logo size={{ xs: 26, sm: 28, md: 32 }} />

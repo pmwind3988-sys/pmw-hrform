@@ -2326,6 +2326,13 @@ interface EmailParams {
     responseItemId: number;
     layer: number;
   };
+  /**
+   * Present only while a test run is in progress. Carried through to
+   * `/api/send-email` so the server can verify the signed ticket and redirect
+   * this send to the test address — the browser never decides that redirect
+   * itself, it only forwards the ticket it was handed.
+   */
+  testRun?: { ticket: string; slug: string };
 }
 
 interface WorkflowEmailAttachment {
@@ -2337,7 +2344,7 @@ interface WorkflowEmailAttachment {
 /**
  * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
  */
-export async function sendSpEmail(_token: string, { to, subject, body, attachments, workflow }: EmailParams): Promise<void> {
+export async function sendSpEmail(_token: string, { to, subject, body, attachments, workflow, testRun }: EmailParams): Promise<void> {
   // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
@@ -2348,7 +2355,14 @@ export async function sendSpEmail(_token: string, { to, subject, body, attachmen
       'Content-Type': 'application/json',
       ...(API_KEY ? { 'X-Api-Key': API_KEY } : {}),
     },
-    body: JSON.stringify({ to, subject, body, attachments, workflow }),
+    body: JSON.stringify({
+      to,
+      subject,
+      body,
+      attachments,
+      workflow,
+      ...(testRun ? { testTicket: testRun.ticket, slug: testRun.slug } : {}),
+    }),
   });
 
   if (!response.ok) {
@@ -2381,6 +2395,8 @@ interface ApprovalNotificationParams {
   throwOnEmailError?: boolean;
   nextEmailSchedule?: EvaluationEmailSchedule;
   attachments?: WorkflowEmailAttachment[];
+  /** Present only while a test run is in progress; forwarded to every `sendSpEmail` call below. */
+  testRun?: { ticket: string; slug: string };
 }
 
 // ── Styled email HTML template ────────────────────────────────────────────
@@ -2579,7 +2595,7 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, attachments } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, attachments, testRun } = params;
   // One address stays a plain string so existing single-assignee mail is byte
   // for byte unchanged; only fan-out layers become an array.
   const deliveryList = (primary: string): string | string[] => {
@@ -2641,6 +2657,7 @@ export async function triggerApprovalNotification(
         await persistSchedule(submitRecipients, layer, requestLink);
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
+            testRun,
             to: submitRecipients,
             subject: `Manual ${nextLayerType}: ${formTitle} layer ${layer}${refSuffix}`,
             attachments,
@@ -2664,6 +2681,7 @@ export async function triggerApprovalNotification(
           return;
         }
         await sendSpEmail(token, {
+          testRun,
           to: submitRecipients,
           subject: `Action required: ${formTitle} needs your ${nextActionNoun}${refSuffix}`,
           workflow: {
@@ -2701,6 +2719,7 @@ export async function triggerApprovalNotification(
         await persistSchedule(nextLayerRecipients, displayNextLayerNumber, requestLink);
         if (isManualPaperWorkflowStatus(targetLayerStatus)) {
           await sendSpEmail(token, {
+            testRun,
             to: nextLayerRecipients,
             subject: `Manual ${nextLayerType}: ${formTitle} layer ${displayNextLayerNumber}${refSuffix}`,
             attachments,
@@ -2724,6 +2743,7 @@ export async function triggerApprovalNotification(
           return;
         }
         await sendSpEmail(token, {
+          testRun,
           to: nextLayerRecipients,
           subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}${refSuffix}`,
           workflow: {
@@ -2756,6 +2776,7 @@ export async function triggerApprovalNotification(
       } else if (layer === totalLayers && isEmailAddress(submittedBy)) {
         // Final approval - notify submitter
         await sendSpEmail(token, {
+          testRun,
           to: submittedBy,
           subject: `Status update: ${formTitle} approved${refSuffix}`,
           body: emailBody({
@@ -2781,6 +2802,7 @@ export async function triggerApprovalNotification(
     } else if (action === 'reject' && isEmailAddress(submittedBy)) {
       // Notify submitter of rejection
       await sendSpEmail(token, {
+        testRun,
         to: submittedBy,
         subject: `Status update: ${formTitle} not approved${refSuffix}`,
         body: emailBody({
