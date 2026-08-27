@@ -84,22 +84,32 @@ export function selectWorkflowLayer(
 }
 
 /**
- * Until when an `/eval/...` link may still open an approval layer.
+ * When this app started telling the two link shapes apart.
  *
- * The two prefixes were split on 2026-08-02. Before that every workflow link
- * was `/eval/...` whatever the layer was, so approval links in the shape this
- * grace covers are real ones that real approvers are still holding. Worse,
- * scheduled evaluation emails persist their link into the SharePoint
- * `WorkflowEmailSchedule` column and `api/workflow-email-cron.ts` posts that
- * stored string as it stands — so a link written the day before the split can
- * still be delivered up to the longest schedule the builder offers, three
- * months, which runs to the start of November.
+ * Before the prefixes were split, every workflow link said `/eval/...` whatever
+ * kind of step it opened, so an approval link in that shape is a real one a
+ * real approver may still be holding. After it, no approval link was ever
+ * issued that way again.
  *
- * Past that date nothing legitimate carries the old shape any more and the
- * grace closes on its own. The cron now corrects the prefix on stored links as
- * it sends them (`withWorkflowRoutePrefix`), so nothing is refilling this.
+ * The date is compared against *the submission*, not against today. A request
+ * raised after this could never have been sent an old-shape approval link, so
+ * refusing one for it is safe from the moment this ships and stays safe. A
+ * request raised before it keeps the old shape working for as long as it lives,
+ * which costs nothing: those rows drain as they complete.
+ *
+ * The alternative — a cutoff on today's date — meant every old link stopped
+ * working on one particular morning, and the only way to know whether that
+ * would strand anyone was to audit which pending approvals were still sitting
+ * on a pre-split email. The submissions workspace cannot answer that: it loads
+ * email history for the hundred most recent rows per form and offers no way to
+ * filter by when a notice went out. A deadline nobody can prepare for is worse
+ * than no deadline, so this replaced it.
+ *
+ * A couple of days later than the split commit itself, because a deploy does
+ * not land the instant a commit does, and being slightly too generous here only
+ * costs a second barrier on a handful of old rows.
  */
-export const LEGACY_EVAL_PREFIX_GRACE_UNTIL = new Date("2026-11-05T00:00:00Z");
+export const PREFIX_SPLIT_SAFE_FROM = new Date("2026-08-05T00:00:00Z");
 
 /**
  * Whether a link with this prefix may open a layer of this type.
@@ -112,20 +122,27 @@ export const LEGACY_EVAL_PREFIX_GRACE_UNTIL = new Date("2026-11-05T00:00:00Z");
  *
  * `/approval/...` never opens an evaluation layer, full stop — no version of
  * this app has ever issued that combination, so any example of it was typed.
- * `/eval/...` opening an approval layer is refused too, but only once the
- * legacy links above have drained; see `LEGACY_EVAL_PREFIX_GRACE_UNTIL`.
+ * `/eval/...` opening an approval layer is refused too, unless the submission
+ * predates the split and could therefore have been sent one honestly.
+ *
+ * `submissionCreatedAt` is the row's own `Created`. Unreadable or absent is
+ * treated as old, which allows: this is a second barrier, and it should never
+ * be the thing that turns a real approver away on its own.
  */
 export function routePrefixAllowsLayerType(
   prefix: WorkflowRoutePrefix,
   layerType: string | undefined,
-  now: Date = new Date(),
+  submissionCreatedAt?: unknown,
 ): boolean {
   // An unresolved layer type is not evidence of anything; the assignee and
   // ordering checks still stand behind this one.
   if (!layerType) return true;
   if (prefix === "approval") return layerType !== "evaluation";
   if (layerType === "evaluation") return true;
-  return now < LEGACY_EVAL_PREFIX_GRACE_UNTIL;
+
+  const created = Date.parse(String(submissionCreatedAt ?? ""));
+  if (!Number.isFinite(created)) return true;
+  return created < PREFIX_SPLIT_SAFE_FROM.getTime();
 }
 
 /** Why a sign-in review link may not open the record it names. */
@@ -142,7 +159,8 @@ export interface SignedInLinkGateParams {
   layerEmails: unknown;
   /** `L{n}_Email` — the primary actor, and all an older row carries. */
   layerEmail: unknown;
-  now?: Date;
+  /** The row's `Created`, which decides whether the old link shape is allowed. */
+  submissionCreatedAt?: unknown;
 }
 
 /**
@@ -165,7 +183,7 @@ export function denySignedInLayerLink(params: SignedInLinkGateParams): SignedInL
 
   // The prefix and the layer number sit side by side in the address. A link
   // whose two halves disagree about what kind of step this is was edited.
-  if (!routePrefixAllowsLayerType(params.routePrefix, params.layerType, params.now)) return "wrong-shape";
+  if (!routePrefixAllowsLayerType(params.routePrefix, params.layerType, params.submissionCreatedAt)) return "wrong-shape";
 
   // A layer can be assigned to several people, or to an expanded distribution
   // list; any one of them may act, and nobody else may.

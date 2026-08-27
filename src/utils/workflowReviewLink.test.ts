@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   denySignedInLayerLink,
-  LEGACY_EVAL_PREFIX_GRACE_UNTIL,
+  PREFIX_SPLIT_SAFE_FROM,
   parseLayerConfig,
   routePrefixAllowsLayerType,
   selectWorkflowLayer,
@@ -142,29 +142,40 @@ describe("the link a resolved layer produces", () => {
 });
 
 describe("routePrefixAllowsLayerType", () => {
-  const duringGrace = new Date(LEGACY_EVAL_PREFIX_GRACE_UNTIL.getTime() - 86_400_000);
-  const afterGrace = new Date(LEGACY_EVAL_PREFIX_GRACE_UNTIL.getTime() + 86_400_000);
+  const raisedBefore = new Date(PREFIX_SPLIT_SAFE_FROM.getTime() - 86_400_000).toISOString();
+  const raisedAfter = new Date(PREFIX_SPLIT_SAFE_FROM.getTime() + 86_400_000).toISOString();
 
   it("lets each prefix open its own kind of layer", () => {
-    expect(routePrefixAllowsLayerType("approval", "approval", duringGrace)).toBe(true);
-    expect(routePrefixAllowsLayerType("eval", "evaluation", duringGrace)).toBe(true);
-    expect(routePrefixAllowsLayerType("eval", "evaluation", afterGrace)).toBe(true);
+    expect(routePrefixAllowsLayerType("approval", "approval", raisedAfter)).toBe(true);
+    expect(routePrefixAllowsLayerType("eval", "evaluation", raisedAfter)).toBe(true);
+    expect(routePrefixAllowsLayerType("eval", "evaluation", raisedBefore)).toBe(true);
   });
 
   it("never lets an approval link open an evaluation layer", () => {
     // The shape the reviewer reached by editing /approval/<slug>/2/1 to .../2/2.
-    expect(routePrefixAllowsLayerType("approval", "evaluation", duringGrace)).toBe(false);
-    expect(routePrefixAllowsLayerType("approval", "evaluation", afterGrace)).toBe(false);
+    expect(routePrefixAllowsLayerType("approval", "evaluation", raisedAfter)).toBe(false);
+    expect(routePrefixAllowsLayerType("approval", "evaluation", raisedBefore)).toBe(false);
   });
 
-  it("keeps pre-split /eval approval links working until their window drains", () => {
-    expect(routePrefixAllowsLayerType("eval", "approval", duringGrace)).toBe(true);
-    expect(routePrefixAllowsLayerType("eval", "approval", afterGrace)).toBe(false);
+  it("refuses the old shape on a submission raised after the split", () => {
+    // Nothing could have mailed this row an /eval approval link, so one is edited.
+    expect(routePrefixAllowsLayerType("eval", "approval", raisedAfter)).toBe(false);
+  });
+
+  it("keeps the old shape working on a submission that predates the split", () => {
+    // A real approver may still be holding one of these, with no deadline on it.
+    expect(routePrefixAllowsLayerType("eval", "approval", raisedBefore)).toBe(true);
+  });
+
+  it("allows rather than refuses when the row's date cannot be read", () => {
+    expect(routePrefixAllowsLayerType("eval", "approval", undefined)).toBe(true);
+    expect(routePrefixAllowsLayerType("eval", "approval", "")).toBe(true);
+    expect(routePrefixAllowsLayerType("eval", "approval", "not a date")).toBe(true);
   });
 
   it("defers to the other checks when the layer type is unknown", () => {
-    expect(routePrefixAllowsLayerType("approval", undefined, afterGrace)).toBe(true);
-    expect(routePrefixAllowsLayerType("eval", "", afterGrace)).toBe(true);
+    expect(routePrefixAllowsLayerType("approval", undefined, raisedAfter)).toBe(true);
+    expect(routePrefixAllowsLayerType("eval", "", raisedAfter)).toBe(true);
   });
 });
 
@@ -203,6 +214,7 @@ describe("denySignedInLayerLink", () => {
     signedInEmail: "reviewer@example.com",
     layerEmails: "reviewer@example.com; deputy@example.com",
     layerEmail: "reviewer@example.com",
+    submissionCreatedAt: new Date(PREFIX_SPLIT_SAFE_FROM.getTime() + 86_400_000).toISOString(),
   };
 
   it("lets the assigned reviewer through", () => {

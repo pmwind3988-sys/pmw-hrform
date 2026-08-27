@@ -34,7 +34,6 @@ import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
 import {
   denySignedInLayerLink,
-  routePrefixAllowsLayerType,
   selectWorkflowLayer,
   type SignedInLinkDenial,
 } from "../utils/workflowReviewLink";
@@ -441,16 +440,11 @@ export default function EvaluationPage() {
           const json = await res.json();
           if (!json.success) { setError(json.error || "Failed to load data."); setLoading(false); return; }
 
-          // An approval link must not open an evaluation step, nor the reverse.
-          // The layer number sits in the address next to the prefix, so editing
-          // it onto a step of the other kind makes the link disagree with
-          // itself — and that is refused before any of the record is shown.
-          if (!routePrefixAllowsLayerType(routePrefix, valueToText(json.data.layerType))) {
-            setNotYourRequest(true);
-            setError(WRONG_SHAPE_MESSAGE);
-            setLoading(false);
-            return;
-          }
+          // No prefix check here, deliberately. A public link names its layer
+          // with the token itself, so there is no layer number to edit onto a
+          // step of the other kind — the thing the prefix check exists to
+          // catch cannot happen on this path. Applying it anyway would only
+          // give pre-split public approval links a way to stop working.
 
           setFormTitle(json.data.formTitle);
           setResponseData(json.data.fields);
@@ -544,7 +538,7 @@ export default function EvaluationPage() {
           const preflight = await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(resolvedTitle)}')/items(${respItemId})`
-            + `?$select=Id,SelectedBranch,L${displayLayerNumber}_Email,L${displayLayerNumber}_Emails`
+            + `?$select=Id,Created,SelectedBranch,L${displayLayerNumber}_Email,L${displayLayerNumber}_Emails`
           ) as Record<string, unknown>;
           const preflightLayer = selectWorkflowLayer(
             slugJson.value?.[0]?.LayerConfig,
@@ -559,6 +553,7 @@ export default function EvaluationPage() {
               signedInEmail,
               layerEmails: preflight[`L${displayLayerNumber}_Emails`],
               layerEmail: preflight[`L${displayLayerNumber}_Email`],
+              submissionCreatedAt: preflight.Created,
             });
             gateSettled = true;
           }
@@ -590,6 +585,7 @@ export default function EvaluationPage() {
             signedInEmail,
             layerEmails: data.responseFields[`L${displayLayerNumber}_Emails`],
             layerEmail: data.responseFields[`L${displayLayerNumber}_Email`],
+            submissionCreatedAt: data.responseFields.Created,
           });
           if (fullDenial) {
             setNotYourRequest(true);
