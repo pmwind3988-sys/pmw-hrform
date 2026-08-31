@@ -234,9 +234,40 @@ describe("stamping a row the signed-in path already wrote", () => {
       d,
     );
     expect(result.status).toBe(200);
-    expect(d.written).toEqual([
+    expect(d.written[0]).toEqual(
       { listTitle: "Leave Application", itemId: "42", fields: { IsTest: "true", TestEmail: "tester@pmw-group.com" } },
-    ]);
+    );
+  });
+
+  it("records who issued the ticket and that the row was created, so a signed-in run's checklist is not blank", async () => {
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps();
+    await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: ticket },
+      d,
+    );
+    // The trail write is a second read/write on top of the stamp itself.
+    const trailWrite = d.written.find((w) => "TestRunLog" in w.fields);
+    expect(trailWrite).toBeDefined();
+    const trail = parseTestRunTrail(trailWrite?.fields.TestRunLog);
+    expect(trail.ticket).toMatchObject({ status: "pass", detail: "Issued by hr@pmw-group.com" });
+    expect(trail.row).toMatchObject({ status: "pass", detail: "Item 42" });
+  });
+
+  it("names the reference number on the row step when the row already has one", async () => {
+    const ticket = mintTestTicket({ slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com" });
+    const d = stampDeps(undefined, {
+      "42": { fields: { SubmittedBy: "hr@pmw-group.com", ReferenceNo: "LA-0042" } },
+    });
+    await handleStampTestRun(
+      "token",
+      { listTitle: "Leave Application", itemId: "42", slug: "leave-application", testTicket: ticket },
+      d,
+    );
+    const trailWrite = d.written.find((w) => "TestRunLog" in w.fields);
+    const trail = parseTestRunTrail(trailWrite?.fields.TestRunLog);
+    expect(trail.row.detail).toBe("Item 42 (LA-0042)");
   });
 
   it("stamps nothing for a ticket that was never signed", async () => {
@@ -319,9 +350,9 @@ describe("stamping a row the signed-in path already wrote", () => {
       d,
     );
     expect(result.status).toBe(200);
-    expect(d.written).toEqual([
+    expect(d.written[0]).toEqual(
       { listTitle: "Leave Application", itemId: "99", fields: { IsTest: "true", TestEmail: "tester@pmw-group.com" } },
-    ]);
+    );
   });
 
   it("still stamps a row in the ticket's own form when no listTitle is spoofed", async () => {
@@ -333,9 +364,9 @@ describe("stamping a row the signed-in path already wrote", () => {
       d,
     );
     expect(result.status).toBe(200);
-    expect(d.written).toEqual([
+    expect(d.written[0]).toEqual(
       { listTitle: "Travel Claim", itemId: "7", fields: { IsTest: "true", TestEmail: "tester@pmw-group.com" } },
-    ]);
+    );
   });
 
   it("refuses when the ticket's own slug names no form", async () => {

@@ -14,6 +14,7 @@ import { mintTestTicket, verifyTestTicket, testRunFieldsFor, isTestRow } from ".
 import { TEST_EMAIL_FIELD, TEST_FLAG_FIELD } from "./testRun.js";
 import { appendTestRunStep, TEST_RUN_LOG_FIELD, type TestRunStep } from "./testRunTrail.js";
 import { logWarn } from "./logger.js";
+import { REFERENCE_NO_FIELD } from "./referenceNumber.js";
 
 export const TEST_RUN_COLUMNS = [TEST_FLAG_FIELD, TEST_EMAIL_FIELD, TEST_RUN_LOG_FIELD];
 
@@ -180,6 +181,33 @@ export async function handleStampTestRun(
   }
 
   await deps.updateFields(token, listTitle, itemId, testRunFieldsFor(ticket));
+
+  // The signed-in path never goes through `api/submit-form.ts`'s own
+  // post-create trail write (it writes the row itself, in the browser), so
+  // without this the checklist would stay blank until whatever step happens
+  // next. These two mirror the same step ids and order numbers submit-form
+  // uses for the equivalent moments ("ticket" order 1, "row" order 4) so a
+  // signed-in run and an anonymous one read as one consistent checklist,
+  // not two different vocabularies.
+  const referenceNo = String(row.fields[REFERENCE_NO_FIELD] ?? "").trim();
+  const stampSteps: Omit<TestRunStep, "at">[] = [
+    {
+      step: "ticket",
+      label: "Test ticket validated",
+      status: "pass",
+      detail: `Issued by ${ticket.issuedBy}`,
+      order: 1,
+    },
+    {
+      step: "row",
+      label: "Response row created",
+      status: "pass",
+      detail: referenceNo ? `Item ${itemId} (${referenceNo})` : `Item ${itemId}`,
+      order: 4,
+    },
+  ];
+  await recordTestRunSteps(token, listTitle, itemId, stampSteps, deps);
+
   return { status: 200, payload: { ok: true } };
 }
 

@@ -22,12 +22,11 @@ import { spGet, getFormConfigByTitle } from "../../utils/formBuilderSP";
 import { isTestRow } from "../../utils/testRun";
 import {
   parseTestRunTrail,
-  orderedTestRunSteps,
-  testRunOutcome,
   TEST_RUN_LOG_FIELD,
   type TestRunStep,
   type TestRunStepStatus,
 } from "../../utils/testRunTrail";
+import { mergeTestRunSteps, testRunVerdict, isTestRunFinished } from "../../utils/testRunProgress";
 import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 
@@ -191,7 +190,7 @@ function Spinner({ size = 14, color = C.purple }: { size?: number; color?: strin
   );
 }
 
-const OUTCOME_LABEL: Record<ReturnType<typeof testRunOutcome>, { text: string; bg: string; fg: string }> = {
+const OUTCOME_LABEL: Record<ReturnType<typeof testRunVerdict>, { text: string; bg: string; fg: string }> = {
   passed: { text: "Passed", bg: C.greenPale, fg: C.green },
   failed: { text: "Failed", bg: C.redPale, fg: C.red },
   running: { text: "Running", bg: C.purplePale, fg: C.purple },
@@ -389,15 +388,19 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
 
           {rows.map((row) => {
             const trail = parseTestRunTrail(row.fields[TEST_RUN_LOG_FIELD]);
-            const steps = orderedTestRunSteps(trail);
-            const outcome = testRunOutcome(trail);
+            const steps = mergeTestRunSteps(trail, row.fields);
+            const outcome = testRunVerdict(trail, row.fields);
             const outcomeStyle = OUTCOME_LABEL[outcome];
             const expanded = expandedId === row.id;
             const reference = valueToText(row.fields[REFERENCE_NO_FIELD]) || `#${row.id}`;
             const submittedAt = valueToText(row.fields.SubmittedAt);
             const stage = valueToText(row.fields.FormStatus) || valueToText(row.fields.Status) || "Unknown";
-            const stepsExcludingPdf = steps.filter((step) => step.step !== "pdf");
-            const runFinished = stepsExcludingPdf.length > 0 && !stepsExcludingPdf.some((step) => step.status === "pending");
+            // A finished run keeps the PDF button available even when the trail
+            // itself is empty — see testRunProgress.ts for why the row, not
+            // the trail, decides finished vs. running. The PDF stays available
+            // on a FAILED run too, deliberately: that is the run you most want
+            // to inspect.
+            const runFinished = isTestRunFinished(trail, row.fields);
             const pdfStep = trail.pdf;
 
             return (
