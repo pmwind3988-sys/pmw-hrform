@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormBySlug, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveApplicantName } from "./_utils/applicantName.js";
 import {
@@ -12,7 +12,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { joinEmailList, parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
+import { isLayerActor, joinEmailList, parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
 import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
@@ -26,6 +26,7 @@ import {
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
+import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
 import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
 
@@ -43,6 +44,31 @@ const LINK_MISMATCH_MESSAGE = "This review link does not open this submission.";
 const LINK_EXPIRED_MESSAGE = "This review link has expired.";
 
 /** Query values arrive as string | string[] depending on the runtime. */
+/**
+ * The layer a signed-in reviewer is asking for, honouring the branch the
+ * submission was routed down.
+ *
+ * A public link names its layer with the token, so the public path never needs
+ * this. A signed-in link carries the layer *number*, which on a branched form
+ * can describe a different step per branch — so the number alone is not enough.
+ */
+export function pickLayerByNumber(
+  config: { layers?: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null,
+  selectedBranch: string,
+  layerNumber: number,
+): Record<string, unknown> | null {
+  if (!config || !layerNumber) return null;
+  const branchKey = selectedBranch.trim().toLowerCase();
+  if (branchKey && config.manualBranches?.length) {
+    const branch = config.manualBranches.find((entry) =>
+      [entry.name, entry.label].some((candidate) =>
+        typeof candidate === "string" && candidate.trim().toLowerCase() === branchKey));
+    const onBranch = branch?.layers?.find((layer) => Number(layer.layerNumber) === layerNumber);
+    if (onBranch) return onBranch;
+  }
+  return (config.layers ?? []).find((layer) => Number(layer.layerNumber) === layerNumber) ?? null;
+}
+
 function firstQueryValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0].trim() : "";
   return typeof value === "string" ? value.trim() : "";
@@ -383,12 +409,44 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
   try {
     const graphToken = await getGraphToken();
 
-    // Find the token in all Master Form items
-    const masterItems = await queryListItems(graphToken, "Master Form", { top: 500 });
     let foundToken: Record<string, unknown> | null = null;
     let foundFormTitle = "";
     let foundLayerNumber = 0;
     let layerConfig: { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null = null;
+
+    /**
+     * The signed-in shape of this request: `?slug=&responseItemId=&layerNumber=`
+     * with a bearer naming the caller, rather than a public layer token.
+     *
+     * It exists so the reviewer page can stop reading SharePoint from the
+     * browser. Everything below the resolution is deliberately shared with the
+     * public path — the same access gate, the same field filtering — because
+     * two copies of "what may this person see" is how they drift apart.
+     */
+    const slug = firstQueryValue(req.query.slug);
+    const signedInMode = !!slug;
+    let viewerEmail = "";
+    if (signedInMode) {
+      const viewer = await requireSignedInViewer(req.headers, graphToken);
+      // Portal accounts never review workflow steps; only staff do.
+      if (viewer?.kind !== "m365") {
+        return res.status(401).json({ error: "Sign in with your work account to open this request." });
+      }
+      viewerEmail = viewer.id;
+
+      const form = await queryMasterFormBySlug(graphToken, slug);
+      if (!form) return res.status(404).json({ error: "This form no longer exists." });
+      foundFormTitle = String(form.fields.Title || "");
+      foundLayerNumber = Number(firstQueryValue(req.query.layerNumber) || 0);
+      try {
+        layerConfig = JSON.parse(String(form.fields.LayerConfig || "")) as typeof layerConfig;
+      } catch { layerConfig = null; }
+      // Corrected below against the submission's own branch, once it is read.
+      foundToken = pickLayerByNumber(layerConfig, "", foundLayerNumber);
+    }
+
+    // Find the token in all Master Form items
+    const masterItems = signedInMode ? [] : await queryListItems(graphToken, "Master Form", { top: 500 });
 
     for (const form of masterItems) {
       const rawLayerConfig = form.fields.LayerConfig as string | undefined;
@@ -412,7 +470,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       if (foundToken) break;
     }
 
-    if (!foundToken) {
+    if (!foundToken && !signedInMode) {
       const versionItems = await queryListItems(graphToken, "Web Form Versions", { top: 500 });
       for (const versionItem of versionItems) {
         const parsedVersion = parseVersionPayload(versionItem.fields.SurveyJSON);
@@ -462,7 +520,15 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           ...(responseLayerConfig.layers ?? []),
           ...((responseLayerConfig.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
         ];
-        const responseToken = responseLayers.find((layer) => layer.publicToken === token);
+        const responseToken = signedInMode
+          // The branch is only knowable now, with the submission in hand — and
+          // on a branched form it decides which step this number describes.
+          ? pickLayerByNumber(
+              { layers: responseLayerConfig.layers, manualBranches: responseLayerConfig.manualBranches },
+              String(allFields.SelectedBranch || ""),
+              foundLayerNumber,
+            )
+          : responseLayers.find((layer) => layer.publicToken === token);
         if (responseToken) {
           foundToken = responseToken;
           foundLayerNumber = responseToken.layerNumber as number;
@@ -481,7 +547,31 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     // the clicker nothing — the id they arrived with is the untrusted part, so it
     // decides only who is written to. Same reply either way; see _utils/linkReissue.ts.
     const linkToken = firstQueryValue(req.query.k);
-    if (!linkToken) {
+
+    // What binds a signed-in link to its record is not a token in the URL but
+    // the assignment on the row: the address bar carries the form, the item and
+    // the layer, and a reviewer can edit all three. Settled here, on the
+    // server, before a single field is filtered — which is the whole point of
+    // this path existing.
+    if (signedInMode) {
+      // A public layer is reached by its own emailed link, whose binding is
+      // checked above. Accepting the signed-in shape for one would be a way
+      // round that check.
+      if (String(foundToken.authMode || "") === "public") {
+        return res.status(403).json({ error: "Open this request from the link that was emailed to its reviewer." });
+      }
+      if (!isLayerActor(viewerEmail, allFields[`L${foundLayerNumber}_Emails`], allFields[`L${foundLayerNumber}_Email`])) {
+        logWarn("api:evaluate:get", "Refused a signed-in reviewer a step they are not assigned", {
+          layerNumber: foundLayerNumber,
+          responseItemId,
+        });
+        // Same wording whether the row exists, is someone else's, or is not
+        // theirs at this layer, so the id cannot be probed for which is which.
+        return res.status(403).json({ error: "This request is waiting for someone else." });
+      }
+    }
+
+    if (!linkToken && !signedInMode) {
       if (responseItem) {
         await reissueReviewLink({
           graphToken,
@@ -506,8 +596,11 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       : denyLayerItemAccess({
         layerNumber: foundLayerNumber,
         intent: "read",
-        linkToken,
-        storedLinkToken: readLinkToken(allFields, foundLayerNumber),
+        // A sign-in layer never had a link binding minted, and offering one
+        // side of a pair without the other reads as a mismatch. The assignment
+        // check above is what binds this path.
+        linkToken: signedInMode ? undefined : linkToken,
+        storedLinkToken: signedInMode ? undefined : readLinkToken(allFields, foundLayerNumber),
         layer: foundToken,
         fields: allFields,
         currentLayer: allFields.CurrentLayer || allFields.CurrentApprovalLayer,
