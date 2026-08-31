@@ -71,6 +71,22 @@ function sectionTitle(element: Record<string, unknown>, fallback: string): strin
   return typeof name === "string" && name.trim() ? formatFieldLabel(name) : fallback;
 }
 
+/**
+ * A page the form builder never renamed carries SurveyJS's own `page1` /
+ * `page2`, which reads as a machine label in a printed record. The first page
+ * is the form itself, so it prints as "Main Page"; later ones keep their
+ * number.
+ */
+function pageTitle(page: Record<string, unknown>, index: number): string {
+  const title = page.title;
+  if (typeof title === "string" && title.trim()) return title.trim();
+  const name = typeof page.name === "string" ? page.name.trim() : "";
+  if (!name || /^page[\s_-]*\d*$/i.test(name)) {
+    return index === 0 ? "Main Page" : `Page ${index + 1}`;
+  }
+  return formatFieldLabel(name);
+}
+
 function getSurveyRoot(surveyJson: unknown): Record<string, unknown> | null {
   if (!isRecord(surveyJson)) return null;
   if (isRecord(surveyJson.surveyJson)) return surveyJson.surveyJson;
@@ -138,10 +154,10 @@ export function collectPreviewSections(
     }
   };
 
-  for (const page of pages) {
-    if (!isRecord(page)) continue;
-    collectFields(page.elements, sectionTitle(page, "Submitted Form"), { current: null, titled: false });
-  }
+  pages.forEach((page, index) => {
+    if (!isRecord(page)) return;
+    collectFields(page.elements, pageTitle(page, index), { current: null, titled: false });
+  });
 
   // A section is created by the field that goes into it, so none can be empty.
   return sections;

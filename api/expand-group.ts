@@ -25,7 +25,7 @@ import { getGraphToken, queryMasterFormBySlug } from "./_utils/graphClient.js";
 import { expandDistributionList } from "./_utils/groupMembers.js";
 import { logError } from "./_utils/logger.js";
 import { searchRecipients } from "./_utils/recipientSearch.js";
-import { resolveSignedInViewer } from "./_utils/viewerIdentity.js";
+import { bearerFromHeaders, resolveSignedInViewer } from "./_utils/viewerIdentity.js";
 
 interface ApiRequest {
   method: string;
@@ -74,12 +74,6 @@ function readString(body: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function bearerToken(headers: Record<string, string | string[] | undefined>): string {
-  const raw = headers.authorization;
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return (value || "").replace(/^Bearer\s+/i, "").trim();
-}
-
 /**
  * Answers the builder's recipient picker.
  *
@@ -93,7 +87,7 @@ async function handleRecipientSearch(
   headers: Record<string, string | string[] | undefined>,
   res: ApiResponse,
 ): Promise<void> {
-  const bearer = bearerToken(headers);
+  const bearer = bearerFromHeaders(headers);
   if (!bearer) {
     res.status(401).json({ error: "Sign in to search for recipients." });
     return;

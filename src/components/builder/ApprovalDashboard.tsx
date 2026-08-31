@@ -102,6 +102,27 @@ const CONFIGURED_MANUAL_PAPER_EMAIL = (
   import.meta.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS || ""
 ).trim().toLowerCase();
 const SUBMISSIONS_PER_PAGE = 12;
+
+// SharePoint answers a list query with ONE page and a link to the next, so a
+// query that reads only the response is capped at whatever `$top` asked for.
+// This screen asked for 100 per list, which quietly dropped every submission
+// older than the newest hundred — pending items included, which is how rows
+// that were still waiting for an approver disappeared from the queue. Every
+// list read below now walks the pages to the end of the list.
+const SP_PAGE_SIZE = 500;
+// 40 * 500 = 20,000 rows per list before we stop asking.
+const SP_PAGE_SAFETY_CAP = 40;
+
+async function spGetAll<T = unknown>(token: string, url: string): Promise<{ value: T[] }> {
+  const value: T[] = [];
+  let nextUrl: string | null = url;
+  for (let page = 0; nextUrl && page < SP_PAGE_SAFETY_CAP; page += 1) {
+    const data = (await spGet(token, nextUrl)) as { value?: T[]; "odata.nextLink"?: string };
+    if (data.value?.length) value.push(...data.value);
+    nextUrl = data["odata.nextLink"] || null;
+  }
+  return { value };
+}
 // The real assignee addresses stay in the layer columns on a test run — a
 // production approver who reaches the row must not action a rehearsal.
 const TEST_RUN_ACTION_BLOCKED_MESSAGE = 'This is a test run. Turn on "Show test runs" to act on it.';
@@ -741,8 +762,8 @@ export default function ApprovalDashboard() {
       try {
         // No $select: the answer columns differ per form, and naming one that
         // does not exist makes SharePoint fail the whole request.
-        const res = await spGet(token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formType)}')/items?$orderby=Created desc&$top=100`
+        const res = await spGetAll(token,
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formType)}')/items?$orderby=Created desc&$top=${SP_PAGE_SIZE}`
         ) as { value?: Record<string, unknown>[] };
         rows = res.value ?? [];
       } catch {
@@ -1019,8 +1040,8 @@ export default function ApprovalDashboard() {
               // SharePoint returns 400 if ANY selected column doesn't exist on the list.
               const attachWorkflowEmailLogs = async (itemsToUpdate: PendingItem[]): Promise<void> => {
                 try {
-                  const emailData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,WorkflowEmailLog&$orderby=Created desc&$top=100`
+                  const emailData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,WorkflowEmailLog&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: { Id: number; WorkflowEmailLog?: string }[] };
                   const emailMap = new Map(
                     (emailData.value ?? [])
@@ -1037,8 +1058,8 @@ export default function ApprovalDashboard() {
               };
               const attachWorkflowEmailSchedules = async (itemsToUpdate: PendingItem[]): Promise<void> => {
                 try {
-                  const scheduleData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,WorkflowEmailSchedule&$orderby=Created desc&$top=100`
+                  const scheduleData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,WorkflowEmailSchedule&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: { Id: number; WorkflowEmailSchedule?: string }[] };
                   const scheduleMap = new Map(
                     (scheduleData.value ?? [])
@@ -1055,8 +1076,8 @@ export default function ApprovalDashboard() {
               };
               const attachPublishKeys = async (itemsToUpdate: PendingItem[]): Promise<void> => {
                 try {
-                  const publishData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,PublishKey&$orderby=Created desc&$top=100`
+                  const publishData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,PublishKey&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: { Id: number; PublishKey?: string }[] };
                   const publishKeyMap = new Map(
                     (publishData.value ?? [])
@@ -1074,8 +1095,8 @@ export default function ApprovalDashboard() {
               const attachLayerStatuses = async (itemsToUpdate: PendingItem[]): Promise<void> => {
                 try {
                   const layerSelect = Array.from({ length: MAX_TRACKED_LAYERS }, (_, i) => `L${i + 1}_Status`).join(",");
-                  const layerData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,${layerSelect}&$orderby=Created desc&$top=100`
+                  const layerData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,${layerSelect}&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: Record<string, unknown>[] };
                   const layerMap = new Map<number, Record<number, string>>();
                   for (const row of layerData.value ?? []) {
@@ -1096,8 +1117,8 @@ export default function ApprovalDashboard() {
               };
               const attachTrainingTitles = async (itemsToUpdate: PendingItem[]): Promise<void> => {
                 try {
-                  const trainingData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,${TRAINING_TITLE_FIELD}&$orderby=Created desc&$top=100`
+                  const trainingData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,${TRAINING_TITLE_FIELD}&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: { Id: number; trainingTitle?: string }[] };
                   const trainingMap = new Map(
                     (trainingData.value ?? [])
@@ -1120,8 +1141,8 @@ export default function ApprovalDashboard() {
               const attachTestFlags = async (itemsToUpdate: PendingItem[]): Promise<void> => {
                 if (isTestColumnKnownMissing(listName)) return;
                 try {
-                  const testData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=Created desc&$top=100`
+                  const testData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: { Id: number; IsTest?: string | boolean }[] };
                   setTestColumnKnownMissing(listName, false);
                   const testMap = new Map(
@@ -1141,8 +1162,8 @@ export default function ApprovalDashboard() {
               // Tier 1: core columns only (no CurrentLayer/SelectedBranch — may not exist on older lists)
               const tier1 = await (async () => {
                 try {
-                  return await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,PdfUrl&$orderby=Created desc&$top=100`
+                  return await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status,PdfUrl&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
@@ -1150,8 +1171,8 @@ export default function ApprovalDashboard() {
                 // Fetch optional columns separately — any may not exist on older lists
                 // CurrentLayer
                 try {
-                  const clData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,CurrentLayer&$orderby=Created desc&$top=100`
+                  const clData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,CurrentLayer&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: { Id: number; CurrentLayer?: number }[] };
                   if (clData.value) {
                     const clMap: Record<number, number> = {};
@@ -1165,8 +1186,8 @@ export default function ApprovalDashboard() {
                 } catch { /* column may not exist */ }
                 // CurrentApprovalLayer
                 try {
-                  const calData = await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,CurrentApprovalLayer&$orderby=Created desc&$top=100`
+                  const calData = await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,CurrentApprovalLayer&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: { Id: number; CurrentApprovalLayer?: number }[] };
                   if (calData.value) {
                     const calMap: Record<number, number> = {};
@@ -1187,8 +1208,8 @@ export default function ApprovalDashboard() {
                 // SelectedBranch (only if the form has manual branches)
                 if (hasBranches) {
                   try {
-                    const sbData = await spGet(token,
-                      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,SelectedBranch&$orderby=Created desc&$top=100`
+                    const sbData = await spGetAll(token,
+                      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,SelectedBranch&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                     ) as { value?: { Id: number; SelectedBranch?: string }[] };
                     if (sbData.value) {
                       const sbMap: Record<number, string> = {};
@@ -1207,8 +1228,8 @@ export default function ApprovalDashboard() {
               // Tier 2: without PdfUrl, CurrentLayer
               const tier2 = await (async () => {
                 try {
-                  return await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status&$orderby=Created desc&$top=100`
+                  return await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status,FormStatus,L1_Status&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
@@ -1235,8 +1256,8 @@ export default function ApprovalDashboard() {
               // against them.
               const tier3 = await (async () => {
                 try {
-                  return await spGet(token,
-                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status&$orderby=Created desc&$top=100`
+                  return await spGetAll(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,FormVersion,Status&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
                   ) as { value?: PendingItem[] };
                 } catch { return null; }
               })();
@@ -1253,8 +1274,8 @@ export default function ApprovalDashboard() {
               }
 
               // Tier 4: without Status too (ancient list)
-              const basic = await spGet(token,
-                `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,Author/Name,Created&$expand=Author&$orderby=Created desc&$top=100`
+              const basic = await spGetAll(token,
+                `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,Author/Name,Created&$expand=Author&$orderby=Created desc&$top=${SP_PAGE_SIZE}`
               ) as { value?: Array<{ Id: number; Title?: string; Author?: { Name?: string }; Created?: string }> };
 
               const basicItems = (basic.value || []).map((item) => ({
@@ -1813,7 +1834,12 @@ export default function ApprovalDashboard() {
           ...(firstRecipients.length ? { nextRecipients: firstRecipients } : {}),
           ...(bLayers[0]?.type ? { nextLayerType: bLayers[0].type } : {}),
           ...(bLayers[0]?.type === "evaluation" ? { nextEmailSchedule: bLayers[0].emailSchedule } : {}),
-          reviewLink: `${window.location.origin}/admin/submissions?form=${encodeURIComponent(listName)}&item=${respId}`,
+          responseListTitle: listName,
+          // No reviewLink: the notification resolves the first layer's own
+          // /approval or /eval link from the record it has just written,
+          // including the binding a public layer needs. This used to send the
+          // admin workspace URL, which the reviewer cannot open and which
+          // named the submission by an id they could retype.
         });
       }
 

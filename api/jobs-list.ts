@@ -2,7 +2,7 @@ import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getListColumns, graphFieldEquals, queryListItemById, queryListItems } from "./_utils/graphClient.js";
 import { listCareerPortalCards } from "./_utils/careerPortalCards.js";
 import { readCareerPortalAccess } from "./_utils/careerPortalAccess.js";
-import { resolveSignedInViewer } from "./_utils/viewerIdentity.js";
+import { bearerFromHeaders, resolveSignedInViewer } from "./_utils/viewerIdentity.js";
 import { parseJobCustomFields } from "./_utils/jobListingFields.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -84,13 +84,6 @@ function mapJobItem(item: { id: string; fields: Record<string, unknown> }, colum
   };
 }
 
-function getBearerToken(headers: Record<string, string | string[] | undefined>): string {
-  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === "authorization")?.[1];
-  const authorization = Array.isArray(entry) ? entry[0] || "" : entry || "";
-  if (!authorization.toLowerCase().startsWith("bearer ")) return "";
-  return authorization.slice(7).trim();
-}
-
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -115,7 +108,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // Either kind of signed-in visitor passes: a PMW Microsoft 365 account, or
       // an HR-issued portal account. A closed portal is closed to the public,
       // not to the people HR deliberately let in.
-      const viewer = await resolveSignedInViewer(getBearerToken(req.headers), token);
+      const viewer = await resolveSignedInViewer(bearerFromHeaders(req.headers), token);
       if (!viewer) {
         return res.status(403).json({
           error: "The career portal is currently open to signed-in accounts only.",

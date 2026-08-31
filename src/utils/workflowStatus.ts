@@ -33,6 +33,35 @@ function hasLayerStatusEvidence(status: string | null | undefined): boolean {
   return typeof status === "string" && status.trim().length > 0;
 }
 
+/**
+ * The earliest layer before `targetLayer` that is still outstanding, or null.
+ *
+ * The ordinary guard on acting out of turn is `CurrentLayer`, which says where
+ * the submission has actually got to. Some rows do not carry it: a response
+ * list created before those columns existed makes SharePoint reject the write,
+ * and the submit path drops the field and retries rather than losing the
+ * submission. On such a row a comparison against `CurrentLayer` has nothing to
+ * compare, so it passes — and someone named on both layer 1 and layer 3 could
+ * act on 3 while 2 sat untouched.
+ *
+ * This reads the order back out of the layer statuses instead. A layer with a
+ * status that is present and not finished is standing in the way. A layer with
+ * no status at all is not evidence of anything and is passed over, which is the
+ * same "missing marker means no opinion" rule the rest of the workflow follows
+ * — the alternative would lock the very rows this exists to serve.
+ */
+export function firstUnfinishedEarlierLayer(
+  layers: { layerNumber: number; status: string | null | undefined }[],
+  targetLayer: number,
+): number | null {
+  const blocking = layers
+    .filter((layer) => layer.layerNumber > 0 && layer.layerNumber < targetLayer)
+    .filter((layer) => hasLayerStatusEvidence(layer.status) && !isTerminalLayerStatus(layer.status))
+    .map((layer) => layer.layerNumber)
+    .sort((a, b) => a - b);
+  return blocking.length ? blocking[0] : null;
+}
+
 export function resolveWorkflowDisplayState(args: {
   formStatus?: string | null;
   currentLayer?: number | null;

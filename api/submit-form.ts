@@ -37,6 +37,7 @@ import { verifyTestTicket, testRunFieldsFor, isTestRow, type TestRunRedirect } f
 import type { TestRunStep, TestRunStepStatus } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
+import { resolveApplicantName } from "./_utils/applicantName.js";
 import {
   buildWorkflowActionEmail,
   buildLayerNeedsRoutingEmail,
@@ -1419,6 +1420,7 @@ async function sendManualPaperWorkflowEmail(
     layer: ApiLayerConfigItem;
     totalLayers: number;
     referenceNo: string;
+    applicantName: string;
     testRun?: TestRunRedirect;
   },
 ): Promise<void> {
@@ -1435,6 +1437,7 @@ async function sendManualPaperWorkflowEmail(
       layerTitle: params.layer.title,
       surveyElements: params.layer.surveyElements,
       referenceNo: params.referenceNo,
+      applicantName: params.applicantName,
     }),
     {
       listTitle: params.listTitle,
@@ -1978,6 +1981,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const formSlug = valueToText(formConfig.Slug);
         try {
           const submittedBy = valueToText(submissionBody.SubmittedBy) || "Public respondent";
+          // Whose request this is, per the form's own name field — the subject
+          // line names the applicant, not the mailbox that pressed submit.
+          const applicantName = resolveApplicantName(submissionBody);
           const totalLayers = parsedLayerConfig?.layers?.length ?? 1;
           if (isNeedsRoutingLayerStatus(submissionBody[`L${firstLayer.layerNumber}_Status`])) {
             // Parked: there is nobody to action it, so the notice says so
@@ -1994,6 +2000,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 layerType: firstLayer.type,
                 reason: routingReasonForLayer(submissionBody, firstLayer.layerNumber),
                 referenceNo,
+                applicantName,
               }),
               { listTitle, responseItemId: parentId, layer: firstLayer.layerNumber, testRun: testRedirect },
               undefined,
@@ -2014,6 +2021,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               layer: firstLayer,
               totalLayers,
               referenceNo,
+              applicantName,
               testRun: testRedirect,
             });
           } else {
@@ -2039,6 +2047,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 layerType: firstLayer.type,
                 reviewLink,
                 referenceNo,
+                applicantName,
               }),
               {
                 listTitle,

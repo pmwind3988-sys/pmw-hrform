@@ -45,3 +45,36 @@ export async function resolveSignedInViewer(
   const signedInEmail = await resolveTenantIdentity(bearer);
   return signedInEmail ? { kind: "m365", id: signedInEmail, displayName: "" } : null;
 }
+
+/**
+ * The bearer token from a request's `Authorization` header, or "".
+ *
+ * Header names are case-insensitive on the wire and the runtime may hand back
+ * either a string or an array, so neither can be assumed. Two endpoints grew
+ * their own copy of this with subtly different rules; this is the one both now
+ * use, so a caller cannot be recognised on one endpoint and not another.
+ */
+export function bearerFromHeaders(headers: Record<string, string | string[] | undefined>): string {
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === "authorization")?.[1];
+  const value = (Array.isArray(entry) ? entry[0] : entry) || "";
+  if (!/^Bearer\s+/i.test(value)) return "";
+  return value.replace(/^Bearer\s+/i, "").trim();
+}
+
+/**
+ * Who is calling, straight from the request — or null if that cannot be proved.
+ *
+ * The API key alone answers "does the caller have the bundle", which every
+ * browser that has loaded the site does. This answers "who is the caller",
+ * which is the question any endpoint returning one person's data has to ask.
+ * Verified against the identity provider rather than taken from the request, so
+ * it cannot be asserted by whoever is making the call.
+ */
+export async function requireSignedInViewer(
+  headers: Record<string, string | string[] | undefined>,
+  graphToken: string,
+): Promise<SignedInViewer | null> {
+  const bearer = bearerFromHeaders(headers);
+  if (!bearer) return null;
+  return resolveSignedInViewer(bearer, graphToken);
+}

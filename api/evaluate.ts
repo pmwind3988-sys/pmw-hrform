@@ -1,6 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormBySlug, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
+import { resolveApplicantName } from "./_utils/applicantName.js";
 import {
   buildWorkflowActionEmail,
   buildLayerNeedsRoutingEmail,
@@ -9,9 +10,9 @@ import {
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
-import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
+import { buildWorkflowReviewLink, routePrefixAllowsLayerType } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { joinEmailList, parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
+import { isLayerActor, joinEmailList, parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
 import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
@@ -21,10 +22,13 @@ import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLo
 import { expandDistributionList } from "./_utils/groupMembers.js";
 import {
   denyLayerItemAccess,
+  firstUnfinishedEarlierLayer,
 } from "./_utils/layerItemAccess.js";
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
+import { readMatrixTables, sortMatrixRows } from "./_utils/matrixChildData.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
+import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
 import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
 
@@ -42,6 +46,31 @@ const LINK_MISMATCH_MESSAGE = "This review link does not open this submission.";
 const LINK_EXPIRED_MESSAGE = "This review link has expired.";
 
 /** Query values arrive as string | string[] depending on the runtime. */
+/**
+ * The layer a signed-in reviewer is asking for, honouring the branch the
+ * submission was routed down.
+ *
+ * A public link names its layer with the token, so the public path never needs
+ * this. A signed-in link carries the layer *number*, which on a branched form
+ * can describe a different step per branch — so the number alone is not enough.
+ */
+export function pickLayerByNumber(
+  config: { layers?: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null,
+  selectedBranch: string,
+  layerNumber: number,
+): Record<string, unknown> | null {
+  if (!config || !layerNumber) return null;
+  const branchKey = selectedBranch.trim().toLowerCase();
+  if (branchKey && config.manualBranches?.length) {
+    const branch = config.manualBranches.find((entry) =>
+      [entry.name, entry.label].some((candidate) =>
+        typeof candidate === "string" && candidate.trim().toLowerCase() === branchKey));
+    const onBranch = branch?.layers?.find((layer) => Number(layer.layerNumber) === layerNumber);
+    if (onBranch) return onBranch;
+  }
+  return (config.layers ?? []).find((layer) => Number(layer.layerNumber) === layerNumber) ?? null;
+}
+
 function firstQueryValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0].trim() : "";
   return typeof value === "string" ? value.trim() : "";
@@ -375,19 +404,56 @@ async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, 
 
 async function handleGet(req: ApiRequest, res: ApiResponse) {
   const { token } = req.query as { token?: string };
-  if (!token || typeof token !== "string") {
+  // A signed-in caller identifies the request by slug, item and layer and
+  // never carries a public layer token, so this guard must not stand in
+  // front of that shape. It did, and every signed-in review link was turned
+  // away with "Missing token query parameter" before reaching the branch
+  // that handles it.
+  if (!firstQueryValue(req.query.slug) && (!token || typeof token !== "string")) {
     return res.status(400).json({ error: "Missing token query parameter" });
   }
 
   try {
     const graphToken = await getGraphToken();
 
-    // Find the token in all Master Form items
-    const masterItems = await queryListItems(graphToken, "Master Form", { top: 500 });
     let foundToken: Record<string, unknown> | null = null;
     let foundFormTitle = "";
     let foundLayerNumber = 0;
     let layerConfig: { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null = null;
+
+    /**
+     * The signed-in shape of this request: `?slug=&responseItemId=&layerNumber=`
+     * with a bearer naming the caller, rather than a public layer token.
+     *
+     * It exists so the reviewer page can stop reading SharePoint from the
+     * browser. Everything below the resolution is deliberately shared with the
+     * public path — the same access gate, the same field filtering — because
+     * two copies of "what may this person see" is how they drift apart.
+     */
+    const slug = firstQueryValue(req.query.slug);
+    const signedInMode = !!slug;
+    let viewerEmail = "";
+    if (signedInMode) {
+      const viewer = await requireSignedInViewer(req.headers, graphToken);
+      // Portal accounts never review workflow steps; only staff do.
+      if (viewer?.kind !== "m365") {
+        return res.status(401).json({ error: "Sign in with your work account to open this request." });
+      }
+      viewerEmail = viewer.id;
+
+      const form = await queryMasterFormBySlug(graphToken, slug);
+      if (!form) return res.status(404).json({ error: "This form no longer exists." });
+      foundFormTitle = String(form.fields.Title || "");
+      foundLayerNumber = Number(firstQueryValue(req.query.layerNumber) || 0);
+      try {
+        layerConfig = JSON.parse(String(form.fields.LayerConfig || "")) as typeof layerConfig;
+      } catch { layerConfig = null; }
+      // Corrected below against the submission's own branch, once it is read.
+      foundToken = pickLayerByNumber(layerConfig, "", foundLayerNumber);
+    }
+
+    // Find the token in all Master Form items
+    const masterItems = signedInMode ? [] : await queryListItems(graphToken, "Master Form", { top: 500 });
 
     for (const form of masterItems) {
       const rawLayerConfig = form.fields.LayerConfig as string | undefined;
@@ -411,7 +477,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       if (foundToken) break;
     }
 
-    if (!foundToken) {
+    if (!foundToken && !signedInMode) {
       const versionItems = await queryListItems(graphToken, "Web Form Versions", { top: 500 });
       for (const versionItem of versionItems) {
         const parsedVersion = parseVersionPayload(versionItem.fields.SurveyJSON);
@@ -443,8 +509,34 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     const responseItemId = req.query.responseItemId ? Number(req.query.responseItemId) : undefined;
     if (!responseItemId) return res.status(400).json({ error: "Missing responseItemId query parameter" });
 
-    const responseListName = `${foundFormTitle} Responses`;
-    const responseItem = await queryListItemById(graphToken, responseListName, String(responseItemId));
+    /**
+     * Where this form's answers actually live.
+     *
+     * Two naming conventions exist. The signed-in reviewer page has always
+     * addressed the list by the form's own title, and every form it opens is
+     * named that way; this endpoint's public path has always appended
+     * " Responses". Both are real, so neither can simply be imposed on the
+     * other — asking for the wrong one throws "List not found", which is how
+     * every signed-in review link broke the moment it started coming here.
+     *
+     * Each path tries the name it is known to use first, then the other. A
+     * missing *row* does not throw, so falling through means the list itself
+     * was wrong, not the id.
+     */
+    const listNameCandidates = signedInMode
+      ? [foundFormTitle, `${foundFormTitle} Responses`]
+      : [`${foundFormTitle} Responses`, foundFormTitle];
+    let responseListName = listNameCandidates[0];
+    let responseItem: Awaited<ReturnType<typeof queryListItemById>> = null;
+    for (const candidate of listNameCandidates) {
+      try {
+        responseItem = await queryListItemById(graphToken, candidate, String(responseItemId));
+        responseListName = candidate;
+        break;
+      } catch {
+        // Not this list; try the other spelling before giving up.
+      }
+    }
     // A missing record is not answered yet: an old link has to be told the same
     // thing whether or not the id it carried was real.
     const allFields = responseItem?.fields || {};
@@ -461,7 +553,15 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           ...(responseLayerConfig.layers ?? []),
           ...((responseLayerConfig.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
         ];
-        const responseToken = responseLayers.find((layer) => layer.publicToken === token);
+        const responseToken = signedInMode
+          // The branch is only knowable now, with the submission in hand — and
+          // on a branched form it decides which step this number describes.
+          ? pickLayerByNumber(
+              { layers: responseLayerConfig.layers, manualBranches: responseLayerConfig.manualBranches },
+              String(allFields.SelectedBranch || ""),
+              foundLayerNumber,
+            )
+          : responseLayers.find((layer) => layer.publicToken === token);
         if (responseToken) {
           foundToken = responseToken;
           foundLayerNumber = responseToken.layerNumber as number;
@@ -480,7 +580,37 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     // the clicker nothing — the id they arrived with is the untrusted part, so it
     // decides only who is written to. Same reply either way; see _utils/linkReissue.ts.
     const linkToken = firstQueryValue(req.query.k);
-    if (!linkToken) {
+
+    // What binds a signed-in link to its record is not a token in the URL but
+    // the assignment on the row: the address bar carries the form, the item and
+    // the layer, and a reviewer can edit all three. Settled here, on the
+    // server, before a single field is filtered — which is the whole point of
+    // this path existing.
+    if (signedInMode) {
+      // A public layer is reached by its own emailed link, whose binding is
+      // checked above. Accepting the signed-in shape for one would be a way
+      // round that check.
+      if (String(foundToken.authMode || "") === "public") {
+        return res.status(403).json({ error: "Open this request from the link that was emailed to its reviewer." });
+      }
+      // Which shape the address used. Self-reported, and that is fine: lying
+      // about it only forgoes this barrier, and the assignment check below is
+      // untouched by it.
+      if (!routePrefixAllowsLayerType(firstQueryValue(req.query.prefix), String(foundToken.type || ""), allFields.Created)) {
+        return res.status(403).json({ error: "This link does not match the step it points at. Please use the link that was emailed to you." });
+      }
+      if (!isLayerActor(viewerEmail, allFields[`L${foundLayerNumber}_Emails`], allFields[`L${foundLayerNumber}_Email`])) {
+        logWarn("api:evaluate:get", "Refused a signed-in reviewer a step they are not assigned", {
+          layerNumber: foundLayerNumber,
+          responseItemId,
+        });
+        // Same wording whether the row exists, is someone else's, or is not
+        // theirs at this layer, so the id cannot be probed for which is which.
+        return res.status(403).json({ error: "This request is waiting for someone else." });
+      }
+    }
+
+    if (!linkToken && !signedInMode) {
       if (responseItem) {
         await reissueReviewLink({
           graphToken,
@@ -505,8 +635,11 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       : denyLayerItemAccess({
         layerNumber: foundLayerNumber,
         intent: "read",
-        linkToken,
-        storedLinkToken: readLinkToken(allFields, foundLayerNumber),
+        // A sign-in layer never had a link binding minted, and offering one
+        // side of a pair without the other reads as a mismatch. The assignment
+        // check above is what binds this path.
+        linkToken: signedInMode ? undefined : linkToken,
+        storedLinkToken: signedInMode ? undefined : readLinkToken(allFields, foundLayerNumber),
         layer: foundToken,
         fields: allFields,
         currentLayer: allFields.CurrentLayer || allFields.CurrentApprovalLayer,
@@ -605,12 +738,30 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     }
     const mediaSrcByField = await buildMediaSrcByField(surveyJson, visibleFields);
 
+    // The repeating-table answers, for the signed-in path only. The public
+    // reviewer page has never shown them, and starting now would be a change
+    // to what a public link discloses rather than to where it is read.
+    const matrixTables = signedInMode
+      ? await readMatrixTables(foundFormTitle, responseItemId, surveyJson, async (listTitle, parentId) => {
+          const rows = await queryListItems(graphToken, listTitle, {
+            filter: `fields/ParentResponseId eq ${parentId}`,
+            preferNonIndexed: true,
+            top: 500,
+          });
+          return sortMatrixRows(rows.map((row) => row.fields ?? {}));
+        })
+      : {};
+
     return res.status(200).json({
       success: true,
       data: {
         formTitle: foundFormTitle,
         layerNumber: foundLayerNumber,
         totalLayers: activeLayers.length || 0,
+        // Which branch this submission took. A signed-in caller needs it to
+        // read the same layer sequence out of the form config that the
+        // server just used, rather than guessing at the top-level layers.
+        selectedBranch: typeof allFields.SelectedBranch === "string" ? allFields.SelectedBranch : "",
         layerType: foundToken.type || "approval",
         layerTitle: foundToken.title || "",
         layerDescription: foundToken.description || "",
@@ -623,6 +774,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         surveyJson,
         logoUrl: typeof versionMeta.logoUrl === "string" ? versionMeta.logoUrl : "",
         mediaSrcByField,
+        matrixTables,
         fields: visibleFields,
       },
     });
@@ -644,7 +796,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { token, layerNumber, formTitle, responseItemId, fields, action, signature, rejection, linkToken } = req.body;
+  const { token, layerNumber, formTitle: bodyFormTitle, responseItemId, fields, action, signature, rejection, linkToken, slug, prefix, confirmerName } = req.body;
+  /**
+   * The signed-in shape of this request: the form's slug plus the caller's own
+   * identity, in place of a public layer token.
+   *
+   * It exists so a reviewer's browser stops writing to SharePoint itself. The
+   * decision, the advance to the next layer and that layer's email are all
+   * recorded here — where the rules about who may act are not editable from the
+   * address bar. Everything below the resolution is deliberately shared with the
+   * public path, for the same reason the read path shares it: two copies of
+   * "who may act on this" is how they drift apart.
+   */
+  const signedInSlug = typeof slug === "string" ? slug.trim() : "";
+  const signedInMode = !!signedInSlug;
   // The page was opened with `k` in its URL and hands it back here, so acting
   // is held to the same binding as looking. A post without one came from a page
   // loaded before links were bound; it is refused rather than trusted.
@@ -653,11 +818,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!safeResponseItemId) return res.status(400).json({ error: "Invalid responseItemId" });
 
   // Validate required fields
-  if (!token || typeof token !== "string") {
-    return res.status(400).json({ error: "Missing or invalid public token" });
-  }
-  if (!formTitle || typeof formTitle !== "string") {
-    return res.status(400).json({ error: "Missing or invalid formTitle" });
+  if (!signedInMode) {
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ error: "Missing or invalid public token" });
+    }
+    if (!bodyFormTitle || typeof bodyFormTitle !== "string") {
+      return res.status(400).json({ error: "Missing or invalid formTitle" });
+    }
   }
   if (!layerNumber || typeof layerNumber !== "number") {
     return res.status(400).json({ error: "Missing or invalid layerNumber" });
@@ -665,26 +832,63 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (typeof action !== "string" || !["approve", "reject", "confirm"].includes(action)) {
     return res.status(400).json({ error: "action must be 'approve', 'reject', or 'confirm'" });
   }
+  // Named after the form the server resolved, not after whatever the caller
+  // said it was: on the signed-in path the body carries no title at all.
+  let formTitle = typeof bodyFormTitle === "string" ? bodyFormTitle : "";
 
   try {
     const graphToken = await getGraphToken();
 
-    // 1. Load Master Form to find the layer config + validate token
-    const formConfig = (await queryMasterFormByTitle(graphToken, formTitle))?.fields;
+    // 1. Load the form this decision belongs to — and, on the signed-in path,
+    // establish who is asking before a single field is read or written.
+    let viewerEmail = "";
+    let formConfig: Record<string, unknown> | undefined;
+    if (signedInMode) {
+      const viewer = await requireSignedInViewer(req.headers, graphToken);
+      // Portal accounts never review workflow steps; only staff do.
+      if (viewer?.kind !== "m365") {
+        return res.status(401).json({ error: "Sign in with your work account to record this decision." });
+      }
+      viewerEmail = viewer.id;
+      const form = await queryMasterFormBySlug(graphToken, signedInSlug);
+      if (!form) return res.status(404).json({ error: "This form no longer exists." });
+      formConfig = form.fields;
+      formTitle = String(form.fields.Title || "");
+    } else {
+      formConfig = (await queryMasterFormByTitle(graphToken, formTitle))?.fields;
+    }
     if (!formConfig) return res.status(404).json({ error: "Form not found" });
 
     // 2. Fetch the response item using Graph API before resolving the workflow
     // config, because same-version profiles can have different layers.
-    const responseListName = `${formTitle} Responses`;
-    const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
+    //
+    // Two naming conventions exist for a form's answers — the form's own title,
+    // and that title with " Responses" appended. Each path tries the spelling it
+    // is known to use first. See handleGet: assuming one of them is what broke
+    // every signed-in review link.
+    const listNameCandidates = signedInMode
+      ? [formTitle, `${formTitle} Responses`]
+      : [`${formTitle} Responses`, formTitle];
+    let responseListName = listNameCandidates[0];
+    let responseItem: Awaited<ReturnType<typeof queryListItemById>> = null;
+    for (const candidate of listNameCandidates) {
+      try {
+        responseItem = await queryListItemById(graphToken, candidate, String(safeResponseItemId));
+        responseListName = candidate;
+        break;
+      } catch {
+        // Not this list; try the other spelling before giving up.
+      }
+    }
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
+    const itemFields = responseItem.fields;
     // A ticket signed at submit time expires in hours; a run can sit at a later
     // layer for days or months. The redirect is therefore recovered off the
     // stored row, never off the request.
-    const testRun = readTestRunRedirect(responseItem.fields);
+    const testRun = readTestRunRedirect(itemFields);
     const trailDeps: TestRunStepDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
-    const itemFormVersion = String(responseItem.fields.FormVersion || formConfig.CurrentVersion || "1.0");
-    const itemPublishKey = String(responseItem.fields.PublishKey || formConfig.CurrentPublishKey || "");
+    const itemFormVersion = String(itemFields.FormVersion || formConfig.CurrentVersion || "1.0");
+    const itemPublishKey = String(itemFields.PublishKey || formConfig.CurrentPublishKey || "");
     const versionRow = itemFormVersion
       ? (await queryWebFormVersion(graphToken, formTitle, itemFormVersion, itemPublishKey || undefined))?.fields
       : null;
@@ -700,13 +904,75 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     if (!layerConfigParsed?.layers) return res.status(400).json({ error: "Form has no layer config" });
 
-    // Find the layer by number
+    // Which branch this submission took. Settled before the layer is chosen,
+    // because on a branched form the same layer number describes a different
+    // step per branch.
+    const selectedBranch = typeof itemFields.SelectedBranch === "string" ? itemFields.SelectedBranch.trim().toLowerCase() : "";
+    const activeLayers = (() => {
+      if (selectedBranch && layerConfigParsed?.manualBranches?.length) {
+        const branch = layerConfigParsed.manualBranches.find((b) =>
+          [b.name, b.label].some((candidate) => typeof candidate === "string" && candidate.trim().toLowerCase() === selectedBranch)
+        );
+        if (branch?.layers?.length) return branch.layers;
+      }
+      return layerConfigParsed?.layers ?? [];
+    })();
+
+    // Find the layer this decision is for. A public link names it with its own
+    // token; a signed-in one carries only the number, so the branch decides.
     const searchableLayers = [
       ...(layerConfigParsed.layers ?? []),
       ...((layerConfigParsed.manualBranches ?? []).flatMap((branch) => branch.layers ?? [])),
     ];
-    const layer = searchableLayers.find((l) => l.layerNumber === layerNumber && l.publicToken === token) as Record<string, unknown> | undefined;
+    const layer = (signedInMode
+      ? pickLayerByNumber(layerConfigParsed, selectedBranch, layerNumber) ?? undefined
+      : searchableLayers.find((l) => l.layerNumber === layerNumber && l.publicToken === token)) as Record<string, unknown> | undefined;
     if (!layer) return res.status(404).json({ error: `Layer ${layerNumber} not found in config` });
+
+    // What binds a signed-in decision to this record is not a token in the URL
+    // but the assignment written on the row. The address bar carries the form,
+    // the submission id and the layer number, and the reviewer can edit all
+    // three — so all three are settled here, against the record, at the moment
+    // of writing. Same rules as the read path, in the same order.
+    if (signedInMode) {
+      // A public layer is reached by its own emailed link, whose binding is
+      // checked below. Accepting the signed-in shape for one would be a way
+      // round that check.
+      if (String(layer.authMode || "") === "public") {
+        return res.status(403).json({ error: "Open this request from the link that was emailed to its reviewer." });
+      }
+      if (!routePrefixAllowsLayerType(typeof prefix === "string" ? prefix : "", String(layer.type || ""), itemFields.Created)) {
+        return res.status(403).json({ error: "This link does not match the step it points at. Please use the link that was emailed to you." });
+      }
+      if (!isLayerActor(viewerEmail, itemFields[`L${layerNumber}_Emails`], itemFields[`L${layerNumber}_Email`])) {
+        logWarn("api:evaluate", "Refused a signed-in decision on a step the caller is not assigned", {
+          layerNumber,
+          responseItemId: safeResponseItemId,
+        });
+        // Same wording whether the row exists, is someone else's, or is not
+        // theirs at this layer, so the id cannot be probed for which is which.
+        return res.status(403).json({ error: "This request is waiting for someone else." });
+      }
+      // Rows written before `CurrentLayer` existed cannot say where they have
+      // got to, and the check below then has nothing to compare. Without this,
+      // editing the layer number is a way past every earlier step on exactly
+      // those rows. See firstUnfinishedEarlierLayer.
+      if (!Number(itemFields.CurrentLayer || itemFields.CurrentApprovalLayer || 0)) {
+        const sequence = (activeLayers.length
+          ? activeLayers.map((entry) => Number(entry.layerNumber))
+          // The layer config did not describe a sequence; fall back to whichever
+          // layers the row itself carries a status for.
+          : Object.keys(itemFields).map((key) => Number(/^L(\d+)_Status$/.exec(key)?.[1] ?? 0))
+        ).filter((n) => n > 0);
+        const blockedBy = firstUnfinishedEarlierLayer(
+          sequence.map((n) => ({ layerNumber: n, status: itemFields[`L${n}_Status`] })),
+          layerNumber,
+        );
+        if (blockedBy !== null) {
+          return res.status(409).json({ error: `Layer ${blockedBy} has not been completed yet, so this step cannot be submitted.` });
+        }
+      }
+    }
 
     // Expiry may be read from the submission's own answers rather than the
     // layer, so it is settled by denyLayerItemAccess below with the record in hand.
@@ -716,13 +982,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const actDenial = denyLayerItemAccess({
       layerNumber,
       intent: "act",
-      linkToken: suppliedLinkToken,
-      storedLinkToken: readLinkToken(responseItem.fields, layerNumber),
+      // A sign-in layer never had a link binding minted, and offering one side
+      // of a pair without the other reads as a mismatch. The assignment check
+      // above is what binds this path.
+      linkToken: signedInMode ? undefined : suppliedLinkToken,
+      storedLinkToken: signedInMode ? undefined : readLinkToken(itemFields, layerNumber),
       layer,
-      fields: responseItem.fields,
-      currentLayer: responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer,
-      layerStatus: responseItem.fields[`L${layerNumber}_Status`],
-      formStatus: responseItem.fields.FormStatus || responseItem.fields.Status,
+      fields: itemFields,
+      currentLayer: itemFields.CurrentLayer || itemFields.CurrentApprovalLayer,
+      layerStatus: itemFields[`L${layerNumber}_Status`],
+      formStatus: itemFields.FormStatus || itemFields.Status,
     });
     if (actDenial === "link-mismatch") {
       logWarn("api:evaluate", "Refused an action from a link that does not cover this submission", {
@@ -743,17 +1012,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(409).json({ error: "This evaluation link is no longer active for the current workflow layer." });
     }
 
-    const selectedBranch = typeof responseItem.fields.SelectedBranch === "string" ? responseItem.fields.SelectedBranch.trim().toLowerCase() : "";
-    const activeLayers = (() => {
-      if (selectedBranch && layerConfigParsed?.manualBranches?.length) {
-        const branch = layerConfigParsed.manualBranches.find((b) =>
-          [b.name, b.label].some((candidate) => typeof candidate === "string" && candidate.trim().toLowerCase() === selectedBranch)
-        );
-        if (branch?.layers?.length) return branch.layers;
-      }
-      return layerConfigParsed?.layers ?? [];
-    })();
-
     // 3. Build update payload based on action
     const updates: Record<string, unknown> = {};
     let notificationNextLayer: Record<string, unknown> | undefined;
@@ -766,16 +1024,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       updates[`L${layerNumber}_SignedAt`] = now;
       if (signature) updates[`L${layerNumber}_Signature`] = signature;
 
-      // Record who acted, so a later layer can route from them. The public
-      // token identifies a layer, not a person, so this is only knowable when
-      // the layer had exactly one possible actor. With several sharing a layer
-      // we cannot tell which of them clicked, and guessing would put a name
-      // against a decision they may not have made — leave it blank instead.
-      const layerActors = parseValidEmailList(
-        responseItem.fields[`L${layerNumber}_Emails`] || responseItem.fields[`L${layerNumber}_Email`],
-      );
-      if (layerActors.length === 1 && !responseItem.fields[`L${layerNumber}_ActedBy`]) {
-        actedByEmail = layerActors[0];
+      // Record who acted, so a later layer can route from them.
+      //
+      // A signed-in caller has already been proved to be who they say, so the
+      // decision is recorded against them. A public token identifies a layer,
+      // not a person, so there it is only knowable when the layer had exactly
+      // one possible actor: with several sharing a layer we cannot tell which
+      // of them clicked, and guessing would put a name against a decision they
+      // may not have made — leave it blank instead.
+      if (signedInMode) {
+        actedByEmail = viewerEmail;
+      } else {
+        const layerActors = parseValidEmailList(
+          itemFields[`L${layerNumber}_Emails`] || itemFields[`L${layerNumber}_Email`],
+        );
+        if (layerActors.length === 1 && !itemFields[`L${layerNumber}_ActedBy`]) {
+          actedByEmail = layerActors[0];
+        }
       }
 
       // For evaluation layers: also write to EvaluationData JSON
@@ -786,8 +1051,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           try { evalData = JSON.parse(responseItem.fields.EvaluationData as string); } catch { /* invalid JSON, start fresh */ }
         }
         evalData[String(layerNumber)] = {
-          confirmerEmail: "SYSTEM",
-          confirmerName: null,
+          // "SYSTEM" on the public path, where nobody signed in to be named.
+          confirmerEmail: signedInMode ? viewerEmail : "SYSTEM",
+          confirmerName: signedInMode && typeof confirmerName === "string" && confirmerName.trim()
+            ? confirmerName.trim()
+            : null,
           confirmedAt: now,
           status: "confirmed",
           fields: fields,
@@ -805,6 +1073,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         updates.CurrentLayer = nextLayer.layerNumber;
         updates.CurrentApprovalLayer = nextLayer.layerNumber;
         updates.FormStatus = "In Review";
+        // `Status` is the older, wordier column the submissions workspace still
+        // reads. The reviewer page has always written it on the signed-in path,
+        // so it keeps being written here — moving where the write happens must
+        // not change what an admin sees afterwards. Public layers never wrote it.
+        if (signedInMode) updates.Status = action === "approve" ? `Approved Layer ${layerNumber}` : "In Review";
         // The link the next reviewer is about to be emailed is bound to this
         // submission, so its binding is written in the same breath as the
         // advance — the record can never be waiting at a public layer that has
@@ -817,6 +1090,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         updates.FormStatus = "Completed";
         updates.CurrentLayer = layerNumber;
         updates.CurrentApprovalLayer = layerNumber;
+        if (signedInMode) updates.Status = action === "approve" ? "Approved" : "Completed";
       }
     } else if (action === "reject") {
       updates[`L${layerNumber}_Status`] = "Rejected";
@@ -834,7 +1108,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     // 4. Update the response item
-    await updateListItemFields(graphToken, responseListName, responseItem.id, updates);
+    //
+    // SharePoint fails an entire PATCH over one column the list does not have,
+    // and response lists provisioned at different times do not all carry the
+    // same ones. The decision itself, the answers and the advance must land; a
+    // signature image, a rejection note and the older wordy `Status` column are
+    // worth dropping to keep them. Dropping the decision would be worse than
+    // failing, so those are never in the second attempt's firing line.
+    const droppableFields = [`L${layerNumber}_Signature`, `L${layerNumber}_Rejection`, "Status"];
+    try {
+      await updateListItemFields(graphToken, responseListName, responseItem.id, updates);
+    } catch (error) {
+      const essential = Object.fromEntries(
+        Object.entries(updates).filter(([key]) => !droppableFields.includes(key)),
+      );
+      if (Object.keys(essential).length === Object.keys(updates).length) throw error;
+      logWarn("api:evaluate", "Recording the decision failed; retrying without the optional columns", {
+        formTitle,
+        layerNumber,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      await updateListItemFields(graphToken, responseListName, responseItem.id, essential);
+    }
 
     // Patched on its own, after the decision is safely recorded. `L{n}_ActedBy`
     // is absent from response lists provisioned before multi-actor layers, and
@@ -929,6 +1224,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const totalLayerCount = activeLayers.length;
           const submittedBy = String(responseItem.fields.SubmittedBy || "Public respondent");
           const referenceNo = String(responseItem.fields[REFERENCE_NO_FIELD] || "");
+          // The subject names whoever the form says the request is about, so a
+          // reviewer can tell two waiting requests apart from the inbox list.
+          const applicantName = resolveApplicantName(responseItem.fields);
           const nextStatus = responseItem.fields[`L${nextLayerNumber}_Status`];
           const manualPaper = isManualPaperLayerStatus(nextStatus);
           await scheduleOrDeliverWorkflowEmail(
@@ -946,6 +1244,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   layerType,
                   reason: routingReasonForLayer(responseItem.fields, nextLayerNumber),
                   referenceNo,
+                  applicantName,
                 })
               : manualPaper
               ? buildManualPaperWorkflowEmail({
@@ -959,6 +1258,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   layerTitle: typeof notificationNextLayer.title === "string" ? notificationNextLayer.title : undefined,
                   surveyElements: layerSurveyElements(notificationNextLayer),
                   referenceNo,
+                  applicantName,
                 })
               : buildWorkflowActionEmail({
                   formTitle,
@@ -970,6 +1270,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   layerType,
                   reviewLink,
                   referenceNo,
+                  applicantName,
                 }),
             {
               listTitle: responseListName,
@@ -999,7 +1300,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    return res.status(200).json({ success: true });
+    // The outcome, so the page does not have to work it out again. Whether
+    // this was the last step decides the PDF and the closing note to whoever
+    // submitted, both of which still happen in the browser.
+    return res.status(200).json({
+      success: true,
+      formStatus: String(updates.FormStatus || ""),
+      advancedToLayer: notificationNextLayer ? Number(notificationNextLayer.layerNumber) : null,
+    });
   } catch (err) {
     logError("api:evaluate", "Failed to submit public evaluation action", err);
     return res.status(500).json({ error: "Internal server error. Please try again." });

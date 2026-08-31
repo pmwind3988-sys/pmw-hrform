@@ -435,16 +435,50 @@ export default function NativeFormView({
   }, [sections, runtime]);
 
   // Move focus to the first thing that failed, rather than leaving the person
-  // to hunt for a red border somewhere below the fold. Keyed on the error set,
-  // not on every keystroke that clears one.
-  const errorKey = Object.keys(runtime.errors).join("|");
+  // to hunt for a red border somewhere below the fold. Keyed on the runtime's
+  // rejection counter, so pressing Submit again on the same unanswered question
+  // walks the respondent back to it instead of appearing to do nothing.
+  const { firstError, errorSignal } = runtime;
+
+  // Which page each question lives on, so a failure on a page the respondent
+  // has already left can be reached rather than silently ignored.
+  const pageOfName = useMemo(() => {
+    const map = new Map<string, number>();
+    const walk = (elements: NativeElement[], index: number) => {
+      for (const el of elements) {
+        if (el.kind === "section") walk(el.elements, index);
+        else if (el.name) map.set(el.name, index);
+      }
+    };
+    form.pages.forEach((p, i) => walk(p.elements, i));
+    return map;
+  }, [form]);
+
   useEffect(() => {
-    const first = errorKey.split("|")[0];
-    if (!first) return;
-    const node = document.getElementById(`field-${first}`);
-    node?.scrollIntoView({ behavior: "smooth", block: "center" });
-    node?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
-  }, [errorKey]);
+    if (!firstError) return;
+    const target = pageOfName.get(firstError);
+    if (target !== undefined && target !== pageIndex) {
+      // Turn to the page that holds it first; this effect runs again once that
+      // page is on screen and the field exists to be focused.
+      runtime.goToPage(target);
+      return;
+    }
+    const node = document.getElementById(`field-${firstError}`);
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Prefer a control the respondent can actually type in; fall back to the
+    // field block itself so screen readers still announce what went wrong.
+    const control = node.querySelector<HTMLElement>(
+      "input:not([type='hidden']):not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable='true'], button:not([disabled])",
+    );
+    if (control) {
+      control.focus({ preventScroll: true });
+      return;
+    }
+    node.setAttribute("tabindex", "-1");
+    node.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstError, errorSignal, pageIndex, pageOfName]);
 
   const complete = runtime.required > 0 && runtime.answered >= runtime.required;
 

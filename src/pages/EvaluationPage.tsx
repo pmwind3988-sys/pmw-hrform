@@ -3,7 +3,7 @@
  * Route: /eval/:token (public) or /eval/:formSlug/:responseId/:layerNumber (365)
  */
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import NativeFormView from "../native/NativeForm";
@@ -11,10 +11,9 @@ import { parseForm, type NativeForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
-import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
+import { getFormConfigByTitle, spGet, triggerApprovalNotification } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
-import { SP_LAYER_STATUS, normalizeLayerStatus } from "../utils/statusConstants";
-import { buildRejectedWorkflowPatch } from "../utils/workflowStatus";
+import { normalizeLayerStatus } from "../utils/statusConstants";
 import { buildSurveyJson } from "../utils/FormBuilderEngine";
 import type { LayerConfigItem, EvaluationDataEntry, EvaluationLayerConfig, FormBuilderField } from "../types";
 import DOMPurify from "dompurify";
@@ -22,7 +21,7 @@ import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
-import { rowsToHtml, getDynamicMatrixFields } from "../utils/matrixData";
+import { rowsToHtml } from "../utils/matrixData";
 import { SignatureCapture } from "../utils/signatureCapture";
 import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
@@ -31,7 +30,10 @@ import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
-import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
+import { parseLayerConfig } from "../utils/workflowReviewLink";
+import { getActiveLayers } from "../components/builder/approvalDashboardLayerProgress";
+import { apiIdentityHeaders } from "../utils/apiIdentity";
+import { approverDisplayName } from "../utils/approverIdentity";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -358,9 +360,19 @@ export default function EvaluationPage() {
 
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
+  /** The reject dialog is opened by the Reject button and closed only by Cancel. */
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [checkboxApproved, setCheckboxApproved] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
+
+  /**
+   * Which of the two link shapes was opened. Both mount this page, so the
+   * prefix is not routing — it is a claim about what the recipient was asked
+   * for, checked against the layer once the record says what it really is.
+   */
+  const { pathname } = useLocation();
+  const routePrefix = pathname.startsWith("/approval/") ? "approval" as const : "eval" as const;
 
   const isPublic = !!routeToken;
   const displayLayerNumber = isPublic
@@ -415,6 +427,12 @@ export default function EvaluationPage() {
           );
           const json = await res.json();
           if (!json.success) { setError(json.error || "Failed to load data."); setLoading(false); return; }
+
+          // No prefix check here, deliberately. A public link names its layer
+          // with the token itself, so there is no layer number to edit onto a
+          // step of the other kind — the thing the prefix check exists to
+          // catch cannot happen on this path. Applying it anyway would only
+          // give pre-split public approval links a way to stop working.
 
           setFormTitle(json.data.formTitle);
           setResponseData(json.data.fields);
@@ -486,34 +504,67 @@ export default function EvaluationPage() {
         if (!resolvedTitle) { setError("the form this request belongs to no longer exists"); setLoading(false); return; }
         setFormTitle(resolvedTitle);
 
-        const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
-        if (!data) { setError("the details for this request could not be loaded"); setLoading(false); return; }
-        // A layer can be assigned to several people (or an expanded distribution
-        // list) — any one of them may act. L{n}_Emails carries the full set;
-        // older submissions only have the single L{n}_Email.
-        const signedInEmail = (userEmail || "").trim();
-        if (
-          data.currentLayer?.authMode !== "public"
-          && !isLayerActor(
-            signedInEmail,
-            data.responseFields[`L${displayLayerNumber}_Emails`],
-            data.responseFields[`L${displayLayerNumber}_Email`],
-          )
-        ) {
-          setNotYourRequest(true);
-          setError("this request is waiting for someone else");
+        const respItemId = parseInt(responseId, 10);
+
+        // The submission is fetched by the server, not by this browser.
+        //
+        // It used to be read straight from SharePoint here with the reviewer's
+        // own token, and only then checked. By that point the record had
+        // arrived: the check decided whether to *draw* it, having already
+        // handed it over. Now the same question is settled before anything is
+        // sent — the server works out the layer, proves the caller is its
+        // assigned reviewer, and returns only the fields that layer may show.
+        //
+        // The form's own definition is still read from here. A layer
+        // configuration is not anybody's personal data, and the page needs the
+        // whole sequence to know what comes next.
+        const res = await fetchWithAuthRecovery(
+          `/api/evaluate?slug=${encodeURIComponent(formSlug)}`
+          + `&responseItemId=${encodeURIComponent(String(respItemId))}`
+          + `&layerNumber=${encodeURIComponent(String(displayLayerNumber))}`
+          + `&prefix=${routePrefix}`,
+          { headers: await apiIdentityHeaders(instance, accounts[0]) },
+        );
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          // The server said no and said why. A refusal about who this request
+          // belongs to gets the "not yours" treatment, which offers different
+          // advice from a broken link.
+          setNotYourRequest(res.status === 403 || res.status === 401);
+          setError(json.error || "the details for this request could not be loaded");
           setLoading(false);
           return;
         }
-        setResponseData(data.responseFields);
-        setCurrentLayer(data.currentLayer || null);
-        setLayerSequence(data.layerConfig);
-        setTotalLayers(data.layerConfig.length || displayLayerNumber);
-        setPreviousResults(data.previousResults);
-        setCurrentLayerStatus(valueToText(data.responseFields[`L${displayLayerNumber}_Status`]));
-        setFormStatus(valueToText(data.responseFields.FormStatus || data.responseFields.Status));
 
-        // Load matrix child list data for dynamicmatrix fields
+        const fields = (json.data.fields || {}) as Record<string, unknown>;
+        // Branch-aware, using the branch the server read off the record, so the
+        // sequence here is the one the submission is actually following.
+        const sequence = getActiveLayers(
+          parseLayerConfig(slugJson.value?.[0]?.LayerConfig),
+          valueToText(json.data.selectedBranch),
+        );
+        setResponseData(fields);
+        setCurrentLayer(sequence.find((entry) => entry.layerNumber === displayLayerNumber) ?? null);
+        setLayerSequence(sequence);
+        setTotalLayers(sequence.length || Number(json.data.totalLayers) || displayLayerNumber);
+        setPreviousResults(
+          sequence
+            .filter((entry) => entry.layerNumber < displayLayerNumber)
+            .map((entry) => ({
+              layerNumber: entry.layerNumber,
+              status: fields[`L${entry.layerNumber}_Status`] ?? null,
+              email: fields[`L${entry.layerNumber}_Email`] ?? null,
+              signedAt: fields[`L${entry.layerNumber}_SignedAt`] ?? null,
+            })),
+        );
+        setCurrentLayerStatus(valueToText(json.data.layerStatus || fields[`L${displayLayerNumber}_Status`]));
+        setFormStatus(valueToText(json.data.formStatus || fields.FormStatus || fields.Status));
+        setMediaSrcByField(isRecord(json.data.mediaSrcByField) ? json.data.mediaSrcByField as Record<string, string | string[]> : {});
+        applyMatrixTables(json.data.matrixTables);
+        const data = { responseFields: fields };
+
+        // The form's own definition — what to draw, and the logo to draw it
+        // under. Not anybody's personal data, so it is still read from here.
         const itemFormVersion = data.responseFields.FormVersion as string | undefined;
         if (itemFormVersion) {
           const itemPublishKey = valueToText(data.responseFields.PublishKey);
@@ -523,7 +574,6 @@ export default function EvaluationPage() {
             const meta = isRecord(parsed.meta) ? parsed.meta : {};
             setLogoUrl(valueToText(meta.logoUrl));
           }
-          loadMatrixChildData(token, resolvedTitle, parseInt(responseId, 10), itemFormVersion, itemPublishKey);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load data.");
@@ -531,24 +581,19 @@ export default function EvaluationPage() {
       setLoading(false);
     };
     load();
-  }, [authState, isPublic, formSlug, responseId, displayLayerNumber, token, userEmail]);
+  }, [authState, isPublic, routePrefix, formSlug, responseId, displayLayerNumber, token, userEmail]);
 
-  const assertSignedInLayerCanSubmit = async (listTitle: string, respId: number, layer: number): Promise<void> => {
-    if (!token) throw new Error("Missing SharePoint token.");
-    const item = await spGet(
-      token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})?$select=Id,Status,FormStatus,CurrentLayer,CurrentApprovalLayer,L${layer}_Status`
-    ) as Record<string, unknown>;
-    const latestStatus = item[`L${layer}_Status`];
-    const latestCurrentLayer = Number(item.CurrentLayer || item.CurrentApprovalLayer || 0);
-
-    if (isTerminalFormStatus(item.FormStatus || item.Status) || isTerminalLayerStatus(latestStatus)) {
-      throw new Error("This layer has already been completed. Refresh the submissions page to see the latest status.");
-    }
-    if (latestCurrentLayer && latestCurrentLayer !== layer) {
-      throw new Error("This link is no longer active because the submission has moved to another layer.");
-    }
-  };
+  /**
+   * The gate on a signed-in decision used to live here, re-reading the record
+   * from SharePoint in the browser before writing to it.
+   *
+   * It has moved to `api/evaluate.ts`, which now records the decision itself.
+   * A check made here could only ever be advice: the page held a SharePoint
+   * token, so anything it declined to write it could still have written. The
+   * server holds the record and the rules together — the assignment on the
+   * row, the layer the submission has actually reached, and the order of the
+   * steps before it. Do not reinstate a copy of them here.
+   */
 
   // ── Submit action ──
   const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm") => {
@@ -594,148 +639,112 @@ export default function EvaluationPage() {
       if (!token) return;
       const listTitle = formTitle; // list is named after form title
       const respId = parseInt(responseId || "0", 10);
-      await assertSignedInLayerCanSubmit(listTitle, respId, displayLayerNumber);
-      const now = new Date().toISOString();
-      const effectiveTotalLayers = totalLayers || displayLayerNumber;
-      const sortedLayers = [...layerSequence].sort((a, b) => a.layerNumber - b.layerNumber);
-      const currentLayerIndex = sortedLayers.findIndex((layer) => layer.layerNumber === displayLayerNumber);
-      const nextLayer = currentLayerIndex >= 0
-        ? sortedLayers[currentLayerIndex + 1]
-        : sortedLayers.find((layer) => layer.layerNumber > displayLayerNumber);
-      const isFinal = !nextLayer && displayLayerNumber >= effectiveTotalLayers;
-      const nextLayerNumber = nextLayer?.layerNumber ?? displayLayerNumber + 1;
-      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
-
-      if (action === "reject") {
-        await spPatch(token, itemUrl, {
-          ...buildRejectedWorkflowPatch(displayLayerNumber, effectiveTotalLayers, now, rejectionReason),
-          [`L${displayLayerNumber}_ActedBy`]: userEmail,
-        });
-        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
-      } else if (action === "confirm" && currentLayer?.type === "evaluation") {
-        await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
-          confirmerEmail: userEmail,
-          confirmerName: accounts[0]?.name ?? undefined,
+      /**
+       * The decision is recorded by the server, not by this browser.
+       *
+       * Everything that decides whether it may be recorded at all — which form,
+       * which submission, which layer — sits in the address bar, where the
+       * reviewer can edit it. None of it can therefore be proof of anything.
+       * The server re-reads the record, satisfies itself that the signed-in
+       * address is the one this step was assigned to, writes the outcome,
+       * advances the workflow and mails whoever is next.
+       *
+       * What is left here is the paperwork that follows a finished workflow:
+       * the PDF record, and the closing note to whoever submitted.
+       */
+      const res = await fetchWithAuthRecovery("/api/evaluate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await apiIdentityHeaders(instance, accounts[0])),
+        },
+        body: JSON.stringify({
+          slug: formSlug,
+          prefix: routePrefix,
+          responseItemId: respId,
+          layerNumber: displayLayerNumber,
+          action,
           fields: evalForm ? foldOtherAnswers(evalRuntime.collect()) : {},
-          signatureUrl: signatureData,
-        });
-        await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
-          status: SP_LAYER_STATUS.CONFIRMED,
-          signedAt: now,
           signature: signatureData || undefined,
-          actedBy: userEmail,
-        });
-        await spPatch(token, itemUrl, {
-          Status: isFinal ? "Completed" : "In Review",
-          FormStatus: isFinal ? "Completed" : "In Review",
-          CurrentLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-          CurrentApprovalLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-        });
-        if (isFinal) {
-          await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
-        }
-      } else if (action === "approve") {
-        await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
-          status: SP_LAYER_STATUS.APPROVED,
-          signedAt: now,
-          signature: signatureData || undefined,
-          actedBy: userEmail,
-        });
-        await spPatch(token, itemUrl, {
-          Status: isFinal ? "Approved" : `Approved Layer ${displayLayerNumber}`,
-          FormStatus: isFinal ? "Completed" : "In Review",
-          CurrentLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-          CurrentApprovalLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-        });
-        if (isFinal) {
-          await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
-        }
+          rejection: rejectionReason || undefined,
+          confirmerName: accounts[0]?.name || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to submit this decision.");
       }
 
-      const nextApproverEmail = !isFinal ? valueToText(responseData?.[`L${nextLayerNumber}_Email`]) : "";
-      const nextRecipients = !isFinal
-        ? parseValidEmailList(responseData?.[`L${nextLayerNumber}_NotifyEmails`])
-        : [];
-      await triggerApprovalNotification(token, {
-        formTitle,
-        submittedBy: valueToText(responseData?.SubmittedBy) || userEmail,
-        responseItemId: respId,
-        layer: displayLayerNumber,
-        totalLayers: effectiveTotalLayers,
-        action: action === "reject" ? "reject" : "approve",
-        ...(nextApproverEmail ? { nextApproverEmail } : {}),
-        ...(nextRecipients.length ? { nextRecipients } : {}),
-        ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
-        ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
-        ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),
-      });
+      // Whether anything comes after this step is the server's answer, read off
+      // the record it has just written rather than guessed at from here.
+      const isFinal = !json.advancedToLayer;
+      if (action === "reject") {
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
+      } else if (isFinal) {
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
+      }
 
+      // The next reviewer's email goes out from the server, in the same breath
+      // as the advance it announces. Left here is the note to whoever submitted,
+      // which is only due once the workflow has finished one way or the other.
+      if (action === "reject" || isFinal) {
+        await triggerApprovalNotification(token, {
+          formTitle,
+          submittedBy: valueToText(responseData?.SubmittedBy) || userEmail,
+          responseItemId: respId,
+          layer: displayLayerNumber,
+          // The completion notice is the one sent when the layer just finished
+          // is the last one, so on a run that ends early these must agree.
+          totalLayers: action === "reject"
+            ? Math.max(totalLayers || displayLayerNumber, displayLayerNumber)
+            : displayLayerNumber,
+          action: action === "reject" ? "reject" : "approve",
+        });
+      }
       setActionState("success");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to submit this decision.");
       setActionState("error");
     }
-  }, [token, userEmail, evalForm, evalRuntime, isPublic, routeToken, currentLayer, formTitle, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData]);
+  }, [token, userEmail, evalForm, evalRuntime, isPublic, routeToken, currentLayer, formTitle, formSlug, routePrefix, instance, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, responseData]);
 
-  /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
-  const loadMatrixChildData = async (
-    tkn: string,
-    resolvedTitle: string,
-    respId: number,
-    formVersion: string,
-    publishKey?: string,
-  ) => {
-    try {
-      // Load the version's SurveyJSON to detect dynamicmatrix fields
-      const parsed = await getVersionPayload(tkn, resolvedTitle, formVersion, publishKey);
-      if (!parsed) return;
-      const surveyDef = parsed.surveyJson || parsed;
-      const matrixFields = getDynamicMatrixFields(surveyDef);
-
-      if (matrixFields.length === 0) return;
-
-      const tables: Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }> = {};
-      for (const mf of matrixFields) {
-        const safeName = mf.name.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
-        const childListName = `${resolvedTitle} Matrix ${safeName}`;
-
-        try {
-          const rows = await readMatrixChildItems(tkn, childListName, respId);
-          if (rows.length > 0) {
-            const cols = mf.columns as MatrixColumnDef[];
-            tables[mf.name] = {
-              columns: cols,
-              rows,
-              html: rowsToHtml(mf.columns, rows),
-            };
-          }
-        } catch {
-          // Child list not found — skip this field
-        }
-      }
-
-      setMatrixTables(tables);
-
-      // Enrich responseData with matrix data in SurveyJS-compatible format
-      if (Object.keys(tables).length > 0) {
-        setResponseData((prev) => {
-          if (!prev) return prev;
-          const enriched = { ...prev };
-          for (const [fieldName, entry] of Object.entries(tables)) {
-            enriched[fieldName] = {
-              rows: entry.rows,
-              html: entry.html,
-              json: JSON.stringify(entry.rows),
-            };
-          }
-          return enriched;
-        });
-      }
-    } catch {
-      // Silently fail — matrix data is non-critical
+  /**
+   * Show the repeating-table answers the server sent with the submission.
+   *
+   * These used to be fetched here, one SharePoint list per table question,
+   * after the record itself had already moved to the server. They are answers
+   * like any other, so they come with it now — and the question of whether
+   * this reviewer may see them is settled once, before any of it is sent.
+   * Building the table markup stays here, where it is displayed.
+   */
+  const applyMatrixTables = useCallback((payload: unknown) => {
+    if (!isRecord(payload)) return;
+    const tables: Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }> = {};
+    for (const [fieldName, entry] of Object.entries(payload)) {
+      if (!isRecord(entry)) continue;
+      const columns = Array.isArray(entry.columns) ? entry.columns as MatrixColumnDef[] : [];
+      const rows = Array.isArray(entry.rows) ? entry.rows as Record<string, unknown>[] : [];
+      if (!columns.length || !rows.length) continue;
+      tables[fieldName] = { columns, rows, html: rowsToHtml(columns, rows) };
     }
-  };
+    if (!Object.keys(tables).length) return;
 
+    setMatrixTables(tables);
+    // Also folded into the answers in the shape SurveyJS expects, so the
+    // read-only preview renders them alongside everything else.
+    setResponseData((prev) => {
+      if (!prev) return prev;
+      const enriched = { ...prev };
+      for (const [fieldName, entry] of Object.entries(tables)) {
+        enriched[fieldName] = {
+          rows: entry.rows,
+          html: entry.html,
+          json: JSON.stringify(entry.rows),
+        };
+      }
+      return enriched;
+    });
+  }, []);
   // ── Render ──
   if (authState === "checking" || loading) {
     return (
@@ -821,6 +830,12 @@ export default function EvaluationPage() {
   const isLayerAlreadyComplete = isTerminalLayerStatus(currentLayerStatus) || isTerminalFormStatus(formStatus);
   const currentLayerLabel = currentLayerStatus || (isLayerAlreadyComplete ? "Completed" : "Pending");
   const effectiveLayerNumber = currentLayer?.layerNumber || displayLayerNumber;
+  // Who is signing, printed under the signature so the record says it and not
+  // only the audit trail. A public link has no signed-in account to name.
+  const signedInApprover = isPublic ? "" : approverDisplayName(accounts[0]?.name, userEmail);
+  const approverRoleLabel = currentLayer?.title || `Layer ${effectiveLayerNumber}`;
+  const approverActionLabel = currentLayer?.description?.trim()
+    || (isEvaluation ? "Confirmed By" : "Approved By");
 
   return (
     <div className="eval-page" style={{ minHeight: "100vh", background: COLORS.bg, padding: "clamp(16px, 3vw, 32px) 16px" }}>
@@ -855,10 +870,10 @@ export default function EvaluationPage() {
               {isEvaluation ? "Evaluation Review" : "Approval Review"}
             </div>
             <h1 style={{ fontSize: "clamp(22px, 3vw, 32px)", lineHeight: 1.15, fontWeight: 800, color: COLORS.textPrimary, margin: 0 }}>
-              {currentLayer?.title || formTitle || (isEvaluation ? "Evaluation" : "Approval")}
+              {formTitle || currentLayer?.title || (isEvaluation ? "Evaluation" : "Approval")}
             </h1>
             <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 8 }}>
-              {formTitle || "Form"} / Layer {effectiveLayerNumber}
+              {currentLayer?.title ? `${currentLayer.title} / ` : ""}Layer {effectiveLayerNumber}
               {currentLayer?.description && <div style={{ marginTop: 4 }}>{currentLayer.description}</div>}
             </div>
           </div>
@@ -1027,28 +1042,18 @@ export default function EvaluationPage() {
                 </label>
               )}
 
-              {/* Rejection reason (always available for approval layers) */}
-              {!isEvaluation && (
+              {/* Who is signing: what they are doing, their name, their role. */}
+              {signedInApprover && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
-                    Rejection Reason <span style={{ fontWeight: 400, color: COLORS.textMuted }}>(optional)</span>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
+                    {approverActionLabel}
                   </div>
-                  <textarea
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="Enter reason if rejecting..."
-                    style={{
-                      width: "100%",
-                      minHeight: 72,
-                      padding: 10,
-                      borderRadius: 8,
-                      border: `1px solid ${COLORS.border}`,
-                      fontSize: 13,
-                      fontFamily: "inherit",
-                      resize: "vertical",
-                      outline: "none",
-                    }}
-                  />
+                  <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>
+                    {signedInApprover}
+                  </div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 2 }}>
+                    {approverRoleLabel}
+                  </div>
                 </div>
               )}
 
@@ -1073,7 +1078,7 @@ export default function EvaluationPage() {
                     >
                       {actionState === "submitting" ? "Submitting..." : isSignatureRequired && !signatureData ? "Signature required" : "Approve"}
                     </button>
-                    <button className="eval-action-button" onClick={() => handleSubmit("reject")} style={btnOutline} disabled={actionState === "submitting"}>
+                    <button className="eval-action-button" onClick={() => setRejectDialogOpen(true)} style={btnOutline} disabled={actionState === "submitting"}>
                       Reject
                     </button>
                   </>
@@ -1083,6 +1088,85 @@ export default function EvaluationPage() {
           )}
         </div>
       </div>
+
+      {/* Reject dialog — a rejection ends the submission, so it is confirmed on
+          purpose: the backdrop ignores clicks and only Cancel closes it. */}
+      {rejectDialogOpen && (
+        <div
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(16, 24, 40, 0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 1000,
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eval-reject-title"
+            style={{
+              background: COLORS.cardBg,
+              borderRadius: 14,
+              padding: 24,
+              width: "100%",
+              maxWidth: 460,
+              boxShadow: "0 24px 48px rgba(16, 24, 40, 0.28)",
+            }}
+          >
+            <div id="eval-reject-title" style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 6 }}>
+              Reject this submission?
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.textSecond, marginBottom: 16 }}>
+              The submitter is told it was rejected and the workflow stops here.
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
+              Rejection Reason <span style={{ fontWeight: 400, color: COLORS.textMuted }}>(optional)</span>
+            </div>
+            <textarea
+              autoFocus
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Enter reason if rejecting..."
+              disabled={actionState === "submitting"}
+              style={{
+                width: "100%",
+                minHeight: 96,
+                padding: 10,
+                borderRadius: 8,
+                border: `1px solid ${COLORS.border}`,
+                fontSize: 13,
+                fontFamily: "inherit",
+                resize: "vertical",
+                outline: "none",
+                marginBottom: 20,
+              }}
+            />
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button
+                className="eval-action-button"
+                onClick={() => setRejectDialogOpen(false)}
+                style={{ ...btnPrimary, background: "transparent", border: `1px solid ${COLORS.border}`, color: COLORS.textSecond }}
+                disabled={actionState === "submitting"}
+              >
+                Cancel
+              </button>
+              <button
+                className="eval-action-button"
+                onClick={() => { setRejectDialogOpen(false); void handleSubmit("reject"); }}
+                style={{ ...btnPrimary, background: COLORS.red, opacity: actionState === "submitting" ? 0.6 : 1 }}
+                disabled={actionState === "submitting"}
+              >
+                {actionState === "submitting" ? "Submitting..." : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

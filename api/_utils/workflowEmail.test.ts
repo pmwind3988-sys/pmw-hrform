@@ -21,23 +21,61 @@ const ACTION_EMAIL_BASE = {
   reviewLink: "https://example.com/approval/1",
 };
 
+describe("workflow email subject lines", () => {
+  it("names the action, the form, the applicant and the reference", () => {
+    const message = buildWorkflowActionEmail({
+      ...ACTION_EMAIL_BASE,
+      applicantName: "Nur Aisyah",
+      referenceNo: "OSH-040826-0007",
+    });
+    expect(message.subject).toBe("[Action Required] Incident Report – Nur Aisyah (#OSH-040826-0007)");
+  });
+
+  it("names the applicant from the form rather than the mailbox that submitted it", () => {
+    const shared = { ...ACTION_EMAIL_BASE, submittedBy: "hr.admin@example.com" };
+    expect(buildWorkflowActionEmail({ ...shared, applicantName: "Nur Aisyah" }).subject)
+      .toContain("– Nur Aisyah");
+    expect(buildWorkflowActionEmail({ ...shared, applicantName: "Nur Aisyah" }).subject)
+      .not.toContain("hr.admin@example.com");
+  });
+
+  it("falls back to the submitting identity when the form collected no name", () => {
+    expect(buildWorkflowActionEmail(ACTION_EMAIL_BASE).subject)
+      .toBe("[Action Required] Incident Report – ahmad@example.com (#42)");
+  });
+
+  it("labels a manual paper notice and a parked one by what they need", () => {
+    const manual = buildManualPaperWorkflowEmail({
+      formTitle: "Incident Report",
+      submittedBy: "ahmad@example.com",
+      responseItemId: 42,
+      layer: 1,
+      totalLayers: 2,
+      recipient: "hr@example.com",
+      layerType: "evaluation",
+      referenceNo: "040826-0001",
+    });
+    expect(manual.subject).toBe("[Manual Action Required] Incident Report – ahmad@example.com (#040826-0001)");
+  });
+});
+
 describe("reference numbers in workflow emails", () => {
   it("puts the reference in the subject and body of an action email", () => {
     const message = buildWorkflowActionEmail({ ...ACTION_EMAIL_BASE, referenceNo: "OSH-040826-0007" });
-    expect(message.subject).toContain("[OSH-040826-0007]");
+    expect(message.subject).toContain("(#OSH-040826-0007)");
     expect(message.body).toContain("Reference no.");
     expect(message.body).toContain("OSH-040826-0007");
   });
 
-  it("leaves the subject and body unchanged when the form issues no reference", () => {
+  it("falls back to the submission ID when the form issues no reference", () => {
     const message = buildWorkflowActionEmail(ACTION_EMAIL_BASE);
-    expect(message.subject).toBe("Action required: Incident Report needs your approval");
+    expect(message.subject).toContain("(#42)");
     expect(message.body).not.toContain("Reference no.");
   });
 
-  it("treats a blank reference as absent rather than printing empty brackets", () => {
+  it("treats a blank reference as absent rather than quoting an empty one", () => {
     const message = buildWorkflowActionEmail({ ...ACTION_EMAIL_BASE, referenceNo: "   " });
-    expect(message.subject).not.toContain("[");
+    expect(message.subject).toContain("(#42)");
     expect(message.body).not.toContain("Reference no.");
   });
 
@@ -52,7 +90,7 @@ describe("reference numbers in workflow emails", () => {
       layerType: "evaluation",
       referenceNo: "040826-0001",
     });
-    expect(message.subject).toContain("[040826-0001]");
+    expect(message.subject).toContain("(#040826-0001)");
     expect(message.body).toContain("040826-0001");
   });
 
@@ -240,7 +278,7 @@ describe("the notice for a layer that could not be routed", () => {
   });
 
   it("keeps the reference searchable in the subject, like the other notices", () => {
-    expect(buildLayerNeedsRoutingEmail(PARAMS).subject).toContain("[OSH-040826-0007]");
+    expect(buildLayerNeedsRoutingEmail(PARAMS).subject).toContain("(#OSH-040826-0007)");
   });
 
   it("escapes the reason rather than trusting a directory string", () => {

@@ -447,6 +447,20 @@ const globalCss = (t: typeof LIGHT) => `
   @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes dfpFade{from{opacity:0}to{opacity:1}}
+  /* The tick is drawn, not faded in: the stroke unrolls from nothing to its
+     full length, which is what makes it read as a confirmation rather than as
+     another static icon. */
+  @keyframes dfpDraw{to{stroke-dashoffset:0}}
+  @keyframes dfpPop{0%{transform:scale(.55);opacity:0}55%{transform:scale(1.07);opacity:1}100%{transform:scale(1);opacity:1}}
+  @keyframes dfpRipple{0%{transform:scale(.85);opacity:.45}100%{transform:scale(1.65);opacity:0}}
+  .dfp-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(16,25,35,.55);backdrop-filter:blur(4px);animation:dfpFade .2s ease}
+  .dfp-overlay-card{background:${t.cardBg};border:1px solid ${t.border};border-radius:12px;box-shadow:${t.shadowLg};padding:34px 30px;max-width:360px;width:100%;text-align:center;animation:fadeUp .25s ease}
+  @media(prefers-reduced-motion:reduce){
+    .dfp-check circle,.dfp-check path{animation:none!important;stroke-dashoffset:0!important}
+    .dfp-check-disc,.dfp-check-ripple,.dfp-overlay,.dfp-overlay-card{animation:none!important}
+    .dfp-check-ripple{display:none}
+  }
   .dfp-header{flex-wrap:nowrap}
   /* The form already sits inside the page's own content column, which sets the
      width and the side padding — so the shell keeps only its vertical rhythm
@@ -524,14 +538,54 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
-const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string }) => (
+/**
+ * The confirmation mark: a ring and a tick that draw themselves once, over a
+ * disc that pops in and a ripple that fades out. Drawn inline rather than
+ * loaded as a GIF so it stays sharp at any size, follows the theme's green,
+ * and needs no network request on the one screen that must never look broken.
+ */
+const SuccessCheck = ({ t }: { t: typeof LIGHT }) => (
+  <div className="dfp-check" aria-hidden="true" style={{ position: "relative", width: 96, height: 96, margin: "0 auto 22px" }}>
+    <div className="dfp-check-ripple" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: t.green, opacity: 0, animation: "dfpRipple .9s .25s ease-out forwards" }} />
+    <div className="dfp-check-disc" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: t.greenPale, animation: "dfpPop .45s cubic-bezier(.34,1.56,.64,1) forwards" }} />
+    <svg viewBox="0 0 52 52" width="96" height="96" style={{ position: "relative", display: "block" }}>
+      <circle cx="26" cy="26" r="23" fill="none" stroke={t.green} strokeWidth="2.4" strokeDasharray="145" strokeDashoffset="145" style={{ animation: "dfpDraw .55s cubic-bezier(.65,0,.45,1) forwards" }} />
+      <path d="M15.5 26.8 L22.8 34 L36.5 19.4" fill="none" stroke={t.green} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="42" strokeDashoffset="42" style={{ animation: "dfpDraw .38s .5s cubic-bezier(.65,0,.45,1) forwards" }} />
+    </svg>
+  </div>
+);
+
+/**
+ * The whole page is blocked while the submission is in flight. A banner under
+ * the button was too easy to miss on a long form — the respondent could scroll
+ * away, press Submit again, or close the tab mid-send. This takes over the
+ * screen, says plainly not to close it, and leaves when the answer comes back.
+ */
+const SubmittingOverlay = ({ t, hasUploads }: { t: typeof LIGHT; hasUploads: boolean }) => (
+  <div className="dfp-overlay" role="alertdialog" aria-modal="true" aria-busy="true" aria-live="assertive" aria-label="Submitting your response">
+    <div className="dfp-overlay-card">
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Spinner size={42} t={t} /></div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: t.textPrimary, marginBottom: 8 }}>Submitting your response</div>
+      <div style={{ fontSize: 13, lineHeight: 1.7, color: t.textSecond }}>
+        {/* The wait is only explained by uploads when this submission actually
+            carries a file or a signature; otherwise the sentence describes work
+            that is not happening. */}
+        {hasUploads ? "This can take a moment while your files upload." : "This only takes a moment."}
+        <br />
+        <strong style={{ color: t.textPrimary }}>Please do not close or refresh this page.</strong>
+      </div>
+    </div>
+  </div>
+);
+
+const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     {isTestRun && (
       <div role="status" style={{ maxWidth: 420, margin: "0 auto 20px", padding: "10px 16px", background: "#B91C1C", color: "#fff", borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
         TEST RUN — this was a rehearsal, not a real submission. Every email it generated went only to {testEmailDisplay || "the nominated test address"}.
       </div>
     )}
-    <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
+    <SuccessCheck t={t} />
     <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary, marginBottom: 10 }}>Submission received</div>
     <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.8, maxWidth: 420, margin: "0 auto 10px" }}>Your response for <strong>{formTitle}</strong> has been recorded.</p>
     {referenceNo && (
@@ -543,7 +597,10 @@ const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmai
         <div style={{ fontSize: 12, color: t.textSecond, marginTop: 6 }}>Keep this to track or ask about your submission.</div>
       </div>
     )}
-    <button onClick={onReset} style={{ padding: "11px 30px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardBg, color: t.textSecond, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans'" }}>Submit another response</button>
+    {/* No "submit another response" here on purpose: a second entry starts
+        from a freshly loaded page, so the reference above cannot be confused
+        with the next one. */}
+    <p style={{ color: t.textMuted, fontSize: 12, marginTop: 4 }}>You can close this page. To send another response, reload the form.</p>
   </div>
 );
 
@@ -592,7 +649,13 @@ export default function DynamicFormPage() {
   const [submittedReference, setSubmittedReference] = useState("");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
-  const [resetKey, setResetKey] = useState(0);
+  /** Whether the answers being sent carry a file or a signature, which is the
+   *  only reason this ever takes longer than a moment. */
+  const [hasUploads, setHasUploads] = useState(false);
+  /** The consent tick and the failure notice, so a rejected submit can put the
+   *  respondent on the exact thing that stopped it. */
+  const consentRef = useRef<HTMLInputElement | null>(null);
+  const submitErrorRef = useRef<HTMLDivElement | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -909,9 +972,6 @@ export default function DynamicFormPage() {
    * written back on a `setTimeout` (which meant a submission fired in the same
    * tick could carry a stale total), `autocapitalize` is a parsed property of
    * the question, and MYR renders as "RM" inside the readout control.
-   *
-   * `resetKey` is a dependency so "submit another response" rebuilds the form
-   * and clears every answer with it.
    */
   const nativeForm = useMemo<NativeForm | null>(() => {
     if (!enrichedSurveyJson) return null;
@@ -920,8 +980,7 @@ export default function DynamicFormPage() {
     } catch {
       return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enrichedSurveyJson, resetKey]);
+  }, [enrichedSurveyJson]);
 
   // A hook cannot be called conditionally, so a form that has not loaded yet
   // runs an empty document rather than skipping the runtime entirely.
@@ -967,11 +1026,20 @@ export default function DynamicFormPage() {
     if (!pdpaAccepted) {
       setPdpaConsentError(pdpa.ui.consentRequired);
       document.querySelector(".dfp-pdpa-consent")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      consentRef.current?.focus({ preventScroll: true });
       return;
     }
 
     setPdpaConsentError("");
-    lastDataRef.current = runtime.collect();
+    const collected = runtime.collect();
+    lastDataRef.current = collected;
+    setHasUploads(
+      runtime.form.questions.some((q) => {
+        if (q.kind !== "file" && q.kind !== "signature") return false;
+        const v = collected[q.name];
+        return !(v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0));
+      }),
+    );
     setSubmitStatus("loading");
   }, [formReady, submitStatus, runtime, pdpaAccepted, pdpa.ui.consentRequired]);
   const doSubmitForm = useCallback(async () => {
@@ -1634,14 +1702,25 @@ export default function DynamicFormPage() {
     clearStoredAuthDecision();
     instance.logoutRedirect({ postLogoutRedirectUri: window.location.href });
   }, [instance]);
-  const handleReset = useCallback(() => {
-    setSubmitStatus(null);
-    setSubmittedReference("");
-    setPdpaAccepted(false);
-    setPdpaConsentError("");
-    lastDataRef.current = null;
-    setResetKey(k => k + 1);
-  }, []);
+
+  // While the overlay is up the page behind it must not scroll, or the
+  // respondent can drift away from a screen that is asking them to wait.
+  useEffect(() => {
+    if (submitStatus !== "loading") return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [submitStatus]);
+
+  // A failed submission is announced and focused, so it is not left sitting
+  // below the fold on a form the respondent has already scrolled past.
+  useEffect(() => {
+    if (submitStatus !== "error") return;
+    const node = submitErrorRef.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.focus({ preventScroll: true });
+  }, [submitStatus]);
 
   // Generate QR when modal opens
   useEffect(() => {
@@ -1787,7 +1866,7 @@ export default function DynamicFormPage() {
 
       <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
-          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} />
+          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} />
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (
@@ -1809,6 +1888,9 @@ export default function DynamicFormPage() {
                   <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
                     <input
                       type="checkbox"
+                      ref={consentRef}
+                      aria-invalid={pdpaConsentError ? true : undefined}
+                      aria-describedby={pdpaConsentError ? "dfp-consent-error" : undefined}
                       checked={pdpaAccepted}
                       onChange={(e) => {
                         setPdpaAccepted(e.target.checked);
@@ -1832,7 +1914,7 @@ export default function DynamicFormPage() {
                       </a>
                     </span>
                   </label>
-                  {pdpaConsentError && <div style={{ color: t.red, fontSize: 12, fontWeight: 700, marginTop: 8 }}>{pdpaConsentError}</div>}
+                  {pdpaConsentError && <div id="dfp-consent-error" role="alert" style={{ color: t.red, fontSize: 12, fontWeight: 700, marginTop: 8 }}>{pdpaConsentError}</div>}
                 </div>
                 <button
                   type="button"
@@ -1856,8 +1938,7 @@ export default function DynamicFormPage() {
                 </button>
               </>
             )}
-            {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 8, color: t.purple, fontSize: 13, fontWeight: 700 }}><Spinner size={14} t={t} /> Submitting your response...</div>}
-            {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
+            {submitStatus === "error" && <div ref={submitErrorRef} tabIndex={-1} role="alert" style={{ outline: "none", marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
               <div>Submission could not be completed. Your answers are still on this page; review them and try again.</div>
               <button onClick={handleSubmit} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry submission</button>
             </div>}
@@ -1865,6 +1946,8 @@ export default function DynamicFormPage() {
         )}
         <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: t.textMuted }}>PMW International Berhad HR Forms</div>
       </div>
+
+      {submitStatus === "loading" && <SubmittingOverlay t={t} hasUploads={hasUploads} />}
 
       {showQr && (
         <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, animation: "fadeUp .2s ease", backdropFilter: "blur(2px)" }}>

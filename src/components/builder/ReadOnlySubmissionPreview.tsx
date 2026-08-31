@@ -275,7 +275,12 @@ function mediaSourcesForField(field: PreviewField, value: unknown, mediaSrcByFie
 function MediaValue({ source, accessToken }: { source: string; accessToken?: string | null }) {
   const { src, loading } = useAuthenticatedMediaSource(source, accessToken);
 
-  if (isImageLike(src)) {
+  // A signature or photo held behind SharePoint's login is fetched with the
+  // reviewer's token and handed to the page as a `blob:` URL, which carries no
+  // file extension. Asking that URL whether it looks like an image said no, so
+  // every protected image collapsed into a bare download link the moment it
+  // finished loading. The stored path is what decides.
+  if (isImageLike(source) || isImageLike(src)) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", padding: 10, overflow: "hidden" }}>

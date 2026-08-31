@@ -4,6 +4,12 @@ import {
   updateListItemFields,
 } from "./graphClient.js";
 import { logWarn } from "./logger.js";
+import {
+  buildWorkflowEmailSubject,
+  renderWorkflowEmail,
+  WORKFLOW_EMAIL_STATUS,
+  type WorkflowEmailDetail,
+} from "./workflowEmailTemplate.js";
 import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
 
 export type WorkflowEmailDeliveryStatus = "sent" | "failed";
@@ -92,6 +98,8 @@ export interface WorkflowActionEmailParams {
   reviewLink: string;
   /** Shown ahead of the numeric item ID when the form issues references. */
   referenceNo?: string;
+  /** The name the form collected, which is who the request is actually about. */
+  applicantName?: string;
 }
 
 export interface ManualPaperWorkflowEmailParams {
@@ -107,6 +115,8 @@ export interface ManualPaperWorkflowEmailParams {
   surveyElements?: Record<string, unknown>[];
   /** Shown ahead of the numeric item ID when the form issues references. */
   referenceNo?: string;
+  /** The name the form collected, which is who the request is actually about. */
+  applicantName?: string;
 }
 
 function parseWorkflowEmailLog(raw: unknown): WorkflowEmailLog {
@@ -462,29 +472,20 @@ export async function deliverWorkflowEmail(
   }
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+/**
+ * The reference row. Blank values are dropped by the template, so this simply
+ * disappears on a form that does not issue references.
+ */
+function referenceDetail(referenceNo: string | undefined): WorkflowEmailDetail {
+  return { label: "Reference no.", value: (referenceNo ?? "").trim() };
 }
 
 /**
- * The reference goes in the subject, not only the body: recipients search their
- * mailbox by the ID they were given, and a subject match is what surfaces the
- * whole thread rather than one message.
+ * Who the request is about, as the form recorded it — dropped, like the
+ * reference, when the form collected no name to show.
  */
-function referenceSuffix(referenceNo: string | undefined): string {
-  const trimmed = (referenceNo ?? "").trim();
-  return trimmed ? ` [${trimmed}]` : "";
-}
-
-function referenceRow(referenceNo: string | undefined): string {
-  const trimmed = (referenceNo ?? "").trim();
-  if (!trimmed) return "";
-  return `<tr><td style="padding:8px 0;color:#6b7280">Reference no.</td><td style="padding:8px 0;font-weight:700">${escapeHtml(trimmed)}</td></tr>`;
+function applicantDetail(applicantName: string | undefined): WorkflowEmailDetail {
+  return { label: "Applicant", value: (applicantName ?? "").trim() };
 }
 
 export function buildManualPaperWorkflowEmail(
@@ -494,24 +495,30 @@ export function buildManualPaperWorkflowEmail(
   const layerName = params.layerTitle?.trim() || `Layer ${params.layer}`;
   return {
     to: params.recipient,
-    subject: `Manual ${params.layerType}: ${params.formTitle} layer ${params.layer}${referenceSuffix(params.referenceNo)}`,
-    body: `<!doctype html>
-<html>
-<body style="margin:0;padding:24px;background:#f3f6fa;font-family:'Segoe UI',Arial,sans-serif;color:#111827">
-  <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px">
-    <div style="font-size:12px;font-weight:700;color:#0078d4;text-transform:uppercase;letter-spacing:.08em">PMW HR Form</div>
-    <h1 style="font-size:22px;line-height:28px;margin:12px 0 8px">${escapeHtml(params.formTitle)} needs ${escapeHtml(noun)}</h1>
-    <p style="font-size:14px;line-height:22px;color:#4b5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${escapeHtml(params.layerType)} in the attached or linked PDF record.</p>
-    <table style="width:100%;border-collapse:collapse;margin:20px 0">
-      ${referenceRow(params.referenceNo)}
-      <tr><td style="padding:8px 0;color:#6b7280">Submission ID</td><td style="padding:8px 0;font-weight:600">#${escapeHtml(String(params.responseItemId))}</td></tr>
-      <tr><td style="padding:8px 0;color:#6b7280">Submitted by</td><td style="padding:8px 0;font-weight:600">${escapeHtml(params.submittedBy)}</td></tr>
-      <tr><td style="padding:8px 0;color:#6b7280">Workflow stage</td><td style="padding:8px 0;font-weight:600">Layer ${params.layer} of ${params.totalLayers}</td></tr>
-      <tr><td style="padding:8px 0;color:#6b7280">Layer</td><td style="padding:8px 0;font-weight:600">${escapeHtml(layerName)}</td></tr>
-    </table>
-  </div>
-</body>
-</html>`,
+    subject: buildWorkflowEmailSubject({
+      prefix: "Manual Action Required",
+      formTitle: params.formTitle,
+      applicantName: params.applicantName,
+      submittedBy: params.submittedBy,
+      referenceNo: params.referenceNo,
+      responseItemId: params.responseItemId,
+    }),
+    body: renderWorkflowEmail({
+      preheader: `${params.formTitle} #${params.responseItemId} needs ${noun}.`,
+      eyebrow: "Manual workflow",
+      status: WORKFLOW_EMAIL_STATUS.manual,
+      heading: `${params.formTitle} needs ${noun}`,
+      intro: `This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${params.layerType} in the attached or linked PDF record.`,
+      details: [
+        { label: "Form", value: params.formTitle },
+        referenceDetail(params.referenceNo),
+        { label: "Submission ID", value: `#${params.responseItemId}` },
+        applicantDetail(params.applicantName),
+        { label: "Submitted by", value: params.submittedBy },
+        { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
+        { label: "Layer", value: layerName },
+      ],
+    }),
   };
 }
 
@@ -526,6 +533,8 @@ export interface LayerNeedsRoutingEmailParams {
   /** Why routing could not be decided, in the resolver's own words. */
   reason: string;
   referenceNo?: string;
+  /** The name the form collected, which is who the request is actually about. */
+  applicantName?: string;
 }
 
 /**
@@ -541,26 +550,30 @@ export function buildLayerNeedsRoutingEmail(
   const noun = params.layerType === "evaluation" ? "evaluation" : "approval";
   return {
     to: params.recipient,
-    subject: `Awaiting routing: ${params.formTitle} ${noun} layer ${params.layer}${referenceSuffix(params.referenceNo)}`,
-    body: `<!doctype html>
-<html>
-<body style="margin:0;padding:24px;background:#f3f6fa;font-family:'Segoe UI',Arial,sans-serif;color:#111827">
-  <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px">
-    <div style="font-size:12px;font-weight:700;color:#0078d4;text-transform:uppercase;letter-spacing:.08em">PMW HR Form</div>
-    <h1 style="font-size:22px;line-height:28px;margin:12px 0 8px">${escapeHtml(params.formTitle)} is waiting to be routed</h1>
-    <p style="font-size:14px;line-height:22px;color:#4b5563">This submission has been saved, but the ${escapeHtml(noun)} layer below could not be assigned to anyone automatically. An administrator needs to route it before it can be actioned — there is nothing to click yet.</p>
-    <table style="width:100%;border-collapse:collapse;margin:20px 0">
-      ${referenceRow(params.referenceNo)}
-      <tr><td style="padding:8px 0;color:#6b7280">Submission ID</td><td style="padding:8px 0;font-weight:600">#${escapeHtml(String(params.responseItemId))}</td></tr>
-      <tr><td style="padding:8px 0;color:#6b7280">Submitted by</td><td style="padding:8px 0;font-weight:600">${escapeHtml(params.submittedBy)}</td></tr>
-      <tr><td style="padding:8px 0;color:#6b7280">Workflow stage</td><td style="padding:8px 0;font-weight:600">Layer ${params.layer} of ${params.totalLayers}</td></tr>
-    </table>
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;font-size:13px;line-height:20px;color:#92400e">
-      <strong>Why it stopped:</strong> ${escapeHtml(params.reason)}
-    </div>
-  </div>
-</body>
-</html>`,
+    subject: buildWorkflowEmailSubject({
+      prefix: "Awaiting Routing",
+      formTitle: params.formTitle,
+      applicantName: params.applicantName,
+      submittedBy: params.submittedBy,
+      referenceNo: params.referenceNo,
+      responseItemId: params.responseItemId,
+    }),
+    body: renderWorkflowEmail({
+      preheader: `${params.formTitle} #${params.responseItemId} is waiting to be routed.`,
+      eyebrow: "System notification",
+      status: WORKFLOW_EMAIL_STATUS.awaitingRouting,
+      heading: `${params.formTitle} is waiting to be routed`,
+      intro: `This submission has been saved, but the ${noun} layer below could not be assigned to anyone automatically. An administrator needs to route it before it can be actioned — there is nothing to click yet.`,
+      details: [
+        { label: "Form", value: params.formTitle },
+        referenceDetail(params.referenceNo),
+        { label: "Submission ID", value: `#${params.responseItemId}` },
+        applicantDetail(params.applicantName),
+        { label: "Submitted by", value: params.submittedBy },
+        { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
+      ],
+      callout: `Why it stopped: ${params.reason}`,
+    }),
   };
 }
 
@@ -571,24 +584,32 @@ export function buildWorkflowActionEmail(
   const actionVerb = params.layerType === "evaluation" ? "review" : "approve";
   return {
     to: params.recipient,
-    subject: `Action required: ${params.formTitle} needs your ${actionNoun}${referenceSuffix(params.referenceNo)}`,
-    body: `<!doctype html>
-<html>
-<body style="margin:0;padding:24px;background:#f3f6fa;font-family:'Segoe UI',Arial,sans-serif;color:#111827">
-  <div style="max-width:584px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px">
-    <div style="font-size:12px;font-weight:700;color:#0078d4;text-transform:uppercase;letter-spacing:.08em">PMW HR Form</div>
-    <h1 style="font-size:22px;line-height:28px;margin:12px 0 8px">${escapeHtml(params.formTitle)} needs your ${escapeHtml(actionNoun)}</h1>
-    <p style="font-size:14px;line-height:22px;color:#4b5563">A submission is waiting for you to ${escapeHtml(actionVerb)}.</p>
-    <table style="width:100%;border-collapse:collapse;margin:20px 0">
-      ${referenceRow(params.referenceNo)}
-      <tr><td style="padding:8px 0;color:#6b7280">Submission ID</td><td style="padding:8px 0;font-weight:600">#${escapeHtml(String(params.responseItemId))}</td></tr>
-      <tr><td style="padding:8px 0;color:#6b7280">Submitted by</td><td style="padding:8px 0;font-weight:600">${escapeHtml(params.submittedBy)}</td></tr>
-      <tr><td style="padding:8px 0;color:#6b7280">Workflow stage</td><td style="padding:8px 0;font-weight:600">Layer ${params.layer} of ${params.totalLayers}</td></tr>
-    </table>
-    <a href="${escapeHtml(params.reviewLink)}" style="display:inline-block;background:#0078d4;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700">Open ${params.layerType === "evaluation" ? "evaluation" : "approval"}</a>
-  </div>
-</body>
-</html>`,
+    subject: buildWorkflowEmailSubject({
+      prefix: "Action Required",
+      formTitle: params.formTitle,
+      applicantName: params.applicantName,
+      submittedBy: params.submittedBy,
+      referenceNo: params.referenceNo,
+      responseItemId: params.responseItemId,
+    }),
+    body: renderWorkflowEmail({
+      preheader: `${params.formTitle} #${params.responseItemId} is waiting for your ${actionNoun}.`,
+      eyebrow: "Action required",
+      status: WORKFLOW_EMAIL_STATUS.actionRequired,
+      heading: `${params.formTitle} needs your ${actionNoun}`,
+      intro: `A submission is waiting for you to ${actionVerb}. Please review the request details below and record your decision.`,
+      details: [
+        { label: "Form", value: params.formTitle },
+        referenceDetail(params.referenceNo),
+        { label: "Submission ID", value: `#${params.responseItemId}` },
+        applicantDetail(params.applicantName),
+        { label: "Submitted by", value: params.submittedBy },
+        { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
+      ],
+      actionUrl: params.reviewLink,
+      actionLabel: params.layerType === "evaluation" ? "Review & submit evaluation" : "Review & approve form",
+      note: "Only the assigned reviewer or an authorized superuser should act on this workflow step.",
+    }),
   };
 }
 

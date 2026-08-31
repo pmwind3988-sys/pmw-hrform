@@ -36,6 +36,19 @@ describe("submission preview sections", () => {
     ]);
   });
 
+  // An untitled page arrives carrying SurveyJS's own `page1`, and the approval
+  // screen was printing that machine label as the section heading.
+  it("names an untitled first page after the form rather than page1", () => {
+    const sections = collectPreviewSections({
+      pages: [
+        { name: "page1", elements: [{ type: "text", name: "textInput", title: "Text Input" }] },
+        { name: "page2", elements: [{ type: "text", name: "comments", title: "Comments" }] },
+      ],
+    }, { textInput: "Test answer", comments: "Well run." });
+
+    expect(sections.map((section) => section.title)).toEqual(["Main Page", "Page 2"]);
+  });
+
   it("drops panels whose fields were never answered", () => {
     const sections = collectPreviewSections({
       pages: [{
