@@ -402,7 +402,12 @@ async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, 
 
 async function handleGet(req: ApiRequest, res: ApiResponse) {
   const { token } = req.query as { token?: string };
-  if (!token || typeof token !== "string") {
+  // A signed-in caller identifies the request by slug, item and layer and
+  // never carries a public layer token, so this guard must not stand in
+  // front of that shape. It did, and every signed-in review link was turned
+  // away with "Missing token query parameter" before reaching the branch
+  // that handles it.
+  if (!firstQueryValue(req.query.slug) && (!token || typeof token !== "string")) {
     return res.status(400).json({ error: "Missing token query parameter" });
   }
 
