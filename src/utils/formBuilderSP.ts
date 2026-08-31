@@ -8,6 +8,13 @@ import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
 import { joinEmailList, parseValidEmailList } from "./layerRecipients";
 import { buildWorkflowReviewLink } from "./workflowLink";
 import { selectWorkflowLayer } from "./workflowReviewLink";
+import { resolveApplicantName } from "./applicantName";
+import {
+  buildWorkflowEmailSubject,
+  renderWorkflowEmail,
+  WORKFLOW_EMAIL_STATUS,
+  type WorkflowEmailDetail,
+} from "./workflowEmailTemplate";
 import { ensureLinkToken } from "./linkToken";
 import { listChoiceValues, toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions";
 import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
@@ -2417,21 +2424,25 @@ function spOrigin(): string {
   try { return new URL(SP_SITE_URL).origin; } catch { return ''; }
 }
 
-function makePdfLink(pdfUrl: string | undefined): string {
-  if (!pdfUrl) return '';
-  const absoluteUrl = pdfUrl.startsWith('http') ? pdfUrl : `${spOrigin()}${pdfUrl}`;
-  return `<a href="${escapeHtml(absoluteUrl)}" style="display:inline-block;background:#FFFFFF;color:#0078D4;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;border:1px solid #B4D5F0">View PDF record</a>`;
+function absolutePdfUrl(pdfUrl: string | undefined): string | undefined {
+  if (!pdfUrl) return undefined;
+  return pdfUrl.startsWith('http') ? pdfUrl : `${spOrigin()}${pdfUrl}`;
 }
 
-interface EmailDetail {
-  label: string;
-  value: string | number;
-}
+type EmailDetail = WorkflowEmailDetail;
 
+/**
+ * Every workflow notice this app sends, in the one shared house style.
+ *
+ * The layout itself lives in `workflowEmailTemplate.ts` so the browser and the
+ * `api/` routes cannot drift into sending two different-looking emails for the
+ * same workflow.
+ */
 function emailBody(params: {
   title: string;
   subtitle: string;
   preheader: string;
+  eyebrow?: string;
   statusColor: string;
   statusLabel: string;
   statusBg: string;
@@ -2442,69 +2453,24 @@ function emailBody(params: {
   pdfUrl?: string;
   note?: string;
 }): string {
-  const detailsRows = params.details
-    .filter((detail) => String(detail.value).trim())
-    .map((detail) => `<tr>
-      <td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">${escapeHtml(detail.label)}</td>
-      <td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(String(detail.value))}</td>
-    </tr>`)
-    .join('');
-  const linkHtml = params.link
-    ? `<a href="${escapeHtml(params.link)}" style="display:inline-block;background:#0078D4;color:#FFFFFF;padding:12px 18px;border-radius:8px;text-decoration:none;font-size:14px;line-height:20px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.08)">${escapeHtml(params.linkLabel || 'Open request')}</a>`
-    : '';
-  const pdfHtml = params.pdfUrl ? makePdfLink(params.pdfUrl) : '';
-  const actionsHtml = linkHtml || pdfHtml
-    ? `<tr><td style="padding:20px 0 4px">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          ${linkHtml ? `<td style="padding-right:10px">${linkHtml}</td>` : ''}
-          ${pdfHtml ? `<td>${pdfHtml}</td>` : ''}
-        </tr></table>
-      </td></tr>`
-    : '';
-  const noteHtml = params.note
-    ? `<tr><td style="padding:12px 0 0;font-size:12px;line-height:18px;color:#6B7280">${escapeHtml(params.note)}</td></tr>`
-    : '';
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#F3F6FA;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(params.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FA">
-  <tr>
-    <td align="center" style="padding:32px 16px">
-      <table role="presentation" width="584" cellpadding="0" cellspacing="0" style="width:100%;max-width:584px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,0.06),0 10px 30px rgba(17,24,39,0.08)">
-        <tr>
-          <td style="padding:22px 28px;background:#FFFFFF;border-bottom:1px solid #E5EAF1">
-            <div style="font-size:12px;line-height:16px;color:#6B7280;font-weight:700;text-transform:uppercase;letter-spacing:0.08em">PMW HR Form</div>
-            <div style="margin-top:4px;font-size:13px;line-height:18px;color:#4B5563">Automated workflow notification</div>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:28px">
-            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:${params.statusBg};border:1px solid ${params.statusBorder};border-radius:999px">
-              <tr><td style="padding:6px 12px;font-size:11px;line-height:14px;font-weight:800;color:${params.statusColor};text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(params.statusLabel)}</td></tr>
-            </table>
-            <h1 style="margin:0 0 8px;font-size:22px;line-height:28px;color:#111827;font-weight:750">${escapeHtml(params.title)}</h1>
-            <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#4B5563">${escapeHtml(params.subtitle)}</p>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
-              ${detailsRows}
-            </table>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              ${actionsHtml}
-              ${noteHtml}
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#6B7280">
-            This is an automated notification. For full details, attachments, comments, and audit history, open the request in PMW HR Form.
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>
-</body></html>`;
+  return renderWorkflowEmail({
+    preheader: params.preheader,
+    eyebrow: params.eyebrow || params.statusLabel,
+    status: {
+      label: params.statusLabel,
+      color: params.statusColor,
+      background: params.statusBg,
+      border: params.statusBorder,
+    },
+    heading: params.title,
+    intro: params.subtitle,
+    details: params.details,
+    actionUrl: params.link || undefined,
+    actionLabel: params.linkLabel,
+    secondaryUrl: absolutePdfUrl(params.pdfUrl),
+    secondaryLabel: 'View PDF record',
+    note: params.note,
+  });
 }
 
 function isManualPaperWorkflowStatus(value: unknown): boolean {
@@ -2513,33 +2479,32 @@ function isManualPaperWorkflowStatus(value: unknown): boolean {
 }
 
 /**
- * Reads the submission's reference so every workflow email can quote it.
+ * Reads the two things every workflow subject line needs from the record: the
+ * reference recipients search their mailbox by, and the applicant's name.
  *
- * Fetched here rather than threaded through all eight call sites: the reference
- * is a property of the stored item, and reading it once at send time cannot
+ * Fetched here rather than threaded through all eight call sites: both are
+ * properties of the stored item, and reading them once at send time cannot
  * drift out of step with what the record actually says.
  */
-async function getReferenceNoForNotification(
+async function getNotificationSubjectContext(
   token: string,
   responseListTitle: string,
   responseItemId: number,
-): Promise<string> {
+): Promise<{ referenceNo: string; applicantName: string }> {
   try {
     const item = await spGet(
       token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})?$select=${REFERENCE_NO_FIELD}`,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})`,
     ) as Record<string, unknown>;
-    return String(item[REFERENCE_NO_FIELD] || "").trim();
+    return {
+      referenceNo: String(item[REFERENCE_NO_FIELD] || "").trim(),
+      applicantName: resolveApplicantName(item),
+    };
   } catch {
-    // A list without the column, or an unreadable item, simply means no
-    // reference line — never a failed notification.
-    return "";
+    // A list without the column, or an unreadable item, simply means a shorter
+    // subject line — never a failed notification.
+    return { referenceNo: "", applicantName: "" };
   }
-}
-
-/** Appends the reference to a subject so mailbox search on it finds the thread. */
-function emailSubjectReferenceSuffix(referenceNo: string): string {
-  return referenceNo ? ` [${referenceNo}]` : "";
 }
 
 async function getLayerStatusForNotification(
@@ -2562,39 +2527,26 @@ async function getLayerStatusForNotification(
 function manualPaperEmailBody(params: {
   formTitle: string;
   submittedBy: string;
+  applicantName?: string;
   responseItemId: number;
   layerNumber: number;
   totalLayers: number;
   layerType: "approval" | "evaluation";
 }): string {
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#F3F6FA;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(params.formTitle)} #${params.responseItemId} needs manual ${escapeHtml(params.layerType)}.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FA">
-  <tr><td align="center" style="padding:32px 16px">
-    <table role="presentation" width="584" cellpadding="0" cellspacing="0" style="width:100%;max-width:584px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,0.06),0 10px 30px rgba(17,24,39,0.08)">
-      <tr><td style="padding:22px 28px;background:#FFFFFF;border-bottom:1px solid #E5EAF1">
-        <div style="font-size:12px;line-height:16px;color:#6B7280;font-weight:700;text-transform:uppercase;letter-spacing:0.08em">PMW HR Form</div>
-        <div style="margin-top:4px;font-size:13px;line-height:18px;color:#4B5563">Manual workflow notification</div>
-      </td></tr>
-      <tr><td style="padding:28px">
-        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:999px">
-          <tr><td style="padding:6px 12px;font-size:11px;line-height:14px;font-weight:800;color:#92400E;text-transform:uppercase;letter-spacing:0.06em">Manual paper workflow</td></tr>
-        </table>
-        <h1 style="margin:0 0 8px;font-size:22px;line-height:28px;color:#111827;font-weight:750">${escapeHtml(params.formTitle)} needs manual ${escapeHtml(params.layerType)}</h1>
-        <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#4B5563">This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${escapeHtml(params.layerType)} in the attached or linked PDF record.</p>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
-          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Form</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(params.formTitle)}</td></tr>
-          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Submission ID</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">#${params.responseItemId}</td></tr>
-          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Submitted by</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(params.submittedBy)}</td></tr>
-          <tr><td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">Workflow stage</td><td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">Layer ${params.layerNumber} of ${params.totalLayers}</td></tr>
-        </table>
-      </td></tr>
-    </table>
-  </td></tr>
-</table>
-</body></html>`;
+  return renderWorkflowEmail({
+    preheader: `${params.formTitle} #${params.responseItemId} needs manual ${params.layerType}.`,
+    eyebrow: 'Manual workflow',
+    status: WORKFLOW_EMAIL_STATUS.manual,
+    heading: `${params.formTitle} needs manual ${params.layerType}`,
+    intro: `This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${params.layerType} in the attached or linked PDF record.`,
+    details: [
+      { label: 'Form', value: params.formTitle },
+      { label: 'Submission ID', value: `#${params.responseItemId}` },
+      { label: 'Applicant', value: params.applicantName || '' },
+      { label: 'Submitted by', value: params.submittedBy },
+      { label: 'Workflow stage', value: `Layer ${params.layerNumber} of ${params.totalLayers}` },
+    ],
+  });
 }
 
 /**
@@ -2688,8 +2640,22 @@ export async function triggerApprovalNotification(
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
   const workflowStage = `Layer ${displayNextLayerNumber} of ${totalLayers}`;
   const submissionId = `#${responseItemId}`;
-  const referenceNo = await getReferenceNoForNotification(token, responseListTitle, responseItemId);
-  const refSuffix = emailSubjectReferenceSuffix(referenceNo);
+  const { referenceNo, applicantName } = await getNotificationSubjectContext(
+    token,
+    responseListTitle,
+    responseItemId,
+  );
+  // Every subject reads `[Prefix] Form – Applicant (#Reference)`, so a reviewer
+  // can tell two waiting requests apart without opening either.
+  const subjectFor = (prefix: string): string => buildWorkflowEmailSubject({
+    prefix,
+    formTitle,
+    applicantName,
+    submittedBy,
+    referenceNo,
+    responseItemId,
+  });
+  const applicantDetail: EmailDetail = { label: 'Applicant', value: applicantName };
   // Empty detail values are dropped by emailBody, so this row simply disappears
   // on forms that do not issue references.
   const referenceDetail: EmailDetail = { label: 'Reference no.', value: referenceNo };
@@ -2759,7 +2725,7 @@ export async function triggerApprovalNotification(
           await sendSpEmail(token, {
             testRun,
             to: submitRecipients,
-            subject: `Manual ${nextLayerType}: ${formTitle} layer ${layer}${refSuffix}`,
+            subject: subjectFor('Manual Action Required'),
             attachments,
             workflow: {
               listTitle: responseListTitle,
@@ -2769,6 +2735,7 @@ export async function triggerApprovalNotification(
             body: manualPaperEmailBody({
               formTitle,
               submittedBy,
+              applicantName,
               responseItemId,
               layerNumber: layer,
               totalLayers,
@@ -2783,7 +2750,7 @@ export async function triggerApprovalNotification(
         await sendSpEmail(token, {
           testRun,
           to: submitRecipients,
-          subject: `Action required: ${formTitle} needs your ${nextActionNoun}${refSuffix}`,
+          subject: subjectFor('Action Required'),
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
@@ -2801,6 +2768,7 @@ export async function triggerApprovalNotification(
               { label: 'Form', value: formTitle },
               referenceDetail,
               { label: 'Submission ID', value: submissionId },
+              applicantDetail,
               { label: 'Submitted by', value: submittedBy },
               { label: 'Workflow stage', value: `Layer ${layer} of ${totalLayers}` },
               { label: 'Current status', value: 'Submitted' },
@@ -2822,7 +2790,7 @@ export async function triggerApprovalNotification(
           await sendSpEmail(token, {
             testRun,
             to: nextLayerRecipients,
-            subject: `Manual ${nextLayerType}: ${formTitle} layer ${displayNextLayerNumber}${refSuffix}`,
+            subject: subjectFor('Manual Action Required'),
             attachments,
             workflow: {
               listTitle: responseListTitle,
@@ -2832,6 +2800,7 @@ export async function triggerApprovalNotification(
             body: manualPaperEmailBody({
               formTitle,
               submittedBy,
+              applicantName,
               responseItemId,
               layerNumber: displayNextLayerNumber,
               totalLayers,
@@ -2846,7 +2815,7 @@ export async function triggerApprovalNotification(
         await sendSpEmail(token, {
           testRun,
           to: nextLayerRecipients,
-          subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}${refSuffix}`,
+          subject: subjectFor('Action Required'),
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
@@ -2864,6 +2833,7 @@ export async function triggerApprovalNotification(
               { label: 'Form', value: formTitle },
               referenceDetail,
               { label: 'Submission ID', value: submissionId },
+              applicantDetail,
               { label: 'Submitted by', value: submittedBy },
               { label: 'Completed step', value: `Layer ${layer} of ${totalLayers}` },
               { label: 'Current step', value: workflowStage },
@@ -2879,25 +2849,27 @@ export async function triggerApprovalNotification(
         await sendSpEmail(token, {
           testRun,
           to: submittedBy,
-          subject: `Status update: ${formTitle} approved${refSuffix}`,
+          subject: subjectFor('Completed'),
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
             layer,
           },
           body: emailBody({
-            title: `${formTitle} has been approved`,
-            subtitle: 'All required workflow steps have been completed. No further action is needed from you at this time.',
-            preheader: `${formTitle} ${submissionId} has been approved.`,
+            title: `${formTitle} has been completed`,
+            subtitle: `Every workflow layer has been completed, the last of them at layer #${layer}. No further action is needed from you at this time.`,
+            preheader: `${formTitle} ${submissionId} has been completed.`,
+            eyebrow: 'Status update',
             statusColor: '#065F46',
-            statusLabel: 'Approved',
+            statusLabel: 'Completed',
             statusBg: '#ECFDF5',
             statusBorder: '#A7F3D0',
             details: [
               { label: 'Form', value: formTitle },
               referenceDetail,
               { label: 'Submission ID', value: submissionId },
-              { label: 'Final status', value: 'Approved' },
+              applicantDetail,
+              { label: 'Final status', value: `Completed at layer #${layer}` },
               { label: 'Completed layers', value: totalLayers },
             ],
             pdfUrl,
@@ -2910,25 +2882,27 @@ export async function triggerApprovalNotification(
       await sendSpEmail(token, {
         testRun,
         to: submittedBy,
-        subject: `Status update: ${formTitle} not approved${refSuffix}`,
+        subject: subjectFor('Rejected'),
         workflow: {
           listTitle: responseListTitle,
           responseItemId,
           layer,
         },
         body: emailBody({
-          title: `${formTitle} was not approved`,
-          subtitle: 'The workflow has been closed at the current step. Open the request record to review the outcome details and any recorded reason.',
-          preheader: `${formTitle} ${submissionId} was not approved.`,
+          title: `${formTitle} was rejected at layer #${layer}`,
+          subtitle: 'The workflow has been closed at this step. Open the request record to review the outcome details and any recorded reason.',
+          preheader: `${formTitle} ${submissionId} was rejected at layer #${layer}.`,
+          eyebrow: 'Status update',
           statusColor: '#991B1B',
-          statusLabel: 'Not approved',
+          statusLabel: 'Rejected',
           statusBg: '#FEF2F2',
           statusBorder: '#FECACA',
           details: [
             { label: 'Form', value: formTitle },
             referenceDetail,
             { label: 'Submission ID', value: submissionId },
-            { label: 'Final status', value: 'Not approved' },
+            applicantDetail,
+            { label: 'Final status', value: `Rejected at layer #${layer}` },
             { label: 'Closed at', value: `Layer ${layer} of ${totalLayers}` },
           ],
           pdfUrl,

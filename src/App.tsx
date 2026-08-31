@@ -28,6 +28,7 @@ import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntr
 import type { PortalSession } from "./utils/internalAccountService";
 import { normalizeLayerStatus } from "./utils/statusConstants";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
+import { APPLICANT_NAME_FIELD_KEYS } from "./utils/applicantName";
 import { isRejectedStatus, resolveWorkflowDisplayState } from "./utils/workflowStatus";
 import {
   EMPTY_SUBMISSION_FILTERS,
@@ -112,24 +113,9 @@ const DETAIL_PASSTHROUGH_FIELDS = new Set([
   "RetentionUntil",
 ]);
 
-const SUBMITTER_NAME_FIELD_KEYS = new Set([
-  "applicant",
-  "applicantname",
-  "employee",
-  "employeename",
-  "fullname",
-  "name",
-  "personname",
-  "requester",
-  "requestername",
-  "requestor",
-  "requestorname",
-  "staff",
-  "staffname",
-  "submittedbyname",
-  "submittedname",
-  "submittername",
-]);
+// Shared with the workflow emails, so the dashboard and the notification
+// subject line never disagree about whose request a submission is.
+const SUBMITTER_NAME_FIELD_KEYS = APPLICANT_NAME_FIELD_KEYS;
 
 const SUBMITTER_IDENTITY_FIELD_KEYS = new Set([
   "submittedby",

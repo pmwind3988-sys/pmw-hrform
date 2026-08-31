@@ -1,6 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
+import { resolveApplicantName } from "./_utils/applicantName.js";
 import {
   buildWorkflowActionEmail,
   buildLayerNeedsRoutingEmail,
@@ -929,6 +930,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const totalLayerCount = activeLayers.length;
           const submittedBy = String(responseItem.fields.SubmittedBy || "Public respondent");
           const referenceNo = String(responseItem.fields[REFERENCE_NO_FIELD] || "");
+          // The subject names whoever the form says the request is about, so a
+          // reviewer can tell two waiting requests apart from the inbox list.
+          const applicantName = resolveApplicantName(responseItem.fields);
           const nextStatus = responseItem.fields[`L${nextLayerNumber}_Status`];
           const manualPaper = isManualPaperLayerStatus(nextStatus);
           await scheduleOrDeliverWorkflowEmail(
@@ -946,6 +950,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   layerType,
                   reason: routingReasonForLayer(responseItem.fields, nextLayerNumber),
                   referenceNo,
+                  applicantName,
                 })
               : manualPaper
               ? buildManualPaperWorkflowEmail({
@@ -959,6 +964,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   layerTitle: typeof notificationNextLayer.title === "string" ? notificationNextLayer.title : undefined,
                   surveyElements: layerSurveyElements(notificationNextLayer),
                   referenceNo,
+                  applicantName,
                 })
               : buildWorkflowActionEmail({
                   formTitle,
@@ -970,6 +976,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   layerType,
                   reviewLink,
                   referenceNo,
+                  applicantName,
                 }),
             {
               listTitle: responseListName,

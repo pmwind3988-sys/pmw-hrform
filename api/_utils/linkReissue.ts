@@ -16,6 +16,7 @@
  * or was never theirs to see. A response that varied would hand back the
  * enumeration the binding just took away.
  */
+import { resolveApplicantName } from "./applicantName.js";
 import { buildWorkflowActionEmail, sendGraphEmail } from "./workflowEmail.js";
 import { buildWorkflowReviewLink } from "./workflowLink.js";
 import { updateListItemFields } from "./graphClient.js";
@@ -141,6 +142,7 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
         linkToken: plan.linkToken,
       }),
       referenceNo: String(params.fields[REFERENCE_NO_FIELD] || ""),
+      applicantName: resolveApplicantName(params.fields),
     });
     if (isTestRow(params.fields)) {
       const testRun = readTestRunRedirect(params.fields);

@@ -1,4 +1,5 @@
 import { setCorsHeaders, validateApiKey } from "./_utils/auth.js";
+import { resolveApplicantName } from "./_utils/applicantName.js";
 import {
   getGraphToken,
   queryAllListItems,
@@ -164,6 +165,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 // the step it opens.
                 reviewLink: entry.reviewLink ? withWorkflowRoutePrefix(entry.reviewLink, entry.layerType) : entry.reviewLink,
                 referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
+                applicantName: resolveApplicantName(item.fields),
               }),
               {
                 listTitle: formTitle,
