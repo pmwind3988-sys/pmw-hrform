@@ -6,20 +6,23 @@
  * `testRunTrail.ts`. Nothing on the server needs the merged view — only the
  * panel, which is browser code — so there is nothing to keep in step.
  *
- * WHY THIS EXISTS: the trail (`testRunTrail.ts`) is written from two places —
- * `api/submit-form.ts` for the anonymous/public path and `api/evaluate.ts`
- * for a decision made through a public review link. A run that is started
- * and decided while SIGNED IN touches neither: the browser writes the
- * response row straight to SharePoint and calls `stamp-test-run`, and a
- * signed-in decision is made from `ApprovalDashboard.tsx` /
- * `EvaluationPage.tsx`, not `api/evaluate.ts`. So a signed-in run's trail can
- * be sparse or empty forever, even though the row itself — `L{n}_Status`,
- * `FormStatus` and friends — is written by every path, always. The row is
- * the true source of truth; the trail only adds detail the row alone
- * cannot carry (a diverted address, a send error). This module treats it
- * that way: it derives checklist steps from the row wherever the trail has
- * none, and it derives the verdict primarily from the row's own lifecycle,
- * not from whether the trail happens to be complete.
+ * WHY THIS EXISTS: the trail (`testRunTrail.ts`) is written by the server, and
+ * not every path goes through it. `api/submit-form.ts` writes it for the
+ * anonymous path; `api/evaluate.ts` writes it for a decision made through a
+ * public review link and — since the review page moved its writes to the
+ * server — for a signed-in reviewer's decision too.
+ *
+ * What still does not reach it: a signed-in SUBMISSION, where the browser
+ * writes the response row straight to SharePoint and only calls
+ * `stamp-test-run`, and a decision made from `ApprovalDashboard.tsx`, which
+ * remains browser-driven. So a signed-in run's trail can still be sparse,
+ * even though the row itself — `L{n}_Status`, `FormStatus` and friends — is
+ * written by every path, always. The row is the true source of truth; the
+ * trail only adds detail the row alone cannot carry (a diverted address, a
+ * send error). This module treats it that way: it derives checklist steps
+ * from the row wherever the trail has none, and it derives the verdict
+ * primarily from the row's own lifecycle, not from whether the trail happens
+ * to be complete.
  */
 import {
   type TestRunStep,
