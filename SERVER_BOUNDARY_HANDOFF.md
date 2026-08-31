@@ -53,28 +53,34 @@ All on `main`, in order:
 - `13b0e31` — repeating-table answers ("one row per trip") come back with the
   record instead of being fetched separately by the browser
 
-Reading was verified working in production by the owner on a real pending
-request. **Submitting has not yet been verified on a real request** — see
-"Before trusting `355feba`" below.
+Verified in production by the owner on real pending requests: reading, and then
+an evaluation step opened from its email, answered, submitted, and its PDF
+produced. What that run did **not** exercise is listed below.
 
-## Before trusting `355feba`
+## What `355feba` still has not been tried on
 
 A change to this path is only proven when a real link opens *and a real
-decision is recorded*. Nothing local can prove it: there is no test tenant.
+decision is recorded*. Nothing local can prove it: there is no test tenant. Use
+the built-in test-run facility, which redirects the emails.
 
-Use the built-in test-run facility, which redirects the emails, and check that:
+Confirmed working on a real request:
 
-1. An approval step still records and moves to the next layer.
-2. An evaluation step still saves its answers (`EvaluationData`).
-3. The next reviewer gets exactly **one** email, not two.
-4. The submissions workspace shows the same wording it did before — the
-   `Status` column ("Approved Layer 2" and so on) is now written by the server;
-   it was deliberately kept because admins read it.
-5. A final approval still produces the PDF and still notifies the submitter.
-6. A rejection still notifies the submitter.
+- an evaluation step opens from its emailed link
+- its answers save (`EvaluationData`)
+- the decision records, and the PDF is still produced
 
-Items 3–6 are where a mistake would hide: the emails moved, and moving one
-twice or not at all is invisible from the reviewer's side.
+Still untried, in the order a mistake would hurt:
+
+1. **The next reviewer gets exactly one email, not two.** The sending moved
+   from the browser to the server; sending it twice, or not at all, is
+   invisible from the reviewer's own screen. Needs a step with another layer
+   after it.
+2. A rejection — it takes a different branch, and its notice to the submitter
+   is one of the two things still sent from the browser.
+3. An **approval**-type step as opposed to an evaluation one.
+4. The submissions workspace wording. The `Status` column ("Approved Layer 2"
+   and so on) is now written by the server; it was deliberately kept because
+   admins read it, but nobody has looked at it since.
 
 ## What is left, in order
 
