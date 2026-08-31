@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkflowReviewLink, workflowRoutePrefix, withWorkflowRoutePrefix } from "./workflowLink.js";
+import { buildWorkflowReviewLink, workflowRoutePrefix, withWorkflowRoutePrefix, PREFIX_SPLIT_SAFE_FROM, routePrefixAllowsLayerType } from "./workflowLink.js";
 
 const base = {
   baseUrl: "https://forms.example.com",
@@ -120,5 +120,36 @@ describe("withWorkflowRoutePrefix", () => {
   it("passes through a stored string that is not one of the two shapes", () => {
     const stored = "https://forms.example.com/admin/submissions?form=Leave&item=42";
     expect(withWorkflowRoutePrefix(stored, "evaluation")).toBe(stored);
+  });
+});
+
+describe("routePrefixAllowsLayerType", () => {
+  const raisedBefore = new Date(PREFIX_SPLIT_SAFE_FROM.getTime() - 86_400_000).toISOString();
+  const raisedAfter = new Date(PREFIX_SPLIT_SAFE_FROM.getTime() + 86_400_000).toISOString();
+
+  it("lets each prefix open its own kind of layer", () => {
+    expect(routePrefixAllowsLayerType("approval", "approval", raisedAfter)).toBe(true);
+    expect(routePrefixAllowsLayerType("eval", "evaluation", raisedAfter)).toBe(true);
+  });
+
+  it("never lets an approval link open an evaluation layer", () => {
+    // Reached by editing /approval/<slug>/2/1 to .../2/2.
+    expect(routePrefixAllowsLayerType("approval", "evaluation", raisedAfter)).toBe(false);
+    expect(routePrefixAllowsLayerType("approval", "evaluation", raisedBefore)).toBe(false);
+  });
+
+  it("refuses the old shape on a submission raised after the split", () => {
+    expect(routePrefixAllowsLayerType("eval", "approval", raisedAfter)).toBe(false);
+  });
+
+  it("keeps the old shape working on a submission that predates the split", () => {
+    expect(routePrefixAllowsLayerType("eval", "approval", raisedBefore)).toBe(true);
+  });
+
+  it("allows rather than refuses when it cannot tell", () => {
+    expect(routePrefixAllowsLayerType("eval", "approval", undefined)).toBe(true);
+    expect(routePrefixAllowsLayerType("eval", "approval", "not a date")).toBe(true);
+    expect(routePrefixAllowsLayerType("approval", undefined, raisedAfter)).toBe(true);
+    expect(routePrefixAllowsLayerType("", "approval", raisedAfter)).toBe(true);
   });
 });

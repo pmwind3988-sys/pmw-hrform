@@ -11,7 +11,7 @@ import { parseForm, type NativeForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
-import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
+import { updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS, normalizeLayerStatus } from "../utils/statusConstants";
 import { buildRejectedWorkflowPatch, firstUnfinishedEarlierLayer } from "../utils/workflowStatus";
@@ -32,11 +32,9 @@ import WarningIcon from "@mui/icons-material/Warning";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
-import {
-  denySignedInLayerLink,
-  selectWorkflowLayer,
-  type SignedInLinkDenial,
-} from "../utils/workflowReviewLink";
+import { parseLayerConfig } from "../utils/workflowReviewLink";
+import { getActiveLayers } from "../components/builder/approvalDashboardLayerProgress";
+import { apiIdentityHeaders } from "../utils/apiIdentity";
 import { approverDisplayName } from "../utils/approverIdentity";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -300,14 +298,6 @@ function surveyElementsForLayer(layerSequence: LayerConfigItem[], layerNumber: u
   return layer?.type === "evaluation" ? (layer as EvaluationLayerConfig).surveyElements || [] : [];
 }
 
-/** What the reviewer is told when a link may not open the record it names. */
-const WRONG_SHAPE_MESSAGE = "this link does not match the step it points at — please use the link that was emailed to you";
-const LINK_DENIAL_MESSAGE: Record<SignedInLinkDenial, string> = {
-  "public-shape": "this request can only be opened from the link that was emailed to its reviewer",
-  "wrong-shape": WRONG_SHAPE_MESSAGE,
-  "not-assigned": "this request is waiting for someone else",
-};
-
 // ── Component ──
 export default function EvaluationPage() {
   const { token: routeToken, formSlug, responseId, layerNumber } = useParams<{
@@ -516,91 +506,63 @@ export default function EvaluationPage() {
         if (!resolvedTitle) { setError("the form this request belongs to no longer exists"); setLoading(false); return; }
         setFormTitle(resolvedTitle);
 
-        const signedInEmail = (userEmail || "").trim();
         const respItemId = parseInt(responseId, 10);
 
-        // Ask for the few fields that decide whether this link may be opened,
-        // and nothing else, before asking for the submission itself. A refusal
-        // is only worth having if it happens before the thing being refused has
-        // been handed over: fetching the whole record first and checking second
-        // puts somebody else's answers in this browser whatever the page then
-        // chooses to draw.
+        // The submission is fetched by the server, not by this browser.
         //
-        // Best effort. A response list old enough to lack L{n}_Emails makes
-        // SharePoint reject the $select naming it, and there is no narrow
-        // question to ask such a list — so it falls through to the full read
-        // and the same gate below, which is where this page has always
-        // decided. Nothing is skipped either way; the difference is only how
-        // much has been fetched by the time it is decided.
-        let gate: SignedInLinkDenial | null = null;
-        let gateSettled = false;
-        try {
-          const preflight = await spGet(
-            token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(resolvedTitle)}')/items(${respItemId})`
-            + `?$select=Id,Created,SelectedBranch,L${displayLayerNumber}_Email,L${displayLayerNumber}_Emails`
-          ) as Record<string, unknown>;
-          const preflightLayer = selectWorkflowLayer(
-            slugJson.value?.[0]?.LayerConfig,
-            valueToText(preflight.SelectedBranch),
-            displayLayerNumber,
-          );
-          if (preflightLayer) {
-            gate = denySignedInLayerLink({
-              routePrefix,
-              layerType: preflightLayer.type,
-              layerAuthMode: preflightLayer.authMode,
-              signedInEmail,
-              layerEmails: preflight[`L${displayLayerNumber}_Emails`],
-              layerEmail: preflight[`L${displayLayerNumber}_Email`],
-              submissionCreatedAt: preflight.Created,
-            });
-            gateSettled = true;
-          }
-        } catch {
-          // Narrow read unavailable on this list; the full read below decides.
-        }
-        if (gate) {
-          setNotYourRequest(true);
-          setError(LINK_DENIAL_MESSAGE[gate]);
+        // It used to be read straight from SharePoint here with the reviewer's
+        // own token, and only then checked. By that point the record had
+        // arrived: the check decided whether to *draw* it, having already
+        // handed it over. Now the same question is settled before anything is
+        // sent — the server works out the layer, proves the caller is its
+        // assigned reviewer, and returns only the fields that layer may show.
+        //
+        // The form's own definition is still read from here. A layer
+        // configuration is not anybody's personal data, and the page needs the
+        // whole sequence to know what comes next.
+        const res = await fetchWithAuthRecovery(
+          `/api/evaluate?slug=${encodeURIComponent(formSlug)}`
+          + `&responseItemId=${encodeURIComponent(String(respItemId))}`
+          + `&layerNumber=${encodeURIComponent(String(displayLayerNumber))}`
+          + `&prefix=${routePrefix}`,
+          { headers: await apiIdentityHeaders(instance, accounts[0]) },
+        );
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          // The server said no and said why. A refusal about who this request
+          // belongs to gets the "not yours" treatment, which offers different
+          // advice from a broken link.
+          setNotYourRequest(res.status === 403 || res.status === 401);
+          setError(json.error || "the details for this request could not be loaded");
           setLoading(false);
           return;
         }
 
-        const data = await getLayerResponseData(token, resolvedTitle, respItemId, displayLayerNumber);
-        if (!data) { setError("the details for this request could not be loaded"); setLoading(false); return; }
-        // Everything in this route — the slug, the id, the layer number, the
-        // prefix — is typed into the address bar, so none of it decides what
-        // may be opened. The record does, and `denySignedInLayerLink` is where
-        // that is settled.
-        //
-        // Already answered above on any list that could serve the narrow read.
-        // This is the same gate over the full record, for the lists that could
-        // not: the decision never depends on which of the two got there first.
-        if (!gateSettled) {
-          const fullDenial = denySignedInLayerLink({
-            routePrefix,
-            layerType: data.currentLayer?.type,
-            layerAuthMode: data.currentLayer?.authMode,
-            signedInEmail,
-            layerEmails: data.responseFields[`L${displayLayerNumber}_Emails`],
-            layerEmail: data.responseFields[`L${displayLayerNumber}_Email`],
-            submissionCreatedAt: data.responseFields.Created,
-          });
-          if (fullDenial) {
-            setNotYourRequest(true);
-            setError(LINK_DENIAL_MESSAGE[fullDenial]);
-            setLoading(false);
-            return;
-          }
-        }
-        setResponseData(data.responseFields);
-        setCurrentLayer(data.currentLayer || null);
-        setLayerSequence(data.layerConfig);
-        setTotalLayers(data.layerConfig.length || displayLayerNumber);
-        setPreviousResults(data.previousResults);
-        setCurrentLayerStatus(valueToText(data.responseFields[`L${displayLayerNumber}_Status`]));
-        setFormStatus(valueToText(data.responseFields.FormStatus || data.responseFields.Status));
+        const fields = (json.data.fields || {}) as Record<string, unknown>;
+        // Branch-aware, using the branch the server read off the record, so the
+        // sequence here is the one the submission is actually following.
+        const sequence = getActiveLayers(
+          parseLayerConfig(slugJson.value?.[0]?.LayerConfig),
+          valueToText(json.data.selectedBranch),
+        );
+        setResponseData(fields);
+        setCurrentLayer(sequence.find((entry) => entry.layerNumber === displayLayerNumber) ?? null);
+        setLayerSequence(sequence);
+        setTotalLayers(sequence.length || Number(json.data.totalLayers) || displayLayerNumber);
+        setPreviousResults(
+          sequence
+            .filter((entry) => entry.layerNumber < displayLayerNumber)
+            .map((entry) => ({
+              layerNumber: entry.layerNumber,
+              status: fields[`L${entry.layerNumber}_Status`] ?? null,
+              email: fields[`L${entry.layerNumber}_Email`] ?? null,
+              signedAt: fields[`L${entry.layerNumber}_SignedAt`] ?? null,
+            })),
+        );
+        setCurrentLayerStatus(valueToText(json.data.layerStatus || fields[`L${displayLayerNumber}_Status`]));
+        setFormStatus(valueToText(json.data.formStatus || fields.FormStatus || fields.Status));
+        setMediaSrcByField(isRecord(json.data.mediaSrcByField) ? json.data.mediaSrcByField as Record<string, string | string[]> : {});
+        const data = { responseFields: fields };
 
         // Load matrix child list data for dynamicmatrix fields
         const itemFormVersion = data.responseFields.FormVersion as string | undefined;

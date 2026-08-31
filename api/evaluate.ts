@@ -10,7 +10,7 @@ import {
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
-import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
+import { buildWorkflowReviewLink, routePrefixAllowsLayerType } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { isLayerActor, joinEmailList, parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
 import {
@@ -560,6 +560,12 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       if (String(foundToken.authMode || "") === "public") {
         return res.status(403).json({ error: "Open this request from the link that was emailed to its reviewer." });
       }
+      // Which shape the address used. Self-reported, and that is fine: lying
+      // about it only forgoes this barrier, and the assignment check below is
+      // untouched by it.
+      if (!routePrefixAllowsLayerType(firstQueryValue(req.query.prefix), String(foundToken.type || ""), allFields.Created)) {
+        return res.status(403).json({ error: "This link does not match the step it points at. Please use the link that was emailed to you." });
+      }
       if (!isLayerActor(viewerEmail, allFields[`L${foundLayerNumber}_Emails`], allFields[`L${foundLayerNumber}_Email`])) {
         logWarn("api:evaluate:get", "Refused a signed-in reviewer a step they are not assigned", {
           layerNumber: foundLayerNumber,
@@ -705,6 +711,10 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         formTitle: foundFormTitle,
         layerNumber: foundLayerNumber,
         totalLayers: activeLayers.length || 0,
+        // Which branch this submission took. A signed-in caller needs it to
+        // read the same layer sequence out of the form config that the
+        // server just used, rather than guessing at the top-level layers.
+        selectedBranch: typeof allFields.SelectedBranch === "string" ? allFields.SelectedBranch : "",
         layerType: foundToken.type || "approval",
         layerTitle: foundToken.title || "",
         layerDescription: foundToken.description || "",
