@@ -53,34 +53,28 @@ All on `main`, in order:
 - `13b0e31` — repeating-table answers ("one row per trip") come back with the
   record instead of being fetched separately by the browser
 
-Verified in production by the owner on real pending requests: reading, and then
-an evaluation step opened from its email, answered, submitted, and its PDF
-produced. What that run did **not** exercise is listed below.
+Verified by the owner against live SharePoint: reading, on a real pending
+request; then a full test run covering rejection, approval and evaluation
+across layers 1 and 2. See below for the one residual check.
 
-## What `355feba` still has not been tried on
+## How `355feba` was verified
 
 A change to this path is only proven when a real link opens *and a real
 decision is recorded*. Nothing local can prove it: there is no test tenant. Use
 the built-in test-run facility, which redirects the emails.
 
-Confirmed working on a real request:
+Confirmed by the owner:
 
-- an evaluation step opens from its emailed link
-- its answers save (`EvaluationData`)
-- the decision records, and the PDF is still produced
+- an evaluation step opens from its emailed link, saves its answers
+  (`EvaluationData`), records the decision, and still produces the PDF — on a
+  real pending request
+- rejection, approval and evaluation steps, across layers 1 and 2, on a test run
 
-Still untried, in the order a mistake would hurt:
-
-1. **The next reviewer gets exactly one email, not two.** The sending moved
-   from the browser to the server; sending it twice, or not at all, is
-   invisible from the reviewer's own screen. Needs a step with another layer
-   after it.
-2. A rejection — it takes a different branch, and its notice to the submitter
-   is one of the two things still sent from the browser.
-3. An **approval**-type step as opposed to an evaluation one.
-4. The submissions workspace wording. The `Status` column ("Approved Layer 2"
-   and so on) is now written by the server; it was deliberately kept because
-   admins read it, but nobody has looked at it since.
+The one thing a working run does not distinguish: **whether the next reviewer's
+email arrived once or twice.** Sending it moved from the browser to the server,
+and a duplicate would advance the workflow perfectly correctly — it is only
+visible by counting what lands in the inbox. Worth a glance if anyone reports
+doubled workflow mail.
 
 ## What is left, in order
 
