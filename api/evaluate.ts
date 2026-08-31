@@ -507,8 +507,34 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     const responseItemId = req.query.responseItemId ? Number(req.query.responseItemId) : undefined;
     if (!responseItemId) return res.status(400).json({ error: "Missing responseItemId query parameter" });
 
-    const responseListName = `${foundFormTitle} Responses`;
-    const responseItem = await queryListItemById(graphToken, responseListName, String(responseItemId));
+    /**
+     * Where this form's answers actually live.
+     *
+     * Two naming conventions exist. The signed-in reviewer page has always
+     * addressed the list by the form's own title, and every form it opens is
+     * named that way; this endpoint's public path has always appended
+     * " Responses". Both are real, so neither can simply be imposed on the
+     * other — asking for the wrong one throws "List not found", which is how
+     * every signed-in review link broke the moment it started coming here.
+     *
+     * Each path tries the name it is known to use first, then the other. A
+     * missing *row* does not throw, so falling through means the list itself
+     * was wrong, not the id.
+     */
+    const listNameCandidates = signedInMode
+      ? [foundFormTitle, `${foundFormTitle} Responses`]
+      : [`${foundFormTitle} Responses`, foundFormTitle];
+    let responseListName = listNameCandidates[0];
+    let responseItem: Awaited<ReturnType<typeof queryListItemById>> = null;
+    for (const candidate of listNameCandidates) {
+      try {
+        responseItem = await queryListItemById(graphToken, candidate, String(responseItemId));
+        responseListName = candidate;
+        break;
+      } catch {
+        // Not this list; try the other spelling before giving up.
+      }
+    }
     // A missing record is not answered yet: an old link has to be told the same
     // thing whether or not the id it carried was real.
     const allFields = responseItem?.fields || {};
