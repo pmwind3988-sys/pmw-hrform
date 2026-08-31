@@ -41,6 +41,7 @@ import type { SchemaSnapshot } from "../../utils/formFieldCatalog";
 import { resolveLifecycleStage } from "../../utils/submissionLifecycle";
 import { isTestRow } from "../../utils/testRun";
 import { isTestColumnKnownMissing, setTestColumnKnownMissing } from "../../utils/testColumnProbeCache";
+import { absoluteSharePointUrl } from "../../utils/sharePointUrl";
 import Chip from "@mui/material/Chip";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -614,7 +615,7 @@ export default function ResponseViewer() {
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       {selectedSubmission.PdfUrl && (
                         <a
-                          href={selectedSubmission.PdfUrl.startsWith("http") ? selectedSubmission.PdfUrl : `${SP_SITE_URL}${selectedSubmission.PdfUrl}`}
+                          href={absoluteSharePointUrl(selectedSubmission.PdfUrl, SP_SITE_URL)}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{

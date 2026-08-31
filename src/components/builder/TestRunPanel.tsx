@@ -18,6 +18,7 @@ import { useMsal } from "@azure/msal-react";
 import { C } from "./constants";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { sharePointManageScope } from "../../utils/sharePointScope";
+import { absoluteSharePointUrl } from "../../utils/sharePointUrl";
 import { spGet, getFormConfigByTitle } from "../../utils/formBuilderSP";
 import { isTestRow } from "../../utils/testRun";
 import {
@@ -313,7 +314,10 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
       const pdfUrl = await generateAndStorePdf(delegatedToken, form.Title, Number(row.id), pdfData, {
         onGeneratedBlob: (blob) => { bytes = blob.size; },
       });
-      window.open(pdfUrl, "_blank", "noopener");
+      // `generateAndStorePdf` returns SharePoint's server-relative path. Opened
+      // as-is the browser resolves it against this app's own origin and the
+      // user gets a Vercel 404 for a file that uploaded perfectly well.
+      window.open(absoluteSharePointUrl(pdfUrl, siteUrl || SP_SITE_URL), "_blank", "noopener");
       const step: Omit<TestRunStep, "at"> = { step: "pdf", label: "PDF rendered", status: "pass", order: 1100, detail: `${bytes} bytes` };
       await callTestRunAction({ action: "record-test-run-step", slug: form.Slug, itemId: row.id, delegatedToken, step });
       setRows((prev) => prev.map((candidate) => (

@@ -27,6 +27,7 @@ import {
   resolveLifecycleStage,
 } from "../../utils/submissionLifecycle";
 import { isTestColumnKnownMissing, setTestColumnKnownMissing } from "../../utils/testColumnProbeCache";
+import { absoluteSharePointUrl } from "../../utils/sharePointUrl";
 import type { LifecycleStage } from "../../utils/submissionLifecycle";
 import SubmissionFilterPanel from "./SubmissionFilterPanel";
 import {
@@ -3032,7 +3033,7 @@ export default function ApprovalDashboard() {
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         {item.PdfUrl && (
                           <a
-                            href={item.PdfUrl.startsWith("http") ? item.PdfUrl : `${new URL(SP_SITE_URL).origin}${item.PdfUrl}`}
+                            href={absoluteSharePointUrl(item.PdfUrl, SP_SITE_URL)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
@@ -3427,7 +3428,7 @@ export default function ApprovalDashboard() {
                     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap", color: C.textMuted, fontSize: 13 }}>
                       <span>
                         {getItemDisplayStatus(selectedItem)} — {selectedItem.PdfUrl ? (
-                          <a href={selectedItem.PdfUrl.startsWith("http") ? selectedItem.PdfUrl : `${new URL(SP_SITE_URL).origin}${selectedItem.PdfUrl}`}
+                          <a href={absoluteSharePointUrl(selectedItem.PdfUrl, SP_SITE_URL)}
                             target="_blank" rel="noopener noreferrer"
                             style={{ color: C.purple, fontWeight: 600 }}>View PDF</a>
                         ) : "No PDF available"}
@@ -3471,7 +3472,7 @@ export default function ApprovalDashboard() {
             <div style={{ fontSize: 20, fontWeight: 700, color: actionSuccess.type === "rejected" ? C.red : C.green }}>{actionSuccessTitle}</div>
             <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, fontWeight: 500 }}>{actionSuccess.message}</div>
             {actionSuccess.pdfUrl && (
-              <a href={actionSuccess.pdfUrl.startsWith("http") ? actionSuccess.pdfUrl : `${new URL(SP_SITE_URL).origin}${actionSuccess.pdfUrl}`}
+              <a href={absoluteSharePointUrl(actionSuccess.pdfUrl, SP_SITE_URL)}
                 target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
                 <DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> View PDF
               </a>
