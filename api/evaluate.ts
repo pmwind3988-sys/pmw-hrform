@@ -25,6 +25,7 @@ import {
   firstUnfinishedEarlierLayer,
 } from "./_utils/layerItemAccess.js";
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
+import { readMatrixTables, sortMatrixRows } from "./_utils/matrixChildData.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
 import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
@@ -737,6 +738,20 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     }
     const mediaSrcByField = await buildMediaSrcByField(surveyJson, visibleFields);
 
+    // The repeating-table answers, for the signed-in path only. The public
+    // reviewer page has never shown them, and starting now would be a change
+    // to what a public link discloses rather than to where it is read.
+    const matrixTables = signedInMode
+      ? await readMatrixTables(foundFormTitle, responseItemId, surveyJson, async (listTitle, parentId) => {
+          const rows = await queryListItems(graphToken, listTitle, {
+            filter: `fields/ParentResponseId eq ${parentId}`,
+            preferNonIndexed: true,
+            top: 500,
+          });
+          return sortMatrixRows(rows.map((row) => row.fields ?? {}));
+        })
+      : {};
+
     return res.status(200).json({
       success: true,
       data: {
@@ -759,6 +774,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         surveyJson,
         logoUrl: typeof versionMeta.logoUrl === "string" ? versionMeta.logoUrl : "",
         mediaSrcByField,
+        matrixTables,
         fields: visibleFields,
       },
     });

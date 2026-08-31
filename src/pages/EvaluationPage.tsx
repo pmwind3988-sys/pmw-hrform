@@ -11,7 +11,7 @@ import { parseForm, type NativeForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
-import { getFormConfigByTitle, spGet, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
+import { getFormConfigByTitle, spGet, triggerApprovalNotification } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { normalizeLayerStatus } from "../utils/statusConstants";
 import { buildSurveyJson } from "../utils/FormBuilderEngine";
@@ -21,7 +21,7 @@ import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
-import { rowsToHtml, getDynamicMatrixFields } from "../utils/matrixData";
+import { rowsToHtml } from "../utils/matrixData";
 import { SignatureCapture } from "../utils/signatureCapture";
 import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
@@ -560,9 +560,11 @@ export default function EvaluationPage() {
         setCurrentLayerStatus(valueToText(json.data.layerStatus || fields[`L${displayLayerNumber}_Status`]));
         setFormStatus(valueToText(json.data.formStatus || fields.FormStatus || fields.Status));
         setMediaSrcByField(isRecord(json.data.mediaSrcByField) ? json.data.mediaSrcByField as Record<string, string | string[]> : {});
+        applyMatrixTables(json.data.matrixTables);
         const data = { responseFields: fields };
 
-        // Load matrix child list data for dynamicmatrix fields
+        // The form's own definition — what to draw, and the logo to draw it
+        // under. Not anybody's personal data, so it is still read from here.
         const itemFormVersion = data.responseFields.FormVersion as string | undefined;
         if (itemFormVersion) {
           const itemPublishKey = valueToText(data.responseFields.PublishKey);
@@ -572,7 +574,6 @@ export default function EvaluationPage() {
             const meta = isRecord(parsed.meta) ? parsed.meta : {};
             setLogoUrl(valueToText(meta.logoUrl));
           }
-          loadMatrixChildData(token, resolvedTitle, parseInt(responseId, 10), itemFormVersion, itemPublishKey);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load data.");
@@ -707,65 +708,43 @@ export default function EvaluationPage() {
     }
   }, [token, userEmail, evalForm, evalRuntime, isPublic, routeToken, currentLayer, formTitle, formSlug, routePrefix, instance, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, responseData]);
 
-  /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
-  const loadMatrixChildData = async (
-    tkn: string,
-    resolvedTitle: string,
-    respId: number,
-    formVersion: string,
-    publishKey?: string,
-  ) => {
-    try {
-      // Load the version's SurveyJSON to detect dynamicmatrix fields
-      const parsed = await getVersionPayload(tkn, resolvedTitle, formVersion, publishKey);
-      if (!parsed) return;
-      const surveyDef = parsed.surveyJson || parsed;
-      const matrixFields = getDynamicMatrixFields(surveyDef);
-
-      if (matrixFields.length === 0) return;
-
-      const tables: Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }> = {};
-      for (const mf of matrixFields) {
-        const safeName = mf.name.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
-        const childListName = `${resolvedTitle} Matrix ${safeName}`;
-
-        try {
-          const rows = await readMatrixChildItems(tkn, childListName, respId);
-          if (rows.length > 0) {
-            const cols = mf.columns as MatrixColumnDef[];
-            tables[mf.name] = {
-              columns: cols,
-              rows,
-              html: rowsToHtml(mf.columns, rows),
-            };
-          }
-        } catch {
-          // Child list not found — skip this field
-        }
-      }
-
-      setMatrixTables(tables);
-
-      // Enrich responseData with matrix data in SurveyJS-compatible format
-      if (Object.keys(tables).length > 0) {
-        setResponseData((prev) => {
-          if (!prev) return prev;
-          const enriched = { ...prev };
-          for (const [fieldName, entry] of Object.entries(tables)) {
-            enriched[fieldName] = {
-              rows: entry.rows,
-              html: entry.html,
-              json: JSON.stringify(entry.rows),
-            };
-          }
-          return enriched;
-        });
-      }
-    } catch {
-      // Silently fail — matrix data is non-critical
+  /**
+   * Show the repeating-table answers the server sent with the submission.
+   *
+   * These used to be fetched here, one SharePoint list per table question,
+   * after the record itself had already moved to the server. They are answers
+   * like any other, so they come with it now — and the question of whether
+   * this reviewer may see them is settled once, before any of it is sent.
+   * Building the table markup stays here, where it is displayed.
+   */
+  const applyMatrixTables = useCallback((payload: unknown) => {
+    if (!isRecord(payload)) return;
+    const tables: Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }> = {};
+    for (const [fieldName, entry] of Object.entries(payload)) {
+      if (!isRecord(entry)) continue;
+      const columns = Array.isArray(entry.columns) ? entry.columns as MatrixColumnDef[] : [];
+      const rows = Array.isArray(entry.rows) ? entry.rows as Record<string, unknown>[] : [];
+      if (!columns.length || !rows.length) continue;
+      tables[fieldName] = { columns, rows, html: rowsToHtml(columns, rows) };
     }
-  };
+    if (!Object.keys(tables).length) return;
 
+    setMatrixTables(tables);
+    // Also folded into the answers in the shape SurveyJS expects, so the
+    // read-only preview renders them alongside everything else.
+    setResponseData((prev) => {
+      if (!prev) return prev;
+      const enriched = { ...prev };
+      for (const [fieldName, entry] of Object.entries(tables)) {
+        enriched[fieldName] = {
+          rows: entry.rows,
+          html: entry.html,
+          json: JSON.stringify(entry.rows),
+        };
+      }
+      return enriched;
+    });
+  }, []);
   // ── Render ──
   if (authState === "checking" || loading) {
     return (
