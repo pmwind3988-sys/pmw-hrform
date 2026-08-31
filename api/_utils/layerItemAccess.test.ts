@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { denyLayerItemAccess, isTerminalFormStatus, isTerminalLayerStatus } from "./layerItemAccess.js";
+import { denyLayerItemAccess, firstUnfinishedEarlierLayer, isTerminalFormStatus, isTerminalLayerStatus } from "./layerItemAccess.js";
 
 /**
  * A public approval link names a *layer*; the submission id rides in the query
@@ -219,5 +219,38 @@ describe("terminal status predicates", () => {
     expect(isTerminalFormStatus("Cancelled")).toBe(true);
     expect(isTerminalFormStatus("Submitted")).toBe(false);
     expect(isTerminalFormStatus("")).toBe(false);
+  });
+});
+
+describe("firstUnfinishedEarlierLayer", () => {
+  it("names the earliest step still outstanding before the one being submitted", () => {
+    expect(firstUnfinishedEarlierLayer([
+      { layerNumber: 1, status: "Approved" },
+      { layerNumber: 2, status: "Pending" },
+      { layerNumber: 3, status: "Pending" },
+    ], 3)).toBe(2);
+  });
+
+  it("lets a step through once everything before it has finished", () => {
+    expect(firstUnfinishedEarlierLayer([
+      { layerNumber: 1, status: "Approved" },
+      { layerNumber: 2, status: "Confirmed" },
+    ], 3)).toBeNull();
+  });
+
+  it("treats a layer with no status as no opinion rather than a blockage", () => {
+    // The rows this exists for are old ones, missing columns. Reading a blank
+    // as "unfinished" would lock exactly those rows out of their own workflow.
+    expect(firstUnfinishedEarlierLayer([
+      { layerNumber: 1, status: undefined },
+      { layerNumber: 2, status: "   " },
+    ], 3)).toBeNull();
+  });
+
+  it("ignores later layers and the layer itself", () => {
+    expect(firstUnfinishedEarlierLayer([
+      { layerNumber: 2, status: "Pending" },
+      { layerNumber: 3, status: "Pending" },
+    ], 2)).toBeNull();
   });
 });

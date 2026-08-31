@@ -11,10 +11,9 @@ import { parseForm, type NativeForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
-import { updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
+import { getFormConfigByTitle, spGet, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
-import { SP_LAYER_STATUS, normalizeLayerStatus } from "../utils/statusConstants";
-import { buildRejectedWorkflowPatch, firstUnfinishedEarlierLayer } from "../utils/workflowStatus";
+import { normalizeLayerStatus } from "../utils/statusConstants";
 import { buildSurveyJson } from "../utils/FormBuilderEngine";
 import type { LayerConfigItem, EvaluationDataEntry, EvaluationLayerConfig, FormBuilderField } from "../types";
 import DOMPurify from "dompurify";
@@ -31,7 +30,6 @@ import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
-import { isLayerActor, parseValidEmailList } from "../utils/layerRecipients";
 import { parseLayerConfig } from "../utils/workflowReviewLink";
 import { getActiveLayers } from "../components/builder/approvalDashboardLayerProgress";
 import { apiIdentityHeaders } from "../utils/apiIdentity";
@@ -585,71 +583,16 @@ export default function EvaluationPage() {
   }, [authState, isPublic, routePrefix, formSlug, responseId, displayLayerNumber, token, userEmail]);
 
   /**
-   * The gate on a signed-in decision, re-read from SharePoint at the moment it
-   * is recorded rather than trusted from the page load.
+   * The gate on a signed-in decision used to live here, re-reading the record
+   * from SharePoint in the browser before writing to it.
    *
-   * Every part of a sign-in review link — the form, the submission id, the
-   * layer number — sits in the address bar where the reviewer can edit it, so
-   * none of it may be taken as proof of anything. What decides is the record:
-   * the layer the submission is actually on, and whether the signed-in address
-   * is one this layer was assigned to. Editing the id to a neighbouring
-   * submission, or the layer number to somebody else's step, lands on a record
-   * that does not name you and is refused here.
-   *
-   * The page load applies the same assignee check before showing anything. This
-   * repeats it against fresh data because the two are answering different
-   * questions: what may be looked at, and what may be written — and an
-   * assignment can be changed, or the submission moved on, in between.
+   * It has moved to `api/evaluate.ts`, which now records the decision itself.
+   * A check made here could only ever be advice: the page held a SharePoint
+   * token, so anything it declined to write it could still have written. The
+   * server holds the record and the rules together — the assignment on the
+   * row, the layer the submission has actually reached, and the order of the
+   * steps before it. Do not reinstate a copy of them here.
    */
-  const assertSignedInLayerCanSubmit = async (listTitle: string, respId: number, layer: number): Promise<void> => {
-    if (!token) throw new Error("Missing SharePoint token.");
-    // The whole row rather than a $select list, because SharePoint rejects a
-    // $select naming a column the list does not have, and a response list
-    // created before layers could fan out has no L{n}_Emails. The read path
-    // fetches the row the same way for the same reason.
-    const item = await spGet(
-      token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`
-    ) as Record<string, unknown>;
-    const latestStatus = item[`L${layer}_Status`];
-    const latestCurrentLayer = Number(item.CurrentLayer || item.CurrentApprovalLayer || 0);
-
-    // A layer may be shared by several people, or by an expanded distribution
-    // list; L{n}_Emails carries the full set and L{n}_Email only the primary.
-    if (!isLayerActor((userEmail || "").trim(), item[`L${layer}_Emails`], item[`L${layer}_Email`])) {
-      throw new Error("This request is assigned to someone else, so it cannot be submitted from your account.");
-    }
-    if (isTerminalFormStatus(item.FormStatus || item.Status) || isTerminalLayerStatus(latestStatus)) {
-      throw new Error("This layer has already been completed. Refresh the submissions page to see the latest status.");
-    }
-    if (latestCurrentLayer) {
-      if (latestCurrentLayer !== layer) {
-        throw new Error("This link is no longer active because the submission has moved to another layer.");
-      }
-    } else {
-      // No CurrentLayer on this row, so the order has to be read back out of
-      // the layer statuses. Without this, editing the layer number in the
-      // address is a way past every earlier step on exactly the rows that
-      // cannot answer where they have got to. See firstUnfinishedEarlierLayer.
-      const sequence = layerSequence.length
-        ? layerSequence.map((entry) => Number(entry.layerNumber))
-        // The layer config did not load; fall back to whichever layers the row
-        // itself carries a status for.
-        : Object.keys(item)
-          .map((key) => Number(/^L(\d+)_Status$/.exec(key)?.[1] ?? 0))
-          .filter((layerNumber) => layerNumber > 0);
-      const blockedBy = firstUnfinishedEarlierLayer(
-        sequence.map((layerNumber) => ({
-          layerNumber,
-          status: valueToText(item[`L${layerNumber}_Status`]),
-        })),
-        layer,
-      );
-      if (blockedBy !== null) {
-        throw new Error(`Layer ${blockedBy} has not been completed yet, so this step cannot be submitted.`);
-      }
-    }
-  };
 
   // ── Submit action ──
   const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm") => {
@@ -695,88 +638,74 @@ export default function EvaluationPage() {
       if (!token) return;
       const listTitle = formTitle; // list is named after form title
       const respId = parseInt(responseId || "0", 10);
-      await assertSignedInLayerCanSubmit(listTitle, respId, displayLayerNumber);
-      const now = new Date().toISOString();
-      const effectiveTotalLayers = totalLayers || displayLayerNumber;
-      const sortedLayers = [...layerSequence].sort((a, b) => a.layerNumber - b.layerNumber);
-      const currentLayerIndex = sortedLayers.findIndex((layer) => layer.layerNumber === displayLayerNumber);
-      const nextLayer = currentLayerIndex >= 0
-        ? sortedLayers[currentLayerIndex + 1]
-        : sortedLayers.find((layer) => layer.layerNumber > displayLayerNumber);
-      const isFinal = !nextLayer && displayLayerNumber >= effectiveTotalLayers;
-      const nextLayerNumber = nextLayer?.layerNumber ?? displayLayerNumber + 1;
-      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
-
-      if (action === "reject") {
-        await spPatch(token, itemUrl, {
-          ...buildRejectedWorkflowPatch(displayLayerNumber, effectiveTotalLayers, now, rejectionReason),
-          [`L${displayLayerNumber}_ActedBy`]: userEmail,
-        });
-        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
-      } else if (action === "confirm" && currentLayer?.type === "evaluation") {
-        await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
-          confirmerEmail: userEmail,
-          confirmerName: accounts[0]?.name ?? undefined,
+      /**
+       * The decision is recorded by the server, not by this browser.
+       *
+       * Everything that decides whether it may be recorded at all — which form,
+       * which submission, which layer — sits in the address bar, where the
+       * reviewer can edit it. None of it can therefore be proof of anything.
+       * The server re-reads the record, satisfies itself that the signed-in
+       * address is the one this step was assigned to, writes the outcome,
+       * advances the workflow and mails whoever is next.
+       *
+       * What is left here is the paperwork that follows a finished workflow:
+       * the PDF record, and the closing note to whoever submitted.
+       */
+      const res = await fetchWithAuthRecovery("/api/evaluate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await apiIdentityHeaders(instance, accounts[0])),
+        },
+        body: JSON.stringify({
+          slug: formSlug,
+          prefix: routePrefix,
+          responseItemId: respId,
+          layerNumber: displayLayerNumber,
+          action,
           fields: evalForm ? foldOtherAnswers(evalRuntime.collect()) : {},
-          signatureUrl: signatureData,
-        });
-        await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
-          status: SP_LAYER_STATUS.CONFIRMED,
-          signedAt: now,
           signature: signatureData || undefined,
-          actedBy: userEmail,
-        });
-        await spPatch(token, itemUrl, {
-          Status: isFinal ? "Completed" : "In Review",
-          FormStatus: isFinal ? "Completed" : "In Review",
-          CurrentLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-          CurrentApprovalLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-        });
-        if (isFinal) {
-          await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
-        }
-      } else if (action === "approve") {
-        await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
-          status: SP_LAYER_STATUS.APPROVED,
-          signedAt: now,
-          signature: signatureData || undefined,
-          actedBy: userEmail,
-        });
-        await spPatch(token, itemUrl, {
-          Status: isFinal ? "Approved" : `Approved Layer ${displayLayerNumber}`,
-          FormStatus: isFinal ? "Completed" : "In Review",
-          CurrentLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-          CurrentApprovalLayer: isFinal ? displayLayerNumber : nextLayerNumber,
-        });
-        if (isFinal) {
-          await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
-        }
+          rejection: rejectionReason || undefined,
+          confirmerName: accounts[0]?.name || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to submit this decision.");
       }
 
-      const nextApproverEmail = !isFinal ? valueToText(responseData?.[`L${nextLayerNumber}_Email`]) : "";
-      const nextRecipients = !isFinal
-        ? parseValidEmailList(responseData?.[`L${nextLayerNumber}_NotifyEmails`])
-        : [];
-      await triggerApprovalNotification(token, {
-        formTitle,
-        submittedBy: valueToText(responseData?.SubmittedBy) || userEmail,
-        responseItemId: respId,
-        layer: displayLayerNumber,
-        totalLayers: effectiveTotalLayers,
-        action: action === "reject" ? "reject" : "approve",
-        ...(nextApproverEmail ? { nextApproverEmail } : {}),
-        ...(nextRecipients.length ? { nextRecipients } : {}),
-        ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
-        ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
-        ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),
-      });
+      // Whether anything comes after this step is the server's answer, read off
+      // the record it has just written rather than guessed at from here.
+      const isFinal = !json.advancedToLayer;
+      if (action === "reject") {
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
+      } else if (isFinal) {
+        await loadPdfAndGenerate(token, listTitle, respId, formTitle, "completed");
+      }
 
+      // The next reviewer's email goes out from the server, in the same breath
+      // as the advance it announces. Left here is the note to whoever submitted,
+      // which is only due once the workflow has finished one way or the other.
+      if (action === "reject" || isFinal) {
+        await triggerApprovalNotification(token, {
+          formTitle,
+          submittedBy: valueToText(responseData?.SubmittedBy) || userEmail,
+          responseItemId: respId,
+          layer: displayLayerNumber,
+          // The completion notice is the one sent when the layer just finished
+          // is the last one, so on a run that ends early these must agree.
+          totalLayers: action === "reject"
+            ? Math.max(totalLayers || displayLayerNumber, displayLayerNumber)
+            : displayLayerNumber,
+          action: action === "reject" ? "reject" : "approve",
+        });
+      }
       setActionState("success");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to submit this decision.");
       setActionState("error");
     }
-  }, [token, userEmail, evalForm, evalRuntime, isPublic, routeToken, currentLayer, formTitle, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData]);
+  }, [token, userEmail, evalForm, evalRuntime, isPublic, routeToken, currentLayer, formTitle, formSlug, routePrefix, instance, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, responseData]);
 
   /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
   const loadMatrixChildData = async (
