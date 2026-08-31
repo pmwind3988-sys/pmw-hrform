@@ -56,6 +56,13 @@ import { DashboardProvider } from "./contexts/DashboardContext";
 
 const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
 const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
+// Rows per request. `queryList` follows SharePoint's page links from here to the
+// end of each list, so this is a page size and not a ceiling on what is shown.
+const DASHBOARD_LIST_PAGE_SIZE = 500;
+// The only two screens that read `submissions`. Everything else - the builder,
+// approvals, routing, careers - is served without them.
+const DASHBOARD_ROUTE_PATHS = new Set(["/admin/dashboard", "/user/dashboard"]);
+type SubmissionsLoadStatus = "idle" | "loading" | "ready";
 const AUTH_PROFILE_REAUTH_TIMEOUT_MS = 60000;
 const INTERNAL_EMAIL_DOMAINS = String(import.meta.env.VITE_INTERNAL_EMAIL_DOMAINS || "pmw-group.com")
   .split(",")
@@ -67,7 +74,6 @@ const AUTH_LOAD_STEP_ORDER = [
   "site",
   "permissions",
   "lists",
-  "submissions",
   "finalizing",
   "reauth",
 ] as const;
@@ -89,10 +95,6 @@ const AUTH_LOAD_STEP_TEXT: Record<AuthLoadStep, Pick<LoadingStep, "label" | "des
   lists: {
     label: "Discover form lists",
     description: "Finding the form libraries this account can use.",
-  },
-  submissions: {
-    label: "Fetch dashboard submissions",
-    description: "Loading visible form responses and workflow status.",
   },
   finalizing: {
     label: "Finish portal setup",
@@ -626,6 +628,9 @@ export default function App() {
 
   // Dashboard data
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [submissionsStatus, setSubmissionsStatus] = useState<SubmissionsLoadStatus>("idle");
+  const [submissionsProgress, setSubmissionsProgress] = useState(0);
+  const [submissionsLoadStatus, setSubmissionsLoadStatus] = useState("Loading submissions...");
   const [visibleLists, setVisibleLists] = useState<DiscoveredList[]>([]);
   const [loadedConfig, setLoadedConfig] = useState<LoadedConfig | null>(null);
   const [missingConfigs, setMissingConfigs] = useState<string[]>([]);
@@ -654,6 +659,9 @@ export default function App() {
    */
   const portalModeActive = Boolean(portalSession) && !isAuthenticated;
   const authProfileAccountRef = useRef("");
+  // Which account's submissions have been asked for, so opening the dashboard a
+  // second time reuses what is already loaded and a new sign-in starts over.
+  const submissionsFetchAccountRef = useRef("");
   const authProfileLoadingRef = useRef(false);
   const postAuthRedirectRef = useRef(false);
   const reauthRedirectInProgressRef = useRef(false);
@@ -674,6 +682,8 @@ export default function App() {
     setIsAdmin(false);
     setCanUseFormBuilder(false);
     setSubmissions([]);
+    setSubmissionsStatus("idle");
+    submissionsFetchAccountRef.current = "";
     setVisibleLists([]);
     setLoadedConfig(null);
     setMissingConfigs([]);
@@ -826,7 +836,6 @@ export default function App() {
 
     const account = activeAccount;
     const accountIsInternal = isInternalAccount(account);
-    const email = account.username || "";
 
     let cancelled = false;
     authProfileLoadingRef.current = true;
@@ -910,85 +919,19 @@ export default function App() {
         setLoadedConfig(config);
         setLoadProgress(50);
 
-        // Build map of list → set of emails that should see submissions (including layer assignees)
-        const assigneeVisibilityMap: Record<string, Set<string>> = {};
-        for (const [title, cfg] of Object.entries(config.layerConfigs || {})) {
-          if (!cfg?.layers) continue;
-          for (const layer of cfg.layers) {
-            if (layer.assignee.type === "user" && layer.assignee.value) {
-              if (!assigneeVisibilityMap[title]) assigneeVisibilityMap[title] = new Set();
-              assigneeVisibilityMap[title].add(layer.assignee.value.toLowerCase());
-            }
-          }
-        }
-
         // Step 4: Filter visible lists
         const visible = filterVisibleLists(allLists, adminResult, config.allowedTitles);
         setVisibleLists(visible);
 
-        const listMetaMap: Record<string, ListMetaEntry> = { ...config.listMetaMap };
-        for (const list of visible) {
-          if (!listMetaMap[list.title]) {
-            listMetaMap[list.title] = generateMeta(list.title);
-          }
-        }
-
-        // Step 5: Fetch submissions
-        const totalLists = visible.length;
-        setAuthLoadStep("submissions");
-        setLoadStatus(
-          totalLists > 0
-            ? `Fetching submissions from ${totalLists} list${totalLists !== 1 ? "s" : ""}...`
-            : "No lists to fetch from."
-        );
-
-        let completedLists = 0;
-        const submissionsByList = await mapWithConcurrency(
-          visible,
-          DASHBOARD_LIST_FETCH_CONCURRENCY,
-          async (list) => {
-            setLoadStatus(`Fetching submissions from "${list.title}"...`);
-
-            try {
-              const items = await spClient.queryList(list.title, {
-                select: "*",
-                orderby: "Created desc",
-                top: adminResult ? 5000 : 1000,
-              });
-              return items.map((item) => mapSubmission(item, list.title, listMetaMap, config.layerConfigs, config.surveyJsonByFormVersion));
-            } catch {
-              return [] as Submission[];
-            } finally {
-              completedLists += 1;
-              setLoadProgress(50 + Math.round((completedLists / Math.max(totalLists, 1)) * 45));
-              setLoadStatus(`Fetched ${completedLists}/${totalLists} list${totalLists !== 1 ? "s" : ""}...`);
-            }
-          },
-        );
-        const allSubmissions = submissionsByList.flat();
-        if (cancelled) return;
-
-        // Step 6: Finalize
+        // Step 5: Finalize
+        //
+        // The submissions are deliberately NOT read here. They are the heaviest
+        // read the portal makes - every response on every visible list - and
+        // only the two dashboard screens show them, so they are fetched when
+        // someone opens one. See `loadDashboardSubmissions` below.
         setAuthLoadStep("finalizing");
         setLoadStatus("Finalizing...");
         setLoadProgress(98);
-
-        const visibleTitles = new Set(visible.map((l) => l.title));
-        let finalSubmissions = allSubmissions.filter((s) => visibleTitles.has(s.listTitle));
-        if (!adminResult && email) {
-          const lowerEmail = email.toLowerCase();
-          finalSubmissions = finalSubmissions.filter((s) => {
-            // User's own submissions
-            if (s.submittedByEmail.toLowerCase() === lowerEmail) return true;
-            if (s.createdByEmail?.toLowerCase() === lowerEmail) return true;
-            // Submissions where user is a layer assignee
-            const assignees = assigneeVisibilityMap[s.listTitle];
-            if (assignees?.has(lowerEmail)) return true;
-            return false;
-          });
-        }
-
-        setSubmissions(finalSubmissions);
         setMissingConfigs(getMissingConfigs(visible, config.layerConfig));
         setLoadProgress(100);
         setLoadStatus("Ready.");
@@ -1203,6 +1146,117 @@ export default function App() {
     setPageState("loading");
   };
 
+  /**
+   * The dashboard's submissions, fetched when someone actually opens a
+   * dashboard rather than during sign-in.
+   *
+   * This is the heaviest read the portal makes - every response on every list
+   * the account can see - and only the dashboard shows it, so signing in on the
+   * way to the builder, routing or careers screens no longer waits behind it.
+   * The fetch runs once per signed-in account: coming back to the dashboard
+   * shows what is already loaded instead of reading every list again.
+   */
+  useEffect(() => {
+    if (!DASHBOARD_ROUTE_PATHS.has(currentPath)) return;
+    if (!authProfileReady || !loadedConfig) return;
+    if (submissionsFetchAccountRef.current === accountKey) return;
+
+    const account = activeAccount ?? accounts[0] ?? null;
+    if (!account) return;
+
+    const requestAccount = accountKey;
+    submissionsFetchAccountRef.current = requestAccount;
+
+    const config = loadedConfig;
+    const lists = visibleLists;
+    const forAdmin = isAdmin;
+    const email = userEmail;
+
+    void (async () => {
+      const totalLists = lists.length;
+      setSubmissionsStatus("loading");
+      setSubmissionsProgress(0);
+      setSubmissionsLoadStatus(
+        totalLists > 0
+          ? `Fetching submissions from ${totalLists} list${totalLists !== 1 ? "s" : ""}...`
+          : "No lists to fetch from."
+      );
+
+      // Which emails may see a list's submissions without owning them - a layer
+      // assignee has to see what is waiting on them.
+      const assigneeVisibilityMap: Record<string, Set<string>> = {};
+      for (const [title, cfg] of Object.entries(config.layerConfigs || {})) {
+        if (!cfg?.layers) continue;
+        for (const layer of cfg.layers) {
+          if (layer.assignee.type === "user" && layer.assignee.value) {
+            if (!assigneeVisibilityMap[title]) assigneeVisibilityMap[title] = new Set();
+            assigneeVisibilityMap[title].add(layer.assignee.value.toLowerCase());
+          }
+        }
+      }
+
+      const fetchMetaMap: Record<string, ListMetaEntry> = { ...config.listMetaMap };
+      for (const list of lists) {
+        if (!fetchMetaMap[list.title]) {
+          fetchMetaMap[list.title] = generateMeta(list.title);
+        }
+      }
+
+      let finalSubmissions: Submission[] = [];
+      try {
+        const spClient = createSpClient(instance, [account]);
+        let completedLists = 0;
+        const submissionsByList = await mapWithConcurrency(
+          lists,
+          DASHBOARD_LIST_FETCH_CONCURRENCY,
+          async (list) => {
+            setSubmissionsLoadStatus(`Fetching submissions from "${list.title}"...`);
+
+            try {
+              const items = await spClient.queryList(list.title, {
+                select: "*",
+                orderby: "Created desc",
+                top: DASHBOARD_LIST_PAGE_SIZE,
+              });
+              return items.map((item) => mapSubmission(item, list.title, fetchMetaMap, config.layerConfigs, config.surveyJsonByFormVersion));
+            } catch {
+              return [] as Submission[];
+            } finally {
+              completedLists += 1;
+              setSubmissionsProgress(Math.round((completedLists / Math.max(totalLists, 1)) * 100));
+              setSubmissionsLoadStatus(`Fetched ${completedLists}/${totalLists} list${totalLists !== 1 ? "s" : ""}...`);
+            }
+          },
+        );
+
+        const visibleTitles = new Set(lists.map((l) => l.title));
+        finalSubmissions = submissionsByList.flat().filter((item) => visibleTitles.has(item.listTitle));
+        if (!forAdmin && email) {
+          const lowerEmail = email.toLowerCase();
+          finalSubmissions = finalSubmissions.filter((item) => {
+            // User's own submissions
+            if (item.submittedByEmail.toLowerCase() === lowerEmail) return true;
+            if (item.createdByEmail?.toLowerCase() === lowerEmail) return true;
+            // Submissions where user is a layer assignee
+            const assignees = assigneeVisibilityMap[item.listTitle];
+            if (assignees?.has(lowerEmail)) return true;
+            return false;
+          });
+        }
+      } catch {
+        // Each list already falls back to an empty result of its own, so only a
+        // failure to build the client itself lands here. The dashboard opens
+        // empty rather than holding on a spinner that will never finish.
+      }
+
+      // Someone signed in as somebody else while this was in flight - their
+      // fetch owns the state now.
+      if (submissionsFetchAccountRef.current !== requestAccount) return;
+      setSubmissions(finalSubmissions);
+      setSubmissionsStatus("ready");
+    })();
+  }, [currentPath, authProfileReady, loadedConfig, visibleLists, accountKey, activeAccount, accounts, instance, isAdmin, userEmail]);
+
   // Filter + sort logic
   const filteredSubmissions = submissions.filter((item) => submissionMatchesFilters(item, filters));
   const sortedSubmissions = sortSubmissions(filteredSubmissions, sortBy);
@@ -1390,6 +1444,19 @@ export default function App() {
     </ErrorBoundary>
   );
 
+  // Until the submissions land, the dashboard would render as an empty state -
+  // "no submissions" is a claim, not a wait - so it holds on the loading screen.
+  const dashboardRouteElement =
+    submissionsStatus === "ready" ? (
+      adminDashboardInner
+    ) : (
+      <LoadingScreen
+        userEmail={userEmail || undefined}
+        progress={submissionsProgress}
+        status={submissionsLoadStatus}
+      />
+    );
+
   // Mounted under both /eval/* and /approval/*. EvaluationPage resolves the layer
   // type from the data, so one component serves both; the prefix only tells the
   // recipient which of the two they were asked for.
@@ -1510,7 +1577,7 @@ export default function App() {
             path="/admin/dashboard"
             element={
               <AdminGuard isAdmin={isAdmin}>
-                {adminDashboardInner}
+                {dashboardRouteElement}
               </AdminGuard>
             }
           />
@@ -1518,7 +1585,7 @@ export default function App() {
             path="/user/dashboard"
             element={
               <ErrorBoundary>
-                {adminDashboardInner}
+                {dashboardRouteElement}
               </ErrorBoundary>
             }
           />

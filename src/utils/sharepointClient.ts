@@ -321,6 +321,44 @@ function getAuthorEmail(item: Record<string, unknown>): string {
 }
 
 /**
+ * SharePoint answers a list query with ONE page of rows plus a link to the next,
+ * so reading only the first response stops at whatever `$top` asked for and the
+ * older rows are silently missing. `$top` is therefore the page size here, and
+ * the pages are followed to the end of the list.
+ */
+const LIST_PAGE_SAFETY_CAP = 40; // 40 pages before we stop asking.
+
+async function fetchListPages(token: string, firstUrl: string): Promise<Record<string, unknown>[]> {
+  const collected: Record<string, unknown>[] = [];
+  let nextUrl: string | null = firstUrl;
+
+  for (let page = 0; nextUrl && page < LIST_PAGE_SAFETY_CAP; page += 1) {
+    const response = await fetchWithTimeout(nextUrl, {
+      headers: {
+        Accept: "application/json;odata=nometadata",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to query list: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const items = data.value;
+    if (Array.isArray(items)) {
+      for (const item of items as Record<string, unknown>[]) {
+        collected.push({ ...item, _authorEmail: getAuthorEmail(item) });
+      }
+    }
+    const next = data["odata.nextLink"];
+    nextUrl = typeof next === "string" && next ? next : null;
+  }
+
+  return collected;
+}
+
+/**
  * @param siteUrl Overrides the home site. Only the form builder passes this, to
  *   check group membership on the site it is about to write to — membership is
  *   per-site in SharePoint, so an HR-site check would answer the wrong question.
@@ -416,28 +454,7 @@ export function createSpClient(
     params.set("$expand", "Author");
 
     const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?${params}`;
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        Accept: "application/json;odata=nometadata",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to query list: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const items = data.value || [];
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return [];
-    }
-
-    return items.map((item: Record<string, unknown>) => ({
-      ...item,
-      _authorEmail: getAuthorEmail(item),
-    }));
+    return fetchListPages(token, url);
   }
 
   async function queryListByGuid(
