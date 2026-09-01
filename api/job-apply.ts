@@ -668,8 +668,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const portalAccess = await readCareerPortalAccess(graphToken);
       if (!portalAccess.isPublic) {
         // `resolveSignedInViewer`, not `resolveTenantIdentity`: an HR-issued
-        // portal account has no Microsoft identity to resolve, and it must match
-        // what `jobs-list.ts` lets in — otherwise a portal account can read the
+        // guest member has no Microsoft identity to resolve, and it must match
+        // what `jobs-list.ts` lets in — otherwise a guest member can read the
         // whole opening and only find out it cannot apply after writing a cover
         // letter.
         const viewer = await resolveSignedInViewer(getBearerToken(req.headers), graphToken);

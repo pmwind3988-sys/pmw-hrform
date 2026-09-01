@@ -426,7 +426,7 @@ export default function AdminLearningPage() {
               }
             >
               Views are not being recorded. The "Learning Material Views" list is missing from SharePoint,
-              so every count stays at zero and nothing a portal account opens reaches the access log.
+              so every count stays at zero and nothing a guest member opens reaches the access log.
               Materials still open normally.
             </Alert>
           )}

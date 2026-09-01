@@ -16,7 +16,9 @@
 | Job admin lists | `AdminJobsPage.tsx` | Route `/admin/career/applications`. Lists/manages job applications. |
 | Job admin manage | `AdminJobManagePage.tsx` | Route `/admin/career/opportunities`. CRUD for job listings. |
 | Career portal cards | `AdminCareerPortalCardsPage.tsx` | Route `/admin/career/cards`. Manages career portal hero/feature cards. |
-| Portal accounts | `AdminPortalAccountsPage.tsx` | Route `/admin/portal-accounts`, HR Forms Owner-only. Create / reset / disable / unlock / delete the login-ID accounts, plus the named access log. Both credential dialogs are mounted only while open, so the generated password is new every time — do not convert them back to an `open` prop with a reset effect. |
+| Guest members | `AdminGuestMembersPage.tsx` | Route `/admin/guest-members`, HR Forms Owner-only. An approvals queue, not a credential factory: approve / revoke learning access, disable / re-enable, plus the named access log. **Nothing here creates a member** — they create themselves by signing in with Google. Paged with a search box, because the list grows on its own. |
+| Guest member home | `GuestMemberPage.tsx` | A signed-in guest member's own page: their record, their learning-access state, and what they have submitted. Carries the PDPA notice about the access log. |
+| Guest profile gate | `GuestProfileSetupPage.tsx` | The blocking one-time form after a first Google sign-in. `App.tsx` renders it *instead of* the member route table, not as a route inside it — so no path reaches anything while it is outstanding. |
 
 ## Conventions
 - **Prop-drilling**: `AdminHomePage` receives massive props from `App.tsx` — no context abstraction yet.

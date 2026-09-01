@@ -660,14 +660,17 @@ export function viewerKey(email: string): string {
 }
 
 /**
- * The same idea for an HR-issued portal account, which has a login ID instead of
- * an address. The `portal|` segment keeps the two namespaces apart: without it a
- * login ID that happened to look like an address would hash into the same key as
- * that person's M365 account and merge two different viewers into one.
+ * The same idea for a guest member, who signs in with Google.
+ *
+ * The `guest|` segment keeps the two namespaces apart. A guest's address and a
+ * staff member's address are both addresses, and somebody who is both — a
+ * contractor with a PMW mailbox who also signed up with a personal Google
+ * account carrying the same address — must count as two viewers, not silently
+ * merge into one.
  */
-export function portalViewerKey(loginId: string): string {
+export function guestViewerKey(email: string): string {
   return createHash("sha256")
-    .update(`learning-views|portal|${loginId.trim().toLowerCase()}`)
+    .update(`learning-views|guest|${email.trim().toLowerCase()}`)
     .digest("hex")
     .slice(0, 24);
 }

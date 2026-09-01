@@ -20,7 +20,7 @@ import {
   readEmbedUrl,
   readLearningSettings,
   readLearningTree,
-  portalViewerKey,
+  guestViewerKey,
   readViewIndex,
   recordView,
   renameFolder,
@@ -59,30 +59,38 @@ import {
   type LockIndex,
 } from "./_utils/learningLocks.js";
 import {
-  authenticateAccount,
-  createAccount,
-  deleteAccount,
-  ensureInternalAccountsSchema,
-  isPortalSessionCurrent,
-  listAccounts,
-  normalizeLoginId,
-  resetAccountPassword,
-  setAccountStatus,
-  unlockAccount,
-  LOCKOUT_MINUTES,
-} from "./_utils/internalAccounts.js";
+  ensureGuestMembersSchema,
+  findOrCreateMember,
+  isGuestSessionCurrent,
+  listDepartments,
+  listMembers,
+  normalizeEmail,
+  readGuestPermissions,
+  readMember,
+  saveMemberProfile,
+  setLearningApproval,
+  setMemberStatus,
+  toMemberSummary,
+  MEMBER_PAGE_SIZE,
+} from "./_utils/guestMembers.js";
+import { readGuestSubmissions } from "./_utils/guestSubmissions.js";
 import {
   ensureLearningAccessLogSchema,
   readAccessLog,
   recordAccessLogEntry,
 } from "./_utils/learningAccessLog.js";
 import {
-  looksLikePortalToken,
-  portalSessionsEnabled,
-  signPortalSession,
-  verifyPortalSession,
-  PORTAL_SESSIONS_DISABLED_MESSAGE,
-} from "./_utils/internalSession.js";
+  guestSessionsEnabled,
+  looksLikeGuestToken,
+  signGuestSession,
+  verifyGuestSession,
+  GUEST_SESSIONS_DISABLED_MESSAGE,
+} from "./_utils/guestSession.js";
+import {
+  googleSignInEnabled,
+  verifyGoogleIdToken,
+  GOOGLE_SIGN_IN_DISABLED_MESSAGE,
+} from "./_utils/googleIdentity.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { logError, logWarn } from "./_utils/logger.js";
 
@@ -120,36 +128,55 @@ const ADMIN_ACTIONS = new Set([
   // behind a password is editing the library, not reading it.
   "set-material-password",
   "set-topic-password",
-  // Portal account management. Same gate, same token, same failure path as the
-  // library actions above — HR issues these accounts to reach this hub, so the
-  // people who may create one are exactly the people who may fill it.
-  "portal-ensure-schema",
-  "portal-list-accounts",
-  "portal-create-account",
-  "portal-reset-password",
-  "portal-set-status",
-  "portal-unlock-account",
-  "portal-delete-account",
-  "portal-view-log",
+  // Guest member management. Same gate, same token, same failure path as the
+  // library actions above — approving a guest member is deciding who may read
+  // the library, so the people who may approve are exactly the people who may
+  // fill it.
+  //
+  // Note what is *not* here: nothing creates a member. Members create
+  // themselves by signing in with Google. What HR does is decide what an
+  // existing one may reach.
+  "guest-ensure-schema",
+  "guest-list-members",
+  "guest-set-learning-approval",
+  "guest-set-status",
+  "guest-view-log",
 ]);
 
 /**
- * Portal accounts live on this endpoint rather than one of their own because
+ * Guest members live on this endpoint rather than one of their own because
  * Vercel's Hobby plan caps a deployment at 12 serverless functions and `api/`
- * was already at 12. Grouping them here is the least arbitrary place to spend
- * the budget: an HR-issued account exists to reach this library, its admin
- * actions want the identical HR Forms Owner gate, and `record-view` already
- * writes the access log these actions read back.
+ * is at exactly 12. Grouping them here is the least arbitrary place to spend
+ * the budget: the reason HR approves a guest member at all is to let them reach
+ * this library, the admin actions want the identical HR Forms Owner gate, and
+ * `record-view` already writes the access log those actions read back. They
+ * inherit the slots the deleted `portal-*` actions vacated, so the function
+ * count is unchanged — see `_utils/deploymentLimits.test.ts`.
  *
- * `portal-sign-in` is the one action on this file that answers before anybody is
+ * `guest-sign-in` is the one action on this file that answers before anybody is
  * signed in — it is the front door — so it is dispatched ahead of both the owner
- * check and the learner check, and is protected by the password verification and
- * per-account lockout alone.
+ * check and the learner check. Nobody is refused here: anyone with a Google
+ * account may sign in and become a member. What a member may then *reach* is
+ * decided by `profileComplete` and `learningApproved` further down.
  */
-const PORTAL_SIGN_IN_ACTION = "portal-sign-in";
+const GUEST_SIGN_IN_ACTION = "guest-sign-in";
 
-/** How long a portal session lasts before the person signs in again. */
-const PORTAL_SESSION_TTL_HOURS = 12;
+/**
+ * Actions a signed-in guest member performs on their own record. They sit
+ * between the front door and the learner check, because a member has to be able
+ * to complete their profile before they may reach anything — including this
+ * library — and revoking someone's learning access must not also lock them out
+ * of correcting their own name.
+ */
+const GUEST_MEMBER_ACTIONS = new Set([
+  "guest-me",
+  "guest-save-profile",
+  "guest-departments",
+  "guest-my-submissions",
+]);
+
+/** How long a guest session lasts before the person signs in again. */
+const GUEST_SESSION_TTL_HOURS = 12;
 
 function getHeader(headers: Record<string, string | string[] | undefined>, name: string): string {
   const lowerName = name.toLowerCase();
@@ -341,11 +368,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // Ahead of every other check: this is how somebody with no Microsoft account
     // proves who they are in the first place.
-    if (action === PORTAL_SIGN_IN_ACTION) {
+    if (action === GUEST_SIGN_IN_ACTION) {
       if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-      // Credentials in, session out — never cached anywhere, by anyone.
+      // Google token in, session out — never cached anywhere, by anyone.
       res.setHeader("Cache-Control", "no-store");
-      return await handlePortalSignIn(req, res, token);
+      return await handleGuestSignIn(req, res, token);
+    }
+
+    if (GUEST_MEMBER_ACTIONS.has(action)) {
+      if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+      res.setHeader("Cache-Control", "no-store");
+      return await handleGuestMemberAction(req, res, token, action, bearer);
     }
 
     if (isAdminAction) {
@@ -356,15 +389,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return await handleAdminAction(req, res, token, action, admin);
     }
 
-    const learner = await resolveLearnerViewer(bearer, token);
-    if (!learner) {
+    const resolved = await resolveLearnerViewer(bearer, token);
+
+    if (resolved.status === "anonymous") {
       return res.status(403).json({
-        error: "Sign in with your PMW Microsoft 365 account or portal account to open learning materials.",
+        error: "Sign in with your PMW Microsoft 365 account, or with Google, to open learning materials.",
         code: "learning-sign-in-required",
       });
     }
 
-    return await handleLearnerAction(req, res, token, action, learner);
+    // A member who has not finished the one-time profile form. Answered
+    // separately from "not signed in" so the hub can send them to the form
+    // rather than back to a sign-in screen they have already been through.
+    if (resolved.status === "profile-incomplete") {
+      return res.status(403).json({
+        error: "Complete your profile before opening learning materials.",
+        code: "guest-profile-incomplete",
+      });
+    }
+
+    // Signed in, profile complete, not yet approved. This is the ordinary state
+    // of a brand-new guest member, not a failure, and the hub renders it as
+    // "your access is being reviewed" rather than an error.
+    if (resolved.status === "awaiting-approval") {
+      return res.status(403).json({
+        error: "Your access to the learning hub is waiting for HR to review it.",
+        code: "guest-awaiting-approval",
+      });
+    }
+
+    return await handleLearnerAction(req, res, token, action, resolved.learner);
   } catch (e) {
     logError("api:learning", "Learning materials request failed", e);
     return res.status(500).json({ error: "Internal server error. Please try again." });
@@ -372,42 +426,87 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 }
 
 /**
- * Two ways to be a learner: a PMW Microsoft 365 account, and an HR-issued portal
- * account. Both fold into the one opaque key the view index counts by, and only
- * one of them carries a name.
+ * Two ways to be a learner: a PMW Microsoft 365 account, and a guest member who
+ * signed in with Google. Both fold into the one opaque key the view index counts
+ * by, and only one of them carries a name.
  */
 interface Learner {
   /** What the view index counts. Never reversible to a person. */
   key: string;
   /**
-   * Set only for a portal account, and only because HR issues those to be
-   * followed up by name — it is what the access log writes. Staff signing in
+   * Set only for a guest member, and only because an approved guest is meant to
+   * be followed up by name — it is what the access log writes. Staff signing in
    * with Microsoft 365 resolve to `null` here, which is what keeps the named
    * trail limited to the population that was told about it.
+   *
+   * The values are the member's details **as they are right now**, read at the
+   * start of the request and stamped into the log row, so a later profile edit
+   * cannot rewrite what the trail already says.
    */
-  portal: { loginId: string; fullName: string } | null;
+  guest: { email: string; fullName: string; position: string; department: string } | null;
 }
 
 /**
- * A portal token is checked first and answers without a network call, so an
- * HR-issued account never pays for a Graph `/me` round trip that could not
- * possibly recognise it. `isPortalSessionCurrent` is the second half of that
- * check: the signature proves who they are, the account state proves they are
- * still allowed in after a disable or a password reset.
+ * Why this returns a status rather than `Learner | null`.
+ *
+ * A guest member can fail to be a learner in three quite different ways, and the
+ * person on the other end needs to be told a different thing in each: sign in,
+ * finish your profile, or wait for HR. Collapsing all three into `null` would
+ * send a member who is merely awaiting approval back to a sign-in screen they
+ * have already used, which reads as the application being broken.
  */
-async function resolveLearnerViewer(bearer: string, graphToken: string): Promise<Learner | null> {
-  if (looksLikePortalToken(bearer)) {
-    const claims = verifyPortalSession(bearer);
-    if (!claims) return null;
-    if (!(await isPortalSessionCurrent(graphToken, claims.loginId, claims.tokenVersion))) return null;
+type ResolvedLearner =
+  | { status: "ok"; learner: Learner }
+  | { status: "anonymous" }
+  | { status: "profile-incomplete" }
+  | { status: "awaiting-approval" };
+
+/**
+ * A guest token is checked first and answers without a network call, so a guest
+ * member never pays for a Graph `/me` round trip that could not possibly
+ * recognise it. `isGuestSessionCurrent` is the second half of that check: the
+ * signature proves who they are, the member record proves they are still allowed
+ * in after being disabled or having their approval revoked.
+ */
+async function resolveLearnerViewer(bearer: string, graphToken: string): Promise<ResolvedLearner> {
+  if (looksLikeGuestToken(bearer)) {
+    const claims = verifyGuestSession(bearer);
+    if (!claims) return { status: "anonymous" };
+    if (!(await isGuestSessionCurrent(graphToken, claims.email, claims.tokenVersion))) {
+      return { status: "anonymous" };
+    }
+
+    const permissions = await readGuestPermissions(graphToken, claims.email);
+    if (!permissions) return { status: "anonymous" };
+    if (!permissions.profileComplete) return { status: "profile-incomplete" };
+
+    // The gate. Signing in with Google is open to anybody; reading the library
+    // is not, and this is the only thing standing between the two. It is checked
+    // here rather than in the interface because the interface is a courtesy.
+    if (!permissions.learningApproved) return { status: "awaiting-approval" };
+
+    // Read once, at the top of the request, so every log row this request writes
+    // records the same details — and the ones current at the time of the view.
+    const member = await readMember(graphToken, claims.email);
+    if (!member) return { status: "anonymous" };
+
     return {
-      key: portalViewerKey(claims.loginId),
-      portal: { loginId: claims.loginId, fullName: claims.fullName },
+      status: "ok",
+      learner: {
+        key: guestViewerKey(claims.email),
+        guest: {
+          email: member.email,
+          fullName: member.fullName || member.googleName,
+          position: member.position,
+          department: member.department,
+        },
+      },
     };
   }
 
   const signedInEmail = await resolveTenantIdentity(bearer);
-  return signedInEmail ? { key: viewerKey(signedInEmail), portal: null } : null;
+  if (!signedInEmail) return { status: "anonymous" };
+  return { status: "ok", learner: { key: viewerKey(signedInEmail), guest: null } };
 }
 
 async function handleLearnerAction(
@@ -472,14 +571,16 @@ async function handleLearnerAction(
     if (action === "record-view") {
       const viewCount = await recordView(token, materialId, viewer);
 
-      // Named trail for HR-issued accounts only, and written after the view has
-      // been counted so a log failure can never cost somebody their view. `item`
-      // is the material this endpoint already resolved and refused to treat as a
+      // Named trail for guest members only, and written after the view has been
+      // counted so a log failure can never cost somebody their view. `item` is
+      // the material this endpoint already resolved and refused to treat as a
       // folder, so the name recorded is the file they actually opened.
-      if (learner.portal) {
+      if (learner.guest) {
         await recordAccessLogEntry(token, {
-          loginId: learner.portal.loginId,
-          viewerName: learner.portal.fullName,
+          email: learner.guest.email,
+          viewerName: learner.guest.fullName,
+          viewerPosition: learner.guest.position,
+          viewerDepartment: learner.guest.department,
           materialId,
           materialName: stripExtension(item.name),
         });
@@ -688,11 +789,11 @@ async function handleAdminAction(
   const body = req.body || {};
 
   try {
-    if (action.startsWith("portal-")) {
-      // Portal account management never touches the document library, and its
+    if (action.startsWith("guest-")) {
+      // Guest member management never touches the document library, and its
       // errors are written for the admin reading them, so it gets its own
       // handler and its own catch rather than sharing the library's.
-      return await handlePortalAdminAction(req, res, token, action, adminEmail);
+      return await handleGuestAdminAction(req, res, token, action, adminEmail);
     }
 
     if (action === "admin-list") {
@@ -804,56 +905,132 @@ function adminErrorMessage(raw: string): string {
   return "SharePoint rejected the change. Please try again.";
 }
 
-// ── Portal accounts ──────────────────────────────────────────────────────────
+// ── Guest members ────────────────────────────────────────────────────────────
 
-async function handlePortalSignIn(req: ApiRequest, res: ApiResponse, graphToken: string): Promise<void> {
-  if (!portalSessionsEnabled()) {
-    // The fix is an environment variable, which is the admin's problem and not
-    // the visitor's — so the reason goes to the log, and the person at the
-    // sign-in box gets something they can actually act on. Admins see the real
-    // state on `portal-list-accounts`, which reports `sessionsConfigured`.
-    logWarn("api:learning", PORTAL_SESSIONS_DISABLED_MESSAGE, {});
+/**
+ * The front door. Nobody is turned away here.
+ *
+ * A verified Google token is exchanged for a member record — created on the spot
+ * if this is a first visit — and a signed session. That is the whole of the
+ * admission decision: anyone with a Google account becomes a permanent guest
+ * member, and membership never expires. Everything about what they may *reach*
+ * is decided elsewhere, and the response says which of those states they are in
+ * so the browser can send them to the right place.
+ */
+async function handleGuestSignIn(req: ApiRequest, res: ApiResponse, graphToken: string): Promise<void> {
+  // Both of these are environment problems, which are the admin's to fix and not
+  // the visitor's — so the reason goes to the log and the person at the sign-in
+  // box gets something they can act on. Admins see the real state on
+  // `guest-list-members`, which reports both flags.
+  if (!googleSignInEnabled()) {
+    logWarn("api:learning", GOOGLE_SIGN_IN_DISABLED_MESSAGE, {});
     return res.status(503).json({
-      error: "Portal account sign-in is unavailable right now. Use Microsoft 365, or contact HR.",
+      error: "Google sign-in is unavailable right now. Use Microsoft 365, or contact HR.",
+    });
+  }
+  if (!guestSessionsEnabled()) {
+    logWarn("api:learning", GUEST_SESSIONS_DISABLED_MESSAGE, {});
+    return res.status(503).json({
+      error: "Google sign-in is unavailable right now. Use Microsoft 365, or contact HR.",
     });
   }
 
-  const loginId = normalizeLoginId(req.body?.loginId);
-  const password = String(req.body?.password ?? "");
-
-  const result = await authenticateAccount(graphToken, loginId, password);
-
-  if (!result.ok) {
-    if (result.reason === "locked") {
-      // Naming the lockout tells an attacker this login ID is real — but they
-      // already had to guess it five times to get here, and the person actually
-      // locked out otherwise has no idea why their correct password stopped
-      // working. The support call costs more than the hint does.
-      return res.status(429).json({
-        error: `Too many failed attempts. Try again in ${result.minutes || LOCKOUT_MINUTES} minutes, or ask HR to unlock the account.`,
-      });
-    }
-    if (result.reason === "disabled") {
-      return res.status(403).json({ error: "This portal account has been disabled. Contact HR." });
-    }
-    return res.status(401).json({ error: "That login ID and password do not match." });
+  const identity = await verifyGoogleIdToken(String(req.body?.credential ?? ""));
+  if (!identity) {
+    // One message for a forged token, an expired one, and one issued for some
+    // other application. Telling them apart helps nobody who is signing in
+    // honestly, and helps somebody who is not.
+    return res.status(401).json({ error: "That Google sign-in could not be verified. Please try again." });
   }
 
-  const { token, expiresAt } = signPortalSession(
+  const member = await findOrCreateMember(graphToken, identity);
+
+  if (member.status === "disabled") {
+    return res.status(403).json({ error: "This account has been disabled. Contact HR." });
+  }
+
+  const { token, expiresAt } = signGuestSession(
     {
-      loginId: result.account.loginId,
-      fullName: result.account.fullName,
-      tokenVersion: result.account.tokenVersion,
+      email: member.email,
+      fullName: member.fullName || member.googleName,
+      tokenVersion: member.tokenVersion,
     },
-    PORTAL_SESSION_TTL_HOURS,
+    GUEST_SESSION_TTL_HOURS,
   );
 
   return res.status(200).json({
-    session: { token, loginId: result.account.loginId, fullName: result.account.fullName, expiresAt },
+    session: {
+      token,
+      email: member.email,
+      fullName: member.fullName || member.googleName,
+      expiresAt,
+    },
+    member: toMemberSummary(member),
   });
 }
 
-async function handlePortalAdminAction(
+/**
+ * What a signed-in guest member may do to their own record.
+ *
+ * Deliberately gated on the session alone — not on `profileComplete`, because
+ * this is where a profile gets completed, and not on `learningApproved`, because
+ * a member whose learning access was revoked must still be able to read and
+ * correct their own details.
+ */
+async function handleGuestMemberAction(
+  req: ApiRequest,
+  res: ApiResponse,
+  graphToken: string,
+  action: string,
+  bearer: string,
+): Promise<void> {
+  const claims = looksLikeGuestToken(bearer) ? verifyGuestSession(bearer) : null;
+  if (!claims || !(await isGuestSessionCurrent(graphToken, claims.email, claims.tokenVersion))) {
+    return res.status(401).json({ error: "Sign in again to continue.", code: "guest-session-expired" });
+  }
+
+  try {
+    if (action === "guest-me") {
+      const member = await readMember(graphToken, claims.email);
+      if (!member) return res.status(401).json({ error: "Sign in again to continue." });
+      return res.status(200).json({ member: toMemberSummary(member) });
+    }
+
+    if (action === "guest-my-submissions") {
+      return res.status(200).json({
+        submissions: await readGuestSubmissions(graphToken, claims.email),
+      });
+    }
+
+    if (action === "guest-departments") {
+      return res.status(200).json({ departments: await listDepartments(graphToken) });
+    }
+
+    if (action === "guest-save-profile") {
+      const body = req.body || {};
+      // The address is taken from the verified session, never from the body: a
+      // member editing their own profile must not be able to name somebody
+      // else's record as the one to write to.
+      const member = await saveMemberProfile(graphToken, claims.email, {
+        fullName: body.fullName,
+        position: body.position,
+        department: body.department,
+      });
+      return res.status(200).json({ member: toMemberSummary(member) });
+    }
+
+    return res.status(400).json({ error: "Unknown action" });
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    logWarn("api:learning", "Guest member action failed", { action, errorMessage: raw });
+    if (/^(Graph|SP REST) /.test(raw)) {
+      return res.status(400).json({ error: "Your details could not be saved. Please try again." });
+    }
+    return res.status(400).json({ error: raw.slice(0, 300) });
+  }
+}
+
+async function handleGuestAdminAction(
   req: ApiRequest,
   res: ApiResponse,
   graphToken: string,
@@ -861,77 +1038,67 @@ async function handlePortalAdminAction(
   adminEmail: string,
 ): Promise<void> {
   const body = req.body || {};
-  // Account state is not library state — never let it sit in a shared cache.
+  // Member state is not library state — never let it sit in a shared cache.
   res.setHeader("Cache-Control", "no-store");
 
   try {
-    if (action === "portal-ensure-schema") {
-      // Both lists, one button. An accounts list without its log would let HR
-      // issue accounts that quietly record nothing, and the promise made when
-      // the account is handed over is that the viewing *is* recorded.
+    if (action === "guest-ensure-schema") {
+      // Both lists, one button. A members list without its log would let HR
+      // approve people for the hub while quietly recording nothing, and the
+      // whole reason approval exists is that the viewing is recorded.
       // The admin's own token, not the application's: SharePoint refuses the
       // app-only principal both the lists and their columns.
       const delegatedToken = getBearerToken(req.headers);
-      await ensureInternalAccountsSchema(delegatedToken);
+      await ensureGuestMembersSchema(delegatedToken);
       await ensureLearningAccessLogSchema(delegatedToken);
-      return res.status(200).json({ success: true, sessionsConfigured: portalSessionsEnabled() });
+      return res.status(200).json({
+        success: true,
+        sessionsConfigured: guestSessionsEnabled(),
+        googleConfigured: googleSignInEnabled(),
+      });
     }
 
-    if (action === "portal-list-accounts") {
+    if (action === "guest-list-members") {
       // A missing list is the ordinary first-run state, not a failure: the admin
       // screen turns `provisioned: false` into a "Set up" button. Reporting it as
       // an error instead would greet every new deployment with a red banner
       // describing a problem that has not happened yet.
-      const listed = await listAccounts(graphToken).catch(() => null);
+      const page = await listMembers(graphToken, {
+        search: String(body.search ?? ""),
+        skip: Number(body.skip) || 0,
+        take: Number(body.take) || MEMBER_PAGE_SIZE,
+      }).catch(() => null);
+
       return res.status(200).json({
-        accounts: listed ?? [],
-        provisioned: listed !== null,
-        sessionsConfigured: portalSessionsEnabled(),
+        members: page?.members ?? [],
+        total: page?.total ?? 0,
+        pageSize: MEMBER_PAGE_SIZE,
+        provisioned: page !== null,
+        sessionsConfigured: guestSessionsEnabled(),
+        googleConfigured: googleSignInEnabled(),
       });
     }
 
-    if (action === "portal-view-log") {
+    if (action === "guest-view-log") {
       return res.status(200).json({ entries: await readAccessLog(graphToken) });
     }
 
-    if (action === "portal-create-account") {
-      const account = await createAccount(
-        graphToken,
-        {
-          loginId: String(body.loginId ?? ""),
-          fullName: String(body.fullName ?? ""),
-          password: String(body.password ?? ""),
-        },
-        adminEmail,
-      );
-      return res.status(200).json({ success: true, account });
+    if (action === "guest-set-learning-approval") {
+      const approved = body.approved === true;
+      await setLearningApproval(graphToken, normalizeEmail(body.email), approved, adminEmail);
+      return res.status(200).json({ success: true, approved });
     }
 
-    if (action === "portal-reset-password") {
-      await resetAccountPassword(graphToken, normalizeLoginId(body.loginId), String(body.password ?? ""));
-      return res.status(200).json({ success: true });
-    }
-
-    if (action === "portal-set-status") {
+    if (action === "guest-set-status") {
       const status = String(body.status ?? "") === "disabled" ? "disabled" : "active";
-      await setAccountStatus(graphToken, normalizeLoginId(body.loginId), status);
+      await setMemberStatus(graphToken, normalizeEmail(body.email), status);
       return res.status(200).json({ success: true, status });
-    }
-
-    if (action === "portal-unlock-account") {
-      await unlockAccount(graphToken, normalizeLoginId(body.loginId));
-      return res.status(200).json({ success: true });
-    }
-
-    if (action === "portal-delete-account") {
-      await deleteAccount(graphToken, normalizeLoginId(body.loginId));
-      return res.status(200).json({ success: true });
     }
 
     return res.status(400).json({ error: "Unknown action" });
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
-    logWarn("api:learning", "Portal account admin action failed", { action, errorMessage: raw });
+    logWarn("api:learning", "Guest member admin action failed", { action, errorMessage: raw });
     // Validation messages are written for the admin reading them and pass
     // through; a raw Graph failure carries site and drive ids and does not.
     if (/^(Graph|SP REST) /.test(raw)) {

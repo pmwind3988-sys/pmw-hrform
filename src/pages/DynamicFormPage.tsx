@@ -48,6 +48,7 @@ import { createApprovalDirectoryReader } from "../utils/approvalDirectory";
 import { NEEDS_ROUTING_LAYER_STATUS } from "../utils/submissionLifecycle";
 import { sampleAnswersFor } from "../utils/testRunLaunch";
 import { getTabularFields, rowsToHtml, type MatrixRow, type MatrixColumn } from "../utils/matrixData";
+import { readStoredGuestSession } from "../utils/guestMemberService";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -1673,12 +1674,19 @@ export default function DynamicFormPage() {
           }
         }
 
+        // A guest member's own session, so the row records who sent it rather
+        // than the word "GUEST". Absent for a genuinely anonymous visitor, who
+        // still submits exactly as before. The server verifies this and ignores
+        // any address in the body — this endpoint is public.
+        const guestSession = readStoredGuestSession();
+
         const res = await fetch("/api/submit-form", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "X-Requested-With": "XMLHttpRequest",
             ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+            ...(guestSession ? { Authorization: `Bearer ${guestSession.token}` } : {}),
           },
           body: JSON.stringify({
             listTitle: cfg.Title,

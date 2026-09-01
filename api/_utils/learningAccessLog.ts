@@ -7,18 +7,23 @@ import { ensureListViaSPRest, ensureTextFieldViaSPRest } from "./sharepointRest.
 import { logWarn } from "./logger.js";
 
 /**
- * The named record of which HR-issued portal account opened which learning
- * material, and when.
+ * The named record of which guest member opened which learning material, and
+ * when.
  *
  * Deliberately a second, separate list from the anonymous view counter in
  * `learningLibrary.ts`, and deliberately narrower. Staff signing in with
  * Microsoft 365 are never written here: their views stay behind the one-way hash
  * that only ever answers "how many distinct people", which is all the product
- * asks of them. A portal account is a different bargain — HR issues it to
- * somebody outside the company specifically so they can be given material and
- * be seen to have received it, and the person is told so when it is handed over.
- * Logging one population by name and not the other is the whole point; folding
- * the two lists into one would quietly extend named tracking to every employee.
+ * asks of them. A guest member is a different bargain — an HR Forms Owner
+ * approves them for the hub specifically so that material given to somebody
+ * outside the company can be seen to have been received. Logging one population
+ * by name and not the other is the whole point; folding the two lists into one
+ * would quietly extend named tracking to every employee.
+ *
+ * Because a guest member signs themselves up rather than being handed an account
+ * across a desk, the notice that this log exists has to be given by the product
+ * — at the point learning access is granted, and on their profile — rather
+ * than spoken at hand-over. See `PDPA_COMPLIANCE.md`.
  *
  * Append-only. Nothing in this module updates or deletes a row: an audit trail
  * that can be edited from the screen that displays it is not evidence of
@@ -26,23 +31,31 @@ import { logWarn } from "./logger.js";
  */
 export const LEARNING_ACCESS_LOG_LIST = "Learning Access Log";
 
-/** Title holds the login ID, so SharePoint indexes the column HR filters on. */
+/** Title holds the member's Google address, the column HR filters on. */
 const COLUMN_VIEWER_NAME = "ViewerName";
+const COLUMN_VIEWER_POSITION = "ViewerPosition";
+const COLUMN_VIEWER_DEPARTMENT = "ViewerDepartment";
 const COLUMN_MATERIAL_ID = "MaterialId";
 const COLUMN_MATERIAL_NAME = "MaterialName";
 const COLUMN_VIEWED_AT = "ViewedAt";
 
 const LOG_COLUMNS = [
   COLUMN_VIEWER_NAME,
+  COLUMN_VIEWER_POSITION,
+  COLUMN_VIEWER_DEPARTMENT,
   COLUMN_MATERIAL_ID,
   COLUMN_MATERIAL_NAME,
   COLUMN_VIEWED_AT,
 ] as const;
 
 /**
- * How many rows the admin screen reads. Well past what this population can
- * generate — a few dozen accounts opening a few dozen materials — and a hard
- * ceiling on how much a single request can ever pull back.
+ * How many rows the admin screen reads.
+ *
+ * A hard ceiling on a single request, and now a real one rather than a
+ * theoretical one: the population this log covers used to be a few dozen
+ * hand-issued accounts, and is now every guest member HR approves. The trail is
+ * append-only and never shrinks, so how long rows should be kept is a
+ * records-keeping decision still to be made.
  */
 const MAX_LOG_ROWS = 5000;
 
@@ -50,8 +63,11 @@ const MAX_LOG_ROWS = 5000;
 const MAX_TEXT = 255;
 
 export interface AccessLogEntry {
-  loginId: string;
+  /** The member's Google address. */
+  email: string;
   viewerName: string;
+  viewerPosition: string;
+  viewerDepartment: string;
   materialId: string;
   materialName: string;
   viewedAt: string;
@@ -82,14 +98,30 @@ export async function ensureLearningAccessLogSchema(delegatedToken: string): Pro
  * because the point of the log outlives the file: HR needs "Ali opened Fire
  * Safety Briefing on 3 March" to still say that after the material has been
  * renamed or deleted.
+ *
+ * The viewer's name, position and department are stored for the same reason,
+ * and for a sharper one. A guest member may edit their own profile. If the log
+ * showed their *current* details it would be rewritable from the profile page —
+ * change your job title and the record of what you opened last year changes with
+ * it. Stamping the values into each row is what stops the trail being edited by
+ * the person it is about.
  */
 export async function recordAccessLogEntry(
   graphToken: string,
-  entry: { loginId: string; viewerName: string; materialId: string; materialName: string },
+  entry: {
+    email: string;
+    viewerName: string;
+    viewerPosition: string;
+    viewerDepartment: string;
+    materialId: string;
+    materialName: string;
+  },
 ): Promise<void> {
   const fields = {
-    Title: clip(entry.loginId),
+    Title: clip(entry.email),
     [COLUMN_VIEWER_NAME]: clip(entry.viewerName),
+    [COLUMN_VIEWER_POSITION]: clip(entry.viewerPosition),
+    [COLUMN_VIEWER_DEPARTMENT]: clip(entry.viewerDepartment),
     [COLUMN_MATERIAL_ID]: clip(entry.materialId),
     [COLUMN_MATERIAL_NAME]: clip(entry.materialName),
     [COLUMN_VIEWED_AT]: new Date().toISOString(),
@@ -102,10 +134,10 @@ export async function recordAccessLogEntry(
     // admin's delegated token and this runs on the learner's request, which never
     // carries one. A failure means either a transient Graph hiccup or a list that
     // was never provisioned, and the second one is fixed by an admin pressing
-    // "Set up" on the Portal Accounts screen — not by anything this path can do.
-    logWarn("api:learning", "Could not record a portal access log entry", {
+    // "Set up" on the Guest Members screen — not by anything this path can do.
+    logWarn("api:learning", "Could not record a guest access log entry", {
       list: LEARNING_ACCESS_LOG_LIST,
-      loginId: entry.loginId,
+      email: entry.email,
       materialId: entry.materialId,
       errorMessage: error instanceof Error ? error.message : String(error),
     });
@@ -115,8 +147,10 @@ export async function recordAccessLogEntry(
 function toEntry(item: GraphListItem): AccessLogEntry {
   const fields = item.fields || {};
   return {
-    loginId: String(fields.Title || ""),
+    email: String(fields.Title || ""),
     viewerName: String(fields[COLUMN_VIEWER_NAME] || ""),
+    viewerPosition: String(fields[COLUMN_VIEWER_POSITION] || ""),
+    viewerDepartment: String(fields[COLUMN_VIEWER_DEPARTMENT] || ""),
     materialId: String(fields[COLUMN_MATERIAL_ID] || ""),
     materialName: String(fields[COLUMN_MATERIAL_NAME] || ""),
     viewedAt: String(fields[COLUMN_VIEWED_AT] || ""),
@@ -156,12 +190,12 @@ export async function readAccessLog(graphToken: string): Promise<AccessLogEntry[
     items = await queryAllListItems(graphToken, LEARNING_ACCESS_LOG_LIST, { maxItems: MAX_LOG_ROWS });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logWarn("api:learning", "Could not read the portal access log", { errorMessage: message });
+    logWarn("api:learning", "Could not read the guest access log", { errorMessage: message });
     if (message.includes(`List "${LEARNING_ACCESS_LOG_LIST}" not found`)) return [];
     throw new Error("The access log could not be read from SharePoint. Try again, or run Set up.", {
       cause: error,
     });
   }
 
-  return sortAccessLogEntries(items.map(toEntry).filter((entry) => entry.loginId && entry.materialId));
+  return sortAccessLogEntries(items.map(toEntry).filter((entry) => entry.email && entry.materialId));
 }

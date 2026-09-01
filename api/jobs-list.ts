@@ -106,7 +106,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (!portalAccess.isPublic) {
       // Either kind of signed-in visitor passes: a PMW Microsoft 365 account, or
-      // an HR-issued portal account. A closed portal is closed to the public,
+      // a guest member signed in with Google. A closed portal is closed to the public,
       // not to the people HR deliberately let in.
       const viewer = await resolveSignedInViewer(bearerFromHeaders(req.headers), token);
       if (!viewer) {

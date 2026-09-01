@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  clearStoredPortalSession,
-  readStoredPortalSession,
-  storePortalSession,
-  type PortalSession,
-} from "../utils/internalAccountService";
+  clearStoredGuestSession,
+  readStoredGuestSession,
+  storeGuestSession,
+  type GuestSession,
+} from "../utils/guestMemberService";
 
 /**
- * The signed-in state of an HR-issued portal account, the identity that stands
- * in for Microsoft 365 for people who have no PMW mailbox.
+ * The signed-in state of a guest member — the identity that stands in for
+ * Microsoft 365 for people outside the company.
  *
  * Deliberately not an MSAL concept and not stored anywhere MSAL can see: these
  * two identity systems never merge, and where both are present the Microsoft
- * account wins (see `portalModeActive` in App.tsx).
+ * account wins (see `guestModeActive` in App.tsx).
  */
-export interface PortalSessionState {
-  session: PortalSession | null;
-  signIn: (session: PortalSession) => void;
+export interface GuestSessionState {
+  session: GuestSession | null;
+  signIn: (session: GuestSession) => void;
   signOut: () => void;
 }
 
@@ -25,16 +25,16 @@ export interface PortalSessionState {
  * `signOut()` in this one would leave every other instance — App.tsx's route
  * gate above all — still holding the old session. This event covers that gap.
  */
-const SESSION_CHANGED_EVENT = "pmw-portal-session-changed";
+const SESSION_CHANGED_EVENT = "pmw-guest-session-changed";
 
-export function usePortalSession(): PortalSessionState {
-  const [session, setSession] = useState<PortalSession | null>(() => readStoredPortalSession());
+export function useGuestSession(): GuestSessionState {
+  const [session, setSession] = useState<GuestSession | null>(() => readStoredGuestSession());
 
   // Signing out in one tab has to sign out the others; leaving a second tab
   // holding a dead session would let it keep rendering the hub until its next
   // API call failed.
   useEffect(() => {
-    const syncFromStorage = () => setSession(readStoredPortalSession());
+    const syncFromStorage = () => setSession(readStoredGuestSession());
     window.addEventListener("storage", syncFromStorage);
     window.addEventListener(SESSION_CHANGED_EVENT, syncFromStorage);
     return () => {
@@ -61,21 +61,21 @@ export function usePortalSession(): PortalSessionState {
       : 0;
 
     const timer = window.setTimeout(() => {
-      clearStoredPortalSession();
+      clearStoredGuestSession();
       setSession(null);
     }, delay);
 
     return () => window.clearTimeout(timer);
   }, [session]);
 
-  const signIn = useCallback((next: PortalSession) => {
-    storePortalSession(next);
+  const signIn = useCallback((next: GuestSession) => {
+    storeGuestSession(next);
     setSession(next);
     window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
   }, []);
 
   const signOut = useCallback(() => {
-    clearStoredPortalSession();
+    clearStoredGuestSession();
     setSession(null);
     window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
   }, []);

@@ -286,9 +286,9 @@ export default function Header({
                         <LearningIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                         <Typography variant="body2">Manage Learning Materials</Typography>
                       </MenuItem>
-                      <MenuItem onClick={() => navigateFromMenu("/admin/portal-accounts", handleMainMenuClose)} sx={menuItemSx}>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/guest-members", handleMainMenuClose)} sx={menuItemSx}>
                         <PortalAccountsIcon sx={menuIconSx(editorial.pmwPurple)} />
-                        <Typography variant="body2">Portal Accounts</Typography>
+                        <Typography variant="body2">Guest Members</Typography>
                       </MenuItem>
                       <MenuItem onClick={() => openCareerPortalAccess(handleMainMenuClose)} sx={menuItemSx}>
                         <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />
@@ -462,9 +462,9 @@ export default function Header({
                         <LearningIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
                         <Typography variant="body2">Manage Learning Materials</Typography>
                       </MenuItem>
-                      <MenuItem onClick={() => navigateFromMenu("/admin/portal-accounts", handleProfileClose)} sx={menuItemSx}>
+                      <MenuItem onClick={() => navigateFromMenu("/admin/guest-members", handleProfileClose)} sx={menuItemSx}>
                         <PortalAccountsIcon sx={menuIconSx(editorial.pmwPurple)} />
-                        <Typography variant="body2">Portal Accounts</Typography>
+                        <Typography variant="body2">Guest Members</Typography>
                       </MenuItem>
                       <MenuItem onClick={() => openCareerPortalAccess(handleProfileClose)} sx={menuItemSx}>
                         <PortalAccessIcon sx={menuIconSx(editorial.pmwBlueDark)} />

@@ -48,7 +48,7 @@ import {
   unlockLearningTopic,
 } from "../utils/learningService";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
-import { usePortalSession } from "../auth/usePortalSession";
+import { useGuestSession } from "../auth/useGuestSession";
 import { mergeViewCounts, useLearningViewCounts } from "../hooks/useLearningViewCounts";
 import { editorial, editorialHairline } from "../theme/editorial";
 import type {
@@ -80,7 +80,7 @@ export default function LearningMaterialsPage() {
   const navigate = useNavigate();
   const { instance } = useMsal();
   const isAdmin = useHrFormsOwner();
-  const { session: portalSession, signOut: signOutPortal } = usePortalSession();
+  const { session: guestSession, signOut: signOutGuest } = useGuestSession();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [accessToken, setAccessToken] = useState("");
@@ -270,13 +270,12 @@ export default function LearningMaterialsPage() {
       <LearningHeader
         title="Learning Materials"
         subtitle={
-          portalSession
-            ? `Signed in as ${portalSession.fullName}`
+          guestSession
+            ? `Signed in as ${guestSession.fullName}`
             : "Training videos, guides, and reference documents for PMW Group staff."
         }
-        backPath={isAdmin ? "/admin/dashboard" : "/user/dashboard"}
-        backLabel="Back to dashboard"
-        showBack={!portalSession}
+        backPath={guestSession ? "/member" : isAdmin ? "/admin/dashboard" : "/user/dashboard"}
+        backLabel={guestSession ? "Back to your account" : "Back to dashboard"}
         actions={
           <>
             <Button
@@ -287,11 +286,11 @@ export default function LearningMaterialsPage() {
             >
               Refresh
             </Button>
-            {portalSession && (
+            {guestSession && (
               <Button
                 size="small"
                 startIcon={<LogoutOutlined />}
-                onClick={signOutPortal}
+                onClick={signOutGuest}
                 sx={{ ...learningButtonSx, color: editorial.pmwBlueDark }}
               >
                 Sign out

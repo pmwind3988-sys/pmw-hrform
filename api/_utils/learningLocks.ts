@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { hashPassword, verifyPassword } from "./internalAccounts.js";
+import { hashPassword, verifyPassword } from "./passwordHash.js";
 
 /**
  * Password locks on learning content — a topic folder, or a single material,

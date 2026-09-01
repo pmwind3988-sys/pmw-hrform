@@ -103,7 +103,7 @@ describe("recording a view when the tracking list is missing", () => {
 
   it("returns a zero count instead of failing the whole request", async () => {
     // The caller writes the named access log *after* this. Throwing here used to
-    // cost a portal account its audit trail as well as its view count.
+    // cost a guest member their audit trail as well as their view count.
     const { recordView } = await loadWithGraph({
       createListItem: vi.fn(async () => {
         throw missing;

@@ -1,3 +1,5 @@
+import { logWarn } from "./logger.js";
+
 function requireSpSiteUrl(): string {
   const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
   if (!SP_SITE_URL) throw new Error("SP_SITE_URL env var not set.");
@@ -224,6 +226,53 @@ export async function ensureTextFieldViaSPRest(
     const lowerText = text.toLowerCase();
     if (lowerText.includes("duplicate") || lowerText.includes("already exists")) return;
     throw new Error(`SP REST create text field ${res.status}: ${text.slice(0, 300)}`);
+  }
+}
+
+/**
+ * Adds a SharePoint index to a column, so filtered reads keep working as the
+ * list grows.
+ *
+ * SharePoint stops answering a `$filter` on an **unindexed** column reliably
+ * once a list passes roughly 5,000 items — it throws, or it quietly returns
+ * nothing, depending on the day and the load. Graph's
+ * `HonorNonIndexedQueriesWarningMayFailRandomly` header, which `graphClient`
+ * sends everywhere, says exactly what it means in its name. That is survivable
+ * for the small configuration lists this codebase mostly keeps; it is not
+ * survivable for a list that grows every time somebody signs in, where the
+ * symptom is a real member being told intermittently that they have no account.
+ *
+ * Indexing an existing column is a MERGE on the field. Already-indexed is a
+ * success, not an error — this runs on every "Set up" press.
+ */
+export async function ensureFieldIndexedViaSPRest(
+  token: string,
+  listName: string,
+  internalName: string,
+): Promise<void> {
+  const digest = await getSpDigest(token);
+  const fieldPath = `${spListEndpoint(listName)}/fields/getbyinternalnameortitle('${encodeURIComponent(
+    escapeODataString(internalName),
+  )}')`;
+
+  const res = await fetch(`${requireSpSiteUrl()}${fieldPath}`, {
+    method: "POST",
+    headers: mergeHeaders(token, digest),
+    body: JSON.stringify({ __metadata: { type: "SP.Field" }, Indexed: true }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    // A column that is already indexed has nothing to do, and a tenant that
+    // refuses index creation still has a working list — a slower one, on a list
+    // that has to grow very large before anybody notices. Neither is worth
+    // failing provisioning over, and both are worth leaving a trace of.
+    logWarn("api:sharepoint", "Could not index a SharePoint column", {
+      list: listName,
+      column: internalName,
+      status: res.status,
+      detail: text.slice(0, 200),
+    });
   }
 }
 

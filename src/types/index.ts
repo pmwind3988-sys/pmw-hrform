@@ -9,11 +9,13 @@ export const PAGE_STATES = {
   wrongTenant: "wrong_tenant",
   error: "error",
   /**
-   * Signed in on an HR-issued portal account rather than Microsoft 365. Reaches
-   * the learning hub and the public routes, and nothing else — see the separate
-   * route table App.tsx renders for this state.
+   * Signed in as a guest member — Google rather than Microsoft 365. Reaches
+   * their own account page, the learning hub once HR has approved them, and the
+   * public routes; nothing else. See the separate route table App.tsx renders
+   * for this state, and the profile form it renders instead of that table until
+   * the member has said who they are.
    */
-  portal: "portal",
+  member: "member",
 } as const;
 
 export type PageState = (typeof PAGE_STATES)[keyof typeof PAGE_STATES];

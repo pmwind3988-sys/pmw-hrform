@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
  * failed deploy.
  *
  * If you need new server-side surface, add an `action` to an existing endpoint
- * rather than a file here — that is why the portal account routes live inside
+ * rather than a file here — that is why the guest member routes live inside
  * `learning-materials.ts`. Raising the number below is only correct alongside a
  * paid plan that actually allows it.
  */

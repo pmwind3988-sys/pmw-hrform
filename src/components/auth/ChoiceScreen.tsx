@@ -6,36 +6,26 @@
  * `#DDE4EC` hairlines, a white panel over the admin's live background photo.
  * Restrained: neutrals plus PMW blue carrying the single primary action.
  * STORY: Arrive, recognise PMW at once, see Microsoft 365 as the way in — and
- * if HR issued a portal account instead, find that door without hunting.
+ * if you are not staff, find the Google door without hunting for it.
  * FIRST VIEWPORT: Centred 440px card on `--app-bg`. Logo, wordmark, one line of
- * purpose, full-width primary, hairline "or", portal panel expanding in place.
+ * purpose, full-width primary, hairline "or", Google button beneath it.
  * FORM: Centred single-card threshold, position 1 of 1 — the composition was
  * pinned by the requester's reference, so no concept tournament was run.
  */
-import { useEffect, useRef, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Collapse,
-  Container,
-  Divider,
-  Link,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
-import { LockOutlined } from "@mui/icons-material";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Box, Button, Container, Divider, Link, Stack, Typography } from "@mui/material";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 import { editorial, editorialHairline, editorialShadow } from "../../theme/editorial";
 import { applyDashboardBackground } from "../../utils/dashboardBackgrounds";
 import { fetchDashboardBackground } from "../../utils/dashboardBackgroundService";
+import { googleSignInConfigured, renderGoogleButton } from "../../auth/googleSignIn";
 import {
-  signInWithPortalAccount,
-  storePortalSession,
-  type PortalSession,
-} from "../../utils/internalAccountService";
+  signInWithGoogle,
+  storeGuestSession,
+  type GuestMemberSummary,
+  type GuestSession,
+} from "../../utils/guestMemberService";
 
 /**
  * White on `pmwBlue` measures 3.4:1 — under the 4.5:1 a 16px button label needs.
@@ -49,11 +39,11 @@ interface ChoiceScreenProps {
   onLogin: () => void;
   onGuest: () => void;
   /**
-   * Handed a signed portal session once login ID and password check out. Left
+   * Handed a signed guest session once Google's token has been verified. Left
    * optional so this screen works before the route gating that consumes it —
    * without it, a successful sign-in still stores the session and reloads.
    */
-  onPortalSignIn?: (session: PortalSession) => void;
+  onGuestSignIn?: (session: GuestSession, member: GuestMemberSummary) => void;
 }
 
 /** Microsoft's four-square mark, drawn rather than fetched — the CSP allows no external images. */
@@ -68,13 +58,11 @@ function MicrosoftMark() {
   );
 }
 
-export default function ChoiceScreen({ onLogin, onPortalSignIn }: ChoiceScreenProps) {
-  const [portalOpen, setPortalOpen] = useState(false);
-  const [loginId, setLoginId] = useState("");
-  const [password, setPassword] = useState("");
+export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenProps) {
   const [signingIn, setSigningIn] = useState(false);
-  const [portalError, setPortalError] = useState("");
-  const loginIdRef = useRef<HTMLInputElement | null>(null);
+  const [guestError, setGuestError] = useState("");
+  const [googleReady, setGoogleReady] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
   // The background an admin picked for the app, on the one screen that renders
   // before anybody is signed in. It reads with the API key alone, so there is
@@ -91,50 +79,80 @@ export default function ChoiceScreen({ onLogin, onPortalSignIn }: ChoiceScreenPr
     };
   }, []);
 
-  const openPortalPanel = () => {
-    setPortalOpen(true);
-    setPortalError("");
-    // Opening a form and leaving the cursor outside it makes the person hunt
-    // for where to start. Waits for the collapse to mount the input.
-    //
-    // `preventScroll` is the whole point of the option: the expanded card is
-    // taller than a laptop viewport, and a default focus scrolls the input into
-    // view by pushing the logo and heading off the top of the screen — so the
-    // person lands on an anonymous pair of fields with no idea what they are
-    // signing in to.
-    window.setTimeout(() => loginIdRef.current?.focus({ preventScroll: true }), 180);
-  };
+  /**
+   * The in-flight guard is a ref, not the `signingIn` state.
+   *
+   * Google's button is rendered once, on mount, and the callback it is given is
+   * captured then — so a check against `signingIn` would read the value from
+   * that first render for the rest of the page's life, and never be true. The
+   * state still exists, because the button has to *look* busy; the ref is what
+   * actually stops a second exchange starting.
+   */
+  const signInProgressRef = useRef(false);
 
-  async function handlePortalSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    if (signingIn) return;
-
-    const id = loginId.trim();
-    if (!id || !password) {
-      setPortalError("Enter both your login ID and password.");
-      return;
-    }
-
-    setSigningIn(true);
-    setPortalError("");
-    try {
-      const session = await signInWithPortalAccount(id, password);
-      storePortalSession(session);
-      // Cleared the instant it has been exchanged — a password has no reason to
-      // outlive the request that used it.
-      setPassword("");
-      if (onPortalSignIn) {
-        onPortalSignIn(session);
-      } else {
-        window.location.reload();
+  const completeGoogleSignIn = useCallback(
+    async (credential: string) => {
+      if (signInProgressRef.current) return;
+      signInProgressRef.current = true;
+      setSigningIn(true);
+      setGuestError("");
+      try {
+        const { session, member } = await signInWithGoogle(credential);
+        storeGuestSession(session);
+        if (onGuestSignIn) {
+          onGuestSignIn(session, member);
+        } else {
+          window.location.reload();
+        }
+      } catch (error) {
+        setGuestError(error instanceof Error ? error.message : "Sign-in failed. Please try again.");
+      } finally {
+        signInProgressRef.current = false;
+        setSigningIn(false);
       }
-    } catch (error) {
-      setPortalError(error instanceof Error ? error.message : "Sign-in failed. Please try again.");
-      setPassword("");
-    } finally {
-      setSigningIn(false);
-    }
-  }
+    },
+    [onGuestSignIn],
+  );
+
+  // Google renders its own button into this slot. It is mounted on arrival
+  // rather than behind a "show me the other option" click: unlike the portal
+  // panel this replaces, there is nothing to fill in, so hiding it would only
+  // add a step to the door most non-staff visitors need.
+  //
+  // `completeGoogleSignIn` is read through a ref for the same reason the guard
+  // above is one — the effect must not re-run and replace a rendered button
+  // when the callback identity changes.
+  const completeRef = useRef(completeGoogleSignIn);
+  completeRef.current = completeGoogleSignIn;
+
+  useEffect(() => {
+    if (!googleSignInConfigured()) return;
+    const parent = googleButtonRef.current;
+    if (!parent) return;
+
+    let cancelled = false;
+
+    void renderGoogleButton(parent, (credential) => {
+      if (cancelled) return;
+      void completeRef.current(credential);
+    })
+      .then(() => {
+        if (!cancelled) setGoogleReady(true);
+      })
+      .catch(() => {
+        // The usual cause is the Content-Security-Policy blocking Google's
+        // script in one of the two files it is written in. Nothing useful can
+        // be said to the visitor about that, so the slot stays empty and
+        // Microsoft 365 remains available.
+        if (!cancelled) setGoogleReady(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // Mounted once. Re-running would replace a rendered button with an identical
+    // one and drop whatever state Google keeps behind it.
+  }, []);
 
   return (
     <Box
@@ -221,132 +239,48 @@ export default function ChoiceScreen({ onLogin, onPortalSignIn }: ChoiceScreenPr
             or
           </Divider>
 
-          {!portalOpen ? (
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={openPortalPanel}
-              startIcon={<LockOutlined sx={{ fontSize: 18 }} />}
-              sx={{
-                py: 1.3,
-                borderRadius: "10px",
-                fontSize: "0.9rem",
-                fontWeight: 700,
-                textTransform: "none",
-                color: editorial.ink,
-                borderColor: editorial.border,
-                backgroundColor: editorial.white,
-                transition: "background-color 0.16s ease, border-color 0.16s ease",
-                "&:hover": { backgroundColor: editorial.blueWash, borderColor: editorial.pmwBlueSoft },
-                "&:focus-visible": { outline: `3px solid ${editorial.pmwBlueSoft}`, outlineOffset: 2 },
-              }}
+          {/*
+            Google's own button, rendered by their script into this slot. It
+            cannot be restyled to match the Microsoft button above — their
+            branding rules forbid it — so the two deliberately sit as siblings
+            rather than pretending to be one set.
+          */}
+          <Box
+            ref={googleButtonRef}
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              minHeight: googleSignInConfigured() ? 44 : 0,
+              opacity: signingIn ? 0.6 : 1,
+              pointerEvents: signingIn ? "none" : "auto",
+              transition: "opacity 0.16s ease",
+            }}
+          />
+
+          {googleSignInConfigured() && !googleReady && !guestError ? (
+            <Typography
+              sx={{ mt: 1, fontSize: "0.8rem", textAlign: "center", color: editorial.muted }}
             >
-              Sign in with a portal account
-            </Button>
+              Loading Google sign-in…
+            </Typography>
           ) : null}
 
-          <Collapse in={portalOpen} unmountOnExit>
-            <Box component="form" onSubmit={handlePortalSubmit} noValidate>
-              <Typography
-                component="h2"
-                sx={{
-                  fontSize: "0.8rem",
-                  fontWeight: 800,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  color: editorial.muted,
-                  mb: 1.75,
-                }}
-              >
-                Portal account
-              </Typography>
+          {guestError ? (
+            <Alert
+              severity="error"
+              role="alert"
+              sx={{ mt: 1.75, borderRadius: "10px", fontSize: "0.85rem", fontWeight: 600, py: 0.25 }}
+            >
+              {guestError}
+            </Alert>
+          ) : null}
 
-              <Stack spacing={1.75}>
-                <TextField
-                  inputRef={loginIdRef}
-                  label="Login ID"
-                  value={loginId}
-                  onChange={(event) => setLoginId(event.target.value)}
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  disabled={signingIn}
-                  fullWidth
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
-                />
-                <TextField
-                  label="Password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
-                  disabled={signingIn}
-                  fullWidth
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
-                />
-
-                {portalError && (
-                  <Alert
-                    severity="error"
-                    role="alert"
-                    sx={{ borderRadius: "10px", fontSize: "0.85rem", fontWeight: 600, py: 0.25 }}
-                  >
-                    {portalError}
-                  </Alert>
-                )}
-
-                <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  disableElevation
-                  disabled={signingIn}
-                  sx={{
-                    py: 1.25,
-                    borderRadius: "10px",
-                    fontSize: "0.9rem",
-                    fontWeight: 700,
-                    textTransform: "none",
-                    backgroundColor: editorial.ink,
-                    color: editorial.white,
-                    transition: "background-color 0.16s ease",
-                    "&:hover": { backgroundColor: "#2A2A2A" },
-                    "&.Mui-disabled": { backgroundColor: editorial.softMuted, color: editorial.white },
-                    "&:focus-visible": { outline: `3px solid ${editorial.pmwBlueSoft}`, outlineOffset: 2 },
-                  }}
-                >
-                  {signingIn ? "Signing in…" : "Sign in"}
-                </Button>
-              </Stack>
-
-              <Typography
-                sx={{ mt: 1.75, fontSize: "0.78rem", lineHeight: 1.55, color: editorial.muted, textWrap: "pretty" }}
-              >
-                Portal accounts are issued by HR. Contact your administrator if you need one, or to have your
-                password reset.
-              </Typography>
-
-              <Button
-                onClick={() => {
-                  setPortalOpen(false);
-                  setPortalError("");
-                  setPassword("");
-                }}
-                sx={{
-                  mt: 0.5,
-                  px: 0,
-                  fontSize: "0.8rem",
-                  fontWeight: 700,
-                  textTransform: "none",
-                  color: editorial.pmwBlueDark,
-                  "&:hover": { backgroundColor: "transparent", textDecoration: "underline" },
-                }}
-              >
-                Back to sign-in options
-              </Button>
-            </Box>
-          </Collapse>
+          <Typography
+            sx={{ mt: 1.75, fontSize: "0.78rem", lineHeight: 1.55, color: editorial.muted, textAlign: "center", textWrap: "pretty" }}
+          >
+            Signing in with Google makes you a guest member. You will be asked for your name,
+            position and department once.
+          </Typography>
 
           <Typography
             sx={{
@@ -360,7 +294,7 @@ export default function ChoiceScreen({ onLogin, onPortalSignIn }: ChoiceScreenPr
               textWrap: "pretty",
             }}
           >
-            Only PMW Microsoft 365 accounts and HR-issued portal accounts can sign in.{" "}
+PMW staff sign in with Microsoft 365. Everyone else is welcome to continue with Google.{" "}
             <Link
               href="/privacy"
               sx={{ color: editorial.pmwBlueDark, fontWeight: 700, textDecorationColor: "currentColor" }}

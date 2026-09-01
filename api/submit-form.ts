@@ -18,6 +18,9 @@ import {
   queryAllListItems,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
+import { bearerFromHeaders } from "./_utils/viewerIdentity.js";
+import { isGuestSessionCurrent } from "./_utils/guestMembers.js";
+import { looksLikeGuestToken, verifyGuestSession } from "./_utils/guestSession.js";
 import { buildWorkflowReviewLink } from "./_utils/workflowLink.js";
 import { linkTokenField, mintLinkToken } from "./_utils/linkToken.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
@@ -1469,6 +1472,30 @@ interface ApiResponse {
   end(): void;
 }
 
+/**
+ * The verified address of a guest member submitting a public form, or "".
+ *
+ * Answers "" for every failure — no token, an expired one, a member who has
+ * since been disabled — because a submission must never be refused over this.
+ * The worst case is a row that records "GUEST", which is exactly what every
+ * public submission recorded before guest members existed.
+ */
+async function resolveGuestSubmitter(
+  headers: Record<string, string | string[] | undefined>,
+  graphToken: string,
+): Promise<string> {
+  try {
+    const bearer = bearerFromHeaders(headers);
+    if (!looksLikeGuestToken(bearer)) return "";
+    const claims = verifyGuestSession(bearer);
+    if (!claims) return "";
+    if (!(await isGuestSessionCurrent(graphToken, claims.email, claims.tokenVersion))) return "";
+    return claims.email;
+  } catch {
+    return "";
+  }
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -1698,6 +1725,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const parsedLayerConfig = parseLayerConfig(formConfig.LayerConfig);
     await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig);
+
+    /*
+      Stamp a signed-in guest member's own address over the literal "GUEST".
+
+      This is what makes their "what you have sent" page possible: without it a
+      public submission records a word rather than a person, and there is no way
+      back from it. Historical rows recorded before guest members existed stay
+      unattributable — nothing was lost, it simply was never recorded.
+
+      **Deliberately after `applyLayerConfigWorkflow`, never before.** That
+      function resolves approval routing from `SubmittedBy`, and treats "GUEST"
+      as unusable — parking a layer rather than guessing at an approver. Setting
+      a real address first would quietly switch that on for external people:
+      chain layers would start resolving against a directory that has never
+      heard of them, and a form assigned to "the submitter" would email a
+      contractor as though they were staff. Routing keeps the behaviour it has
+      today; only the stored row learns who sent it.
+
+      The address comes from the session token, never from the request body.
+      This endpoint is public — a body field naming the submitter would let
+      anybody file a submission under somebody else's name.
+    */
+    const guestSubmitter = await resolveGuestSubmitter(req.headers, token);
+    if (guestSubmitter) submissionBody.SubmittedBy = guestSubmitter;
 
     const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
 

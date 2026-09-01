@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import {
   useMsal,
@@ -8,7 +8,7 @@ import type { AccountInfo } from "@azure/msal-browser";
 import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
-import { usePortalSession } from "./auth/usePortalSession";
+import { useGuestSession } from "./auth/useGuestSession";
 import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
 import {
   AUTH_RECOVERY_REQUIRED_EVENT,
@@ -25,7 +25,12 @@ import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta, surveySnapshotKey } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
-import type { PortalSession } from "./utils/internalAccountService";
+import {
+  fetchOwnMember,
+  type GuestMemberSummary,
+  type GuestSession,
+} from "./utils/guestMemberService";
+import { forgetGoogleAccount } from "./auth/googleSignIn";
 import { normalizeLayerStatus } from "./utils/statusConstants";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
 import { APPLICANT_NAME_FIELD_KEYS } from "./utils/applicantName";
@@ -286,7 +291,14 @@ const loadAdminJobManagePage = () => import("./pages/AdminJobManagePage");
 const loadAdminCareerPortalCardsPage = () => import("./pages/AdminCareerPortalCardsPage");
 const loadLearningMaterialsPage = () => import("./pages/LearningMaterialsPage");
 const loadAdminLearningPage = () => import("./pages/AdminLearningPage");
-const loadAdminPortalAccountsPage = () => import("./pages/AdminPortalAccountsPage");
+const loadAdminGuestMembersPage = () => import("./pages/AdminGuestMembersPage");
+/*
+  These two take props, which `LazyRoute` cannot forward — it loads a component
+  with no arguments. They are lazily imported all the same, so a staff member
+  who never sees either page never downloads them.
+*/
+const GuestMemberPage = lazy(() => import("./pages/GuestMemberPage"));
+const GuestProfileSetupPage = lazy(() => import("./pages/GuestProfileSetupPage"));
 
 function isPublicRoutePath(pathname: string): boolean {
   return (
@@ -650,14 +662,47 @@ export default function App() {
   const currentPath = location.pathname;
   const isPublicRoute = isPublicRoutePath(currentPath);
 
-  const { session: portalSession, signIn: signInPortal } = usePortalSession();
+  const { session: guestSession, signIn: signInGuest, signOut: signOutGuest } = useGuestSession();
   /**
    * A Microsoft account always wins. The two identities can only coexist when
-   * someone signs in with M365 on a browser that still holds a portal session,
-   * and the richer identity is the right one to honour — the portal session
+   * someone signs in with M365 on a browser that still holds a guest session,
+   * and the richer identity is the right one to honour — the guest session
    * stays stored and takes over again once they sign out of Microsoft.
    */
-  const portalModeActive = Boolean(portalSession) && !isAuthenticated;
+  const memberModeActive = Boolean(guestSession) && !isAuthenticated;
+  const [guestMember, setGuestMember] = useState<GuestMemberSummary | null>(null);
+
+  /**
+   * The member record behind the stored session.
+   *
+   * Re-read on load rather than kept in storage alongside the token, because
+   * what it says — whether the profile is complete, whether HR has approved the
+   * learning hub — is decided on somebody else's screen and can have changed
+   * since this browser last looked. A stored copy would show an approval that
+   * had been withdrawn.
+   */
+  useEffect(() => {
+    if (!memberModeActive || !guestSession) {
+      setGuestMember(null);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchOwnMember(guestSession.token)
+      .then((member) => {
+        if (!cancelled) setGuestMember(member);
+      })
+      .catch(() => {
+        // A token the server will not honour any more. Dropping it returns the
+        // person to the sign-in screen rather than leaving them on a page whose
+        // every request fails.
+        if (!cancelled) signOutGuest();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [memberModeActive, guestSession, signOutGuest]);
   const authProfileAccountRef = useRef("");
   // Which account's submissions have been asked for, so opening the dashboard a
   // second time reuses what is already loaded and a new sign-in starts over.
@@ -720,10 +765,10 @@ export default function App() {
       return;
     }
 
-    // A portal account is signed in, so this is not the sign-in gate — but it is
-    // not the dashboard either. `portal` renders its own small route table.
-    if (portalModeActive) {
-      setPageState("portal");
+    // A guest member is signed in, so this is not the sign-in gate — but it is
+    // not the staff dashboard either. `member` renders its own small route table.
+    if (memberModeActive) {
+      setPageState("member");
       return;
     }
 
@@ -734,7 +779,7 @@ export default function App() {
     } else {
       setPageState("choice");
     }
-  }, [isAuthenticated, inProgress, accountKey, isPublicRoute, authProfileReady, authProfileRestricted, portalModeActive]);
+  }, [isAuthenticated, inProgress, accountKey, isPublicRoute, authProfileReady, authProfileRestricted, memberModeActive]);
 
   useEffect(() => {
     if (!isAuthenticated || inProgress !== "none" || !activeAccount) return;
@@ -1060,16 +1105,25 @@ export default function App() {
     setPageState("guest");
   };
 
-  const handlePortalSignIn = (session: PortalSession) => {
-    signInPortal(session);
-    setPageState("portal");
-    navigate("/learning", { replace: true });
+  const handleGuestSignIn = (session: GuestSession, member: GuestMemberSummary) => {
+    signInGuest(session);
+    setGuestMember(member);
+    setPageState("member");
+    // Straight to their own page rather than the learning hub: a brand-new
+    // member has not been approved for the hub, and landing on a "waiting for
+    // review" screen as the very first thing reads as a rejection.
+    navigate("/member", { replace: true });
   };
 
-  // Signing out is not handled here on purpose. The learning hub owns that
-  // button, and `usePortalSession` broadcasts the change — which clears
-  // `portalModeActive`, re-runs the auth effect, and drops the whole portal
-  // route table back to the sign-in gate without a prop crossing the tree.
+  const handleGuestSignOut = useCallback(() => {
+    // Google keeps offering the last account it saw unless told to stop, which
+    // makes "sign out" look broken: press it, press Google again, and you are
+    // instantly back in as the same person with no chance to switch.
+    forgetGoogleAccount();
+    signOutGuest();
+    setGuestMember(null);
+    navigate("/", { replace: true });
+  }, [signOutGuest, navigate]);
 
   const handleSwitchAccount = useCallback(() => {
     clearAuthTimeoutReloginAttempt();
@@ -1362,12 +1416,61 @@ export default function App() {
   // later, and an allowlist of two cannot leak a dashboard the way twenty
   // individually-guarded routes eventually would. Public routes never reach
   // here — they are handled above, and they are public to everyone anyway.
-  if (pageState === "portal") {
+  if (pageState === "member") {
+    // Still reading the member record. Rendering the route table first would
+    // flash the profile form at somebody who completed it months ago.
+    if (!guestMember) {
+      return (
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <LoadingScreen status="Loading your account..." />
+        </ThemeProvider>
+      );
+    }
+
+    /*
+      The blocking profile step. Rendered instead of the route table rather than
+      as a route inside it, so there is no path — typed, bookmarked or
+      redirected to — that reaches anything else while it is outstanding.
+    */
+    if (!guestMember.profileComplete && guestSession) {
+      return (
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingScreen status="Loading..." />}>
+              <GuestProfileSetupPage
+                token={guestSession.token}
+                member={guestMember}
+                onSaved={setGuestMember}
+                onSignOut={handleGuestSignOut}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        </ThemeProvider>
+      );
+    }
+
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <ErrorBoundary>
           <Routes>
+            <Route
+              path="/member"
+              element={
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingScreen status="Loading your account..." />}>
+                    <GuestMemberPage
+                      token={guestSession?.token ?? ""}
+                      member={guestMember}
+                      onMemberChanged={setGuestMember}
+                      onSignOut={handleGuestSignOut}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              }
+            />
             <Route
               path="/learning"
               element={
@@ -1387,7 +1490,7 @@ export default function App() {
                 </ErrorBoundary>
               }
             />
-            <Route path="*" element={<Navigate to="/learning" replace />} />
+            <Route path="*" element={<Navigate to="/member" replace />} />
           </Routes>
         </ErrorBoundary>
       </ThemeProvider>
@@ -1400,7 +1503,7 @@ export default function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <ChoiceScreen onLogin={handleLogin} onGuest={handleGuest} onPortalSignIn={handlePortalSignIn} />
+        <ChoiceScreen onLogin={handleLogin} onGuest={handleGuest} onGuestSignIn={handleGuestSignIn} />
       </ThemeProvider>
     );
   }
@@ -1651,14 +1754,14 @@ export default function App() {
             }
           />
           <Route
-            path="/admin/portal-accounts"
+            path="/admin/guest-members"
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute
-                      load={loadAdminPortalAccountsPage}
-                      fallback={<LoadingScreen status="Loading portal accounts..." />}
+                      load={loadAdminGuestMembersPage}
+                      fallback={<LoadingScreen status="Loading guest members..." />}
                     />
                   </Box>
                 </ErrorBoundary>

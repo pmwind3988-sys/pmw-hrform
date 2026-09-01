@@ -1,5 +1,5 @@
 import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
-import { readStoredPortalSession } from "./internalAccountService";
+import { readStoredGuestSession } from "./guestMemberService";
 import type {
   LearningLibraryData,
   LearningMaterialOpenResult,
@@ -114,12 +114,12 @@ export async function acquireLearningIdentityToken(
   instance: IPublicClientApplication,
   account: AccountInfo | null,
 ): Promise<string> {
-  // An HR-issued portal account proves itself with its own signed session
-  // instead of a Microsoft token. Checked first: these visitors have no MSAL
-  // account at all, so the branch below would hand back "" and the hub would
-  // ask them to sign in they already had.
-  const portalSession = readStoredPortalSession();
-  if (portalSession) return portalSession.token;
+  // A guest member proves themselves with their own signed session instead of
+  // a Microsoft token. Checked first: these visitors have no MSAL account at
+  // all, so the branch below would hand back "" and the hub would ask them to
+  // sign in they already had.
+  const guestSession = readStoredGuestSession();
+  if (guestSession) return guestSession.token;
 
   if (!account) return "";
   try {

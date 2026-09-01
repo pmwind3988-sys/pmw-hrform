@@ -38,7 +38,8 @@ The API functions need these env vars to authenticate with SharePoint via client
 | `SYSTEM_CLIENT_SECRET` | App registration Client Secret |
 | `API_SECRET_KEY` / `VITE_API_SECRET_KEY` | Shared API key for frontend-to-API calls |
 | `CRON_SECRET` | Server-only bearer secret used by Vercel Cron for scheduled evaluator emails |
-| `INTERNAL_SESSION_SECRET` | **Server-only.** Signs portal-account sessions (served by `/api/learning-materials`, action `portal-sign-in` — see the 12-function limit in `api/AGENTS.md`). Must be 32+ random characters, and must NOT reuse `API_SECRET_KEY` — that one ships to every browser as `VITE_API_SECRET_KEY`, so signing with it would let anyone mint a session for any login ID. Generate with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Until it is set, portal sign-in returns 503 and only Microsoft 365 works. Changing it signs everyone out. |
+| `INTERNAL_SESSION_SECRET` | **Server-only.** Signs guest-member sessions (served by `/api/learning-materials`, action `guest-sign-in` — see the 12-function limit in `api/AGENTS.md`). Must be 32+ random characters, and must NOT reuse `API_SECRET_KEY` — that one ships to every browser as `VITE_API_SECRET_KEY`, so signing with it would let anyone mint a session for any address. Generate with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Until it is set, Google sign-in returns 503 and only Microsoft 365 works. Changing it signs every guest member out. |
+| `GOOGLE_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` | **The same value in both.** A Google Cloud OAuth 2.0 **Web application** client ID. The `VITE_` copy renders the sign-in button; the server copy is what checks a token was issued for *this* application and not somebody else's. There is **no Google client secret** — the browser flow returns an identity token the server verifies against Google's public keys, and the app never calls a Google API on a member's behalf. Until it is set, Google sign-in returns 503 and only Microsoft 365 works. |
 | `HR_FORM_EMAIL_FROM_ADDRESS` | Mail-enabled sender for HR form workflow and approval emails |
 | `JOB_APPLICATION_EMAIL_FROM_ADDRESS` | Mail-enabled sender for job application emails |
 | `HR_RECRUITMENT_EMAIL` | Recipient mailbox for job application notifications |
@@ -165,7 +166,8 @@ On the OSHES project specifically, confirm:
 | `HR_FORM_EMAIL_FROM_ADDRESS` | No sender means no workflow email at all — `sendGraphEmail` throws before sending |
 | `CRON_SECRET` | The cron is per-project. Without it (and the `crons` entry in `vercel.json`) deferred evaluation emails never fire on OSHES |
 | `API_SECRET_KEY` / `VITE_API_SECRET_KEY` | Its own pair |
-| `INTERNAL_SESSION_SECRET` | Its own, if portal accounts are used there |
+| `INTERNAL_SESSION_SECRET` | Its own, if guest members are used there |
+| `GOOGLE_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` | Its own OAuth client, with that project's own origins authorised |
 
 The app registration also needs the **OSHES site** granted for `Sites.Selected` —
 granting the HR site does not cover it. That failure looks like 403s on every
@@ -207,8 +209,18 @@ In Vercel Dashboard → Project Settings → Environment Variables, add:
 - `VITE_API_SECRET_KEY`
 - `CRON_SECRET`
 - `INTERNAL_SESSION_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `VITE_GOOGLE_CLIENT_ID`
 - `HR_FORM_EMAIL_FROM_ADDRESS`
 - `JOB_APPLICATION_EMAIL_FROM_ADDRESS`
 - `HR_RECRUITMENT_EMAIL`
 
-> Keep system credentials and sender mailboxes server-only. The browser-required values are `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_SP_SITE_URL`, and `VITE_API_SECRET_KEY`.
+> Keep system credentials and sender mailboxes server-only. The browser-required values are `VITE_AZURE_CLIENT_ID`, `VITE_AZURE_TENANT_ID`, `VITE_SP_SITE_URL`, `VITE_API_SECRET_KEY`, and `VITE_GOOGLE_CLIENT_ID`.
+
+## Google sign-in setup
+
+1. In Google Cloud Console, create an **OAuth 2.0 Client ID** of type *Web application*.
+2. Add every origin the app is served from to **Authorised JavaScript origins** — the production domain and each preview domain that needs to sign in. Google refuses the button outright on an origin it does not know, so a preview deployment on a fresh URL will silently show nothing until its origin is added.
+3. No redirect URI and no client secret are needed: the identity token comes back to the page, not through a server callback.
+4. Set the client ID as **both** `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID`.
+5. The Content-Security-Policy already allows `https://accounts.google.com` — in **both** `vercel.json` and the `<meta http-equiv>` in `index.html`. A page carrying both is held to the intersection, so if either is ever narrowed the button stops rendering with no error anywhere visible.

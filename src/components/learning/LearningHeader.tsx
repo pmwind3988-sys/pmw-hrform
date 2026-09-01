@@ -13,7 +13,7 @@ interface LearningHeaderProps {
   backLabel: string;
   actions?: ReactNode;
   /**
-   * Off for a portal account, which has no dashboard behind this page — a back
+   * Off where there is no dashboard behind this page — a back
    * arrow that only ever returns here is worse than no arrow.
    */
   showBack?: boolean;
