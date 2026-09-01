@@ -635,12 +635,12 @@ export function FileControl({ element, value, onChange, disabled, invalid, contr
   const accept = async (picked: FileList | null) => {
     if (!picked || picked.length === 0) return;
     setTooLarge("");
-    const limit = element.maxSizeMb > 0 ? element.maxSizeMb * 1024 * 1024 : 0;
+    const limit = element.maxSizeBytes;
     const kept: StoredFile[] = [];
 
     for (const file of Array.from(picked)) {
       if (limit > 0 && file.size > limit) {
-        setTooLarge(`"${file.name}" is over the ${element.maxSizeMb} MB limit and was not attached.`);
+        setTooLarge(`"${file.name}" is over the ${formatBytes(limit)} limit and was not attached.`);
         continue;
       }
       const content = await new Promise<string>((resolve) => {
@@ -685,7 +685,7 @@ export function FileControl({ element, value, onChange, disabled, invalid, contr
         <span>{element.allowMultiple ? "Choose files or drop them here" : "Choose a file or drop it here"}</span>
         <span className="nf-drop-note">
           {element.acceptedTypes || "Any file type"}
-          {element.maxSizeMb > 0 ? ` · up to ${element.maxSizeMb} MB each` : ""}
+          {element.maxSizeBytes > 0 ? ` · up to ${formatBytes(element.maxSizeBytes)} each` : ""}
         </span>
       </button>
       <input

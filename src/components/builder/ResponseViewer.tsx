@@ -68,6 +68,8 @@ const C = {
 };
 
 interface MatrixTableEntry {
+  /** The question's own title, for the heading above the table. */
+  title: string;
   columns: MatrixColumnDef[];
   rows: Record<string, unknown>[];
   html: string;
@@ -285,6 +287,7 @@ export default function ResponseViewer() {
               const rows = await readMatrixChildItems(token, childListName, item.Id, mf.columns);
               if (rows.length > 0) {
                 tables[mf.name] = {
+                  title: mf.title || mf.name,
                   columns: mf.columns as MatrixColumnDef[],
                   rows,
                   html: rowsToHtml(mf.columns, rows),
@@ -300,6 +303,7 @@ export default function ResponseViewer() {
                 const htmlVal = itemData[`${mf.name}_Html`] as string | undefined;
                 if (htmlVal) {
                   tables[mf.name] = {
+                    title: mf.title || mf.name,
                     columns: mf.columns as MatrixColumnDef[],
                     rows: [],
                     html: htmlVal,
@@ -692,7 +696,7 @@ export default function ResponseViewer() {
                             marginBottom: 4,
                           }}
                         >
-                          {entry.columns[0]?.title ? entry.columns[0].title : fieldName}
+                          {entry.title || fieldName}
                         </div>
                         <div
                           style={{

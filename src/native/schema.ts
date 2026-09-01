@@ -145,7 +145,12 @@ export interface NativeElement {
 
   acceptedTypes: string;
   allowMultiple: boolean;
-  maxSizeMb: number;
+  /**
+   * Upload ceiling in bytes, which is the unit the builder asks the author
+   * for ("Max size (bytes)"). It was read as megabytes for a while, putting
+   * the real ceiling around ten terabytes and letting every file through.
+   */
+  maxSizeBytes: number;
 
   columns: NativeColumn[];
   minRows: number;
@@ -475,7 +480,7 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
 
     acceptedTypes: str(raw.acceptedTypes ?? raw.acceptedTypes ?? raw.accept),
     allowMultiple: bool(raw.allowMultiple),
-    maxSizeMb: num(raw.maxSize, 0),
+    maxSizeBytes: num(raw.maxSize, 0),
 
     columns: toColumns(raw.columns ?? raw.tableConfigColumns ?? raw.matrixColumns),
     minRows: num(raw.minRows ?? raw.rowCount, 1),

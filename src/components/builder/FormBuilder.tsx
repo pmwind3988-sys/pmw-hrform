@@ -2377,7 +2377,15 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const [showFieldTemplates, setShowFieldTemplates] = useState(false);
   const [showFieldComments, setShowFieldComments] = useState(false);
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
-  const [errors, setErrors] = useState<{ id: string; msg: string }[]>([]);
+  /**
+   * Whether a publish or preview attempt has asked for the form to be checked.
+   *
+   * The errors themselves are derived from the fields rather than stored, so
+   * fixing a duplicate name clears its message and the count straight away.
+   * Held as state, the list stayed exactly as it was until the next attempt,
+   * and the banner kept reporting problems the author had already fixed.
+   */
+  const [validationRequested, setValidationRequested] = useState(false);
   const [surveySettings, setSurveySettings] = useState<Record<string, unknown>>(() => {
     if (!initialJson) return {};
     return {
@@ -2548,6 +2556,11 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
+  const errors = useMemo(
+    () => (validationRequested ? validateFields(fields) : []),
+    [validationRequested, fields],
+  );
+
   // Push current state to history before making changes
   const withManagedCompanyChoice = useCallback((newFields: FormBuilderField[]) => {
     return companyChoice?.enabled ? normalizeCompanyChoiceFields(newFields, companyChoice) : removeManagedCompanyChoiceFields(newFields);
@@ -2693,7 +2706,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
     if (toolNonce === undefined || !toolKey) return;
     if (toolKey.startsWith("preview-")) {
       const found = validateFields(fieldsRef.current);
-      setErrors(found);
+      setValidationRequested(true);
       if (found.length) return;
       setPreviewDevice(toolKey.slice("preview-".length) as "desktop" | "tablet" | "mobile");
       setShowPreview(true);

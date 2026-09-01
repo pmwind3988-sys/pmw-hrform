@@ -453,3 +453,19 @@ describe("interactive numeric fields keep their own control", () => {
     expect(el.step).toBe(15);
   });
 });
+
+describe("file upload size limit", () => {
+  const fileEl = (raw: Record<string, unknown>) =>
+    q({ pages: [{ elements: [{ type: "file", name: "doc", ...raw }] }] }, "doc");
+
+  it("reads the limit as the bytes the builder stores", () => {
+    // The builder's field is labelled "Max size (bytes)" and defaults to
+    // 10485760. Reading that as megabytes put the ceiling at ~10 TB, so no
+    // file was ever turned away, and the hint read "up to 10485760 MB each".
+    expect(fileEl({ maxSize: 10485760 }).maxSizeBytes).toBe(10485760);
+  });
+
+  it("treats a missing limit as no limit", () => {
+    expect(fileEl({}).maxSizeBytes).toBe(0);
+  });
+});
