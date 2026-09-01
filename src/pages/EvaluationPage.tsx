@@ -134,6 +134,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
 
 type AuthState = "checking" | "authorized" | "unauthorized" | "error";
 type ActionState = "idle" | "submitting" | "success" | "error";
+type SubmitAction = "approve" | "reject" | "confirm";
 type PublicPreviousLayerSummary = {
   layerNumber: number;
   type?: string;
@@ -179,6 +180,47 @@ const btnOutline: React.CSSProperties = {
   background: "transparent",
   border: `1px solid ${COLORS.red}`,
   color: COLORS.red,
+};
+
+const Spinner = ({ size = 42 }: { size?: number }) => (
+  <div
+    style={{
+      width: size, height: size,
+      border: `2.5px solid ${COLORS.purplePale}`,
+      borderTop: `2.5px solid ${COLORS.purple}`,
+      borderRadius: "50%",
+      animation: "evalSpin .85s linear infinite",
+      flexShrink: 0,
+    }}
+  />
+);
+
+/**
+ * The whole page is blocked while a decision is in flight, exactly as the form
+ * blocks itself while a submission is sending. A reviewer who only saw a
+ * greyed-out button could scroll away, press again, or close the tab while the
+ * server is still writing the outcome, generating the record PDF and mailing
+ * whoever is next — none of which survives a half-sent decision.
+ */
+const SubmittingOverlay = ({ action }: { action: SubmitAction }) => {
+  const label = action === "reject"
+    ? "Recording your rejection"
+    : action === "confirm"
+      ? "Submitting your evaluation"
+      : "Recording your approval";
+  return (
+    <div className="eval-overlay" role="alertdialog" aria-modal="true" aria-busy="true" aria-live="assertive" aria-label={label}>
+      <div className="eval-overlay-card">
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Spinner /></div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 8 }}>{label}</div>
+        <div style={{ fontSize: 13, lineHeight: 1.7, color: COLORS.textSecond }}>
+          This can take a moment while the record is written and the next step is notified.
+          <br />
+          <strong style={{ color: COLORS.textPrimary }}>Please do not close or refresh this page.</strong>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 function valueToText(value: unknown): string {
@@ -359,6 +401,8 @@ export default function EvaluationPage() {
     : evalForm !== null && evalRuntime.answered >= evalRuntime.required;
 
   const [actionState, setActionState] = useState<ActionState>("idle");
+  /** Which decision is in flight — the blocking overlay names it. */
+  const [submitAction, setSubmitAction] = useState<SubmitAction>("approve");
   const [rejectionReason, setRejectionReason] = useState("");
   /** The reject dialog is opened by the Reject button and closed only by Cancel. */
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -595,12 +639,22 @@ export default function EvaluationPage() {
    * steps before it. Do not reinstate a copy of them here.
    */
 
+  // While the overlay is up the page behind it must not scroll, or the
+  // reviewer can drift away from a screen that is asking them to wait.
+  useEffect(() => {
+    if (actionState !== "submitting") return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [actionState]);
+
   // ── Submit action ──
   const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm") => {
     if (!userEmail) return;
     // Validation paints the errors and focuses the first one, so a rejected
     // confirm leaves the evaluator looking at what still needs answering.
     if (action === "confirm" && evalForm && !evalRuntime.validateAll().ok) return;
+    setSubmitAction(action);
     setActionState("submitting");
     try {
       if (isPublic) {
@@ -845,6 +899,14 @@ export default function EvaluationPage() {
         .eval-page p, .eval-page li, .eval-page span { text-wrap: pretty; }
         .eval-action-button { transition-property: transform, box-shadow, background-color, color; transition-duration: 150ms; transition-timing-function: cubic-bezier(0.2, 0, 0, 1); }
         .eval-action-button:active:not(:disabled) { transform: scale(0.96); }
+        @keyframes evalSpin { to { transform: rotate(360deg); } }
+        @keyframes evalOverlayFade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes evalOverlayRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+        .eval-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(16, 25, 35, 0.55); backdrop-filter: blur(4px); animation: evalOverlayFade .2s ease; }
+        .eval-overlay-card { background: ${COLORS.cardBg}; border: 1px solid ${COLORS.border}; border-radius: 12px; box-shadow: 0 24px 48px rgba(16, 24, 40, 0.28); padding: 34px 30px; max-width: 360px; width: 100%; text-align: center; animation: evalOverlayRise .25s ease; }
+        @media (prefers-reduced-motion: reduce) {
+          .eval-overlay, .eval-overlay-card { animation: none !important; }
+        }
         .eval-currency-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #5F646D; font-size: 13px; font-weight: 800; pointer-events: none; z-index: 1; font-variant-numeric: tabular-nums; }
         .eval-survey-wrap .sd-root-modern, .eval-survey-wrap .sd-container-modern { background: transparent !important; max-width: 100% !important; }
         .eval-survey-wrap .sd-row { display: flex !important; flex-wrap: wrap !important; }
@@ -1167,6 +1229,8 @@ export default function EvaluationPage() {
           </div>
         </div>
       )}
+
+      {actionState === "submitting" && <SubmittingOverlay action={submitAction} />}
     </div>
   );
 }
