@@ -633,17 +633,12 @@ export interface FormBuilderField {
   addRowText?: string;
   // Table Input
   tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean }; required?: boolean }[];
-  // Ranking
-  rankItems?: string[];
   minItems?: number;
   maxItems?: number;
   // Budget Allocator
   totalAmount?: number;
   lineItems?: string[];
   enforceTotal?: boolean;
-  // Hierarchy
-  hierarchyLevels?: string[];
-  hierarchyDataSource?: Record<string, unknown>[];
   // JSON Editor
   jsonSchema?: string;
   initialJson?: string;

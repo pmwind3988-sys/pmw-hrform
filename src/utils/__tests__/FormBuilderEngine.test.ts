@@ -464,8 +464,12 @@ describe('getSpColumnKind', () => {
     expect(getSpColumnKind({ type: 'matrixdynamic' })).toBeNull();
   });
 
-  it('returns Multi-line (3) for ranking', () => {
-    expect(getSpColumnKind({ type: 'ranking' })).toEqual({ FieldTypeKind: 3, label: 'Multi-line' });
+  it('falls back to Text for a retired type a published form still carries', () => {
+    // ranking and hierarchy were removed from the palette. A form published
+    // before that still names them, and must keep provisioning rather than
+    // throwing.
+    expect(getSpColumnKind({ type: 'ranking' })).toEqual({ FieldTypeKind: 2, label: 'Text' });
+    expect(getSpColumnKind({ type: 'hierarchy' })).toEqual({ FieldTypeKind: 2, label: 'Text' });
   });
 
   it('returns Number (9) for text type with number inputType', () => {
@@ -1049,5 +1053,46 @@ describe('createQuestion identity', () => {
     expect(field.type).toBe('alert');
     expect(field.title).toBe('Alert / Notice');
     expect(field.alertType).toBe('info');
+  });
+});
+
+describe('interactive numeric fields publish as themselves', () => {
+  const publish = (type: string, overrides: Record<string, unknown> = {}) => {
+    const def = QUESTION_TYPES.find(t => t.type === type);
+    if (!def) throw new Error(`no question type ${type}`);
+    const field = { ...createQuestion(def), ...overrides };
+    const [published] = (buildSurveyJson([field], {}) as { pages: { elements: Record<string, unknown>[] }[] })
+      .pages[0].elements;
+    return published;
+  };
+
+  // All three used to publish as { type: 'text', inputType: 'number' }, which
+  // erased the control and every range setting with it.
+  it.each(['slider', 'counter', 'duration'])('keeps %s as its own type', type => {
+    const published = publish(type);
+    expect(published.type).toBe(type);
+    expect(published.inputType).toBeUndefined();
+  });
+
+  it('carries the slider range through', () => {
+    const published = publish('slider', { min: 10, max: 50, step: 5 });
+    expect(published).toMatchObject({ type: 'slider', min: 10, max: 50, step: 5 });
+  });
+
+  it('carries the counter range through', () => {
+    const published = publish('counter', { min: 1, max: 9, step: 2 });
+    expect(published).toMatchObject({ type: 'counter', min: 1, max: 9, step: 2 });
+  });
+
+  it('converts the duration settings to minutes', () => {
+    // The author sets whole hours and a minute step; the control works in
+    // minutes, which is also what gets stored.
+    expect(publish('duration', { maxHours: 8, stepMinutes: 15 })).toMatchObject({ max: 480, step: 15 });
+    expect(publish('duration')).toMatchObject({ max: 24 * 60, step: 15 });
+  });
+
+  it.each(['slider', 'counter', 'duration'])('still provisions %s as a Number column', type => {
+    const published = publish(type);
+    expect(getSpColumnKind(published as never)).toEqual({ FieldTypeKind: 9, label: 'Number' });
   });
 });

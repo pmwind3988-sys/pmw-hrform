@@ -151,7 +151,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Numeric",
     description: "Monetary input with currency formatting",
     spColumnKind: 9,
-    defaultProps: { currency: "MYR", locale: "en-MY", currencySymbol: "RM", decimalPlaces: 2, min: 0, max: 0, step: 0.01 },
+    defaultProps: { currency: "MYR", locale: "en-MY", currencySymbol: "RM", decimalPlaces: 2, min: 0, step: 0.01 },
   },
   {
     type: "formula",
@@ -265,24 +265,6 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     description: "User fills in rows of a table",
     spColumnKind: null,
     defaultProps: { columns: [{ name: "col1", title: "Column 1" }], minRows: 1, maxRows: 50 },
-  },
-  {
-    type: "ranking",
-    label: "Ranking",
-    icon: "🏆",
-    group: "Advanced",
-    description: "Drag to rank items",
-    spColumnKind: 3,
-    defaultProps: { items: ["Item 1", "Item 2", "Item 3"], minItems: 1, maxItems: 10 },
-  },
-  {
-    type: "hierarchy",
-    label: "Hierarchy Selector",
-    icon: "🌳",
-    group: "Advanced",
-    description: "Cascading dropdowns (Country → State → City)",
-    spColumnKind: 2,
-    defaultProps: { levels: ["Country", "State", "City"], dataSource: [] },
   },
   {
     type: "jsoneditor",
@@ -561,7 +543,7 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
     "text", "comment", "dropdown", "radiogroup", "checkbox",
     "boolean", "rating", "file", "html", "image",
     "signaturepad", "panel", "pagebreak",
-    "ranking", "matrixdynamic",
+    "matrixdynamic",
   ];
   if (nativeTypes.includes(type)) return field;
 
@@ -621,20 +603,32 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
     case "repeater":
       return { ...field, type: "paneldynamic" };
 
-    // Selection variants
+    // Selection and numeric variants each keep their own control. Publishing
+    // them as a plain number box drew one, dropped every range setting the
+    // author configured, and left the renderer no way to tell them apart.
     case "slider":
-      return { ...field, type: "text", inputType: "number" };
-
-    // Numeric variants
-    case "duration":
-      return { ...field, type: "text", inputType: "number" };
+      return { ...field, type: "slider" };
     case "counter":
-      return { ...field, type: "text", inputType: "number" };
+      return { ...field, type: "counter" };
+    case "duration": {
+      // Stored as a single number of minutes, so the answer stays sortable and
+      // summable in SharePoint. The author sets whole hours and a minute step;
+      // both become minutes here so the control has one unit to work in.
+      const props = field as unknown as Record<string, unknown>;
+      const maxHours = typeof props.maxHours === "number" ? props.maxHours : 24;
+      const stepMinutes = typeof props.stepMinutes === "number" ? props.stepMinutes : 15;
+      return { ...field, type: "duration", max: maxHours * 60, step: stepMinutes } as FormBuilderField;
+    }
     case "currency": {
       const cs = (field as unknown as Record<string, unknown>).currencySymbol as string || "RM";
       const dp = (field as unknown as Record<string, unknown>).decimalPlaces as number ?? 2;
       const fmt = dp > 0 ? `0.${"0".repeat(dp)}` : "0";
-      return { ...field, type: "text", inputType: "number", currency: cs, format: fmt };
+      // A currency ceiling of 0 rejects every real amount, so it can only be the
+      // old default rather than a deliberate limit. Drop it on publish so forms
+      // authored before that default was removed repair themselves.
+      const { max, ...rest } = field as FormBuilderField & { max?: number };
+      const priced = max === 0 ? rest : field;
+      return { ...priced, type: "text", inputType: "number", currency: cs, format: fmt };
     }
     case "formula": {
       // Use SurveyJS native `expression` type — auto-evaluates and re-evaluates.
@@ -684,11 +678,24 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return { ...field, type: "text" };
     case "jsoneditor":
       return { ...field, type: "comment" };
-    case "hierarchy":
-      return { ...field, type: "dropdown" };
     case "dynamicmatrix":
-    case "tableinput":
-      return { ...field, type: "matrixdynamic" };
+    case "tableinput": {
+      // A matrix may be authored as a plain list of headers. A bare string has
+      // no `name`, and `ensureMatrixChildList` only provisions columns that
+      // have one — so every data column was dropped, the child row was written
+      // with nothing but its parent metadata, and the saved table came back
+      // empty when the submission was reopened. Give each header a name here,
+      // matching the shape `tableinput` already publishes.
+      const rawColumns = (field as unknown as Record<string, unknown>).columns;
+      const columns = Array.isArray(rawColumns)
+        ? rawColumns.map((column, i) =>
+            typeof column === "string"
+              ? { name: `col${i + 1}`, title: column }
+              : column,
+          )
+        : rawColumns;
+      return { ...field, type: "matrixdynamic", columns } as FormBuilderField;
+    }
 
     // Fallback: everything else renders as plain text
     default:
@@ -1185,10 +1192,6 @@ export function getSpColumnKind(
   // dynamicmatrix and tableinput are provisioned separately as _Html + _Json
   if (field.type === 'dynamicmatrix' || field.type === 'tableinput' || field.type === 'matrixdynamic') return null;
 
-  // Complex types that produce arrays/objects → store as JSON in multi-line text
-  if (field.type === 'ranking') {
-    return { FieldTypeKind: 3, label: 'Multi-line' };
-  }
 
   // ── text type with inputType variants ─────────────────────────────────
   // SurveyJS maps custom types like "number" → { type: "text", inputType: "number" }.

@@ -265,8 +265,6 @@ export const TYPE_GLYPH: Record<string, string> = {
   file: "upload",
   imageupload: "image",
   signaturepad: "pen",
-  ranking: "ordered",
-  hierarchy: "tree",
   jsoneditor: "braces",
   dynamicmatrix: "grid",
   tableinput: "table",

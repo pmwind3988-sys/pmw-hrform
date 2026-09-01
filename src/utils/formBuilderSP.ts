@@ -18,6 +18,7 @@ import {
 import { ensureLinkToken } from "./linkToken";
 import { listChoiceValues, toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions";
 import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
+import { encodeMatrixRow, decodeMatrixRow, type MatrixColumn } from "./matrixData";
 
 /**
  * The SharePoint site every call in this module targets.
@@ -2197,6 +2198,11 @@ export async function writeMatrixChildItems(
   parentSnapshot: MatrixChildParentSnapshot = {},
 ): Promise<number[]> {
   const createdIds: number[] = [];
+  // SharePoint files a column under a property name of its own choosing — a
+  // column asked for as `col1` becomes `OData__x0063_ol1` — and rejects the
+  // name we asked for outright. The response list has always mapped its fields
+  // this way before writing; the child lists a matrix writes to need it too.
+  const resolveColumnKey = await getSharePointColumnKeyResolver(token, listName);
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -2209,13 +2215,14 @@ export async function writeMatrixChildItems(
     if (parentSnapshot.submittedAt) body.ParentSubmittedAt = parentSnapshot.submittedAt;
     if (parentSnapshot.submittedBy) body.ParentSubmittedBy = parentSnapshot.submittedBy;
 
-    // Map row values to column names
+    // Dates are normalised before the keys are rewritten, so the conversion
+    // still looks the answer up by the name the form used.
+    const normalizedRow: Record<string, unknown> = { ...row };
     for (const col of columns) {
-      if (!col.name) continue;
-      body[col.name] = col.cellType === "date"
-        ? toSharePointMalaysiaDateTime(row[col.name]) ?? row[col.name] ?? null
-        : row[col.name] ?? null;
+      if (!col.name || col.cellType !== "date") continue;
+      normalizedRow[col.name] = toSharePointMalaysiaDateTime(row[col.name]) ?? row[col.name] ?? null;
     }
+    Object.assign(body, encodeMatrixRow(normalizedRow, columns as MatrixColumn[], resolveColumnKey));
 
     const result = await spPost(
       token,
@@ -2238,14 +2245,21 @@ export async function writeMatrixChildItems(
 export async function readMatrixChildItems(
   token: string,
   listName: string,
-  parentResponseId: number
+  parentResponseId: number,
+  columns: MatrixColumn[] = [],
 ): Promise<Record<string, unknown>[]> {
   const data = await spGet(
     token,
     `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$filter=ParentResponseId eq ${parentResponseId}&$orderby=RowIndex asc`
   ) as { value?: Record<string, unknown>[] };
+  const rows = data.value || [];
+  if (rows.length === 0 || columns.length === 0) return rows;
 
-  return data.value || [];
+  // Rows come back under SharePoint's own property names. Everything that
+  // renders a saved matrix reads `row[column.name]`, so without this they
+  // display as blank.
+  const resolveColumnKey = await getSharePointColumnKeyResolver(token, listName);
+  return rows.map((row) => decodeMatrixRow(row, columns, resolveColumnKey));
 }
 
 // ── Response List Provisioning ────────────────────────────────────────────

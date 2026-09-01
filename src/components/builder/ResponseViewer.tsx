@@ -282,7 +282,7 @@ export default function ResponseViewer() {
             const childListName = `${formTitle} Matrix ${safeName}`;
 
             try {
-              const rows = await readMatrixChildItems(token, childListName, item.Id);
+              const rows = await readMatrixChildItems(token, childListName, item.Id, mf.columns);
               if (rows.length > 0) {
                 tables[mf.name] = {
                   columns: mf.columns as MatrixColumnDef[],

@@ -29,8 +29,6 @@ import BadgeIcon from "@mui/icons-material/Badge";
 import ArticleIcon from "@mui/icons-material/Article";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import TableRowsIcon from "@mui/icons-material/TableRows";
-import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import WarningIcon from "@mui/icons-material/Warning";
 
 import TimelapseIcon from "@mui/icons-material/Timelapse";
@@ -72,8 +70,6 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   consent: <ArticleIcon sx={{ fontSize: 16 }} />,
   dynamicmatrix: <TableChartIcon sx={{ fontSize: 16 }} />,
   tableinput: <TableRowsIcon sx={{ fontSize: 16 }} />,
-  ranking: <FormatListNumberedIcon sx={{ fontSize: 16 }} />,
-  hierarchy: <AccountTreeIcon sx={{ fontSize: 16 }} />,
   duration: <TimelapseIcon sx={{ fontSize: 16 }} />,
   formula: <CalculateIcon sx={{ fontSize: 16 }} />,
   counter: <PlusOneIcon sx={{ fontSize: 16 }} />,

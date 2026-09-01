@@ -93,8 +93,6 @@ const CHOICE_TYPES = new Set([
   "tagbox",
   "imagepicker",
   "buttongroup",
-  "ranking",
-  "hierarchy",
 ]);
 
 const CHILD_ELEMENT_KEYS = ["elements", "templateElements", "questions"];

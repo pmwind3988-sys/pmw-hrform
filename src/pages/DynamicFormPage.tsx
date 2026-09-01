@@ -47,6 +47,7 @@ import {
 import { createApprovalDirectoryReader } from "../utils/approvalDirectory";
 import { NEEDS_ROUTING_LAYER_STATUS } from "../utils/submissionLifecycle";
 import { sampleAnswersFor } from "../utils/testRunLaunch";
+import { getTabularFields, rowsToHtml, type MatrixRow, type MatrixColumn } from "../utils/matrixData";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -643,6 +644,19 @@ export default function DynamicFormPage() {
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<LoadedFormData | null>(null);
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
+  /**
+   * The same value, readable from `doSubmitForm`.
+   *
+   * That callback is memoised on `formData` and friends, so it captured this
+   * state on the render that first had a form — before the enrich effect had
+   * run — and kept seeing `null` for the life of the page. Reads that had no
+   * fallback simply did nothing: matrix rows never reached their child list,
+   * and the PDF was built without them. Adding it to the dependency array
+   * instead would rebuild the callback mid-submit, and the effect that calls it
+   * would fire a second time and submit twice.
+   */
+  const enrichedSurveyJsonRef = useRef<Record<string, unknown> | null>(null);
+  enrichedSurveyJsonRef.current = enrichedSurveyJson;
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   /** Reference allocated to the submission just made, for the success screen. */
@@ -1132,7 +1146,7 @@ export default function DynamicFormPage() {
       }
 
       if (token) {
-        normalizeSharePointDateTimeFields(raw, enrichedSurveyJson || formData?.surveyJson);
+        normalizeSharePointDateTimeFields(raw, enrichedSurveyJsonRef.current || formData?.surveyJson);
       }
 
       // Step 2: Resolve layers — try LayerConfig first, fall back to old rules
@@ -1188,8 +1202,23 @@ export default function DynamicFormPage() {
       // Step 3: Build body (keep existing logic)
       const body: Record<string, unknown> = {};
       const urlFieldPatchNames = new Set(urlFieldPatches.map((patch) => patch.fieldName));
+      // Dynamic matrices and table inputs have no bare SharePoint column — they
+      // are provisioned as `_Response` / `_Html` / `_Json` / `_RowIds` only (see
+      // `getSpColumnKind`). The renderer hands their answers back as a plain
+      // array of rows, which would otherwise fall through to `body[k]` below and
+      // be rejected as an unprovisioned field, failing the whole submission.
+      const tabularColumns = new Map(
+        getTabularFields(enrichedSurveyJsonRef.current || formData?.surveyJson).map(f => [f.name, f.columns]),
+      );
       for (const [k, v] of Object.entries(raw)) {
         if (urlFieldPatchNames.has(k)) continue;
+        if (tabularColumns.has(k)) {
+          const rows = (Array.isArray(v) ? v : []) as MatrixRow[];
+          if (rows.length === 0) continue;
+          body[`${k}_Response`] = rowsToHtml(tabularColumns.get(k) || [], rows);
+          body[`${k}_Json`] = JSON.stringify(rows);
+          continue;
+        }
         if (v && typeof v === "object" && (v as Record<string, unknown>).html && (v as Record<string, unknown>).json) {
           body[`${k}_Response`] = (v as Record<string, unknown>).html;
           body[`${k}_Json`] = typeof (v as Record<string, unknown>).json === "string" ? (v as Record<string, unknown>).json : JSON.stringify((v as Record<string, unknown>).json);
@@ -1397,9 +1426,9 @@ export default function DynamicFormPage() {
 
         // Step 6: Write matrix child list items (dynamicmatrix fields)
         const matrixUpdateBody: Record<string, unknown> = {};
-        if (result?.Id && enrichedSurveyJson) {
+        if (result?.Id && enrichedSurveyJsonRef.current) {
           try {
-            const pages = (enrichedSurveyJson as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
+            const pages = (enrichedSurveyJsonRef.current as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
             const matrixFields: { name: string; columns: MatrixColumnDef[] }[] = [];
             if (pages) {
               const walk = (els: Record<string, unknown>[]) => {
@@ -1416,7 +1445,13 @@ export default function DynamicFormPage() {
             for (const mf of matrixFields) {
               const rawVal = raw[mf.name];
               if (!rawVal || typeof rawVal !== "object") continue;
-              const rows = (rawVal as Record<string, unknown>).rows as Record<string, unknown>[] | undefined;
+              // The renderer hands back a bare array of rows; only older answers
+              // carry the `{ rows }` wrapper. Reading just the wrapper left the
+              // child list empty, so a saved matrix showed no rows when the
+              // submission was opened again.
+              const rows = (Array.isArray(rawVal)
+                ? rawVal
+                : (rawVal as Record<string, unknown>).rows) as Record<string, unknown>[] | undefined;
               if (!Array.isArray(rows) || rows.length === 0) continue;
               const childList = await ensureMatrixChildList(token, cfg.Title as string, mf.name, mf.columns, () => {});
               if (childList) {
@@ -1545,7 +1580,7 @@ export default function DynamicFormPage() {
                         if (fName && respItem[`${fName}_RowIds`]) {
                           const safeName = fName.replace(/[^a-zA-Z0-9_ -]/g, '').trim();
                           const childListName = `${cfg.Title as string} Matrix ${safeName}`;
-                          readMatrixChildItems(token, childListName, result.Id as number).then(childRows => {
+                          readMatrixChildItems(token, childListName, result.Id as number, (el.columns as MatrixColumn[]) || []).then(childRows => {
                             if (childRows.length > 0) {
                               pdfData[`${fName}_childRows`] = { columns: (el.columns as MatrixColumnDef[]) || [], rows: childRows };
                             }
@@ -1614,8 +1649,8 @@ export default function DynamicFormPage() {
 
         // Extract matrix data from raw submission (for server-side child list writing)
         const matrixData: Record<string, { rows: Record<string, unknown>[]; columns: { name: string; title: string; cellType?: string; choices?: string[] }[] }> = {};
-        if (enrichedSurveyJson) {
-          const pages = (enrichedSurveyJson as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
+        if (enrichedSurveyJsonRef.current) {
+          const pages = (enrichedSurveyJsonRef.current as unknown as Record<string, unknown>).pages as { elements?: Record<string, unknown>[] }[] | undefined;
           if (pages) {
             const walk = (els: Record<string, unknown>[]) => {
               for (const el of els) {
@@ -1684,7 +1719,11 @@ export default function DynamicFormPage() {
     let cancelled = false;
     doSubmitForm()
       .then(() => { if (!cancelled) setSubmitStatus("success"); })
-      .catch(() => {
+      .catch((err) => {
+        // Respondents get the generic message below; the reason goes to the
+        // console only, because these carry SharePoint list and column names
+        // and a public form can be filled in by anyone.
+        console.error("[DynamicFormPage] submission failed:", err);
         if (!cancelled) setSubmitStatus("error");
       });
     return () => { cancelled = true; };

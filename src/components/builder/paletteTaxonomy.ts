@@ -46,8 +46,6 @@ const TAXONOMY: Record<string, Entry> = {
   file: { tab: "advanced", section: "Rich input", shortLabel: "File Upload" },
   imageupload: { tab: "advanced", section: "Rich input", shortLabel: "Image Upload" },
   signaturepad: { tab: "advanced", section: "Rich input", shortLabel: "Signature" },
-  ranking: { tab: "advanced", section: "Rich input", shortLabel: "Ranking" },
-  hierarchy: { tab: "advanced", section: "Rich input", shortLabel: "Hierarchy" },
   jsoneditor: { tab: "advanced", section: "Rich input", shortLabel: "JSON Editor" },
   // Advanced · Tables
   dynamicmatrix: { tab: "advanced", section: "Tables", shortLabel: "Dynamic Matrix" },
@@ -111,8 +109,8 @@ export const QUICK_ADD_TYPES = ["text", "comment", "dropdown", "date"];
 // ── How a type renders inside the WYSIWYG sheet ────────────────────────────
 
 const AREA = new Set(["comment", "jsoneditor", "html"]);
-const CHOICE = new Set(["dropdown", "radiogroup", "checkbox", "ranking", "hierarchy", "consent"]);
-const ROUND_MARK = new Set(["dropdown", "radiogroup", "hierarchy"]);
+const CHOICE = new Set(["dropdown", "radiogroup", "checkbox", "consent"]);
+const ROUND_MARK = new Set(["dropdown", "radiogroup"]);
 const BLOCK = new Set([
   "signaturepad",
   "file",

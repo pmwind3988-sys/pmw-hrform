@@ -104,7 +104,10 @@ describe("parseForm — kinds", () => {
     expect(kindOf({ type: "file" })).toBe("file");
     expect(kindOf({ type: "signaturepad" })).toBe("signature");
     expect(kindOf({ type: "matrixdynamic" })).toBe("table");
-    expect(kindOf({ type: "ranking" })).toBe("ranking");
+    // Retired from the palette: an older published form still names it, and
+     // renders as a plain answer rather than failing.
+    expect(kindOf({ type: "ranking" })).toBe("text");
+    expect(kindOf({ type: "ranking", choices: ["a", "b"] })).toBe("single-choice");
     expect(kindOf({ type: "paneldynamic" })).toBe("repeater");
     expect(kindOf({ type: "expression" })).toBe("readout");
     expect(kindOf({ type: "panel" })).toBe("section");
@@ -389,5 +392,64 @@ describe("autocapitalize", () => {
     const once = applyAutocapitalize("words", "ali b");
     expect(once).toBe("Ali B");
     expect(applyAutocapitalize("words", once)).toBe(once);
+  });
+});
+
+describe("parseForm and the stored version envelope", () => {
+  const inner = {
+    pages: [{ elements: [{ type: "text", name: "fullName", title: "Full name" }] }],
+  };
+
+  it("reads a plain survey definition", () => {
+    expect(parseForm(inner).questions.map(x => x.name)).toEqual(["fullName"]);
+  });
+
+  it("reads the envelope that Web Form Versions stores", () => {
+    // saveFormVersion writes { surveyJson, meta, version, layerConfig, ... },
+    // so anything reading a published version back hands parseForm the whole
+    // envelope. Without unwrapping there are no pages, and the read-only
+    // submission view renders an empty form with no answers on it.
+    const envelope = { surveyJson: inner, meta: {}, version: "1.0", layerConfig: null };
+    expect(parseForm(envelope).questions.map(x => x.name)).toEqual(["fullName"]);
+  });
+
+  it("prefers a top-level definition over a nested one", () => {
+    const both = { pages: inner.pages, surveyJson: { pages: [{ elements: [{ type: "text", name: "nested" }] }] } };
+    expect(parseForm(both).questions.map(x => x.name)).toEqual(["fullName"]);
+  });
+
+  it("still yields an empty form for junk", () => {
+    expect(parseForm(null).questions).toEqual([]);
+    expect(parseForm({ surveyJson: "not an object" }).questions).toEqual([]);
+  });
+});
+
+describe("interactive numeric fields keep their own control", () => {
+  // Each of these used to publish as { type: "text", inputType: "number" },
+  // which drew a plain number box: no slider track, no plus/minus buttons, no
+  // hours-and-minutes picker, and every range setting dropped on the way.
+  const survey = (element: Record<string, unknown>) => ({ pages: [{ elements: [element] }] });
+
+  it("draws a slider, not a number box", () => {
+    const el = q(survey({ type: "slider", name: "effort", min: 0, max: 100, step: 5 }), "effort");
+    expect(el.kind).toBe("slider");
+    expect(el.min).toBe(0);
+    expect(el.max).toBe(100);
+    expect(el.step).toBe(5);
+  });
+
+  it("draws a stepper, not a number box", () => {
+    const el = q(survey({ type: "counter", name: "headcount", min: 0, max: 10, step: 2 }), "headcount");
+    expect(el.kind).toBe("counter");
+    expect(el.min).toBe(0);
+    expect(el.max).toBe(10);
+    expect(el.step).toBe(2);
+  });
+
+  it("draws an hours-and-minutes picker, not a number box", () => {
+    const el = q(survey({ type: "duration", name: "spent", max: 480, step: 15 }), "spent");
+    expect(el.kind).toBe("duration");
+    expect(el.max).toBe(480);
+    expect(el.step).toBe(15);
   });
 });

@@ -2056,7 +2056,7 @@ function PropertyPanel({ field, allFields, onChange, onClose, token }: {
                   open={card === "settings"}
                   onToggle={() => toggleCard("settings")}
                 >
-                  {!["html", "dynamicmatrix", "file", "formula", "ranking", "panel"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
+                  {!["html", "dynamicmatrix", "file", "formula", "panel"].includes(field.type) && <DefaultValueEditor field={field} onChange={onChange} />}
                   {field.type === "text" && (
                     <PropRow label="Input type">
                       <Select value={field.inputType || "text"} onChange={v => onChange({ inputType: v })} options={[{ value: "text", label: "Text" }, { value: "email", label: "Email" }, { value: "number", label: "Number" }, { value: "date", label: "Date" }, { value: "datetime-local", label: "Date & Time" }, { value: "tel", label: "Phone" }, { value: "url", label: "URL" }, { value: "password", label: "Password" }]} />

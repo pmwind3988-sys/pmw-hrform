@@ -22,10 +22,11 @@ export type NativeKind =
   | "boolean"
   | "rating"
   | "slider"
+  | "counter"
+  | "duration"
   | "file"
   | "signature"
   | "table"
-  | "ranking"
   | "repeater"
   | "readout"
   | "section"
@@ -151,7 +152,6 @@ export interface NativeElement {
   maxRows: number;
   addRowText: string;
 
-  rankItems: NativeChoice[];
 
   /** Formula source, from the custom `_expression` prop or SurveyJS's own. */
   expression: string;
@@ -368,7 +368,6 @@ function toKind(type: string, raw: Raw): NativeKind {
     case "jsoneditor":
       return "textarea";
     case "dropdown":
-    case "hierarchy":
       return "select";
     case "radiogroup":
       return "single-choice";
@@ -381,6 +380,10 @@ function toKind(type: string, raw: Raw): NativeKind {
       return "rating";
     case "slider":
       return "slider";
+    case "counter":
+      return "counter";
+    case "duration":
+      return "duration";
     case "file":
     case "imageupload":
       return "file";
@@ -390,8 +393,6 @@ function toKind(type: string, raw: Raw): NativeKind {
     case "dynamicmatrix":
     case "tableinput":
       return "table";
-    case "ranking":
-      return "ranking";
     case "paneldynamic":
     case "repeater":
       return "repeater";
@@ -425,7 +426,6 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
   const kind = toKind(type, raw);
   const name = str(raw.name);
   const choices = toChoices(raw.choices);
-  const rankItems = toChoices(raw.rankItems ?? raw.choices);
 
   const el: NativeElement = {
     id: `${parentId}.${index}-${name || type}-${(seq += 1)}`,
@@ -482,7 +482,6 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
     maxRows: num(raw.maxRows, 0),
     addRowText: str(raw.addRowText ?? raw.addRowButtonText ?? raw.addButtonText, "Add row"),
 
-    rankItems,
 
     // `_expression` first: SurveyJS's native `expression` is also used by the
     // builder for scorecards, and forms published on either convention exist.
@@ -564,7 +563,17 @@ function collectQuestions(elements: NativeElement[], out: NativeElement[]): void
 
 /** Parse a published SurveyJSON document into the engine's model. */
 export function parseForm(json: unknown): NativeForm {
-  const root = (json && typeof json === "object" ? json : {}) as Raw;
+  const outer = (json && typeof json === "object" ? json : {}) as Raw;
+  // A published version is stored as an envelope — `{ surveyJson, meta,
+  // version, layerConfig, ... }` (see `saveFormVersion`) — so anything reading
+  // one back hands us the envelope rather than the definition inside it. Take
+  // the definition either way: a caller that already unwrapped has `pages`
+  // here, and only a caller that did not needs the nested one.
+  const nested = outer.surveyJson;
+  const root =
+    !Array.isArray(outer.pages) && nested && typeof nested === "object"
+      ? (nested as Raw)
+      : outer;
   const rawPages = Array.isArray(root.pages) ? (root.pages as Raw[]) : [];
 
   const pages: NativePage[] = [];

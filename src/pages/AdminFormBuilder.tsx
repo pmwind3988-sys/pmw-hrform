@@ -297,7 +297,7 @@ function sampleValueForElement(field: Record<string, unknown>, index: number, as
   if (type === "file" || type === "fileupload") return "sample-document.pdf";
   if (type === "boolean") return true;
   if (type === "checkbox" || type === "tagbox") return firstTwoChoiceValues(field.choices);
-  if (["dropdown", "radiogroup", "imagepicker", "ranking"].includes(type)) return firstChoiceValue(field.choices);
+  if (["dropdown", "radiogroup", "imagepicker"].includes(type)) return firstChoiceValue(field.choices);
   if (type === "rating") {
     const rateValues = field.rateValues;
     if (Array.isArray(rateValues) && rateValues.length > 0) return choiceValue(rateValues[rateValues.length - 1]);

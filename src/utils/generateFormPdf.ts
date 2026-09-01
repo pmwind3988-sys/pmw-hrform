@@ -451,7 +451,7 @@ export async function generateAndStorePdf(
     try {
       const safeName = sanitizeMatrixFieldName(mf.name);
       const childListName = `${data.meta.formTitle} Matrix ${safeName}`;
-      const childRows = await readMatrixChildItems(token, childListName, responseItemId);
+      const childRows = await readMatrixChildItems(token, childListName, responseItemId, mf.columns);
       if (childRows.length > 0) {
         data.responseData[`${mf.name}_childRows`] = { columns: mf.columns, rows: childRows };
       }

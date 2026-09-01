@@ -15,9 +15,6 @@
  *   badly and a list is better, so the switch is automatic rather than an
  *   authoring decision — published forms carry no property for it.
  * - **The whole option row is the hit target**, not the 15px dot inside it.
- * - **Ranking reorders with buttons, not drag.** Dragging is unusable on a
- *   phone and unreachable from a keyboard; the project has `react-dnd` for the
- *   builder canvas, but an answer control is not the place for it.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -458,6 +455,123 @@ export function RatingControl({ element, value, onChange, disabled, controlId }:
   );
 }
 
+/**
+ * Plus and minus around a running count.
+ *
+ * Published as a `counter` rather than a plain number so the buttons survive:
+ * a stepper is chosen when tapping is easier than typing, and a bare number box
+ * takes that away — along with the range the author set.
+ */
+export function CounterControl({ element, value, onChange, disabled, controlId }: ControlProps) {
+  const step = element.step && element.step > 0 ? element.step : 1;
+  const min = element.min ?? Number.NEGATIVE_INFINITY;
+  const max = element.max ?? Number.POSITIVE_INFINITY;
+  const parsed = value === null || value === undefined || value === "" ? null : Number(value);
+  const current = parsed !== null && Number.isFinite(parsed) ? parsed : null;
+  // An empty counter starts from its floor, so the first tap moves off a real
+  // number rather than from nothing.
+  const base = current ?? (Number.isFinite(min) ? min : 0);
+  const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  const shift = (by: number) => onChange(clamp(base + by));
+
+  return (
+    <div className="nf-counter">
+      <button
+        type="button"
+        className="nf-counter-step"
+        onClick={() => shift(-step)}
+        disabled={disabled || base <= min}
+        aria-label={`Decrease ${element.title || "value"}`}
+      >
+        −
+      </button>
+      <input
+        id={controlId}
+        className="nf-input nf-counter-value"
+        type="number"
+        inputMode="numeric"
+        value={current === null ? "" : current}
+        min={Number.isFinite(min) ? min : undefined}
+        max={Number.isFinite(max) ? max : undefined}
+        step={step}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value === "" ? null : clamp(Number(e.target.value)))}
+      />
+      <button
+        type="button"
+        className="nf-counter-step"
+        onClick={() => shift(step)}
+        disabled={disabled || base >= max}
+        aria-label={`Increase ${element.title || "value"}`}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Hours and minutes, stored as a single number of minutes.
+ *
+ * One number keeps the answer sortable and summable in SharePoint, which a
+ * "2h 30m" string would not be — but nobody wants to enter 150 by hand, which
+ * is what the plain number box this used to publish as asked them to do.
+ *
+ * `max` is the ceiling in minutes and `step` the minute increment, both set
+ * when the form is published from the author's hours and step settings.
+ */
+export function DurationControl({ element, value, onChange, disabled, controlId }: ControlProps) {
+  const stepMinutes = element.step && element.step > 0 ? element.step : 1;
+  const maxMinutes = element.max && element.max > 0 ? element.max : null;
+  const parsed = value === null || value === undefined || value === "" ? null : Number(value);
+  const total = parsed !== null && Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+  const hours = total === null ? "" : Math.floor(total / 60);
+  const minutes = total === null ? "" : total % 60;
+
+  const write = (nextHours: number, nextMinutes: number) => {
+    const combined = Math.max(0, nextHours) * 60 + Math.max(0, nextMinutes);
+    onChange(maxMinutes === null ? combined : Math.min(maxMinutes, combined));
+  };
+  const numberOr = (raw: string, fallback: number) => {
+    const n = Number(raw);
+    return raw === "" || !Number.isFinite(n) ? fallback : n;
+  };
+
+  return (
+    <div className="nf-duration">
+      <span className="nf-duration-part">
+        <input
+          id={controlId}
+          className="nf-input nf-duration-input"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={maxMinutes === null ? undefined : Math.floor(maxMinutes / 60)}
+          value={hours}
+          disabled={disabled}
+          aria-label={`${element.title || "Duration"} — hours`}
+          onChange={(e) => write(numberOr(e.target.value, 0), numberOr(String(minutes), 0))}
+        />
+        <span className="nf-duration-unit">h</span>
+      </span>
+      <span className="nf-duration-part">
+        <input
+          className="nf-input nf-duration-input"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={59}
+          step={stepMinutes}
+          value={minutes}
+          disabled={disabled}
+          aria-label={`${element.title || "Duration"} — minutes`}
+          onChange={(e) => write(numberOr(String(hours), 0), numberOr(e.target.value, 0))}
+        />
+        <span className="nf-duration-unit">m</span>
+      </span>
+    </div>
+  );
+}
 export function SliderControl({ element, value, onChange, disabled, controlId }: ControlProps) {
   const min = element.min ?? 0;
   const max = element.max ?? 100;
@@ -974,58 +1088,6 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
           </span>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ── Ranking ────────────────────────────────────────────────────────────── */
-
-export function RankingControl({ element, value, onChange, disabled }: ControlProps) {
-  const items = element.rankItems;
-  const ordered = toArray(value).filter((v) => items.some((i) => i.value === v));
-  // Anything the stored order does not mention keeps its authored position, so
-  // a form that gained an option since a draft was saved still shows it.
-  const full = [...ordered, ...items.map((i) => i.value).filter((v) => !ordered.includes(v))];
-
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= full.length) return;
-    const next = [...full];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    onChange(next);
-  };
-
-  return (
-    <div className="nf-rank">
-      {full.map((itemValue, index) => {
-        const item = items.find((i) => i.value === itemValue);
-        return (
-          <div className="nf-rank-item" key={itemValue}>
-            <span className="nf-rank-pos">{index + 1}</span>
-            <span className="nf-rank-label">{item?.text ?? itemValue}</span>
-            <span className="nf-rank-moves">
-              <button
-                type="button"
-                className="nf-rowbtn"
-                disabled={disabled || index === 0}
-                aria-label={`Move ${item?.text ?? itemValue} up`}
-                onClick={() => move(index, index - 1)}
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                className="nf-rowbtn"
-                disabled={disabled || index === full.length - 1}
-                aria-label={`Move ${item?.text ?? itemValue} down`}
-                onClick={() => move(index, index + 1)}
-              >
-                ↓
-              </button>
-            </span>
-          </div>
-        );
-      })}
     </div>
   );
 }

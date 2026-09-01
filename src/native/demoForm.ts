@@ -282,10 +282,10 @@ export const DEMO_FORM: Record<string, unknown> = {
           title: "Declaration",
           elements: [
             {
-              type: "ranking",
+              type: "checkbox",
               name: "outcomes",
-              title: "Rank the expected outcomes",
-              description: "Most important first.",
+              title: "Which outcomes do you expect?",
+              description: "Choose every one that applies.",
               choices: [
                 "Reduced downtime",
                 "Fewer quality escapes",
