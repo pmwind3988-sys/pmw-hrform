@@ -32,6 +32,7 @@ import {
   type DirectoryColumnMap,
   type ApprovalDirectoryRow,
 } from "./approvalDirectorySchema";
+import { DIRECTORY_SOURCE, type DirectorySource } from "./directoryHarvest";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
 
@@ -91,6 +92,8 @@ export async function ensureApprovalDirectory(token: string): Promise<void> {
     { n: APPROVAL_DIRECTORY_COLUMNS.employeeId, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.approverEmail, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.isActive, k: SP_FIELD_KIND.boolean },
+    { n: APPROVAL_DIRECTORY_COLUMNS.source, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.confirmed, k: SP_FIELD_KIND.boolean },
   ]);
 }
 
@@ -112,6 +115,25 @@ export interface ApprovalDirectoryInput {
   approverEmail: string;
   isActive: boolean;
 }
+
+/**
+ * Where a row came from, kept apart from the fields an admin edits.
+ *
+ * Only the harvester passes this. Everything else — the dialog, the CSV
+ * import — is an admin putting a row there deliberately, which is what the
+ * default says. It matters that saving a row confirms it: an admin who opened
+ * a guessed row and pressed save has reviewed it, and should not then have to
+ * confirm it a second time.
+ */
+export interface DirectoryRowOrigin {
+  source: DirectorySource;
+  confirmed: boolean;
+}
+
+const ADMIN_ORIGIN: DirectoryRowOrigin = {
+  source: DIRECTORY_SOURCE.manual,
+  confirmed: true,
+};
 
 export const EMPTY_APPROVAL_DIRECTORY_INPUT: ApprovalDirectoryInput = {
   personEmail: "",
@@ -178,6 +200,7 @@ export function directoryItemBody(
   input: ApprovalDirectoryInput,
   isNew: boolean,
   map: DirectoryColumnMap,
+  origin: DirectoryRowOrigin = ADMIN_ORIGIN,
 ): Record<string, unknown> {
   const missing = REQUIRED_DIRECTORY_FIELDS
     .filter((field) => !map[field])
@@ -201,6 +224,8 @@ export function directoryItemBody(
   put("employeeId", input.employeeId.trim());
   put("approverEmail", input.approverEmail.trim().toLowerCase());
   put("isActive", input.isActive);
+  put("source", origin.source);
+  put("confirmed", origin.confirmed);
 
   // A generic SharePoint list still requires Title; mirror the person into it
   // on create only, so a hand-maintained title survives later edits.
@@ -246,8 +271,9 @@ export async function createApprovalDirectoryRow(
   token: string,
   input: ApprovalDirectoryInput,
   columns: DirectoryColumnMap,
+  origin?: DirectoryRowOrigin,
 ): Promise<void> {
-  await spPost(token, `${listUrl()}/items`, directoryItemBody(input, true, columns));
+  await spPost(token, `${listUrl()}/items`, directoryItemBody(input, true, columns, origin));
 }
 
 export async function updateApprovalDirectoryRow(
@@ -255,8 +281,28 @@ export async function updateApprovalDirectoryRow(
   id: number,
   input: ApprovalDirectoryInput,
   columns: DirectoryColumnMap,
+  origin?: DirectoryRowOrigin,
 ): Promise<void> {
-  await spPatch(token, `${listUrl()}/items(${id})`, directoryItemBody(input, false, columns));
+  await spPatch(token, `${listUrl()}/items(${id})`, directoryItemBody(input, false, columns, origin));
+}
+
+/**
+ * Marks a row as checked without touching anything else on it.
+ *
+ * Separate from an edit so an admin can accept a guess in one click from the
+ * table, rather than opening a dialog only to press save.
+ */
+export async function confirmApprovalDirectoryRow(
+  token: string,
+  id: number,
+  columns: DirectoryColumnMap,
+): Promise<void> {
+  if (!columns.confirmed) {
+    throw new Error(
+      `"${APPROVAL_DIRECTORY_LIST}" has no ${APPROVAL_DIRECTORY_COLUMNS.confirmed} column, so there is nowhere to record that the row was checked.`,
+    );
+  }
+  await spPatch(token, `${listUrl()}/items(${id})`, { [columns.confirmed]: true });
 }
 
 /**

@@ -19,6 +19,8 @@ function person(
     employeeId: "",
     approverEmail,
     isActive: true,
+    source: "manual",
+    confirmed: true,
     ...overrides,
   };
 }

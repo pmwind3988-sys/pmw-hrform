@@ -21,6 +21,9 @@ import { Icon } from "../components/builder/BuilderIcons";
 import type { BuilderMode, BuilderToolCommand, BuilderToolKey } from "../components/builder/builderTheme";
 import "../components/builder/BuilderShell.css";
 import { validateLayerConfig } from "../components/builder/layerValidation";
+import DirectoryHarvestPanel from "../components/builder/DirectoryHarvestPanel";
+import { hasEvaluationLayer } from "../utils/directoryHarvest";
+import { fieldsFromSurveyJson } from "../utils/formFieldCatalog";
 import type { LayerFieldOption } from "../components/builder/layerValidation";
 import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
@@ -37,7 +40,7 @@ import {
   type ReferenceNumberConfig,
 } from "../utils/referenceNumber";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "../utils/FormPdfDocument";
-import type { SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../types";
+import type { DirectoryHarvestSettings, SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../types";
 import type { DocumentControlHeader } from "../types";
 
 // MUI Icons
@@ -663,6 +666,26 @@ export default function AdminFormBuilder() {
   const [deleting, setDeleting] = useState(false);
   const [approvalRules, setApprovalRules] = useState<{ conditionField: string; rules: { when: string; layers: { email: string; name: string; role: string }[] }[] } | null>(null);
   const [layerConfig, setLayerConfig] = useState<LayerConfig | null>(null);
+
+  /**
+   * Whether this form can feed the Approval Directory, and the questions it
+   * would read people out of.
+   *
+   * Offered only for a workflow that has an evaluation step, because that is
+   * the only kind of submission this harvests from — and only for a form whose
+   * workflow is stored as a layer config, which is where the setting lives.
+   */
+  const canHarvestDirectory = useMemo(
+    () => !!layerConfig && hasEvaluationLayer(layerConfig),
+    [layerConfig],
+  );
+  const harvestFieldOptions = useMemo(
+    () => fieldsFromSurveyJson(surveyJson).map((field) => ({ name: field.key, title: field.label })),
+    [surveyJson],
+  );
+  const setDirectoryHarvest = useCallback((next: DirectoryHarvestSettings) => {
+    setLayerConfig((current) => (current ? { ...current, directoryHarvest: next } : current));
+  }, []);
   const [profileLayerEdit, setProfileLayerEdit] = useState<{ version: string; publishKey: string; publishLabel: string } | null>(null);
   const [profileLayerSaving, setProfileLayerSaving] = useState(false);
   const [renameProfileBusy, setRenameProfileBusy] = useState("");
@@ -2248,6 +2271,22 @@ export default function AdminFormBuilder() {
                   hint="Turn this off for an explicit sign-in gate."
                 />
               </Disclosure>
+
+              {canHarvestDirectory && (
+                <Disclosure
+                  open={!!disc.directoryHarvest}
+                  onToggle={() => toggleDisc("directoryHarvest")}
+                  title="Approval routing"
+                  sub="Add this form's submitters to the Approval Directory"
+                  summary={layerConfig?.directoryHarvest?.enabled ? "On" : "Off"}
+                >
+                  <DirectoryHarvestPanel
+                    settings={layerConfig?.directoryHarvest}
+                    onChange={setDirectoryHarvest}
+                    options={harvestFieldOptions}
+                  />
+                </Disclosure>
+              )}
 
               <Disclosure
                 open={!!disc.reference}

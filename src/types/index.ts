@@ -318,6 +318,25 @@ export interface LayerConfig {
   layers: LayerConfigItem[];
   routing?: ConditionalRouting[];
   manualBranches?: ManualBranch[];
+  /**
+   * Whether this form adds its submitters to the Approval Directory, and which
+   * of its questions describe them. Absent on every form until an admin
+   * switches it on. See src/utils/directoryHarvest.ts.
+   */
+  directoryHarvest?: DirectoryHarvestSettings;
+}
+
+/**
+ * Per-form harvest settings. Mirrors `DirectoryHarvestConfig` in
+ * src/utils/directoryHarvest.ts, which reads this back out of the stored JSON
+ * without trusting its shape.
+ */
+export interface DirectoryHarvestSettings {
+  enabled: boolean;
+  nameField?: string;
+  employeeIdField?: string;
+  departmentField?: string;
+  emailField?: string;
 }
 
 export interface ConditionalRouting {

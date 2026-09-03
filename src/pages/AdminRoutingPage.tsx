@@ -53,6 +53,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
+import ManageSearchIcon from "@mui/icons-material/ManageSearch";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
@@ -62,6 +64,7 @@ import { directoryToCsv } from "../utils/approvalDirectoryCsv";
 import type { DirectoryImportPlan } from "../utils/approvalDirectoryCsv";
 import {
   approvalDirectoryExists,
+  confirmApprovalDirectoryRow,
   createApprovalDirectoryRow,
   deleteApprovalDirectoryRow,
   ensureApprovalDirectory,
@@ -76,10 +79,18 @@ import {
   type ApprovalDirectoryRow,
   type DirectoryColumnMap,
 } from "../utils/approvalDirectorySchema";
+import {
+  applyDirectoryScan,
+  hasGuessedEmail,
+  isUnconfirmedRow,
+  runDirectoryScan,
+} from "../utils/directoryHarvestWrite";
+import type { DirectoryScanPlan, ScanProposal } from "../utils/directoryScan";
 import { findDirectoryProblems, traceApprovalChain } from "../utils/approvalDirectoryHealth";
 import ChainTraceView from "../components/routing/ChainTraceView";
 import DirectoryPersonDialog from "../components/routing/DirectoryPersonDialog";
 import DirectoryImportDialog, { type DirectoryImportProgress } from "../components/routing/DirectoryImportDialog";
+import DirectoryScanDialog, { type DirectoryScanProgress } from "../components/routing/DirectoryScanDialog";
 
 type RoutingTab = "people" | "trace" | "health";
 type SnackbarState = { message: string; severity: "success" | "error" } | null;
@@ -96,6 +107,8 @@ const MISSING_COLUMN_EFFECT: Record<string, string> = {
   [APPROVAL_DIRECTORY_COLUMNS.position]: 'forms set to "Whoever holds a role" cannot tell who holds the post',
   [APPROVAL_DIRECTORY_COLUMNS.employeeId]: "staff numbers are not kept; nothing routes on them",
   [APPROVAL_DIRECTORY_COLUMNS.isActive]: "somebody who has left can only be removed, not switched off",
+  [APPROVAL_DIRECTORY_COLUMNS.source]: "a row cannot record where it came from, so forms cannot add their submitters",
+  [APPROVAL_DIRECTORY_COLUMNS.confirmed]: "a guessed row cannot be marked for review, so forms cannot add their submitters",
 };
 
 /** Anything the page could not do, said in words an admin can act on. */
@@ -139,6 +152,16 @@ export default function AdminRoutingPage() {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<DirectoryImportProgress | null>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>(null);
+
+  // The review queue: rows a form guessed, which nobody has checked yet.
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanLabel, setScanLabel] = useState("");
+  const [scanPlan, setScanPlan] = useState<DirectoryScanPlan | null>(null);
+  const [scanApplying, setScanApplying] = useState(false);
+  const [scanProgress, setScanProgress] = useState<DirectoryScanProgress | null>(null);
 
   // Access check, backing up the route guard.
   useEffect(() => {
@@ -201,12 +224,16 @@ export default function AdminRoutingPage() {
   const visibleRows = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return rows.filter((row) => {
+      if (reviewOnly && !isUnconfirmedRow(row)) return false;
       if (departmentFilter !== ALL_DEPARTMENTS && row.department !== departmentFilter) return false;
       if (!needle) return true;
       return [row.personName, row.personEmail, row.department, row.position, row.employeeId, row.approverEmail]
         .some((value) => value.toLowerCase().includes(needle));
     });
-  }, [rows, search, departmentFilter]);
+  }, [rows, search, departmentFilter, reviewOnly]);
+
+  /** Rows a form added and nobody has checked. Empty on a hand-kept list. */
+  const unconfirmedRows = useMemo(() => rows.filter(isUnconfirmedRow), [rows]);
 
   const problems = useMemo(() => findDirectoryProblems(rows), [rows]);
   const blockingProblems = problems.filter((problem) => problem.blocking);
@@ -303,6 +330,74 @@ export default function AdminRoutingPage() {
       severity: failures.length === 0 ? "success" : "error",
     });
     await load(token);
+  };
+
+  /**
+   * Accepts a guessed row as it stands, in one click.
+   *
+   * Kept separate from editing so the common case — the guess was right — does
+   * not make an admin open a dialog only to press save.
+   */
+  const handleConfirm = async (row: ApprovalDirectoryRow) => {
+    if (!token || !columns || row.id === undefined) return;
+    setConfirmingId(row.id);
+    try {
+      await confirmApprovalDirectoryRow(token, row.id, columns);
+      setSnackbar({
+        message: `${row.personName || row.personEmail} confirmed.`,
+        severity: "success",
+      });
+      await load(token);
+    } catch (error) {
+      setSnackbar({ message: errorMessage(error, "Could not confirm that row."), severity: "error" });
+    } finally {
+      setConfirmingId(null);
+    }
+  };
+
+  const handleScan = async () => {
+    if (!token) return;
+    setScanOpen(true);
+    setScanPlan(null);
+    setScanProgress(null);
+    setScanLabel("");
+    setScanning(true);
+    try {
+      setScanPlan(await runDirectoryScan(token, (_done, _total, formTitle) => setScanLabel(formTitle)));
+    } catch (error) {
+      setSnackbar({
+        message: errorMessage(error, "Could not read the evaluation submissions."),
+        severity: "error",
+      });
+      setScanOpen(false);
+    } finally {
+      setScanning(false);
+      setScanLabel("");
+    }
+  };
+
+  const handleApplyScan = async (proposals: ScanProposal[]) => {
+    if (!token || !columns) return;
+    setScanApplying(true);
+    setScanProgress({ done: 0, total: proposals.length, failures: [] });
+    try {
+      const result = await applyDirectoryScan(token, proposals, columns, (done) => {
+        setScanProgress((current) => ({ done, total: proposals.length, failures: current?.failures ?? [] }));
+      });
+      setScanProgress({ done: result.created, total: proposals.length, failures: result.failures });
+      setSnackbar({
+        message: result.failures.length === 0
+          ? `Added ${result.created} ${result.created === 1 ? "person" : "people"} for review.`
+          : `Added ${result.created} of ${proposals.length}; ${result.failures.length} failed.`,
+        severity: result.failures.length === 0 ? "success" : "error",
+      });
+      if (result.failures.length === 0) setScanOpen(false);
+      // Show what just landed, rather than making them find it.
+      setReviewOnly(true);
+      await load(token);
+    } finally {
+      setScanApplying(false);
+    }
   };
 
   const openEditorFor = (email: string) => {
@@ -431,6 +526,29 @@ export default function AdminRoutingPage() {
               </Alert>
             )}
 
+            {unconfirmedRows.length > 0 && (
+              <Alert
+                severity="info"
+                action={(
+                  <Button
+                    size="small"
+                    onClick={() => { setTab("people"); setReviewOnly(true); }}
+                    sx={{ textTransform: "none", fontWeight: 700 }}
+                  >
+                    Review
+                  </Button>
+                )}
+              >
+                <AlertTitle>
+                  {unconfirmedRows.length === 1
+                    ? "One person needs review"
+                    : `${unconfirmedRows.length} people need review`}
+                </AlertTitle>
+                A form added them from an evaluation and guessed their superior. Their submissions are waiting on
+                the Approvals screen until you confirm the row.
+              </Alert>
+            )}
+
             <Paper sx={{ borderRadius: "12px", boxShadow: editorialShadow, overflow: "hidden" }}>
               <Tabs
                 value={tab}
@@ -481,6 +599,23 @@ export default function AdminRoutingPage() {
                         <MenuItem key={department} value={department}>{department}</MenuItem>
                       ))}
                     </TextField>
+                    {unconfirmedRows.length > 0 && (
+                      <Chip
+                        label={`Needs review (${unconfirmedRows.length})`}
+                        color={reviewOnly ? "primary" : "default"}
+                        variant={reviewOnly ? "filled" : "outlined"}
+                        onClick={() => setReviewOnly((current) => !current)}
+                        sx={{ fontWeight: 700, alignSelf: "center" }}
+                      />
+                    )}
+                    <Button
+                      startIcon={<ManageSearchIcon />}
+                      onClick={() => void handleScan()}
+                      disabled={!usable}
+                      sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+                    >
+                      Scan submissions
+                    </Button>
                     <Button
                       startIcon={<UploadFileIcon />}
                       onClick={() => { setImportProgress(null); setImportOpen(true); }}
@@ -520,7 +655,7 @@ export default function AdminRoutingPage() {
                     </Box>
                   ) : visibleRows.length === 0 ? (
                     <Typography sx={{ py: 4, textAlign: "center", color: editorial.muted, fontSize: "0.845rem" }}>
-                      Nobody matches that search.
+                      {reviewOnly ? "Nothing left to review." : "Nobody matches that search."}
                     </Typography>
                   ) : (
                     <Box sx={{ overflowX: "auto" }}>
@@ -551,6 +686,21 @@ export default function AdminRoutingPage() {
                                   {!row.isActive && (
                                     <Chip size="small" label="Off" sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
                                   )}
+                                  {isUnconfirmedRow(row) && (
+                                    <Tooltip title="A form added this from an evaluation. Everything on it is a guess until you confirm it.">
+                                      <Chip
+                                        size="small"
+                                        label={hasGuessedEmail(row) ? "Unconfirmed - address guessed" : "Unconfirmed"}
+                                        sx={{
+                                          height: 20,
+                                          fontSize: "0.72rem",
+                                          fontWeight: 700,
+                                          color: editorial.pmwBlueDark,
+                                          backgroundColor: editorial.blueWash,
+                                        }}
+                                      />
+                                    </Tooltip>
+                                  )}
                                 </Stack>
                               </TableCell>
                               <TableCell sx={{ fontSize: "0.78rem" }}>{row.department || "-"}</TableCell>
@@ -565,6 +715,19 @@ export default function AdminRoutingPage() {
                                   : <em style={{ color: editorial.softMuted }}>top of the line</em>}
                               </TableCell>
                               <TableCell align="right">
+                                {isUnconfirmedRow(row) && (
+                                  <Tooltip title="Confirm this row as it stands">
+                                    <IconButton
+                                      size="small"
+                                      aria-label={`Confirm ${row.personEmail}`}
+                                      onClick={() => void handleConfirm(row)}
+                                      disabled={confirmingId === row.id}
+                                      sx={{ color: editorial.success }}
+                                    >
+                                      <CheckCircleOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                                 <IconButton
                                   size="small"
                                   aria-label={`Edit ${row.personEmail}`}
@@ -700,6 +863,17 @@ export default function AdminRoutingPage() {
         progress={importProgress}
         onClose={() => setImportOpen(false)}
         onApply={(plan) => void handleImport(plan)}
+      />
+
+      <DirectoryScanDialog
+        open={scanOpen}
+        plan={scanPlan}
+        scanning={scanning}
+        applying={scanApplying}
+        progress={scanProgress}
+        scanningLabel={scanLabel}
+        onClose={() => setScanOpen(false)}
+        onApply={(proposals) => void handleApplyScan(proposals)}
       />
 
       <Dialog open={!!deleteTarget} onClose={deleting ? undefined : () => setDeleteTarget(null)}>

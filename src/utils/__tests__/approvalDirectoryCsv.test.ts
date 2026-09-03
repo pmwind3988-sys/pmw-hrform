@@ -12,6 +12,8 @@ function person(overrides: Partial<ApprovalDirectoryRow> = {}): ApprovalDirector
     employeeId: "E1",
     approverEmail: "siti@pmw.com",
     isActive: true,
+    source: "manual",
+    confirmed: true,
     ...overrides,
   };
 }

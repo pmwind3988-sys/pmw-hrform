@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   directoryIsUsable,
+  directoryTracksConfirmation,
   mapDirectoryColumns,
   missingDirectoryColumns,
   toApprovalDirectoryRow,
@@ -19,6 +20,8 @@ const FULL_LIST = [
   plain("EmployeeId"),
   plain("ApproverEmail"),
   plain("IsActive"),
+  plain("Source"),
+  plain("Confirmed"),
 ];
 
 describe("mapDirectoryColumns", () => {
@@ -40,7 +43,7 @@ describe("mapDirectoryColumns", () => {
     const map = mapDirectoryColumns([
       ...FULL_LIST.slice(0, 5),
       { key: "Approver_x0020_Email", aliases: ["Approver Email", "Approver_x0020_Email"] },
-      plain("IsActive"),
+      ...FULL_LIST.slice(6),
     ]);
     expect(map.approverEmail).toBe("Approver_x0020_Email");
     expect(directoryIsUsable(map)).toBe(true);
@@ -70,6 +73,8 @@ describe("mapDirectoryColumns", () => {
       "Position",
       "EmployeeId",
       "IsActive",
+      "Source",
+      "Confirmed",
     ]);
   });
 
@@ -112,5 +117,47 @@ describe("toApprovalDirectoryRow", () => {
 
   it("still works without a map, for callers that know the names", () => {
     expect(toApprovalDirectoryRow({ PersonEmail: "ali@pmw.com" }).personEmail).toBe("ali@pmw.com");
+  });
+});
+
+describe("directoryTracksConfirmation", () => {
+  it("is true for a list that can mark a row as an unchecked guess", () => {
+    expect(directoryTracksConfirmation(mapDirectoryColumns(FULL_LIST))).toBe(true);
+  });
+
+  it("is false for a directory that predates the two columns", () => {
+    const map = mapDirectoryColumns(FULL_LIST.slice(0, 7));
+    // Still perfectly able to route; just unable to hold a guess, which is why
+    // harvesting is refused rather than the whole page.
+    expect(directoryIsUsable(map)).toBe(true);
+    expect(directoryTracksConfirmation(map)).toBe(false);
+  });
+});
+
+describe("toApprovalDirectoryRow, on origin", () => {
+  it("reads a hand-kept row as manual and checked", () => {
+    const row = toApprovalDirectoryRow({ PersonEmail: "ali@pmw.com", ApproverEmail: "siti@pmw.com" });
+    expect(row.source).toBe("manual");
+    expect(row.confirmed).toBe(true);
+  });
+
+  it("reads a harvested row as the guess it is", () => {
+    const row = toApprovalDirectoryRow({
+      PersonEmail: "ali@pmw.com",
+      ApproverEmail: "siti@pmw.com",
+      Source: "auto-email-guessed",
+      Confirmed: false,
+    });
+    expect(row.source).toBe("auto-email-guessed");
+    expect(row.confirmed).toBe(false);
+  });
+
+  it("reads a blank Confirmed cell as checked, so an old list grows no badges", () => {
+    const row = toApprovalDirectoryRow({
+      PersonEmail: "ali@pmw.com",
+      ApproverEmail: "siti@pmw.com",
+      Confirmed: "",
+    });
+    expect(row.confirmed).toBe(true);
   });
 });

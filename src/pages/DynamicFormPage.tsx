@@ -20,6 +20,8 @@ import { planLayerRouting } from "../utils/layerRoutingPlan";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
+import { hasEvaluationLayer, readHarvestConfig } from "../utils/directoryHarvest";
+import { harvestSubmitter } from "../utils/directoryHarvestWrite";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
@@ -1313,6 +1315,32 @@ export default function DynamicFormPage() {
         for (let n = 1; n <= resolvedLayerCount; n++) {
           body[`L${n}_Status`] = n === 1 ? "Pending" : "Waiting";
           body[`L${n}_Email`] = activeLayers[n - 1]?.email ?? "";
+        }
+      }
+
+      // Step 4b: add a brand-new submitter to the Approval Directory, when
+      // this form has been set to do that.
+      //
+      // Runs after routing on purpose. Somebody the directory has never heard
+      // of parks their layer, which is right — the row created here is a guess
+      // for an admin to check, not an answer to send an appraisal off on.
+      //
+      // Needs a signed-in token, and is skipped when routing is deferred: in
+      // both of those cases api/submit-form.ts harvests instead, so exactly
+      // one side ever writes the row.
+      if (token && !deferLayerRoutingToApi) {
+        const harvestConfig = readHarvestConfig(layerConfigParsed);
+        if (harvestConfig && hasEvaluationLayer(layerConfigParsed)) {
+          const harvested = await harvestSubmitter(token, {
+            config: harvestConfig,
+            data: body,
+            submittedBy: String(body.SubmittedBy || userEmail || ""),
+          }).catch(() => null);
+          if (harvested?.note) {
+            body.RoutingNotes = [String(body.RoutingNotes || ""), harvested.note]
+              .filter(Boolean)
+              .join("\n");
+          }
         }
       }
 

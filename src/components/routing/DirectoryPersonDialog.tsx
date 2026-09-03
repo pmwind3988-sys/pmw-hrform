@@ -112,7 +112,14 @@ export default function DirectoryPersonDialog({
    */
   const preview = useMemo(() => {
     if (!input.personEmail.trim()) return null;
-    const pending: ApprovalDirectoryRow = { ...input, id: editing?.id };
+    // Saving is itself a review, so the preview shows the row as confirmed
+    // even while the stored one is still a guess.
+    const pending: ApprovalDirectoryRow = {
+      ...input,
+      id: editing?.id,
+      source: editing?.source ?? "manual",
+      confirmed: true,
+    };
     const merged = [
       pending,
       ...rows.filter((row) => directoryEmailKey(row.personEmail) !== directoryEmailKey(input.personEmail)),

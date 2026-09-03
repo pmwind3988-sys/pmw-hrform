@@ -33,6 +33,8 @@ import {
   type ResolvedLayerActors,
 } from "./_utils/resolveAssignee.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
+import { hasEvaluationLayer, readHarvestConfig } from "./_utils/directoryHarvest.js";
+import { harvestSubmitter } from "./_utils/directoryHarvestWrite.js";
 import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { handleMintTestTicket, handleStampTestRun, handleDeleteTestRuns, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
@@ -1323,6 +1325,56 @@ function isNeedsRoutingLayerStatus(value: unknown): boolean {
   return valueToText(value).trim().toLowerCase() === LAYER_NEEDS_ROUTING_STATUS.toLowerCase();
 }
 
+/**
+ * Adds one line to the item's routing notes without losing what is there.
+ *
+ * The notes are what an admin reads when a submission needs a hand, and they
+ * now carry two kinds of line: why a layer could not be routed, and who was
+ * added to the directory. Both matter, so neither overwrites the other.
+ */
+function appendRoutingNote(formBody: Record<string, unknown>, note: string): void {
+  if (!note) return;
+  const existing = valueToText(formBody.RoutingNotes);
+  formBody.RoutingNotes = existing ? `${existing}\n${note}` : note;
+}
+
+/**
+ * Adds the submitter to the Approval Directory when this form asks for it and
+ * they are not listed yet, and says so on the submission.
+ *
+ * Runs *after* routing, deliberately. Routing parks on a person it cannot
+ * find, which is what should happen — the guessed row is a question for an
+ * admin, not an answer to route on. Harvesting first would resolve the layer
+ * to a guessed HOD and send somebody's appraisal off on it unreviewed.
+ *
+ * Answers "" for a form that was never switched on, a person already listed,
+ * or any failure: a directory that will not cooperate is never allowed to cost
+ * a submission.
+ */
+async function harvestDirectoryRow(
+  token: string,
+  formBody: Record<string, unknown>,
+  layerConfig: ApiLayerConfig | null,
+): Promise<string> {
+  const config = readHarvestConfig(layerConfig);
+  if (!config || !hasEvaluationLayer(layerConfig)) return "";
+
+  try {
+    const result = await harvestSubmitter({
+      token,
+      config,
+      data: formBody,
+      submittedBy: valueToText(formBody.SubmittedBy),
+    });
+    return result?.note ?? "";
+  } catch (error) {
+    logWarn("api:submit-form", "Directory harvest failed", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return "";
+  }
+}
+
 /** The parked reason recorded for one layer, for the routing notice to quote. */
 function routingReasonForLayer(formBody: Record<string, unknown>, layerNumber: number): string {
   const prefix = `Layer ${layerNumber}: `;
@@ -1349,11 +1401,15 @@ async function applyLayerConfigWorkflow(
     formBody.Status = FORM_SUBMITTED_STATUS;
     formBody.CurrentLayer = 0;
     formBody.CurrentApprovalLayer = 0;
+    appendRoutingNote(formBody, await harvestDirectoryRow(token, formBody, layerConfig));
     return;
   }
 
   const layers = layerConfig?.layers ?? [];
-  if (layers.length === 0) return;
+  if (layers.length === 0) {
+    appendRoutingNote(formBody, await harvestDirectoryRow(token, formBody, layerConfig));
+    return;
+  }
 
   // Chain routing needs an identity the form body does not carry. Public
   // submissions record "GUEST", which the resolver treats as unusable and
@@ -1408,6 +1464,7 @@ async function applyLayerConfigWorkflow(
     // to re-derive it from a directory that may have changed since.
     formBody.RoutingNotes = parkedReasons.join("\n");
   }
+  appendRoutingNote(formBody, await harvestDirectoryRow(token, formBody, layerConfig));
   formBody.FormStatus = FORM_SUBMITTED_STATUS;
   formBody.CurrentLayer = layers[0]?.layerNumber ?? 1;
   formBody.CurrentApprovalLayer = formBody.CurrentLayer;

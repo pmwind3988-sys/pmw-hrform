@@ -34,6 +34,19 @@ export const APPROVAL_DIRECTORY_COLUMNS = {
   approverEmail: "ApproverEmail",
   /** Leavers are switched off, never deleted, so old submissions stay readable. */
   isActive: "IsActive",
+  /**
+   * How the row came to exist: `manual` when an admin typed or imported it,
+   * `auto` when it was harvested from a submission, `auto-email-guessed` when
+   * the address on it was built from the person's name as well. See
+   * `DIRECTORY_SOURCE` in the directoryHarvest module.
+   */
+  source: "Source",
+  /**
+   * Whether an admin has checked the row. Harvested rows arrive false; a blank
+   * cell, or no such column, reads as true so a hand-kept list is not suddenly
+   * covered in review badges.
+   */
+  confirmed: "Confirmed",
 } as const;
 
 export interface ApprovalDirectoryRow {
@@ -45,6 +58,8 @@ export interface ApprovalDirectoryRow {
   employeeId: string;
   approverEmail: string;
   isActive: boolean;
+  source: string;
+  confirmed: boolean;
 }
 
 /** Case- and whitespace-insensitive key for comparing addresses. */
@@ -108,6 +123,8 @@ export function mapDirectoryColumns(
     employeeId: resolve(APPROVAL_DIRECTORY_COLUMNS.employeeId),
     approverEmail: resolve(APPROVAL_DIRECTORY_COLUMNS.approverEmail),
     isActive: resolve(APPROVAL_DIRECTORY_COLUMNS.isActive),
+    source: resolve(APPROVAL_DIRECTORY_COLUMNS.source),
+    confirmed: resolve(APPROVAL_DIRECTORY_COLUMNS.confirmed),
   };
 }
 
@@ -121,6 +138,17 @@ export function missingDirectoryColumns(map: DirectoryColumnMap): string[] {
 /** True when the list has enough columns to answer a routing question at all. */
 export function directoryIsUsable(map: DirectoryColumnMap): boolean {
   return REQUIRED_DIRECTORY_FIELDS.every((field) => !!map[field]);
+}
+
+/**
+ * True when the list can record that a row is a guess awaiting review.
+ *
+ * Harvesting is refused without this. Writing guessed rows into a list that
+ * cannot mark them unconfirmed would quietly turn every guess into an answer,
+ * and route somebody's appraisal to an address nobody checked.
+ */
+export function directoryTracksConfirmation(map: DirectoryColumnMap): boolean {
+  return !!map.source && !!map.confirmed;
 }
 
 /**
@@ -143,6 +171,9 @@ export function toApprovalDirectoryRow(
   const activeKey = map ? map.isActive : APPROVAL_DIRECTORY_COLUMNS.isActive;
   const active = activeKey ? fields[activeKey] : undefined;
 
+  const confirmedKey = map ? map.confirmed : APPROVAL_DIRECTORY_COLUMNS.confirmed;
+  const confirmed = confirmedKey ? fields[confirmedKey] : undefined;
+
   return {
     personEmail: text("personEmail"),
     personName: text("personName"),
@@ -153,5 +184,9 @@ export function toApprovalDirectoryRow(
     // A blank cell, or no such column at all, must not read as "left the
     // company" — an absent IsActive means everybody is active.
     isActive: active === undefined || active === null || active === "" ? true : Boolean(active),
+    // An unrecorded origin is a row somebody put there by hand, which is what
+    // every row in an existing directory is.
+    source: text("source") || "manual",
+    confirmed: confirmed === undefined || confirmed === null || confirmed === "" ? true : Boolean(confirmed),
   };
 }
