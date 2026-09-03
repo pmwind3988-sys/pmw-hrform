@@ -22,6 +22,7 @@ import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLo
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { hasEvaluationLayer, readHarvestConfig } from "../utils/directoryHarvest";
 import { resolveScopedChoices } from "../utils/orgDirectory";
+import { forEachSurveyElement } from "../utils/surveyWalk";
 import { harvestSubmitter } from "../utils/directoryHarvestWrite";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
@@ -908,16 +909,12 @@ export default function DynamicFormPage() {
     const clone = withAppFont(JSON.parse(JSON.stringify(baseJson)) as Record<string, unknown>);
 
     async function enrich(): Promise<void> {
-      const pages = (clone.pages || []) as { elements?: Record<string, unknown>[] }[];
       const pending: Promise<void>[] = [];
 
-      function walk(elements: Record<string, unknown>[]) {
-        for (const el of elements) {
-          if (el.type === "panel" && Array.isArray(el.elements)) {
-            walk(el.elements as Record<string, unknown>[]);
-            continue;
-          }
-
+      // Every question, whatever container it sits in. This recursed into
+      // panels alone, so a question inside a column layout never had its
+      // choices loaded at all.
+      function collect(el: Record<string, unknown>) {
           // Main field spChoicesSource
           const src = el.spChoicesSource as { list?: string; column?: string } | undefined;
           if (src?.list && src?.column) {
@@ -991,11 +988,8 @@ export default function DynamicFormPage() {
             }
           }
         }
-      }
 
-      for (const page of pages) {
-        if (Array.isArray(page.elements)) walk(page.elements);
-      }
+      forEachSurveyElement(clone, collect);
 
       await Promise.all(pending);
       setEnrichedSurveyJson(cloneAndApplyPrefilledQr(clone, prefilledQrPayload));

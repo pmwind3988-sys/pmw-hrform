@@ -1,4 +1,5 @@
 import type { ListChoiceOption } from "./listChoiceOptions";
+import { forEachSurveyElement } from "./surveyWalk";
 
 export interface SurveyChoiceLoaders {
   getSharePointChoices: (listTitle: string, fieldName: string) => Promise<string[]>;
@@ -55,12 +56,10 @@ export async function enrichSurveyJsonChoices<T extends Record<string, unknown>>
     );
   };
 
-  const walk = (elements: unknown): void => {
-    if (!Array.isArray(elements)) return;
-
-    for (const element of elements) {
-      if (!isRecord(element)) continue;
-
+  // Every question, whatever container it sits in. This went into panels and
+  // repeater templates but never a column layout, so a question two columns
+  // deep kept whatever stale choices were published with it.
+  const visit = (element: Record<string, unknown>): void => {
       const src = element.spChoicesSource as ChoiceSource | undefined;
       if (src?.list && src?.column) {
         enqueue(element, loaders.getSharePointChoices(src.list, src.column));
@@ -104,16 +103,9 @@ export async function enrichSurveyJsonChoices<T extends Record<string, unknown>>
           }
         }
       }
-
-      walk(element.elements);
-      walk(element.templateElements);
-    }
   };
 
-  const pages = Array.isArray(clone.pages) ? clone.pages : [];
-  for (const page of pages) {
-    if (isRecord(page)) walk(page.elements);
-  }
+  forEachSurveyElement(clone, visit);
 
   await Promise.all(pending);
   return clone;

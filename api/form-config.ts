@@ -1,6 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryMasterFormBySlug, queryWebFormVersion, getListColumnChoices, getListColumnValues, getListScopedRows } from "./_utils/graphClient.js";
 import { resolveScopedChoices } from "./_utils/orgDirectory.js";
+import { forEachSurveyElement } from "./_utils/surveyWalk.js";
 import { redactLayerConfigForPublic } from "./_utils/publicLayerConfig.js";
 import { logError } from "./_utils/logger.js";
 
@@ -48,20 +49,19 @@ async function enrichSurveyJson(
   token: string,
   surveyJson: Record<string, unknown>
 ): Promise<{ spSources: number; choicesFetched: number; errors: string[] }> {
-  const pages = (surveyJson.pages || []) as { elements?: Record<string, unknown>[] }[];
   const errors: string[] = [];
   let spSources = 0;
   let choicesFetched = 0;
+  const pending: Promise<void>[] = [];
 
-  async function walk(elements: Record<string, unknown>[]) {
-    const pending: Promise<void>[] = [];
-
-    for (const el of elements) {
-      if (el.type === "panel" && Array.isArray(el.elements)) {
-        await walk(el.elements as Record<string, unknown>[]);
-        continue;
-      }
-
+  /*
+    Every question, whatever it is nested inside — see `forEachSurveyElement`.
+    This used to recurse into panels alone, so a Company dropdown inside a
+    column layout came back with no choices for a public submitter while a
+    signed-in colleague, whose browser did its own loading, saw it populated.
+  */
+  {
+    const collect = (el: Record<string, unknown>): void => {
       // Main field spChoicesSource
       const src = el.spChoicesSource as
         | { list?: string; column?: string }
@@ -194,14 +194,12 @@ async function enrichSurveyJson(
           }
         }
       }
-    }
+    };
 
-    await Promise.all(pending);
+    forEachSurveyElement(surveyJson, collect);
   }
 
-  for (const page of pages) {
-    if (Array.isArray(page.elements)) await walk(page.elements);
-  }
+  await Promise.all(pending);
 
   return { spSources, choicesFetched, errors };
 }
