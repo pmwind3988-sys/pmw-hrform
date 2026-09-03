@@ -56,6 +56,7 @@ const HELP: Record<string, string> = {
   personEmail: "Their work email. This is what a submission is matched on, so it has to be exact.",
   approverEmail: "Who signs off this person's forms. Leave empty if nobody is above them.",
   department: "Used when a form routes to a whole department's head rather than to this person's own approver.",
+  company: "Which company they belong to. Two companies can have a department of the same name, so this is what tells them apart.",
   position: "Their job title. A form set to 'Whoever holds a role' looks for the title you type here, such as HOD.",
   employeeId: "Their ID in whichever system HR keys off. Free text; nothing routes on it.",
 };
@@ -80,6 +81,7 @@ export default function DirectoryPersonDialog({
         personEmail: editing.personEmail,
         personName: editing.personName,
         department: editing.department,
+        company: editing.company,
         position: editing.position,
         employeeId: editing.employeeId,
         approverEmail: editing.approverEmail,
@@ -103,6 +105,11 @@ export default function DirectoryPersonDialog({
 
   const departments = useMemo(
     () => [...new Set(rows.map((row) => row.department).filter(Boolean))].sort(),
+    [rows],
+  );
+
+  const companies = useMemo(
+    () => [...new Set(rows.map((row) => row.company).filter(Boolean))].sort(),
     [rows],
   );
 
@@ -189,6 +196,19 @@ export default function DirectoryPersonDialog({
               )}
               {has("position") && field("Position", "position")}
             </Stack>
+          )}
+
+          {has("company") && (
+            <Autocomplete
+              freeSolo
+              options={companies}
+              value={input.company}
+              onInputChange={(_, value) => setInput((prev) => ({ ...prev, company: value }))}
+              fullWidth
+              renderInput={(params) => (
+                <TextField {...params} label="Company" size="small" helperText={HELP.company} />
+              )}
+            />
           )}
 
           {has("employeeId") && field("Employee ID", "employeeId")}

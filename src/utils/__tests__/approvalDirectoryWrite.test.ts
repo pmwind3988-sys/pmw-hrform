@@ -14,6 +14,7 @@ const INPUT: ApprovalDirectoryInput = {
   personEmail: "  Ali@Example.com ",
   personName: " Ali Bakar ",
   department: " Finance ",
+  company: " PMW Group ",
   position: " Officer ",
   employeeId: " E-1042 ",
   approverEmail: " Siti@Example.COM ",

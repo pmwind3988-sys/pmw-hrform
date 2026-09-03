@@ -336,6 +336,7 @@ export interface DirectoryHarvestSettings {
   nameField?: string;
   employeeIdField?: string;
   departmentField?: string;
+  companyField?: string;
   emailField?: string;
 }
 

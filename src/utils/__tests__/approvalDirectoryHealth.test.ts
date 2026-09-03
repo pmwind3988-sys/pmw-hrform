@@ -15,6 +15,7 @@ function person(
     personEmail,
     personName: personEmail.split("@")[0],
     department: "Engineering",
+    company: "PMW Industries",
     position: "Engineer",
     employeeId: "",
     approverEmail,

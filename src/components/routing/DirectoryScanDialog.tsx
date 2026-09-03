@@ -196,6 +196,11 @@ export default function DirectoryScanDialog({
                             </TableCell>
                             <TableCell sx={{ fontSize: "0.78rem" }}>
                               {proposal.candidate.department || "-"}
+                              {proposal.candidate.company && (
+                                <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted }}>
+                                  {proposal.candidate.company}
+                                </Typography>
+                              )}
                             </TableCell>
                             <TableCell sx={{ fontSize: "0.78rem" }}>
                               {proposal.approverEmail || (

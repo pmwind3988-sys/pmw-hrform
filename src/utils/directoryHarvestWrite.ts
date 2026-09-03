@@ -99,6 +99,7 @@ export function harvestedRow(
     personEmail: candidate.personEmail,
     personName: candidate.personName,
     department: candidate.department,
+    company: candidate.company,
     // Position is not asked for on an evaluation form, and inventing one would
     // put a role-holder layer onto somebody who may not hold the post.
     position: "",

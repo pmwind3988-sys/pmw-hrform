@@ -49,6 +49,12 @@ export interface DirectoryHarvestConfig {
   /** Which question holds their department. */
   departmentField?: string;
   /**
+   * Which question holds their company. Rarely needed: the company selector
+   * every form can carry already stores its answer under a known key, and that
+   * is used when this is blank.
+   */
+  companyField?: string;
+  /**
    * Which question holds their email address, when the form asks for one.
    * Optional: most forms do not, and the submitter's own address serves.
    */
@@ -61,6 +67,7 @@ export interface DirectoryHarvestCandidate {
   personName: string;
   employeeId: string;
   department: string;
+  company: string;
   /** True when `personEmail` was built from the name rather than submitted. */
   emailWasGuessed: boolean;
 }
@@ -78,6 +85,7 @@ export interface HarvestFieldGuess {
   nameField: string;
   employeeIdField: string;
   departmentField: string;
+  companyField: string;
   emailField: string;
 }
 
@@ -85,6 +93,7 @@ export const EMPTY_HARVEST_FIELD_GUESS: HarvestFieldGuess = {
   nameField: "",
   employeeIdField: "",
   departmentField: "",
+  companyField: "",
   emailField: "",
 };
 
@@ -96,6 +105,16 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * the directory standing for everybody who ever used a public link.
  */
 const NON_PERSON_ADDRESSES = new Set(["guest", "anonymous", "system", "public"]);
+
+/**
+ * Where the company selector stores its answer.
+ *
+ * Deliberately a copy of the candidate keys in src/utils/companySelection.ts
+ * rather than an import: this module has to stay pure and has to compile on
+ * the serverless side, which cannot reach into src/. The two lists describe
+ * the same handful of names that selector has ever written.
+ */
+const COMPANY_KEYS = ["company", "Company", "Company_x0020_Name", "JobCompany", "Job_x0020_Company"];
 
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -248,6 +267,13 @@ export function harvestFieldGuesses(options: HarvestFieldOption[]): HarvestField
       ["employee", "staff", "emp"],
       FOREIGN_ID_WORDS,
     ),
+    companyField: bestMatch(
+      options,
+      ["company", "company name", "employer", "syarikat"],
+      ["company", "employer", "syarikat"],
+      ["entity", "subsidiary"],
+      ["supervisor", "approver", "manager", "hod", "head", "bank", "insurance"],
+    ),
     departmentField: bestMatch(
       options,
       ["department", "dept", "division", "jabatan"],
@@ -339,6 +365,7 @@ export function readHarvestConfig(layerConfig: unknown): DirectoryHarvestConfig 
     nameField: text(record.nameField) || undefined,
     employeeIdField: text(record.employeeIdField) || undefined,
     departmentField: text(record.departmentField) || undefined,
+    companyField: text(record.companyField) || undefined,
     emailField: text(record.emailField) || undefined,
   };
 }
@@ -380,6 +407,11 @@ export function buildHarvestCandidate(params: {
   const personName = harvestFieldValue(data, config.nameField);
   const employeeId = harvestFieldValue(data, config.employeeIdField);
   const department = harvestFieldValue(data, config.departmentField);
+  // The company selector's own answer is the fallback, and in practice the
+  // usual source: it is on the form whether or not anybody mapped a question.
+  const company = harvestFieldValue(data, config.companyField)
+    || COMPANY_KEYS.map((key) => harvestFieldValue(data, key)).find(Boolean)
+    || "";
 
   const submittedEmail = harvestFieldValue(data, config.emailField);
   let personEmail = "";
@@ -397,7 +429,7 @@ export function buildHarvestCandidate(params: {
   if (!personEmail) return null;
   if (!personName && !employeeId && !department) return null;
 
-  return { personEmail, personName, employeeId, department, emailWasGuessed };
+  return { personEmail, personName, employeeId, department, company, emailWasGuessed };
 }
 
 /** Which `Source` value a harvested row carries. */

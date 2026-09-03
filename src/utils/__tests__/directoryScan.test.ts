@@ -22,6 +22,7 @@ function listed(personEmail: string): ApprovalDirectoryRow {
     personEmail,
     personName: personEmail.split("@")[0],
     department: "Safety",
+    company: "PMW Industries",
     position: "",
     employeeId: "",
     approverEmail: "",
@@ -182,6 +183,23 @@ describe("planDirectoryScan", () => {
     expect(plan.formsScanned).toEqual(["Appraisal", "Probation"]);
     expect(plan.formsFailed).toEqual([{ formTitle: "Renamed", reason: "list not found" }]);
     expect(plan.proposals).toHaveLength(2);
+  });
+});
+
+describe("planDirectoryScan, on company", () => {
+  it("carries each person's company through from their submission", () => {
+    const plan = planDirectoryScan({
+      forms: [form([
+        { FullName: "Ahmad Faiz", Department: "Safety", company: "PMW Industries", SubmittedBy: "ahmad.faiz@pmw-group.com" },
+        { FullName: "Siti Aminah", Department: "Finance", company: "PMW Group", SubmittedBy: "siti@pmw-group.com" },
+      ])],
+      existing: [],
+      domain: DOMAIN,
+      hodFor: NO_HODS,
+    });
+    const byEmail = new Map(plan.proposals.map((p) => [p.candidate.personEmail, p.candidate.company]));
+    expect(byEmail.get("ahmad.faiz@pmw-group.com")).toBe("PMW Industries");
+    expect(byEmail.get("siti@pmw-group.com")).toBe("PMW Group");
   });
 });
 

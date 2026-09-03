@@ -26,6 +26,12 @@ export const APPROVAL_DIRECTORY_COLUMNS = {
   personEmail: "PersonEmail",
   personName: "PersonName",
   department: "Department",
+  /**
+   * Which company they belong to. Every submission already records the one the
+   * submitter picked, so this is read rather than guessed — and it matters for
+   * routing because two companies can have a department of the same name.
+   */
+  company: "Company",
   /** Job title, and the role matched by role-holder layers (e.g. "HOD"). */
   position: "Position",
   /** Identifier from whichever system HR actually keys off. Free text. */
@@ -54,6 +60,7 @@ export interface ApprovalDirectoryRow {
   personEmail: string;
   personName: string;
   department: string;
+  company: string;
   position: string;
   employeeId: string;
   approverEmail: string;
@@ -119,6 +126,7 @@ export function mapDirectoryColumns(
     personEmail: resolve(APPROVAL_DIRECTORY_COLUMNS.personEmail),
     personName: resolve(APPROVAL_DIRECTORY_COLUMNS.personName),
     department: resolve(APPROVAL_DIRECTORY_COLUMNS.department),
+    company: resolve(APPROVAL_DIRECTORY_COLUMNS.company),
     position: resolve(APPROVAL_DIRECTORY_COLUMNS.position),
     employeeId: resolve(APPROVAL_DIRECTORY_COLUMNS.employeeId),
     approverEmail: resolve(APPROVAL_DIRECTORY_COLUMNS.approverEmail),
@@ -178,6 +186,7 @@ export function toApprovalDirectoryRow(
     personEmail: text("personEmail"),
     personName: text("personName"),
     department: text("department"),
+    company: text("company"),
     position: text("position"),
     employeeId: text("employeeId"),
     approverEmail: text("approverEmail"),

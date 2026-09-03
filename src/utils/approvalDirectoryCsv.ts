@@ -19,6 +19,7 @@ export const DIRECTORY_CSV_HEADER = [
   "PersonEmail",
   "PersonName",
   "Department",
+  "Company",
   "Position",
   "EmployeeId",
   "ApproverEmail",
@@ -38,6 +39,7 @@ const HEADER_ALIASES: Record<DirectoryField, string[]> = {
   personEmail: ["personemail", "email", "emailaddress", "useremail", "staffemail", "upn"],
   personName: ["personname", "name", "fullname", "staffname", "employeename", "displayname"],
   department: ["department", "dept", "division"],
+  company: ["company", "companyname", "employer", "entity", "organisation", "organization", "subsidiary"],
   position: ["position", "role", "jobtitle", "title", "designation"],
   employeeId: ["employeeid", "empid", "staffid", "staffno", "userid", "employeenumber"],
   approverEmail: ["approveremail", "approver", "reportsto", "reportingto", "manager", "manageremail", "supervisor", "evaluator"],
@@ -65,6 +67,7 @@ function matchColumns(header: string[]): DirectoryCsvColumns {
     personEmail: find("personEmail"),
     personName: find("personName"),
     department: find("department"),
+    company: find("company"),
     position: find("position"),
     employeeId: find("employeeId"),
     approverEmail: find("approverEmail"),
@@ -111,6 +114,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COMPARED_FIELDS: Array<{ field: DirectoryField; label: string }> = [
   { field: "personName", label: "Name" },
   { field: "department", label: "Department" },
+  { field: "company", label: "Company" },
   { field: "position", label: "Position" },
   { field: "employeeId", label: "Employee ID" },
   { field: "approverEmail", label: "Approver" },
@@ -199,6 +203,7 @@ export function planDirectoryImport(
       personEmail,
       personName: text(columns.personName, "personName"),
       department: text(columns.department, "department"),
+      company: text(columns.company, "company"),
       position: text(columns.position, "position"),
       employeeId: text(columns.employeeId, "employeeId"),
       approverEmail: at(columns.approverEmail).toLowerCase(),
@@ -261,6 +266,7 @@ export function directoryToCsv(rows: ApprovalDirectoryRow[]): string {
       row.personEmail,
       row.personName,
       row.department,
+      row.company,
       row.position,
       row.employeeId,
       row.approverEmail,
@@ -274,8 +280,8 @@ export function directoryToCsv(rows: ApprovalDirectoryRow[]): string {
 export function directoryCsvTemplate(): string {
   return [
     csvRow([...DIRECTORY_CSV_HEADER]),
-    csvRow(["ali@example.com", "Ali bin Ahmad", "Engineering", "Engineer", "E1024", "siti@example.com", "Yes"]),
-    csvRow(["siti@example.com", "Siti Nurhaliza", "Engineering", "HOD", "E0310", "raj@example.com", "Yes"]),
-    csvRow(["raj@example.com", "Raj Kumar", "Finance", "CFO", "E0044", "", "Yes"]),
+    csvRow(["ali@example.com", "Ali bin Ahmad", "Engineering", "PMW Industries", "Engineer", "E1024", "siti@example.com", "Yes"]),
+    csvRow(["siti@example.com", "Siti Nurhaliza", "Engineering", "PMW Industries", "HOD", "E0310", "raj@example.com", "Yes"]),
+    csvRow(["raj@example.com", "Raj Kumar", "Finance", "PMW Group", "CFO", "E0044", "", "Yes"]),
   ].join("\r\n");
 }

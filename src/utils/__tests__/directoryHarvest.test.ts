@@ -24,6 +24,7 @@ function candidate(overrides: Partial<DirectoryHarvestCandidate> = {}): Director
     personName: "Ahmad Faiz",
     employeeId: "E-1042",
     department: "Safety",
+    company: "PMW Industries",
     emailWasGuessed: false,
     ...overrides,
   };
@@ -110,6 +111,14 @@ describe("harvestFieldGuesses", () => {
     expect(guess.nameField).toBe("FullName");
   });
 
+  it("offers a company question when the form has one", () => {
+    const guess = harvestFieldGuesses([
+      { name: "Employer", title: "Company Name" },
+      { name: "BankName", title: "Bank Name" },
+    ]);
+    expect(guess.companyField).toBe("Employer");
+  });
+
   it("reads Malay labels", () => {
     const guess = harvestFieldGuesses([
       { name: "Nama", title: "Nama Penuh" },
@@ -123,7 +132,13 @@ describe("harvestFieldGuesses", () => {
       { name: "Q1", title: "How did it go?" },
       { name: "Q2", title: "Anything else?" },
     ]);
-    expect(guess).toEqual({ nameField: "", employeeIdField: "", departmentField: "", emailField: "" });
+    expect(guess).toEqual({
+      nameField: "",
+      employeeIdField: "",
+      departmentField: "",
+      companyField: "",
+      emailField: "",
+    });
   });
 
   it("falls back to the stored field name when a question has no label", () => {
@@ -262,7 +277,7 @@ describe("buildHarvestCandidate", () => {
   it("reads the person off the form and keys them on the submitter's address", () => {
     expect(buildHarvestCandidate({
       config,
-      data: { FullName: "Ahmad Faiz", EmployeeId: "E-1042", Department: "Safety" },
+      data: { FullName: "Ahmad Faiz", EmployeeId: "E-1042", Department: "Safety", company: "PMW Industries" },
       submittedBy: "Ahmad.Faiz@PMW-Group.com",
       domain: DOMAIN,
     })).toEqual({
@@ -270,6 +285,7 @@ describe("buildHarvestCandidate", () => {
       personName: "Ahmad Faiz",
       employeeId: "E-1042",
       department: "Safety",
+      company: "PMW Industries",
       emailWasGuessed: false,
     });
   });
@@ -316,6 +332,70 @@ describe("buildHarvestCandidate", () => {
     expect(buildHarvestCandidate({
       config: { ...config, enabled: false },
       data: { FullName: "Ahmad Faiz" },
+      submittedBy: "ahmad.faiz@pmw-group.com",
+      domain: DOMAIN,
+    })).toBeNull();
+  });
+});
+
+describe("buildHarvestCandidate, on company", () => {
+  const config = {
+    enabled: true,
+    nameField: "FullName",
+    departmentField: "Department",
+  };
+
+  it("reads the company selector's own answer without anybody mapping it", () => {
+    const result = buildHarvestCandidate({
+      config,
+      data: { FullName: "Ahmad Faiz", Department: "Safety", company: "PMW Industries" },
+      submittedBy: "ahmad.faiz@pmw-group.com",
+      domain: DOMAIN,
+    });
+    expect(result?.company).toBe("PMW Industries");
+  });
+
+  it("reads the selector under the spellings SharePoint gives it", () => {
+    for (const key of ["Company", "Company_x0020_Name", "JobCompany", "Job_x0020_Company"]) {
+      const result = buildHarvestCandidate({
+        config,
+        data: { FullName: "Ahmad Faiz", Department: "Safety", [key]: "PMW Group" },
+        submittedBy: "ahmad.faiz@pmw-group.com",
+        domain: DOMAIN,
+      });
+      expect(result?.company, key).toBe("PMW Group");
+    }
+  });
+
+  it("prefers a question an admin mapped over the selector", () => {
+    const result = buildHarvestCandidate({
+      config: { ...config, companyField: "Employer" },
+      data: {
+        FullName: "Ahmad Faiz",
+        Department: "Safety",
+        company: "PMW Group",
+        Employer: "PMW Industries",
+      },
+      submittedBy: "ahmad.faiz@pmw-group.com",
+      domain: DOMAIN,
+    });
+    expect(result?.company).toBe("PMW Industries");
+  });
+
+  it("leaves the company blank on a form that asks for none", () => {
+    const result = buildHarvestCandidate({
+      config,
+      data: { FullName: "Ahmad Faiz", Department: "Safety" },
+      submittedBy: "ahmad.faiz@pmw-group.com",
+      domain: DOMAIN,
+    });
+    expect(result?.company).toBe("");
+  });
+
+  it("does not harvest a company on its own — that is nobody", () => {
+    expect(buildHarvestCandidate({
+      config,
+      data: { company: "PMW Group" },
       submittedBy: "ahmad.faiz@pmw-group.com",
       domain: DOMAIN,
     })).toBeNull();

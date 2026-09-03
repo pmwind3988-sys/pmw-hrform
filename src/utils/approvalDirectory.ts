@@ -88,6 +88,7 @@ export async function ensureApprovalDirectory(token: string): Promise<void> {
     { n: APPROVAL_DIRECTORY_COLUMNS.personEmail, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.personName, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.department, k: SP_FIELD_KIND.text },
+    { n: APPROVAL_DIRECTORY_COLUMNS.company, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.position, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.employeeId, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.approverEmail, k: SP_FIELD_KIND.text },
@@ -110,6 +111,7 @@ export interface ApprovalDirectoryInput {
   personEmail: string;
   personName: string;
   department: string;
+  company: string;
   position: string;
   employeeId: string;
   approverEmail: string;
@@ -139,6 +141,7 @@ export const EMPTY_APPROVAL_DIRECTORY_INPUT: ApprovalDirectoryInput = {
   personEmail: "",
   personName: "",
   department: "",
+  company: "",
   position: "",
   employeeId: "",
   approverEmail: "",
@@ -220,6 +223,7 @@ export function directoryItemBody(
   put("personEmail", input.personEmail.trim().toLowerCase());
   put("personName", input.personName.trim());
   put("department", input.department.trim());
+  put("company", input.company.trim());
   put("position", input.position.trim());
   put("employeeId", input.employeeId.trim());
   put("approverEmail", input.approverEmail.trim().toLowerCase());

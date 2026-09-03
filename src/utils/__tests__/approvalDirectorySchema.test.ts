@@ -16,6 +16,7 @@ const FULL_LIST = [
   plain("PersonEmail"),
   plain("PersonName"),
   plain("Department"),
+  plain("Company"),
   plain("Position"),
   plain("EmployeeId"),
   plain("ApproverEmail"),
@@ -34,16 +35,16 @@ describe("mapDirectoryColumns", () => {
   });
 
   it("ignores casing, so EmployeeID still matches EmployeeId", () => {
-    const map = mapDirectoryColumns([...FULL_LIST.slice(0, 4), plain("EMPLOYEEID"), ...FULL_LIST.slice(5)]);
+    const map = mapDirectoryColumns([...FULL_LIST.slice(0, 5), plain("EMPLOYEEID"), ...FULL_LIST.slice(6)]);
     expect(map.employeeId).toBe("EMPLOYEEID");
   });
 
   it("matches a column created with a space in its name", () => {
     // What SharePoint does to a column created as "Approver Email".
     const map = mapDirectoryColumns([
-      ...FULL_LIST.slice(0, 5),
+      ...FULL_LIST.slice(0, 6),
       { key: "Approver_x0020_Email", aliases: ["Approver Email", "Approver_x0020_Email"] },
-      ...FULL_LIST.slice(6),
+      ...FULL_LIST.slice(7),
     ]);
     expect(map.approverEmail).toBe("Approver_x0020_Email");
     expect(directoryIsUsable(map)).toBe(true);
@@ -70,6 +71,7 @@ describe("mapDirectoryColumns", () => {
     expect(missingDirectoryColumns(map)).toEqual([
       "PersonName",
       "Department",
+      "Company",
       "Position",
       "EmployeeId",
       "IsActive",
@@ -126,7 +128,7 @@ describe("directoryTracksConfirmation", () => {
   });
 
   it("is false for a directory that predates the two columns", () => {
-    const map = mapDirectoryColumns(FULL_LIST.slice(0, 7));
+    const map = mapDirectoryColumns(FULL_LIST.slice(0, 8));
     // Still perfectly able to route; just unable to hold a guess, which is why
     // harvesting is refused rather than the whole page.
     expect(directoryIsUsable(map)).toBe(true);

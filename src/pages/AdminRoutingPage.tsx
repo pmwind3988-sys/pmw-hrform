@@ -106,6 +106,7 @@ const MISSING_COLUMN_EFFECT: Record<string, string> = {
   [APPROVAL_DIRECTORY_COLUMNS.department]: 'forms set to "Whoever holds a role" have nothing to match on',
   [APPROVAL_DIRECTORY_COLUMNS.position]: 'forms set to "Whoever holds a role" cannot tell who holds the post',
   [APPROVAL_DIRECTORY_COLUMNS.employeeId]: "staff numbers are not kept; nothing routes on them",
+  [APPROVAL_DIRECTORY_COLUMNS.company]: "two companies with a department of the same name cannot be told apart",
   [APPROVAL_DIRECTORY_COLUMNS.isActive]: "somebody who has left can only be removed, not switched off",
   [APPROVAL_DIRECTORY_COLUMNS.source]: "a row cannot record where it came from, so forms cannot add their submitters",
   [APPROVAL_DIRECTORY_COLUMNS.confirmed]: "a guessed row cannot be marked for review, so forms cannot add their submitters",
@@ -227,7 +228,7 @@ export default function AdminRoutingPage() {
       if (reviewOnly && !isUnconfirmedRow(row)) return false;
       if (departmentFilter !== ALL_DEPARTMENTS && row.department !== departmentFilter) return false;
       if (!needle) return true;
-      return [row.personName, row.personEmail, row.department, row.position, row.employeeId, row.approverEmail]
+      return [row.personName, row.personEmail, row.department, row.company, row.position, row.employeeId, row.approverEmail]
         .some((value) => value.toLowerCase().includes(needle));
     });
   }, [rows, search, departmentFilter, reviewOnly]);
@@ -703,7 +704,14 @@ export default function AdminRoutingPage() {
                                   )}
                                 </Stack>
                               </TableCell>
-                              <TableCell sx={{ fontSize: "0.78rem" }}>{row.department || "-"}</TableCell>
+                              <TableCell sx={{ fontSize: "0.78rem" }}>
+                                {row.department || "-"}
+                                {row.company && (
+                                  <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted }}>
+                                    {row.company}
+                                  </Typography>
+                                )}
+                              </TableCell>
                               <TableCell sx={{ fontSize: "0.78rem" }}>{row.position || "-"}</TableCell>
                               <TableCell sx={{ fontSize: "0.78rem" }}>
                                 {row.approverEmail

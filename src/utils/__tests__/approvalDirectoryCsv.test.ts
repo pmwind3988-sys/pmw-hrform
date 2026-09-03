@@ -8,6 +8,7 @@ function person(overrides: Partial<ApprovalDirectoryRow> = {}): ApprovalDirector
     personEmail: "ali@pmw.com",
     personName: "Ali",
     department: "Engineering",
+    company: "PMW Industries",
     position: "Engineer",
     employeeId: "E1",
     approverEmail: "siti@pmw.com",
