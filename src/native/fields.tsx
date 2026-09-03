@@ -22,6 +22,8 @@ import { createPortal } from "react-dom";
 import DOMPurify from "dompurify";
 import type { NativeChoice, NativeElement, NativeRateStep } from "./schema";
 import { formatNumber } from "./expression";
+import SearchableSelect from "./SearchableSelect";
+import { shouldSearchChoices } from "./choiceSearch";
 
 export interface ControlProps {
   element: NativeElement;
@@ -221,6 +223,32 @@ export function SelectControl(props: ControlProps) {
   // response, where the free text has already replaced the literal "other".
   const isUnlisted = current !== "" && !options.some((o) => o.value === current);
   const showOther = element.hasOther && (isUnlisted || otherIsChosen(options, [current]));
+
+  // A long list becomes typeable. Short ones keep the native control, which no
+  // custom widget improves on and which a phone renders as its own picker.
+  if (shouldSearchChoices(options.length) && !isUnlisted) {
+    return (
+      <>
+        <SearchableSelect
+          options={options}
+          value={current}
+          onChange={onChange}
+          disabled={disabled}
+          invalid={invalid}
+          controlId={controlId}
+          placeholder={element.placeholder || "Select…"}
+        />
+        {showOther && (
+          <OtherBox
+            element={element}
+            otherValue={props.otherValue ?? ""}
+            onOtherChange={props.onOtherChange}
+            disabled={disabled}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <>

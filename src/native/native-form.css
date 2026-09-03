@@ -1660,3 +1660,88 @@
     animation-duration: 0.01ms !important;
   }
 }
+
+/* ── Searchable dropdown ────────────────────────────────────────────────────
+   Stands in for a native <select> once a list is long enough to be worth
+   typing into. It borrows .nf-select for the closed box so a searchable field
+   and an ordinary one are indistinguishable until you use them — the caret,
+   the height and the focus ring are the same. */
+
+.nf-combo {
+  position: relative;
+}
+
+.nf-combo-input {
+  /* Its own caret, since the borrowed background image belongs to <select>. */
+  cursor: text;
+}
+
+.nf-combo-clear {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nf-ink-soft);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nf-combo-clear:hover {
+  background: var(--nf-line);
+  color: var(--nf-ink);
+}
+
+.nf-combo-list {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  /* Ten rows before it scrolls: enough to see that a search narrowed things,
+     short enough not to cover the question underneath. */
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+}
+
+.nf-combo-option {
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--nf-ink);
+  font-size: var(--nf-fs-control);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+/* Hover and keyboard share one highlight: two different ones in a list this
+   long makes it unclear which row Enter would take. */
+.nf-combo-option[data-active="true"] {
+  background: var(--nf-accent);
+  color: #fff;
+}
+
+.nf-combo-option[aria-selected="true"] {
+  font-weight: 600;
+}
+
+.nf-combo-empty {
+  padding: 10px;
+  color: var(--nf-ink-soft);
+  font-size: var(--nf-fs-control);
+}
