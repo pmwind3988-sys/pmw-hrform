@@ -275,7 +275,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * Mutates the element in place and reports whether anything changed, so a
  * profile that already reads from the list is not rewritten for nothing.
  */
-function repointElement(root: unknown, target: RepointTarget): boolean {
+function repointElement(root: unknown, target: RepointTarget, companyField: string): boolean {
   let changed = false;
 
   const visit = (elements: unknown): void => {
@@ -310,6 +310,10 @@ function repointElement(root: unknown, target: RepointTarget): boolean {
             // A department with no company belongs to all of them, so a blank
             // filter cell has to match whichever company was chosen.
             includeBlankFilter: true,
+            // Which answer narrows this list. Named here because only the
+            // conversion knows both questions belong together; the repoint
+            // rules already guarantee a company question is on the form.
+            scopeField: companyField,
           };
           delete element.spChoicesSource;
         }
@@ -385,9 +389,13 @@ export async function repointFormQuestions(
       if (!row) throw new Error("no such published profile");
 
       const payload = JSON.parse(row.SurveyJSON || "") as unknown;
+      // The company question on this same profile is what a department list
+      // narrows by. The repoint rules refuse a department without one, so by
+      // the time a department target reaches here this is always set.
+      const companyField = group.find((target) => target.kind === "company")?.questionName ?? "";
       let touched = false;
       for (const target of group) {
-        if (repointElement(payload, target)) touched = true;
+        if (repointElement(payload, target, companyField)) touched = true;
       }
       if (touched) {
         await spPatch(

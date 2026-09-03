@@ -22,12 +22,19 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { NativeElement, NativeForm, NativePage } from "./schema";
+import type { NativeChoice, NativeElement, NativeForm, NativePage } from "./schema";
 import { evaluateCondition, evaluateFormula, referencedFields, type ValueBag } from "./expression";
+import { resolveScopedChoices } from "../utils/orgDirectory";
 
 export interface FieldState {
   visible: boolean;
   enabled: boolean;
+  /**
+   * The choices to offer instead of the element's own, for a list that narrows
+   * as another answer is given — a department list once a company is picked.
+   * Absent for every ordinary field.
+   */
+  choices?: NativeChoice[];
 }
 
 export interface NativeFormRuntime {
@@ -263,6 +270,15 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
         const state: FieldState = {
           visible: parentVisible && ownVisible,
           enabled: parentEnabled && ownEnabled && !el.readOnly && !readOnlyForm,
+          // Narrowed here rather than in the renderer because this is already
+          // the one place that recomputes per element whenever an answer
+          // changes, which is exactly when the list has to shorten.
+          choices: el.scopedChoices
+            ? resolveScopedChoices(
+              el.scopedChoices.rows,
+              String(values[el.scopedChoices.scopeField] ?? ""),
+            ).map((choice) => ({ value: choice.value, text: choice.text }))
+            : undefined,
         };
         map.set(el.id, state);
         if (el.elements.length > 0 && el.kind === "section") {
@@ -333,6 +349,34 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
     },
     [form, checkOne],
   );
+
+  /**
+   * Drops an answer that the narrowed list no longer offers.
+   *
+   * Change the company and a department belonging to the old one is not merely
+   * unlisted, it is wrong. Left in place it would submit silently, because
+   * nothing else validates an answer against a list that shortened after it
+   * was given. Cleared, the respondent is asked again — which is the honest
+   * outcome of them changing the company.
+   */
+  useEffect(() => {
+    const stale: string[] = [];
+    for (const question of form.questions) {
+      if (!question.scopedChoices || !question.name) continue;
+      const current = values[question.name];
+      if (current === undefined || current === null || current === "") continue;
+      const offered = states.get(question.id)?.choices;
+      if (!offered) continue;
+      if (!offered.some((choice) => choice.value === String(current))) stale.push(question.name);
+    }
+    if (stale.length === 0) return;
+
+    setValues((prev) => {
+      const next = { ...prev };
+      for (const name of stale) delete next[name];
+      return next;
+    });
+  }, [form, states, values]);
 
   const getValue = useCallback((name: string) => merged[name], [merged]);
 

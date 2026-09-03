@@ -689,6 +689,15 @@ export interface FormBuilderField {
      * `resolveScopedChoices` in src/utils/orgDirectory.ts.
      */
     includeBlankFilter?: boolean;
+    /**
+     * The question on this form whose answer narrows these choices — the
+     * company question, for a department list.
+     *
+     * Names a *field*, where `filterColumn` names a list column: the two sit
+     * on opposite sides of the match. Absent means no narrowing, and every row
+     * the filter allows is offered.
+     */
+    scopeField?: string;
     choicesLoaded?: boolean;
   };
   // Data Table

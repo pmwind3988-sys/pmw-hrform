@@ -126,6 +126,21 @@ export interface NativeElement {
   suffix: string;
 
   choices: NativeChoice[];
+  /**
+   * Choices that shorten as another answer is given — a department list that
+   * narrows once a company is picked.
+   *
+   * Every row is carried, each tagged with the company it belongs to, and the
+   * subset to offer is worked out while the form is being filled. `choices`
+   * above still holds the unnarrowed set, so a renderer that knows nothing
+   * about this shows everything rather than nothing.
+   */
+  scopedChoices?: {
+    /** The field whose answer narrows this list. */
+    scopeField: string;
+    /** Every row; `scope` blank means it belongs to every scope. */
+    rows: Array<{ value: string; label: string; scope: string }>;
+  };
   colCount: number;
   hasOther: boolean;
   otherText: string;
@@ -424,6 +439,31 @@ function toKind(type: string, raw: Raw): NativeKind {
   }
 }
 
+/**
+ * Reads the scoped-choice payload, or undefined when there is none.
+ *
+ * Tolerant of shape: this arrives on a published schema that the page loading
+ * it may be newer or older than, and a malformed value has to read as "no
+ * narrowing" rather than break the form it is attached to.
+ */
+function toScopedChoices(raw: unknown): NativeElement["scopedChoices"] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const scopeField = str(record.scopeField);
+  if (!scopeField || !Array.isArray(record.rows)) return undefined;
+
+  const rows = record.rows
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+    .map((row) => ({
+      value: str(row.value),
+      label: str(row.label, str(row.value)),
+      scope: str(row.scope),
+    }))
+    .filter((row) => row.value);
+
+  return rows.length > 0 ? { scopeField, rows } : undefined;
+}
+
 let seq = 0;
 
 function toElement(raw: Raw, parentId: string, index: number): NativeElement {
@@ -458,6 +498,7 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
     suffix: str(raw.suffix),
 
     choices,
+    scopedChoices: toScopedChoices(raw.scopedChoices),
     colCount: num(raw.colCount, 1),
     hasOther: bool(raw.hasOther ?? raw.showOtherItem),
     // "Other (describe)" rather than "Other": an author who never set a label

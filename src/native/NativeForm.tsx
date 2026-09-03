@@ -123,6 +123,10 @@ function FieldBlock({ element, runtime, depth, scope }: BlockProps) {
   if (element.kind === "repeater") return <Repeater element={element} runtime={runtime} depth={depth} />;
 
   const Control = CONTROLS[element.kind] ?? TextControl;
+  // A narrowing list hands the control a shortened copy of itself. Cloned
+  // rather than mutated: the parsed schema is shared by every render, and the
+  // narrowed set belongs to this one.
+  const shown = state.choices ? { ...element, choices: state.choices } : element;
   const error = scope ? "" : (runtime.errors[element.name] ?? "");
   const value = scope ? scope.read(element.name) : runtime.getValue(element.name);
   const otherKey = `${element.name}${COMMENT_SUFFIX}`;
@@ -148,7 +152,7 @@ function FieldBlock({ element, runtime, depth, scope }: BlockProps) {
       </label>
       {element.description && <p className="nf-hint">{element.description}</p>}
       <Control
-        element={element}
+        element={shown}
         value={value}
         onChange={setValue}
         disabled={!state.enabled}

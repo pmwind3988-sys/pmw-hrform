@@ -12,7 +12,7 @@ import { parseForm, type NativeForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, getScopedListRows, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -21,6 +21,7 @@ import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { hasEvaluationLayer, readHarvestConfig } from "../utils/directoryHarvest";
+import { resolveScopedChoices } from "../utils/orgDirectory";
 import { harvestSubmitter } from "../utils/directoryHarvestWrite";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
@@ -930,8 +931,30 @@ export default function DynamicFormPage() {
           }
 
           // Main field spFilteredListSource
-          const fls = el.spFilteredListSource as { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; includeBlankFilter?: boolean } | undefined;
-          if (fls?.list && fls?.valueColumn) {
+          const fls = el.spFilteredListSource as { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; includeBlankFilter?: boolean; scopeField?: string } | undefined;
+          if (fls?.list && fls?.valueColumn && fls.scopeField && fls.filterColumn) {
+            /*
+              A list that narrows as another answer is given. Every row is
+              fetched once, tagged with the scope it belongs to, and the subset
+              to show is worked out while the form is filled - see
+              `scopedChoices` in src/native/schema.ts. `choices` is also set to
+              the unnarrowed set, so a renderer that ignores `scopedChoices`
+              offers everything rather than nothing.
+            */
+            const scopeField = fls.scopeField;
+            pending.push(
+              getScopedListRows(fls.list, fls.valueColumn, fls.filterColumn, token, fls.labelColumn)
+                .then((rows) => {
+                  if (rows.length === 0) return;
+                  el.scopedChoices = { scopeField, rows };
+                  el.choices = resolveScopedChoices(rows, "").map((choice) => ({
+                    value: choice.value,
+                    text: choice.text,
+                  }));
+                })
+                .catch(() => {})
+            );
+          } else if (fls?.list && fls?.valueColumn) {
             pending.push(
               getFilteredListChoices(fls.list, fls.valueColumn, token, fls.filterColumn, fls.filterValue, fls.labelColumn, fls.includeBlankFilter)
                 .then((choices) => {

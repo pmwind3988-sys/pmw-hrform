@@ -753,6 +753,45 @@ export async function getFilteredListChoices(
   }
 }
 
+/**
+ * Every row of a scoped choice list, with the scope kept alongside.
+ *
+ * The narrowing this feeds happens while somebody is filling the form — pick a
+ * company and the department list shortens — so the rows are fetched once and
+ * re-filtered in the browser. Re-querying SharePoint on every keystroke would
+ * make a dropdown depend on the network.
+ */
+export async function getScopedListRows(
+  listTitle: string,
+  valueColumn: string,
+  scopeColumn: string,
+  token: string,
+  labelColumn?: string,
+): Promise<Array<{ value: string; label: string; scope: string }>> {
+  const encoded = encodeURIComponent(listTitle);
+  const internalValCol = await resolveInternalName(listTitle, valueColumn, token);
+  const internalScopeCol = await resolveInternalName(listTitle, scopeColumn, token);
+  const internalLabelCol = labelColumn && labelColumn !== valueColumn
+    ? await resolveInternalName(listTitle, labelColumn, token)
+    : undefined;
+
+  const select = [internalValCol, internalScopeCol, ...(internalLabelCol ? [internalLabelCol] : [])]
+    .filter((column, index, all) => all.indexOf(column) === index)
+    .map(encodeURIComponent)
+    .join(",");
+
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${select}&$top=5000`,
+  ) as { value?: Record<string, unknown>[] };
+
+  return (data.value || []).map((item) => ({
+    value: cellToText(item[internalValCol]),
+    label: internalLabelCol ? cellToText(item[internalLabelCol]) : cellToText(item[internalValCol]),
+    scope: cellToText(item[internalScopeCol]),
+  })).filter((row) => row.value);
+}
+
 /** A list cell as text, for the scoped path where every field is compared. */
 function cellToText(value: unknown): string {
   if (value === null || value === undefined) return "";

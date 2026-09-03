@@ -469,3 +469,55 @@ describe("file upload size limit", () => {
     expect(fileEl({}).maxSizeBytes).toBe(0);
   });
 });
+
+describe("scoped choices", () => {
+  const parse = (element: Record<string, unknown>) =>
+    parseForm({ pages: [{ elements: [element] }] }).questions[0];
+
+  it("carries every row and the field that narrows them", () => {
+    const q = parse({
+      name: "orgDepartment",
+      title: "Department",
+      type: "dropdown",
+      scopedChoices: {
+        scopeField: "orgCompany",
+        rows: [
+          { value: "Finance", label: "Finance", scope: "" },
+          { value: "Stockyard", label: "Stockyard", scope: "PMWC" },
+        ],
+      },
+    });
+    expect(q.scopedChoices?.scopeField).toBe("orgCompany");
+    expect(q.scopedChoices?.rows).toHaveLength(2);
+  });
+
+  it("falls back to the value when a row has no label", () => {
+    const q = parse({
+      name: "d", title: "Department", type: "dropdown",
+      scopedChoices: { scopeField: "c", rows: [{ value: "Finance", scope: "" }] },
+    });
+    expect(q.scopedChoices?.rows[0].label).toBe("Finance");
+  });
+
+  it("reads as no narrowing rather than breaking on a malformed payload", () => {
+    // The payload arrives on a published schema this page may be older or
+    // newer than, so anything unexpected has to mean "offer everything".
+    for (const scopedChoices of [null, "yes", {}, { rows: [] }, { scopeField: "c" }, { scopeField: "", rows: [{ value: "x" }] }]) {
+      expect(parse({ name: "d", title: "Department", type: "dropdown", scopedChoices }).scopedChoices)
+        .toBeUndefined();
+    }
+  });
+
+  it("drops rows with no value to store", () => {
+    const q = parse({
+      name: "d", title: "Department", type: "dropdown",
+      scopedChoices: { scopeField: "c", rows: [{ value: "", scope: "" }, { value: "HR", scope: "" }] },
+    });
+    expect(q.scopedChoices?.rows.map((row) => row.value)).toEqual(["HR"]);
+  });
+
+  it("leaves an ordinary question without any of it", () => {
+    expect(parse({ name: "q", title: "Anything", type: "dropdown", choices: ["a"] }).scopedChoices)
+      .toBeUndefined();
+  });
+});
