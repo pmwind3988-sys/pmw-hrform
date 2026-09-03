@@ -15,6 +15,7 @@ import {
   AlertTitle,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
@@ -32,8 +33,11 @@ import {
 import { editorial } from "../../theme/editorial";
 import {
   describeOrgConversionPlan,
+  groupRepointTargets,
   planOrgConversion,
+  repointBlockReason,
   type OrgConversionPlan,
+  type RepointTarget,
 } from "../../utils/orgConversion";
 import {
   collectFormOrgUsage,
@@ -74,6 +78,7 @@ export default function OrgConversionDialog({ open, token, onClose, onDone }: Pr
     setPlan(null);
     setSeeded(false);
     setProgress(null);
+    setTickedProfiles(new Set());
 
     void (async () => {
       try {
@@ -118,6 +123,40 @@ export default function OrgConversionDialog({ open, token, onClose, onDone }: Pr
     [plan, alreadyListed],
   );
 
+  /**
+   * Which published profiles to repoint. Nothing to begin with: this edits
+   * forms staff are submitting right now, one form at a time is the normal way
+   * to do it, and a default of "all of them" is not a choice anybody made.
+   */
+  const [tickedProfiles, setTickedProfiles] = useState<Set<string>>(new Set());
+
+  const repointGroups = useMemo(() => groupRepointTargets(plan?.repoint ?? []), [plan]);
+
+  /** Targets the rules allow, out of the profiles that are ticked. */
+  const chosenTargets = useMemo<RepointTarget[]>(() => {
+    const chosen: RepointTarget[] = [];
+    for (const group of repointGroups) {
+      const key = `${group.formTitle}|${group.version}|${group.publishKey}`;
+      if (!tickedProfiles.has(key)) continue;
+      for (const target of group.targets) {
+        if (!repointBlockReason(target, group)) chosen.push(target);
+      }
+    }
+    return chosen;
+  }, [repointGroups, tickedProfiles]);
+
+  /**
+   * Whether the lists have nothing in them yet.
+   *
+   * This, and not "the plan proposes new rows", is what makes repointing
+   * premature. A plan can propose rows that should never be added — the
+   * placeholder choices a freshly added question arrives with, say — while the
+   * lists themselves are perfectly well populated, and refusing to repoint
+   * until those were added would force junk into the list to get past a
+   * button.
+   */
+  const listsAreEmpty = alreadyListed.companies.size === 0 && alreadyListed.departments.size === 0;
+
   const busy = stage === "reading" || stage === "seeding" || stage === "repointing";
 
   const handleSeed = async () => {
@@ -149,11 +188,11 @@ export default function OrgConversionDialog({ open, token, onClose, onDone }: Pr
   const handleRepoint = async () => {
     if (!token || !plan) return;
     setStage("repointing");
-    setProgress({ done: 0, total: plan.repoint.length });
+    setProgress({ done: 0, total: chosenTargets.length });
     try {
       const result = await repointFormQuestions(
         token,
-        plan.repoint,
+        chosenTargets,
         (done, total) => setProgress({ done, total }),
       );
       onDone(
@@ -254,17 +293,90 @@ export default function OrgConversionDialog({ open, token, onClose, onDone }: Pr
               </Typography>
             </Box>
 
-            {plan.repoint.length > 0 && (
-              <Alert severity={seeded || seedCount === 0 ? "info" : "warning"}>
-                <AlertTitle>
-                  Then {plan.repoint.length} question{plan.repoint.length === 1 ? "" : "s"} can be repointed at
-                  the lists
-                </AlertTitle>
-                This edits published profiles of forms people are submitting right now. It changes only where
-                each question's choices come from — the questions, the publish status and the expiry are left
-                as they are, and nothing is republished.
-                {!seeded && seedCount > 0 && " Add the rows first, or the forms will point at an empty list."}
-              </Alert>
+            {repointGroups.length > 0 && (
+              <Box>
+                <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, mb: 0.5 }}>
+                  Then choose which published profiles read from the lists
+                </Typography>
+                <Typography sx={{ fontSize: "0.78rem", color: editorial.muted, mb: 1 }}>
+                  This edits profiles of forms people are submitting right now, so pick them deliberately —
+                  one form at a time is a reasonable way to go about it. Only where a question's choices come
+                  from changes: the questions, the publish status and the expiry are left as they are, and
+                  nothing is republished.
+                  {listsAreEmpty && !seeded
+                    && " Add the rows above first, or a form will point at an empty list."}
+                </Typography>
+                {seedCount > 0 && !listsAreEmpty && (
+                  <Typography sx={{ fontSize: "0.78rem", color: editorial.muted, mb: 1 }}>
+                    You do not have to add the rows above to repoint. A question that has just been added
+                    still carries its placeholder choices, and those show up there as values in use —
+                    repointing replaces them with the list, so there is no need to let them into it.
+                  </Typography>
+                )}
+
+                <Box sx={{ maxHeight: 260, overflowY: "auto" }}>
+                  {repointGroups.map((group) => {
+                    const key = `${group.formTitle}|${group.version}|${group.publishKey}`;
+                    return (
+                      <Box
+                        key={key}
+                        sx={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 1,
+                          py: 0.75,
+                          borderBottom: `1px solid ${editorial.border}`,
+                        }}
+                      >
+                        <Checkbox
+                          size="small"
+                          sx={{ mt: -0.5 }}
+                          checked={tickedProfiles.has(key)}
+                          disabled={stage === "repointing"}
+                          onChange={() => setTickedProfiles((current) => {
+                            const next = new Set(current);
+                            if (next.has(key)) next.delete(key);
+                            else next.add(key);
+                            return next;
+                          })}
+                          slotProps={{ input: { "aria-label": `Repoint ${group.formTitle} ${group.publishKey}` } }}
+                        />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontSize: "0.845rem", fontWeight: 700, color: editorial.ink }}>
+                            {group.formTitle}
+                            <Typography
+                              component="span"
+                              sx={{ fontSize: "0.72rem", color: editorial.softMuted, ml: 1 }}
+                            >
+                              v{group.version} · {group.publishKey}
+                            </Typography>
+                          </Typography>
+                          {group.targets.map((target) => {
+                            const blocked = repointBlockReason(target, group);
+                            return (
+                              <Typography
+                                key={target.questionName}
+                                sx={{ fontSize: "0.72rem", color: blocked ? editorial.error : editorial.muted }}
+                              >
+                                {`${target.questionTitle || target.questionName} — ${target.kind}`}
+                                {blocked ? ` · skipped: ${blocked}` : ""}
+                              </Typography>
+                            );
+                          })}
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+
+                <Alert severity="warning" sx={{ mt: 1.5 }}>
+                  <AlertTitle>Check these are the organisation's own fields</AlertTitle>
+                  A question is recognised by its label, so one asking for an outside party's company or
+                  department — a contractor, a previous employer, a trainer's firm — looks identical from
+                  here. Repointing one of those would replace free text with a list of PMW companies. Leave
+                  those unticked.
+                </Alert>
+              </Box>
             )}
 
             {progress && (
@@ -285,10 +397,12 @@ export default function OrgConversionDialog({ open, token, onClose, onDone }: Pr
         <Button onClick={onClose} disabled={busy} sx={{ textTransform: "none" }}>Close</Button>
         <Button
           onClick={() => void handleRepoint()}
-          disabled={busy || !plan || plan.repoint.length === 0 || (!seeded && seedCount > 0)}
+          disabled={busy || chosenTargets.length === 0 || (listsAreEmpty && !seeded)}
           sx={{ textTransform: "none", fontWeight: 700 }}
         >
-          {stage === "repointing" ? "Repointing..." : "Repoint the forms"}
+          {stage === "repointing"
+            ? "Repointing..."
+            : `Repoint ${tickedProfiles.size || "no"} ${tickedProfiles.size === 1 ? "profile" : "profiles"}`}
         </Button>
         <Button
           variant="contained"

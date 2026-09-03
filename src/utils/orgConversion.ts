@@ -280,6 +280,54 @@ export function planOrgConversion(params: {
   };
 }
 
+/** One published profile's repoint targets, grouped for the admin to choose. */
+export interface RepointGroup {
+  formTitle: string;
+  version: string;
+  publishKey: string;
+  targets: RepointTarget[];
+}
+
+/** The plan's targets, one group per published profile, forms in name order. */
+export function groupRepointTargets(targets: RepointTarget[]): RepointGroup[] {
+  const groups = new Map<string, RepointGroup>();
+  for (const target of targets) {
+    const key = `${target.formTitle}|${target.version}|${target.publishKey}`;
+    const group = groups.get(key) ?? {
+      formTitle: target.formTitle,
+      version: target.version,
+      publishKey: target.publishKey,
+      targets: [],
+    };
+    group.targets.push(target);
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) =>
+    a.formTitle.localeCompare(b.formTitle)
+    || a.version.localeCompare(b.version)
+    || a.publishKey.localeCompare(b.publishKey));
+}
+
+/**
+ * Why a question must not be repointed, or "" when it may be.
+ *
+ * One rule, and it comes from how the two lists relate: a department only
+ * means something once a company is known, because a company-specific
+ * department is invisible until its company has been chosen. So a department
+ * question is wired to the global list only where the same form also asks
+ * which company — while a company question stands perfectly well alone.
+ *
+ * Left as a reason rather than silently dropped: "this form asks for a
+ * department but not a company" is a thing the form's owner should see.
+ */
+export function repointBlockReason(target: RepointTarget, group: RepointGroup): string {
+  if (target.kind !== "department") return "";
+  const hasCompany = group.targets.some((candidate) => candidate.kind === "company");
+  return hasCompany
+    ? ""
+    : "this form asks for a department but not a company, so there is nothing to narrow it by";
+}
+
 /** One line summing a plan up, for the dialog's heading. */
 export function describeOrgConversionPlan(plan: OrgConversionPlan): string {
   if (plan.profilesRead === 0) {

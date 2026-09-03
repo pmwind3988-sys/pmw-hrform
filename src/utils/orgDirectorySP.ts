@@ -284,12 +284,23 @@ function repointElement(root: unknown, target: RepointTarget): boolean {
       if (!isRecord(element)) continue;
       if (element.name === target.questionName) {
         if (target.kind === "company") {
-          element.spChoicesSource = {
+          /*
+            `spFilteredListSource` with no filter, deliberately, and not
+            `spChoicesSource`.
+
+            The two read different things. `spChoicesSource` returns a
+            SharePoint *choice column's* allowed values — it inspects the field
+            definition, not the rows. `Code` is a plain text column, so that
+            path finds nothing at all and the dropdown renders empty. Reading
+            the list's items is what is wanted here, and that is the filtered
+            source's job; leaving the filter off simply means every row.
+          */
+          element.spFilteredListSource = {
             list: COMPANY_LIST,
-            column: ORG_COLUMNS.code,
+            valueColumn: ORG_COLUMNS.code,
             labelColumn: ORG_COLUMNS.name,
           };
-          delete element.spFilteredListSource;
+          delete element.spChoicesSource;
         } else {
           element.spFilteredListSource = {
             list: DEPARTMENT_LIST,

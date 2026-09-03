@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   companiesFromMeta,
+  groupRepointTargets,
+  repointBlockReason,
   describeOrgConversionPlan,
   orgQuestionsFromSurveyJson,
   planOrgConversion,
@@ -193,5 +195,59 @@ describe("describeOrgConversionPlan", () => {
     });
     expect(describeOrgConversionPlan(plan))
       .toBe("Read 1 published profile and found 2 companies and 1 department in use.");
+  });
+});
+
+describe("groupRepointTargets", () => {
+  const target = (formTitle: string, publishKey: string, kind: "company" | "department") => ({
+    formTitle, version: "1.0", publishKey,
+    questionName: kind === "company" ? "Company" : "Department",
+    questionTitle: kind === "company" ? "Company" : "Department",
+    kind, from: "static" as const,
+  });
+
+  it("puts each published profile in its own group", () => {
+    const groups = groupRepointTargets([
+      target("ZZ TEST RUN", "production", "company"),
+      target("ZZ TEST RUN", "production", "department"),
+      target("ZZ TEST RUN", "draft", "company"),
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups.map((group) => group.publishKey)).toEqual(["draft", "production"]);
+    expect(groups.find((group) => group.publishKey === "production")?.targets).toHaveLength(2);
+  });
+
+  it("orders forms by name, so one can be picked out of a list", () => {
+    expect(groupRepointTargets([
+      target("Training Requisition Form", "production", "company"),
+      target("ZZ TEST RUN", "production", "company"),
+      target("Training Attendance Form", "production", "company"),
+    ]).map((group) => group.formTitle))
+      .toEqual(["Training Attendance Form", "Training Requisition Form", "ZZ TEST RUN"]);
+  });
+});
+
+describe("repointBlockReason", () => {
+  const company = {
+    formTitle: "F", version: "1.0", publishKey: "production",
+    questionName: "Company", questionTitle: "Company",
+    kind: "company" as const, from: "static" as const,
+  };
+  const department = { ...company, questionName: "Department", questionTitle: "Department", kind: "department" as const };
+
+  it("allows a company question on its own", () => {
+    const group = { formTitle: "F", version: "1.0", publishKey: "production", targets: [company] };
+    expect(repointBlockReason(company, group)).toBe("");
+  });
+
+  it("allows a department where the same form also asks the company", () => {
+    const group = { formTitle: "F", version: "1.0", publishKey: "production", targets: [company, department] };
+    expect(repointBlockReason(department, group)).toBe("");
+  });
+
+  it("blocks a department with no company to narrow it by", () => {
+    const group = { formTitle: "F", version: "1.0", publishKey: "production", targets: [department] };
+    expect(repointBlockReason(department, group))
+      .toContain("asks for a department but not a company");
   });
 });
