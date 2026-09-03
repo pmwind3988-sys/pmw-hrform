@@ -1,5 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryMasterFormBySlug, queryWebFormVersion, getListColumnChoices, getListColumnValues } from "./_utils/graphClient.js";
+import { getGraphToken, queryMasterFormBySlug, queryWebFormVersion, getListColumnChoices, getListColumnValues, getListScopedRows } from "./_utils/graphClient.js";
+import { resolveScopedChoices } from "./_utils/orgDirectory.js";
 import { redactLayerConfigForPublic } from "./_utils/publicLayerConfig.js";
 import { logError } from "./_utils/logger.js";
 
@@ -89,9 +90,36 @@ async function enrichSurveyJson(
             labelColumn?: string;
             filterColumn?: string;
             filterValue?: string;
+            includeBlankFilter?: boolean;
+            scopeField?: string;
           }
         | undefined;
-      if (fls?.list && fls?.valueColumn) {
+      if (fls?.list && fls?.valueColumn && fls.scopeField && fls.filterColumn) {
+        /*
+          A list that narrows as another answer is given, for somebody with no
+          SharePoint token of their own.
+
+          The narrowing itself cannot happen here — nobody has answered
+          anything yet — so every row is sent with the scope it belongs to and
+          the browser shortens the list as a company is picked. `choices` is
+          also filled with the unnarrowed set, so the form is never empty
+          before a company is chosen.
+        */
+        const scopeField = fls.scopeField;
+        spSources++;
+        pending.push(
+          getListScopedRows(token, fls.list, fls.valueColumn, fls.filterColumn, fls.labelColumn)
+            .then((rows) => {
+              if (rows.length === 0) return;
+              el.scopedChoices = { scopeField, rows };
+              el.choices = resolveScopedChoices(rows, "");
+              choicesFetched++;
+            })
+            .catch((e: unknown) => {
+              errors.push(`scoped ${fls.list}.${fls.valueColumn}: ${e instanceof Error ? e.message : String(e)}`);
+            })
+        );
+      } else if (fls?.list && fls?.valueColumn) {
         spSources++;
         pending.push(
           getListColumnValues(

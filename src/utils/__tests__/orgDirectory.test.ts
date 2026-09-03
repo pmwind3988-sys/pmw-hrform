@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   companyChoices,
   departmentChoices,
@@ -200,5 +202,28 @@ describe("validateDepartment", () => {
     const existing = [{ ...department("Finance", ""), id: 1 }];
     expect(validateDepartment({ ...department("Finance", ""), id: 2 }, existing)[0])
       .toContain("shared by all companies");
+  });
+});
+
+describe("the src/ and api/ copies", () => {
+  it("stay identical apart from the header pointing at the other one", () => {
+    const root = resolve(__dirname, "../../..");
+    const read = (path: string) =>
+      readFileSync(resolve(root, path), "utf8").replace(/\r\n/g, "\n").split("\n");
+
+    const client = read("src/utils/orgDirectory.ts");
+    const server = read("api/_utils/orgDirectory.ts");
+
+    expect(server.length).toBe(client.length);
+    const differing = client
+      .map((line, index) => (line === server[index] ? null : index))
+      .filter((index): index is number => index !== null);
+
+    // A signed-in submitter's browser resolves these choices; a public
+    // submitter's are resolved for them in api/form-config.ts. The two must
+    // agree on which departments belong to which company, or the same form
+    // offers different options depending on how somebody signed in.
+    expect(differing.length).toBe(1);
+    expect(client[differing[0]]).toContain("api/_utils/orgDirectory.ts");
   });
 });

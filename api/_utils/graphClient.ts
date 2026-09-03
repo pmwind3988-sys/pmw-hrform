@@ -833,6 +833,55 @@ export async function getListColumnValues(
   })));
 }
 
+/**
+ * Every row of a scoped choice list, with the scope kept alongside.
+ *
+ * The public counterpart of `getScopedListRows` in src/utils/formBuilderSP.ts.
+ * A public submitter has no SharePoint token of their own, so their form's
+ * choices are resolved here — and the rows have to arrive whole, because the
+ * narrowing happens in their browser as they pick a company.
+ */
+export async function getListScopedRows(
+  token: string,
+  listDisplayName: string,
+  valueColumn: string,
+  scopeColumn: string,
+  labelColumn?: string
+): Promise<Array<{ value: string; label: string; scope: string }>> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+
+  const internalValueCol = await resolveColumnName(token, listDisplayName, valueColumn);
+  const internalScopeCol = await resolveColumnName(token, listDisplayName, scopeColumn);
+  const internalLabelCol = labelColumn && labelColumn !== valueColumn
+    ? await resolveColumnName(token, listDisplayName, labelColumn)
+    : undefined;
+
+  const selected = [internalValueCol, internalScopeCol, ...(internalLabelCol ? [internalLabelCol] : [])]
+    .filter((column, index, all) => all.indexOf(column) === index)
+    .join(",");
+  const expand = encodeURIComponent(`fields($select=${selected})`);
+
+  const data = (await graphGet(
+    token,
+    `/sites/${siteId}/lists/${listId}/items?$expand=${expand}&$top=5000`
+  )) as { value: Array<{ fields?: Record<string, unknown> }> };
+
+  const text = (value: unknown): string => {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    return "";
+  };
+
+  return (data.value || [])
+    .map((item) => ({
+      value: text(item.fields?.[internalValueCol]),
+      label: internalLabelCol ? text(item.fields?.[internalLabelCol]) : text(item.fields?.[internalValueCol]),
+      scope: text(item.fields?.[internalScopeCol]),
+    }))
+    .filter((row) => row.value);
+}
+
 export async function updateListItemFields(
   token: string,
   listDisplayName: string,
