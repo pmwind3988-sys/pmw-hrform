@@ -174,6 +174,11 @@ export default function DirectoryScanDialog({
                               <Typography sx={{ fontSize: "0.845rem", fontWeight: 700, color: editorial.ink }}>
                                 {proposal.candidate.personName || proposal.candidate.personEmail}
                               </Typography>
+                              {proposal.candidate.position && (
+                                <Typography sx={{ fontSize: "0.72rem", color: editorial.muted }}>
+                                  {proposal.candidate.position}
+                                </Typography>
+                              )}
                               <Stack direction="row" sx={{ alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
                                 <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted }}>
                                   {proposal.candidate.personEmail}

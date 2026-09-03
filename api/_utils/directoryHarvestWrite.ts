@@ -148,9 +148,9 @@ function harvestedItemFields(
   put("personName", candidate.personName);
   put("department", candidate.department);
   put("company", candidate.company);
-  // Position is not asked for on an evaluation form, and inventing one would
-  // put a role-holder layer onto somebody who may not hold the post.
-  put("position", "");
+  // Blank unless the form actually asked. Never invented: a made-up Position
+  // would put a role-holder layer onto somebody who does not hold the post.
+  put("position", candidate.position);
   put("employeeId", candidate.employeeId);
   put("approverEmail", approverEmail);
   put("isActive", true);

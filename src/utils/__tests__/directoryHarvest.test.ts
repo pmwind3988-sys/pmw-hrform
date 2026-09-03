@@ -25,6 +25,7 @@ function candidate(overrides: Partial<DirectoryHarvestCandidate> = {}): Director
     employeeId: "E-1042",
     department: "Safety",
     company: "PMW Industries",
+    position: "IT Officer",
     emailWasGuessed: false,
     ...overrides,
   };
@@ -119,6 +120,22 @@ describe("harvestFieldGuesses", () => {
     expect(guess.companyField).toBe("Employer");
   });
 
+  it("offers the position question, and not the training's title", () => {
+    const guess = harvestFieldGuesses([
+      { name: "TrainingTitle", title: "Training Title" },
+      { name: "Position", title: "Position" },
+    ]);
+    expect(guess.positionField).toBe("Position");
+  });
+
+  it("refuses somebody else's post", () => {
+    const guess = harvestFieldGuesses([
+      { name: "SupervisorPosition", title: "Supervisor Position" },
+      { name: "HodDesignation", title: "HOD Designation" },
+    ]);
+    expect(guess.positionField).toBe("");
+  });
+
   it("reads Malay labels", () => {
     const guess = harvestFieldGuesses([
       { name: "Nama", title: "Nama Penuh" },
@@ -137,6 +154,7 @@ describe("harvestFieldGuesses", () => {
       employeeIdField: "",
       departmentField: "",
       companyField: "",
+      positionField: "",
       emailField: "",
     });
   });
@@ -286,6 +304,7 @@ describe("buildHarvestCandidate", () => {
       employeeId: "E-1042",
       department: "Safety",
       company: "PMW Industries",
+      position: "",
       emailWasGuessed: false,
     });
   });
@@ -399,6 +418,37 @@ describe("buildHarvestCandidate, on company", () => {
       submittedBy: "ahmad.faiz@pmw-group.com",
       domain: DOMAIN,
     })).toBeNull();
+  });
+});
+
+describe("buildHarvestCandidate, on position", () => {
+  const config = {
+    enabled: true,
+    nameField: "FullName",
+    departmentField: "Department",
+    positionField: "Position",
+  };
+
+  it("keeps the job title the form asked for", () => {
+    const result = buildHarvestCandidate({
+      config,
+      data: { FullName: "Ahmad Faiz", Department: "Safety", Position: "Safety Officer" },
+      submittedBy: "ahmad.faiz@pmw-group.com",
+      domain: DOMAIN,
+    });
+    expect(result?.position).toBe("Safety Officer");
+  });
+
+  it("leaves it blank rather than inventing one when nothing is mapped", () => {
+    const result = buildHarvestCandidate({
+      config: { ...config, positionField: undefined },
+      data: { FullName: "Ahmad Faiz", Department: "Safety", Position: "Safety Officer" },
+      submittedBy: "ahmad.faiz@pmw-group.com",
+      domain: DOMAIN,
+    });
+    // A guessed Position would put a role-holder layer onto somebody who may
+    // not hold the post, so an unmapped one stays empty.
+    expect(result?.position).toBe("");
   });
 });
 

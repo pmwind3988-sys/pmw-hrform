@@ -100,9 +100,9 @@ export function harvestedRow(
     personName: candidate.personName,
     department: candidate.department,
     company: candidate.company,
-    // Position is not asked for on an evaluation form, and inventing one would
-    // put a role-holder layer onto somebody who may not hold the post.
-    position: "",
+    // Blank unless the form actually asked. Never invented: a made-up Position
+    // would put a role-holder layer onto somebody who does not hold the post.
+    position: candidate.position,
     employeeId: candidate.employeeId,
     approverEmail,
     isActive: true,

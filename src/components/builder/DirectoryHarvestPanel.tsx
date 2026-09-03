@@ -28,7 +28,7 @@ interface Props {
 }
 
 const FIELD_ROWS: Array<{
-  key: "nameField" | "employeeIdField" | "departmentField" | "companyField" | "emailField";
+  key: "nameField" | "employeeIdField" | "departmentField" | "companyField" | "positionField" | "emailField";
   label: string;
   hint: string;
 }> = [
@@ -51,6 +51,11 @@ const FIELD_ROWS: Array<{
     key: "companyField",
     label: "Company",
     hint: "Optional. Left blank, the company they picked on the form is used.",
+  },
+  {
+    key: "positionField",
+    label: "Position",
+    hint: "Their job title. Worth setting — it is what a “whoever holds a role” layer matches on.",
   },
   {
     key: "emailField",
@@ -84,6 +89,7 @@ export default function DirectoryHarvestPanel({ settings, onChange, options }: P
         employeeIdField: guess.employeeIdField || undefined,
         departmentField: guess.departmentField || undefined,
         companyField: guess.companyField || undefined,
+        positionField: guess.positionField || undefined,
         emailField: guess.emailField || undefined,
       });
   };
@@ -103,8 +109,8 @@ export default function DirectoryHarvestPanel({ settings, onChange, options }: P
     <>
       <p className="bx-lede" style={{ fontSize: 14, marginBottom: 14 }}>
         When somebody submits this form and is not in the Approval Directory yet, they are added to it
-        automatically — name, staff number, department and company read off their answers, and their
-        superior guessed from their department's HOD. The new row is marked <strong>unconfirmed</strong> and their submission
+        automatically — name, staff number, department, company and job title read off their answers, and
+        their superior guessed from their department's HOD. The new row is marked <strong>unconfirmed</strong> and their submission
         waits for you on the Approvals screen, so nothing routes on a guess until you have checked it on the
         Approval routing page.
       </p>

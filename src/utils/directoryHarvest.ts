@@ -55,6 +55,12 @@ export interface DirectoryHarvestConfig {
    */
   companyField?: string;
   /**
+   * Which question holds their job title. Worth mapping wherever the form
+   * asks: Position is what a "whoever holds a role" layer matches on, so a
+   * blank one makes this person invisible to those layers.
+   */
+  positionField?: string;
+  /**
    * Which question holds their email address, when the form asks for one.
    * Optional: most forms do not, and the submitter's own address serves.
    */
@@ -68,6 +74,7 @@ export interface DirectoryHarvestCandidate {
   employeeId: string;
   department: string;
   company: string;
+  position: string;
   /** True when `personEmail` was built from the name rather than submitted. */
   emailWasGuessed: boolean;
 }
@@ -80,12 +87,13 @@ export interface HarvestFieldOption {
   title?: string;
 }
 
-/** The four settings label matching can offer; blank where nothing matched. */
+/** The settings label matching can offer; blank where nothing matched. */
 export interface HarvestFieldGuess {
   nameField: string;
   employeeIdField: string;
   departmentField: string;
   companyField: string;
+  positionField: string;
   emailField: string;
 }
 
@@ -94,6 +102,7 @@ export const EMPTY_HARVEST_FIELD_GUESS: HarvestFieldGuess = {
   employeeIdField: "",
   departmentField: "",
   companyField: "",
+  positionField: "",
   emailField: "",
 };
 
@@ -281,6 +290,16 @@ export function harvestFieldGuesses(options: HarvestFieldOption[]): HarvestField
       ["dept", "division", "unit"],
       ["supervisor", "approver", "manager", "hod", "head"],
     ),
+    positionField: bestMatch(
+      options,
+      ["position", "job title", "designation", "post", "jawatan"],
+      ["position", "designation", "job title", "jawatan"],
+      ["title", "post", "grade", "role"],
+      // A form asks for the approver's post about as often as the subject's,
+      // and a bare "title" would otherwise match "Training Title".
+      ["supervisor", "superior", "approver", "manager", "hod", "head", "evaluator",
+        "training", "course", "document", "form", "project"],
+    ),
     emailField: bestMatch(
       options,
       ["email", "e mail", "email address", "emel"],
@@ -366,6 +385,7 @@ export function readHarvestConfig(layerConfig: unknown): DirectoryHarvestConfig 
     employeeIdField: text(record.employeeIdField) || undefined,
     departmentField: text(record.departmentField) || undefined,
     companyField: text(record.companyField) || undefined,
+    positionField: text(record.positionField) || undefined,
     emailField: text(record.emailField) || undefined,
   };
 }
@@ -412,6 +432,7 @@ export function buildHarvestCandidate(params: {
   const company = harvestFieldValue(data, config.companyField)
     || COMPANY_KEYS.map((key) => harvestFieldValue(data, key)).find(Boolean)
     || "";
+  const position = harvestFieldValue(data, config.positionField);
 
   const submittedEmail = harvestFieldValue(data, config.emailField);
   let personEmail = "";
@@ -429,7 +450,7 @@ export function buildHarvestCandidate(params: {
   if (!personEmail) return null;
   if (!personName && !employeeId && !department) return null;
 
-  return { personEmail, personName, employeeId, department, company, emailWasGuessed };
+  return { personEmail, personName, employeeId, department, company, position, emailWasGuessed };
 }
 
 /** Which `Source` value a harvested row carries. */
