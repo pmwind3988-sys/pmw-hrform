@@ -113,7 +113,7 @@ export default function SubmissionFilterPanel({
     padding: "7px 10px",
     borderRadius: 8,
     border: `1px solid ${palette.border}`,
-    fontSize: 12,
+    fontSize: 12.5,
     color: palette.textPrimary,
     outline: "none",
     background: palette.cardBg,
@@ -125,16 +125,16 @@ export default function SubmissionFilterPanel({
     background: palette.panelBg,
     cursor: "not-allowed",
   };
-  const labelStyle: CSSProperties = { fontSize: 12, color: palette.textMuted, whiteSpace: "nowrap" };
+  const labelStyle: CSSProperties = { fontSize: 12.5, color: palette.textMuted, whiteSpace: "nowrap" };
   const sectionLabelStyle: CSSProperties = {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: 700,
-    letterSpacing: "0.08em",
+    letterSpacing: "0.03em",
     textTransform: "uppercase",
     color: palette.textMuted,
   };
   const stepLabelStyle: CSSProperties = {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: 700,
     color: palette.textSecond,
     minWidth: 76,
@@ -156,7 +156,7 @@ export default function SubmissionFilterPanel({
         <span style={stepLabelStyle}>{label}</span>
         {body}
       </div>
-      {hint && <div style={{ fontSize: 11, color: palette.textMuted }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 11.5, color: palette.textMuted }}>{hint}</div>}
     </div>
   );
 
@@ -299,7 +299,7 @@ export default function SubmissionFilterPanel({
           placeholder="Search reference no, form or ID..."
           value={filters.search}
           onChange={(e) => patch({ search: e.target.value })}
-          style={{ ...controlStyle, flex: "1 1 220px", fontSize: 13, padding: "8px 12px" }}
+          style={{ ...controlStyle, flex: "1 1 220px", fontSize: 13.5, padding: "8px 12px" }}
         />
 
         {showStage && (
@@ -417,7 +417,7 @@ export default function SubmissionFilterPanel({
           "Fields",
           "",
           !formChosen ? (
-            <span style={{ fontSize: 12, color: palette.textSecond }}>
+            <span style={{ fontSize: 12.5, color: palette.textSecond }}>
               Choose a form first — questions differ from one form to the next.
             </span>
           ) : (
@@ -474,7 +474,7 @@ export default function SubmissionFilterPanel({
             >
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: 12.5,
                   fontWeight: 700,
                   color: palette.textPrimary,
                   flex: "0 1 160px",
@@ -518,9 +518,9 @@ export default function SubmissionFilterPanel({
                   border: `1px solid ${palette.border}`,
                   background: "transparent",
                   color: palette.textMuted,
-                  borderRadius: 6,
+                  borderRadius: 8,
                   padding: "4px 9px",
-                  fontSize: 12,
+                  fontSize: 12.5,
                   cursor: "pointer",
                 }}
               >
@@ -550,7 +550,7 @@ export default function SubmissionFilterPanel({
                 border: `1px solid ${palette.border}`,
                 borderRadius: 999,
                 padding: "4px 10px",
-                fontSize: 12,
+                fontSize: 12.5,
                 fontWeight: 600,
                 color: palette.textPrimary,
                 cursor: "pointer",

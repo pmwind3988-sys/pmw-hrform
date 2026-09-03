@@ -38,7 +38,7 @@ import {
 import { createFieldFilter, type FieldFilter } from "../../utils/submissionFilters";
 
 const controlSx = {
-  borderRadius: "10px",
+  borderRadius: "12px",
   backgroundColor: editorial.white,
 } as const;
 
@@ -164,7 +164,7 @@ export function FieldConditionRow({ filter, field, onChange, onRemove }: FieldCo
         gap: 1,
         alignItems: "center",
         p: 1,
-        borderRadius: "10px",
+        borderRadius: "12px",
         backgroundColor: editorial.blueSoft,
         border: `1px solid ${editorial.border}`,
       }}
@@ -172,7 +172,7 @@ export function FieldConditionRow({ filter, field, onChange, onRemove }: FieldCo
       <Typography
         sx={{
           fontWeight: 700,
-          fontSize: "0.85rem",
+          fontSize: "0.845rem",
           color: editorial.ink,
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -234,8 +234,8 @@ export function AddFieldCondition({ fields, onAdd, disabled }: AddFieldCondition
         sx={{
           alignSelf: "start",
           textTransform: "none",
-          fontWeight: 800,
-          borderRadius: "10px",
+          fontWeight: 700,
+          borderRadius: "12px",
           color: editorial.pmwBlueDark,
           border: `1px dashed ${editorial.pmwBlueSoft}`,
           px: 1.5,
@@ -255,7 +255,7 @@ export function AddFieldCondition({ fields, onAdd, disabled }: AddFieldCondition
           index > 0 ? <Divider key={`${group.section}-divider`} /> : null,
           <ListSubheader
             key={`${group.section}-header`}
-            sx={{ fontWeight: 800, fontSize: "0.72rem", letterSpacing: "0.06em", textTransform: "uppercase" }}
+            sx={{ fontWeight: 700, fontSize: "0.72rem", letterSpacing: "0.03em", textTransform: "uppercase" }}
           >
             {group.section}
           </ListSubheader>,
@@ -271,7 +271,7 @@ export function AddFieldCondition({ fields, onAdd, disabled }: AddFieldCondition
                 primary={field.label}
                 secondary={opLabel(defaultOpForKind(field.kind))}
                 slotProps={{
-                  primary: { sx: { fontSize: "0.88rem" } },
+                  primary: { sx: { fontSize: "0.875rem" } },
                   secondary: { sx: { fontSize: "0.72rem" } },
                 }}
               />

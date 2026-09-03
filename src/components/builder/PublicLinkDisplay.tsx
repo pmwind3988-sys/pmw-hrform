@@ -38,30 +38,30 @@ const modeButton = (active: boolean, available = true): CSSProperties => ({
   flex: 1,
   height: 24,
   border: `1px solid ${active ? C.purple : C.border}`,
-  borderRadius: 6,
+  borderRadius: 8,
   background: active ? C.purplePale : C.white,
   color: active ? C.purple : available ? C.textMuted : C.border,
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 600,
   cursor: available ? "pointer" : "not-allowed",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontFamily: "var(--pmw-font-main)",
   transition: "all .15s",
 });
 
 const inputBox: CSSProperties = {
   height: 26,
   border: `1px solid ${C.border}`,
-  borderRadius: 6,
+  borderRadius: 8,
   padding: "0 7px",
-  fontSize: 11,
+  fontSize: 11.5,
   color: C.textPrimary,
   background: C.white,
   outline: "none",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontFamily: "var(--pmw-font-main)",
 };
 
 const hintText: CSSProperties = {
-  fontSize: 10,
+  fontSize: 11,
   color: C.textMuted,
   marginTop: 4,
   lineHeight: 1.5,
@@ -154,11 +154,11 @@ export default function PublicLinkDisplay({
     >
       <div
         style={{
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: C.textMuted,
           textTransform: "uppercase",
-          letterSpacing: ".05em",
+          letterSpacing: "0.03em",
           marginBottom: 6,
         }}
       >
@@ -172,9 +172,9 @@ export default function PublicLinkDisplay({
             flex: 1,
             background: C.white,
             border: `1px solid ${C.border}`,
-            borderRadius: 6,
+            borderRadius: 8,
             padding: "5px 9px",
-            fontSize: 11,
+            fontSize: 11.5,
             color: C.textSecond,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -190,13 +190,13 @@ export default function PublicLinkDisplay({
             height: 28,
             padding: "0 10px",
             border: `1px solid ${copied ? C.green : C.border}`,
-            borderRadius: 6,
+            borderRadius: 8,
             background: copied ? C.greenPale : C.white,
             color: copied ? C.green : C.purple,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             cursor: "pointer",
-            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            fontFamily: "var(--pmw-font-main)",
             flexShrink: 0,
             transition: "all .15s",
           }}
@@ -269,7 +269,7 @@ export default function PublicLinkDisplay({
                 </option>
               ))}
             </select>
-            <label style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>+ days</label>
+            <label style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>+ days</label>
             <input
               type="number"
               min={0}
@@ -312,7 +312,7 @@ export default function PublicLinkDisplay({
         </div>
       ) : (
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-          <label style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>Token expires</label>
+          <label style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>Token expires</label>
           <input
             type="date"
             value={tokenExpiresAt ? tokenExpiresAt.split("T")[0] : ""}
@@ -326,14 +326,14 @@ export default function PublicLinkDisplay({
       <button
         onClick={handleRegenerate}
         style={{
-          fontSize: 10,
+          fontSize: 11,
           color: confirmRegen ? C.red : C.amber,
           background: confirmRegen ? C.redPale : C.amberPale,
           border: `1px solid ${confirmRegen ? C.red : C.amber}`,
-          borderRadius: 6,
+          borderRadius: 8,
           padding: "4px 9px",
           cursor: "pointer",
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+          fontFamily: "var(--pmw-font-main)",
           fontWeight: 600,
           transition: "all .15s",
         }}

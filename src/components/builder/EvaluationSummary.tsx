@@ -138,7 +138,7 @@ function RatingDisplay({ field, value }: { field: EvaluationFieldDefinition; val
       <div style={{ height: 7, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
         <div style={{ width: `${percent}%`, height: "100%", background: "linear-gradient(90deg, #F7C948, #6264A7)" }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 10, color: "#6B7280" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11, color: "#6B7280" }}>
         <span>{field.minRateDescription || min}</span>
         <span>{field.maxRateDescription || max}</span>
       </div>
@@ -155,16 +155,16 @@ const cardStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 11.5,
   fontWeight: 600,
   color: "#6B7280",
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.03em",
   marginBottom: 4,
 };
 
 const valueStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 13.5,
   color: "#1E1B4B",
   fontWeight: 500,
   fontVariantNumeric: "tabular-nums",
@@ -181,7 +181,7 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
   if (!result || result.status !== "confirmed") {
     return (
       <div style={cardStyle}>
-        <div style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>
+        <div style={{ fontSize: 12.5, color: "#9CA3AF", fontStyle: "italic" }}>
           {layerTitle ? `${layerTitle}: ` : ""}Not yet evaluated
         </div>
       </div>
@@ -195,11 +195,11 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
     <div style={cardStyle}>
       {/* Header */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#5B21B6" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#5B21B6" }}>
           {layerTitle || `Evaluation Layer ${result.layerNumber}`}
         </div>
         {layerDescription && (
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{layerDescription}</div>
+          <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 2 }}>{layerDescription}</div>
         )}
       </div>
 
@@ -231,8 +231,8 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
             const field: EvaluationFieldDefinition = fieldDefinitions.get(key) ?? { name: key, title: formatFieldName(key), type: "text" };
             return (
               <div key={key} style={fieldRowStyle}>
-                <div style={{ fontSize: 12, color: "#6B7280", flex: 1 }}>{field.title}</div>
-                <div style={{ fontSize: 13, color: "#1E1B4B", fontWeight: 500, flex: 1, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 12.5, color: "#6B7280", flex: 1 }}>{field.title}</div>
+                <div style={{ fontSize: 13.5, color: "#1E1B4B", fontWeight: 500, flex: 1, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                   {field.type === "rating" ? <RatingDisplay field={field} value={value} /> : formatValue(value, field)}
                 </div>
               </div>
@@ -243,7 +243,7 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
 
       {/* Notes */}
       {result.notes && (
-        <div style={{ marginTop: 12, padding: 10, background: "#FFF8E7", borderRadius: 8, fontSize: 12 }}>
+        <div style={{ marginTop: 12, padding: 10, background: "#FFF8E7", borderRadius: 8, fontSize: 12.5 }}>
           <div style={{ fontWeight: 600, color: "#92400E", marginBottom: 4 }}>Notes</div>
           <div style={{ color: "#78350F" }}>{result.notes}</div>
         </div>

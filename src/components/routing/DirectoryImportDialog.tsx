@@ -101,10 +101,10 @@ export default function DirectoryImportDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 800, color: editorial.ink }}>Import people from a spreadsheet</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700, color: editorial.ink }}>Import people from a spreadsheet</DialogTitle>
       <DialogContent dividers>
         <Stack sx={{ gap: 2 }}>
-          <Typography sx={{ fontSize: "0.85rem", color: editorial.muted }}>
+          <Typography sx={{ fontSize: "0.845rem", color: editorial.muted }}>
             Save your spreadsheet as CSV and pick it below. It needs a column for the person's email and a
             column for who approves them; anything else is optional. Columns your file does not have are left
             exactly as they are, so a two-column file will not blank anybody's department.
@@ -166,14 +166,14 @@ export default function DirectoryImportDialog({
                 </Alert>
               )}
 
-              <Box sx={{ maxHeight: 320, overflow: "auto", border: `1px solid ${editorial.border}`, borderRadius: "10px" }}>
+              <Box sx={{ maxHeight: 320, overflow: "auto", border: `1px solid ${editorial.border}`, borderRadius: "12px" }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 800 }}>Line</TableCell>
-                      <TableCell sx={{ fontWeight: 800 }}>Person</TableCell>
-                      <TableCell sx={{ fontWeight: 800 }}>Approved by</TableCell>
-                      <TableCell sx={{ fontWeight: 800 }}>What happens</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Line</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Person</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Approved by</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>What happens</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -181,16 +181,16 @@ export default function DirectoryImportDialog({
                       <TableRow key={row.line}>
                         <TableCell sx={{ color: editorial.softMuted }}>{row.line}</TableCell>
                         <TableCell>
-                          <Typography sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                          <Typography sx={{ fontSize: "0.78rem", fontWeight: 600 }}>
                             {row.input.personName || row.input.personEmail || "(blank)"}
                           </Typography>
                           {row.input.personName && (
-                            <Typography sx={{ fontSize: "0.7rem", color: editorial.softMuted }}>
+                            <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted }}>
                               {row.input.personEmail}
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell sx={{ fontSize: "0.8rem" }}>
+                        <TableCell sx={{ fontSize: "0.78rem" }}>
                           {row.input.approverEmail || <em style={{ color: editorial.softMuted }}>nobody</em>}
                         </TableCell>
                         <TableCell>
@@ -203,7 +203,7 @@ export default function DirectoryImportDialog({
                               backgroundColor: ACTION_STYLE[row.action].background,
                             }}
                           />
-                          <Typography sx={{ fontSize: "0.7rem", color: row.action === "error" ? editorial.error : editorial.softMuted, mt: 0.25 }}>
+                          <Typography sx={{ fontSize: "0.72rem", color: row.action === "error" ? editorial.error : editorial.softMuted, mt: 0.25 }}>
                             {row.problems.join(" ") || row.changedFields.join(", ")}
                           </Typography>
                         </TableCell>
@@ -222,7 +222,7 @@ export default function DirectoryImportDialog({
                 value={progress.total === 0 ? 100 : (progress.done / progress.total) * 100}
                 sx={{ borderRadius: 1, height: 6 }}
               />
-              <Typography sx={{ fontSize: "0.75rem", color: editorial.muted, mt: 0.75 }}>
+              <Typography sx={{ fontSize: "0.78rem", color: editorial.muted, mt: 0.75 }}>
                 Saved {progress.done} of {progress.total}.
               </Typography>
               {progress.failures.length > 0 && (

@@ -171,7 +171,7 @@ export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenPro
         <Box
           sx={{
             backgroundColor: editorial.white,
-            borderRadius: "14px",
+            borderRadius: "12px",
             border: editorialHairline,
             boxShadow: editorialShadow,
             px: { xs: 3, sm: 4.5 },
@@ -187,8 +187,8 @@ export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenPro
               sx={{
                 mt: 2,
                 fontSize: { xs: "1.4rem", sm: "1.6rem" },
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
+                fontWeight: 700,
+                letterSpacing: "-0.01em",
                 lineHeight: 1.15,
                 color: editorial.ink,
                 textWrap: "balance",
@@ -220,8 +220,8 @@ export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenPro
             startIcon={<MicrosoftMark />}
             sx={{
               py: 1.4,
-              borderRadius: "10px",
-              fontSize: "0.95rem",
+              borderRadius: "12px",
+              fontSize: "0.9375rem",
               fontWeight: 700,
               letterSpacing: "-0.01em",
               textTransform: "none",
@@ -235,7 +235,7 @@ export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenPro
             Continue with Microsoft 365
           </Button>
 
-          <Divider sx={{ my: 2.5, color: editorial.softMuted, fontSize: "0.75rem", fontWeight: 700 }}>
+          <Divider sx={{ my: 2.5, color: editorial.softMuted, fontSize: "0.78rem", fontWeight: 700 }}>
             or
           </Divider>
 
@@ -259,7 +259,7 @@ export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenPro
 
           {googleSignInConfigured() && !googleReady && !guestError ? (
             <Typography
-              sx={{ mt: 1, fontSize: "0.8rem", textAlign: "center", color: editorial.muted }}
+              sx={{ mt: 1, fontSize: "0.78rem", textAlign: "center", color: editorial.muted }}
             >
               Loading Google sign-in…
             </Typography>
@@ -269,7 +269,7 @@ export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenPro
             <Alert
               severity="error"
               role="alert"
-              sx={{ mt: 1.75, borderRadius: "10px", fontSize: "0.85rem", fontWeight: 600, py: 0.25 }}
+              sx={{ mt: 1.75, borderRadius: "12px", fontSize: "0.845rem", fontWeight: 600, py: 0.25 }}
             >
               {guestError}
             </Alert>
@@ -287,7 +287,7 @@ export default function ChoiceScreen({ onLogin, onGuestSignIn }: ChoiceScreenPro
               mt: 3,
               pt: 2.25,
               borderTop: editorialHairline,
-              fontSize: "0.75rem",
+              fontSize: "0.78rem",
               lineHeight: 1.6,
               textAlign: "center",
               color: editorial.muted,

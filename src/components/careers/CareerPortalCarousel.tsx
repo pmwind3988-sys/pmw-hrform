@@ -136,13 +136,13 @@ export default function CareerPortalCarousel({
       <Box
         sx={{
           minHeight: { xs: 250, md: 280 },
-          borderRadius: "8px",
+          borderRadius: "12px",
           overflow: "hidden",
           border: "1px solid rgba(17, 24, 39, 0.08)",
           boxShadow: "0 12px 26px rgba(17, 24, 39, 0.08)",
         }}
       >
-        <Skeleton variant="rounded" width="100%" height="100%" sx={{ minHeight: { xs: 250, md: 280 }, borderRadius: "8px" }} />
+        <Skeleton variant="rounded" width="100%" height="100%" sx={{ minHeight: { xs: 250, md: 280 }, borderRadius: "12px" }} />
       </Box>
     );
   }
@@ -174,7 +174,7 @@ export default function CareerPortalCarousel({
       sx={{
         position: "relative",
         minHeight: { xs: 250, md: 280 },
-        borderRadius: "8px",
+        borderRadius: "12px",
         overflow: "hidden",
         border: `1px solid ${editorial.pmwBlueSoft}`,
         background: `linear-gradient(135deg, ${editorial.blueSoft} 0%, ${editorial.purpleWash} 56%, ${editorial.white} 100%)`,
@@ -230,10 +230,10 @@ export default function CareerPortalCarousel({
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "flex-end",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   overflow: "hidden",
                   backgroundColor: "#111827",
-                  boxShadow: "0 14px 32px rgba(0, 90, 158, 0.18)",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)",
                   cursor: canOpen ? "pointer" : "default",
                   outline: "none",
                   transition: "transform 0.18s ease, box-shadow 0.18s ease",
@@ -285,18 +285,19 @@ export default function CareerPortalCarousel({
                     sx={{
                       mb: 1,
                       width: "fit-content",
-                      borderRadius: "8px",
+                      /* 5px: a tag, not a container. See SI badges. */
+                      borderRadius: "5px",
                       backgroundColor: "rgba(255,255,255,0.88)",
                       color: editorial.pmwBlueDark,
-                      fontWeight: 800,
-                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      fontSize: "0.72rem",
                     }}
                   />
                   <Typography
                     variant="h6"
                     sx={{
                       color: "#ffffff",
-                      fontWeight: 800,
+                      fontWeight: 700,
                       fontSize: { xs: "1.05rem", sm: "1.18rem" },
                       lineHeight: 1.24,
                       mb: 0.65,
@@ -329,7 +330,7 @@ export default function CareerPortalCarousel({
                       zIndex: 2,
                       maxWidth: "45%",
                       color: "rgba(255,255,255,0.78)",
-                      fontSize: "0.62rem",
+                      fontSize: "0.72rem",
                       lineHeight: 1.2,
                       overflow: "hidden",
                       textOverflow: "ellipsis",

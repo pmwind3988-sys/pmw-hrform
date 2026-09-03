@@ -114,7 +114,7 @@ export default function GuestProfileSetupPage({
           noValidate
           sx={{
             backgroundColor: editorial.white,
-            borderRadius: "14px",
+            borderRadius: "12px",
             border: editorialHairline,
             boxShadow: editorialShadow,
             px: { xs: 3, sm: 4.5 },
@@ -130,8 +130,8 @@ export default function GuestProfileSetupPage({
               sx={{
                 mt: 2,
                 fontSize: { xs: "1.3rem", sm: "1.45rem" },
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
+                fontWeight: 700,
+                letterSpacing: "-0.01em",
                 lineHeight: 1.2,
                 color: editorial.ink,
                 textWrap: "balance",
@@ -143,7 +143,7 @@ export default function GuestProfileSetupPage({
               sx={{
                 mt: 1.25,
                 mb: 3,
-                fontSize: "0.9rem",
+                fontSize: "0.875rem",
                 fontWeight: 500,
                 lineHeight: 1.5,
                 color: editorial.muted,
@@ -164,7 +164,7 @@ export default function GuestProfileSetupPage({
               disabled={saving}
               fullWidth
               required
-              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
             />
             <TextField
               label="Position"
@@ -175,7 +175,7 @@ export default function GuestProfileSetupPage({
               disabled={saving}
               fullWidth
               required
-              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
             />
             <TextField
               select={useDropdown}
@@ -190,7 +190,7 @@ export default function GuestProfileSetupPage({
               }
               fullWidth
               required
-              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
             >
               {useDropdown
                 ? departments.map((name) => (
@@ -205,7 +205,7 @@ export default function GuestProfileSetupPage({
               <Alert
                 severity="error"
                 role="alert"
-                sx={{ borderRadius: "10px", fontSize: "0.85rem", fontWeight: 600, py: 0.25 }}
+                sx={{ borderRadius: "12px", fontSize: "0.845rem", fontWeight: 600, py: 0.25 }}
               >
                 {error}
               </Alert>
@@ -219,8 +219,8 @@ export default function GuestProfileSetupPage({
               disabled={saving}
               sx={{
                 py: 1.35,
-                borderRadius: "10px",
-                fontSize: "0.95rem",
+                borderRadius: "12px",
+                fontSize: "0.9375rem",
                 fontWeight: 700,
                 textTransform: "none",
                 backgroundColor: PRIMARY_BLUE,
@@ -240,7 +240,7 @@ export default function GuestProfileSetupPage({
               mt: 2.5,
               pt: 2,
               borderTop: editorialHairline,
-              fontSize: "0.75rem",
+              fontSize: "0.78rem",
               lineHeight: 1.6,
               textAlign: "center",
               color: editorial.muted,
@@ -253,7 +253,7 @@ export default function GuestProfileSetupPage({
               sx={{
                 p: 0,
                 minWidth: 0,
-                fontSize: "0.75rem",
+                fontSize: "0.78rem",
                 fontWeight: 700,
                 textTransform: "none",
                 verticalAlign: "baseline",

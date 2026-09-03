@@ -28,7 +28,7 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
       <Container maxWidth="sm">
         <Card
           sx={{
-            borderRadius: "14px",
+            borderRadius: "12px",
             boxShadow: editorialShadow,
             border: `1px solid ${editorial.border}`,
             backgroundColor: "rgba(255,255,255,0.94)",
@@ -56,7 +56,7 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
               <LockIcon sx={{ fontSize: 22, color: editorial.pmwBlueDark }} />
             </Box>
 
-            <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: editorial.ink, mb: 1.25 }}>
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 700, color: editorial.ink, mb: 1.25 }}>
               Sign in to view openings
             </Typography>
 
@@ -73,9 +73,9 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
                 sx={{
                   backgroundColor: editorial.black,
                   color: editorial.white,
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   py: 1.5,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   textTransform: "none",
                   boxShadow: "none",
                   "&:hover": { backgroundColor: "#333333", boxShadow: "none" },

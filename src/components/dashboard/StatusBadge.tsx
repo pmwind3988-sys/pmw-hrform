@@ -35,7 +35,7 @@ interface StatusBadgeProps {
 }
 
 function getStatusIcon(key: string, color: string) {
-  const iconSx = { color: `${color} !important`, fontSize: "1rem" };
+  const iconSx = { color: `${color} !important`, fontSize: "0.9375rem" };
   if (key === "fullyapproved" || key === "approved") return <CheckCircleIcon sx={iconSx} />;
   if (key === "confirmed") return <ConfirmedIcon sx={iconSx} />;
   if (key === "rejected" || key === "cancelled") return <CancelIcon sx={iconSx} />;
@@ -56,8 +56,8 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
         backgroundColor: cfg.bg,
         color: cfg.color,
         boxShadow: `inset 0 0 0 1px ${cfg.dot}33`,
-        fontWeight: 800,
-        fontSize: "0.75rem",
+        fontWeight: 700,
+        fontSize: "0.78rem",
       }}
     />
   );

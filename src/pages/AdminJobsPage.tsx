@@ -181,8 +181,8 @@ function StatusChip({ status }: { status: string }) {
         backgroundColor: `${color}18`,
         color,
         fontWeight: 600,
-        fontSize: "0.75rem",
-        borderRadius: "8px",
+        fontSize: "0.78rem",
+        borderRadius: "12px",
       }}
     />
   );
@@ -210,14 +210,14 @@ function AdminApplicationsLoadingSkeleton() {
         sx={{
           p: 2,
           mb: 3,
-          borderRadius: "8px",
+          borderRadius: "12px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
-          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "8px", flex: "1 1 300px", minWidth: { xs: "100%", sm: 280 } }} />
-          <Skeleton variant="rounded" width={132} height={40} sx={{ borderRadius: "8px" }} />
-          <Skeleton variant="rounded" width={82} height={32} sx={{ borderRadius: "8px" }} />
+          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "12px", flex: "1 1 300px", minWidth: { xs: "100%", sm: 280 } }} />
+          <Skeleton variant="rounded" width={132} height={40} sx={{ borderRadius: "12px" }} />
+          <Skeleton variant="rounded" width={82} height={32} sx={{ borderRadius: "12px" }} />
         </Box>
       </Paper>
 
@@ -230,16 +230,16 @@ function AdminApplicationsLoadingSkeleton() {
         }}
       >
         {[1, 2, 3, 4, 5].map((item) => (
-          <Skeleton key={item} variant="rounded" height={96} sx={{ borderRadius: "8px" }} />
+          <Skeleton key={item} variant="rounded" height={96} sx={{ borderRadius: "12px" }} />
         ))}
       </Box>
 
-      <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Table>
           <TableHead>
             <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
               {["", "Reference", "Applicant", "Role", "Status", "Submitted", "Actions"].map((h) => (
-                <TableCell key={h || "select"} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
+                <TableCell key={h || "select"} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -253,9 +253,9 @@ function AdminApplicationsLoadingSkeleton() {
                   <Skeleton variant="text" width={160} height={14} />
                 </TableCell>
                 <TableCell><Skeleton variant="text" width={120} /></TableCell>
-                <TableCell><Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "12px" }} /></TableCell>
                 <TableCell><Skeleton variant="text" width={100} /></TableCell>
-                <TableCell><Skeleton variant="rounded" width={120} height={34} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={120} height={34} sx={{ borderRadius: "12px" }} /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -521,9 +521,9 @@ export default function AdminJobsPage() {
               sx={{
                 ...careerSearchFieldSx,
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
+                  borderRadius: "12px",
                   backgroundColor: editorial.white,
-                  fontSize: "0.85rem",
+                  fontSize: "0.845rem",
                 },
               }}
               slotProps={{
@@ -574,9 +574,9 @@ export default function AdminJobsPage() {
                 sx={{
                   backgroundColor: editorial.blueWash,
                   color: editorial.pmwBlueDark,
-                  fontWeight: 800,
-                  fontSize: "0.75rem",
-                  borderRadius: "8px",
+                  fontWeight: 700,
+                  fontSize: "0.78rem",
+                  borderRadius: "12px",
                   fontVariantNumeric: "tabular-nums",
                 }}
               />
@@ -587,7 +587,7 @@ export default function AdminJobsPage() {
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, width: "100%" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <FilterIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />
-                <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink, fontSize: "0.85rem" }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink, fontSize: "0.845rem" }}>
                   Timeline
                 </Typography>
               </Box>
@@ -647,7 +647,7 @@ export default function AdminJobsPage() {
                       fullWidth
                       slotProps={{
                         inputLabel: { shrink: true },
-                        input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
+                        input: { sx: { borderRadius: "12px", fontSize: "0.78rem" } },
                       }}
                     />
                     <TextField
@@ -659,7 +659,7 @@ export default function AdminJobsPage() {
                       fullWidth
                       slotProps={{
                         inputLabel: { shrink: true },
-                        input: { sx: { borderRadius: "8px", fontSize: "0.8rem" } },
+                        input: { sx: { borderRadius: "12px", fontSize: "0.78rem" } },
                       }}
                     />
                   </>
@@ -671,7 +671,7 @@ export default function AdminJobsPage() {
                     value={statusFilter}
                     label="Status"
                     onChange={(e) => { setStatusFilter(e.target.value); setSelectedIds(new Set()); }}
-                    sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
+                    sx={{ borderRadius: "12px", fontSize: "0.78rem" }}
                   >
                     <MenuItem value="">All statuses</MenuItem>
                     {STATUS_OPTIONS.map((opt) => (
@@ -686,7 +686,7 @@ export default function AdminJobsPage() {
                     value={sortBy}
                     label="Sort"
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    sx={{ borderRadius: "8px", fontSize: "0.8rem" }}
+                    sx={{ borderRadius: "12px", fontSize: "0.78rem" }}
                   >
                     <MenuItem value="newest">Newest first</MenuItem>
                     <MenuItem value="oldest">Oldest first</MenuItem>
@@ -758,7 +758,7 @@ export default function AdminJobsPage() {
             sx={{
               mb: 2,
               p: 1.5,
-              borderRadius: "8px",
+              borderRadius: "12px",
               display: "flex",
               alignItems: "center",
               gap: 2,
@@ -775,14 +775,14 @@ export default function AdminJobsPage() {
               size="small"
               startIcon={<DeleteIcon />}
               onClick={() => setConfirmDeleteOpen(true)}
-              sx={{ borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
+              sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 600 }}
             >
               Delete
             </Button>
             <Button
               size="small"
               onClick={() => setSelectedIds(new Set())}
-              sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280", fontWeight: 500 }}
+              sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280", fontWeight: 500 }}
             >
               Clear
             </Button>
@@ -808,22 +808,22 @@ export default function AdminJobsPage() {
                       sx={{ color: editorial.border, "&.Mui-checked": { color: editorial.pmwBlue } }}
                     />
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Reference
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Applicant
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Role
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Status
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Submitted
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Actions
                   </TableCell>
                 </TableRow>
@@ -845,12 +845,12 @@ export default function AdminJobsPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4", fontSize: "0.8rem" }}>
+                      <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4", fontSize: "0.78rem" }}>
                         {app.submissionRef}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.85rem" }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.845rem" }}>
                         {app.applicantName}
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#9CA3AF" }}>
@@ -858,7 +858,7 @@ export default function AdminJobsPage() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ color: "#374151", fontSize: "0.85rem" }}>
+                      <Typography variant="body2" sx={{ color: "#374151", fontSize: "0.845rem" }}>
                         {app.jobTitle}
                       </Typography>
                       {app.company && (
@@ -871,7 +871,7 @@ export default function AdminJobsPage() {
                       <StatusChip status={app.status} />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
+                      <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.78rem" }}>
                         {formatDate(app.submittedAt)}
                       </Typography>
                     </TableCell>
@@ -883,15 +883,15 @@ export default function AdminJobsPage() {
                           disabled={updatingStatusId === app.id}
                           onChange={(e) => handleStatusChange(app.id, e.target.value)}
                           sx={{
-                            borderRadius: "8px",
-                            fontSize: "0.8rem",
+                            borderRadius: "12px",
+                            fontSize: "0.78rem",
                             minWidth: 120,
                             opacity: updatingStatusId === app.id ? 0.6 : 1,
                             "& .MuiOutlinedInput-notchedOutline": { borderColor: "#E5E7EB" },
                           }}
                         >
                           {STATUS_OPTIONS.map((opt) => (
-                            <MenuItem key={opt} value={opt} sx={{ fontSize: "0.85rem" }}>
+                            <MenuItem key={opt} value={opt} sx={{ fontSize: "0.845rem" }}>
                               {opt}
                             </MenuItem>
                           ))}
@@ -938,7 +938,7 @@ export default function AdminJobsPage() {
           fullWidth
           slotProps={{
             paper: {
-              sx: { borderRadius: "8px", p: 1 },
+              sx: { borderRadius: "12px", p: 1 },
             },
           }}
         >
@@ -1017,8 +1017,8 @@ export default function AdminJobsPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "8px",
-                              color: "#0078D4", fontWeight: 600, fontSize: "0.85rem",
+                              px: 1.5, py: 0.75, borderRadius: "12px",
+                              color: "#0078D4", fontWeight: 600, fontSize: "0.845rem",
                               backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
                               "&:hover": { backgroundColor: "#DBEAFE" },
@@ -1037,8 +1037,8 @@ export default function AdminJobsPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "8px",
-                              color: "#0078D4", fontWeight: 600, fontSize: "0.85rem",
+                              px: 1.5, py: 0.75, borderRadius: "12px",
+                              color: "#0078D4", fontWeight: 600, fontSize: "0.845rem",
                               backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
                               "&:hover": { backgroundColor: "#DBEAFE" },
@@ -1077,7 +1077,7 @@ export default function AdminJobsPage() {
                 <Button
                   variant="outlined"
                   onClick={() => setSelectedApp(null)}
-                  sx={{ borderRadius: "8px", textTransform: "none", borderColor: "#D1D5DB", color: "#6B7280" }}
+                  sx={{ borderRadius: "12px", textTransform: "none", borderColor: "#D1D5DB", color: "#6B7280" }}
                 >
                   Close
                 </Button>
@@ -1087,7 +1087,7 @@ export default function AdminJobsPage() {
         </Dialog>
 
         {/* Delete confirmation dialog */}
-        <Dialog open={confirmDeleteOpen} onClose={() => !deleting && setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
+        <Dialog open={confirmDeleteOpen} onClose={() => !deleting && setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
           <DialogTitle sx={{ pb: 1 }}>
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
               Delete Applications
@@ -1099,14 +1099,14 @@ export default function AdminJobsPage() {
             </Typography>
             {deleting && <LinearProgress sx={{ mt: 2, borderRadius: "4px" }} />}
             {deleteResult && (
-              <Alert severity="info" sx={{ mt: 2, borderRadius: "8px" }}>{deleteResult}</Alert>
+              <Alert severity="info" sx={{ mt: 2, borderRadius: "12px" }}>{deleteResult}</Alert>
             )}
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
             <Button
               onClick={() => setConfirmDeleteOpen(false)}
               disabled={deleting}
-              sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}
+              sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}
             >
               Cancel
             </Button>
@@ -1115,7 +1115,7 @@ export default function AdminJobsPage() {
               color="error"
               onClick={handleDelete}
               disabled={deleting}
-              sx={{ borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
+              sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 600 }}
             >
               {deleting ? "Deleting..." : `Delete ${selectedIds.size}`}
             </Button>
@@ -1134,9 +1134,9 @@ export default function AdminJobsPage() {
               severity={snackbar.severity}
               onClose={() => setSnackbar(null)}
               sx={{
-                borderRadius: "8px",
+                borderRadius: "12px",
                 fontWeight: 700,
-                fontSize: "0.9rem",
+                fontSize: "0.875rem",
                 boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
                 color: "#111827",
                 "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },

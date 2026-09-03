@@ -79,7 +79,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
             sx={{
               minHeight: 154,
               backgroundColor: "rgba(255, 255, 255, 0.94)",
-              borderRadius: "8px",
+              borderRadius: "12px",
               p: { xs: 1.5, sm: 2 },
               display: "grid",
               gridTemplateRows: "auto 1fr auto",
@@ -115,8 +115,8 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                   textTransform: "uppercase",
                   letterSpacing: 0,
                   color: editorial.muted,
-                  fontWeight: 800,
-                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  fontSize: "0.72rem",
                   display: "block",
                 }}
               >
@@ -126,7 +126,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 sx={{
                   width: 42,
                   height: 42,
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   backgroundColor: stat.bg,
                   display: "flex",
                   alignItems: "center",
@@ -143,7 +143,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
               <Typography
                 variant="h4"
                 sx={{
-                  fontWeight: 800,
+                  fontWeight: 700,
                   color: editorial.ink,
                   letterSpacing: 0,
                   lineHeight: 1,

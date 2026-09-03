@@ -138,7 +138,7 @@ export default function AdminGuard({ isAdmin, restrictedTo = "HR Form Owners", c
             startIcon={<HomeOutlinedIcon />}
             onClick={() => navigate("/user/dashboard", { replace: true })}
             sx={{
-              borderRadius: "8px",
+              borderRadius: "12px",
               textTransform: "none",
               fontWeight: 600,
               px: 4,
@@ -162,7 +162,7 @@ export default function AdminGuard({ isAdmin, restrictedTo = "HR Form Owners", c
             variant="filled"
             sx={{
               width: "100%",
-              borderRadius: "8px",
+              borderRadius: "12px",
               fontWeight: 500,
               boxShadow: "0 8px 32px rgba(220, 38, 38, 0.25)",
             }}

@@ -35,14 +35,14 @@ interface VersionHistoryProps {
 
 const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) => (
   <span style={{
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 700,
     color,
     background: bg,
-    borderRadius: 20,
+    borderRadius: 12,
     padding: "2px 9px",
     textTransform: "uppercase",
-    letterSpacing: ".04em",
+    letterSpacing: "0.03em",
     whiteSpace: "nowrap",
   }}>{children}</span>
 );
@@ -77,7 +77,7 @@ export default function VersionHistory({
   onRename,
   renameBusyKey,
 }: VersionHistoryProps) {
-  if (!history.length) return <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>No history yet.</div>;
+  if (!history.length) return <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic" }}>No history yet.</div>;
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -160,7 +160,7 @@ function ProfileCard({
   return (
     <section style={{
       border: `1px solid ${isCurrent ? C.purple : C.border}`,
-      borderRadius: 10,
+      borderRadius: 12,
       background: C.white,
       boxShadow: isCurrent ? "0 1px 2px rgba(0,120,212,0.14)" : "0 1px 2px rgba(26,31,43,0.04)",
       overflow: "hidden",
@@ -174,7 +174,7 @@ function ProfileCard({
         </div>
 
         <label style={{ display: "block" }}>
-          <span style={{ display: "block", fontSize: 9, fontWeight: 800, letterSpacing: ".04em", textTransform: "uppercase", color: C.textSecond, marginBottom: 3 }}>
+          <span style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", color: C.textSecond, marginBottom: 3 }}>
             Profile name
           </span>
           <span style={{ display: "block" }}>
@@ -195,10 +195,10 @@ function ProfileCard({
                 borderRadius: 7,
                 padding: "0 9px",
                 background: onRename && !renaming ? C.white : C.offWhite,
-                fontSize: 13,
+                fontSize: 13.5,
                 fontWeight: 700,
                 color: C.textPrimary,
-                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                fontFamily: "var(--pmw-font-main)",
               }}
             />
             {nameDirty && (
@@ -225,7 +225,7 @@ function ProfileCard({
             )}
           </span>
         </label>
-        <div style={{ fontSize: 10, color: renaming ? C.purple : C.textSecond, lineHeight: 1.5, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ fontSize: 11, color: renaming ? C.purple : C.textSecond, lineHeight: 1.5, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
           {renaming
             ? "Saving the name to SharePoint…"
             : nameDirty
@@ -236,11 +236,11 @@ function ProfileCard({
 
       {/* Provenance + availability */}
       <div style={{ padding: "9px 11px", borderTop: `1px solid ${C.borderLight}`, background: C.offWhite, display: "grid", gap: 8 }}>
-        <div style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: C.textSecond, lineHeight: 1.5 }}>
           Published by {entry.PublishedBy?.split("@")[0] || "unknown"} ·{" "}
           {entry.PublishedAt ? new Date(entry.PublishedAt).toLocaleString("en-MY", { dateStyle: "short", timeStyle: "short" }) : "-"}
         </div>
-        <label style={{ display: "grid", gap: 3, fontSize: 10, fontWeight: 700, color: C.textSecond }}>
+        <label style={{ display: "grid", gap: 3, fontSize: 11, fontWeight: 700, color: C.textSecond }}>
           Stops serving on
           <input
             type="date"
@@ -251,10 +251,10 @@ function ProfileCard({
               border: `1px solid ${C.border}`,
               borderRadius: 7,
               padding: "0 8px",
-              fontSize: 11,
+              fontSize: 11.5,
               color: C.textSecond,
               background: C.white,
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+              fontFamily: "var(--pmw-font-main)",
             }}
           />
         </label>
@@ -335,10 +335,10 @@ function profileBtn(color: string, background: string, border: string, disabled 
     borderRadius: 7,
     background: disabled ? C.offWhite : background,
     color: disabled ? C.textMuted : color,
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: 700,
     cursor: disabled ? "not-allowed" : "pointer",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    fontFamily: "var(--pmw-font-main)",
     transition: "background-color .12s, border-color .12s, color .12s",
   };
 }

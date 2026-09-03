@@ -74,14 +74,14 @@ export default function SetLockPasswordDialog({
   };
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: "14px" } } }}>
-      <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
+      <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
           <Box
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "10px",
+              borderRadius: "12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -93,7 +93,7 @@ export default function SetLockPasswordDialog({
             <LockOutlined />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, lineHeight: 1.2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, lineHeight: 1.2 }}>
               {replacing ? "Change password" : "Set a password"}
             </Typography>
             <Typography
@@ -174,12 +174,12 @@ export default function SetLockPasswordDialog({
           />
 
           {copied && (
-            <Alert severity="success" sx={{ borderRadius: "10px", fontWeight: 700 }}>
+            <Alert severity="success" sx={{ borderRadius: "12px", fontWeight: 700 }}>
               Copied to the clipboard.
             </Alert>
           )}
 
-          <Alert severity="info" sx={{ borderRadius: "10px", fontWeight: 600 }}>
+          <Alert severity="info" sx={{ borderRadius: "12px", fontWeight: 600 }}>
             Write this down now. It is stored as a one-way hash, so it can be replaced later but never looked up —
             not from this screen and not from SharePoint.
           </Alert>

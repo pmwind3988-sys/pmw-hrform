@@ -283,14 +283,14 @@ function MediaValue({ source, accessToken }: { source: string; accessToken?: str
   if (isImageLike(source) || isImageLike(src)) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", padding: 10, overflow: "hidden" }}>
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: "#fff", padding: 10, overflow: "hidden" }}>
           <img
             src={src}
             alt={filenameFromUrl(source)}
-            style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", borderRadius: 6 }}
+            style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", borderRadius: 8 }}
           />
         </div>
-        {loading && <span style={{ color: C.textMuted, fontSize: 12 }}>Loading secure image...</span>}
+        {loading && <span style={{ color: C.textMuted, fontSize: 12.5 }}>Loading secure image...</span>}
       </div>
     );
   }
@@ -329,8 +329,8 @@ function MatrixValue({ field, value }: { field: PreviewField; value: unknown }) 
   if (rows.length === 0) return <span style={{ color: C.textMuted }}>No rows</span>;
   const columns = matrixColumns(field, rows);
   return (
-    <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+    <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
         <thead>
           <tr style={{ background: C.softBg }}>
             {columns.map((column) => (
@@ -368,14 +368,14 @@ function RatingValue({ field, value }: { field: PreviewField; value: unknown }) 
   return (
     <div style={{ display: "grid", gap: 7, maxWidth: 340 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontVariantNumeric: "tabular-nums" }}>
-        <span style={{ color: C.textPrimary, fontSize: 15, fontWeight: 800 }}>{rating}</span>
-        <span style={{ color: C.textMuted, fontSize: 12 }}>of {max}</span>
-        {selectedLabel && <span style={{ color: C.textSecond, fontSize: 12, fontWeight: 700 }}>{selectedLabel}</span>}
+        <span style={{ color: C.textPrimary, fontSize: 15, fontWeight: 700 }}>{rating}</span>
+        <span style={{ color: C.textMuted, fontSize: 12.5 }}>of {max}</span>
+        {selectedLabel && <span style={{ color: C.textSecond, fontSize: 12.5, fontWeight: 700 }}>{selectedLabel}</span>}
       </div>
       <div style={{ position: "relative", height: 8, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
         <div style={{ width: `${percent}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #F7C948, #0078D4)" }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", color: C.textMuted, fontSize: 11, gap: 12, textWrap: "pretty" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", color: C.textMuted, fontSize: 11.5, gap: 12, textWrap: "pretty" }}>
         <span>{field.minRateDescription || String(min)}</span>
         <span>{field.maxRateDescription || String(max)}</span>
       </div>
@@ -426,7 +426,7 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
   const displaySections = sections.length > 0 ? sections : fallbackSections(fallbackData ?? data ?? undefined);
 
   if (displaySections.length === 0) {
-    return <div style={{ color: C.textMuted, fontSize: 13 }}>No submitted field data is available.</div>;
+    return <div style={{ color: C.textMuted, fontSize: 13.5 }}>No submitted field data is available.</div>;
   }
 
   return (
@@ -442,17 +442,17 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
           }}
         >
           {section.title && (
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, marginBottom: 6 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>
               {section.title}
             </div>
           )}
           <div>
             {section.fields.map((field) => (
               <div key={field.name} style={fieldRowStyle}>
-                <div style={{ color: C.textSecond, fontSize: 12, fontWeight: 700, lineHeight: 1.45 }}>
+                <div style={{ color: C.textSecond, fontSize: 12.5, fontWeight: 700, lineHeight: 1.45 }}>
                   {field.title}
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.5, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, lineHeight: 1.5, minWidth: 0 }}>
                   <FieldValue field={field} value={data?.[field.name]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} />
                 </div>
               </div>

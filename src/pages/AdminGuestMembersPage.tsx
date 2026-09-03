@@ -47,7 +47,7 @@ import { loginRequest } from "../auth/msalConfig";
 
 const panelSx = {
   backgroundColor: editorial.white,
-  borderRadius: "14px",
+  borderRadius: "12px",
   border: editorialHairline,
   boxShadow: editorialShadow,
   px: { xs: 2, sm: 3 },
@@ -160,17 +160,17 @@ export default function AdminGuestMembersPage() {
   return (
     <Box sx={{ minHeight: "100vh", px: 2, py: { xs: 3, sm: 4 } }}>
       <Container maxWidth="lg" disableGutters>
-        <Typography component="h1" sx={{ fontSize: "1.5rem", fontWeight: 800, color: editorial.ink }}>
+        <Typography component="h1" sx={{ fontSize: "1.5rem", fontWeight: 700, color: editorial.ink }}>
           Guest members
         </Typography>
-        <Typography sx={{ fontSize: "0.9rem", color: editorial.muted, mt: 0.5, mb: 3, maxWidth: 720 }}>
+        <Typography sx={{ fontSize: "0.875rem", color: editorial.muted, mt: 0.5, mb: 3, maxWidth: 720 }}>
           Anyone with a Google account can sign in and become a permanent member. They can browse
           jobs, apply, and submit forms straight away. The learning hub stays closed to them until
           you approve it here.
         </Typography>
 
         {error ? (
-          <Alert severity="error" sx={{ borderRadius: "10px", mb: 2 }}>
+          <Alert severity="error" sx={{ borderRadius: "12px", mb: 2 }}>
             {error}
           </Alert>
         ) : null}
@@ -180,7 +180,7 @@ export default function AdminGuestMembersPage() {
             <Typography sx={{ fontWeight: 700, color: editorial.ink, mb: 0.5 }}>
               Storage is not set up yet
             </Typography>
-            <Typography sx={{ fontSize: "0.88rem", color: editorial.muted, mb: 2 }}>
+            <Typography sx={{ fontSize: "0.875rem", color: editorial.muted, mb: 2 }}>
               This creates the member list and the learning access log in SharePoint.
             </Typography>
             <Button variant="contained" disableElevation onClick={() => void provision()}>
@@ -190,14 +190,14 @@ export default function AdminGuestMembersPage() {
         ) : null}
 
         {snapshot && snapshot.provisioned && !snapshot.googleConfigured ? (
-          <Alert severity="warning" sx={{ borderRadius: "10px", mb: 2 }}>
+          <Alert severity="warning" sx={{ borderRadius: "12px", mb: 2 }}>
             Google sign-in is switched off because <code>GOOGLE_CLIENT_ID</code> is not set. Nobody
             can sign in as a guest until it is.
           </Alert>
         ) : null}
 
         {snapshot && snapshot.provisioned && !snapshot.sessionsConfigured ? (
-          <Alert severity="warning" sx={{ borderRadius: "10px", mb: 2 }}>
+          <Alert severity="warning" sx={{ borderRadius: "12px", mb: 2 }}>
             Guest sign-in is switched off because <code>INTERNAL_SESSION_SECRET</code> is not set,
             or is shorter than 32 characters.
           </Alert>
@@ -210,9 +210,9 @@ export default function AdminGuestMembersPage() {
             placeholder="Search name, email, position or department"
             size="small"
             fullWidth
-            sx={{ maxWidth: 420, "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+            sx={{ maxWidth: 420, "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
           />
-          <Typography sx={{ fontSize: "0.85rem", color: editorial.muted, whiteSpace: "nowrap" }}>
+          <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, whiteSpace: "nowrap" }}>
             {total === 0 ? "No members" : `Showing ${members.length} of ${total}`}
           </Typography>
           <Button
@@ -236,12 +236,12 @@ export default function AdminGuestMembersPage() {
             <Table size="small" sx={{ minWidth: 860 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 800 }}>Member</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Position</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Department</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Joined</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Learning</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }} align="right">
+                  <TableCell sx={{ fontWeight: 700 }}>Member</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Position</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Joined</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Learning</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }} align="right">
                     Account
                   </TableCell>
                 </TableRow>
@@ -304,21 +304,21 @@ function MemberRow({
   return (
     <TableRow sx={{ opacity: disabled ? 0.55 : 1 }}>
       <TableCell>
-        <Typography sx={{ fontWeight: 700, fontSize: "0.9rem", color: editorial.ink }}>
+        <Typography sx={{ fontWeight: 700, fontSize: "0.875rem", color: editorial.ink }}>
           {member.fullName || member.googleName || "—"}
         </Typography>
-        <Typography sx={{ fontSize: "0.8rem", color: editorial.muted }}>{member.email}</Typography>
+        <Typography sx={{ fontSize: "0.78rem", color: editorial.muted }}>{member.email}</Typography>
         {!member.profileComplete ? (
           <Chip
             label="Profile not completed"
             size="small"
-            sx={{ mt: 0.5, fontSize: "0.68rem", fontWeight: 700, backgroundColor: "#F3F1EA" }}
+            sx={{ mt: 0.5, fontSize: "0.72rem", fontWeight: 700, backgroundColor: "#F3F1EA" }}
           />
         ) : null}
       </TableCell>
-      <TableCell sx={{ fontSize: "0.85rem" }}>{member.position || "—"}</TableCell>
-      <TableCell sx={{ fontSize: "0.85rem" }}>{member.department || "—"}</TableCell>
-      <TableCell sx={{ fontSize: "0.85rem" }}>{formatDate(member.joinedAt)}</TableCell>
+      <TableCell sx={{ fontSize: "0.845rem" }}>{member.position || "—"}</TableCell>
+      <TableCell sx={{ fontSize: "0.845rem" }}>{member.department || "—"}</TableCell>
+      <TableCell sx={{ fontSize: "0.845rem" }}>{formatDate(member.joinedAt)}</TableCell>
       <TableCell>
         {/*
           Approval is withheld until the member has said who they are — granting
@@ -387,16 +387,16 @@ function AccessLogDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 800 }}>Learning access log</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700 }}>Learning access log</DialogTitle>
       <DialogContent>
-        <Typography sx={{ fontSize: "0.85rem", color: editorial.muted, mb: 2 }}>
+        <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, mb: 2 }}>
           Every material a guest member has opened. Names, positions and departments are recorded as
           they were at the time of the view, so a later profile edit cannot change what this says.
         </Typography>
         <Divider sx={{ mb: 2 }} />
 
         {error ? (
-          <Alert severity="error" sx={{ borderRadius: "10px", mb: 2 }}>
+          <Alert severity="error" sx={{ borderRadius: "12px", mb: 2 }}>
             {error}
           </Alert>
         ) : null}
@@ -414,28 +414,28 @@ function AccessLogDialog({
             <Table size="small" sx={{ minWidth: 720 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 800 }}>Who</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Role at the time</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Material</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Opened</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Who</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Role at the time</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Material</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Opened</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {entries.map((entry, index) => (
                   <TableRow key={`${entry.email}-${entry.materialId}-${index}`}>
                     <TableCell>
-                      <Typography sx={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                      <Typography sx={{ fontWeight: 700, fontSize: "0.845rem" }}>
                         {entry.viewerName || "—"}
                       </Typography>
                       <Typography sx={{ fontSize: "0.78rem", color: editorial.muted }}>
                         {entry.email}
                       </Typography>
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.82rem" }}>
+                    <TableCell sx={{ fontSize: "0.845rem" }}>
                       {[entry.viewerPosition, entry.viewerDepartment].filter(Boolean).join(" · ") || "—"}
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.85rem" }}>{entry.materialName}</TableCell>
-                    <TableCell sx={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>
+                    <TableCell sx={{ fontSize: "0.845rem" }}>{entry.materialName}</TableCell>
+                    <TableCell sx={{ fontSize: "0.845rem", whiteSpace: "nowrap" }}>
                       {formatDate(entry.viewedAt)}
                     </TableCell>
                   </TableRow>

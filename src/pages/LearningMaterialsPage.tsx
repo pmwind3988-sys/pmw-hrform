@@ -326,7 +326,7 @@ export default function LearningMaterialsPage() {
                   backgroundColor: editorial.purpleWash,
                   color: editorial.pmwPurpleDark,
                   border: `1px solid ${editorial.pmwPurpleSoft}`,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   "& .MuiChip-icon": { color: editorial.pmwPurpleDark },
                 }}
               />
@@ -337,7 +337,7 @@ export default function LearningMaterialsPage() {
                   backgroundColor: editorial.paperSoft,
                   color: editorial.muted,
                   border: editorialHairline,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
                 }}
               />
@@ -349,7 +349,7 @@ export default function LearningMaterialsPage() {
                   backgroundColor: editorial.paperSoft,
                   color: editorial.muted,
                   border: editorialHairline,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
                   "& .MuiChip-icon": { color: editorial.softMuted },
                 }}
@@ -395,7 +395,7 @@ export default function LearningMaterialsPage() {
                 }}
                 sx={{
                   flex: 1,
-                  "& .MuiOutlinedInput-root": { borderRadius: "10px", backgroundColor: editorial.white },
+                  "& .MuiOutlinedInput-root": { borderRadius: "12px", backgroundColor: editorial.white },
                 }}
               />
               <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75 }}>
@@ -407,8 +407,8 @@ export default function LearningMaterialsPage() {
                       label={filter.label}
                       onClick={() => setKindFilter(filter.value)}
                       sx={{
-                        fontWeight: 800,
-                        borderRadius: "8px",
+                        fontWeight: 700,
+                        borderRadius: "12px",
                         backgroundColor: selected ? editorial.pmwBlueDark : editorial.white,
                         color: selected ? editorial.white : editorial.muted,
                         border: `1px solid ${selected ? editorial.pmwBlueDark : editorial.border}`,
@@ -440,7 +440,7 @@ export default function LearningMaterialsPage() {
                   display: "flex",
                   alignItems: "center",
                   gap: 0.5,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   color: currentPath ? editorial.pmwBlueDark : editorial.ink,
                 }}
               >
@@ -451,7 +451,7 @@ export default function LearningMaterialsPage() {
                 const path = breadcrumbSegments.slice(0, index + 1).join("/");
                 const isLast = index === breadcrumbSegments.length - 1;
                 return isLast ? (
-                  <Typography key={path} sx={{ fontWeight: 800, color: editorial.ink }}>
+                  <Typography key={path} sx={{ fontWeight: 700, color: editorial.ink }}>
                     {segment}
                   </Typography>
                 ) : (
@@ -461,7 +461,7 @@ export default function LearningMaterialsPage() {
                     type="button"
                     underline="hover"
                     onClick={() => goToPath(path)}
-                    sx={{ fontWeight: 800, color: editorial.pmwBlueDark }}
+                    sx={{ fontWeight: 700, color: editorial.pmwBlueDark }}
                   >
                     {segment}
                   </Link>
@@ -471,7 +471,7 @@ export default function LearningMaterialsPage() {
           )}
 
           {needsSignIn && (
-            <Alert severity="warning" sx={{ mb: 2, borderRadius: "10px", fontWeight: 700 }}>
+            <Alert severity="warning" sx={{ mb: 2, borderRadius: "12px", fontWeight: 700 }}>
               Your Microsoft 365 session could not be confirmed. Refresh the page or sign in again to open learning
               materials.
             </Alert>
@@ -480,7 +480,7 @@ export default function LearningMaterialsPage() {
           {error && (
             <Alert
               severity="error"
-              sx={{ mb: 2, borderRadius: "10px", fontWeight: 700 }}
+              sx={{ mb: 2, borderRadius: "12px", fontWeight: 700 }}
               action={
                 <Button size="small" onClick={() => setReloadKey((key) => key + 1)} sx={learningButtonSx}>
                   Retry

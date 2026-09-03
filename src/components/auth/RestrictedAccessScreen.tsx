@@ -62,7 +62,7 @@ export default function RestrictedAccessScreen({
         <Card
           elevation={0}
           sx={{
-            borderRadius: "8px",
+            borderRadius: "12px",
             border: "1px solid rgba(17, 24, 39, 0.1)",
             boxShadow: "0 18px 60px rgba(15, 23, 42, 0.1)",
             backgroundColor: "rgba(255, 255, 255, 0.94)",
@@ -154,7 +154,7 @@ export default function RestrictedAccessScreen({
                   onClick={onRetry}
                   sx={{
                     backgroundColor: "#0078D4",
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     py: 1.5,
                     fontWeight: 600,
                     boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
@@ -174,7 +174,7 @@ export default function RestrictedAccessScreen({
                   startIcon={<SwitchAccountIcon />}
                   onClick={onSwitch}
                   sx={{
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     py: 1.5,
                     fontWeight: 600,
                     borderColor: "rgba(0, 120, 212, 0.3)",
@@ -196,7 +196,7 @@ export default function RestrictedAccessScreen({
                   startIcon={<LogoutIcon />}
                   onClick={onSignOut}
                   sx={{
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     py: 1.25,
                     color: "#6B7280",
                     fontWeight: 600,

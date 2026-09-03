@@ -22,7 +22,7 @@ const EC: Record<string, { color: string; bg: string }> = {
 export default function AuditLog({ logs }: AuditLogProps) {
   const [exp, setExp] = useState<number | null>(null);
 
-  if (!logs.length) return <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>No log entries yet.</div>;
+  if (!logs.length) return <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic" }}>No log entries yet.</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -52,13 +52,13 @@ export default function AuditLog({ logs }: AuditLogProps) {
                 background: isE ? C.offWhite : C.white,
               }}
             >
-              <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color, background: cfg.bg, borderRadius: 20, padding: "2px 7px", flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, background: cfg.bg, borderRadius: 12, padding: "2px 7px", flexShrink: 0 }}>
                 {l.EventType}
               </span>
-              <span style={{ fontSize: 11, color: C.textPrimary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 11.5, color: C.textPrimary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {l.EventSummary}
               </span>
-              <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>
                 {l.EventAt ? new Date(l.EventAt).toLocaleString("en-MY", { dateStyle: "short", timeStyle: "short" }) : ""}
               </span>
               {hasDiff && <span style={{ fontSize: 10, color: C.textMuted }}>{isE ? <ExpandLessIcon style={{ fontSize: 14 }} /> : <ExpandMoreIcon style={{ fontSize: 14 }} />}</span>}
@@ -74,16 +74,16 @@ export default function AuditLog({ logs }: AuditLogProps) {
               }}>
                 {before && (
                   <div>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: C.red, textTransform: "uppercase", marginBottom: 3 }}>Before</div>
-                    <pre style={{ fontSize: 10, color: C.textSecond, fontFamily: "monospace", whiteSpace: "pre-wrap", lineHeight: 1.6, margin: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.red, textTransform: "uppercase", marginBottom: 3 }}>Before</div>
+                    <pre style={{ fontSize: 11, color: C.textSecond, fontFamily: "monospace", whiteSpace: "pre-wrap", lineHeight: 1.6, margin: 0 }}>
                       {JSON.stringify(before, null, 2)}
                     </pre>
                   </div>
                 )}
                 {after && (
                   <div>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: C.green, textTransform: "uppercase", marginBottom: 3 }}>After</div>
-                    <pre style={{ fontSize: 10, color: C.textSecond, fontFamily: "monospace", whiteSpace: "pre-wrap", lineHeight: 1.6, margin: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", marginBottom: 3 }}>After</div>
+                    <pre style={{ fontSize: 11, color: C.textSecond, fontFamily: "monospace", whiteSpace: "pre-wrap", lineHeight: 1.6, margin: 0 }}>
                       {JSON.stringify(after, null, 2)}
                     </pre>
                   </div>

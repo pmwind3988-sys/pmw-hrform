@@ -39,7 +39,7 @@ interface ChoiceOption {
   text: string;
 }
 
-const font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const font = "var(--pmw-font-main)";
 
 function fieldLabel(field: FormBuilderField): string {
   return field.title || field.name;
@@ -197,21 +197,21 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
           <QrCode2Icon style={{ fontSize: 17 }} />
         </span>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, fontFamily: font }}>Prefilled QR instance</div>
-          <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.4, fontFamily: font }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, fontFamily: font }}>Prefilled QR instance</div>
+          <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.4, fontFamily: font }}>
             Set defaults for this QR only{publishLabel ? <> · targets <strong style={{ color: C.purple }}>{publishLabel}</strong></> : isDefaultProfile ? "" : <> · targets <strong style={{ color: C.purple }}>{targetPublishKey}</strong></>}.
           </div>
         </div>
       </div>
 
       {!canGenerate && (
-        <div style={{ background: C.amberPale, color: C.amber, borderRadius: 8, padding: "8px 10px", fontSize: 11, lineHeight: 1.45, marginBottom: 10, fontFamily: font }}>
+        <div style={{ background: C.amberPale, color: C.amber, borderRadius: 8, padding: "8px 10px", fontSize: 11.5, lineHeight: 1.45, marginBottom: 10, fontFamily: font }}>
           Publish this form first so the QR targets the live form route.
         </div>
       )}
 
       {canGenerate && fields.length === 0 && (
-        <div style={{ background: C.offWhite, color: C.textMuted, borderRadius: 8, padding: "8px 10px", fontSize: 11, lineHeight: 1.45, marginBottom: 10, fontFamily: font }}>
+        <div style={{ background: C.offWhite, color: C.textMuted, borderRadius: 8, padding: "8px 10px", fontSize: 11.5, lineHeight: 1.45, marginBottom: 10, fontFamily: font }}>
           No fillable fields are available for prefill.
         </div>
       )}
@@ -225,8 +225,8 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
             <div key={field.name} style={{ borderRadius: 8, background: C.white, boxShadow: "0 0 0 1px rgba(0,0,0,0.06), 0 6px 16px rgba(26,31,43,0.06)", padding: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.textPrimary, lineHeight: 1.35, fontFamily: font, textWrap: "pretty" }}>{fieldLabel(field)}</div>
-                  <div style={{ fontSize: 9, color: C.textMuted, fontFamily: font }}>{field.name} · {fieldTypeLabel(field)}</div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: C.textPrimary, lineHeight: 1.35, fontFamily: font, textWrap: "pretty" }}>{fieldLabel(field)}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted, fontFamily: font }}>{field.name} · {fieldTypeLabel(field)}</div>
                 </div>
                 <button
                   type="button"
@@ -259,7 +259,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
                   {options.map(option => {
                     const selected = Array.isArray(draftValue) ? draftValue.includes(option.value) : false;
                     return (
-                      <label key={option.value} style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 28, fontSize: 11, color: C.textSecond, fontFamily: font }}>
+                      <label key={option.value} style={{ display: "flex", alignItems: "center", gap: 7, minHeight: 28, fontSize: 11.5, color: C.textSecond, fontFamily: font }}>
                         <input type="checkbox" disabled={disabled} checked={selected} onChange={e => toggleChoice(field, option.value, e.target.checked)} />
                         <span>{option.text}</span>
                       </label>
@@ -271,7 +271,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
                   disabled={disabled}
                   value={typeof draftValue === "string" ? draftValue : ""}
                   onChange={e => setFieldValue(field.name, e.target.value)}
-                  style={{ width: "100%", minHeight: 40, border: `1px solid ${C.border}`, borderRadius: 7, padding: "0 9px", color: C.textPrimary, fontSize: 12, fontFamily: font, background: C.white }}
+                  style={{ width: "100%", minHeight: 40, border: `1px solid ${C.border}`, borderRadius: 7, padding: "0 9px", color: C.textPrimary, fontSize: 12.5, fontFamily: font, background: C.white }}
                 >
                   <option value="">Select value</option>
                   {options.map(option => <option key={option.value} value={option.value}>{option.text}</option>)}
@@ -281,7 +281,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
                   disabled={disabled}
                   value={typeof draftValue === "boolean" ? String(draftValue) : ""}
                   onChange={e => setFieldValue(field.name, e.target.value === "true")}
-                  style={{ width: "100%", minHeight: 40, border: `1px solid ${C.border}`, borderRadius: 7, padding: "0 9px", color: C.textPrimary, fontSize: 12, fontFamily: font, background: C.white }}
+                  style={{ width: "100%", minHeight: 40, border: `1px solid ${C.border}`, borderRadius: 7, padding: "0 9px", color: C.textPrimary, fontSize: 12.5, fontFamily: font, background: C.white }}
                 >
                   <option value="">Select value</option>
                   <option value="true">Yes</option>
@@ -293,7 +293,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
                   value={typeof draftValue === "string" ? draftValue : ""}
                   onChange={e => setFieldValue(field.name, e.target.value)}
                   rows={3}
-                  style={{ width: "100%", minHeight: 72, border: `1px solid ${C.border}`, borderRadius: 7, padding: "8px 9px", resize: "vertical", color: C.textPrimary, fontSize: 12, lineHeight: 1.45, fontFamily: font, background: C.white }}
+                  style={{ width: "100%", minHeight: 72, border: `1px solid ${C.border}`, borderRadius: 7, padding: "8px 9px", resize: "vertical", color: C.textPrimary, fontSize: 12.5, lineHeight: 1.45, fontFamily: font, background: C.white }}
                 />
               ) : (
                 <input
@@ -301,7 +301,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
                   type={inputTypeForField(field)}
                   value={typeof draftValue === "string" ? draftValue : ""}
                   onChange={e => setFieldValue(field.name, e.target.value)}
-                  style={{ width: "100%", minHeight: 40, border: `1px solid ${C.border}`, borderRadius: 7, padding: "0 9px", color: C.textPrimary, fontSize: 12, fontFamily: font, background: C.white }}
+                  style={{ width: "100%", minHeight: 40, border: `1px solid ${C.border}`, borderRadius: 7, padding: "0 9px", color: C.textPrimary, fontSize: 12.5, fontFamily: font, background: C.white }}
                 />
               )}
             </div>
@@ -321,8 +321,8 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
             background: disabled || !hasValues ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
             color: disabled || !hasValues ? C.textMuted : C.white,
             cursor: disabled || !hasValues ? "not-allowed" : "pointer",
-            fontSize: 12,
-            fontWeight: 800,
+            fontSize: 12.5,
+            fontWeight: 700,
             fontFamily: font,
             transitionProperty: "transform, opacity",
             transitionDuration: "140ms",
@@ -347,21 +347,21 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
           {qrDataUrl ? (
             <img src={qrDataUrl} alt="Prefilled QR code" style={{ width: 168, height: 168, display: "block", margin: "0 auto 10px", borderRadius: 8, outline: "1px solid rgba(0, 0, 0, 0.1)", background: C.white }} />
           ) : (
-            <div style={{ width: 168, height: 168, margin: "0 auto 10px", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, fontSize: 11, fontFamily: font }}>Generating...</div>
+            <div style={{ width: 168, height: 168, margin: "0 auto 10px", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, fontSize: 11.5, fontFamily: font }}>Generating...</div>
           )}
-          <div style={{ fontSize: 10, color: C.textMuted, wordBreak: "break-all", lineHeight: 1.45, fontFamily: font, marginBottom: 10 }}>{generatedUrl}</div>
+          <div style={{ fontSize: 11, color: C.textMuted, wordBreak: "break-all", lineHeight: 1.45, fontFamily: font, marginBottom: 10 }}>{generatedUrl}</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <button
               type="button"
               onClick={copyLink}
-              style={{ minHeight: 40, border: "none", borderRadius: 8, background: copied ? C.greenPale : C.white, color: copied ? C.green : C.textSecond, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: font, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)" }}
+              style={{ minHeight: 40, border: "none", borderRadius: 8, background: copied ? C.greenPale : C.white, color: copied ? C.green : C.textSecond, cursor: "pointer", fontSize: 11.5, fontWeight: 700, fontFamily: font, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)" }}
             >
               <ContentCopyIcon style={{ fontSize: 14, verticalAlign: "middle", marginRight: 4 }} /> {copied ? "Copied" : "Copy"}
             </button>
             <a
               href={qrDataUrl || generatedUrl}
               download={`${slug || "form"}${isDefaultProfile ? "" : `-${targetPublishKey}`}-prefilled-qr.png`}
-              style={{ minHeight: 40, borderRadius: 8, background: C.white, color: C.textSecond, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: font, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+              style={{ minHeight: 40, borderRadius: 8, background: C.white, color: C.textSecond, cursor: "pointer", fontSize: 11.5, fontWeight: 700, fontFamily: font, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
             >
               <DownloadIcon style={{ fontSize: 14, marginRight: 4 }} /> PNG
             </a>

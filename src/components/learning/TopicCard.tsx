@@ -118,7 +118,7 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
           }}
         >
           <LockOutlined sx={{ fontSize: 14 }} />
-          <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>
             {needsPassword ? "Locked" : "Unlocked"}
           </Typography>
         </Stack>
@@ -133,7 +133,7 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
         <Typography
           variant="subtitle1"
           sx={{
-            fontWeight: 900,
+            fontWeight: 700,
             lineHeight: 1.25,
             textWrap: "pretty",
             display: "-webkit-box",
@@ -163,14 +163,14 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
         <Stack direction="row" spacing={1.5} sx={{ mt: 1, alignItems: "center", opacity: 0.92 }}>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
             <PlayLessonOutlined sx={{ fontSize: 15 }} />
-            <Typography variant="caption" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
               {topic.totalMaterialCount} item{topic.totalMaterialCount === 1 ? "" : "s"}
             </Typography>
           </Stack>
           {topic.subtopicCount > 0 && (
             <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
               <LayersOutlined sx={{ fontSize: 15 }} />
-              <Typography variant="caption" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                 {topic.subtopicCount} subtopic{topic.subtopicCount === 1 ? "" : "s"}
               </Typography>
             </Stack>

@@ -111,13 +111,13 @@ function FieldRefPicker({
   return (
     <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.borderLight}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-        <span style={{ fontSize: 9, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0 }}>
+        <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0 }}>
           Field references
         </span>
         <div style={{ flex: 1 }} />
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter..."
           style={{
-            width: 80, padding: "2px 6px", fontSize: 10, border: `1px solid ${C.border}`,
+            width: 80, padding: "2px 6px", fontSize: 11, border: `1px solid ${C.border}`,
             borderRadius: 4, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
           }} />
       </div>
@@ -126,7 +126,7 @@ function FieldRefPicker({
           <button key={f.name} onClick={() => onPick(f.name)}
             title={`${f.title || f.name}`}
             style={{
-              padding: "1px 5px", fontSize: 9, fontFamily: "monospace",
+              padding: "1px 5px", fontSize: 11, fontFamily: "monospace",
               border: `1px solid ${C.border}`, borderRadius: 3,
               background: C.offWhite, color: C.purple, cursor: "pointer",
               lineHeight: 1.6, whiteSpace: "nowrap",
@@ -134,7 +134,7 @@ function FieldRefPicker({
           >{`{${f.name}}`}</button>
         ))}
         {matched.length === 0 && (
-          <span style={{ fontSize: 9, color: C.textMuted, padding: "2px 0" }}>
+          <span style={{ fontSize: 11, color: C.textMuted, padding: "2px 0" }}>
             {available.length === 0 ? "No other fields available" : "No matches"}
           </span>
         )}
@@ -329,14 +329,14 @@ function PreviewFormIdentity({
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>
         {isoStandards}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: C.textPrimary, lineHeight: 1.3, textWrap: "balance" }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, lineHeight: 1.3, textWrap: "balance" }}>
         {title}
       </div>
       {description && (
-        <div style={{ fontSize: 12, fontWeight: 500, color: C.textSecond, lineHeight: 1.5, textWrap: "pretty" }}>
+        <div style={{ fontSize: 12.5, fontWeight: 500, color: C.textSecond, lineHeight: 1.5, textWrap: "pretty" }}>
           {description}
         </div>
       )}
@@ -379,7 +379,7 @@ function ConditionEditor({ label, value, onChange, allFields }: { label: string;
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>{label}</span>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>{label}</span>
       <div style={{ flex: 1 }} />
       <Toggle checked={mode === "advanced"} onChange={v => setMode(v ? "advanced" : "simple")} label="Advanced" />
     </div>
@@ -434,7 +434,7 @@ function ValidationEditor({ field, onChange }: { field: FormBuilderField; onChan
   const removeValidator = (idx: number) => { const next = validators; next.splice(idx, 1); onChange({ validators: next }); };
   return <div>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Validators</span>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Validators</span>
       <div style={{ flex: 1 }} />
       <Select value="" onChange={v => { if (v) addValidator(v); }} options={[{ value: "", label: "+ Add validator..." }, ...VALIDATOR_TYPES.map(v => ({ value: v.value, label: v.label }))]} />
     </div>
@@ -460,7 +460,7 @@ function ValidationEditor({ field, onChange }: { field: FormBuilderField; onChan
         <PropRow label="Expression"><Input value={(v.expression as string) || ""} onChange={val => updateValidator(idx, { expression: val || undefined })} placeholder="{field} > 5" /></PropRow>
         <PropRow label="Error text"><Input value={(v.text as string) || ""} onChange={val => updateValidator(idx, { text: val || undefined })} placeholder="Error message" /></PropRow>
       </>}
-      {v.type === "email" && <div style={{ fontSize: 10, color: C.textMuted }}>Validates email format automatically</div>}
+      {v.type === "email" && <div style={{ fontSize: 11, color: C.textMuted }}>Validates email format automatically</div>}
       <PropRow label="Error text"><Input value={(v.text as string) || ""} onChange={val => updateValidator(idx, { text: val || undefined })} placeholder="Custom error message" /></PropRow>
     </div>)}
   </div>;
@@ -534,7 +534,7 @@ function RulesSection({ rules, ruleType: _ruleType, title, icon, color, allField
     <div style={{ marginBottom: 16, padding: 12, background: `${color}08`, borderRadius: 8, border: `1px solid ${color}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 14, display: "inline-flex", alignItems: "center", color }}>{icon}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color, flex: 1 }}>{title}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color, flex: 1 }}>{title}</span>
         <Toggle checked={rules.length > 0} onChange={v => { if (v && !rules.length) addRule(); else if (!v) onChange([]); }} label={rules.length > 0 ? "Active" : "Disabled"} />
       </div>
       {rules.map((rule, idx) => (
@@ -548,7 +548,7 @@ function RulesSection({ rules, ruleType: _ruleType, title, icon, color, allField
         </div>
       ))}
       {rules.length > 0 && (
-        <button onClick={addRule} style={{ fontSize: 11, color: C.purple, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+        <button onClick={addRule} style={{ fontSize: 11.5, color: C.purple, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
           + Add condition
         </button>
       )}
@@ -568,7 +568,7 @@ function ValueMappingSection({ valueRule, allFields, onChange }: {
     <div style={{ marginBottom: 16, padding: 12, background: `${C.purple}08`, borderRadius: 8, border: `1px solid ${C.purple}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <RefreshIcon style={{ fontSize: 14 }} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.purple, flex: 1 }}>Value Mapping</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: C.purple, flex: 1 }}>Value Mapping</span>
         <Toggle checked={enabled} onChange={v => { setEnabled(v); if (!v) onChange(undefined); }} label={enabled ? "Active" : "Disabled"} />
       </div>
       {enabled && (
@@ -621,15 +621,15 @@ function CrossFieldValidationSection({ validations, fieldName, allFields, onChan
     <div style={{ marginBottom: 16, padding: 12, background: `${C.red}08`, borderRadius: 8, border: `1px solid ${C.red}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 14 }}>⚖️</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.red, flex: 1 }}>Cross-field Validation</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: C.red, flex: 1 }}>Cross-field Validation</span>
         <Toggle checked={validations.length > 0} onChange={v => { if (v && !validations.length) addValidation(); else if (!v) onChange([]); }} label={validations.length > 0 ? "Active" : "Disabled"} />
       </div>
       {validations.length === 0 && priorFields.length === 0 && (
-        <div style={{ fontSize: 10, color: C.textMuted }}>Add fields before this one to create validations.</div>
+        <div style={{ fontSize: 11, color: C.textMuted }}>Add fields before this one to create validations.</div>
       )}
       {validations.map((v, idx) => (
-        <div key={v.id} style={{ marginBottom: 12, padding: 10, background: C.white, borderRadius: 6 }}>
-          <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>
+        <div key={v.id} style={{ marginBottom: 12, padding: 10, background: C.white, borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8 }}>
             <strong>{fieldName}</strong> must be:
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
@@ -648,13 +648,13 @@ function CrossFieldValidationSection({ validations, fieldName, allFields, onChan
               options={[{ value: "", label: "Select field" }, ...priorFields.map(f => ({ value: f.name, label: f.title || f.name }))]} />
           </div>
           <Input value={v.errorMessage} onChange={val => updateValidation(idx, { errorMessage: val })} placeholder="Error message" />
-          <button onClick={() => removeValidation(idx)} style={{ marginTop: 8, fontSize: 10, color: C.red, background: "none", border: "none", cursor: "pointer" }}>
+          <button onClick={() => removeValidation(idx)} style={{ marginTop: 8, fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}>
             Remove validation
           </button>
         </div>
       ))}
       {validations.length > 0 && (
-        <button onClick={addValidation} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+        <button onClick={addValidation} style={{ fontSize: 11.5, color: C.red, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
           + Add validation
         </button>
       )}
@@ -1337,7 +1337,7 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
   return <PropRow label="Default value">
     {isDateOrDateTime ? (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: C.textSecond, userSelect: "none" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12.5, color: C.textSecond, userSelect: "none" }}>
           <input
             type="checkbox"
             checked={useDynamicDefault}
@@ -1355,7 +1355,7 @@ function DefaultValueEditor({ field, onChange }: { field: FormBuilderField; onCh
           <Input type={inputType} value={currentValue} onChange={handleChange} placeholder={isDateType ? "Pick a date" : "Pick date & time"} />
         )}
         {useDynamicDefault && (
-          <div style={{ fontSize: 10, color: C.textMuted, fontStyle: "italic" }}>
+          <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>
             {isDateType
               ? "Form will auto-fill with today's date when opened."
               : "Form will auto-fill with the current date and time when opened."}
@@ -1432,8 +1432,8 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
       <PropRow label="Expression / Formula" span>
         <div>
           <Textarea value={field.expression || ""} onChange={v => onChange({ expression: v })} rows={3} placeholder="e.g. {field1} + {field2}" />
-          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
-            Use <code style={{ background: "#F3F4F6", padding: "1px 4px", borderRadius: 3, fontSize: 10 }}>{'{field_name}'}</code> syntax to reference other fields.
+          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+            Use <code style={{ background: "#F3F4F6", padding: "1px 4px", borderRadius: 3, fontSize: 11 }}>{'{field_name}'}</code> syntax to reference other fields.
             Supports <strong>+</strong>, <strong>-</strong>, <strong>*</strong>, <strong>/</strong>, parentheses, and SurveyJS expression functions.
           </div>
         </div>
@@ -1641,24 +1641,24 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Matrix Columns</span>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Matrix Columns</span>
       <div style={{ flex: 1 }} />
-      <button onClick={addCol} style={{ fontSize: 11, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>＋ Add column</button>
+      <button onClick={addCol} style={{ fontSize: 11.5, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: 8, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>＋ Add column</button>
     </div>
-    {columns.length === 0 && <div style={{ fontSize: 11, color: C.textMuted, padding: 8, background: C.offWhite, borderRadius: 6 }}>No columns defined. Add at least one.</div>}
+    {columns.length === 0 && <div style={{ fontSize: 11.5, color: C.textMuted, padding: 8, background: C.offWhite, borderRadius: 8 }}>No columns defined. Add at least one.</div>}
     {columns.map((col, i) => {
       const hasChoices = col.cellType === "dropdown" || col.cellType === "checkbox";
       return <div key={i} style={{ padding: 10, background: C.offWhite, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.purple, width: 18 }}>{i + 1}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple, width: 18 }}>{i + 1}</span>
           <div style={{ flex: 1, display: "flex", gap: 6 }}>
-            <input value={col.title} onChange={e => setColTitle(i, e.target.value)} placeholder="Label" aria-label={`Column ${i + 1} label`} style={{ flex: 1.5, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
-            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} placeholder="schemaName" aria-label={`Column ${i + 1} schema name`} style={{ flex: 1, fontSize: 11, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }} />
+            <input value={col.title} onChange={e => setColTitle(i, e.target.value)} placeholder="Label" aria-label={`Column ${i + 1} label`} style={{ flex: 1.5, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
+            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} placeholder="schemaName" aria-label={`Column ${i + 1} schema name`} style={{ flex: 1, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
           </div>
           <button onClick={() => removeCol(i)} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}><CloseIcon style={{ fontSize: 11 }} /></button>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: C.textMuted, whiteSpace: "nowrap" }}>Cell type:</span>
+          <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: "nowrap" }}>Cell type:</span>
           <Select value={col.cellType || "text"} onChange={v => updateCol(i, { cellType: v, choices: undefined, choicesSource: undefined, multiSelect: undefined })} options={[
             { value: "text", label: "Text" },
             { value: "dropdown", label: "Dropdown" },
@@ -1667,7 +1667,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             { value: "checkbox", label: "Checkbox" },
             { value: "boolean", label: "Boolean" },
           ]} />
-          {col.cellType === "dropdown" && <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: C.textMuted }}>
+          {col.cellType === "dropdown" && <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: C.textMuted }}>
             <input type="checkbox" checked={!!col.multiSelect} onChange={e => updateCol(i, { multiSelect: e.target.checked })} /> Multi-select
           </label>}
         </div>
@@ -1683,7 +1683,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             onChange={src => updateCol(i, { filteredListSource: src || undefined, choices: src?.list ? [] : (col.choices || []) })}
           />
           {!col.choicesSource?.list && !col.filteredListSource?.list && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-            {(col.choices || []).map((ch, ci) => <span key={ci} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>
+            {(col.choices || []).map((ch, ci) => <span key={ci} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>
               {ch}
               <button onClick={() => updateCol(i, { choices: (col.choices || []).filter((_, idx) => idx !== ci) })} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", padding: 0 }}><CloseIcon style={{ fontSize: 9 }} /></button>
             </span>)}
@@ -1695,7 +1695,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
                   if (val) { updateCol(i, { choices: [...(col.choices || []), val] }); (e.target as HTMLInputElement).value = ""; }
                 }
               }}
-              style={{ fontSize: 11, padding: "3px 8px", border: `1px dashed ${C.border}`, borderRadius: 12, width: 90, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}
+              style={{ fontSize: 11.5, padding: "3px 8px", border: `1px dashed ${C.border}`, borderRadius: 12, width: 90, fontFamily: "var(--pmw-font-main)" }}
             />
           </div>}
         </>}
@@ -1736,21 +1736,21 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Data Source</span>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Data Source</span>
       <div style={{ flex: 1 }} />
     </div>
     <div style={{ display: "flex", gap: 8 }}>
       <button onClick={() => { setMode("manual"); onChange(undefined); }}
-        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "manual" ? C.purple : C.border}`, background: mode === "manual" ? C.purplePale : C.white, color: mode === "manual" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>
+        style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${mode === "manual" ? C.purple : C.border}`, background: mode === "manual" ? C.purplePale : C.white, color: mode === "manual" ? C.purple : C.textMuted, fontSize: 12.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
         Manual
       </button>
       <button onClick={() => setMode("sp")}
-        style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: `1px solid ${mode === "sp" ? C.purple : C.border}`, background: mode === "sp" ? C.purplePale : C.white, color: mode === "sp" ? C.purple : C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>
+        style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${mode === "sp" ? C.purple : C.border}`, background: mode === "sp" ? C.purplePale : C.white, color: mode === "sp" ? C.purple : C.textMuted, fontSize: 12.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
         SharePoint List
       </button>
     </div>
     {mode === "sp" && <>
-      {!token && <div style={{ fontSize: 11, color: C.amber, padding: 8, background: C.amberPale, borderRadius: 6 }}>Sign in to load SharePoint lists.</div>}
+      {!token && <div style={{ fontSize: 11.5, color: C.amber, padding: 8, background: C.amberPale, borderRadius: 8 }}>Sign in to load SharePoint lists.</div>}
       {!!token && <>
         <PropRow label="List">
           <Select value={source?.list || ""} onChange={v => onChange({ list: v || undefined, column: undefined })} options={[
@@ -1764,10 +1764,10 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
             ...columns.map(c => ({ value: c.title, label: `${c.title} (${c.typeKind === 15 ? "Multi" : "Single"})` }))
           ]} />
         </PropRow>}
-        {selectedCol && selectedCol.choices.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: 8, background: C.offWhite, borderRadius: 6 }}>
-          {selectedCol.choices.map(ch => <span key={ch} style={{ fontSize: 10, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>{ch}</span>)}
+        {selectedCol && selectedCol.choices.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: 8, background: C.offWhite, borderRadius: 8 }}>
+          {selectedCol.choices.map(ch => <span key={ch} style={{ fontSize: 11, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>{ch}</span>)}
         </div>}
-        {error && <div style={{ fontSize: 11, color: C.red }}>{error}</div>}
+        {error && <div style={{ fontSize: 11.5, color: C.red }}>{error}</div>}
       </>}
     </>}
   </div>;
@@ -1813,9 +1813,9 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
 
   return <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Filtered List Source</span>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Filtered List Source</span>
       <div style={{ flex: 1 }} />
-      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: C.textSecond, userSelect: "none" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11.5, color: C.textSecond, userSelect: "none" }}>
         <input type="checkbox" checked={enabled} onChange={toggle} style={{ width: 14, height: 14, accentColor: C.purple }} />
         Enabled
       </label>
@@ -1841,28 +1841,28 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
             ...columns.map(c => ({ value: c.title, label: c.title }))
           ]} />
         </PropRow>
-        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.6, marginTop: -4 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.6, marginTop: -4 }}>
           {source?.labelColumn && source.labelColumn !== source.valueColumn
             ? <>People pick <strong>{source.labelColumn}</strong> from the list; the answer stores <strong>{source.valueColumn}</strong>. Use this when the stored answer has to be exact — an email an approval routes on — but is not what somebody would recognise.</>
             : <>The list shows the value itself. Pick a label column to show something friendlier, such as a name, while still storing the value.</>}
         </div>
       </>}
       {source?.list && source?.valueColumn && <>
-        <div style={{ fontSize: 10, fontWeight: 600, color: C.textMuted, marginBottom: 2 }}>Filter (optional)</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 2 }}>Filter (optional)</div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: C.textMuted, whiteSpace: "nowrap" }}>Where</span>
+          <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: "nowrap" }}>Where</span>
           <select value={source?.filterColumn || ""} onChange={e => onChange({ ...source, filterColumn: (e.target as HTMLSelectElement).value || undefined })}
-            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", padding: "0 4px" }}>
+            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11.5, fontFamily: "var(--pmw-font-main)", padding: "0 4px" }}>
             <option value="">Select column</option>
             {columns.map(c => <option key={c.title} value={c.title}>{c.title}</option>)}
           </select>
-          <span style={{ fontSize: 10, color: C.textMuted }}>=</span>
+          <span style={{ fontSize: 11, color: C.textMuted }}>=</span>
           <input value={source?.filterValue || ""} onChange={e => onChange({ ...source, filterValue: e.target.value })}
             placeholder="value"
-            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", padding: "0 6px" }} />
+            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11.5, fontFamily: "var(--pmw-font-main)", padding: "0 6px" }} />
         </div>
       </>}
-      {error && <div style={{ fontSize: 11, color: C.red }}>{error}</div>}
+      {error && <div style={{ fontSize: 11.5, color: C.red }}>{error}</div>}
     </div>}
   </div>;
 }
@@ -2175,15 +2175,15 @@ function JsonPreview({ json, onClose }: { json: SurveyJson; onClose: () => void 
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 38, flexShrink: 0, cursor: "pointer" }} onClick={onClose} title="Hide the JSON drawer">
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <CodeIcon style={{ fontSize: 14, color: "rgba(255,255,255,0.68)" }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.68)", textTransform: "uppercase", letterSpacing: 0 }}>SurveyJS JSON</span>
-        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{charCount} chars</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.68)", textTransform: "uppercase", letterSpacing: 0 }}>SurveyJS JSON</span>
+        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{charCount} chars</span>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 10, color: copied ? "#6EE7B7" : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>{copied ? "Copied!" : "Copy JSON"}</button>
+        <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 11, color: copied ? "#6EE7B7" : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>{copied ? "Copied!" : "Copy JSON"}</button>
         <ExpandLessIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} />
       </div>
     </div>
-    <pre style={{ height: 182, overflowY: "auto", margin: 0, padding: "0 14px 14px", fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.75)", lineHeight: 1.7 }}>{text}</pre>
+    <pre style={{ height: 182, overflowY: "auto", margin: 0, padding: "0 14px 14px", fontSize: 11.5, fontFamily: "monospace", color: "rgba(255,255,255,0.75)", lineHeight: 1.7 }}>{text}</pre>
   </div>;
 }
 
@@ -2295,11 +2295,11 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
-    <div style={{ background: C.white, borderRadius: 16, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
+    <div style={{ background: C.white, borderRadius: 12, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
       <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>Live Form Preview</div>
-          <div style={{ fontSize: 14, color: C.white, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>How users will see this form</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>Live Form Preview</div>
+          <div style={{ fontSize: 14, color: C.white, fontFamily: "var(--pmw-font-main)" }}>How users will see this form</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
@@ -2312,7 +2312,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
               <td style={{ width: bannerLogoWidth, borderRight: `1px solid ${C.border}`, background: C.offWhite, padding: device === "mobile" ? "8px 10px" : "10px 16px", verticalAlign: "middle", textAlign: "center" }}>
                 <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: bannerLogoMaxHeight, objectFit: "contain" }} />
               </td>
-              <td style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13, color: C.textPrimary }}>
+              <td style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13.5, color: C.textPrimary }}>
                 <PreviewFormIdentity title={formTitle} description={formDescription} isoStandards={isoStandards} />
               </td>
             </tr>
@@ -2326,7 +2326,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
         companyValue={previewCompany}
         onCompanyChange={setPreviewCompany}
       />
-      <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.textMuted, textAlign: "center", background: C.offWhite }}>
+      <div style={{ padding: "10px 20px", borderTop: `1px solid ${C.border}`, fontSize: 11.5, color: C.textMuted, textAlign: "center", background: C.offWhite }}>
         Preview only — nothing is saved. This is the renderer a published form uses.
       </div>
     </div>
@@ -2826,15 +2826,15 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
           <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 480, maxWidth: "90vw", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke={C.textMuted} strokeWidth="1.5"/><path d="M10.5 10.5L14 14" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
-              <input autoFocus value={commandPaletteSearch} onChange={(e) => setCommandPaletteSearch(e.target.value)} placeholder="Search field types..." style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", color: C.textPrimary }} />
-              <span style={{ fontSize: 10, color: C.textMuted, background: C.offWhite, padding: "2px 6px", borderRadius: 4 }}>ESC to close</span>
+              <input autoFocus value={commandPaletteSearch} onChange={(e) => setCommandPaletteSearch(e.target.value)} placeholder="Search field types..." style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "var(--pmw-font-main)", color: C.textPrimary }} />
+              <span style={{ fontSize: 11, color: C.textMuted, background: C.offWhite, padding: "2px 6px", borderRadius: 4 }}>ESC to close</span>
             </div>
 <div style={{ maxHeight: 320, overflowY: "auto", padding: "8px 0" }}>
               {(() => {
                 const q = commandPaletteSearch.toLowerCase();
                 const filtered = QUESTION_TYPES.filter(t => !q || t.label.toLowerCase().includes(q) || t.type.toLowerCase().includes(q) || t.description.toLowerCase().includes(q));
                 if (filtered.length === 0) {
-                  return <div style={{ padding: 24, textAlign: "center", color: C.textMuted, fontSize: 13 }}>No field types match "{commandPaletteSearch}"</div>;
+                  return <div style={{ padding: 24, textAlign: "center", color: C.textMuted, fontSize: 13.5 }}>No field types match "{commandPaletteSearch}"</div>;
                 }
                 return filtered.map((td, i) => (
                   <div key={td.type} onClick={() => { addField(td); setShowCommandPalette(false); setCommandPaletteSearch(""); }}
@@ -2843,10 +2843,10 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                     onMouseLeave={(e) => { e.currentTarget.style.background = i === 0 ? C.offWhite : "transparent"; }}>
                     <span style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: C.purple }}><FieldIcon type={td.type} size={18} /></span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>{td.label}</div>
-                      <div style={{ fontSize: 11, color: C.textMuted }}>{td.description}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: C.textPrimary }}>{td.label}</div>
+                      <div style={{ fontSize: 11.5, color: C.textMuted }}>{td.description}</div>
                     </div>
-                    <span style={{ fontSize: 10, color: C.textMuted }}>{td.group}</span>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{td.group}</span>
                   </div>
                 ));
               })()}
@@ -2864,20 +2864,20 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
             </div>
             <div style={{ padding: 16, maxHeight: 400, overflowY: "auto" }}>
               <div style={{ marginBottom: 16 }}>
-                <button onClick={() => setDataSources([...dataSources, { name: `ds${dataSources.length + 1}`, url: "", labelKey: "label", valueKey: "value" }])} style={{ fontSize: 12, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 6, cursor: "pointer" }}>+ Add Data Source</button>
+                <button onClick={() => setDataSources([...dataSources, { name: `ds${dataSources.length + 1}`, url: "", labelKey: "label", valueKey: "value" }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 8, cursor: "pointer" }}>+ Add Data Source</button>
               </div>
               {dataSources.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13 }}>No data sources. Add one to connect dropdowns to REST APIs.</div>
+                <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13.5 }}>No data sources. Add one to connect dropdowns to REST APIs.</div>
               ) : dataSources.map((ds, idx) => (
                 <div key={idx} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                    <input value={ds.name} onChange={(e) => { const n = [...dataSources]; n[idx].name = e.target.value; setDataSources(n); }} placeholder="Source name (e.g. departments)" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
-                    <button onClick={() => setDataSources(dataSources.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>Delete</button>
+                    <input value={ds.name} onChange={(e) => { const n = [...dataSources]; n[idx].name = e.target.value; setDataSources(n); }} placeholder="Source name (e.g. departments)" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                    <button onClick={() => setDataSources(dataSources.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12.5 }}>Delete</button>
                   </div>
-                  <input value={ds.url} onChange={(e) => { const n = [...dataSources]; n[idx].url = e.target.value; setDataSources(n); }} placeholder="REST API URL..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12, marginBottom: 8 }} />
+                  <input value={ds.url} onChange={(e) => { const n = [...dataSources]; n[idx].url = e.target.value; setDataSources(n); }} placeholder="REST API URL..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
                   <div style={{ display: "flex", gap: 8 }}>
-                    <input value={ds.labelKey} onChange={(e) => { const n = [...dataSources]; n[idx].labelKey = e.target.value; setDataSources(n); }} placeholder="label key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
-                    <input value={ds.valueKey} onChange={(e) => { const n = [...dataSources]; n[idx].valueKey = e.target.value; setDataSources(n); }} placeholder="value key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
+                    <input value={ds.labelKey} onChange={(e) => { const n = [...dataSources]; n[idx].labelKey = e.target.value; setDataSources(n); }} placeholder="label key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                    <input value={ds.valueKey} onChange={(e) => { const n = [...dataSources]; n[idx].valueKey = e.target.value; setDataSources(n); }} placeholder="value key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
                   </div>
                 </div>
               ))}
@@ -2897,7 +2897,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(surveyJson, null, 2)); alert("JSON copied to clipboard!"); }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 16, marginRight: 6 }} /> SurveyJS JSON</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>Copy full SurveyJS JSON to clipboard</div>
+                  <div style={{ fontSize: 11.5, color: C.textMuted }}>Copy full SurveyJS JSON to clipboard</div>
                 </button>
                 <button onClick={() => {
                   const csv = fields.map(f => `${f.name},${f.title},${f.type},${f.isRequired ? "Yes" : "No"}`).join("\n");
@@ -2906,7 +2906,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const a = document.createElement("a"); a.href = url; a.download = `${surveyJson.title || "form"}_fields.csv`; a.click();
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><TableChartIcon style={{ fontSize: 14, marginRight: 4 }} /> Excel CSV</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>Export field names and types as CSV</div>
+                  <div style={{ fontSize: 11.5, color: C.textMuted }}>Export field names and types as CSV</div>
                 </button>
                 <button onClick={() => {
                   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;}h1{color:#0078D4;}label{display:block;margin:12px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:12px;border:1px solid #ddd;border-radius:4px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>` + (f.type === "textarea" ? `<textarea rows="3" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}"></textarea>` : f.type === "select" || f.type === "dropdown" ? `<select><option>Select...</option>${(f.choices || []).map((c: unknown) => `<option>${DOMPurify.sanitize(typeof c === "string" ? String(c) : String((c as { text: string }).text))}</option>`).join("")}</select>` : `<input type="${DOMPurify.sanitize(String(f.inputType ?? "text"))}" placeholder="${DOMPurify.sanitize(String(f.placeholder ?? ""))}">`)).join("\n")}</body></html>`;
@@ -2915,7 +2915,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const a = document.createElement("a"); a.href = url; a.download = `${surveyJson.title || "form"}.html`; a.click();
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Blank HTML Form</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>Export printable blank form as HTML</div>
+                  <div style={{ fontSize: 11.5, color: C.textMuted }}>Export printable blank form as HTML</div>
                 </button>
                 <button onClick={() => {
                   // Simple PDF generation using window.print
@@ -2923,8 +2923,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const printWindow = window.open("", "_blank");
                   if (printWindow) { printWindow.document.write(printContent); printWindow.document.close(); printWindow.print(); }
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>🖨️ PDF Blank Form</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>Open printable form for PDF export</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: C.textPrimary }}>🖨️ PDF Blank Form</div>
+                  <div style={{ fontSize: 11.5, color: C.textMuted }}>Open printable form for PDF export</div>
                 </button>
                 <button onClick={() => {
                   // Create ZIP with all form assets - placeholder for JSZip implementation
@@ -2938,8 +2938,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   // Note: Real ZIP requires a library like JSZip - this is a placeholder
                   alert("ZIP export would include: form.json, fields.csv, email-templates.json, webhooks.json, README.md\n\n(Requires JSZip library for full implementation)");
                 }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>📦 Full ZIP Export</div>
-                  <div style={{ fontSize: 11, color: C.textMuted }}>Download all form assets as ZIP</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: C.textPrimary }}>📦 Full ZIP Export</div>
+                  <div style={{ fontSize: 11.5, color: C.textMuted }}>Download all form assets as ZIP</div>
                 </button>
               </div>
             </div>
@@ -2961,33 +2961,33 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 { code: "zh" as const, label: "🇨🇳 Chinese" },
                 { code: "ta" as const, label: "🇮🇳 Tamil" }
               ]).map(loc => (
-                <button key={loc.code} onClick={() => setActiveLocale(loc.code)} style={{ padding: "6px 12px", background: activeLocale === loc.code ? C.purplePale : C.offWhite, border: "none", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, color: activeLocale === loc.code ? C.purple : C.textMuted }}>
+                <button key={loc.code} onClick={() => setActiveLocale(loc.code)} style={{ padding: "6px 12px", background: activeLocale === loc.code ? C.purplePale : C.offWhite, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: activeLocale === loc.code ? C.purple : C.textMuted }}>
                   {loc.label}
                 </button>
               ))}
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
-              <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 16 }}>
+              <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 16 }}>
                 Translate each field's label, placeholder, and help text for {activeLocale === "en" ? "English" : activeLocale === "ms" ? "Malay" : activeLocale === "zh" ? "Chinese" : "Tamil"}.
               </div>
               {fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map((f) => {
                 const fieldTranslations = translations[f.name]?.[activeLocale] || {};
                 return (
                   <div key={f._id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: C.textPrimary }}>{f.title} <span style={{ color: C.textMuted, fontWeight: 400 }}>({f.name})</span></div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8, color: C.textPrimary }}>{f.title} <span style={{ color: C.textMuted, fontWeight: 400 }}>({f.name})</span></div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div>
-                        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>Label</div>
-                        <input value={fieldTranslations.label || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], label: e.target.value } } }))} placeholder={`Translate "${f.title}"`} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} />
+                        <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Label</div>
+                        <input value={fieldTranslations.label || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], label: e.target.value } } }))} placeholder={`Translate "${f.title}"`} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>Placeholder</div>
-                        <input value={fieldTranslations.placeholder || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], placeholder: e.target.value } } }))} placeholder={f.placeholder || "(no placeholder)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} />
+                        <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Placeholder</div>
+                        <input value={fieldTranslations.placeholder || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], placeholder: e.target.value } } }))} placeholder={f.placeholder || "(no placeholder)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} />
                       </div>
                     </div>
                     <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>Help Text / Description</div>
-                      <input value={fieldTranslations.description || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], description: e.target.value } } }))} placeholder={f.description || "(no description)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} />
+                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Help Text / Description</div>
+                      <input value={fieldTranslations.description || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], description: e.target.value } } }))} placeholder={f.description || "(no description)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} />
                     </div>
                   </div>
                 );
@@ -3006,26 +3006,26 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
             </div>
             <div style={{ padding: 20, maxHeight: 400, overflowY: "auto" }}>
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Colors</div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Colors</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || "#0078D4")} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Background</label><input type="color" value={String(surveySettings.backgroundColor || "#FFFFFF")} onChange={(e) => setSurveySettings({ ...surveySettings, backgroundColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || "#1A1F2B")} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Error Color</label><input type="color" value={String(surveySettings.errorColor || "#DC2626")} onChange={(e) => setSurveySettings({ ...surveySettings, errorColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 6 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || "#0078D4")} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Background</label><input type="color" value={String(surveySettings.backgroundColor || "#FFFFFF")} onChange={(e) => setSurveySettings({ ...surveySettings, backgroundColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || "#1A1F2B")} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Error Color</label><input type="color" value={String(surveySettings.errorColor || "#DC2626")} onChange={(e) => setSurveySettings({ ...surveySettings, errorColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Typography</div>
-                <div style={{ marginBottom: 8 }}><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Font Family</label><select value={String(surveySettings.fontFamily || APP_FONT_NAME)} onChange={() => setSurveySettings({ ...surveySettings, fontFamily: APP_FONT_NAME })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}><option>{APP_FONT_NAME}</option></select></div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Typography</div>
+                <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Font Family</label><select value={String(surveySettings.fontFamily || APP_FONT_NAME)} onChange={() => setSurveySettings({ ...surveySettings, fontFamily: APP_FONT_NAME })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 8 }}><option>{APP_FONT_NAME}</option></select></div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Label Position</label><select value={String(surveySettings.labelPosition || "top")} onChange={(e) => setSurveySettings({ ...surveySettings, labelPosition: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}><option value="top">Top</option><option value="left">Left</option><option value="floating">Floating</option></select></div>
-                  <div><label style={{ fontSize: 10, color: C.textSecond, display: "block", marginBottom: 4 }}>Border Radius</label><select value={String(surveySettings.borderRadius || "8px")} onChange={(e) => setSurveySettings({ ...surveySettings, borderRadius: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 6 }}><option>0px</option><option>4px</option><option>8px</option><option>12px</option></select></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Label Position</label><select value={String(surveySettings.labelPosition || "top")} onChange={(e) => setSurveySettings({ ...surveySettings, labelPosition: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 8 }}><option value="top">Top</option><option value="left">Left</option><option value="floating">Floating</option></select></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Border Radius</label><select value={String(surveySettings.borderRadius || "8px")} onChange={(e) => setSurveySettings({ ...surveySettings, borderRadius: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 8 }}><option>0px</option><option>4px</option><option>8px</option><option>12px</option></select></div>
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Form Settings</div>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12 }}><input type="checkbox" checked={!!surveySettings.showProgressBar} onChange={(e) => setSurveySettings({ ...surveySettings, showProgressBar: e.target.checked })} /> Show Progress Bar</label>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12 }}><input type="checkbox" checked={!!surveySettings.showPageTitles} onChange={(e) => setSurveySettings({ ...surveySettings, showPageTitles: e.target.checked })} /> Show Page Titles</label>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Form Settings</div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12.5 }}><input type="checkbox" checked={!!surveySettings.showProgressBar} onChange={(e) => setSurveySettings({ ...surveySettings, showProgressBar: e.target.checked })} /> Show Progress Bar</label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12.5 }}><input type="checkbox" checked={!!surveySettings.showPageTitles} onChange={(e) => setSurveySettings({ ...surveySettings, showPageTitles: e.target.checked })} /> Show Page Titles</label>
               </div>
             </div>
           </div>
@@ -3061,9 +3061,9 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
             </div>
             <div style={{ padding: 16 }}>
               {fields.map((f) => (
-                <div key={f._id} style={{ padding: 10, marginBottom: 8, background: C.offWhite, borderRadius: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>{f.title}</div>
-                  <input value={String(f.comment || "")} onChange={(e) => { const u = fields.map(fi => fi._id === f._id ? { ...fi, comment: e.target.value } : fi); pushHistory(u); }} placeholder="Comment..." style={{ width: "100%", padding: 6, fontSize: 11 }} />
+                <div key={f._id} style={{ padding: 10, marginBottom: 8, background: C.offWhite, borderRadius: 8 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>{f.title}</div>
+                  <input value={String(f.comment || "")} onChange={(e) => { const u = fields.map(fi => fi._id === f._id ? { ...fi, comment: e.target.value } : fi); pushHistory(u); }} placeholder="Comment..." style={{ width: "100%", padding: 6, fontSize: 11.5 }} />
                 </div>
               ))}
             </div>
@@ -3084,7 +3084,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   <>
                     <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
                       {["webhooks", "email", "powerautomate"].map(tab => (
-                        <button key={tab} onClick={() => setActiveIntegrationTab(tab as "webhooks" | "email" | "powerautomate")} style={{ padding: "10px 16px", background: activeIntegrationTab === tab ? C.purplePale : "transparent", border: "none", borderBottom: activeIntegrationTab === tab ? `2px solid ${C.purple}` : "2px solid transparent", cursor: "pointer", fontSize: 12, fontWeight: 600, color: activeIntegrationTab === tab ? C.purple : C.textMuted }}>
+                        <button key={tab} onClick={() => setActiveIntegrationTab(tab as "webhooks" | "email" | "powerautomate")} style={{ padding: "10px 16px", background: activeIntegrationTab === tab ? C.purplePale : "transparent", border: "none", borderBottom: activeIntegrationTab === tab ? `2px solid ${C.purple}` : "2px solid transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: activeIntegrationTab === tab ? C.purple : C.textMuted }}>
                           {tab === "webhooks" && <><PowerIcon style={{ fontSize: 14, marginRight: 4 }} /> Webhooks</>}
                           {tab === "email" && <><EmailIcon style={{ fontSize: 14, marginRight: 4 }} /> Email Templates</>}
                           {tab === "powerautomate" && <><BoltIcon style={{ fontSize: 14, marginRight: 4 }} /> Power Automate</>}
@@ -3096,24 +3096,24 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                       {activeIntegrationTab === "webhooks" && (
                         <div>
                           <div style={{ marginBottom: 12 }}>
-                            <button onClick={() => setWebhooks([...webhooks, { id: `wh_${Date.now()}`, name: `Webhook ${webhooks.length + 1}`, url: "", method: "POST", events: ["onSubmission"], enabled: true }])} style={{ fontSize: 12, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 6, cursor: "pointer" }}>+ Add Webhook</button>
+                            <button onClick={() => setWebhooks([...webhooks, { id: `wh_${Date.now()}`, name: `Webhook ${webhooks.length + 1}`, url: "", method: "POST", events: ["onSubmission"], enabled: true }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 8, cursor: "pointer" }}>+ Add Webhook</button>
                           </div>
                           {webhooks.length === 0 ? (
-                            <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13 }}>No webhooks configured. Add one to trigger external services on form events.</div>
+                            <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13.5 }}>No webhooks configured. Add one to trigger external services on form events.</div>
                           ) : webhooks.map((wh, idx) => (
                             <div key={wh.id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
                               <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                                 <input type="checkbox" checked={wh.enabled} onChange={(e) => { const u = [...webhooks]; u[idx].enabled = e.target.checked; setWebhooks(u); }} />
-                                <input value={wh.name} onChange={(e) => { const u = [...webhooks]; u[idx].name = e.target.value; setWebhooks(u); }} placeholder="Webhook name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
-                                <button onClick={() => setWebhooks(webhooks.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>Delete</button>
+                                <input value={wh.name} onChange={(e) => { const u = [...webhooks]; u[idx].name = e.target.value; setWebhooks(u); }} placeholder="Webhook name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                                <button onClick={() => setWebhooks(webhooks.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12.5 }}>Delete</button>
                               </div>
-                              <input value={wh.url} onChange={(e) => { const u = [...webhooks]; u[idx].url = e.target.value; setWebhooks(u); }} placeholder="https://..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12, marginBottom: 8 }} />
+                              <input value={wh.url} onChange={(e) => { const u = [...webhooks]; u[idx].url = e.target.value; setWebhooks(u); }} placeholder="https://..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                <label style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onSubmission")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onSubmission"] : u[idx].events.filter(e => e !== "onSubmission"); setWebhooks(u); }} /> On Submit</label>
-                                <label style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onApprovalDecision")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onApprovalDecision"] : u[idx].events.filter(e => e !== "onApprovalDecision"); setWebhooks(u); }} /> On Approval</label>
-                                <label style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onFormPublished")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onFormPublished"] : u[idx].events.filter(e => e !== "onFormPublished"); setWebhooks(u); }} /> On Publish</label>
+                                <label style={{ fontSize: 11.5, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onSubmission")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onSubmission"] : u[idx].events.filter(e => e !== "onSubmission"); setWebhooks(u); }} /> On Submit</label>
+                                <label style={{ fontSize: 11.5, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onApprovalDecision")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onApprovalDecision"] : u[idx].events.filter(e => e !== "onApprovalDecision"); setWebhooks(u); }} /> On Approval</label>
+                                <label style={{ fontSize: 11.5, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onFormPublished")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onFormPublished"] : u[idx].events.filter(e => e !== "onFormPublished"); setWebhooks(u); }} /> On Publish</label>
                               </div>
-                              <textarea value={wh.payloadTemplate || ""} onChange={(e) => { const u = [...webhooks]; u[idx].payloadTemplate = e.target.value; setWebhooks(u); }} placeholder='{"formId": "{formId}", "data": {fieldName}}' style={{ width: "100%", marginTop: 8, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11, fontFamily: "monospace", minHeight: 60 }} />
+                              <textarea value={wh.payloadTemplate || ""} onChange={(e) => { const u = [...webhooks]; u[idx].payloadTemplate = e.target.value; setWebhooks(u); }} placeholder='{"formId": "{formId}", "data": {fieldName}}' style={{ width: "100%", marginTop: 8, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5, fontFamily: "monospace", minHeight: 60 }} />
                             </div>
                           ))}
                         </div>
@@ -3122,19 +3122,19 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                       {activeIntegrationTab === "email" && (
                         <div>
                           <div style={{ marginBottom: 12 }}>
-                            <button onClick={() => setEmailTemplates([...emailTemplates, { id: `et_${Date.now()}`, name: `Template ${emailTemplates.length + 1}`, event: "submissionConfirm", to: "{email}", subject: "Form Submitted", body: "Your submission has been received.", enabled: true }])} style={{ fontSize: 12, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 6, cursor: "pointer" }}>+ Add Email Template</button>
+                            <button onClick={() => setEmailTemplates([...emailTemplates, { id: `et_${Date.now()}`, name: `Template ${emailTemplates.length + 1}`, event: "submissionConfirm", to: "{email}", subject: "Form Submitted", body: "Your submission has been received.", enabled: true }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 8, cursor: "pointer" }}>+ Add Email Template</button>
                           </div>
                           {emailTemplates.length === 0 ? (
-                            <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13 }}>No email templates. Configure notifications for submissions and approvals.</div>
+                            <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13.5 }}>No email templates. Configure notifications for submissions and approvals.</div>
                           ) : emailTemplates.map((et, idx) => (
                             <div key={et.id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
                               <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                                 <input type="checkbox" checked={et.enabled} onChange={(e) => { const u = [...emailTemplates]; u[idx].enabled = e.target.checked; setEmailTemplates(u); }} />
-                                <input value={et.name} onChange={(e) => { const u = [...emailTemplates]; u[idx].name = e.target.value; setEmailTemplates(u); }} placeholder="Template name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }} />
-                                <button onClick={() => setEmailTemplates(emailTemplates.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>Delete</button>
+                                <input value={et.name} onChange={(e) => { const u = [...emailTemplates]; u[idx].name = e.target.value; setEmailTemplates(u); }} placeholder="Template name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                                <button onClick={() => setEmailTemplates(emailTemplates.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12.5 }}>Delete</button>
                               </div>
                               <div style={{ marginBottom: 8 }}>
-                                <select value={et.event} onChange={(e) => { const u = [...emailTemplates]; u[idx].event = e.target.value; setEmailTemplates(u); }} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12 }}>
+                                <select value={et.event} onChange={(e) => { const u = [...emailTemplates]; u[idx].event = e.target.value; setEmailTemplates(u); }} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }}>
                                   <option value="submissionConfirm">Submission Confirmation</option>
                                   <option value="newSubmissionAlert">New Submission Alert</option>
                                   <option value="approvalRequest">Approval Request</option>
@@ -3142,9 +3142,9 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                                   <option value="rejectionNotice">Rejection Notice</option>
                                 </select>
                               </div>
-                              <input value={et.to} onChange={(e) => { const u = [...emailTemplates]; u[idx].to = e.target.value; setEmailTemplates(u); }} placeholder="To: {email} or admin@example.com" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12, marginBottom: 8 }} />
-                              <input value={et.subject} onChange={(e) => { const u = [...emailTemplates]; u[idx].subject = e.target.value; setEmailTemplates(u); }} placeholder="Subject" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12, marginBottom: 8 }} />
-                              <textarea value={et.body} onChange={(e) => { const u = [...emailTemplates]; u[idx].body = e.target.value; setEmailTemplates(u); }} placeholder="Email body (use {fieldName} for dynamic values)" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12, minHeight: 80 }} />
+                              <input value={et.to} onChange={(e) => { const u = [...emailTemplates]; u[idx].to = e.target.value; setEmailTemplates(u); }} placeholder="To: {email} or admin@example.com" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
+                              <input value={et.subject} onChange={(e) => { const u = [...emailTemplates]; u[idx].subject = e.target.value; setEmailTemplates(u); }} placeholder="Subject" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
+                              <textarea value={et.body} onChange={(e) => { const u = [...emailTemplates]; u[idx].body = e.target.value; setEmailTemplates(u); }} placeholder="Email body (use {fieldName} for dynamic values)" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, minHeight: 80 }} />
                             </div>
                           ))}
                         </div>
@@ -3154,11 +3154,11 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                         <div>
                           <div style={{ padding: 16, background: C.offWhite, borderRadius: 8, marginBottom: 16 }}>
                             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}><BoltIcon style={{ fontSize: 14, marginRight: 4, verticalAlign: 'middle' }} /> Power Automate HTTP Trigger</div>
-                            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 12 }}>Generate a URL to trigger a Power Automate flow when forms are submitted.</div>
-                            <input value={powerAutomateUrl} onChange={(e) => setPowerAutomateUrl(e.target.value)} placeholder="Paste your Power Automate HTTP trigger URL here" style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12, fontFamily: "monospace", marginBottom: 12 }} />
-                            <button onClick={() => { const url = powerAutomateUrl; if (url) { navigator.clipboard.writeText(url); alert("URL copied!"); } else { alert("Enter a Power Automate trigger URL first."); } }} style={{ fontSize: 11, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 4, cursor: "pointer" }}>Copy URL</button>
+                            <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 12 }}>Generate a URL to trigger a Power Automate flow when forms are submitted.</div>
+                            <input value={powerAutomateUrl} onChange={(e) => setPowerAutomateUrl(e.target.value)} placeholder="Paste your Power Automate HTTP trigger URL here" style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, fontFamily: "monospace", marginBottom: 12 }} />
+                            <button onClick={() => { const url = powerAutomateUrl; if (url) { navigator.clipboard.writeText(url); alert("URL copied!"); } else { alert("Enter a Power Automate trigger URL first."); } }} style={{ fontSize: 11.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 4, cursor: "pointer" }}>Copy URL</button>
                           </div>
-                          <div style={{ fontSize: 11, color: C.textSecond }}>
+                          <div style={{ fontSize: 11.5, color: C.textSecond }}>
                             <strong>Setup Instructions:</strong>
                             <ol style={{ marginTop: 8, paddingLeft: 20 }}>
                               <li>In Power Automate, create a new "When a HTTP request is triggered" flow</li>
@@ -3184,8 +3184,8 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <button onClick={() => setShowProvisioningPreview(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
-              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 16 }}>Preview the SharePoint columns that will be created or modified when you publish this form.</div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 16 }}>Preview the SharePoint columns that will be created or modified when you publish this form.</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead>
                   <tr style={{ borderBottom: `2px solid ${C.border}` }}>
                     <th style={{ textAlign: "left", padding: "8px 12px", background: C.offWhite }}>Field Name</th>
@@ -3205,13 +3205,13 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                         <td style={{ padding: "8px 12px" }}><strong>{f.name}</strong></td>
                         <td style={{ padding: "8px 12px" }}>{f.type}</td>
                         <td style={{ padding: "8px 12px" }}>{spTypeName} (kind {spKind})</td>
-                        <td style={{ padding: "8px 12px" }}><span style={{ background: `${statusColor}20`, color: statusColor, padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>{status.toUpperCase()}</span></td>
+                        <td style={{ padding: "8px 12px" }}><span style={{ background: `${statusColor}20`, color: statusColor, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600 }}>{status.toUpperCase()}</span></td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-              <div style={{ marginTop: 16, padding: 12, background: C.amberPale, borderRadius: 8, fontSize: 11 }}>
+              <div style={{ marginTop: 16, padding: 12, background: C.amberPale, borderRadius: 8, fontSize: 11.5 }}>
                 <strong>Note:</strong> New columns will be created in the SharePoint list. Changed columns may require data migration. Obsolete columns will be archived (not deleted).
               </div>
             </div>
@@ -3231,15 +3231,15 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <div style={{ marginBottom: 20, padding: 12, background: C.offWhite, borderRadius: 8 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <input type="checkbox" checked={scoreConfig.enabled} onChange={(e) => setScoreConfig({ ...scoreConfig, enabled: e.target.checked })} />
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>Enable Calculated Score</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>Enable Calculated Score</span>
                 </label>
                 {scoreConfig.enabled && (
                   <>
-                    <input value={scoreConfig.expression} onChange={(e) => setScoreConfig({ ...scoreConfig, expression: e.target.value })} placeholder='Expression: "{q1} * 0.3 + {q2} * 0.7"' style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11, marginBottom: 8 }} />
+                    <input value={scoreConfig.expression} onChange={(e) => setScoreConfig({ ...scoreConfig, expression: e.target.value })} placeholder='Expression: "{q1} * 0.3 + {q2} * 0.7"' style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5, marginBottom: 8 }} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                      <div><label style={{ fontSize: 10, color: C.textMuted }}>Green ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.green} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, green: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} /></div>
-                      <div><label style={{ fontSize: 10, color: C.textMuted }}>Amber ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.amber} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, amber: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} /></div>
-                      <div><label style={{ fontSize: 10, color: C.textMuted }}>Red</label><input type="number" value={scoreConfig.thresholds.red} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, red: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} /></div>
+                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Green ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.green} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, green: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
+                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Amber ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.amber} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, amber: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
+                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Red</label><input type="number" value={scoreConfig.thresholds.red} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, red: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
                     </div>
                   </>
                 )}
@@ -3248,19 +3248,19 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <div style={{ marginBottom: 20, padding: 12, background: C.offWhite, borderRadius: 8 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <input type="checkbox" checked={duplicateDetection.enabled} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, enabled: e.target.checked })} />
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>Duplicate Detection</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>Duplicate Detection</span>
                 </label>
                 {duplicateDetection.enabled && (
                   <>
                     <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>Identify duplicates by:</div>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Identify duplicates by:</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                         {fields.filter(f => f.type !== "panel" && f.type !== "html").slice(0, 6).map(f => (
-                          <label key={f._id} style={{ fontSize: 10, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={duplicateDetection.identifyBy.includes(f.name)} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, identifyBy: e.target.checked ? [...duplicateDetection.identifyBy, f.name] : duplicateDetection.identifyBy.filter(n => n !== f.name) })} /> {f.name}</label>
+                          <label key={f._id} style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={duplicateDetection.identifyBy.includes(f.name)} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, identifyBy: e.target.checked ? [...duplicateDetection.identifyBy, f.name] : duplicateDetection.identifyBy.filter(n => n !== f.name) })} /> {f.name}</label>
                         ))}
                       </div>
                     </div>
-                    <select value={duplicateDetection.action} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, action: e.target.value as "block" | "warn" | "overwrite" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }}>
+                    <select value={duplicateDetection.action} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, action: e.target.value as "block" | "warn" | "overwrite" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }}>
                       <option value="warn">Warn but allow</option>
                       <option value="block">Block submission</option>
                       <option value="overwrite">Overwrite previous</option>
@@ -3272,15 +3272,15 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <div style={{ padding: 12, background: C.offWhite, borderRadius: 8 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <input type="checkbox" checked={quotaConfig.enabled} onChange={(e) => setQuotaConfig({ ...quotaConfig, enabled: e.target.checked })} />
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>Submission Quota</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>Submission Quota</span>
                 </label>
                 {quotaConfig.enabled && (
                   <>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <div><div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>Max Total</div><input type="number" value={quotaConfig.maxSubmissions} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxSubmissions: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} /></div>
-                      <div><div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>Max Per User (0=unlimited)</div><input type="number" value={quotaConfig.maxPerUser || 0} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxPerUser: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} /></div>
+                      <div><div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Max Total</div><input type="number" value={quotaConfig.maxSubmissions} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxSubmissions: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
+                      <div><div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Max Per User (0=unlimited)</div><input type="number" value={quotaConfig.maxPerUser || 0} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxPerUser: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
                     </div>
-                    <select value={quotaConfig.actionWhenReached} onChange={(e) => setQuotaConfig({ ...quotaConfig, actionWhenReached: e.target.value as "disable" | "message" | "redirect" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }}>
+                    <select value={quotaConfig.actionWhenReached} onChange={(e) => setQuotaConfig({ ...quotaConfig, actionWhenReached: e.target.value as "disable" | "message" | "redirect" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }}>
                       <option value="message">Show message</option>
                       <option value="disable">Disable form</option>
                       <option value="redirect">Redirect to URL</option>
@@ -3301,20 +3301,20 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <button onClick={() => setShowFieldPermissions(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
-              <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 16 }}>Configure who can view/edit each field and mark sensitive fields for data masking.</div>
+              <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 16 }}>Configure who can view/edit each field and mark sensitive fields for data masking.</div>
               {fields.filter(f => f.type !== "panel" && f.type !== "html" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map((f) => {
                 const perm = fieldPermissions.find(p => p.fieldName === f.name) || { fieldName: f.name, viewRoles: ["All"], editRoles: ["All"], isSensitive: false, readOnlyAfterSubmit: false };
                 return (
                   <div key={f._id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{f.title} <span style={{ color: C.textMuted, fontWeight: 400 }}>({f.name})</span></div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>{f.title} <span style={{ color: C.textMuted, fontWeight: 400 }}>({f.name})</span></div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                       <div>
-                        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>View Roles (comma-separated)</div>
-                        <input value={perm.viewRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, viewRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin, Manager" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 10 }} />
+                        <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>View Roles (comma-separated)</div>
+                        <input value={perm.viewRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, viewRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin, Manager" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>Edit Roles (comma-separated)</div>
-                        <input value={perm.editRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, editRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 10 }} />
+                        <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Edit Roles (comma-separated)</div>
+                        <input value={perm.editRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, editRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} />
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 12 }}>

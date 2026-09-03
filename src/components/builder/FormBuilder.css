@@ -36,8 +36,8 @@ body {
   --fb-shadow: var(--fb-shadow-border);
   /* Aligned to the shell's 6/10/14 scale so the tool panels reached from the
      Tools menu share the workspace's geometry rather than their own. */
-  --fb-radius-card: 10px;
-  --fb-radius-control: 6px;
+  --fb-radius-card: 12px;
+  --fb-radius-control: 8px;
   --fb-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -62,7 +62,7 @@ body {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-thumb {
   background: #b9c3d0;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 /* Dragging state */
@@ -77,9 +77,9 @@ body {
 
 /* Pill component */
 .fb-pill {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
-  border-radius: 20px;
+  border-radius: 12px;
   padding: 3px 8px;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -99,7 +99,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 13.5px;
   position: relative;
   transition-property: background-color, color, transform;
   transition-duration: 150ms;
@@ -156,7 +156,7 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 .fb-toggle-label {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--fb-muted);
 }
 
@@ -167,8 +167,8 @@ body {
   border: 1px solid var(--fb-border);
   border-radius: var(--fb-radius-control);
   padding: 0 10px;
-  font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12.5px;
+  font-family: var(--pmw-font-main);
   color: var(--fb-ink);
   background: #ffffff;
   outline: none;
@@ -188,8 +188,8 @@ body {
   border: 1px solid var(--fb-border);
   border-radius: var(--fb-radius-control);
   padding: 8px 10px;
-  font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12.5px;
+  font-family: var(--pmw-font-main);
   color: var(--fb-ink);
   background: #ffffff;
   outline: none;
@@ -211,8 +211,8 @@ body {
   border: 1px solid var(--fb-border);
   border-radius: var(--fb-radius-control);
   padding: 0 10px;
-  font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12.5px;
+  font-family: var(--pmw-font-main);
   color: var(--fb-ink);
   background: #ffffff;
   outline: none;
@@ -225,7 +225,7 @@ body {
 
 /* Property label */
 .fb-prop-label {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--fb-muted);
   text-transform: uppercase;
@@ -260,10 +260,10 @@ body {
   min-height: 34px;
   border: none;
   border-radius: var(--fb-radius-control);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   transition-property: background-color, color, transform, box-shadow;
   transition-duration: 150ms;
   transition-timing-function: var(--fb-ease);
@@ -276,7 +276,7 @@ body {
 
 /* Current condition display */
 .fb-current-condition {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-blue);
   margin-top: 4px;
   font-family: monospace;
@@ -300,7 +300,7 @@ body {
   margin-bottom: 8px;
 }
 .fb-no-validators {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   text-align: center;
   padding: 12px;
@@ -333,8 +333,8 @@ body {
   border-radius: var(--fb-radius-control);
   padding-left: 28px;
   padding-right: 10px;
-  font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12.5px;
+  font-family: var(--pmw-font-main);
   color: var(--fb-ink);
   background: var(--fb-panel);
   outline: none;
@@ -356,12 +356,12 @@ body {
 .fb-palette-group-btn {
   min-height: 28px;
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: 12px;
   border: none;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   transition-property: background-color, color, transform, box-shadow;
   transition-duration: 150ms;
   transition-timing-function: var(--fb-ease);
@@ -404,7 +404,7 @@ body {
 .fb-palette-item:active { transform: scale(0.96); }
 .fb-palette-item:hover .fb-palette-item-icon { color: var(--fb-blue); }
 .fb-palette-item-icon {
-  font-size: 16px;
+  font-size: 15px;
   flex-shrink: 0;
   width: 26px;
   height: 26px;
@@ -419,13 +419,13 @@ body {
   min-width: 0;
 }
 .fb-palette-item-title {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--fb-ink);
   margin-bottom: 1px;
 }
 .fb-palette-item-desc {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -440,12 +440,12 @@ body {
   text-align: center;
   padding: 24px 0;
   color: var(--fb-muted);
-  font-size: 12px;
+  font-size: 12.5px;
 }
 .fb-palette-footer {
   padding: 8px 12px;
   border-top: 1px solid var(--fb-border);
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   text-align: center;
 }
@@ -532,7 +532,7 @@ body {
   color: var(--fb-blue);
 }
 .fb-field-title-text {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--fb-ink);
   text-wrap: pretty;
@@ -544,21 +544,21 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .fb-field-name {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   font-family: monospace;
 }
 .fb-field-type {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
 }
 .fb-field-default {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #059669;
 }
 .fb-field-error {
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 11.5px;
   color: #DC2626;
   display: flex;
   align-items: center;
@@ -587,7 +587,7 @@ body {
   color: var(--fb-muted);
   text-align: center;
   border: 1px dashed #b9c3d0;
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 32px;
   background: rgba(255, 255, 255, 0.72);
 }
@@ -603,14 +603,14 @@ body {
   text-wrap: balance;
 }
 .fb-canvas-empty-text {
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.7;
   text-wrap: pretty;
 }
 .fb-canvas-drop-indicator {
   height: 4px;
   background: var(--fb-blue);
-  border-radius: 3px;
+  border-radius: 5px;
   margin-bottom: 6px;
   animation: pulse 1s infinite;
 }
@@ -629,11 +629,11 @@ body {
 }
 .fb-choice-input {
   flex: 1;
-  font-size: 11px;
+  font-size: 11.5px;
 }
 /* Column captions for the label / schema-name pair below. */
 .fb-choice-head {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -644,7 +644,7 @@ body {
 .fb-rate-step {
   width: 32px;
   flex: none;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -666,9 +666,9 @@ body {
   border-radius: var(--fb-radius-control);
   background: none;
   color: var(--fb-blue);
-  font-size: 11px;
+  font-size: 11.5px;
   cursor: pointer;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -706,15 +706,15 @@ body {
   margin-bottom: 2px;
 }
 .fb-property-header-icon {
-  font-size: 16px;
+  font-size: 15px;
 }
 .fb-property-header-title-text {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--fb-blue);
 }
 .fb-property-header-subtitle {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   font-family: monospace;
 }
@@ -728,8 +728,8 @@ body {
   border: 1px solid var(--fb-border);
   border-radius: var(--fb-radius-control);
   padding: 0 8px;
-  font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 12.5px;
+  font-family: var(--pmw-font-main);
   color: var(--fb-ink);
   background: #ffffff;
   cursor: pointer;
@@ -753,7 +753,7 @@ body {
   padding: 20px;
   text-align: center;
   color: var(--fb-muted);
-  font-size: 12px;
+  font-size: 12.5px;
 }
 .fb-property-divider {
   border-top: 1px solid var(--fb-border);
@@ -761,7 +761,7 @@ body {
   margin-top: 4px;
 }
 .fb-property-divider-label {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--fb-muted);
   text-transform: uppercase;
@@ -776,7 +776,7 @@ body {
   padding-top: 12px;
 }
 .fb-property-field-hint {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   margin-top: 4px;
 }
@@ -814,7 +814,7 @@ body {
 }
 .fb-preview-modal {
   background: #ffffff;
-  border-radius: 14px;
+  border-radius: 12px;
   width: 100%;
   max-width: 760px;
   box-shadow: 0 18px 42px rgba(26,31,43,0.16);
@@ -836,7 +836,7 @@ body {
   height: 36px;
   border-radius: var(--fb-radius-control);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -857,14 +857,14 @@ body {
   padding: 16px 22px;
 }
 .fb-preview-banner-subtitle {
-  font-size: 9px;
+  font-size: 11.5px;
   color: rgba(255,255,255,0.5);
   text-transform: uppercase;
   letter-spacing: 0;
   margin-bottom: 3px;
 }
 .fb-preview-banner-title {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   font-size: 17px;
   color: #fff;
 }
@@ -881,7 +881,7 @@ body {
   background: var(--fb-paper);
   padding: 9px 14px;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   text-transform: uppercase;
   letter-spacing: 0;
@@ -890,7 +890,7 @@ body {
 .fb-preview-banner-cell-value {
   padding: 12px 16px;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--fb-ink);
 }
 .fb-preview-modal-content {
@@ -901,7 +901,7 @@ body {
 .fb-preview-modal-footer {
   padding: 10px 20px;
   border-top: 1px solid var(--fb-border);
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--fb-muted);
   text-align: center;
   background: var(--fb-paper);
@@ -909,7 +909,7 @@ body {
 
 /* Root layout */
 .fb-root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   display: flex;
   flex-direction: column;
   background: var(--fb-paper);
@@ -954,10 +954,10 @@ body {
   border-radius: var(--fb-radius-control);
   background: #ffffff;
   color: var(--fb-muted);
-  font-size: 12px;
+  font-size: 12.5px;
   cursor: pointer;
   padding: 0 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   transition-property: background-color, border-color, color, transform, box-shadow;
   transition-duration: 150ms;
   transition-timing-function: var(--fb-ease);
@@ -980,10 +980,10 @@ body {
   border-radius: var(--fb-radius-control);
   background: #ffffff;
   color: var(--fb-muted);
-  font-size: 12px;
+  font-size: 12.5px;
   cursor: pointer;
   padding: 0 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   transition-property: background-color, border-color, color, transform, box-shadow;
   transition-duration: 150ms;
   transition-timing-function: var(--fb-ease);
@@ -1012,10 +1012,10 @@ body {
   border-radius: var(--fb-radius-control);
   background: #ffffff;
   color: var(--fb-muted);
-  font-size: 12px;
+  font-size: 12.5px;
   cursor: pointer;
   padding: 0 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   transition-property: background-color, border-color, color, transform, box-shadow;
   transition-duration: 150ms;
   transition-timing-function: var(--fb-ease);
@@ -1043,11 +1043,11 @@ body {
   border: none;
   border-radius: var(--fb-radius-control);
   color: #ffffff;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   padding: 0 16px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
   box-shadow: 0 6px 14px rgba(0,120,212,0.22);
   transition-property: background-color, box-shadow, transform;
   transition-duration: 150ms;
@@ -1083,7 +1083,7 @@ body {
   border-bottom: 1px solid var(--fb-border);
 }
 .fb-panel-header-text {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--fb-muted);
   text-transform: uppercase;
@@ -1106,7 +1106,7 @@ body {
   justify-content: space-between;
 }
 .fb-canvas-panel-hint {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--fb-muted);
 }
 .fb-canvas-body {
@@ -1220,7 +1220,7 @@ body {
   border: 1px solid var(--fb-border);
   border-radius: var(--fb-radius-control);
   padding: 0 12px;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--fb-muted);
   cursor: pointer;
@@ -1230,7 +1230,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--pmw-font-main);
 }
 .fb-undo-btn:hover,
 .fb-redo-btn:hover {
@@ -1268,9 +1268,9 @@ body {
 .fb-count {
   background: var(--fb-blue);
   color: white;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 1px 5px;
-  font-size: 9px;
+  font-size: 11.5px;
 }
 
 /* Toolbar scroll container */
@@ -1449,7 +1449,7 @@ body {
 }
 
 .fb-preview-modal {
-  border-radius: 14px;
+  border-radius: 12px;
   border-color: var(--fb-border);
   box-shadow: 0 18px 42px rgba(26,31,43,0.16);
 }

@@ -64,7 +64,7 @@ export default function ListSummaryCards({
               sx={{
                 minHeight: 224,
                 backgroundColor: "rgba(255, 255, 255, 0.94)",
-                borderRadius: "8px",
+                borderRadius: "12px",
                 boxShadow: editorialShadow,
                 p: { xs: 1.75, sm: 2 },
                 pt: canUseFormBuilder ? { xs: 2.25, sm: 2.5 } : { xs: 1.75, sm: 2 },
@@ -97,7 +97,7 @@ export default function ListSummaryCards({
                   sx={{
                     width: 44,
                     height: 44,
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     backgroundColor: meta.pale,
                     display: "flex",
                     alignItems: "center",
@@ -111,7 +111,7 @@ export default function ListSummaryCards({
                   <Typography
                     variant="h6"
                     sx={{
-                      fontWeight: 800,
+                      fontWeight: 700,
                       color: editorial.ink,
                       lineHeight: 1.2,
                       mb: 0.25,
@@ -136,7 +136,7 @@ export default function ListSummaryCards({
                         right: 12,
                         width: 40,
                         height: 40,
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         backgroundColor: editorial.purpleWash,
                         color: editorial.pmwPurpleDark,
                         boxShadow: `inset 0 0 0 1px ${editorial.pmwPurpleSoft}`,
@@ -164,7 +164,7 @@ export default function ListSummaryCards({
                 <Typography
                   variant="h2"
                   sx={{
-                    fontWeight: 800,
+                    fontWeight: 700,
                     color: editorial.ink,
                     letterSpacing: 0,
                     fontSize: "2.4rem",
@@ -175,7 +175,7 @@ export default function ListSummaryCards({
                 >
                   {count}
                 </Typography>
-                <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 800 }}>
+                <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 700 }}>
                   {count === 1 ? "submission" : "submissions"}
                 </Typography>
               </Box>
@@ -202,7 +202,7 @@ export default function ListSummaryCards({
                       display: "flex",
                       alignItems: "center",
                       gap: 0.75,
-                      fontSize: "0.75rem",
+                      fontSize: "0.78rem",
                       color: editorial.success,
                       fontWeight: 700,
                     }}
@@ -215,7 +215,7 @@ export default function ListSummaryCards({
                       display: "flex",
                       alignItems: "center",
                       gap: 0.75,
-                      fontSize: "0.75rem",
+                      fontSize: "0.78rem",
                       color: editorial.warning,
                       fontWeight: 700,
                     }}
@@ -228,7 +228,7 @@ export default function ListSummaryCards({
                       display: "flex",
                       alignItems: "center",
                       gap: 0.75,
-                      fontSize: "0.75rem",
+                      fontSize: "0.78rem",
                       color: editorial.error,
                       fontWeight: 700,
                     }}
@@ -255,8 +255,8 @@ export default function ListSummaryCards({
                     justifyContent: "flex-start",
                     gap: 0.5,
                     color: editorial.pmwBlueDark,
-                    fontSize: "0.75rem",
-                    fontWeight: 800,
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
                     mt: 2,
                     transition: "transform 0.2s ease",
                     ".MuiBox-root:hover &": {

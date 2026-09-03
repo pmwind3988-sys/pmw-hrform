@@ -108,7 +108,7 @@ export default function LayerCard({
             flexShrink: 0,
             background: `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
             color: C.white,
-            fontSize: 11,
+            fontSize: 11.5,
             fontWeight: 700,
             display: "flex",
             alignItems: "center",
@@ -121,21 +121,21 @@ export default function LayerCard({
         {/* Type badge */}
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             color: badge.color,
             background: badge.bg,
-            borderRadius: 20,
+            borderRadius: 12,
             padding: "2px 8px",
             textTransform: "uppercase",
-            letterSpacing: ".04em",
+            letterSpacing: "0.03em",
           }}
         >
           {badge.label}
         </span>
 
         {/* Auth mode icon */}
-        <span style={{ fontSize: 12 }} title={auth.label}>
+        <span style={{ fontSize: 12.5 }} title={auth.label}>
           {auth.icon}
         </span>
 
@@ -143,7 +143,7 @@ export default function LayerCard({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 12,
+              fontSize: 12.5,
               fontWeight: 600,
               color: C.textPrimary,
               overflow: "hidden",
@@ -153,7 +153,7 @@ export default function LayerCard({
           >
             {layer.title || `Layer ${index + 1}`}
           </div>
-          <div style={{ fontSize: 10, color: C.textMuted }}>{assigneeLabel}</div>
+          <div style={{ fontSize: 11, color: C.textMuted }}>{assigneeLabel}</div>
         </div>
 
         {/* Move / delete buttons */}
@@ -169,7 +169,7 @@ export default function LayerCard({
               background: C.white,
               color: index === 0 || actionsDisabled ? C.textMuted : C.textSecond,
               cursor: index === 0 || actionsDisabled ? "default" : "pointer",
-              fontSize: 10,
+              fontSize: 11,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -188,7 +188,7 @@ export default function LayerCard({
               background: C.white,
               color: index === total - 1 || actionsDisabled ? C.textMuted : C.textSecond,
               cursor: index === total - 1 || actionsDisabled ? "default" : "pointer",
-              fontSize: 10,
+              fontSize: 11,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -209,7 +209,7 @@ export default function LayerCard({
               background: actionsDisabled ? C.offWhite : (hoverDel ? C.red : C.redPale),
               color: actionsDisabled ? C.textMuted : (hoverDel ? C.white : C.red),
               cursor: actionsDisabled ? "default" : "pointer",
-              fontSize: 10,
+              fontSize: 11,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -222,7 +222,7 @@ export default function LayerCard({
         {/* Expand chevron */}
         <div
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: C.textMuted,
             transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform .15s",

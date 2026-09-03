@@ -178,8 +178,8 @@ const inp = {
   border: `1px solid ${C.border}`,
   borderRadius: 8,
   padding: "0 11px",
-  fontSize: 13,
-  fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+  fontSize: 13.5,
+  fontFamily: "var(--pmw-font-main)",
   color: C.textPrimary,
   background: C.white,
   outline: "none",
@@ -221,7 +221,7 @@ function TextInput({ value, onChange, placeholder, error, disabled, ...rest }: {
         onBlur={() => setF(false)}
         {...rest}
       />
-      {error && <div style={{ fontSize: 10, color: C.red, marginTop: 3 }}>{error}</div>}
+      {error && <div style={{ fontSize: 11, color: C.red, marginTop: 3 }}>{error}</div>}
     </>
   );
 }
@@ -1662,9 +1662,9 @@ export default function AdminFormBuilder() {
     return (
       <div style={{ minHeight: "100vh", background: C.offWhite, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <style>{G}</style>
-        <div style={{ maxWidth: 460, background: C.white, border: `1px solid ${C.border}`, borderRadius: 14, padding: "32px 28px" }}>
+        <div style={{ maxWidth: 460, background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: "32px 28px" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.red, marginBottom: 8 }}>Site not available</div>
-          <p style={{ fontSize: 13, lineHeight: 1.65, color: C.textSecond, margin: "0 0 18px" }}>{siteError}</p>
+          <p style={{ fontSize: 13.5, lineHeight: 1.65, color: C.textSecond, margin: "0 0 18px" }}>{siteError}</p>
           <button type="button" className="bx-btn" onClick={() => navigate("/admin/builder")}>
             Back to {resolveSite(HOME_SITE_KEY).label}
           </button>
@@ -1859,7 +1859,7 @@ export default function AdminFormBuilder() {
                       onClick={() => { setSwitcherOpen(false); void loadForEdit(f as unknown as Record<string, unknown>); }}
                     >
                       <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: "block", fontWeight: 600, fontSize: 15, letterSpacing: "-0.006em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.Title}</span>
+                        <span style={{ display: "block", fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.Title}</span>
                         <span style={{ display: "flex", gap: 9, alignItems: "center", marginTop: 2 }}>
                           <span className="bx-meta bx-num">{f.FormID || "No form ID"}</span>
                           <span className="bx-meta">v{f.CurrentVersion || "1.0"}</span>
@@ -2349,7 +2349,7 @@ export default function AdminFormBuilder() {
                 <button
                   type="button"
                   className="bx-btn bx-btn-primary"
-                  style={{ height: 50, padding: "0 26px", fontSize: 16 }}
+                  style={{ height: 50, padding: "0 26px", fontSize: 15 }}
                   onClick={() => handlePublish(surveyJson as SurveyJson, "live")}
                   disabled={publishBlocked}
                 >
@@ -2359,7 +2359,7 @@ export default function AdminFormBuilder() {
                 <button
                   type="button"
                   className="bx-btn bx-btn-secondary"
-                  style={{ height: 50, padding: "0 22px", fontSize: 16 }}
+                  style={{ height: 50, padding: "0 22px", fontSize: 15 }}
                   onClick={() => handleSaveDraft()}
                   disabled={!meta.formTitle.trim() || !!viewingOld || !!saveBusy}
                 >
@@ -2562,7 +2562,7 @@ export default function AdminFormBuilder() {
         >
           <div style={{
             background: C.white,
-            borderRadius: 10,
+            borderRadius: 12,
             padding: "20px 22px",
             maxWidth: 440,
             width: "100%",
@@ -2573,7 +2573,7 @@ export default function AdminFormBuilder() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>Document header — {docHeaderProfile.publishLabel}</div>
-                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
                   v{docHeaderProfile.version} · {docHeaderProfile.publishKey}. Saved to this profile only; blank Document / Revision fall back to Form ID and version.
                 </div>
               </div>
@@ -2596,14 +2596,14 @@ export default function AdminFormBuilder() {
               <button
                 onClick={() => { if (!docHeaderSaving) setDocHeaderProfile(null); }}
                 disabled={docHeaderSaving}
-                style={{ minHeight: 38, borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 13, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
+                style={{ minHeight: 38, borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 13.5, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveProfileDocHeader}
                 disabled={docHeaderSaving}
-                style={{ minHeight: 38, borderRadius: 8, border: "none", background: docHeaderSaving ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`, color: docHeaderSaving ? C.textMuted : C.white, fontSize: 13, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
+                style={{ minHeight: 38, borderRadius: 8, border: "none", background: docHeaderSaving ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`, color: docHeaderSaving ? C.textMuted : C.white, fontSize: 13.5, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
               >
                 {docHeaderSaving ? "Saving…" : "Save header"}
               </button>
@@ -2629,7 +2629,7 @@ export default function AdminFormBuilder() {
         >
           <div style={{
             background: C.white,
-            borderRadius: 10,
+            borderRadius: 12,
             padding: "20px 22px",
             maxWidth: 420,
             width: "100%",
@@ -2640,7 +2640,7 @@ export default function AdminFormBuilder() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>Prefilled QR — {qrProfile.publishLabel}</div>
-                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
                   v{qrProfile.version} · {qrProfile.publishKey} · generate as many QR instances as you need for this profile.
                 </div>
               </div>
@@ -2688,7 +2688,7 @@ export default function AdminFormBuilder() {
             <div style={{ fontSize: 15, fontWeight: 600, color: C.textPrimary, marginBottom: 6 }}>
               Delete &ldquo;{deleteConfirm.Title}&rdquo;?
             </div>
-            <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
+            <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
               This will permanently remove this form and all related data: versions, audit logs, and approver records.
               <br /><br />
               <span style={{ color: C.amber }}>Submission data in the form&rsquo;s list will NOT be deleted.</span>
@@ -2704,9 +2704,9 @@ export default function AdminFormBuilder() {
                   border: `1px solid ${C.border}`,
                   background: C.white,
                   color: C.textSecond,
-                  fontSize: 13,
+                  fontSize: 13.5,
                   cursor: deleting ? "not-allowed" : "pointer",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                   opacity: deleting ? 0.6 : 1,
                 }}
               >
@@ -2722,10 +2722,10 @@ export default function AdminFormBuilder() {
                   border: "none",
                   background: `linear-gradient(135deg,${C.red},#B91C1C)`,
                   color: C.white,
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: 600,
                   cursor: deleting ? "not-allowed" : "pointer",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                   opacity: deleting ? 0.6 : 1,
                   display: "flex",
                   alignItems: "center",
@@ -2764,11 +2764,11 @@ export default function AdminFormBuilder() {
             <div style={{ fontSize: 15, fontWeight: 700, color: "#991B1B", marginBottom: 6 }}>
               Permanently delete ALL data for &ldquo;{hardDeleteConfirm.Title}&rdquo;?
             </div>
-            <div style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.6, marginBottom: 6 }}>
+            <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.6, marginBottom: 6 }}>
               This will completely destroy everything related to this form:
             </div>
             <div style={{
-              fontSize: 12,
+              fontSize: 12.5,
               color: "#991B1B",
               lineHeight: 1.7,
               marginBottom: 16,
@@ -2784,13 +2784,13 @@ export default function AdminFormBuilder() {
               <div>✦ Approver records (Approvers)</div>
               <div style={{ fontWeight: 700 }}>✦ ALL submissions in &ldquo;{hardDeleteConfirm.Title} Responses&rdquo; list</div>
             </div>
-            <div style={{ fontSize: 11, color: C.red, fontWeight: 600, marginBottom: 18 }}>
+            <div style={{ fontSize: 11.5, color: C.red, fontWeight: 600, marginBottom: 18 }}>
               <WarningIcon style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }} /> This action is irreversible. All submission data will be permanently lost.
             </div>
             {/* Naming the site here is the last chance to catch a delete aimed at
                 the wrong product. */}
             {activeSite && (
-              <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 18 }}>
+              <div style={{ fontSize: 12.5, color: C.textSecond, marginBottom: 18 }}>
                 On site <strong style={{ color: C.textPrimary }}>{activeSite.label}</strong>
               </div>
             )}
@@ -2805,9 +2805,9 @@ export default function AdminFormBuilder() {
                   border: `1px solid ${C.border}`,
                   background: C.white,
                   color: C.textSecond,
-                  fontSize: 13,
+                  fontSize: 13.5,
                   cursor: deleting ? "not-allowed" : "pointer",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                   opacity: deleting ? 0.6 : 1,
                 }}
               >
@@ -2823,10 +2823,10 @@ export default function AdminFormBuilder() {
                   border: "none",
                   background: `linear-gradient(135deg,#DC2626,#991B1B)`,
                   color: C.white,
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: 700,
                   cursor: deleting ? "not-allowed" : "pointer",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                   opacity: deleting ? 0.6 : 1,
                   display: "flex",
                   alignItems: "center",

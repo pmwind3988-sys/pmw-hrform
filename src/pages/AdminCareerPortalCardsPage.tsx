@@ -164,12 +164,12 @@ function CardsLoadingSkeleton() {
         sx={{
           p: { xs: 2, md: 2.5 },
           mb: 3,
-          borderRadius: "8px",
+          borderRadius: "12px",
           border: "1px solid rgba(17, 24, 39, 0.08)",
           boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
         }}
       >
-        <Skeleton variant="rounded" width="100%" height={40} sx={{ maxWidth: 420, borderRadius: "8px" }} />
+        <Skeleton variant="rounded" width="100%" height={40} sx={{ maxWidth: 420, borderRadius: "12px" }} />
       </Paper>
       <Grid container spacing={2}>
         {[1, 2, 3, 4, 5, 6].map((item) => (
@@ -177,7 +177,7 @@ function CardsLoadingSkeleton() {
             <Card
               sx={{
                 height: "100%",
-                borderRadius: "8px",
+                borderRadius: "12px",
                 border: "1px solid rgba(17, 24, 39, 0.08)",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
                 overflow: "hidden",
@@ -190,14 +190,14 @@ function CardsLoadingSkeleton() {
                     <Skeleton variant="text" width="72%" height={26} />
                     <Skeleton variant="text" width={76} height={18} />
                   </Box>
-                  <Skeleton variant="rounded" width={74} height={22} sx={{ borderRadius: "8px" }} />
+                  <Skeleton variant="rounded" width={74} height={22} sx={{ borderRadius: "12px" }} />
                 </Box>
                 <Skeleton variant="text" width="100%" height={20} />
                 <Skeleton variant="text" width="82%" height={20} sx={{ mb: 1.25 }} />
-                <Skeleton variant="rounded" width="70%" height={26} sx={{ borderRadius: "8px" }} />
+                <Skeleton variant="rounded" width="70%" height={26} sx={{ borderRadius: "12px" }} />
                 <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5, mt: 1.5 }}>
-                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "8px" }} />
-                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "8px" }} />
+                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "12px" }} />
+                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "12px" }} />
                 </Box>
               </CardContent>
             </Card>
@@ -242,18 +242,18 @@ function PortalCardDialog({
       onClose={saving ? () => {} : onClose}
       maxWidth="md"
       fullWidth
-      slotProps={{ paper: { sx: { borderRadius: "8px" } } }}
+      slotProps={{ paper: { sx: { borderRadius: "12px" } } }}
     >
       <DialogTitle sx={{ pb: 1 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 800, color: "#111827" }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
             {initial ? "Edit Card" : "Add Card"}
           </Typography>
           {isSystemDefault && (
             <Chip
               label="System Default"
               size="small"
-              sx={{ borderRadius: "8px", backgroundColor: "#EEF2FF", color: "#4F46E5", fontWeight: 800 }}
+              sx={{ borderRadius: "12px", backgroundColor: "#EEF2FF", color: "#4F46E5", fontWeight: 700 }}
             />
           )}
         </Stack>
@@ -269,7 +269,7 @@ function PortalCardDialog({
                 fullWidth
                 required
                 size="small"
-                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
               />
               <TextField
                 label="Description"
@@ -279,7 +279,7 @@ function PortalCardDialog({
                 multiline
                 rows={4}
                 size="small"
-                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
               />
               {!isSystemDefault && (
                 <>
@@ -290,7 +290,7 @@ function PortalCardDialog({
                     fullWidth
                     size="small"
                     placeholder="https://..."
-                    slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                    slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                   />
                   <TextField
                     label="Image source / credit"
@@ -300,7 +300,7 @@ function PortalCardDialog({
                     required={hasCustomImage}
                     size="small"
                     placeholder="PMW owned asset, photographer, license, or source URL"
-                    slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                    slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                   />
                   <Box>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.25 }}>
@@ -336,7 +336,7 @@ function PortalCardDialog({
                       onChange={(e) => updateField("colorStart", e.target.value)}
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -347,7 +347,7 @@ function PortalCardDialog({
                       onChange={(e) => updateField("colorEnd", e.target.value)}
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -358,7 +358,7 @@ function PortalCardDialog({
                       onChange={(e) => updateField("colorAccent", e.target.value)}
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
                     />
                   </Grid>
                 </Grid>
@@ -372,7 +372,7 @@ function PortalCardDialog({
                     onChange={(e) => updateField("sortOrder", Number(e.target.value))}
                     fullWidth
                     size="small"
-                    slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                    slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
@@ -382,7 +382,7 @@ function PortalCardDialog({
                       value={form.status}
                       label="Status"
                       onChange={(e) => updateField("status", e.target.value as CareerPortalCard["status"])}
-                      sx={{ borderRadius: "8px" }}
+                      sx={{ borderRadius: "12px" }}
                     >
                       <MenuItem value="Active">Active</MenuItem>
                       <MenuItem value="Hidden" disabled={mustStayActive}>Hidden</MenuItem>
@@ -391,7 +391,7 @@ function PortalCardDialog({
                 </Grid>
               </Grid>
               {mustStayActive && (
-                <Alert severity="info" sx={{ borderRadius: "8px" }}>
+                <Alert severity="info" sx={{ borderRadius: "12px" }}>
                   At least one carousel card must stay active.
                 </Alert>
               )}
@@ -402,7 +402,7 @@ function PortalCardDialog({
             <Stack spacing={2}>
               <Box
                 sx={{
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   overflow: "hidden",
                   border: "1px solid #E5E7EB",
                   minHeight: 190,
@@ -424,7 +424,7 @@ function PortalCardDialog({
                     {form.imageSource.trim() && (
                       <Typography
                         variant="caption"
-                        sx={{ position: "absolute", right: 10, bottom: 8, color: "rgba(255,255,255,0.76)", maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.62rem" }}
+                        sx={{ position: "absolute", right: 10, bottom: 8, color: "rgba(255,255,255,0.76)", maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.72rem" }}
                       >
                         {form.imageSource.trim()}
                       </Typography>
@@ -456,7 +456,7 @@ function PortalCardDialog({
                     const targetType = e.target.value as CareerPortalCard["targetType"];
                     setForm((prev) => ({ ...prev, targetType, targetValue: "" }));
                   }}
-                  sx={{ borderRadius: "8px" }}
+                  sx={{ borderRadius: "12px" }}
                 >
                   <MenuItem value="none">No target</MenuItem>
                   <MenuItem value="job">Job item</MenuItem>
@@ -471,7 +471,7 @@ function PortalCardDialog({
                     value={form.targetValue}
                     label="Target Job"
                     onChange={(e) => updateField("targetValue", e.target.value)}
-                    sx={{ borderRadius: "8px" }}
+                    sx={{ borderRadius: "12px" }}
                   >
                     {jobs.map((job) => (
                       <MenuItem key={job.id} value={job.id}>
@@ -491,7 +491,7 @@ function PortalCardDialog({
                   required
                   size="small"
                   placeholder="https://... or /career-portal"
-                  slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                  slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                 />
               )}
             </Stack>
@@ -499,7 +499,7 @@ function PortalCardDialog({
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button onClick={onClose} disabled={saving} sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}>
+        <Button onClick={onClose} disabled={saving} sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}>
           Cancel
         </Button>
         <Button
@@ -517,7 +517,7 @@ function PortalCardDialog({
             colorEnd: safeColor(form.colorEnd, DEFAULT_CARD_COLORS.end),
             colorAccent: safeColor(form.colorAccent, DEFAULT_CARD_COLORS.accent),
           })}
-          sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4", fontWeight: 700 }}
+          sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4", fontWeight: 700 }}
         >
           {saving ? "Saving..." : initial ? "Update Card" : "Add Card"}
         </Button>
@@ -710,7 +710,7 @@ export default function AdminCareerPortalCardsPage() {
             sx={{
               ...careerSearchFieldSx,
               width: { xs: "100%", md: 420 },
-              "& .MuiOutlinedInput-root": { borderRadius: "10px", backgroundColor: editorial.white },
+              "& .MuiOutlinedInput-root": { borderRadius: "12px", backgroundColor: editorial.white },
             }}
             slotProps={{
               input: {
@@ -737,7 +737,7 @@ export default function AdminCareerPortalCardsPage() {
             title="No cards"
             description="Add the first carousel item for the careers page."
             action={
-              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ ...careerActionButtonSx, borderRadius: "8px", backgroundColor: editorial.pmwBlue }}>
+              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ ...careerActionButtonSx, borderRadius: "12px", backgroundColor: editorial.pmwBlue }}>
                 Add Card
               </Button>
             }
@@ -802,7 +802,7 @@ export default function AdminCareerPortalCardsPage() {
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
-                              fontSize: "0.62rem",
+                              fontSize: "0.72rem",
                             }}
                           >
                             {card.imageSource}
@@ -814,7 +814,7 @@ export default function AdminCareerPortalCardsPage() {
                   <CardContent sx={{ p: 2 }}>
                     <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
                       <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: editorial.ink, lineHeight: 1.25 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: editorial.ink, lineHeight: 1.25 }}>
                           {card.title}
                         </Typography>
                         <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
@@ -827,9 +827,9 @@ export default function AdminCareerPortalCardsPage() {
                             label="System Default"
                             size="small"
                             sx={{
-                              borderRadius: "8px",
-                              fontSize: "0.68rem",
-                              fontWeight: 800,
+                              borderRadius: "12px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
                               backgroundColor: editorial.purpleWash,
                               color: editorial.pmwPurpleDark,
                             }}
@@ -839,9 +839,9 @@ export default function AdminCareerPortalCardsPage() {
                           label={card.status}
                           size="small"
                           sx={{
-                            borderRadius: "8px",
-                            fontSize: "0.68rem",
-                            fontWeight: 800,
+                            borderRadius: "12px",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
                             backgroundColor: card.status === "Active" ? "rgba(16, 124, 16, 0.12)" : "rgba(95, 100, 109, 0.12)",
                             color: card.status === "Active" ? editorial.success : editorial.muted,
                           }}
@@ -868,7 +868,7 @@ export default function AdminCareerPortalCardsPage() {
                       size="small"
                       sx={{
                         maxWidth: "100%",
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         backgroundColor: card.targetType === "none" ? "rgba(95, 100, 109, 0.12)" : editorial.blueWash,
                         color: card.targetType === "none" ? editorial.muted : editorial.pmwBlueDark,
                         fontWeight: 700,
@@ -923,16 +923,16 @@ export default function AdminCareerPortalCardsPage() {
         onClose={() => deletingId ? undefined : setDeleteConfirm(null)}
         maxWidth="xs"
         fullWidth
-        slotProps={{ paper: { sx: { borderRadius: "8px" } } }}
+        slotProps={{ paper: { sx: { borderRadius: "12px" } } }}
       >
-        <DialogTitle sx={{ fontWeight: 800 }}>Delete card?</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Delete card?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: "#4B5563" }}>
             This removes "{deleteConfirm?.title}" from the careers page carousel.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDeleteConfirm(null)} disabled={Boolean(deletingId)} sx={{ borderRadius: "8px", textTransform: "none" }}>
+          <Button onClick={() => setDeleteConfirm(null)} disabled={Boolean(deletingId)} sx={{ borderRadius: "12px", textTransform: "none" }}>
             Cancel
           </Button>
           <Button
@@ -940,7 +940,7 @@ export default function AdminCareerPortalCardsPage() {
             color="error"
             onClick={() => void handleDelete()}
             disabled={Boolean(deletingId)}
-            sx={{ borderRadius: "8px", textTransform: "none" }}
+            sx={{ borderRadius: "12px", textTransform: "none" }}
           >
             {deletingId ? "Deleting..." : "Delete"}
           </Button>
@@ -956,7 +956,7 @@ export default function AdminCareerPortalCardsPage() {
         <Alert
           severity={snackbar?.severity || "success"}
           onClose={() => setSnackbar(null)}
-          sx={{ borderRadius: "8px", boxShadow: "0 8px 24px rgba(17,24,39,0.16)", fontWeight: 700 }}
+          sx={{ borderRadius: "12px", boxShadow: "0 8px 24px rgba(17,24,39,0.16)", fontWeight: 700 }}
         >
           {snackbar?.message}
         </Alert>

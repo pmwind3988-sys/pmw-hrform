@@ -4,8 +4,9 @@
  * THESIS: the builder is a controlled document, not a dashboard. It refuses the
  *   five-column workspace and shows two panes at most, with the form itself —
  *   not a stack of summary cards — in the middle.
- * OWN-WORLD: the grammar of official form systems. One family — Public Sans, the
- *   USWDS face — at four weights; softened geometry (6/10/14px); legible field
+ * OWN-WORLD: the grammar of official form systems. One family — Inter, the face
+ *   SI and the rest of this app share — at four weights; SI's geometry (8px
+ *   inner, 12px containers) and its single card elevation; legible field
  *   borders that state where a control begins; a paper-grey desk; PMW blue
  *   reserved for state and action. A dark navy rail carries the four modes.
  *
@@ -46,9 +47,9 @@ export const B = {
   /** Interactive-control edges. Separators may be faint; these may not. */
   lineField: "#8A929E",
 
-  radiusSm: "6px",
-  radiusMd: "10px",
-  radiusLg: "14px",
+  radiusSm: "8px",
+  radiusMd: "12px",
+  radiusLg: "12px",
   radiusPill: "999px",
 
   danger: "#C62828",
@@ -57,14 +58,14 @@ export const B = {
   warnPale: "#FFF4CE",
   ok: "#107C10",
 
-  shadowSm: "0 1px 2px rgba(26,31,43,0.06), 0 1px 3px rgba(26,31,43,0.09)",
-  shadowMd: "0 2px 4px rgba(26,31,43,0.06), 0 6px 16px rgba(26,31,43,0.10)",
-  shadowLg: "0 4px 10px rgba(26,31,43,0.08), 0 18px 44px rgba(26,31,43,0.16)",
+  shadowSm: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)",
+  shadowMd: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)",
+  shadowLg: "0 4px 8px rgba(15, 23, 42, 0.06), 0 12px 32px rgba(15, 23, 42, 0.1)",
 
   /** One family; hierarchy is size, weight, colour and space — not width. */
-  fontBody: "'Public Sans','Segoe UI',var(--pmw-font-main)",
+  fontBody: "var(--pmw-font-main)",
   /** Retained so existing call sites keep compiling; same stack by design. */
-  fontHeading: "'Public Sans','Segoe UI',var(--pmw-font-main)",
+  fontHeading: "var(--pmw-font-main)",
 } as const;
 
 export type BuilderMode = "build" | "flow" | "settings" | "publish";

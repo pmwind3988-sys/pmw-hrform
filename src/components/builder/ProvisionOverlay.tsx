@@ -52,7 +52,7 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
       }}>
         <div style={{
           background: C.purpleDark,
-          borderRadius: 16,
+          borderRadius: 12,
           width: "100%",
           maxWidth: 580,
           border: "1px solid rgba(167,139,250,.3)",
@@ -61,14 +61,14 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
           animation: "fadeUp .2s ease",
         }}>
           <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(167,139,250,.2)" }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.purpleMid, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.purpleMid, display: "flex", alignItems: "center", gap: 6 }}>
               {success ? <><CheckIcon style={{ fontSize: 16 }} /> Published</> : error ? <><CloseIcon style={{ fontSize: 16 }} /> Could not publish</> : <><WarningAmberIcon style={{ fontSize: 16 }} /> Publishing...</>}
             </div>
           </div>
           <div style={{
             padding: "12px 20px",
             fontFamily: "monospace",
-            fontSize: 11,
+            fontSize: 11.5,
             color: "rgba(255,255,255,.8)",
             lineHeight: 2,
             maxHeight: 360,
@@ -109,10 +109,10 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
                   background: success ? C.green : C.purple,
                   color: C.white,
                   border: "none",
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: 500,
                   cursor: "pointer",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                 }}
               >
                 {success ? "Done" : "Close"}

@@ -45,14 +45,14 @@ const fieldStyle = {
   background: C.white,
   color: C.textPrimary,
   font: "inherit",
-  fontSize: 12,
+  fontSize: 12.5,
 } as const;
 
 const labelStyle = {
   display: "block",
   marginBottom: 4,
   color: C.textSecond,
-  fontSize: 11,
+  fontSize: 11.5,
   fontWeight: 700,
 } as const;
 
@@ -115,7 +115,7 @@ export default function WorkflowAssignmentEditor({
     <details style={{
       marginTop: 12,
       border: `1px solid ${C.border}`,
-      borderRadius: 10,
+      borderRadius: 12,
       background: C.white,
     }}>
       <summary style={{
@@ -125,7 +125,7 @@ export default function WorkflowAssignmentEditor({
         padding: "11px 12px",
         cursor: "pointer",
         color: C.textPrimary,
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: 750,
       }}>
         <ManageAccountsIcon style={{ color: C.purpleAccent, fontSize: 19 }} />
@@ -133,7 +133,7 @@ export default function WorkflowAssignmentEditor({
       </summary>
 
       <div style={{ padding: "2px 12px 12px", borderTop: `1px solid ${C.borderLight}` }}>
-        <p style={{ margin: "10px 0", color: C.textSecond, fontSize: 11, lineHeight: 1.55 }}>
+        <p style={{ margin: "10px 0", color: C.textSecond, fontSize: 11.5, lineHeight: 1.55 }}>
           Changes apply only to this submission. Completed layers cannot be edited.
         </p>
 
@@ -223,7 +223,7 @@ export default function WorkflowAssignmentEditor({
             borderRadius: 7,
             background: C.offWhite,
             color: C.textSecond,
-            fontSize: 10,
+            fontSize: 11,
             lineHeight: 1.5,
           }}>
             Last changed by {assignment.updatedBy} on {new Date(assignment.updatedAt).toLocaleString("en-MY")}.
@@ -253,7 +253,7 @@ export default function WorkflowAssignmentEditor({
               color: C.white,
               cursor: saving || !email.trim() || !reason.trim() ? "not-allowed" : "pointer",
               opacity: saving || !email.trim() || !reason.trim() ? 0.55 : 1,
-              fontSize: 11,
+              fontSize: 11.5,
               fontWeight: 750,
             }}
           >

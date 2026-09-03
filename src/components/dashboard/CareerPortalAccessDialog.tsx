@@ -93,7 +93,7 @@ export default function CareerPortalAccessDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, pb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0 }}>
           <VisibilityOutlined sx={{ color: editorial.pmwBlueDark }} />
@@ -146,7 +146,7 @@ export default function CareerPortalAccessDialog({
                     alignItems: "flex-start",
                     gap: 1.5,
                     p: 2,
-                    borderRadius: "10px",
+                    borderRadius: "12px",
                     cursor: "pointer",
                     border: selected ? `1px solid ${editorial.pmwBlue}` : editorialHairline,
                     backgroundColor: selected ? editorial.blueWash : editorial.white,
@@ -168,7 +168,7 @@ export default function CareerPortalAccessDialog({
                   <Box sx={{ minWidth: 0 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                       <OptionIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />
-                      <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink }}>
                         {option.label}
                       </Typography>
                     </Box>
@@ -205,7 +205,7 @@ export default function CareerPortalAccessDialog({
           variant="contained"
           disabled={loading || saving || !isDirty}
           startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}
-          sx={{ textTransform: "none", fontWeight: 800 }}
+          sx={{ textTransform: "none", fontWeight: 700 }}
         >
           {saving ? "Saving..." : "Save"}
         </Button>

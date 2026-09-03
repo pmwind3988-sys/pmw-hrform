@@ -18,7 +18,7 @@ type Props = {
  */
 export default function PdpaLanguageToggle({ locale, onChange, mutedColor, color }: Props) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.75rem" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.78rem" }}>
       {PDPA_LOCALES.map((option, index) => {
         const active = option === locale;
         return (
@@ -41,7 +41,7 @@ export default function PdpaLanguageToggle({ locale, onChange, mutedColor, color
                 padding: 0,
                 cursor: "pointer",
                 font: "inherit",
-                fontSize: "0.75rem",
+                fontSize: "0.78rem",
                 fontWeight: active ? 800 : 500,
                 color: active ? color : mutedColor,
                 textDecoration: active ? "underline" : "none",

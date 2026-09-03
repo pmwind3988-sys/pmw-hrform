@@ -71,9 +71,9 @@ interface ToolbarProps {
 }
 
 const SECTION_LABEL_SX = {
-  fontWeight: 800,
+  fontWeight: 700,
   fontSize: "0.72rem",
-  letterSpacing: "0.08em",
+  letterSpacing: "0.03em",
   textTransform: "uppercase",
   color: editorial.softMuted,
 } as const;
@@ -102,7 +102,7 @@ export default function Toolbar({
   const searchFieldSx = {
     minWidth: 0,
     "& .MuiOutlinedInput-root": {
-      borderRadius: "10px",
+      borderRadius: "12px",
       backgroundColor: editorial.paperSoft,
       transition: "background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
       "&:hover": {
@@ -115,7 +115,7 @@ export default function Toolbar({
     },
   } as const;
   const selectSx = {
-    borderRadius: "10px",
+    borderRadius: "12px",
     backgroundColor: editorial.paperSoft,
     "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
       borderColor: editorial.pmwBlue,
@@ -256,7 +256,7 @@ export default function Toolbar({
               height: 40,
               minWidth: { xs: 116, sm: 178 },
               px: { xs: 1.25, sm: 2 },
-              borderRadius: "10px",
+              borderRadius: "12px",
               whiteSpace: "nowrap",
               ...(advancedOpen
                 ? {
@@ -392,7 +392,7 @@ export default function Toolbar({
               </Typography>
 
               {!filters.formType ? (
-                <Typography sx={{ mt: 1, fontSize: "0.85rem", color: editorial.muted }}>
+                <Typography sx={{ mt: 1, fontSize: "0.845rem", color: editorial.muted }}>
                   Pick a form above to narrow to a profile and version, then filter by the questions that version
                   asked — dates, titles, times, numbers, ratings, choices.
                 </Typography>
@@ -465,7 +465,7 @@ export default function Toolbar({
                   />
 
                   {!fieldCatalog.length && (
-                    <Typography sx={{ fontSize: "0.8rem", color: editorial.muted }}>
+                    <Typography sx={{ fontSize: "0.78rem", color: editorial.muted }}>
                       No filterable questions found for this selection yet — its published schema loads with the
                       submissions.
                     </Typography>
@@ -496,8 +496,8 @@ export default function Toolbar({
                       backgroundColor: editorial.purpleWash,
                       color: editorial.pmwPurpleDark,
                       border: `1px solid ${editorial.pmwPurpleSoft}`,
-                      fontWeight: 800,
-                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      fontSize: "0.78rem",
                       height: 32,
                       "& .MuiChip-icon": {
                         color: editorial.pmwPurpleDark,
@@ -515,12 +515,12 @@ export default function Toolbar({
                     onClick={onOpenExport}
                     sx={{
                       minHeight: 40,
-                      borderRadius: "10px",
+                      borderRadius: "12px",
                       px: 1.5,
                       color: editorial.pmwBlueDark,
                       borderColor: editorial.pmwBlueSoft,
                       backgroundColor: editorial.white,
-                      fontWeight: 800,
+                      fontWeight: 700,
                       textTransform: "none",
                       transition: "background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease",
                       "&:hover": {
@@ -550,8 +550,8 @@ export default function Toolbar({
                 backgroundColor: editorial.blueWash,
                 color: editorial.pmwBlueDark,
                 border: `1px solid ${editorial.pmwBlueSoft}`,
-                fontWeight: 800,
-                fontSize: "0.75rem",
+                fontWeight: 700,
+                fontSize: "0.78rem",
                 height: 32,
                 fontVariantNumeric: "tabular-nums",
               }}
@@ -569,7 +569,7 @@ export default function Toolbar({
                   color: editorial.ink,
                   border: `1px solid ${editorial.border}`,
                   fontWeight: 700,
-                  fontSize: "0.75rem",
+                  fontSize: "0.78rem",
                   height: 32,
                 }}
               />
@@ -582,7 +582,7 @@ export default function Toolbar({
               onClick={clearFilters}
               sx={{
                 color: editorial.pmwBlueDark,
-                fontWeight: 800,
+                fontWeight: 700,
                 textTransform: "none",
                 minHeight: 32,
                 px: 1,

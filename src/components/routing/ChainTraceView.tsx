@@ -52,10 +52,10 @@ export default function ChainTraceView({ trace, startLabel = "Submits" }: ChainT
               size="small"
               label={(
                 <Stack sx={{ py: 0.25 }}>
-                  <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: editorial.ink, lineHeight: 1.3 }}>
+                  <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, color: editorial.ink, lineHeight: 1.3 }}>
                     {step.name || step.email}
                   </Typography>
-                  <Typography sx={{ fontSize: "0.65rem", color: editorial.softMuted, lineHeight: 1.3 }}>
+                  <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted, lineHeight: 1.3 }}>
                     {index === 0 ? startLabel : "Approves"}
                     {[step.position, step.department].filter(Boolean).length > 0
                       ? ` · ${[step.position, step.department].filter(Boolean).join(", ")}`
@@ -65,7 +65,7 @@ export default function ChainTraceView({ trace, startLabel = "Submits" }: ChainT
               )}
               sx={{
                 height: "auto",
-                borderRadius: "10px",
+                borderRadius: "12px",
                 px: 0.5,
                 border: `1px solid ${index === 0 ? editorial.pmwBlueSoft : editorial.border}`,
                 backgroundColor: index === 0 ? editorial.blueWash : editorial.white,
@@ -81,13 +81,13 @@ export default function ChainTraceView({ trace, startLabel = "Submits" }: ChainT
           alignItems: "flex-start",
           gap: 1,
           p: 1.25,
-          borderRadius: "10px",
+          borderRadius: "12px",
           backgroundColor: tone.background,
           color: tone.color,
         }}
       >
         {tone.icon}
-        <Typography sx={{ fontSize: "0.8rem", color: tone.color, fontWeight: 600 }}>
+        <Typography sx={{ fontSize: "0.78rem", color: tone.color, fontWeight: 600 }}>
           {trace.summary}
         </Typography>
       </Stack>

@@ -130,7 +130,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
             width: "100%",
             maxWidth: isMobile ? "100%" : 560,
             mx: "auto",
-            borderRadius: "18px",
+            borderRadius: "12px",
             boxShadow: editorialShadow,
             border: `1px solid ${editorial.ink}`,
             backgroundColor: "rgba(255, 255, 255, 0.88)",
@@ -168,7 +168,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                 alignSelf: "flex-start",
                 mb: 3,
                 color: editorial.muted,
-                fontSize: "0.85rem",
+                fontSize: "0.845rem",
                 fontWeight: 500,
                 textTransform: "none",
                 "&:hover": {
@@ -244,8 +244,8 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                 borderRadius: 0,
                 py: 1.75,
                 px: 4,
-                fontSize: "1rem",
-                fontWeight: 800,
+                fontSize: "0.9375rem",
+                fontWeight: 700,
                 boxShadow: "none",
                 transition: "background-color 0.2s ease, box-shadow 0.2s ease",
                 "&:hover": {
@@ -260,10 +260,10 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
             <Typography
               variant="caption"
               align="center"
-              sx={{ mt: 3, color: editorial.muted, fontSize: "0.75rem", lineHeight: 1.6, maxWidth: 360 }}
+              sx={{ mt: 3, color: editorial.muted, fontSize: "0.78rem", lineHeight: 1.6, maxWidth: 360 }}
             >
               Public form submissions may contain personal data.{" "}
-              <Box component="a" href="/privacy" sx={{ color: editorial.ink, fontWeight: 800, textDecoration: "underline" }}>
+              <Box component="a" href="/privacy" sx={{ color: editorial.ink, fontWeight: 700, textDecoration: "underline" }}>
                 Privacy Notice
               </Box>
             </Typography>

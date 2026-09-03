@@ -171,7 +171,7 @@ function StepBadge({ status }: { status: TestRunStepStatus }) {
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: 18, height: 18, borderRadius: "50%", background: style.bg, color: style.fg,
-        fontSize: 11, fontWeight: 700, flex: "none",
+        fontSize: 11.5, fontWeight: 700, flex: "none",
       }}
     >
       {status === "pending" ? <Spinner size={10} color={style.fg} /> : style.symbol}
@@ -348,24 +348,24 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
       <style>{"@keyframes bx-spin { to { transform: rotate(360deg); } }"}</style>
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: C.white, borderRadius: 10, width: 640, maxWidth: "100%", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
+        style={{ background: C.white, borderRadius: 12, width: 640, maxWidth: "100%", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px 12px" }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>Test runs</div>
-            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Rehearsals of "{form.Title}", newest first.</div>
+            <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>Rehearsals of "{form.Title}", newest first.</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={clearAll}
               disabled={busyAll || rows.length === 0}
-              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.red, fontSize: 12, fontWeight: 600, cursor: busyAll || rows.length === 0 ? "default" : "pointer", opacity: busyAll || rows.length === 0 ? 0.5 : 1 }}
+              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.red, fontSize: 12.5, fontWeight: 600, cursor: busyAll || rows.length === 0 ? "default" : "pointer", opacity: busyAll || rows.length === 0 ? 0.5 : 1 }}
             >
               {busyAll ? "Clearing…" : "Clear all test runs"}
             </button>
             <button
               onClick={onClose}
-              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.textSecond, fontSize: 12, cursor: "pointer" }}
+              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}
             >
               Close
             </button>
@@ -373,21 +373,21 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
         </div>
 
         {error && (
-          <div style={{ margin: "0 22px 10px", fontSize: 12, color: C.red, background: C.redPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
+          <div style={{ margin: "0 22px 10px", fontSize: 12.5, color: C.red, background: C.redPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
             {error}
           </div>
         )}
 
         {!loading && rowsTruncated && (
-          <div style={{ margin: "0 22px 10px", fontSize: 12, color: C.amber, background: C.amberPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
+          <div style={{ margin: "0 22px 10px", fontSize: 12.5, color: C.amber, background: C.amberPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
             Showing the first {rows.length} test runs — this form has more than the panel could list. "Clear all test runs" still deletes every one of them.
           </div>
         )}
 
         <div style={{ overflowY: "auto", padding: "0 22px 20px", flex: 1 }}>
-          {loading && <div style={{ fontSize: 12, color: C.textMuted, padding: "16px 0" }}>Loading test runs…</div>}
+          {loading && <div style={{ fontSize: 12.5, color: C.textMuted, padding: "16px 0" }}>Loading test runs…</div>}
           {!loading && rows.length === 0 && (
-            <div style={{ fontSize: 12, color: C.textMuted, padding: "16px 0" }}>No test runs yet. Start one from "Test workflow" above.</div>
+            <div style={{ fontSize: 12.5, color: C.textMuted, padding: "16px 0" }}>No test runs yet. Start one from "Test workflow" above.</div>
           )}
 
           {rows.map((row) => {
@@ -413,19 +413,19 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
                   onClick={() => setExpandedId(expanded ? null : row.id)}
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", cursor: "pointer" }}
                 >
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: outcomeStyle.bg, color: outcomeStyle.fg, flex: "none" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, background: outcomeStyle.bg, color: outcomeStyle.fg, flex: "none" }}>
                     {outcomeStyle.text}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>{reference}</div>
-                    <div style={{ fontSize: 11, color: C.textMuted }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: C.textPrimary }}>{reference}</div>
+                    <div style={{ fontSize: 11.5, color: C.textMuted }}>
                       {submittedAt ? new Date(submittedAt).toLocaleString() : "Unknown time"} · {stage}
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteOne(row.id); }}
                     disabled={busyRowId === row.id}
-                    style={{ height: 26, padding: "0 10px", border: `1px solid ${C.border}`, borderRadius: 6, background: C.white, color: C.red, fontSize: 11, fontWeight: 600, cursor: busyRowId === row.id ? "default" : "pointer", opacity: busyRowId === row.id ? 0.5 : 1 }}
+                    style={{ height: 26, padding: "0 10px", border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.red, fontSize: 11.5, fontWeight: 600, cursor: busyRowId === row.id ? "default" : "pointer", opacity: busyRowId === row.id ? 0.5 : 1 }}
                   >
                     {busyRowId === row.id ? "Deleting…" : "Delete"}
                   </button>
@@ -437,8 +437,8 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
                       <div key={step.step} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 0" }}>
                         <StepBadge status={step.status} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, color: C.textPrimary, fontWeight: 500 }}>{step.label}</div>
-                          {step.detail && <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{step.detail}</div>}
+                          <div style={{ fontSize: 12.5, color: C.textPrimary, fontWeight: 500 }}>{step.label}</div>
+                          {step.detail && <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>{step.detail}</div>}
                         </div>
                       </div>
                     ))}
@@ -449,8 +449,8 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
                         disabled={!runFinished || pdfBusyId === row.id}
                         title={runFinished ? "Render this run's submission PDF" : "Finish the workflow before rendering the PDF"}
                         style={{
-                          height: 28, padding: "0 12px", border: "none", borderRadius: 6,
-                          background: runFinished ? C.purple : C.border, color: C.white, fontSize: 11, fontWeight: 600,
+                          height: 28, padding: "0 12px", border: "none", borderRadius: 8,
+                          background: runFinished ? C.purple : C.border, color: C.white, fontSize: 11.5, fontWeight: 600,
                           cursor: !runFinished || pdfBusyId === row.id ? "default" : "pointer",
                           opacity: pdfBusyId === row.id ? 0.7 : 1,
                           display: "flex", alignItems: "center", gap: 6,
@@ -460,7 +460,7 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
                         {pdfBusyId === row.id ? "Rendering…" : pdfStep ? "Render PDF again" : "Render PDF"}
                       </button>
                       {pdfErrorById[row.id] && (
-                        <span style={{ fontSize: 11, color: C.red }}>{pdfErrorById[row.id]}</span>
+                        <span style={{ fontSize: 11.5, color: C.red }}>{pdfErrorById[row.id]}</span>
                       )}
                     </div>
                   </div>

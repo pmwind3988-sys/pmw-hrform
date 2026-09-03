@@ -137,7 +137,7 @@ export default function ErrorScreen({
         <Card
           elevation={0}
           sx={{
-            borderRadius: "8px",
+            borderRadius: "12px",
             border: "1px solid rgba(220,38,38,0.1)",
             boxShadow: "0 4px 24px rgba(220,38,38,0.06)",
             backgroundColor: "rgba(255, 255, 255, 0.92)",
@@ -211,7 +211,7 @@ export default function ErrorScreen({
                     m: 0,
                     p: 1,
                     listStyle: "none",
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     backgroundColor: "rgba(255, 255, 255, 0.8)",
                     boxShadow: "0 12px 34px rgba(15, 23, 42, 0.08)",
                   }}
@@ -232,7 +232,7 @@ export default function ErrorScreen({
                           alignItems: "start",
                           px: 1.5,
                           py: 1.25,
-                          borderRadius: "8px",
+                          borderRadius: "12px",
                           backgroundColor: isActive ? "rgba(0, 120, 212, 0.08)" : "transparent",
                         }}
                       >
@@ -278,9 +278,9 @@ export default function ErrorScreen({
                 onClick={onRetry}
                 sx={{
                   backgroundColor: "#0078D4",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   py: 1.75,
-                  fontSize: "1rem",
+                  fontSize: "0.9375rem",
                   fontWeight: 500,
                   boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
                   transition: "background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.2, 0, 0, 1)",
@@ -304,9 +304,9 @@ export default function ErrorScreen({
                   startIcon={<LogoutIcon />}
                   onClick={onSignOut}
                   sx={{
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     py: 1.75,
-                    fontSize: "1rem",
+                    fontSize: "0.9375rem",
                     fontWeight: 500,
                     borderColor: "rgba(17, 24, 39, 0.15)",
                     color: "#6B7280",

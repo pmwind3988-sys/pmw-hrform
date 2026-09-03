@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ShieldIcon from "@mui/icons-material/Shield";
-import { editorial } from "../theme/editorial";
+import { editorial, si, siType } from "../theme/editorial";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
 import {
   getPdpaContent,
@@ -70,12 +70,12 @@ function ContactBlock({ content }: { content: PdpaNoticeContent }) {
       sx={{
         mt: 1.5,
         p: 2,
-        border: `1px solid ${editorial.ink}`,
+        border: `1px solid ${editorial.border}`,
         borderRadius: "12px",
         backgroundColor: editorial.blueSoft,
       }}
     >
-      <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800, mb: 0.75 }}>
+      <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, mb: 0.75 }}>
         {content.contactEntity}
       </Typography>
       <Typography variant="body2" sx={bodyTextSx}>
@@ -114,7 +114,7 @@ function NoticeBlock({ block, content }: { block: PdpaNoticeBlock; content: Pdpa
 function NoticeSection({ section, content }: { section: PdpaNoticeSection; content: PdpaNoticeContent }) {
   return (
     <Box>
-      <Typography variant="h6" sx={{ fontWeight: 800, color: editorial.ink }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink }}>
         {section.id ? `${section.id}. ` : ""}
         {section.title}
       </Typography>
@@ -131,18 +131,18 @@ export default function PrivacyNoticePage() {
   const { ui } = content;
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 42%, #F7F5EF 100%)", py: { xs: 3, md: 5 } }}>
+    <Box sx={{ minHeight: "100vh", background: "var(--app-bg, var(--app-bg-fallback))", py: { xs: 3, md: 5 } }}>
       <Container maxWidth="md">
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate(-1)}
-          sx={{ mb: 2, textTransform: "none", color: editorial.ink, fontWeight: 800 }}
+          sx={{ mb: 2, textTransform: "none", color: editorial.pmwBlueDark, fontWeight: 600 }}
         >
           {ui.back}
         </Button>
 
-        <Paper sx={{ borderRadius: "18px", overflow: "hidden", border: `1px solid ${editorial.ink}`, boxShadow: "none" }}>
-          <Box sx={{ p: { xs: 3, md: 5 }, backgroundColor: editorial.yellow, color: editorial.ink, borderBottom: `1px solid ${editorial.ink}` }}>
+        <Paper sx={{ borderRadius: "12px", overflow: "hidden", border: `1px solid ${editorial.border}`, boxShadow: si.shadow }}>
+          <Box sx={{ p: { xs: 3, md: 4 }, backgroundColor: editorial.white, color: editorial.ink, borderBottom: `1px solid ${editorial.border}` }}>
             <Box
               sx={{
                 mb: 1,
@@ -155,7 +155,7 @@ export default function PrivacyNoticePage() {
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                 <ShieldIcon />
-                <Typography variant="overline" sx={{ letterSpacing: 0, fontWeight: 700 }}>
+                <Typography variant="overline" sx={{ ...siType.micro, color: editorial.muted }}>
                   {ui.eyebrow}
                 </Typography>
               </Box>
@@ -167,18 +167,22 @@ export default function PrivacyNoticePage() {
                 onChange={(_, next) => next && setLocale(next)}
                 aria-label="Notice language / Bahasa notis"
                 sx={{
-                  backgroundColor: "rgba(255,255,255,0.55)",
+                  backgroundColor: editorial.appSurface,
+                  borderRadius: "12px",
                   "& .MuiToggleButton-root": {
                     textTransform: "none",
-                    fontWeight: 800,
-                    color: editorial.ink,
-                    borderColor: editorial.ink,
+                    fontWeight: 600,
+                    fontSize: "0.78rem",
+                    color: editorial.muted,
+                    borderColor: editorial.border,
+                    borderRadius: "12px",
                     px: 1.5,
                   },
                   "& .MuiToggleButton-root.Mui-selected": {
-                    backgroundColor: editorial.ink,
-                    color: editorial.yellow,
-                    "&:hover": { backgroundColor: editorial.ink },
+                    backgroundColor: editorial.pmwBlue,
+                    color: editorial.white,
+                    borderColor: editorial.pmwBlue,
+                    "&:hover": { backgroundColor: editorial.pmwBlueDark },
                   },
                 }}
               >
@@ -190,7 +194,7 @@ export default function PrivacyNoticePage() {
               </ToggleButtonGroup>
             </Box>
 
-            <Typography variant="h1" sx={{ fontSize: { xs: "2.5rem", md: "4rem" } }}>
+            <Typography variant="h1" sx={{ ...siType.pageTitle }}>
               {ui.documentTitle}
             </Typography>
             <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
@@ -233,7 +237,7 @@ export default function PrivacyNoticePage() {
               component={RouterLink}
               to="/"
               variant="outlined"
-              sx={{ mt: 3, borderRadius: 0, textTransform: "none", fontWeight: 800 }}
+              sx={{ mt: 3, borderRadius: "12px", textTransform: "none", fontWeight: 600 }}
             >
               {ui.returnHome}
             </Button>

@@ -95,7 +95,7 @@ export default function Header({
     color,
   });
   const iconButtonSx = {
-    borderRadius: "10px",
+    borderRadius: "12px",
     color: editorial.pmwBlueDark,
     backgroundColor: editorial.blueWash,
     border: `1px solid ${editorial.pmwBlueSoft}`,
@@ -175,7 +175,7 @@ export default function Header({
               variant="h5"
               component="h1"
               sx={{
-                fontWeight: 800,
+                fontWeight: 700,
                 color: editorial.ink,
                 letterSpacing: 0,
                 lineHeight: 1.2,
@@ -191,7 +191,7 @@ export default function Header({
                 color: editorial.muted,
                 textTransform: "uppercase",
                 letterSpacing: 0,
-                fontSize: "0.7rem",
+                fontSize: "0.72rem",
                 fontWeight: 600,
                 lineHeight: 1,
                 display: { xs: "none", sm: "block" },
@@ -329,12 +329,12 @@ export default function Header({
               sx={{
                 height: 34,
                 px: 1.5,
-                borderRadius: "8px",
+                borderRadius: "12px",
                 backgroundColor: editorial.white,
                 border: `1px solid ${editorial.pmwBlueSoft}`,
                 color: editorial.pmwBlueDark,
-                fontSize: "0.75rem",
-                fontWeight: 800,
+                fontSize: "0.78rem",
+                fontWeight: 700,
                 letterSpacing: 0,
                 lineHeight: 1,
                 minWidth: 0,
@@ -359,12 +359,12 @@ export default function Header({
               sx={{
                 height: 34,
                 px: 1.5,
-                borderRadius: "8px",
+                borderRadius: "12px",
                 backgroundColor: editorial.white,
                 border: `1px solid ${editorial.pmwPurpleSoft}`,
                 color: editorial.pmwPurpleDark,
-                fontSize: "0.75rem",
-                fontWeight: 800,
+                fontSize: "0.78rem",
+                fontWeight: 700,
                 letterSpacing: 0,
                 lineHeight: 1,
                 minWidth: 0,
@@ -407,7 +407,7 @@ export default function Header({
                 },
               }}
             >
-              <Box sx={{ width: 32, height: 32, borderRadius: "8px", backgroundColor: editorial.blueWash, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Box sx={{ width: 32, height: 32, borderRadius: "12px", backgroundColor: editorial.blueWash, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <PersonIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />
               </Box>
             </IconButton>

@@ -59,8 +59,8 @@ const inp = {
   border: `1px solid ${C.border}`,
   borderRadius: 8,
   padding: "0 10px",
-  fontSize: 12,
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontSize: 12.5,
+  fontFamily: "var(--pmw-font-main)",
   color: C.textPrimary,
   background: C.white,
   outline: "none",
@@ -68,9 +68,9 @@ const inp = {
 
 const fieldLabelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: 9,
-  fontWeight: 800,
-  letterSpacing: ".04em",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.03em",
   textTransform: "uppercase",
   color: C.textMuted,
   marginBottom: 4,
@@ -83,7 +83,7 @@ const warningNoteStyle: React.CSSProperties = {
   border: `1px solid ${C.amber}`,
   borderRadius: 7,
   background: C.amberPale,
-  fontSize: 10,
+  fontSize: 11,
   lineHeight: 1.5,
   color: C.textPrimary,
 };
@@ -92,10 +92,10 @@ const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
   flex: 1,
   minHeight: 40,
   border: `1px solid ${active ? C.purple : C.border}`,
-  borderRadius: 6,
+  borderRadius: 8,
   background: active ? C.purplePale : C.white,
   color: active ? C.purple : C.textMuted,
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 600,
   cursor: "pointer",
   display: "flex",
@@ -104,14 +104,14 @@ const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
   lineHeight: 1.2,
   padding: "5px 7px",
   minWidth: 0,
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontFamily: "var(--pmw-font-main)",
   transition: "background-color .12s, border-color .12s, color .12s, transform .12s",
 });
 
 const SECTION_CARD: React.CSSProperties = {
   background: C.white,
   border: `1px solid ${C.border}`,
-  borderRadius: 10,
+  borderRadius: 12,
   padding: "10px 11px",
   boxShadow: "0 1px 2px rgba(26,31,43,0.04)",
 };
@@ -140,10 +140,10 @@ function WorkflowMetric({ label, value }: { label: string; value: string }) {
       padding: "7px 8px",
       minWidth: 0,
     }}>
-      <div style={{ fontSize: 9, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>
         {label}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {value}
       </div>
     </div>
@@ -283,12 +283,12 @@ function ChainAssigneeSettings({
           checked={assignee.skipSelf !== false}
           onChange={event => patch({ skipSelf: event.target.checked })}
         />
-        <span style={{ fontSize: 11, color: C.textPrimary }}>
+        <span style={{ fontSize: 11.5, color: C.textPrimary }}>
           Skip past the submitter if the line reaches them
         </span>
       </label>
 
-      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 1.6 }}>
         Goes to <strong>{hopLabel}</strong>, starting from <strong>{startLabel}</strong>, using the{" "}
         <strong>Approval Directory</strong> list — one row per person, with the column saying who approves them.
         <br />
@@ -360,7 +360,7 @@ function RoleHolderSettings({
         style={inp}
       />
 
-      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 8, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 1.6 }}>
         Matches the <strong>Approval Directory</strong> row whose department and position are these — so
         "Safety" and "HOD" finds whoever currently heads Safety, no matter who submits.
         <br />
@@ -423,7 +423,7 @@ function DepartmentLookupSettings({
       boxShadow: "inset 0 0 0 1px rgba(26,31,43,0.06)",
     }}>
       <div>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, display: "block", marginBottom: 4 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, display: "block", marginBottom: 4 }}>
           Department field
         </label>
         <select
@@ -436,17 +436,17 @@ function DepartmentLookupSettings({
             <option key={field.name} value={field.name}>{departmentFieldOptionLabel(field)}</option>
           ))}
         </select>
-        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45, marginTop: 4 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.45, marginTop: 4 }}>
           The submitted department must match the SharePoint directory value exactly.
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>
           Directory list
           <input value={config.listName} onChange={e => patch({ listName: e.target.value })} style={{ ...inp, marginTop: 4 }} />
         </label>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>
           Approver role
           <input value={config.roleValue} onChange={e => patch({ roleValue: e.target.value })} style={{ ...inp, marginTop: 4 }} />
         </label>
@@ -466,14 +466,14 @@ function DepartmentLookupSettings({
             border: "none",
             background: "none",
             color: C.textSecond,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             cursor: "pointer",
-            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            fontFamily: "var(--pmw-font-main)",
           }}
         >
           <ExpandMoreIcon style={{
-            fontSize: 16,
+            fontSize: 15,
             transform: columnsOpen ? "rotate(0deg)" : "rotate(-90deg)",
             transition: "transform .15s ease",
           }} />
@@ -482,19 +482,19 @@ function DepartmentLookupSettings({
         </button>
         {columnsOpen && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginTop: 7 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>
               Department column
               <input value={config.departmentColumn} onChange={e => patch({ departmentColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
             </label>
-            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>
               Email column
               <input value={config.emailColumn} onChange={e => patch({ emailColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
             </label>
-            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>
               Name column
               <input value={config.nameColumn} onChange={e => patch({ nameColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
             </label>
-            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted }}>
               Role column
               <input value={config.roleColumn} onChange={e => patch({ roleColumn: e.target.value })} style={{ ...inp, marginTop: 4 }} />
             </label>
@@ -528,7 +528,7 @@ const EVALUATION_TYPE_HINT = "They fill in questions you set for this step. Ther
 
 function LayerTypeHint({ isEval }: { isEval: boolean }) {
   return (
-    <p style={{ fontSize: 11, lineHeight: 1.45, color: C.textSecond, margin: "5px 0 0" }}>
+    <p style={{ fontSize: 11.5, lineHeight: 1.45, color: C.textSecond, margin: "5px 0 0" }}>
       {isEval ? EVALUATION_TYPE_HINT : APPROVAL_TYPE_HINT}
     </p>
   );
@@ -611,7 +611,7 @@ function EmailChipInput({
                 color: isLayerEmail(email) ? C.purple : C.red,
                 borderRadius: 999,
                 padding: "3px 4px 3px 9px",
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
               }}
             >
@@ -670,15 +670,15 @@ function EmailChipInput({
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
-                <div style={{ fontSize: 9, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
+                <div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
               </div>
               <span style={{
                 flexShrink: 0,
                 fontSize: 8,
                 fontWeight: 700,
                 textTransform: "uppercase",
-                letterSpacing: ".04em",
+                letterSpacing: "0.03em",
                 borderRadius: 999,
                 padding: "2px 6px",
                 background: KIND_BADGE[user.kind].bg,
@@ -692,14 +692,14 @@ function EmailChipInput({
       )}
 
       {stranded.length > 0 && (
-        <div style={{ fontSize: 10, color: C.amber, marginTop: 6, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: C.amber, marginTop: 6, lineHeight: 1.5 }}>
           <strong>{stranded.join(", ")}</strong>{stranded.length > 1 ? " are shared mailboxes" : " is a shared mailbox"} —
           nobody can sign in as {stranded.length > 1 ? "them" : "it"}, so this layer would never be actionable.
           Put the mailbox under <strong>Notify also</strong> instead and name the people who may act here.
         </div>
       )}
 
-      <div style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
         {emails.length === 0 ? emptyHint : "Press Enter, comma or semicolon to add another address. People, distribution lists and shared mailboxes are all searchable."}
       </div>
     </div>
@@ -793,21 +793,21 @@ function DistributionListPicker({
                 onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
-                <div style={{ fontSize: 11, fontWeight: 500 }}>{group.name}</div>
-                <div style={{ fontSize: 9, color: C.textMuted }}>{group.email}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 500 }}>{group.name}</div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{group.email}</div>
               </div>
             ))}
           </div>
         )}
       </div>
       {typedIsMailbox ? (
-        <div style={{ fontSize: 10, color: C.amber, marginTop: 4, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: C.amber, marginTop: 4, lineHeight: 1.5 }}>
           <strong>{value.trim()}</strong> is a shared mailbox, not a distribution list — it has no members to expand,
           so this layer would arrive with nobody assigned. Use <strong>Notify also</strong> to mail the mailbox, and
           name the people who may act separately.
         </div>
       ) : (
-        <div style={{ fontSize: 9, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.5 }}>
           Members are read from the group when a form is submitted, and any one of them can complete this layer.
           Needs the <strong>Group.Read.All</strong> Graph permission on the app registration.
         </div>
@@ -837,7 +837,7 @@ function MultiUserAssigneeEditor({
         onChange={next => onChange({ type: "users", value: joinEmailList(next) })}
       />
       {emails.length > 1 && (
-        <div style={{ fontSize: 9, color: C.textMuted, marginTop: 2, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, lineHeight: 1.5 }}>
           Any one of these {emails.length} people completes the layer — the first decision wins and the rest go stale.
         </div>
       )}
@@ -864,7 +864,7 @@ function NotificationRecipientsEditor({
 
   return (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
         Notify also
       </label>
       <EmailChipInput
@@ -880,7 +880,7 @@ function NotificationRecipientsEditor({
         })}
       />
       {notifyEmails.length > 0 && (
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6, fontSize: 10, color: C.textSecond, lineHeight: 1.5, cursor: "pointer" }}>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6, fontSize: 11, color: C.textSecond, lineHeight: 1.5, cursor: "pointer" }}>
           <input
             type="checkbox"
             checked={notifyOnly}
@@ -900,7 +900,7 @@ function NotificationRecipientsEditor({
 function FieldReferenceHint({ field }: { field: LayerFieldOption | undefined }) {
   if (!field || isEmailProducingField(field)) return null;
   return (
-    <div style={{ fontSize: 10, color: C.amber, marginTop: 4, lineHeight: 1.45 }}>
+    <div style={{ fontSize: 11, color: C.amber, marginTop: 4, lineHeight: 1.45 }}>
       This field must submit a valid email address before a Microsoft 365 layer can start.
     </div>
   );
@@ -919,19 +919,19 @@ function ValidationPanel({ errors, warnings }: { errors: string[]; warnings: str
       gap: 9,
       alignItems: "flex-start",
       background: bg,
-      borderRadius: 10,
+      borderRadius: 12,
       padding: "9px 10px",
       marginBottom: 12,
       boxShadow: "0 1px 2px rgba(26,31,43,0.05)",
     }}>
       <ValidationGlyph tone={tone} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: fg, fontSize: 11, fontWeight: 800, marginBottom: items.length ? 4 : 0 }}>{title}</div>
+        <div style={{ color: fg, fontSize: 11.5, fontWeight: 700, marginBottom: items.length ? 4 : 0 }}>{title}</div>
         {items.slice(0, 4).map((item) => (
-          <div key={item} style={{ color: C.textSecond, fontSize: 10, lineHeight: 1.45 }}>{item}</div>
+          <div key={item} style={{ color: C.textSecond, fontSize: 11, lineHeight: 1.45 }}>{item}</div>
         ))}
         {items.length > 4 && (
-          <div style={{ color: C.textMuted, fontSize: 10, marginTop: 2 }}>+{items.length - 4} more</div>
+          <div style={{ color: C.textMuted, fontSize: 11, marginTop: 2 }}>+{items.length - 4} more</div>
         )}
       </div>
     </div>
@@ -1113,7 +1113,7 @@ export default function LayerConfigPanel({
     },
   ) => (
     <div>
-      <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
         Assignee
       </label>
       {/* Split 3 + 2 rather than reflowing five buttons through one grid: the
@@ -1219,15 +1219,15 @@ export default function LayerConfigPanel({
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 >
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</div>
-                    <div style={{ fontSize: 9, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
+                    <div style={{ fontSize: 11.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</div>
+                    <div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
                   </div>
                   <span style={{
                     flexShrink: 0,
                     fontSize: 8,
                     fontWeight: 700,
                     textTransform: "uppercase",
-                    letterSpacing: ".04em",
+                    letterSpacing: "0.03em",
                     borderRadius: 999,
                     padding: "2px 6px",
                     background: KIND_BADGE[u.kind].bg,
@@ -1287,7 +1287,7 @@ export default function LayerConfigPanel({
 
   const renderWorkflowRow = (label: string, rowLayers: LayerConfigItem[]) => (
     <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0 }}>
         {label}
       </div>
       <div style={{ display: "flex", alignItems: "stretch", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
@@ -1297,7 +1297,7 @@ export default function LayerConfigPanel({
           background: C.white,
           border: `1px solid ${C.border}`,
           padding: "6px 7px",
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: C.textSecond,
           textAlign: "center",
@@ -1313,10 +1313,10 @@ export default function LayerConfigPanel({
             padding: "6px 7px",
             color: C.textPrimary,
           }}>
-            <div style={{ fontSize: 9, fontWeight: 800, color: layer.type === "approval" ? C.purple : C.green, textTransform: "uppercase", letterSpacing: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: layer.type === "approval" ? C.purple : C.green, textTransform: "uppercase", letterSpacing: 0 }}>
               {layer.type}
             </div>
-            <div style={{ fontSize: 10, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {layer.title || `Layer ${idx + 1}`}
             </div>
           </div>
@@ -1327,7 +1327,7 @@ export default function LayerConfigPanel({
           background: C.white,
           border: `1px solid ${C.border}`,
           padding: "6px 7px",
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: C.green,
           textAlign: "center",
@@ -1352,7 +1352,7 @@ export default function LayerConfigPanel({
     };
     return (
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 9, background: C.lightGray }}>
-        <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 5 }}>
           Evaluator Email Timing
         </label>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -1381,10 +1381,10 @@ export default function LayerConfigPanel({
               })}
               style={{ ...inp, width: 92 }}
             />
-            <span style={{ fontSize: 10, color: C.textSecond }}>days after this evaluation layer becomes active</span>
+            <span style={{ fontSize: 11, color: C.textSecond }}>days after this evaluation layer becomes active</span>
           </div>
         )}
-        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 5 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>
           Admins and Form Builder Superusers can override the date for an individual submission.
         </div>
       </div>
@@ -1404,7 +1404,7 @@ export default function LayerConfigPanel({
     return (
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 9, background: C.white }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em" }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
             Submitter Routing
           </label>
           <button
@@ -1420,12 +1420,12 @@ export default function LayerConfigPanel({
                 },
               ],
             })}
-            style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 7, background: C.purplePale, color: C.purple, fontSize: 10, fontWeight: 700, padding: "5px 8px", cursor: "pointer" }}
+            style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 7, background: C.purplePale, color: C.purple, fontSize: 11, fontWeight: 700, padding: "5px 8px", cursor: "pointer" }}
           >
             + Rule
           </button>
         </div>
-        <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45, marginBottom: rules.length ? 8 : 0 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.45, marginBottom: rules.length ? 8 : 0 }}>
           Match by submitted email, employee ID, user ID, full name, or a combination. The first matching rule wins.
         </div>
         {rules.map((rule, ruleIndex) => (
@@ -1435,7 +1435,7 @@ export default function LayerConfigPanel({
                 value={rule.label}
                 onChange={event => patchRule(ruleIndex, { label: event.target.value })}
                 placeholder="Rule label"
-                style={{ ...inp, height: 30, fontSize: 11, flex: 1 }}
+                style={{ ...inp, height: 30, fontSize: 11.5, flex: 1 }}
               />
               <button
                 type="button"
@@ -1449,7 +1449,7 @@ export default function LayerConfigPanel({
               <select
                 value={rule.emailField || ""}
                 onChange={event => patchRule(ruleIndex, { emailField: event.target.value })}
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               >
                 <option value="">Use SubmittedBy email</option>
                 {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
@@ -1458,12 +1458,12 @@ export default function LayerConfigPanel({
                 value={rule.emailValue || ""}
                 onChange={event => patchRule(ruleIndex, { emailValue: event.target.value })}
                 placeholder="Email value"
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               />
               <select
                 value={rule.employeeIdField || ""}
                 onChange={event => patchRule(ruleIndex, { employeeIdField: event.target.value })}
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               >
                 <option value="">Employee ID field</option>
                 {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
@@ -1472,12 +1472,12 @@ export default function LayerConfigPanel({
                 value={rule.employeeIdValue || ""}
                 onChange={event => patchRule(ruleIndex, { employeeIdValue: event.target.value })}
                 placeholder="Employee ID value"
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               />
               <select
                 value={rule.userIdField || ""}
                 onChange={event => patchRule(ruleIndex, { userIdField: event.target.value })}
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               >
                 <option value="">User ID field</option>
                 {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
@@ -1486,12 +1486,12 @@ export default function LayerConfigPanel({
                 value={rule.userIdValue || ""}
                 onChange={event => patchRule(ruleIndex, { userIdValue: event.target.value })}
                 placeholder="User ID value"
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               />
               <select
                 value={rule.fullNameField || ""}
                 onChange={event => patchRule(ruleIndex, { fullNameField: event.target.value })}
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               >
                 <option value="">Full name field</option>
                 {formFields.map(field => <option key={field.name} value={field.name}>{fieldOptionLabel(field)}</option>)}
@@ -1500,12 +1500,12 @@ export default function LayerConfigPanel({
                 value={rule.fullNameValue || ""}
                 onChange={event => patchRule(ruleIndex, { fullNameValue: event.target.value })}
                 placeholder="Full name value"
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               />
               <select
                 value={rule.action}
                 onChange={event => patchRule(ruleIndex, { action: event.target.value as EvaluationSubmitterRoutingRule["action"] })}
-                style={{ ...inp, height: 30, fontSize: 11 }}
+                style={{ ...inp, height: 30, fontSize: 11.5 }}
               >
                 <option value="assign-evaluator">Different assignee</option>
                 <option value="send-to-configured-sender">Send to the portal's sending mailbox</option>
@@ -1517,7 +1517,7 @@ export default function LayerConfigPanel({
                 value={rule.evaluatorEmail || ""}
                 onChange={event => patchRule(ruleIndex, { evaluatorEmail: event.target.value })}
                 placeholder="different.evaluator@company.com"
-                style={{ ...inp, height: 30, fontSize: 11, marginTop: 6 }}
+                style={{ ...inp, height: 30, fontSize: 11.5, marginTop: 6 }}
               />
             )}
           </div>
@@ -1535,7 +1535,7 @@ export default function LayerConfigPanel({
       <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 9 }}>
         {/* Layer type toggle */}
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Layer Type
           </label>
           <div style={{ display: "flex", gap: 4 }}>
@@ -1583,7 +1583,7 @@ export default function LayerConfigPanel({
 
         {/* Auth mode toggle */}
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Auth Mode
           </label>
           <div style={{ display: "flex", gap: 4 }}>
@@ -1604,7 +1604,7 @@ export default function LayerConfigPanel({
             </button>
           </div>
           {layer.authMode === "public" && (
-            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
               Anyone with the link can access this layer without signing in.
             </div>
           )}
@@ -1633,7 +1633,7 @@ export default function LayerConfigPanel({
                 onChange={event => patchLayer(idx, { manualPaperWhenSenderEmail: event.target.checked })}
                 style={{ width: 14, height: 14, accentColor: C.purple, marginTop: 1 }}
               />
-              <span style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.45 }}>
+              <span style={{ fontSize: 11, color: C.textSecond, lineHeight: 1.45 }}>
                 Handle this layer on paper. When it resolves to the portal's own sending mailbox, no approval link is sent — the notice goes to that mailbox to be signed off by hand.
               </span>
             </label>
@@ -1648,7 +1648,7 @@ export default function LayerConfigPanel({
         {isApproval && (
           <>
             <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
                 Confirmation Type
               </label>
               <div style={{ display: "flex", gap: 4 }}>
@@ -1666,7 +1666,7 @@ export default function LayerConfigPanel({
                 </button>
               </div>
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textSecond }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.textSecond }}>
               <input
                 type="checkbox"
                 checked={(layer as ApprovalLayerConfig).allowRejectionReason}
@@ -1700,9 +1700,9 @@ export default function LayerConfigPanel({
                   borderRadius: 7,
                   background: "none",
                   color: C.purple,
-                  fontSize: 11,
+                  fontSize: 11.5,
                   cursor: "pointer",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                 }}
               >
                 <DescriptionIcon style={{ fontSize: 12, marginRight: 4 }} /> Configure Evaluation Form ({((layer as EvaluationLayerConfig).surveyElements || []).length} fields)
@@ -1712,13 +1712,13 @@ export default function LayerConfigPanel({
               <button
                 onClick={() => setEvalPickerOpen(null)}
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   color: C.textMuted,
                   background: "none",
                   border: "none",
                   cursor: "pointer",
                   marginTop: 4,
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                 }}
               >
                 Done
@@ -1729,7 +1729,7 @@ export default function LayerConfigPanel({
 
         {/* Title & description */}
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Layer Title
           </label>
           <input
@@ -1740,7 +1740,7 @@ export default function LayerConfigPanel({
           />
         </div>
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Description
           </label>
           <input
@@ -1778,7 +1778,7 @@ export default function LayerConfigPanel({
       <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 9 }}>
         {/* Layer type toggle */}
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Layer Type
           </label>
           <div style={{ display: "flex", gap: 4 }}>
@@ -1826,7 +1826,7 @@ export default function LayerConfigPanel({
 
         {/* Auth mode toggle */}
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Auth Mode
           </label>
           <div style={{ display: "flex", gap: 4 }}>
@@ -1847,7 +1847,7 @@ export default function LayerConfigPanel({
             </button>
           </div>
           {layer.authMode === "public" && (
-            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
               Anyone with the link can access this layer without signing in.
             </div>
           )}
@@ -1876,7 +1876,7 @@ export default function LayerConfigPanel({
                 onChange={event => patchBranchLayer(bi, li, { manualPaperWhenSenderEmail: event.target.checked })}
                 style={{ width: 14, height: 14, accentColor: C.purple, marginTop: 1 }}
               />
-              <span style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.45 }}>
+              <span style={{ fontSize: 11, color: C.textSecond, lineHeight: 1.45 }}>
                 Handle this layer on paper. When it resolves to the portal's own sending mailbox, no approval link is sent — the notice goes to that mailbox to be signed off by hand.
               </span>
             </label>
@@ -1891,7 +1891,7 @@ export default function LayerConfigPanel({
         {isApproval && (
           <>
             <div>
-              <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
                 Confirmation Type
               </label>
               <div style={{ display: "flex", gap: 4 }}>
@@ -1909,7 +1909,7 @@ export default function LayerConfigPanel({
                 </button>
               </div>
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textSecond }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.textSecond }}>
               <input
                 type="checkbox"
                 checked={(layer as ApprovalLayerConfig).allowRejectionReason}
@@ -1943,9 +1943,9 @@ export default function LayerConfigPanel({
                   borderRadius: 7,
                   background: "none",
                   color: C.purple,
-                  fontSize: 11,
+                  fontSize: 11.5,
                   cursor: "pointer",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                 }}
               >
                 <DescriptionIcon style={{ fontSize: 12, marginRight: 4 }} /> Configure Evaluation Form ({((layer as EvaluationLayerConfig).surveyElements || []).length} fields)
@@ -1955,13 +1955,13 @@ export default function LayerConfigPanel({
               <button
                 onClick={() => setBranchEvalPicker(null)}
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   color: C.textMuted,
                   background: "none",
                   border: "none",
                   cursor: "pointer",
                   marginTop: 4,
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                 }}
               >
                 Done
@@ -1972,7 +1972,7 @@ export default function LayerConfigPanel({
 
         {/* Title & description */}
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Layer Title
           </label>
           <input
@@ -1983,7 +1983,7 @@ export default function LayerConfigPanel({
           />
         </div>
         <div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
             Description
           </label>
           <input
@@ -2017,7 +2017,7 @@ export default function LayerConfigPanel({
     <div style={{ marginTop: 14 }}>
       <div
         style={{
-          fontSize: 11,
+          fontSize: 11.5,
           fontWeight: 700,
           color: C.textPrimary,
           marginBottom: 8,
@@ -2042,7 +2042,7 @@ export default function LayerConfigPanel({
           }}
           style={{ width: 16, height: 16, accentColor: C.purple }}
         />
-        <span style={{ fontSize: 11, color: C.textSecond }}>
+        <span style={{ fontSize: 11.5, color: C.textSecond }}>
           {condEnabled ? "Enabled" : "Disabled — all layers always active"}
         </span>
       </label>
@@ -2050,7 +2050,7 @@ export default function LayerConfigPanel({
       {condEnabled && (
         <>
           <div style={{ marginBottom: 8 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 4 }}>
               Condition field name
             </label>
             <input
@@ -2061,7 +2061,7 @@ export default function LayerConfigPanel({
             />
           </div>
 
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 }}>
             Rules ({condRules.length})
           </div>
 
@@ -2077,7 +2077,7 @@ export default function LayerConfigPanel({
               }}
             >
               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>When =</span>
+                <span style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>When =</span>
                 <input
                   value={rule.when}
                   onChange={e => {
@@ -2085,7 +2085,7 @@ export default function LayerConfigPanel({
                     setCondRules(next);
                   }}
                   placeholder="value"
-                  style={{ ...inp, flex: 1, height: 26, fontSize: 11 }}
+                  style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }}
                 />
                 <button
                   onClick={() => setCondRules(condRules.filter((_, i) => i !== ri))}
@@ -2097,14 +2097,14 @@ export default function LayerConfigPanel({
                     color: C.red,
                     borderRadius: 5,
                     cursor: "pointer",
-                    fontSize: 10,
+                    fontSize: 11,
                     flexShrink: 0,
                   }}
                 >
                   <CloseIcon style={{ fontSize: 14 }} />
                 </button>
               </div>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>Skip layers:</div>
+              <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Skip layers:</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                 {layers.map((l, li) => (
                   <label
@@ -2113,7 +2113,7 @@ export default function LayerConfigPanel({
                       display: "flex",
                       alignItems: "center",
                       gap: 3,
-                      fontSize: 10,
+                      fontSize: 11,
                       color: rule.skipLayers.includes(l.layerNumber) ? C.purple : C.textMuted,
                       cursor: "pointer",
                     }}
@@ -2146,9 +2146,9 @@ export default function LayerConfigPanel({
               borderRadius: 7,
               background: "none",
               color: C.purple,
-              fontSize: 10,
+              fontSize: 11,
               cursor: "pointer",
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+              fontFamily: "var(--pmw-font-main)",
             }}
           >
             + Add rule
@@ -2172,12 +2172,12 @@ export default function LayerConfigPanel({
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
           <AccountTreeIcon style={{ fontSize: 16, color: C.purple, marginTop: 1 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: C.textPrimary, marginBottom: 2 }}>Workflow map</div>
-            <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.55 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.textPrimary, marginBottom: 2 }}>Workflow map</div>
+            <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.55 }}>
               Review paths, then expand a step below to edit assignee, auth mode, confirmation, and evaluation fields.
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>
             <CheckCircleIcon style={{ fontSize: 13 }} />
             {branchEnabled ? `${branches.length} branch${branches.length === 1 ? "" : "es"}` : `${layers.length} layer${layers.length === 1 ? "" : "s"}`}
           </div>
@@ -2202,7 +2202,7 @@ export default function LayerConfigPanel({
             border: "1px solid #FDE68A",
             borderRadius: 8,
             padding: "9px 11px",
-            fontSize: 11,
+            fontSize: 11.5,
             color: C.amber,
             marginBottom: 10,
           }}
@@ -2238,10 +2238,10 @@ export default function LayerConfigPanel({
           borderRadius: 8,
           background: branchEnabled ? C.offWhite : "none",
           color: branchEnabled ? C.textMuted : C.purple,
-          fontSize: 11,
+          fontSize: 11.5,
           fontWeight: 600,
           cursor: branchEnabled ? "not-allowed" : "pointer",
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+          fontFamily: "var(--pmw-font-main)",
           marginBottom: 14,
         }}
       >
@@ -2252,14 +2252,14 @@ export default function LayerConfigPanel({
       <div style={{ ...SECTION_CARD, marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 800, color: C.textPrimary, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.textPrimary, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
               Approval branches
             </div>
-            <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.45 }}>
+            <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.45 }}>
               Use separate paths for managerial and non-managerial submissions.
             </div>
           </div>
-          <span style={{ fontSize: 10, fontWeight: 800, color: branchEnabled ? C.green : C.textMuted, background: branchEnabled ? C.greenPale : C.offWhite, border: `1px solid ${branchEnabled ? C.green : C.border}`, borderRadius: 999, padding: "3px 7px", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: branchEnabled ? C.green : C.textMuted, background: branchEnabled ? C.greenPale : C.offWhite, border: `1px solid ${branchEnabled ? C.green : C.border}`, borderRadius: 999, padding: "3px 7px", whiteSpace: "nowrap" }}>
             {branchEnabled ? "On" : "Off"}
           </span>
         </div>
@@ -2280,30 +2280,30 @@ export default function LayerConfigPanel({
               }
             }}
             style={{ width: 16, height: 16, accentColor: C.purple }} />
-          <span style={{ fontSize: 11, color: C.textSecond, fontWeight: 650 }}>Enable branch-specific approval paths</span>
+          <span style={{ fontSize: 11.5, color: C.textSecond, fontWeight: 650 }}>Enable branch-specific approval paths</span>
         </label>
         {branchEnabled && (
           <>
-            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
               Branch layers override the main sequence. Each branch can still reference the same HOD or manager email field.
             </div>
             {branches.length === 0 && (
-              <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "9px 11px", fontSize: 11, color: C.amber, marginBottom: 10 }}>
+              <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "9px 11px", fontSize: 11.5, color: C.amber, marginBottom: 10 }}>
                 No branches defined — add a branch to get started.
               </div>
             )}
             {branches.map((branch, bi) => (
-              <div key={bi} style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 10, background: C.white, marginBottom: 10, overflow: "hidden" }}>
+              <div key={bi} style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 12, background: C.white, marginBottom: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 11px", background: C.purplePale, borderBottom: `1px solid ${C.purpleMid}` }}>
-                  <span style={{ width: 24, height: 24, borderRadius: 6, background: `linear-gradient(135deg,${C.purple},#3B0764)`, color: C.white, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{bi + 1}</span>
+                  <span style={{ width: 24, height: 24, borderRadius: 8, background: `linear-gradient(135deg,${C.purple},#3B0764)`, color: C.white, fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{bi + 1}</span>
                   <div style={{ flex: 1, display: "flex", gap: 6 }}>
-                    <input value={branch.name} onChange={e => updateBranchField(bi, "name", e.target.value)} placeholder="Branch name (key)" style={{ ...inp, flex: 1, height: 26, fontSize: 11 }} />
-                    <input value={branch.label} onChange={e => updateBranchField(bi, "label", e.target.value)} placeholder="Display label" style={{ ...inp, flex: 1, height: 26, fontSize: 11 }} />
+                    <input value={branch.name} onChange={e => updateBranchField(bi, "name", e.target.value)} placeholder="Branch name (key)" style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }} />
+                    <input value={branch.label} onChange={e => updateBranchField(bi, "label", e.target.value)} placeholder="Display label" style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }} />
                   </div>
                   <button onClick={() => removeBranch(bi)} style={{ width: 22, height: 22, border: "none", borderRadius: 5, background: C.redPale, color: C.red, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CloseIcon style={{ fontSize: 10 }} /></button>
                 </div>
                 <div style={{ padding: "9px 11px" }}>
-                  {branch.layers.length === 0 && <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>No layers in this branch.</div>}
+                  {branch.layers.length === 0 && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8 }}>No layers in this branch.</div>}
                   {branch.layers.map((layer, li) => (
                     <LayerCard key={li} layer={layer} index={li} total={branch.layers.length}
                       expanded={branchExpanded[bi] === li}
@@ -2319,14 +2319,14 @@ export default function LayerConfigPanel({
                     </LayerCard>
                   ))}
                   <button onClick={() => addBranchLayer(bi)}
-                    style={{ width: "100%", height: 28, border: `1px dashed ${C.purpleMid}`, borderRadius: 7, background: "none", color: C.purple, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" }}>
+                    style={{ width: "100%", height: 28, border: `1px dashed ${C.purpleMid}`, borderRadius: 7, background: "none", color: C.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
                     + Add Layer to Branch
                   </button>
                 </div>
               </div>
             ))}
             <button onClick={addBranch}
-              style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: 8, background: "none", color: C.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", marginBottom: 14 }}>
+              style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: 8, background: "none", color: C.purple, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "var(--pmw-font-main)", marginBottom: 14 }}>
               + Add Branch
             </button>
           </>

@@ -165,7 +165,7 @@ const sectionCard: React.CSSProperties = {
 const btnPrimary: React.CSSProperties = {
   padding: "12px 32px",
   minHeight: 44,
-  borderRadius: 8,
+  borderRadius: 12,
   border: "none",
   background: COLORS.purple,
   color: "#fff",
@@ -212,7 +212,7 @@ const SubmittingOverlay = ({ action }: { action: SubmitAction }) => {
     <div className="eval-overlay" role="alertdialog" aria-modal="true" aria-busy="true" aria-live="assertive" aria-label={label}>
       <div className="eval-overlay-card">
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Spinner /></div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 8 }}>{label}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>{label}</div>
         <div style={{ fontSize: 13, lineHeight: 1.7, color: COLORS.textSecond }}>
           This can take a moment while the record is written and the next step is notified.
           <br />
@@ -811,7 +811,7 @@ export default function EvaluationPage() {
   if (authState === "unauthorized") {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
+        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>You need to sign in with your Microsoft 365 account to access this evaluation.</p>
@@ -824,7 +824,7 @@ export default function EvaluationPage() {
   if (error) {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "48px 44px", maxWidth: 460, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
+        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "48px 44px", maxWidth: 460, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon style={{ fontSize: 40 }} /></div>
           {/* The people who land here are approvers following a link from an
               email, not staff who can read a status code. Say what happened and
@@ -866,7 +866,7 @@ export default function EvaluationPage() {
   if (actionState === "success") {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
+        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.green, marginBottom: 8 }}>Submitted Successfully</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>
@@ -907,7 +907,7 @@ export default function EvaluationPage() {
         @media (prefers-reduced-motion: reduce) {
           .eval-overlay, .eval-overlay-card { animation: none !important; }
         }
-        .eval-currency-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #5F646D; font-size: 13px; font-weight: 800; pointer-events: none; z-index: 1; font-variant-numeric: tabular-nums; }
+        .eval-currency-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #5F646D; font-size: 13px; font-weight: 700; pointer-events: none; z-index: 1; font-variant-numeric: tabular-nums; }
         .eval-survey-wrap .sd-root-modern, .eval-survey-wrap .sd-container-modern { background: transparent !important; max-width: 100% !important; }
         .eval-survey-wrap .sd-row { display: flex !important; flex-wrap: wrap !important; }
         .eval-survey-wrap .sd-question { box-shadow: none !important; }
@@ -919,7 +919,7 @@ export default function EvaluationPage() {
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
 
         {/* Header */}
-        <div className="eval-header" style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 18, alignItems: "center", background: COLORS.cardBg, borderRadius: 16, padding: "18px 20px", marginBottom: 20, boxShadow: COLORS.shadow }}>
+        <div className="eval-header" style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 18, alignItems: "center", background: COLORS.cardBg, borderRadius: 12, padding: "18px 20px", marginBottom: 20, boxShadow: COLORS.shadow }}>
           <div style={{ width: 64, height: 64, borderRadius: 12, background: COLORS.purplePale, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
             {logoUrl ? (
               <img src={logoUrl} alt="Company logo" style={{ maxWidth: 54, maxHeight: 54, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", outlineOffset: -1 }} />
@@ -928,10 +928,10 @@ export default function EvaluationPage() {
             )}
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.purple, textTransform: "uppercase", letterSpacing: 0, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.purple, textTransform: "uppercase", letterSpacing: 0, marginBottom: 4 }}>
               {isEvaluation ? "Evaluation Review" : "Approval Review"}
             </div>
-            <h1 style={{ fontSize: "clamp(22px, 3vw, 32px)", lineHeight: 1.15, fontWeight: 800, color: COLORS.textPrimary, margin: 0 }}>
+            <h1 style={{ fontSize: "clamp(22px, 3vw, 32px)", lineHeight: 1.15, fontWeight: 700, color: COLORS.textPrimary, margin: 0 }}>
               {formTitle || currentLayer?.title || (isEvaluation ? "Evaluation" : "Approval")}
             </h1>
             <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 8 }}>
@@ -942,7 +942,7 @@ export default function EvaluationPage() {
           <span style={{
             justifySelf: "start",
             fontSize: 12,
-            fontWeight: 800,
+            fontWeight: 700,
             padding: "7px 12px",
             borderRadius: 999,
             color: isLayerAlreadyComplete ? COLORS.green : COLORS.purple,
@@ -984,7 +984,7 @@ export default function EvaluationPage() {
                 );
               }
               return (
-                <div key={i} style={{ background: COLORS.purplePale, borderRadius: 8, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
+                <div key={i} style={{ background: COLORS.purplePale, borderRadius: 12, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
                   Layer {previousLayerNumber}: <strong>{String(pr.status || "Completed")}</strong>
                   {pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null}
                 </div>
@@ -1038,7 +1038,7 @@ export default function EvaluationPage() {
                       {entry.columns[0]?.title || fieldName}
                     </div>
                     <div
-                      style={{ overflow: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 8 }}
+                      style={{ overflow: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 12 }}
                       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
                     />
                     <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 4 }}>
@@ -1058,7 +1058,7 @@ export default function EvaluationPage() {
           </div>
 
           {isLayerAlreadyComplete ? (
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: 14, borderRadius: 10, background: COLORS.greenPale, color: COLORS.textPrimary }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: 14, borderRadius: 12, background: COLORS.greenPale, color: COLORS.textPrimary }}>
               <LockIcon style={{ fontSize: 20, color: COLORS.green, marginTop: 1 }} />
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>This layer is already completed</div>
@@ -1076,7 +1076,7 @@ export default function EvaluationPage() {
                       <NativeFormView runtime={evalRuntime} />
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, color: COLORS.red, background: COLORS.redPale, borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontSize: 13, color: COLORS.red, background: COLORS.redPale, borderRadius: 12, padding: 12 }}>
                       This evaluation layer has no configured fields. Ask a form builder superuser to update the layer configuration.
                     </div>
                   )}
@@ -1173,14 +1173,14 @@ export default function EvaluationPage() {
             aria-labelledby="eval-reject-title"
             style={{
               background: COLORS.cardBg,
-              borderRadius: 14,
+              borderRadius: 12,
               padding: 24,
               width: "100%",
               maxWidth: 460,
               boxShadow: "0 24px 48px rgba(16, 24, 40, 0.28)",
             }}
           >
-            <div id="eval-reject-title" style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 6 }}>
+            <div id="eval-reject-title" style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 6 }}>
               Reject this submission?
             </div>
             <div style={{ fontSize: 13, color: COLORS.textSecond, marginBottom: 16 }}>
@@ -1199,7 +1199,7 @@ export default function EvaluationPage() {
                 width: "100%",
                 minHeight: 96,
                 padding: 10,
-                borderRadius: 8,
+                borderRadius: 12,
                 border: `1px solid ${COLORS.border}`,
                 fontSize: 13,
                 fontFamily: "inherit",

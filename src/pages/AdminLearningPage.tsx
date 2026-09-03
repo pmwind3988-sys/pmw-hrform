@@ -398,7 +398,7 @@ export default function AdminLearningPage() {
       <Container maxWidth="xl" disableGutters>
         <Box sx={learningContentSx}>
           {error && (
-            <Alert severity="error" sx={{ mb: 2, borderRadius: "10px", fontWeight: 700 }}>
+            <Alert severity="error" sx={{ mb: 2, borderRadius: "12px", fontWeight: 700 }}>
               {error}
             </Alert>
           )}
@@ -459,7 +459,7 @@ export default function AdminLearningPage() {
             >
               <Paper sx={{ ...learningPanelSx, p: 1.5, position: { md: "sticky" }, top: { md: 88 } }}>
                 <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1, px: 0.5 }}>
-                  <Typography variant="overline" sx={{ fontWeight: 900, color: editorial.softMuted }}>
+                  <Typography variant="overline" sx={{ fontWeight: 700, color: editorial.softMuted }}>
                     Topics
                   </Typography>
                   <Tooltip title="New top-level topic">
@@ -514,7 +514,7 @@ export default function AdminLearningPage() {
                     <Box sx={{ minWidth: 0 }}>
                       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                         <FolderOutlined sx={{ color: editorial.pmwBlueDark }} />
-                        <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink }}>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink }}>
                           {selectedPath ? selectedPath.replace(/\//g, " › ") : "All materials (root)"}
                         </Typography>
                       </Stack>
@@ -559,7 +559,7 @@ export default function AdminLearningPage() {
                                 slotProps={{ input: { "aria-label": `Password protect ${selectedTopic.name}` } }}
                               />
                             </Tooltip>
-                            <Typography variant="caption" sx={{ fontWeight: 800, color: editorial.muted }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: editorial.muted }}>
                               Password
                             </Typography>
                             {selectedTopic.locked && (
@@ -622,10 +622,10 @@ export default function AdminLearningPage() {
                   {upload && (
                     <Box sx={{ mt: 2 }}>
                       <Stack direction="row" sx={{ justifyContent: "space-between", mb: 0.5 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 800, color: editorial.ink }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: editorial.ink }}>
                           Uploading {upload.index}/{upload.count}: {upload.fileName}
                         </Typography>
-                        <Typography variant="caption" sx={{ fontWeight: 800, color: editorial.muted, fontVariantNumeric: "tabular-nums" }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: editorial.muted, fontVariantNumeric: "tabular-nums" }}>
                           {formatFileSize(upload.loaded)} / {formatFileSize(upload.total)}
                         </Typography>
                       </Stack>
@@ -637,7 +637,7 @@ export default function AdminLearningPage() {
                     </Box>
                   )}
 
-                  <Alert severity="info" sx={{ mt: 2, borderRadius: "10px", fontWeight: 600 }}>
+                  <Alert severity="info" sx={{ mt: 2, borderRadius: "12px", fontWeight: 600 }}>
                     Uploaded files are view-only by default. Turn on Download for anything staff should be able to keep
                     a copy of, and the lock switch for anything that needs a password — a locked material shows no
                     thumbnail and no preview until the password is entered, every time. Files go straight from this
@@ -652,7 +652,7 @@ export default function AdminLearningPage() {
                     </Stack>
                   ) : folderMaterials.length === 0 ? (
                     <Box sx={{ py: 5, textAlign: "center" }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 800, color: editorial.ink }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: editorial.ink }}>
                         No materials in this topic
                       </Typography>
                       <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 600, mt: 0.5 }}>
@@ -680,7 +680,7 @@ export default function AdminLearningPage() {
                                 sx={{
                                   width: 44,
                                   height: 44,
-                                  borderRadius: "10px",
+                                  borderRadius: "12px",
                                   flexShrink: 0,
                                   display: "flex",
                                   alignItems: "center",
@@ -698,7 +698,7 @@ export default function AdminLearningPage() {
                                 <Typography
                                   variant="subtitle2"
                                   sx={{
-                                    fontWeight: 800,
+                                    fontWeight: 700,
                                     color: editorial.ink,
                                     overflow: "hidden",
                                     textOverflow: "ellipsis",
@@ -713,8 +713,8 @@ export default function AdminLearningPage() {
                                     label={style.label}
                                     sx={{
                                       height: 20,
-                                      fontSize: "0.65rem",
-                                      fontWeight: 800,
+                                      fontSize: "0.72rem",
+                                      fontWeight: 700,
                                       color: style.color,
                                       backgroundColor: style.wash,
                                     }}
@@ -724,7 +724,7 @@ export default function AdminLearningPage() {
                                   </Typography>
                                   <Stack direction="row" spacing={0.4} sx={{ alignItems: "center", color: editorial.softMuted }}>
                                     <VisibilityOutlined sx={{ fontSize: 14 }} />
-                                    <Typography variant="caption" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                                       {material.viewCount}
                                     </Typography>
                                   </Stack>
@@ -774,7 +774,7 @@ export default function AdminLearningPage() {
                                   value=""
                                   disabled={busy}
                                   onChange={(event) => handleMoveMaterial(material, String(event.target.value))}
-                                  sx={{ borderRadius: "8px" }}
+                                  sx={{ borderRadius: "12px" }}
                                 >
                                   <MenuItem value="">Root</MenuItem>
                                   {topics
@@ -819,7 +819,7 @@ export default function AdminLearningPage() {
       </Container>
 
       <Dialog open={Boolean(folderDialog)} onClose={() => setFolderDialog(null)} fullWidth maxWidth="xs">
-        <DialogTitle sx={{ fontWeight: 900 }}>
+        <DialogTitle sx={{ fontWeight: 700 }}>
           {folderDialog?.mode === "rename" ? "Rename topic" : folderDialog?.path ? "New subtopic" : "New topic"}
         </DialogTitle>
         <DialogContent>
@@ -852,7 +852,7 @@ export default function AdminLearningPage() {
       </Dialog>
 
       <Dialog open={Boolean(editing)} onClose={() => setEditing(null)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontWeight: 900 }}>Material details</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Material details</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
@@ -888,7 +888,7 @@ export default function AdminLearningPage() {
                 slotProps={{ input: { "aria-label": "Allow download" } }}
               />
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink }}>
                   Allow download
                 </Typography>
                 <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 600 }}>
@@ -903,7 +903,7 @@ export default function AdminLearningPage() {
             <Divider />
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", justifyContent: "space-between" }}>
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink }}>
                   Password protection
                 </Typography>
                 <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 600 }}>
@@ -967,7 +967,7 @@ export default function AdminLearningPage() {
         <Alert
           severity={feedback?.severity ?? "success"}
           onClose={() => setFeedback(null)}
-          sx={{ borderRadius: "10px", fontWeight: 700 }}
+          sx={{ borderRadius: "12px", fontWeight: 700 }}
         >
           {feedback?.message}
         </Alert>
@@ -975,7 +975,7 @@ export default function AdminLearningPage() {
 
       {!identityToken && !loading && (
         <Box sx={{ px: 3, pb: 3 }}>
-          <Alert severity="warning" sx={{ borderRadius: "10px", fontWeight: 700 }}>
+          <Alert severity="warning" sx={{ borderRadius: "12px", fontWeight: 700 }}>
             Microsoft 365 identity could not be confirmed, so material lists and view counts may be incomplete. Refresh
             the page to try again.
           </Alert>
@@ -1014,7 +1014,7 @@ function TopicTreeButton({
         pl: 1 + depth * 1.5,
         cursor: "pointer",
         textAlign: "left",
-        borderRadius: "8px",
+        borderRadius: "12px",
         border: selected ? `1px solid ${editorial.pmwBlueSoft}` : "1px solid transparent",
         backgroundColor: selected ? editorial.blueWash : "transparent",
         color: selected ? editorial.pmwBlueDark : editorial.ink,
@@ -1036,7 +1036,7 @@ function TopicTreeButton({
           {label}
         </Typography>
       </Stack>
-      <Typography variant="caption" sx={{ fontWeight: 800, color: editorial.softMuted, fontVariantNumeric: "tabular-nums" }}>
+      <Typography variant="caption" sx={{ fontWeight: 700, color: editorial.softMuted, fontVariantNumeric: "tabular-nums" }}>
         {count}
       </Typography>
     </Box>

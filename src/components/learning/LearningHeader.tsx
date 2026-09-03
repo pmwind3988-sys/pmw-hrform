@@ -72,7 +72,7 @@ export default function LearningHeader({
               sx={{
                 width: { xs: 38, sm: 46 },
                 height: { xs: 38, sm: 46 },
-                borderRadius: "10px",
+                borderRadius: "12px",
                 border: `1px solid ${editorial.pmwBlueSoft}`,
                 display: { xs: "none", sm: "flex" },
                 alignItems: "center",
@@ -89,7 +89,7 @@ export default function LearningHeader({
                 variant="h5"
                 component="h1"
                 sx={{
-                  fontWeight: 800,
+                  fontWeight: 700,
                   color: editorial.ink,
                   fontSize: { xs: "1.05rem", sm: "1.3rem", md: "1.45rem" },
                   lineHeight: 1.15,
@@ -104,7 +104,7 @@ export default function LearningHeader({
                 sx={{
                   color: editorial.muted,
                   fontWeight: 600,
-                  fontSize: "0.82rem",
+                  fontSize: "0.845rem",
                   display: { xs: "none", md: "block" },
                 }}
               >

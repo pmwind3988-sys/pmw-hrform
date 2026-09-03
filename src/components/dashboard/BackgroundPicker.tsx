@@ -103,7 +103,7 @@ export default function BackgroundPicker({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, pb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0 }}>
           <ImageSearch sx={{ color: "#0078D4" }} />
@@ -118,7 +118,7 @@ export default function BackgroundPicker({
 
       <DialogContent sx={{ pt: 1 }}>
         {(error || validationError) && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: "8px" }}>
+          <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>
             {validationError || error}
           </Alert>
         )}
@@ -140,7 +140,7 @@ export default function BackgroundPicker({
                     sx={{
                       appearance: "none",
                       border: selected ? "2px solid #0078D4" : "1px solid rgba(17,24,39,0.12)",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       background: "#fff",
                       cursor: "pointer",
                       p: 0,
@@ -174,7 +174,7 @@ export default function BackgroundPicker({
               })}
             </Box>
 
-            <Box sx={{ mt: 2.5, p: 2, border: selectedId === "custom" ? "2px solid #0078D4" : "1px solid rgba(17,24,39,0.12)", borderRadius: "8px", backgroundColor: "#fff" }}>
+            <Box sx={{ mt: 2.5, p: 2, border: selectedId === "custom" ? "2px solid #0078D4" : "1px solid rgba(17,24,39,0.12)", borderRadius: "12px", backgroundColor: "#fff" }}>
               <Typography variant="subtitle2" sx={{ color: "#111827", fontWeight: 700, mb: 1 }}>
                 Custom Image
               </Typography>
@@ -197,7 +197,7 @@ export default function BackgroundPicker({
                 <Button
                   variant={selectedId === "custom" ? "contained" : "outlined"}
                   onClick={() => setSelectedId("custom")}
-                  sx={{ textTransform: "none", borderRadius: "8px", minWidth: 92 }}
+                  sx={{ textTransform: "none", borderRadius: "12px", minWidth: 92 }}
                 >
                   Select
                 </Button>
@@ -214,12 +214,12 @@ export default function BackgroundPicker({
                   placeholder="PMW owned asset, photographer, license, or source URL"
                   fullWidth
                   sx={{ mt: 1.25 }}
-                  slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                  slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                 />
               )}
             </Box>
 
-            <Box sx={{ mt: 2, p: 2, border: "1px solid rgba(17,24,39,0.12)", borderRadius: "8px", backgroundColor: "#fff" }}>
+            <Box sx={{ mt: 2, p: 2, border: "1px solid rgba(17,24,39,0.12)", borderRadius: "12px", backgroundColor: "#fff" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, mb: 0.75 }}>
                 <Typography variant="subtitle2" sx={{ color: "#111827", fontWeight: 700 }}>
                   Image Opacity
@@ -250,16 +250,16 @@ export default function BackgroundPicker({
             <Box
               sx={{
                 height: { xs: 180, md: 300 },
-                borderRadius: "8px",
+                borderRadius: "12px",
                 border: "1px solid rgba(17,24,39,0.12)",
                 background: previewCss,
                 overflow: "hidden",
                 position: "relative",
               }}
             >
-              <Box sx={{ position: "absolute", left: 16, right: 16, top: 18, height: 38, borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.92)", border: "1px solid rgba(17,24,39,0.08)" }} />
-              <Box sx={{ position: "absolute", left: 16, right: 16, top: 72, height: 74, borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.9)", border: "1px solid rgba(17,24,39,0.08)" }} />
-              <Box sx={{ position: "absolute", left: 16, right: 16, top: 162, bottom: 18, borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.88)", border: "1px solid rgba(17,24,39,0.08)" }} />
+              <Box sx={{ position: "absolute", left: 16, right: 16, top: 18, height: 38, borderRadius: "12px", backgroundColor: "rgba(255,255,255,0.92)", border: "1px solid rgba(17,24,39,0.08)" }} />
+              <Box sx={{ position: "absolute", left: 16, right: 16, top: 72, height: 74, borderRadius: "12px", backgroundColor: "rgba(255,255,255,0.9)", border: "1px solid rgba(17,24,39,0.08)" }} />
+              <Box sx={{ position: "absolute", left: 16, right: 16, top: 162, bottom: 18, borderRadius: "12px", backgroundColor: "rgba(255,255,255,0.88)", border: "1px solid rgba(17,24,39,0.08)" }} />
               {loading && (
                 <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.52)" }}>
                   <CircularProgress size={28} />
@@ -279,14 +279,14 @@ export default function BackgroundPicker({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
-        <Button onClick={onClose} sx={{ textTransform: "none", borderRadius: "8px" }}>
+        <Button onClick={onClose} sx={{ textTransform: "none", borderRadius: "12px" }}>
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={() => { void handleSave(); }}
           disabled={saving}
-          sx={{ textTransform: "none", borderRadius: "8px", minWidth: 150 }}
+          sx={{ textTransform: "none", borderRadius: "12px", minWidth: 150 }}
         >
           {saving ? <CircularProgress size={20} color="inherit" /> : "Save Background"}
         </Button>

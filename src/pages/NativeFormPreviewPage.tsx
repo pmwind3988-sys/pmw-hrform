@@ -237,7 +237,7 @@ export default function NativeFormPreviewPage() {
                 style={{
                   margin: 0,
                   padding: 14,
-                  borderRadius: 8,
+                  borderRadius: 12,
                   background: "var(--nf-sunken)",
                   border: "1px solid var(--nf-line)",
                   fontSize: 12,
@@ -317,7 +317,7 @@ function PreviewBar({ formId, version }: { formId: string; version: string }) {
           background: "var(--nf-brand-wash)",
           color: "var(--nf-brand-ink)",
           fontWeight: 700,
-          letterSpacing: "0.04em",
+          letterSpacing: "0.03em",
           textTransform: "uppercase",
           fontSize: 10,
         }}
@@ -384,14 +384,14 @@ function FormBanner({
             style={{
               fontSize: 10,
               fontWeight: 700,
-              letterSpacing: "0.06em",
+              letterSpacing: "0.03em",
               textTransform: "uppercase",
               color: "var(--nf-ink-faint)",
             }}
           >
             {isoStandards}
           </div>
-          <h1 style={{ margin: "4px 0 0", fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>{title}</h1>
+          <h1 style={{ margin: "4px 0 0", fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em" }}>{title}</h1>
         </div>
       </div>
       <div

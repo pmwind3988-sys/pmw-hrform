@@ -200,7 +200,7 @@ export default function CareerPortalHeader({
               sx={{
                 width: { xs: 38, sm: 46 },
                 height: { xs: 38, sm: 46 },
-                borderRadius: "8px",
+                borderRadius: "12px",
                 border: `1px solid ${editorial.pmwBlueSoft}`,
                 display: "flex",
                 alignItems: "center",
@@ -223,7 +223,7 @@ export default function CareerPortalHeader({
                 variant="h5"
                 component="h1"
                 sx={{
-                  fontWeight: 800,
+                  fontWeight: 700,
                   color: editorial.ink,
                   fontSize: { xs: "1.1rem", sm: "1.35rem", md: "1.5rem" },
                   lineHeight: 1,
@@ -266,7 +266,7 @@ export default function CareerPortalHeader({
                 sx={{
                   width: 31,
                   height: 31,
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   backgroundColor: "rgba(0, 120, 212, 0.10)",
                   display: "flex",
                   alignItems: "center",
@@ -286,7 +286,7 @@ export default function CareerPortalHeader({
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   color: editorial.pmwBlueDark,
                   backgroundColor: "#ffffff",
                   border: `1px solid ${editorial.border}`,
@@ -345,7 +345,7 @@ export default function CareerPortalHeader({
                 sx={{
                   width: 31,
                   height: 31,
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   backgroundColor: "rgba(0, 120, 212, 0.10)",
                   display: "flex",
                   alignItems: "center",
@@ -363,7 +363,7 @@ export default function CareerPortalHeader({
                 paper: {
                   sx: {
                     minWidth: 250,
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
                     border: "1px solid rgba(0, 0, 0, 0.06)",
                     mt: 1,
@@ -445,7 +445,7 @@ export default function CareerPortalHeader({
                 sx: {
                   width: 280,
                   maxWidth: "calc(100vw - 24px)",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   boxShadow: "0 10px 34px rgba(17, 24, 39, 0.16)",
                   border: "1px solid rgba(17, 24, 39, 0.08)",
                   mt: 1,
@@ -471,7 +471,7 @@ export default function CareerPortalHeader({
                   "& .MuiButton-root": {
                     width: "100%",
                     justifyContent: "flex-start",
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     textTransform: "none",
                     fontWeight: 700,
                   },

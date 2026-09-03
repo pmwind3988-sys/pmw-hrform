@@ -45,7 +45,7 @@ interface GuestMemberPageProps {
 
 const panelSx = {
   backgroundColor: editorial.white,
-  borderRadius: "14px",
+  borderRadius: "12px",
   border: editorialHairline,
   boxShadow: editorialShadow,
   px: { xs: 2.5, sm: 3.5 },
@@ -143,16 +143,16 @@ export default function GuestMemberPage({
           <Box sx={panelSx}>
             <Typography
               component="h2"
-              sx={{ fontSize: "1.05rem", fontWeight: 800, color: editorial.ink, mb: 0.5 }}
+              sx={{ fontSize: "1.0625rem", fontWeight: 700, color: editorial.ink, mb: 0.5 }}
             >
               What you have sent
             </Typography>
-            <Typography sx={{ fontSize: "0.85rem", color: editorial.muted, mb: 2 }}>
+            <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, mb: 2 }}>
               Job applications and HR forms submitted with this account.
             </Typography>
 
             {submissionsError ? (
-              <Alert severity="warning" sx={{ borderRadius: "10px", mb: 2, fontSize: "0.85rem" }}>
+              <Alert severity="warning" sx={{ borderRadius: "12px", mb: 2, fontSize: "0.845rem" }}>
                 {submissionsError}
               </Alert>
             ) : null}
@@ -162,7 +162,7 @@ export default function GuestMemberPage({
                 <CircularProgress size={22} />
               </Stack>
             ) : submissions.length === 0 ? (
-              <Typography sx={{ fontSize: "0.9rem", color: editorial.muted, py: 1.5 }}>
+              <Typography sx={{ fontSize: "0.875rem", color: editorial.muted, py: 1.5 }}>
                 Nothing yet. Anything you apply for or submit from now on will appear here.
               </Typography>
             ) : (
@@ -175,11 +175,11 @@ export default function GuestMemberPage({
                   >
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography
-                        sx={{ fontSize: "0.92rem", fontWeight: 700, color: editorial.ink }}
+                        sx={{ fontSize: "0.9375rem", fontWeight: 700, color: editorial.ink }}
                       >
                         {row.title}
                       </Typography>
-                      <Typography sx={{ fontSize: "0.8rem", color: editorial.muted }}>
+                      <Typography sx={{ fontSize: "0.78rem", color: editorial.muted }}>
                         {row.kind === "job-application" ? "Job application" : "Form"}
                         {row.reference ? ` · ${row.reference}` : ""} · {formatDate(row.submittedAt)}
                       </Typography>
@@ -189,7 +189,7 @@ export default function GuestMemberPage({
                       size="small"
                       sx={{
                         fontWeight: 700,
-                        fontSize: "0.75rem",
+                        fontSize: "0.78rem",
                         backgroundColor: editorial.blueWash,
                         color: editorial.pmwBlueDark,
                       }}
@@ -222,7 +222,7 @@ function LearningPanel({ approved }: { approved: boolean }) {
   return (
     <Box sx={panelSx}>
       <Stack direction="row" sx={{ alignItems: "center", gap: 1.25, mb: 1 }}>
-        <Typography component="h2" sx={{ fontSize: "1.05rem", fontWeight: 800, color: editorial.ink }}>
+        <Typography component="h2" sx={{ fontSize: "1.0625rem", fontWeight: 700, color: editorial.ink }}>
           Learning materials
         </Typography>
         <Chip
@@ -239,11 +239,11 @@ function LearningPanel({ approved }: { approved: boolean }) {
 
       {approved ? (
         <>
-          <Typography sx={{ fontSize: "0.9rem", color: editorial.muted, lineHeight: 1.6 }}>
+          <Typography sx={{ fontSize: "0.875rem", color: editorial.muted, lineHeight: 1.6 }}>
             You can open the learning hub.
           </Typography>
           <Typography
-            sx={{ mt: 1.25, fontSize: "0.8rem", color: editorial.muted, lineHeight: 1.6, textWrap: "pretty" }}
+            sx={{ mt: 1.25, fontSize: "0.78rem", color: editorial.muted, lineHeight: 1.6, textWrap: "pretty" }}
           >
             Your name, position, department and the material you open are recorded in an access log
             that HR can read. This is how PMW evidences that training material was received.
@@ -256,8 +256,8 @@ function LearningPanel({ approved }: { approved: boolean }) {
               mt: 2,
               px: 2.5,
               py: 1,
-              borderRadius: "10px",
-              fontSize: "0.9rem",
+              borderRadius: "12px",
+              fontSize: "0.875rem",
               fontWeight: 700,
               textTransform: "none",
               backgroundColor: PRIMARY_BLUE,
@@ -268,7 +268,7 @@ function LearningPanel({ approved }: { approved: boolean }) {
           </Button>
         </>
       ) : (
-        <Typography sx={{ fontSize: "0.9rem", color: editorial.muted, lineHeight: 1.6, textWrap: "pretty" }}>
+        <Typography sx={{ fontSize: "0.875rem", color: editorial.muted, lineHeight: 1.6, textWrap: "pretty" }}>
           HR is reviewing your access. Everything else on the site works in the meantime — you can
           browse jobs, apply, and submit forms. If you opened the learning hub and were sent back
           here, this is why.
@@ -340,16 +340,16 @@ function ProfilePanel({
     <Box sx={panelSx}>
       <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}>
         <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: "1.15rem", fontWeight: 800, color: editorial.ink }}>
+          <Typography sx={{ fontSize: "1.15rem", fontWeight: 700, color: editorial.ink }}>
             {member.fullName || member.googleName || member.email}
           </Typography>
-          <Typography sx={{ fontSize: "0.85rem", color: editorial.muted }}>{member.email}</Typography>
+          <Typography sx={{ fontSize: "0.845rem", color: editorial.muted }}>{member.email}</Typography>
         </Box>
         <Button
           onClick={onSignOut}
           sx={{
             flexShrink: 0,
-            fontSize: "0.82rem",
+            fontSize: "0.845rem",
             fontWeight: 700,
             textTransform: "none",
             color: editorial.muted,
@@ -370,7 +370,7 @@ function ProfilePanel({
             onChange={(event) => setFullName(event.target.value)}
             disabled={saving}
             fullWidth
-            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
           />
           <TextField
             label="Position"
@@ -378,7 +378,7 @@ function ProfilePanel({
             onChange={(event) => setPosition(event.target.value)}
             disabled={saving}
             fullWidth
-            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
           />
           <TextField
             select={departments.length > 0}
@@ -387,7 +387,7 @@ function ProfilePanel({
             onChange={(event) => setDepartment(event.target.value)}
             disabled={saving}
             fullWidth
-            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
           >
             {departments.map((name) => (
               <MenuItem key={name} value={name}>
@@ -397,7 +397,7 @@ function ProfilePanel({
           </TextField>
 
           {error ? (
-            <Alert severity="error" role="alert" sx={{ borderRadius: "10px", fontSize: "0.85rem" }}>
+            <Alert severity="error" role="alert" sx={{ borderRadius: "12px", fontSize: "0.845rem" }}>
               {error}
             </Alert>
           ) : null}
@@ -415,7 +415,7 @@ function ProfilePanel({
               disabled={saving}
               sx={{
                 px: 2.5,
-                borderRadius: "10px",
+                borderRadius: "12px",
                 fontWeight: 700,
                 textTransform: "none",
                 backgroundColor: PRIMARY_BLUE,
@@ -427,7 +427,7 @@ function ProfilePanel({
             <Button
               onClick={() => onEditingChange(false)}
               disabled={saving}
-              sx={{ borderRadius: "10px", fontWeight: 700, textTransform: "none", color: editorial.muted }}
+              sx={{ borderRadius: "12px", fontWeight: 700, textTransform: "none", color: editorial.muted }}
             >
               Cancel
             </Button>
@@ -436,18 +436,18 @@ function ProfilePanel({
       ) : (
         <Stack direction="row" sx={{ gap: 3, flexWrap: "wrap", alignItems: "flex-end" }}>
           <Box>
-            <Typography sx={{ fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: editorial.softMuted }}>
+            <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", color: editorial.softMuted }}>
               Position
             </Typography>
-            <Typography sx={{ fontSize: "0.92rem", fontWeight: 600, color: editorial.ink }}>
+            <Typography sx={{ fontSize: "0.9375rem", fontWeight: 600, color: editorial.ink }}>
               {member.position || "—"}
             </Typography>
           </Box>
           <Box>
-            <Typography sx={{ fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: editorial.softMuted }}>
+            <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", color: editorial.softMuted }}>
               Department
             </Typography>
-            <Typography sx={{ fontSize: "0.92rem", fontWeight: 600, color: editorial.ink }}>
+            <Typography sx={{ fontSize: "0.9375rem", fontWeight: 600, color: editorial.ink }}>
               {member.department || "—"}
             </Typography>
           </Box>
@@ -455,7 +455,7 @@ function ProfilePanel({
             onClick={startEditing}
             sx={{
               ml: "auto",
-              fontSize: "0.82rem",
+              fontSize: "0.845rem",
               fontWeight: 700,
               textTransform: "none",
               color: editorial.pmwBlueDark,

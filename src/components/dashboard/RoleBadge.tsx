@@ -18,9 +18,9 @@ export default function RoleBadge({ isAdmin }: RoleBadgeProps) {
           backgroundColor: editorial.purpleWash,
           color: editorial.pmwPurpleDark,
           border: `1px solid ${editorial.pmwPurpleSoft}`,
-          fontWeight: 800,
+          fontWeight: 700,
           letterSpacing: 0,
-          fontSize: "0.7rem",
+          fontSize: "0.72rem",
         }}
       />
     );
@@ -35,9 +35,9 @@ export default function RoleBadge({ isAdmin }: RoleBadgeProps) {
         backgroundColor: editorial.blueWash,
         color: editorial.pmwBlueDark,
         border: `1px solid ${editorial.pmwBlueSoft}`,
-        fontWeight: 800,
+        fontWeight: 700,
         letterSpacing: 0,
-        fontSize: "0.7rem",
+        fontSize: "0.72rem",
       }}
     />
   );

@@ -61,12 +61,12 @@ export default function CareerHero({ title, subtitle, children }: CareerHeroProp
           variant="h1"
           sx={{
             color: editorial.white,
-            fontWeight: 800,
+            fontWeight: 700,
             // Template sets 60px; scaled down so it does not overpower the
             // portal header sitting directly above it.
             fontSize: { xs: "2rem", sm: "2.75rem", md: "3.25rem" },
             lineHeight: 1.05,
-            letterSpacing: "-0.02em",
+            letterSpacing: "-0.01em",
             textWrap: "balance",
           }}
         >

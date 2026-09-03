@@ -44,7 +44,7 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
             size="small"
             onClick={() => setOpen(false)}
             sx={{
-              borderRadius: "10px",
+              borderRadius: "12px",
               "&:focus-visible": {
                 outline: `3px solid ${editorial.yellowSoft}`,
                 outlineOffset: 2,
@@ -55,7 +55,7 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
           </IconButton>
         }
       >
-        <Typography variant="body2" sx={{ fontWeight: 900, color: editorial.ink, mb: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink, mb: 0.5 }}>
           Lists missing configuration
         </Typography>
         <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
@@ -69,10 +69,10 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
                 backgroundColor: editorial.yellowSoft,
                 color: editorial.warning,
                 fontFamily: "monospace",
-                fontSize: "0.75rem",
+                fontSize: "0.78rem",
                 px: 1.5,
                 py: 0.5,
-                borderRadius: "6px",
+                borderRadius: "12px",
               }}
             >
               {list}

@@ -63,15 +63,15 @@ export default function UnlockPasswordDialog({
       onClose={busy ? undefined : onClose}
       fullWidth
       maxWidth="xs"
-      slotProps={{ paper: { sx: { borderRadius: "14px" } } }}
+      slotProps={{ paper: { sx: { borderRadius: "12px" } } }}
     >
-      <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
+      <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
           <Box
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "10px",
+              borderRadius: "12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -83,7 +83,7 @@ export default function UnlockPasswordDialog({
             {scope === "topic" ? <FolderOutlined /> : <LockOutlined />}
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, lineHeight: 1.2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, lineHeight: 1.2 }}>
               Password required
             </Typography>
             <Typography
@@ -111,7 +111,7 @@ export default function UnlockPasswordDialog({
         </Typography>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: "10px", fontWeight: 700 }}>
+          <Alert severity="error" sx={{ mb: 2, borderRadius: "12px", fontWeight: 700 }}>
             {error}
           </Alert>
         )}

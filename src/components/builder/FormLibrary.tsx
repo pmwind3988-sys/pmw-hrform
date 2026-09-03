@@ -17,14 +17,14 @@ interface FormLibraryProps {
 
 const Tag = ({ children, color = C.purple, bg = C.purplePale }: { children: React.ReactNode; color?: string; bg?: string }) => (
   <span style={{
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 700,
     color,
     background: bg,
-    borderRadius: 20,
+    borderRadius: 12,
     padding: "2px 9px",
     textTransform: "uppercase",
-    letterSpacing: ".04em",
+    letterSpacing: "0.03em",
   }}>{children}</span>
 );
 
@@ -38,7 +38,7 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
         alignItems: "center",
         justifyContent: "space-between",
       }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".06em" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
           Forms ({forms.length})
         </div>
         <button
@@ -47,12 +47,12 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
             height: 23,
             padding: "0 10px",
             border: "none",
-            borderRadius: 6,
+            borderRadius: 8,
             background: C.purple,
             color: C.white,
-            fontSize: 11,
+            fontSize: 11.5,
             cursor: "pointer",
-            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            fontFamily: "var(--pmw-font-main)",
             display: "flex",
             alignItems: "center",
             gap: 4,
@@ -63,7 +63,7 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "7px 9px" }}>
         {forms.length === 0 && (
-          <div style={{ textAlign: "center", padding: "20px 0", color: C.textMuted, fontSize: 11 }}>No forms yet.</div>
+          <div style={{ textAlign: "center", padding: "20px 0", color: C.textMuted, fontSize: 11.5 }}>No forms yet.</div>
         )}
         {forms.map(f => (
           <div
@@ -104,12 +104,12 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
                 borderRadius: 5,
                 background: "transparent",
                 color: C.textMuted,
-                fontSize: 12,
+                fontSize: 12.5,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                fontFamily: "var(--pmw-font-main)",
                 transition: "all .13s",
               }}
               onMouseEnter={e => {
@@ -142,12 +142,12 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
                   borderRadius: 5,
                   background: "transparent",
                   color: C.textMuted,
-                  fontSize: 12,
+                  fontSize: 12.5,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontFamily: "var(--pmw-font-main)",
                   transition: "all .13s",
                 }}
                 onMouseEnter={e => {
@@ -164,18 +164,18 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
                 <DeleteSweepIcon style={{ fontSize: 14 }} />
               </button>
             )}
-            <div style={{ fontSize: 12, fontWeight: 600, color: f.Title === current ? C.purple : C.textPrimary, marginBottom: 2, paddingRight: 22 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: f.Title === current ? C.purple : C.textPrimary, marginBottom: 2, paddingRight: 22 }}>
               {f.Title}
             </div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: C.textMuted, fontFamily: "monospace" }}>{f.FormID}</span>
+              <span style={{ fontSize: 11, color: C.textMuted, fontFamily: "monospace" }}>{f.FormID}</span>
               <Tag>v{f.CurrentVersion || "?"}</Tag>
               {f.IsPublished === false ? (
                 <Tag color={C.amber} bg={C.amberPale}>Draft</Tag>
               ) : (
                 <Tag color={C.green} bg={C.greenPale}>Published</Tag>
               )}
-              {f.Slug && <span style={{ fontSize: 10, color: C.textMuted }}>/forms/{f.Slug}</span>}
+              {f.Slug && <span style={{ fontSize: 11, color: C.textMuted }}>/forms/{f.Slug}</span>}
             </div>
           </div>
         ))}

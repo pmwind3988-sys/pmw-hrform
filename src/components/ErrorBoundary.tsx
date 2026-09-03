@@ -39,7 +39,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             padding: 40,
             maxWidth: 500,
             margin: "60px auto",
-            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            fontFamily: "var(--pmw-font-main)",
           }}
         >
           <div
@@ -72,7 +72,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             style={{
               marginTop: 20,
               padding: "10px 24px",
-              borderRadius: 8,
+              borderRadius: 12,
               border: "none",
               background: "#0078D4",
               color: "#fff",

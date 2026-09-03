@@ -329,10 +329,10 @@ export default function AdminRoutingPage() {
               <ArrowBackIcon fontSize="small" />
             </IconButton>
             <Box sx={{ flex: 1, minWidth: 220 }}>
-              <Typography sx={{ fontSize: "1.15rem", fontWeight: 800, color: editorial.ink, lineHeight: 1.2 }}>
+              <Typography sx={{ fontSize: "1.15rem", fontWeight: 700, color: editorial.ink, lineHeight: 1.2 }}>
                 Approval routing
               </Typography>
-              <Typography sx={{ fontSize: "0.8rem", color: editorial.muted }}>
+              <Typography sx={{ fontSize: "0.78rem", color: editorial.muted }}>
                 Who approves whom. Forms set to a reporting line read their answer from here.
               </Typography>
             </Box>
@@ -352,7 +352,7 @@ export default function AdminRoutingPage() {
         {loading && (
           <Stack sx={{ alignItems: "center", py: 8, gap: 2 }}>
             <CircularProgress size={28} />
-            <Typography sx={{ color: editorial.muted, fontSize: "0.85rem" }}>Reading the directory...</Typography>
+            <Typography sx={{ color: editorial.muted, fontSize: "0.845rem" }}>Reading the directory...</Typography>
           </Stack>
         )}
 
@@ -367,11 +367,11 @@ export default function AdminRoutingPage() {
 
         {/* Not set up yet: teach what the list is for before asking to make it. */}
         {!loading && !loadError && !listExists && (
-          <Paper sx={{ p: 4, borderRadius: "16px", boxShadow: editorialShadow, textAlign: "center" }}>
-            <Typography sx={{ fontSize: "1.05rem", fontWeight: 800, color: editorial.ink, mb: 1 }}>
+          <Paper sx={{ p: 4, borderRadius: "12px", boxShadow: editorialShadow, textAlign: "center" }}>
+            <Typography sx={{ fontSize: "1.0625rem", fontWeight: 700, color: editorial.ink, mb: 1 }}>
               The approval directory has not been set up yet
             </Typography>
-            <Typography sx={{ fontSize: "0.88rem", color: editorial.muted, maxWidth: 620, mx: "auto", mb: 3 }}>
+            <Typography sx={{ fontSize: "0.875rem", color: editorial.muted, maxWidth: 620, mx: "auto", mb: 3 }}>
               It is one SharePoint list with a row per person, and one column that matters: who approves them.
               With it, a form can be set to "goes to the submitter's approver" and route a clerk to their head of
               department, that head to the CFO, and the CFO to the CEO, without writing a single rule.
@@ -431,7 +431,7 @@ export default function AdminRoutingPage() {
               </Alert>
             )}
 
-            <Paper sx={{ borderRadius: "16px", boxShadow: editorialShadow, overflow: "hidden" }}>
+            <Paper sx={{ borderRadius: "12px", boxShadow: editorialShadow, overflow: "hidden" }}>
               <Tabs
                 value={tab}
                 onChange={(_, value: RoutingTab) => setTab(value)}
@@ -508,10 +508,10 @@ export default function AdminRoutingPage() {
 
                   {rows.length === 0 ? (
                     <Box sx={{ py: 6, textAlign: "center" }}>
-                      <Typography sx={{ fontWeight: 800, color: editorial.ink, mb: 1 }}>
+                      <Typography sx={{ fontWeight: 700, color: editorial.ink, mb: 1 }}>
                         Nobody in the directory yet
                       </Typography>
-                      <Typography sx={{ fontSize: "0.85rem", color: editorial.muted, maxWidth: 560, mx: "auto" }}>
+                      <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, maxWidth: 560, mx: "auto" }}>
                         Two ways in, and you can mix them. Import the staff list HR already keeps as a
                         spreadsheet, or add nobody at all and let it fill in over time: a form that cannot find
                         somebody parks that submission as "Needs routing" instead of losing it, and you name the
@@ -519,7 +519,7 @@ export default function AdminRoutingPage() {
                       </Typography>
                     </Box>
                   ) : visibleRows.length === 0 ? (
-                    <Typography sx={{ py: 4, textAlign: "center", color: editorial.muted, fontSize: "0.85rem" }}>
+                    <Typography sx={{ py: 4, textAlign: "center", color: editorial.muted, fontSize: "0.845rem" }}>
                       Nobody matches that search.
                     </Typography>
                   ) : (
@@ -527,11 +527,11 @@ export default function AdminRoutingPage() {
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell sx={{ fontWeight: 800 }}>Person</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }}>Department</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }}>Position</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }}>Approved by</TableCell>
-                            <TableCell sx={{ fontWeight: 800 }} align="right">Edit</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Person</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Position</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>Approved by</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }} align="right">Edit</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -540,7 +540,7 @@ export default function AdminRoutingPage() {
                               <TableCell>
                                 <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
                                   <Box>
-                                    <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: editorial.ink }}>
+                                    <Typography sx={{ fontSize: "0.845rem", fontWeight: 700, color: editorial.ink }}>
                                       {row.personName || row.personEmail}
                                     </Typography>
                                     <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted }}>
@@ -549,13 +549,13 @@ export default function AdminRoutingPage() {
                                     </Typography>
                                   </Box>
                                   {!row.isActive && (
-                                    <Chip size="small" label="Off" sx={{ height: 20, fontSize: "0.65rem", fontWeight: 700 }} />
+                                    <Chip size="small" label="Off" sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
                                   )}
                                 </Stack>
                               </TableCell>
-                              <TableCell sx={{ fontSize: "0.8rem" }}>{row.department || "-"}</TableCell>
-                              <TableCell sx={{ fontSize: "0.8rem" }}>{row.position || "-"}</TableCell>
-                              <TableCell sx={{ fontSize: "0.8rem" }}>
+                              <TableCell sx={{ fontSize: "0.78rem" }}>{row.department || "-"}</TableCell>
+                              <TableCell sx={{ fontSize: "0.78rem" }}>{row.position || "-"}</TableCell>
+                              <TableCell sx={{ fontSize: "0.78rem" }}>
                                 {row.approverEmail
                                   ? (
                                     <Tooltip title={row.approverEmail}>
@@ -591,7 +591,7 @@ export default function AdminRoutingPage() {
 
               {tab === "trace" && (
                 <Box sx={{ p: 3 }}>
-                  <Typography sx={{ fontSize: "0.85rem", color: editorial.muted, mb: 2, maxWidth: 640 }}>
+                  <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, mb: 2, maxWidth: 640 }}>
                     Pick somebody to see where their forms would go, before anybody submits one. A form layer set
                     to "Their direct manager, one step" sends to the second name below; two steps sends to the third.
                   </Typography>
@@ -608,7 +608,7 @@ export default function AdminRoutingPage() {
                   {trace
                     ? <ChainTraceView trace={trace} />
                     : (
-                      <Typography sx={{ fontSize: "0.85rem", color: editorial.softMuted }}>
+                      <Typography sx={{ fontSize: "0.845rem", color: editorial.softMuted }}>
                         Nobody chosen yet.
                       </Typography>
                     )}
@@ -619,16 +619,16 @@ export default function AdminRoutingPage() {
                 <Box sx={{ p: 3 }}>
                   {problems.length === 0 ? (
                     <Box sx={{ py: 4, textAlign: "center" }}>
-                      <Typography sx={{ fontWeight: 800, color: editorial.success, mb: 0.5 }}>
+                      <Typography sx={{ fontWeight: 700, color: editorial.success, mb: 0.5 }}>
                         Nothing wrong with the directory
                       </Typography>
-                      <Typography sx={{ fontSize: "0.85rem", color: editorial.muted }}>
+                      <Typography sx={{ fontSize: "0.845rem", color: editorial.muted }}>
                         Every reporting line ends somewhere, and every approver is listed and switched on.
                       </Typography>
                     </Box>
                   ) : (
                     <Stack sx={{ gap: 1.25 }}>
-                      <Typography sx={{ fontSize: "0.85rem", color: editorial.muted, mb: 0.5 }}>
+                      <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, mb: 0.5 }}>
                         {blockingProblems.length > 0
                           ? `${blockingProblems.length} of these will stop an approval. The rest are worth knowing about.`
                           : "Nothing here stops an approval; these are worth knowing about."}
@@ -641,7 +641,7 @@ export default function AdminRoutingPage() {
                             alignItems: { sm: "center" },
                             gap: 1.5,
                             p: 1.5,
-                            borderRadius: "10px",
+                            borderRadius: "12px",
                             border: `1px solid ${problem.blocking ? "#F0C9C9" : editorial.border}`,
                             backgroundColor: problem.blocking ? "#FDF3F3" : editorial.paperSoft,
                           }}
@@ -651,12 +651,12 @@ export default function AdminRoutingPage() {
                             label={problem.blocking ? "Blocking" : "Check"}
                             sx={{
                               fontWeight: 700,
-                              fontSize: "0.65rem",
+                              fontSize: "0.72rem",
                               color: problem.blocking ? editorial.error : editorial.warning,
                               backgroundColor: problem.blocking ? "#FBE9E9" : editorial.yellowSoft,
                             }}
                           />
-                          <Typography sx={{ flex: 1, fontSize: "0.82rem", color: editorial.ink }}>
+                          <Typography sx={{ flex: 1, fontSize: "0.845rem", color: editorial.ink }}>
                             {problem.message}
                           </Typography>
                           <Button
@@ -674,7 +674,7 @@ export default function AdminRoutingPage() {
               )}
             </Paper>
 
-            <Typography sx={{ fontSize: "0.75rem", color: editorial.softMuted, px: 0.5 }}>
+            <Typography sx={{ fontSize: "0.78rem", color: editorial.softMuted, px: 0.5 }}>
               Editing this list never changes anything already submitted. A submission records its approvers when
               it is routed, so past records keep the people they were actually sent to. Submissions that could not
               be routed wait under "Needs routing" on the submissions page.
@@ -703,9 +703,9 @@ export default function AdminRoutingPage() {
       />
 
       <Dialog open={!!deleteTarget} onClose={deleting ? undefined : () => setDeleteTarget(null)}>
-        <DialogTitle sx={{ fontWeight: 800 }}>Remove this person?</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Remove this person?</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ fontSize: "0.88rem" }}>
+          <DialogContentText sx={{ fontSize: "0.875rem" }}>
             {deleteTarget?.personName || deleteTarget?.personEmail} will be taken out of the directory, and
             anybody who reports to them will have no approver until you point them somewhere else.
             <br /><br />

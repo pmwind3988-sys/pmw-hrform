@@ -1,10 +1,24 @@
 import { createTheme, keyframes } from "@mui/material/styles";
-import { editorial, editorialFonts, editorialHairline, editorialShadow } from "./editorial";
+import {
+  editorial,
+  editorialFonts,
+  editorialHairline,
+  si,
+  siFocusRing,
+  siTracking,
+} from "./editorial";
 
+/**
+ * The entrance animation, ported from SI's `.rise`.
+ *
+ * Kept under the name `fadeInUp` because a dozen call sites animate with it;
+ * only the values changed. The travel is 10px rather than 20px and the curve is
+ * shorter — SI's entrance is a settle, not a slide.
+ */
 const fadeInUp = keyframes`
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -12,7 +26,10 @@ const fadeInUp = keyframes`
   }
 `;
 
-const alertSurfaceShadow = "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)";
+const alertSurfaceShadow = si.shadow;
+
+/** The canvas fill SI puts behind inputs and table headers. */
+const canvasFill = editorial.appSurface;
 
 const theme = createTheme({
   palette: {
@@ -64,72 +81,109 @@ const theme = createTheme({
       900: "#101010",
     },
   },
+  /**
+   * SI's type scale, taken literally (`docs/SI_Design_System.md` §2.2).
+   *
+   * One family at four weights. Titles are Bold with -0.01em tracking, card
+   * titles Semibold, body Regular, and uppercase appears only on the micro
+   * label. The scale is deliberately dense and top-to-bottom small — 21px is a
+   * *page title* here, not a heading-shaped decoration — because that density
+   * is what makes SI read as an enterprise tool rather than a brochure.
+   *
+   * The two display headings in this app (the careers hero, the dashboard
+   * header) set their own `fontSize` inline, and inline `sx` outranks the
+   * theme, so they keep their size and simply inherit the weight and tracking.
+   */
   typography: {
     fontFamily: editorialFonts.sans,
+    /** SI H1 — page title. */
     h1: {
-      fontFamily: editorialFonts.serif,
-      fontSize: "4.5rem",
-      fontWeight: 400,
-      letterSpacing: "0",
-      lineHeight: 1,
-    },
-    h2: {
-      fontFamily: editorialFonts.serif,
-      fontSize: "3.25rem",
-      fontWeight: 400,
-      letterSpacing: "0",
-      lineHeight: 1.05,
-    },
-    h3: {
-      fontSize: "2rem",
+      fontFamily: editorialFonts.sans,
+      fontSize: "1.3125rem",
       fontWeight: 700,
-      letterSpacing: "0",
-      lineHeight: 1.15,
-    },
-    h4: {
-      fontSize: "1.35rem",
-      fontWeight: 700,
-      letterSpacing: "0",
+      letterSpacing: siTracking.title,
       lineHeight: 1.3,
     },
-    h5: {
-      fontSize: "1.15rem",
+    /** SI H2 — section title, upper end of its 17–19px range. */
+    h2: {
+      fontFamily: editorialFonts.sans,
+      fontSize: "1.1875rem",
       fontWeight: 700,
+      letterSpacing: siTracking.title,
+      lineHeight: 1.3,
+    },
+    /** SI H2 — lower end, for a subsection under an h2. */
+    h3: {
+      fontSize: "1.0625rem",
+      fontWeight: 700,
+      letterSpacing: siTracking.title,
+      lineHeight: 1.3,
+    },
+    /** SI card title, bold end of its 14–15px range. */
+    h4: {
+      fontSize: "0.9375rem",
+      fontWeight: 700,
+      letterSpacing: siTracking.title,
+      lineHeight: 1.4,
+    },
+    /** SI card title, semibold. */
+    h5: {
+      fontSize: "0.875rem",
+      fontWeight: 600,
       letterSpacing: "0",
       lineHeight: 1.4,
     },
+    /** Smallest title: a label that still outranks the body beside it. */
     h6: {
-      fontSize: "1rem",
-      fontWeight: 700,
+      fontSize: "0.845rem",
+      fontWeight: 600,
       letterSpacing: "0",
+      lineHeight: 1.4,
+    },
+    subtitle1: {
+      fontSize: "0.9375rem",
+      fontWeight: 600,
+      lineHeight: 1.4,
+    },
+    subtitle2: {
+      fontSize: "0.845rem",
+      fontWeight: 600,
       lineHeight: 1.45,
     },
     body1: {
-      fontSize: "0.96rem",
-      lineHeight: 1.65,
+      fontSize: "0.845rem",
+      lineHeight: 1.5,
       fontWeight: 400,
     },
     body2: {
-      fontSize: "0.875rem",
-      lineHeight: 1.55,
+      fontSize: "0.78rem",
+      lineHeight: 1.45,
       fontWeight: 400,
     },
     caption: {
-      fontSize: "0.75rem",
-      lineHeight: 1.5,
+      fontSize: "0.78rem",
+      lineHeight: 1.4,
       letterSpacing: "0",
-      fontWeight: 600,
+      fontWeight: 500,
+    },
+    /** SI's micro / eyebrow label: the only place uppercase is allowed. */
+    overline: {
+      fontSize: "0.72rem",
+      lineHeight: 1.3,
+      fontWeight: 700,
+      letterSpacing: siTracking.micro,
+      textTransform: "uppercase",
     },
     button: {
-      fontFamily: editorialFonts.mono,
-      fontWeight: 700,
+      fontFamily: editorialFonts.sans,
+      fontWeight: 600,
       letterSpacing: "0",
       textTransform: "none",
-      fontSize: "0.875rem",
+      fontSize: "0.845rem",
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: si.radius,
   },
   zIndex: {
     snackbar: 20000,
@@ -171,24 +225,31 @@ const theme = createTheme({
           outline: "1px solid rgba(0, 0, 0, 0.1)",
           outlineOffset: "-1px",
         },
+        // SI's rule is that focus is visible on *every* interactive element,
+        // with no exemption for quiet controls. Declared once here rather than
+        // per component so a control added later inherits it.
+        ":focus-visible": siFocusRing,
       },
     },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 0,
+          borderRadius: si.radius,
           textTransform: "none",
-          fontWeight: 700,
-          padding: "10px 18px",
-          fontSize: "0.875rem",
-          transition: "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
+          fontWeight: 600,
+          // SI's medium button: 10px vertical / 16px horizontal.
+          padding: "10px 16px",
+          fontSize: "0.845rem",
+          transition: "background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease",
           boxShadow: "none",
+          // SI communicates press by darkening the fill, not by moving the
+          // button. The old lift-on-hover fought the card shadows underneath.
           "&:hover": {
             boxShadow: "none",
-            transform: "translateY(-1px)",
           },
-          "&:active": {
-            transform: "scale(0.96)",
+          "&:focus-visible": siFocusRing,
+          "&.Mui-disabled": {
+            opacity: 0.5,
           },
         },
         contained: {
@@ -205,30 +266,54 @@ const theme = createTheme({
         outlined: {
           color: editorial.pmwBlueDark,
           borderColor: editorial.pmwBlue,
-          borderWidth: "1px",
-          backgroundColor: "rgba(255, 255, 255, 0.72)",
+          // SI's ghost button carries a 1.5px border so it holds its own next
+          // to a filled button without needing a fill of its own.
+          borderWidth: "1.5px",
+          backgroundColor: "transparent",
           "&:hover": {
-            borderWidth: "1px",
+            borderWidth: "1.5px",
             backgroundColor: editorial.blueWash,
             borderColor: editorial.pmwBlueDark,
           },
         },
+        text: {
+          // SI's "subtle" tertiary variant: a canvas fill on hover, no border.
+          "&:hover": {
+            backgroundColor: canvasFill,
+          },
+        },
+        sizeSmall: {
+          padding: "7px 12px",
+          fontSize: "0.78rem",
+        },
         sizeLarge: {
-          padding: "12px 24px",
-          fontSize: "1rem",
+          padding: "12px 22px",
+          fontSize: "0.9375rem",
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 14,
-          boxShadow: "none",
+          borderRadius: si.radius,
+          // One elevation, applied uniformly. In SI no card is deeper than
+          // another: hierarchy comes from size and position, so hover shifts
+          // the border tint only and the page never shuffles depth on mouseover.
+          boxShadow: si.shadow,
           border: editorialHairline,
-          transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+          transition: "border-color 0.2s ease",
           "&:hover": {
-            boxShadow: editorialShadow,
             borderColor: "rgba(0, 120, 212, 0.36)",
+          },
+        },
+      },
+    },
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          padding: si.padLoose,
+          "&:last-child": {
+            paddingBottom: si.padLoose,
           },
         },
       },
@@ -239,18 +324,20 @@ const theme = createTheme({
           backgroundImage: "none",
         },
         rounded: {
-          borderRadius: 14,
+          borderRadius: si.radius,
         },
         elevation1: {
-          boxShadow: "none",
+          boxShadow: si.shadow,
           border: editorialHairline,
         },
         elevation2: {
-          boxShadow: editorialShadow,
+          boxShadow: si.shadow,
           border: editorialHairline,
         },
+        // Lifted surfaces only — dialogs, popovers, panels that float over the
+        // page and need to read as detached rather than merely present.
         elevation3: {
-          boxShadow: "0 18px 42px rgba(16, 16, 16, 0.16)",
+          boxShadow: si.shadowRaised,
         },
       },
     },
@@ -258,37 +345,68 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           "& .MuiOutlinedInput-root": {
-            borderRadius: 10,
+            borderRadius: si.radius,
             transition: "background-color 0.2s ease, box-shadow 0.2s ease",
-            backgroundColor: editorial.white,
+            // SI fills inputs with the canvas grey so a field reads as a slot
+            // you type into rather than as another white card on white.
+            backgroundColor: canvasFill,
             "&:hover": {
+              backgroundColor: editorial.white,
               "& .MuiOutlinedInput-notchedOutline": {
                 borderColor: editorial.pmwBlue,
               },
             },
             "&.Mui-focused": {
+              backgroundColor: editorial.white,
               boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.16)",
             },
           },
         },
       },
     },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: si.radius,
+          backgroundColor: canvasFill,
+          "&.Mui-focused": {
+            backgroundColor: editorial.white,
+          },
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          fontSize: "0.845rem",
+          fontWeight: 500,
+        },
+      },
+    },
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
+          // A badge is a tag, not a container: 5px, tighter than everything
+          // else in the system, so a row carrying two of them doesn't read as
+          // a row of little boxes.
+          borderRadius: si.radiusBadge,
           fontWeight: 700,
-          fontSize: "0.8rem",
-          height: 28,
+          fontSize: "0.75rem",
+          height: 24,
           border: editorialHairline,
+          letterSpacing: "0",
+        },
+        label: {
+          paddingLeft: 8,
+          paddingRight: 8,
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 14,
-          boxShadow: "0 18px 42px rgba(16, 16, 16, 0.16)",
+          borderRadius: si.radius,
+          boxShadow: si.shadowRaised,
           border: editorialHairline,
         },
       },
@@ -302,8 +420,8 @@ const theme = createTheme({
       },
       styleOverrides: {
         paper: {
-          borderRadius: 12,
-          boxShadow: editorialShadow,
+          borderRadius: si.radius,
+          boxShadow: si.shadowRaised,
           border: editorialHairline,
           marginTop: 8,
         },
@@ -312,9 +430,12 @@ const theme = createTheme({
     MuiMenuItem: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          // The inner radius: nested inside a 12px container, 8px keeps the
+          // gap between the item's corner and the panel's visually even.
+          borderRadius: si.radiusSm,
           margin: "2px 6px",
-          padding: "10px 12px",
+          padding: "9px 10px",
+          fontSize: "0.845rem",
           transition: "background-color 0.15s ease, color 0.15s ease",
           "&:hover": {
             backgroundColor: editorial.blueWash,
@@ -328,13 +449,35 @@ const theme = createTheme({
         },
       },
     },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          borderRadius: si.radiusSm,
+          backgroundColor: editorial.ink,
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          padding: "7px 10px",
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          borderRadius: si.radius,
+          textTransform: "none",
+          fontWeight: 600,
+          fontSize: "0.845rem",
+          minHeight: 42,
+        },
+      },
+    },
     MuiAlert: {
       styleOverrides: {
         root: {
           border: "1px solid transparent",
-          borderRadius: "8px",
+          borderRadius: si.radius,
           boxShadow: alertSurfaceShadow,
-          fontWeight: 700,
+          fontWeight: 600,
           opacity: 1,
           // Each severity is matched TWICE on purpose. MUI used to emit one
           // fused class (`MuiAlert-standardError`); from v6 it emits the
@@ -383,7 +526,7 @@ const theme = createTheme({
         },
         message: {
           color: "inherit",
-          fontWeight: 700,
+          fontWeight: 600,
           lineHeight: 1.5,
           padding: "8px 0",
         },
@@ -406,15 +549,15 @@ const theme = createTheme({
             alignItems: "center",
             backgroundColor: editorial.white,
             border: `1px solid ${editorial.pmwBlueSoft}`,
-            borderRadius: "8px",
-            boxShadow: alertSurfaceShadow,
+            borderRadius: si.radius,
+            boxShadow: si.shadowRaised,
             color: editorial.ink,
-            fontWeight: 700,
+            fontWeight: 600,
             opacity: 1,
           },
           "& .MuiAlert-message": {
             color: editorial.ink,
-            fontWeight: 700,
+            fontWeight: 600,
             lineHeight: 1.45,
             padding: "8px 0",
           },
@@ -448,6 +591,8 @@ const theme = createTheme({
           backgroundImage: "none",
           backgroundColor: "rgba(255, 255, 255, 0.82)",
           backdropFilter: "blur(16px)",
+          // No shadow on the top bar: SI leaves the separation to the single
+          // hairline, so the bar doesn't compete with the cards below it.
           borderBottom: editorialHairline,
           boxShadow: "none",
         },
@@ -475,15 +620,30 @@ const theme = createTheme({
     MuiIconButton: {
       styleOverrides: {
         root: {
-          transition: "background-color 0.2s ease, color 0.2s ease, transform 0.2s ease",
-          borderRadius: 8,
-          minWidth: 40,
-          minHeight: 40,
+          transition: "background-color 0.2s ease, color 0.2s ease",
+          borderRadius: si.radiusSm,
+          // SI's mobile floor for anything tappable, applied everywhere so a
+          // toolbar icon is the same target on a phone as on a desktop.
+          minWidth: si.touchTarget,
+          minHeight: si.touchTarget,
           "&:hover": {
             backgroundColor: editorial.blueWash,
           },
-          "&:active": {
-            transform: "scale(0.96)",
+          "&:focus-visible": siFocusRing,
+        },
+      },
+    },
+    MuiTableRow: {
+      styleOverrides: {
+        root: {
+          // A very light canvas tint on hover, matching SI's list rows.
+          "&:hover": {
+            backgroundColor: canvasFill,
+          },
+        },
+        head: {
+          "&:hover": {
+            backgroundColor: "transparent",
           },
         },
       },
@@ -491,17 +651,23 @@ const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         head: {
-          backgroundColor: editorial.blueSoft,
-          color: editorial.ink,
-          fontWeight: 800,
-          fontSize: "0.75rem",
+          // SI's table header: canvas fill, uppercase micro-label in the
+          // secondary ink, and no divider heavier than the body's hairlines.
+          backgroundColor: canvasFill,
+          color: editorial.muted,
+          fontWeight: 700,
+          fontSize: "0.72rem",
           textTransform: "uppercase",
-          letterSpacing: "0",
+          letterSpacing: siTracking.micro,
           borderBottom: editorialHairline,
         },
         body: {
           borderBottom: editorialHairline,
+          fontSize: "0.845rem",
           fontVariantNumeric: "tabular-nums",
+          // 44px minimum row height, 52px once a cell stacks two lines.
+          paddingTop: 11,
+          paddingBottom: 11,
         },
       },
     },

@@ -46,7 +46,7 @@ export const learningPanelSx = {
 export const learningInlineSurfaceSx = {
   display: "inline-flex",
   alignItems: "center",
-  borderRadius: "8px",
+  borderRadius: "12px",
   px: 1.25,
   py: 0.5,
   backgroundColor: "rgba(255, 255, 255, 0.92)",
@@ -55,9 +55,9 @@ export const learningInlineSurfaceSx = {
 } satisfies SxProps<Theme>;
 
 export const learningButtonSx = {
-  borderRadius: "8px",
+  borderRadius: "12px",
   textTransform: "none",
-  fontWeight: 800,
+  fontWeight: 700,
   minHeight: 40,
   transition: "background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease",
   "&:active": { transform: "scale(0.96)" },
@@ -130,7 +130,7 @@ export function LearningSectionLabel({ children }: { children: ReactNode }) {
     <Box sx={learningInlineSurfaceSx}>
       <Typography
         variant="overline"
-        sx={{ color: editorial.muted, fontWeight: 900, lineHeight: 1.6, letterSpacing: "0.08em" }}
+        sx={{ color: editorial.muted, fontWeight: 700, lineHeight: 1.6, letterSpacing: "0.03em" }}
       >
         {children}
       </Typography>
@@ -157,7 +157,7 @@ export function LearningEmptyState({
           height: 56,
           mx: "auto",
           mb: 2,
-          borderRadius: "14px",
+          borderRadius: "12px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -168,7 +168,7 @@ export function LearningEmptyState({
       >
         {icon}
       </Box>
-      <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, textWrap: "balance" }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, textWrap: "balance" }}>
         {title}
       </Typography>
       <Typography

@@ -10,15 +10,15 @@ interface ListBadgeProps {
 export default function ListBadge({ title, color, pale }: ListBadgeProps) {
   return (
     <Chip
-      icon={<DescriptionIcon sx={{ color: `${color} !important`, fontSize: "1rem" }} />}
+      icon={<DescriptionIcon sx={{ color: `${color} !important`, fontSize: "0.9375rem" }} />}
       label={title}
       size="small"
       sx={{
         backgroundColor: pale,
         color,
         boxShadow: `inset 0 0 0 1px ${color}33`,
-        fontWeight: 800,
-        fontSize: "0.75rem",
+        fontWeight: 700,
+        fontSize: "0.78rem",
         textTransform: "none",
         maxWidth: "100%",
         "& .MuiChip-label": {

@@ -341,7 +341,7 @@ export default function MaterialViewerDialog({
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "10px",
+              borderRadius: "12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -358,7 +358,7 @@ export default function MaterialViewerDialog({
           <Typography
             variant="h6"
             sx={{
-              fontWeight: 900,
+              fontWeight: 700,
               color: editorial.ink,
               lineHeight: 1.25,
               overflow: "hidden",
@@ -371,7 +371,7 @@ export default function MaterialViewerDialog({
           <Stack direction="row" spacing={1} sx={{ alignItems: "center", mt: 0.25, flexWrap: "wrap" }}>
             <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", color: editorial.softMuted }}>
               <VisibilityOutlined sx={{ fontSize: 15 }} />
-              <Typography variant="caption" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                 {formatViewCount(material?.viewCount ?? 0)}
               </Typography>
             </Stack>
@@ -382,7 +382,7 @@ export default function MaterialViewerDialog({
                 label="View only"
                 sx={{
                   height: 22,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   fontSize: "0.66rem",
                   color: editorial.muted,
                   backgroundColor: editorial.paper,
@@ -432,7 +432,7 @@ export default function MaterialViewerDialog({
         {loading && <CircularProgress sx={{ color: editorial.pmwBlue }} />}
 
         {!loading && error && (
-          <Alert severity="error" sx={{ m: 3, borderRadius: "10px", fontWeight: 700 }}>
+          <Alert severity="error" sx={{ m: 3, borderRadius: "12px", fontWeight: 700 }}>
             {error}
           </Alert>
         )}
@@ -447,7 +447,7 @@ export default function MaterialViewerDialog({
                 height: 56,
                 mx: "auto",
                 mb: 2,
-                borderRadius: "14px",
+                borderRadius: "12px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -458,7 +458,7 @@ export default function MaterialViewerDialog({
             >
               <LockPersonOutlined />
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, textWrap: "balance" }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, textWrap: "balance" }}>
               Password required
             </Typography>
             <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 600, mt: 0.75 }}>
@@ -466,7 +466,7 @@ export default function MaterialViewerDialog({
             </Typography>
 
             {unlockError && (
-              <Alert severity="error" sx={{ mt: 2, borderRadius: "10px", fontWeight: 700, textAlign: "left" }}>
+              <Alert severity="error" sx={{ mt: 2, borderRadius: "12px", fontWeight: 700, textAlign: "left" }}>
                 {unlockError}
               </Alert>
             )}
@@ -504,7 +504,7 @@ export default function MaterialViewerDialog({
                 },
                 htmlInput: { autoComplete: "off" },
               }}
-              sx={{ mt: 2.5, backgroundColor: editorial.white, borderRadius: "10px" }}
+              sx={{ mt: 2.5, backgroundColor: editorial.white, borderRadius: "12px" }}
             />
 
             <Button

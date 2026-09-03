@@ -147,7 +147,7 @@ export default function DirectoryPersonDialog({
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 800, color: editorial.ink }}>
+      <DialogTitle sx={{ fontWeight: 700, color: editorial.ink }}>
         {editing ? "Edit person" : "Add a person"}
       </DialogTitle>
       <DialogContent dividers>
@@ -206,7 +206,7 @@ export default function DirectoryPersonDialog({
                 />
               )}
               label={(
-                <Typography sx={{ fontSize: "0.85rem" }}>
+                <Typography sx={{ fontSize: "0.845rem" }}>
                   {input.isActive
                     ? "Active — submissions can route to and from this person"
                     : "Switched off — kept for history, but nothing new routes here"}
@@ -217,7 +217,7 @@ export default function DirectoryPersonDialog({
 
           {preview && (
             <Box sx={{ p: 1.5, borderRadius: "12px", border: `1px solid ${editorial.border}`, backgroundColor: editorial.paperSoft }}>
-              <Typography sx={{ fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: editorial.softMuted, mb: 1 }}>
+              <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", color: editorial.softMuted, mb: 1 }}>
                 Where their forms would go
               </Typography>
               <ChainTraceView trace={preview} />

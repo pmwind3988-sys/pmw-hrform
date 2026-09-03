@@ -507,7 +507,7 @@ function ValueLink({ link }: { link: LinkValue }) {
         alignItems: "center",
         gap: 0.5,
         color: editorial.pmwBlueDark,
-        fontWeight: 800,
+        fontWeight: 700,
         textDecorationThickness: "2px",
         textUnderlineOffset: "3px",
         overflowWrap: "anywhere",
@@ -570,7 +570,7 @@ function FriendlyValue({ fieldKey, value, depth = 0 }: { fieldKey: string; value
       <Stack spacing={1}>
         {entries.slice(0, 8).map(([key, entry]) => (
           <Box key={key} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "140px minmax(0, 1fr)" }, gap: 0.75 }}>
-            <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 800 }}>
+            <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
               {formatFieldName(key)}
             </Typography>
             <Box sx={{ minWidth: 0 }}>
@@ -594,7 +594,7 @@ function FieldCard({ fieldKey, label, value }: { fieldKey: string; label?: strin
           sx={{
             backgroundColor: "#ffffff",
             border: editorialHairline,
-            borderRadius: "8px",
+            borderRadius: "12px",
             p: 2,
             overflowX: "auto",
             "& table": {
@@ -609,7 +609,7 @@ function FieldCard({ fieldKey, label, value }: { fieldKey: string; label?: strin
             },
             "& th": {
               backgroundColor: editorial.blueSoft,
-              fontWeight: 800,
+              fontWeight: 700,
             },
             "& tr:nth-of-type(even)": {
               backgroundColor: "rgba(0,0,0,0.02)",
@@ -628,7 +628,7 @@ function FieldCard({ fieldKey, label, value }: { fieldKey: string; label?: strin
         sx={{
           backgroundColor: "#ffffff",
           border: editorialHairline,
-          borderRadius: "8px",
+          borderRadius: "12px",
           p: 2,
           color: editorial.ink,
           overflowWrap: "anywhere",
@@ -658,7 +658,7 @@ function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
         sx={{
           backgroundColor: "#ffffff",
           border: editorialHairline,
-          borderRadius: "8px",
+          borderRadius: "12px",
           overflowX: "auto",
         }}
       >
@@ -671,8 +671,8 @@ function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
             "& th": {
               backgroundColor: editorial.blueSoft,
               color: editorial.ink,
-              fontSize: "0.75rem",
-              fontWeight: 900,
+              fontSize: "0.78rem",
+              fontWeight: 700,
               textAlign: "left",
               p: 1.25,
               borderBottom: editorialHairline,
@@ -742,7 +742,7 @@ function DataPreviewSections({ sections }: { sections: FormSubmissionSection[] }
               variant="body1"
               sx={{
                 color: editorial.ink,
-                fontWeight: 900,
+                fontWeight: 700,
                 mb: 1.25,
                 textWrap: "balance",
               }}
@@ -841,7 +841,7 @@ function SignatureCard({ signature }: { signature: SignatureField }) {
       elevation={0}
       sx={{
         border: editorialHairline,
-        borderRadius: "8px",
+        borderRadius: "12px",
         backgroundColor: "#ffffff",
         p: 2,
       }}
@@ -859,7 +859,7 @@ function SignatureCard({ signature }: { signature: SignatureField }) {
             display: "block",
             maxHeight: 140,
             maxWidth: "100%",
-            borderRadius: "8px",
+            borderRadius: "12px",
             border: "1px solid rgba(0, 0, 0, 0.1)",
             backgroundColor: "#ffffff",
             p: 1,
@@ -886,7 +886,7 @@ function FieldLabel({ children }: { children: ReactNode }) {
         textTransform: "uppercase",
         letterSpacing: 0,
         color: editorial.muted,
-        fontWeight: 800,
+        fontWeight: 700,
         fontSize: "0.72rem",
         display: "block",
         mb: 0.75,
@@ -904,7 +904,7 @@ function SectionTitle({ icon, title, subtitle }: { icon: ReactNode; title: strin
         sx={{
           width: 34,
           height: 34,
-          borderRadius: "8px",
+          borderRadius: "12px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -917,7 +917,7 @@ function SectionTitle({ icon, title, subtitle }: { icon: ReactNode; title: strin
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h6" sx={{ fontWeight: 800, color: editorial.ink, textWrap: "balance" }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, textWrap: "balance" }}>
           {title}
         </Typography>
         {subtitle && (
@@ -936,7 +936,7 @@ function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; valu
       elevation={0}
       sx={{
         border: editorialHairline,
-        borderRadius: "8px",
+        borderRadius: "12px",
         p: 1.75,
         backgroundColor: "#ffffff",
         display: "grid",
@@ -950,7 +950,7 @@ function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; valu
         sx={{
           width: 34,
           height: 34,
-          borderRadius: "8px",
+          borderRadius: "12px",
           backgroundColor: editorial.paperSoft,
           color: editorial.pmwBlueDark,
           display: "flex",
@@ -961,7 +961,7 @@ function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; valu
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 800, display: "block" }}>
+        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, display: "block" }}>
           {label}
         </Typography>
         <Typography
@@ -969,7 +969,7 @@ function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; valu
           variant="body2"
           sx={{
             color: editorial.ink,
-            fontWeight: 800,
+            fontWeight: 700,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -988,7 +988,7 @@ function DocumentLinkCard({ title, link, icon }: { title: string; link: LinkValu
       elevation={0}
       sx={{
         border: editorialHairline,
-        borderRadius: "8px",
+        borderRadius: "12px",
         p: 1.75,
         backgroundColor: "#ffffff",
         display: "grid",
@@ -1001,7 +1001,7 @@ function DocumentLinkCard({ title, link, icon }: { title: string; link: LinkValu
         sx={{
           width: 40,
           height: 40,
-          borderRadius: "8px",
+          borderRadius: "12px",
           backgroundColor: link ? editorial.blueWash : editorial.paperSoft,
           color: link ? editorial.pmwBlueDark : editorial.muted,
           display: "flex",
@@ -1012,7 +1012,7 @@ function DocumentLinkCard({ title, link, icon }: { title: string; link: LinkValu
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800 }}>
+        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700 }}>
           {title}
         </Typography>
         {link ? (
@@ -1092,7 +1092,7 @@ function LayerProgression({
               sx={{
                 border: `1px solid ${borderColor}66`,
                 backgroundColor: bgColor,
-                borderRadius: "8px",
+                borderRadius: "12px",
                 p: 1.75,
                 display: "grid",
                 gridTemplateColumns: "32px minmax(0, 1fr) auto",
@@ -1105,7 +1105,7 @@ function LayerProgression({
                 sx={{
                   width: 32,
                   height: 32,
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   backgroundColor: `${iconColor}14`,
                   display: "flex",
                   alignItems: "center",
@@ -1117,7 +1117,7 @@ function LayerProgression({
                 {statusIcon}
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink }}>
                   Layer {layerNum}
                   {enhanced?.type === "evaluation" && (
                     <Typography component="span" variant="caption" sx={{ color: editorial.muted, ml: 1 }}>
@@ -1125,7 +1125,7 @@ function LayerProgression({
                     </Typography>
                   )}
                 </Typography>
-                <Typography variant="caption" sx={{ color: iconColor, fontWeight: 800 }}>
+                <Typography variant="caption" sx={{ color: iconColor, fontWeight: 700 }}>
                   {statusLabel}
                 </Typography>
               </Box>
@@ -1135,7 +1135,7 @@ function LayerProgression({
                   sx={{
                     color: editorial.muted,
                     fontWeight: 700,
-                    fontSize: "0.75rem",
+                    fontSize: "0.78rem",
                     overflowWrap: "anywhere",
                     textAlign: "right",
                   }}
@@ -1184,7 +1184,7 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
       sx={{
         border: `1px solid ${borderColor}55`,
         backgroundColor: bgColor,
-        borderRadius: "8px",
+        borderRadius: "12px",
         p: 2,
         transition: "box-shadow 0.2s ease",
         "&:hover": {
@@ -1197,7 +1197,7 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
           sx={{
             width: 36,
             height: 36,
-            borderRadius: "8px",
+            borderRadius: "12px",
             backgroundColor: `${iconColor}15`,
             display: "flex",
             alignItems: "center",
@@ -1208,7 +1208,7 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
           {statusIcon}
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink }}>
+          <Typography variant="body1" sx={{ fontWeight: 700, color: editorial.ink }}>
             Layer {index + 1}
           </Typography>
           <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
@@ -1221,8 +1221,8 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
           sx={{
             backgroundColor: `${iconColor}15`,
             color: iconColor,
-            fontWeight: 800,
-            fontSize: "0.7rem",
+            fontWeight: 700,
+            fontSize: "0.72rem",
             height: 24,
             ml: "auto",
           }}
@@ -1260,7 +1260,7 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
                 display: "block",
                 maxHeight: 118,
                 maxWidth: "100%",
-                borderRadius: "8px",
+                borderRadius: "12px",
                 outline: "1px solid rgba(0, 0, 0, 0.1)",
                 outlineOffset: "-1px",
                 backgroundColor: "#ffffff",
@@ -1372,7 +1372,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                 backgroundColor: isAdmin ? editorial.purpleWash : editorial.blueWash,
                 color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
                 border: `1px solid ${isAdmin ? editorial.pmwPurpleSoft : editorial.pmwBlueSoft}`,
-                fontWeight: 800,
+                fontWeight: 700,
               }}
             />
             {branchDecisionPending && (
@@ -1384,7 +1384,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                   backgroundColor: editorial.blueWash,
                   color: editorial.pmwBlueDark,
                   border: `1px solid ${editorial.pmwBlueSoft}`,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   "& .MuiChip-icon": {
                     color: editorial.pmwBlueDark,
                   },
@@ -1392,7 +1392,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
               />
             )}
           </Stack>
-          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: 0, textWrap: "balance" }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: 0, textWrap: "balance" }}>
             {displayTitle}
           </Typography>
           <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.5, fontWeight: 700 }}>
@@ -1459,7 +1459,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                   icon={<InfoIcon fontSize="small" />}
                   sx={{
                     mt: 1.5,
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     border: `1px solid ${editorial.pmwBlueSoft}`,
                     backgroundColor: "#ffffff",
                     color: editorial.ink,
@@ -1471,7 +1471,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                     },
                   }}
                 >
-                  <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 900 }}>
+                  <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700 }}>
                     FYI: Branch still needs to be decided
                   </Typography>
                   <Typography variant="caption" sx={{ color: editorial.muted, display: "block", fontWeight: 700 }}>
@@ -1594,7 +1594,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
             alignItems: "center",
             gap: 1,
             color: editorial.muted,
-            fontSize: "0.8rem",
+            fontSize: "0.78rem",
             mr: "auto",
           }}
         >
@@ -1609,8 +1609,8 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
             variant="outlined"
             startIcon={<PdfIcon />}
             sx={{
-              borderRadius: "8px",
-              fontWeight: 800,
+              borderRadius: "12px",
+              fontWeight: 700,
             }}
           >
             Open PDF
@@ -1622,9 +1622,9 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
           startIcon={<CloseIcon />}
           sx={{
             backgroundColor: editorial.pmwBlue,
-            borderRadius: "8px",
+            borderRadius: "12px",
             textTransform: "none",
-            fontWeight: 800,
+            fontWeight: 700,
             px: 3,
             py: 1,
             "&:hover": { backgroundColor: editorial.pmwBlueDark },

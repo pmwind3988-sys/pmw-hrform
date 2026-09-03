@@ -90,3 +90,66 @@ textarea {
 a {
   color: inherit;
 }
+
+/* ---------------------------------------------------------------------------
+   SI design-language additions.
+
+   The entrance animation and the two mobile-hardening rules SI carries in its
+   own `globals.css`. Both are here rather than in the MUI theme because plain
+   elements outside MUI (the careers hero, the carousel track) use them too.
+--------------------------------------------------------------------------- */
+
+@keyframes siRiseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* `both` matters: without it the element is painted at full opacity for the one
+   frame before the animation starts, which reads as a flicker rather than an
+   entrance. */
+.rise {
+  animation: siRiseIn 0.4s ease both;
+}
+
+.rise-slow {
+  animation: siRiseIn 0.55s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .rise-slow {
+    animation: none;
+  }
+}
+
+html {
+  /* Android Chrome and iOS Safari inflate text in "narrow columns" unless told
+     not to — it silently overrides the type scale, and this scale is dense
+     enough that the inflation is obvious. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Mobile browsers zoom the page when a form control smaller than 16px takes
+   focus, and never zoom back out. The type scale is 13.5px, so every input
+   triggered it. Bumping controls to 16px only on small screens keeps the
+   desktop density intact. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Tabular figures on data, per SI: WO-style codes, dates and money line up in
+   columns without switching to a monospace face. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

@@ -25,8 +25,8 @@ const inp = {
   border: `1px solid ${C.border}`,
   borderRadius: 8,
   padding: "0 11px",
-  fontSize: 13,
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontSize: 13.5,
+  fontFamily: "var(--pmw-font-main)",
   color: C.textPrimary,
   background: C.white,
   outline: "none",
@@ -39,10 +39,10 @@ const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
   borderRadius: 5,
   background: active ? C.purplePale : C.white,
   color: active ? C.purple : C.textMuted,
-  fontSize: 9,
+  fontSize: 11,
   fontWeight: 600,
   cursor: "pointer",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontFamily: "var(--pmw-font-main)",
   transition: "all .1s",
 });
 
@@ -86,7 +86,7 @@ export default function ApproverRow({ index, layer, onChange, siteUsers, formFie
           flexShrink: 0,
           background: layer.email ? `linear-gradient(135deg,${C.green},#34D399)` : `linear-gradient(135deg,${C.purple},${C.purpleLight})`,
           color: C.white,
-          fontSize: 11,
+          fontSize: 11.5,
           fontWeight: 700,
           display: "flex",
           alignItems: "center",
@@ -103,7 +103,7 @@ export default function ApproverRow({ index, layer, onChange, siteUsers, formFie
               onChange(index, "email", e.target.value);
               onChange(index, "name", e.target.value);
             }}
-            style={{ ...inp, flex: 2, height: 30, fontSize: 12 }}
+            style={{ ...inp, flex: 2, height: 30, fontSize: 12.5 }}
           >
             <option value="">— Select field —</option>
             {formFieldNames!.map(fn => (
@@ -121,7 +121,7 @@ export default function ApproverRow({ index, layer, onChange, siteUsers, formFie
               }}
               onFocus={() => setOpen(true)}
               placeholder={`Layer ${index + 1} email`}
-              style={{ ...inp, height: 30, fontSize: 12 }}
+              style={{ ...inp, height: 30, fontSize: 12.5 }}
             />
             {open && sugg.length > 0 && (
               <div style={{
@@ -149,8 +149,8 @@ export default function ApproverRow({ index, layer, onChange, siteUsers, formFie
                     onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
-                    <div style={{ fontSize: 12, fontWeight: 500 }}>{u.name}</div>
-                    <div style={{ fontSize: 10, color: C.textMuted }}>{u.email}</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500 }}>{u.name}</div>
+                    <div style={{ fontSize: 11, color: C.textMuted }}>{u.email}</div>
                   </div>
                 ))}
               </div>
@@ -163,7 +163,7 @@ export default function ApproverRow({ index, layer, onChange, siteUsers, formFie
             value={layer.name}
             onChange={e => onChange(index, "name", e.target.value)}
             placeholder="Name"
-            style={{ ...inp, flex: 1, height: 30, fontSize: 12 }}
+            style={{ ...inp, flex: 1, height: 30, fontSize: 12.5 }}
           />
         )}
       </div>

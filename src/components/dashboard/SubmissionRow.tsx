@@ -89,24 +89,24 @@ export default function SubmissionRow({
     }
   };
   const identityChipSx = {
-    borderRadius: "8px",
+    borderRadius: "12px",
     backgroundColor: editorial.blueWash,
     color: editorial.pmwBlueDark,
     border: `1px solid ${editorial.pmwBlueSoft}`,
-    fontWeight: 800,
-    fontSize: "0.7rem",
+    fontWeight: 700,
+    fontSize: "0.72rem",
     height: 24,
     "& .MuiChip-icon": {
       color: editorial.pmwBlueDark,
     },
   } as const;
   const layerChipSx = {
-    borderRadius: "8px",
+    borderRadius: "12px",
     backgroundColor: editorial.purpleWash,
     color: editorial.pmwPurpleDark,
     border: `1px solid ${editorial.pmwPurpleSoft}`,
-    fontWeight: 800,
-    fontSize: "0.7rem",
+    fontWeight: 700,
+    fontSize: "0.72rem",
     height: 24,
     "& .MuiChip-icon": {
       color: editorial.pmwPurpleDark,
@@ -123,7 +123,7 @@ export default function SubmissionRow({
         onKeyDown={handleKeyDown}
         sx={{
           backgroundColor: "rgba(255, 255, 255, 0.94)",
-          borderRadius: "8px",
+          borderRadius: "12px",
           boxShadow: editorialShadow,
           p: 2,
           mb: 2,
@@ -144,7 +144,7 @@ export default function SubmissionRow({
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5 }}>
+            <Typography variant="body1" sx={{ fontWeight: 700, color: editorial.ink, mb: 0.5 }}>
               {displayTitle}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
@@ -166,7 +166,7 @@ export default function SubmissionRow({
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       border: `1px solid rgba(198, 40, 40, 0.2)`,
                       backgroundColor: "rgba(198, 40, 40, 0.08)",
                       color: editorial.error,
@@ -188,7 +188,7 @@ export default function SubmissionRow({
               sx={{
                 width: 40,
                 height: 40,
-                borderRadius: "8px",
+                borderRadius: "12px",
                 border: `1px solid ${editorial.pmwBlueSoft}`,
                 backgroundColor: editorial.blueWash,
                 color: editorial.pmwBlueDark,
@@ -256,7 +256,7 @@ export default function SubmissionRow({
     >
       {/* Submission */}
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5, textWrap: "balance" }}>
+        <Typography variant="body1" sx={{ fontWeight: 700, color: editorial.ink, mb: 0.5, textWrap: "balance" }}>
           {displayTitle}
         </Typography>
         <Box sx={{ display: "flex", gap: 1, alignItems: "center", minWidth: 0 }}>
@@ -303,7 +303,7 @@ export default function SubmissionRow({
 
       {/* Submitted */}
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800 }}>
+        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700 }}>
           {submittedAt}
         </Typography>
         {submittedTime && (
@@ -334,7 +334,7 @@ export default function SubmissionRow({
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   color: editorial.error,
                   transition: "background-color 0.18s ease, transform 0.18s ease",
                   "&:hover": {

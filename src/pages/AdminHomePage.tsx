@@ -277,7 +277,7 @@ export default function AdminHomePage() {
                   backgroundColor: isAdmin ? editorial.purpleWash : editorial.blueWash,
                   color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
                   border: `1px solid ${isAdmin ? editorial.pmwPurpleSoft : editorial.pmwBlueSoft}`,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   "& .MuiChip-icon": {
                     color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
                   },
@@ -290,7 +290,7 @@ export default function AdminHomePage() {
                   backgroundColor: "rgba(255, 255, 255, 0.82)",
                   color: editorial.muted,
                   border: `1px solid ${editorial.border}`,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
                 }}
               />
@@ -329,7 +329,7 @@ export default function AdminHomePage() {
               maxWidth: "100%",
               px: 1.5,
               py: 1.25,
-              borderRadius: "8px",
+              borderRadius: "12px",
               color: editorial.muted,
               backgroundColor: "rgba(255, 255, 255, 0.9)",
               boxShadow: editorialShadow,
@@ -339,7 +339,7 @@ export default function AdminHomePage() {
               sx={{
                 width: 40,
                 height: 40,
-                borderRadius: "8px",
+                borderRadius: "12px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -351,14 +351,14 @@ export default function AdminHomePage() {
               {isAdmin ? <AdminIcon sx={{ fontSize: 20 }} /> : <PersonIcon sx={{ fontSize: 20 }} />}
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 800 }}>
+              <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 700 }}>
                 Signed in as
               </Typography>
               <Typography
                 variant="body2"
                 sx={{
                   color: editorial.ink,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -420,7 +420,7 @@ export default function AdminHomePage() {
             onClose={() => setDeleteResult(null)}
             sx={{
               mb: 2,
-              borderRadius: "8px",
+              borderRadius: "12px",
               backgroundColor: deleteResult.warnings.length > 0 ? "#FFF3E0" : "#F1FAF1",
               border: `1px solid ${deleteResult.warnings.length > 0 ? "rgba(177, 92, 0, 0.42)" : "rgba(16, 124, 16, 0.42)"}`,
               boxShadow: "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)",
@@ -478,7 +478,7 @@ export default function AdminHomePage() {
         slotProps={{
           paper: {
             sx: {
-              borderRadius: "8px",
+              borderRadius: "12px",
               boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 18px 48px rgba(16, 16, 16, 0.18)",
               overflow: "hidden",
             },
@@ -490,7 +490,7 @@ export default function AdminHomePage() {
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "8px",
+              borderRadius: "12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -502,7 +502,7 @@ export default function AdminHomePage() {
             <TableChartIcon sx={{ fontSize: 22 }} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, textWrap: "balance" }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, textWrap: "balance" }}>
               Export dashboard submissions
             </Typography>
             <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700, textWrap: "pretty" }}>
@@ -517,7 +517,7 @@ export default function AdminHomePage() {
               value={exportScope}
               label="Scope"
               onChange={(event) => setExportScope(event.target.value as "current" | "all")}
-              sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
+              sx={{ borderRadius: "12px", backgroundColor: editorial.paperSoft }}
             >
               <MenuItem value="current">Current view (filters applied)</MenuItem>
               <MenuItem value="all">All submissions</MenuItem>
@@ -528,7 +528,7 @@ export default function AdminHomePage() {
             severity={exportRows.length > 0 ? "info" : "warning"}
             sx={{
               mt: 2,
-              borderRadius: "8px",
+              borderRadius: "12px",
               backgroundColor: exportRows.length > 0 ? editorial.blueWash : editorial.yellowSoft,
               color: exportRows.length > 0 ? editorial.pmwBlueDark : editorial.warning,
               boxShadow: `inset 0 0 0 1px ${exportRows.length > 0 ? editorial.pmwBlueSoft : "rgba(177, 92, 0, 0.28)"}`,
@@ -537,7 +537,7 @@ export default function AdminHomePage() {
               },
               "& .MuiAlert-message": {
                 fontVariantNumeric: "tabular-nums",
-                fontWeight: 800,
+                fontWeight: 700,
               },
             }}
           >
@@ -548,11 +548,11 @@ export default function AdminHomePage() {
           <Button
             onClick={() => setExportOpen(false)}
             sx={{
-              borderRadius: "8px",
+              borderRadius: "12px",
               minHeight: 40,
               px: 2,
               textTransform: "none",
-              fontWeight: 800,
+              fontWeight: 700,
             }}
           >
             Cancel
@@ -563,9 +563,9 @@ export default function AdminHomePage() {
             onClick={handleExportCsv}
             disabled={exportRows.length === 0}
             sx={{
-              borderRadius: "8px",
+              borderRadius: "12px",
               minHeight: 40,
-              fontWeight: 800,
+              fontWeight: 700,
               textTransform: "none",
               transition: "background-color 0.18s ease, transform 0.18s ease",
               "&:active": {
@@ -586,7 +586,7 @@ export default function AdminHomePage() {
         slotProps={{
           paper: {
             sx: {
-              borderRadius: "8px",
+              borderRadius: "12px",
               border: `1px solid rgba(198, 40, 40, 0.18)`,
               boxShadow: "0 18px 48px rgba(16, 16, 16, 0.18)",
             },
@@ -598,7 +598,7 @@ export default function AdminHomePage() {
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "8px",
+              borderRadius: "12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -610,7 +610,7 @@ export default function AdminHomePage() {
             <WarningIcon sx={{ fontSize: 22 }} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: editorial.ink, textWrap: "balance" }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, textWrap: "balance" }}>
               Permanently delete submission?
             </Typography>
             <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700 }}>
@@ -619,17 +619,17 @@ export default function AdminHomePage() {
           </Box>
         </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
-            <Alert severity="error" sx={{ borderRadius: "8px", mb: 2, fontWeight: 700 }}>
+            <Alert severity="error" sx={{ borderRadius: "12px", mb: 2, fontWeight: 700 }}>
               This removes the SharePoint item, generated PDFs, signature images, uploaded files stored in app-managed libraries, and matrix child rows. This action cannot be undone.
             </Alert>
           {deleteError && (
-            <Alert severity="error" sx={{ borderRadius: "8px", fontWeight: 700 }}>
+            <Alert severity="error" sx={{ borderRadius: "12px", fontWeight: 700 }}>
               {deleteError}
             </Alert>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={closeDeleteDialog} disabled={deleteStatus === "deleting"} sx={{ borderRadius: "8px", minHeight: 40 }}>
+          <Button onClick={closeDeleteDialog} disabled={deleteStatus === "deleting"} sx={{ borderRadius: "12px", minHeight: 40 }}>
             Cancel
           </Button>
           <Button
@@ -639,9 +639,9 @@ export default function AdminHomePage() {
             onClick={confirmHardDelete}
             disabled={deleteStatus === "deleting"}
             sx={{
-              borderRadius: "8px",
+              borderRadius: "12px",
               minHeight: 40,
-              fontWeight: 800,
+              fontWeight: 700,
               textTransform: "none",
               transition: "background-color 0.18s ease, transform 0.18s ease",
               "&:active": {

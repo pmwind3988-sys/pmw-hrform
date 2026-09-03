@@ -460,9 +460,9 @@ export default function ResponseViewer() {
   if (!isAuthenticated) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
+        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <div style={{ color: C.textSecond }}>You must be signed in to view submissions.</div>
         </div>
       </div>
@@ -472,11 +472,11 @@ export default function ResponseViewer() {
   if (adminChecked && !isAdmin) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
+        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
           <div style={{ color: C.textSecond }}>You need HR Form Owner permissions to view this page.</div>
-          <div style={{ color: C.textMuted, marginTop: 8, fontSize: 13 }}>Please return to the dashboard.</div>
+          <div style={{ color: C.textMuted, marginTop: 8, fontSize: 13.5 }}>Please return to the dashboard.</div>
         </div>
       </div>
     );
@@ -503,7 +503,7 @@ export default function ResponseViewer() {
                 border: `1px solid ${C.border}`,
                 background: C.cardBg,
                 color: C.textPrimary,
-                fontSize: 13,
+                fontSize: 13.5,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -543,7 +543,7 @@ export default function ResponseViewer() {
           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontWeight: 600, color: C.textPrimary }}>Submissions</span>
-              <span style={{ fontSize: 12, color: C.textMuted }}>{filteredSubmissions.length} items</span>
+              <span style={{ fontSize: 12.5, color: C.textMuted }}>{filteredSubmissions.length} items</span>
             </div>
             <div style={{ maxHeight: 600, overflow: "auto" }}>
               {filteredSubmissions.length === 0 ? (
@@ -564,14 +564,14 @@ export default function ResponseViewer() {
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 12, color: C.textMuted }}>#{item.Id}</span>
+                          <span style={{ fontSize: 12.5, color: C.textMuted }}>#{item.Id}</span>
                           {isTestRow(item as unknown as Record<string, unknown>) && (
-                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 10, fontWeight: 700 }} />
+                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
                           )}
                         </span>
                         <span
                           style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: 600,
                             padding: "2px 8px",
                             borderRadius: 12,
@@ -582,14 +582,14 @@ export default function ResponseViewer() {
                           {item.Status}
                         </span>
                       </div>
-                      <div style={{ fontSize: 13, color: C.textSecond }}>
+                      <div style={{ fontSize: 13.5, color: C.textSecond }}>
                         By {item.SubmittedBy}
                       </div>
-                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>
                         {item.SubmittedAt ? new Date(item.SubmittedAt).toLocaleString() : "N/A"}
                       </div>
                       {(item.CurrentLayer ?? item.CurrentApprovalLayer) > 0 && (
-                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
                           Layer {item.CurrentLayer || item.CurrentApprovalLayer}
                         </div>
                       )}
@@ -612,7 +612,7 @@ export default function ResponseViewer() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontWeight: 600, color: C.textPrimary }}>Submission #{selectedSubmission.Id}</div>
-                      <div style={{ fontSize: 13, color: C.textSecond, marginTop: 4 }}>
+                      <div style={{ fontSize: 13.5, color: C.textSecond, marginTop: 4 }}>
                         {selectedSubmission.SubmittedAt ? new Date(selectedSubmission.SubmittedAt).toLocaleString() : "N/A"}
                       </div>
                     </div>
@@ -623,7 +623,7 @@ export default function ResponseViewer() {
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
-                            fontSize: 11,
+                            fontSize: 11.5,
                             fontWeight: 600,
                             padding: "4px 12px",
                             borderRadius: 12,
@@ -637,7 +637,7 @@ export default function ResponseViewer() {
                       )}
                       <div
                         style={{
-                          fontSize: 11,
+                          fontSize: 11.5,
                           fontWeight: 600,
                           padding: "4px 12px",
                           borderRadius: 12,
@@ -648,14 +648,14 @@ export default function ResponseViewer() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ marginTop: 8, fontSize: 12, color: C.textMuted }}>
+                  <div style={{ marginTop: 8, fontSize: 12.5, color: C.textMuted }}>
                     Submitted by: <strong>{selectedSubmission.SubmittedBy}</strong> • Version: {selectedSubmission.FormVersion}
                     {(selectedSubmission.CurrentLayer ?? selectedSubmission.CurrentApprovalLayer) > 0 && (
                       <> • Layer: <strong>{selectedSubmission.CurrentLayer || selectedSubmission.CurrentApprovalLayer}</strong></>
                     )}
                   </div>
                   {selectedCompany && (
-                    <div style={{ marginTop: 4, fontSize: 12, color: C.purple, fontWeight: 600 }}>
+                    <div style={{ marginTop: 4, fontSize: 12.5, color: C.purple, fontWeight: 600 }}>
                       Company: {selectedCompany}
                     </div>
                   )}
@@ -676,11 +676,11 @@ export default function ResponseViewer() {
                   <div style={{ padding: "0 16px 16px" }}>
                     <div
                       style={{
-                        fontSize: 12,
+                        fontSize: 12.5,
                         fontWeight: 600,
                         color: C.textSecond,
                         textTransform: "uppercase",
-                        letterSpacing: "0.05em",
+                        letterSpacing: "0.03em",
                         marginBottom: 12,
                       }}
                     >
@@ -690,7 +690,7 @@ export default function ResponseViewer() {
                       <div key={fieldName} style={{ marginBottom: 18 }}>
                         <div
                           style={{
-                            fontSize: 11,
+                            fontSize: 11.5,
                             fontWeight: 600,
                             color: C.purple,
                             marginBottom: 4,
@@ -706,7 +706,7 @@ export default function ResponseViewer() {
                           }}
                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
                         />
-                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
                           {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
                         </div>
                       </div>
@@ -714,12 +714,12 @@ export default function ResponseViewer() {
                   </div>
                 )}
                 {matrixLoading && (
-                  <div style={{ padding: "0 16px 16px", color: C.textMuted, fontSize: 12 }}>Loading matrix data...</div>
+                  <div style={{ padding: "0 16px 16px", color: C.textMuted, fontSize: 12.5 }}>Loading matrix data...</div>
                 )}
 
                 {selectedSubmission.RawJSON && (
                   <details style={{ padding: 16, borderTop: `1px solid ${C.border}`, background: C.bg }}>
-                    <summary style={{ cursor: "pointer", color: C.textSecond, fontSize: 13 }}>
+                    <summary style={{ cursor: "pointer", color: C.textSecond, fontSize: 13.5 }}>
                       View Raw JSON
                     </summary>
                     <pre
@@ -728,7 +728,7 @@ export default function ResponseViewer() {
                         padding: 12,
                         background: C.cardBg,
                         borderRadius: 8,
-                        fontSize: 11,
+                        fontSize: 11.5,
                         overflow: "auto",
                         maxHeight: 200,
                       }}

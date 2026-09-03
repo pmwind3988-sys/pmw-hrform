@@ -213,7 +213,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
                   textAlign: "center",
                   minHeight: "1.5em",
                   maxWidth: 400,
-                  fontSize: "0.95rem",
+                  fontSize: "0.9375rem",
                   lineHeight: 1.6,
                 }}
               >
@@ -271,7 +271,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
                       alignItems: "start",
                       px: 1.5,
                       py: 1.25,
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: isActive ? "rgba(0, 120, 212, 0.08)" : "transparent",
                     }}
                   >
@@ -314,7 +314,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
               variant="caption"
               sx={{
                 color: "#9CA3AF",
-                fontSize: "0.75rem",
+                fontSize: "0.78rem",
                 lineHeight: 1.5,
                 letterSpacing: 0,
                 fontWeight: 500,

@@ -105,7 +105,7 @@ function JobOverviewCard({ job }: { job: JobListing }) {
       sx={{
         // Template uses a low-saturation tint of its accent for this panel.
         backgroundColor: editorial.blueWash,
-        borderRadius: "20px",
+        borderRadius: "12px",
         border: `1px solid ${editorial.pmwBlueSoft}`,
         boxShadow: "none",
         pt: 3.5,
@@ -119,7 +119,7 @@ function JobOverviewCard({ job }: { job: JobListing }) {
       <Typography
         id="job-overview-heading"
         variant="h2"
-        sx={{ fontWeight: 800, fontSize: "1.125rem", color: editorial.ink }}
+        sx={{ fontWeight: 700, fontSize: "1.125rem", color: editorial.ink }}
       >
         Job overview
       </Typography>
@@ -130,10 +130,10 @@ function JobOverviewCard({ job }: { job: JobListing }) {
               {row.icon}
             </Box>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
-              <Typography variant="body1" sx={{ fontWeight: 600, color: editorial.ink, fontSize: "1rem" }}>
+              <Typography variant="body1" sx={{ fontWeight: 600, color: editorial.ink, fontSize: "0.9375rem" }}>
                 {row.label}
               </Typography>
-              <Typography variant="body1" sx={{ color: editorial.muted, fontSize: "1rem", overflowWrap: "anywhere" }}>
+              <Typography variant="body1" sx={{ color: editorial.muted, fontSize: "0.9375rem", overflowWrap: "anywhere" }}>
                 {row.value}
               </Typography>
             </Box>
@@ -287,7 +287,7 @@ export default function JobDetailsPage() {
                       label="Already submitted"
                       size="small"
                       sx={{
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         fontWeight: 700,
                         backgroundColor: "rgba(16, 124, 16, 0.10)",
                         color: editorial.success,
@@ -320,17 +320,17 @@ export default function JobDetailsPage() {
                 <Box>
                   <Typography
                     variant="h2"
-                    sx={{ fontWeight: 800, fontSize: "1.375rem", color: editorial.ink, mb: 2 }}
+                    sx={{ fontWeight: 700, fontSize: "1.375rem", color: editorial.ink, mb: 2 }}
                   >
                     Job description
                   </Typography>
                   {sanitizedDescription ? (
                     <Box
                       sx={{
-                        "& p": { mb: 1.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.95rem" },
+                        "& p": { mb: 1.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.9375rem" },
                         "& ul, & ol": { pl: 3, mb: 1.5 },
-                        "& li": { mb: 0.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.95rem" },
-                        "& h1, & h2, & h3, & h4": { mt: 2, mb: 1, fontWeight: 800, color: editorial.ink },
+                        "& li": { mb: 0.5, lineHeight: 1.7, color: editorial.ink, fontSize: "0.9375rem" },
+                        "& h1, & h2, & h3, & h4": { mt: 2, mb: 1, fontWeight: 700, color: editorial.ink },
                         "& strong": { fontWeight: 600 },
                         "& a": { color: editorial.pmwBlueDark, fontWeight: 500 },
                       }}
@@ -398,7 +398,7 @@ export default function JobDetailsPage() {
               <Grid size={12}>
                 <Typography
                   variant="h2"
-                  sx={{ fontWeight: 800, fontSize: "1.5rem", color: editorial.ink, mb: 2.5, mt: { xs: 1, md: 2 } }}
+                  sx={{ fontWeight: 700, fontSize: "1.5rem", color: editorial.ink, mb: 2.5, mt: { xs: 1, md: 2 } }}
                 >
                   Related opportunities
                 </Typography>

@@ -46,17 +46,17 @@ const field: React.CSSProperties = {
   border: `1px solid ${C.border}`,
   borderRadius: 7,
   padding: "0 9px",
-  fontSize: 12,
+  fontSize: 12.5,
   color: C.textPrimary,
   background: C.white,
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontFamily: "var(--pmw-font-main)",
 };
 
 const fieldLabel: React.CSSProperties = {
   display: "block",
-  fontSize: 9,
-  fontWeight: 800,
-  letterSpacing: ".04em",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.03em",
   textTransform: "uppercase",
   color: C.textSecond,
   marginBottom: 3,
@@ -79,10 +79,10 @@ function actionBtn(tone: "primary" | "quiet" | "danger", disabled = false): Reac
     border: `1px solid ${disabled ? C.border : palette.bd}`,
     background: disabled ? C.offWhite : palette.bg,
     color: disabled ? C.textMuted : palette.fg,
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: 700,
     cursor: disabled ? "not-allowed" : "pointer",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    fontFamily: "var(--pmw-font-main)",
     transition: "background-color .12s, border-color .12s, color .12s",
   };
 }
@@ -116,7 +116,7 @@ function EntryForm({
         background: C.purplePale,
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 800, color: C.purple }}>{title}</div>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.purple }}>{title}</div>
       <label>
         <span style={fieldLabel}>Department</span>
         <input
@@ -321,21 +321,21 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
           background: "none",
           textAlign: "left",
           cursor: "pointer",
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+          fontFamily: "var(--pmw-font-main)",
         }}
       >
         <ExpandMoreIcon style={{
-          fontSize: 18,
+          fontSize: 17,
           color: C.textMuted,
           flexShrink: 0,
           transform: open ? "rotate(0deg)" : "rotate(-90deg)",
           transition: "transform .15s ease",
         }} />
         <span style={{ minWidth: 0, flex: 1 }}>
-          <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: C.textPrimary }}>
+          <span style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: C.textPrimary }}>
             {roleLabel} directory
           </span>
-          <span style={{ display: "block", fontSize: 10, color: C.textSecond, lineHeight: 1.4 }}>
+          <span style={{ display: "block", fontSize: 11, color: C.textSecond, lineHeight: 1.4 }}>
             {summary}
           </span>
         </span>
@@ -344,7 +344,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
       {open && (
         <div style={{ display: "grid", gap: 9, marginTop: 6 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <span style={{ fontSize: 10, color: C.textSecond, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 11, color: C.textSecond, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {config.listName} · {config.roleColumn} = {config.roleValue || "any"}
             </span>
             <button
@@ -359,13 +359,13 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
           </div>
 
           {!token && (
-            <p style={{ fontSize: 10, color: C.amber, lineHeight: 1.5, margin: 0 }}>
+            <p style={{ fontSize: 11, color: C.amber, lineHeight: 1.5, margin: 0 }}>
               Waiting for the SharePoint session. Reopen this panel once the builder finishes signing in.
             </p>
           )}
 
           {loadError && (
-            <div style={{ background: C.redPale, border: "1px solid #F0C7C7", borderRadius: 8, padding: "8px 9px", fontSize: 10, color: C.red, lineHeight: 1.5 }}>
+            <div style={{ background: C.redPale, border: "1px solid #F0C7C7", borderRadius: 8, padding: "8px 9px", fontSize: 11, color: C.red, lineHeight: 1.5 }}>
               Could not read the directory: {loadError}
             </div>
           )}
@@ -376,7 +376,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
               border: `1px solid ${notice.tone === "ok" ? "#A7D7A7" : "#F0C7C7"}`,
               borderRadius: 8,
               padding: "8px 9px",
-              fontSize: 10,
+              fontSize: 11,
               color: notice.tone === "ok" ? C.green : C.red,
               lineHeight: 1.5,
               display: "flex",
@@ -397,7 +397,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
 
           {token && directory && !directory.exists && (
             <div style={{ display: "grid", gap: 8, background: C.white, border: `1px dashed ${C.border}`, borderRadius: 8, padding: "11px 10px" }}>
-              <p style={{ fontSize: 11, color: C.textSecond, lineHeight: 1.5, margin: 0 }}>
+              <p style={{ fontSize: 11.5, color: C.textSecond, lineHeight: 1.5, margin: 0 }}>
                 SharePoint has no list named <strong>{config.listName}</strong>. Create it with the four
                 columns this layer expects, then add the departments.
               </p>
@@ -414,7 +414,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
 
           {token && directory?.exists && directory.missingColumns.length > 0 && (
             <div style={{ display: "grid", gap: 8, background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "9px 10px" }}>
-              <p style={{ fontSize: 10, color: C.amber, lineHeight: 1.5, margin: 0, display: "flex", gap: 6 }}>
+              <p style={{ fontSize: 11, color: C.amber, lineHeight: 1.5, margin: 0, display: "flex", gap: 6 }}>
                 <WarningAmberIcon style={{ fontSize: 14, flexShrink: 0 }} />
                 <span>
                   {config.listName} has no <strong>{directory.missingColumns.join(", ")}</strong> column
@@ -435,7 +435,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
           {token && directory?.exists && directory.missingColumns.length === 0 && (
             <>
               {entries.length === 0 && !adding && (
-                <p style={{ fontSize: 11, color: C.textSecond, lineHeight: 1.5, margin: 0, background: C.white, border: `1px dashed ${C.border}`, borderRadius: 8, padding: "11px 10px" }}>
+                <p style={{ fontSize: 11.5, color: C.textSecond, lineHeight: 1.5, margin: 0, background: C.white, border: `1px dashed ${C.border}`, borderRadius: 8, padding: "11px 10px" }}>
                   No {roleLabel} rows yet. Add one department per approver — the workflow matches the
                   submitted department against this list.
                 </p>
@@ -468,14 +468,14 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
                         ) : (
                           <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary, overflowWrap: "anywhere" }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.textPrimary, overflowWrap: "anywhere" }}>
                                 {entry.department || <em style={{ color: C.amber, fontWeight: 600 }}>No department</em>}
                               </div>
-                              <div style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.5, overflowWrap: "anywhere" }}>
+                              <div style={{ fontSize: 11, color: C.textSecond, lineHeight: 1.5, overflowWrap: "anywhere" }}>
                                 {entry.approverName ? `${entry.approverName} · ` : ""}{entry.approverEmail || "No email"}
                               </div>
                               {(duplicate || badEmail) && (
-                                <div style={{ fontSize: 10, color: C.amber, lineHeight: 1.5, marginTop: 2 }}>
+                                <div style={{ fontSize: 11, color: C.amber, lineHeight: 1.5, marginTop: 2 }}>
                                   {duplicate
                                     ? `Two ${roleLabel} rows share this department — the workflow stops until one is removed.`
                                     : "This email is not valid, so the approval email cannot be sent."}
@@ -519,7 +519,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
 
                         {confirmDeleteId === entry.id && !isEditing && (
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, background: C.redPale, border: "1px solid #F0C7C7", borderRadius: 7, padding: "7px 8px" }}>
-                            <span style={{ flex: 1, fontSize: 10, color: C.red, lineHeight: 1.45 }}>
+                            <span style={{ flex: 1, fontSize: 11, color: C.red, lineHeight: 1.45 }}>
                               Remove {entry.department || "this row"} from the directory?
                             </span>
                             <button
@@ -568,7 +568,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
               )}
 
               {directory.otherRoleCount > 0 && (
-                <p style={{ fontSize: 10, color: C.textSecond, lineHeight: 1.5, margin: 0 }}>
+                <p style={{ fontSize: 11, color: C.textSecond, lineHeight: 1.5, margin: 0 }}>
                   {directory.otherRoleCount === 1
                     ? "1 other row in this list belongs to a different role."
                     : `${directory.otherRoleCount} other rows in this list belong to different roles.`}{" "}

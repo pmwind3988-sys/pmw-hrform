@@ -567,7 +567,7 @@ const SubmittingOverlay = ({ t, hasUploads }: { t: typeof LIGHT; hasUploads: boo
   <div className="dfp-overlay" role="alertdialog" aria-modal="true" aria-busy="true" aria-live="assertive" aria-label="Submitting your response">
     <div className="dfp-overlay-card">
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Spinner size={42} t={t} /></div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: t.textPrimary, marginBottom: 8 }}>Submitting your response</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: t.textPrimary, marginBottom: 8 }}>Submitting your response</div>
       <div style={{ fontSize: 13, lineHeight: 1.7, color: t.textSecond }}>
         {/* The wait is only explained by uploads when this submission actually
             carries a file or a signature; otherwise the sentence describes work
@@ -583,7 +583,7 @@ const SubmittingOverlay = ({ t, hasUploads }: { t: typeof LIGHT; hasUploads: boo
 const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     {isTestRun && (
-      <div role="status" style={{ maxWidth: 420, margin: "0 auto 20px", padding: "10px 16px", background: "#B91C1C", color: "#fff", borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+      <div role="status" style={{ maxWidth: 420, margin: "0 auto 20px", padding: "10px 16px", background: "#B91C1C", color: "#fff", borderRadius: 12, fontSize: 12, fontWeight: 700 }}>
         TEST RUN — this was a rehearsal, not a real submission. Every email it generated went only to {testEmailDisplay || "the nominated test address"}.
       </div>
     )}
@@ -593,8 +593,8 @@ const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay 
     {referenceNo && (
       // The reference is what the respondent has to quote later, so it is given
       // room to be read and copied rather than tucked into the sentence above.
-      <div style={{ maxWidth: 420, margin: "18px auto 22px", padding: "14px 18px", background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 8 }}>
-        <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: t.textSecond, marginBottom: 6 }}>Reference number</div>
+      <div style={{ maxWidth: 420, margin: "18px auto 22px", padding: "14px 18px", background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 12 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.03em", textTransform: "uppercase", color: t.textSecond, marginBottom: 6 }}>Reference number</div>
         <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 20, fontWeight: 700, color: t.textPrimary, userSelect: "all", wordBreak: "break-all" }}>{referenceNo}</div>
         <div style={{ fontSize: 12, color: t.textSecond, marginTop: 6 }}>Keep this to track or ask about your submission.</div>
       </div>
@@ -608,11 +608,11 @@ const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay 
 
 const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: typeof LIGHT }) => (
   <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-    <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
-      <div style={{ width: 66, height: 66, borderRadius: 18, margin: "0 auto 22px", background: t.purplePale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>LOCK</div>
+    <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
+      <div style={{ width: 66, height: 66, borderRadius: 12, margin: "0 auto 22px", background: t.purplePale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>LOCK</div>
       <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: t.textPrimary, marginBottom: 10 }}>Sign in required</div>
       <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7, marginBottom: 32 }}><strong>{formTitle || "This form"}</strong> is restricted.</p>
-      <button onClick={onSignIn} style={{ width: "100%", padding: "14px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${t.purple},${t.purpleLight})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+      <button onClick={onSignIn} style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: `linear-gradient(135deg,${t.purple},${t.purpleLight})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
         <MsIcon /> Sign in with Microsoft 365
       </button>
     </div>
@@ -1801,7 +1801,7 @@ export default function DynamicFormPage() {
   if (!error && !formData?.surveyJson) return (
     <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <style>{globalCss(t)}</style>
-      <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
+      <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
         <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
         <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form unavailable</div>
         <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>This link has no published form content. Please ask HR to republish the form and share the link again.</p>
@@ -1812,7 +1812,7 @@ export default function DynamicFormPage() {
   if (error) return (
     <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <style>{globalCss(t)}</style>
-      <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
+      <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
         <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
         <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form not found</div>
         <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>{error}</p>
@@ -1845,8 +1845,8 @@ export default function DynamicFormPage() {
               background: "#B91C1C",
               color: "#fff",
               fontSize: 13,
-              fontWeight: 800,
-              letterSpacing: ".02em",
+              fontWeight: 700,
+              letterSpacing: "0.03em",
               textAlign: "center",
               padding: "10px 12px",
               lineHeight: 1.4,
@@ -1860,20 +1860,20 @@ export default function DynamicFormPage() {
           <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <Logo size={{ xs: 26, sm: 28, md: 32 }} />
             <span className="dfp-title" style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 15, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
-            {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
-            {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>Private</span>}
+            {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 12, padding: "2px 8px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
+            {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 12, padding: "2px 8px", whiteSpace: "nowrap" }}>Private</span>}
           </div>
           <div className="dfp-header-right" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
+            <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 12, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
             {isAuthenticated ? (
               <>
                 <div className="dfp-user-badge" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: t.textSecond }}>
                   <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
                   <span className="dfp-user-name">{userEmail?.split("@")[0]}</span>
                 </div>
-                <button onClick={handleSignOut} style={{ height: 30, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
+                <button onClick={handleSignOut} style={{ height: 30, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 12, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
               </>
-            ) : (<button onClick={handleSignIn} style={{ height: 30, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
+            ) : (<button onClick={handleSignIn} style={{ height: 30, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 12, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
             <span className="dfp-version" style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap" }}>v{formVersion}</span>
           </div>
         </header>
@@ -1917,7 +1917,7 @@ export default function DynamicFormPage() {
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (
-              <div style={{ background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 8, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 12, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg,${t.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>{(userEmail?.[0] || "?").toUpperCase()}</div>
                 <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: t.green }}>Submitting as yourself</div><div style={{ fontSize: 11, color: t.textSecond }}>{userEmail}</div></div>
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
@@ -1927,11 +1927,11 @@ export default function DynamicFormPage() {
             {formReady && isLastSurveyPage && (
               <>
                 {isTestRun && (
-                  <div role="status" style={{ marginTop: 18, padding: "12px 16px", background: "#FEE2E2", border: "1px solid #B91C1C", borderRadius: 8, color: "#7F1D1D", fontSize: 13, fontWeight: 700, textAlign: "center" }}>
+                  <div role="status" style={{ marginTop: 18, padding: "12px 16px", background: "#FEE2E2", border: "1px solid #B91C1C", borderRadius: 12, color: "#7F1D1D", fontSize: 13, fontWeight: 700, textAlign: "center" }}>
                     You are about to submit a TEST RUN, not a real request. Every email it generates will go only to {testEmailDisplay || "the nominated test address"}.
                   </div>
                 )}
-                <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>
+                <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 12, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>
                   <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
                     <input
                       type="checkbox"
@@ -1972,11 +1972,11 @@ export default function DynamicFormPage() {
                     minHeight: 46,
                     marginTop: 14,
                     border: "none",
-                    borderRadius: 8,
+                    borderRadius: 12,
                     background: submitStatus === "loading" ? t.purpleMid : t.purple,
                     color: "#fff",
                     fontSize: 14,
-                    fontWeight: 800,
+                    fontWeight: 700,
                     cursor: submitStatus === "loading" ? "wait" : "pointer",
                     boxShadow: t.shadowFab,
                   }}
@@ -1985,9 +1985,9 @@ export default function DynamicFormPage() {
                 </button>
               </>
             )}
-            {submitStatus === "error" && <div ref={submitErrorRef} tabIndex={-1} role="alert" style={{ outline: "none", marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
+            {submitStatus === "error" && <div ref={submitErrorRef} tabIndex={-1} role="alert" style={{ outline: "none", marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 12, color: t.red, fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
               <div>Submission could not be completed. Your answers are still on this page; review them and try again.</div>
-              <button onClick={handleSubmit} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry submission</button>
+              <button onClick={handleSubmit} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 12, background: t.red, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry submission</button>
             </div>}
           </div>
         )}
@@ -1998,20 +1998,20 @@ export default function DynamicFormPage() {
 
       {showQr && (
         <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, animation: "fadeUp .2s ease", backdropFilter: "blur(2px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 8, padding: "32px 28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: "32px 28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
             <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: "#1E1B4B", marginBottom: 4 }}>Share this form</div>
             <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 20, lineHeight: 1.5 }}>Scan the QR code or copy the link below</div>
             {qrDataUrl ? (
-              <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 8 }} />
+              <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 12 }} />
             ) : (
               <div style={{ width: 200, height: 200, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF", fontSize: 12 }}>Generating...</div>
             )}
-            <div style={{ fontSize: 11, color: "#6B7280", wordBreak: "break-all", padding: "10px 12px", background: "#F3F4F6", borderRadius: 8, marginBottom: 18, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: "#6B7280", wordBreak: "break-all", padding: "10px 12px", background: "#F3F4F6", borderRadius: 12, marginBottom: 18, lineHeight: 1.5 }}>
               {shareUrl}
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? "#059669" : "#E5E3F0"}`, borderRadius: 8, background: copied ? "#D1FAE5" : "none", color: copied ? "#059669" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
-              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: "linear-gradient(135deg,#005A9E,#0078D4)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
+              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? "#059669" : "#E5E3F0"}`, borderRadius: 12, background: copied ? "#D1FAE5" : "none", color: copied ? "#059669" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
+              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 12, background: "linear-gradient(135deg,#005A9E,#0078D4)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
             </div>
           </div>
         </div>

@@ -35,7 +35,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           letterSpacing: 0,
           color: editorial.muted,
           fontWeight: 600,
-          fontSize: "0.7rem",
+          fontSize: "0.72rem",
         }}
       >
         Submission
@@ -48,7 +48,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
             letterSpacing: 0,
             color: editorial.muted,
             fontWeight: 600,
-            fontSize: "0.7rem",
+            fontSize: "0.72rem",
           }}
         >
           Submitted By
@@ -61,7 +61,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           letterSpacing: 0,
           color: editorial.muted,
           fontWeight: 600,
-          fontSize: "0.7rem",
+          fontSize: "0.72rem",
         }}
       >
         List
@@ -73,7 +73,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           letterSpacing: 0,
           color: editorial.muted,
           fontWeight: 600,
-          fontSize: "0.7rem",
+          fontSize: "0.72rem",
         }}
       >
         Submitted
@@ -85,7 +85,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           letterSpacing: 0,
           color: editorial.muted,
           fontWeight: 600,
-          fontSize: "0.7rem",
+          fontSize: "0.72rem",
         }}
       >
         Status
@@ -98,7 +98,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
             letterSpacing: 0,
             color: editorial.muted,
             fontWeight: 600,
-            fontSize: "0.7rem",
+            fontSize: "0.72rem",
             textAlign: "right",
           }}
         >

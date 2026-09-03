@@ -252,8 +252,8 @@ export default function MaterialCard({
             top: 10,
             left: 10,
             height: 24,
-            fontWeight: 800,
-            fontSize: "0.68rem",
+            fontWeight: 700,
+            fontSize: "0.72rem",
             color: style.color,
             backgroundColor: "rgba(255, 255, 255, 0.94)",
             border: `1px solid ${style.wash}`,
@@ -278,7 +278,7 @@ export default function MaterialCard({
             }}
           >
             <LockOutlined sx={{ fontSize: 14 }} />
-            <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>
               Locked
             </Typography>
           </Box>
@@ -302,7 +302,7 @@ export default function MaterialCard({
             }}
           >
             <CheckCircle sx={{ fontSize: 14 }} />
-            <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>
               Viewed
             </Typography>
           </Box>
@@ -313,7 +313,7 @@ export default function MaterialCard({
         <Typography
           variant="subtitle1"
           sx={{
-            fontWeight: 800,
+            fontWeight: 700,
             color: editorial.ink,
             lineHeight: 1.3,
             display: "-webkit-box",
@@ -355,7 +355,7 @@ export default function MaterialCard({
         >
           <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
             <VisibilityOutlined sx={{ fontSize: 15 }} />
-            <Typography variant="caption" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
               {formatViewCount(material.viewCount)}
             </Typography>
           </Stack>

@@ -37,15 +37,15 @@ export const careerSearchFieldSx = {
   flex: "1 1 300px",
   minWidth: { xs: "100%", sm: 280 },
   "& .MuiOutlinedInput-root": {
-    borderRadius: "10px",
+    borderRadius: "12px",
     backgroundColor: editorial.white,
   },
 } satisfies SxProps<Theme>;
 
 export const careerActionButtonSx = {
-  borderRadius: "8px",
+  borderRadius: "12px",
   textTransform: "none",
-  fontWeight: 800,
+  fontWeight: 700,
   minHeight: 40,
   transition: "background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease",
   "&:active": {
@@ -56,7 +56,7 @@ export const careerActionButtonSx = {
 export const careerIconButtonSx = {
   width: 40,
   height: 40,
-  borderRadius: "8px",
+  borderRadius: "12px",
   border: `1px solid ${editorial.border}`,
   backgroundColor: editorial.white,
   color: editorial.pmwBlueDark,
@@ -97,7 +97,7 @@ export const careerTableShellSx = {
  */
 export const jobBoardCardSx = {
   backgroundColor: editorial.white,
-  borderRadius: "20px",
+  borderRadius: "12px",
   border: editorialHairline,
   p: { xs: 2.5, sm: 3.5, md: 5 },
   display: "flex",
@@ -115,8 +115,10 @@ export const jobBoardCardSx = {
 
 /** Small tinted pill — the template's "10 min ago" stamp. */
 export const jobBoardBadgeSx = {
-  height: 28,
-  borderRadius: "8px",
+  height: 24,
+  /* 5px: SI gives badges a tighter radius than containers so a card carrying
+     two of them does not read as a row of little boxes. */
+  borderRadius: "5px",
   px: 1,
   backgroundColor: "rgba(0, 120, 212, 0.10)",
   color: editorial.pmwBlueDark,
@@ -157,7 +159,7 @@ export const jobBoardPrimaryButtonSx = {
 /** Left filter rail container from the template's sidebar. */
 export const jobBoardRailSx = {
   backgroundColor: editorial.white,
-  borderRadius: "20px",
+  borderRadius: "12px",
   border: editorialHairline,
   boxShadow: "0 3px 4px rgba(0, 120, 212, 0.08)",
   p: { xs: 2, md: 2.5 },
@@ -229,7 +231,7 @@ export function CareerErrorState({
         ) : undefined
       }
     >
-      <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink, lineHeight: 1.4 }}>
+      <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink, lineHeight: 1.4 }}>
         Something needs attention
       </Typography>
       <Typography variant="body2" sx={{ color: editorial.muted, lineHeight: 1.5 }}>
@@ -276,7 +278,7 @@ export function CareerEmptyState({
       >
         {icon ?? <SearchOff />}
       </Box>
-      <Typography variant="h6" sx={{ color: editorial.ink, fontWeight: 800, mb: 0.5, textWrap: "balance" }}>
+      <Typography variant="h6" sx={{ color: editorial.ink, fontWeight: 700, mb: 0.5, textWrap: "balance" }}>
         {title}
       </Typography>
       <Typography variant="body2" sx={{ color: editorial.muted, maxWidth: 520, mx: "auto", textWrap: "pretty" }}>
@@ -333,7 +335,7 @@ export function CareerMetricPill({
         sx={{
           width: { xs: 32, sm: 38 },
           height: { xs: 32, sm: 38 },
-          borderRadius: "10px",
+          borderRadius: "12px",
           backgroundColor: colors.bg,
           color: colors.color,
           display: "flex",
@@ -349,7 +351,7 @@ export function CareerMetricPill({
         <Typography
           sx={{
             color: editorial.ink,
-            fontWeight: 900,
+            fontWeight: 700,
             fontSize: { xs: "1rem", sm: "1.15rem" },
             lineHeight: 1,
             fontVariantNumeric: "tabular-nums",
@@ -357,7 +359,7 @@ export function CareerMetricPill({
         >
           {value}
         </Typography>
-        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 800, lineHeight: 1.2 }}>
+        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, lineHeight: 1.2 }}>
           {label}
         </Typography>
       </Box>

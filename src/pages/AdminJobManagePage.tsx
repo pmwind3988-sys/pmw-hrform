@@ -186,7 +186,7 @@ function MiniFormBuilder({
           size="small"
           startIcon={<Add />}
           onClick={() => { resetForm(); setShowForm(true); }}
-          sx={{ borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
+          sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 600 }}
         >
           Add Question
         </Button>
@@ -204,15 +204,15 @@ function MiniFormBuilder({
           <Paper
             key={i}
             variant="outlined"
-            sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 1, borderRadius: "8px", borderColor: "#E5E7EB" }}
+            sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 1, borderRadius: "12px", borderColor: "#E5E7EB" }}
           >
             <Box sx={{ flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.85rem" }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.845rem" }}>
                 {field.label}
               </Typography>
               <Box sx={{ display: "flex", gap: 0.5, mt: 0.25 }}>
-                <Chip label={field.type} size="small" sx={{ height: 20, fontSize: "0.65rem", borderRadius: "4px", backgroundColor: "#F3F4F6", color: "#6B7280" }} />
-                {field.required && <Chip label="Required" size="small" sx={{ height: 20, fontSize: "0.65rem", borderRadius: "4px", backgroundColor: "#FEF3C7", color: "#92400E" }} />}
+                <Chip label={field.type} size="small" sx={{ height: 20, fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#F3F4F6", color: "#6B7280" }} />
+                {field.required && <Chip label="Required" size="small" sx={{ height: 20, fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#FEF3C7", color: "#92400E" }} />}
               </Box>
             </Box>
             <IconButton size="small" onClick={() => handleEdit(i)} sx={{ color: "#6B7280" }}><Edit sx={{ fontSize: 16 }} /></IconButton>
@@ -222,7 +222,7 @@ function MiniFormBuilder({
       </Stack>
 
       {/* Add/Edit form */}
-      <Dialog open={showForm} onClose={resetForm} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
+      <Dialog open={showForm} onClose={resetForm} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
           <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
             {editIndex !== null ? "Edit Question" : "Add Question"}
@@ -236,7 +236,7 @@ function MiniFormBuilder({
               onChange={(e) => setEditField({ ...editField, label: e.target.value, name: e.target.value.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") })}
               fullWidth
               size="small"
-              slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+              slotProps={{ input: { sx: { borderRadius: "12px" } } }}
             />
             <FormControl fullWidth size="small">
               <InputLabel>Type</InputLabel>
@@ -244,7 +244,7 @@ function MiniFormBuilder({
                 value={editField.type}
                 label="Type"
                 onChange={(e) => setEditField({ ...editField, type: e.target.value as CustomFieldDefinition["type"] })}
-                sx={{ borderRadius: "8px" }}
+                sx={{ borderRadius: "12px" }}
               >
                 {FIELD_TYPES.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
               </Select>
@@ -260,14 +260,14 @@ function MiniFormBuilder({
                 onChange={(e) => setChoicesInput(e.target.value)}
                 fullWidth
                 size="small"
-                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
               />
             )}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={resetForm} sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={!editField.label.trim()} sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}>
+          <Button onClick={resetForm} sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave} disabled={!editField.label.trim()} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4" }}>
             {editIndex !== null ? "Update" : "Add"}
           </Button>
         </DialogActions>
@@ -333,7 +333,7 @@ function RichTextEditor({
     <Box
       sx={{
         border: "1px solid #D1D5DB",
-        borderRadius: "8px",
+        borderRadius: "12px",
         overflow: "hidden",
         "&:focus-within": {
           borderColor: "#0078D4",
@@ -357,7 +357,7 @@ function RichTextEditor({
             selected={format.includes("bold")}
             onMouseDown={(e) => { e.preventDefault(); exec("bold"); }}
             size="small"
-            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+            sx={{ border: "none", borderRadius: "12px", p: "4px 8px", minWidth: 32 }}
           >
             <FormatBold sx={{ fontSize: 18 }} />
           </ToggleButton>
@@ -368,7 +368,7 @@ function RichTextEditor({
             selected={format.includes("italic")}
             onMouseDown={(e) => { e.preventDefault(); exec("italic"); }}
             size="small"
-            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+            sx={{ border: "none", borderRadius: "12px", p: "4px 8px", minWidth: 32 }}
           >
             <FormatItalic sx={{ fontSize: 18 }} />
           </ToggleButton>
@@ -380,7 +380,7 @@ function RichTextEditor({
             selected={format.includes("ul")}
             onMouseDown={(e) => { e.preventDefault(); exec("insertUnorderedList"); }}
             size="small"
-            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+            sx={{ border: "none", borderRadius: "12px", p: "4px 8px", minWidth: 32 }}
           >
             <FormatListBulleted sx={{ fontSize: 18 }} />
           </ToggleButton>
@@ -391,7 +391,7 @@ function RichTextEditor({
             selected={format.includes("ol")}
             onMouseDown={(e) => { e.preventDefault(); exec("insertOrderedList"); }}
             size="small"
-            sx={{ border: "none", borderRadius: "6px", p: "4px 8px", minWidth: 32 }}
+            sx={{ border: "none", borderRadius: "12px", p: "4px 8px", minWidth: 32 }}
           >
             <FormatListNumbered sx={{ fontSize: 18 }} />
           </ToggleButton>
@@ -411,7 +411,7 @@ function RichTextEditor({
           minHeight,
           p: 2,
           outline: "none",
-          fontSize: "0.9rem",
+          fontSize: "0.875rem",
           lineHeight: 1.7,
           color: "#374151",
           "&:empty:before": {
@@ -525,7 +525,7 @@ function JobFormDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px", m: { xs: 1, sm: 2 } } } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px", m: { xs: 1, sm: 2 } } } }}>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
         <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
           {isEdit ? "Edit Opportunity" : "Create Opportunity"}
@@ -535,12 +535,12 @@ function JobFormDialog({
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 0.5 }}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <TextField label="Role Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth required size="small" slotProps={{ input: { sx: { borderRadius: "8px" } } }} />
+            <TextField label="Role Title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth required size="small" slotProps={{ input: { sx: { borderRadius: "12px" } } }} />
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Company</InputLabel>
-              <Select value={company} label="Company" onChange={(e) => setCompany(e.target.value)} sx={{ borderRadius: "8px" }}>
+              <Select value={company} label="Company" onChange={(e) => setCompany(e.target.value)} sx={{ borderRadius: "12px" }}>
                 <MenuItem value="">Unassigned</MenuItem>
                 {companyOptions.length > 0
                   ? companyOptions.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)
@@ -552,7 +552,7 @@ function JobFormDialog({
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Department</InputLabel>
-              <Select value={department} label="Department" onChange={(e) => setDepartment(e.target.value)} sx={{ borderRadius: "8px" }}>
+              <Select value={department} label="Department" onChange={(e) => setDepartment(e.target.value)} sx={{ borderRadius: "12px" }}>
                 {departmentOptions.length > 0
                   ? departmentOptions.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)
                   : <MenuItem value="">No choices loaded</MenuItem>
@@ -563,7 +563,7 @@ function JobFormDialog({
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Location</InputLabel>
-              <Select value={location} label="Location" onChange={(e) => setLocation(e.target.value)} sx={{ borderRadius: "8px" }}>
+              <Select value={location} label="Location" onChange={(e) => setLocation(e.target.value)} sx={{ borderRadius: "12px" }}>
                 {locationOptions.length > 0
                   ? locationOptions.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)
                   : <MenuItem value="">No choices loaded</MenuItem>
@@ -580,7 +580,7 @@ function JobFormDialog({
           <Grid size={{ xs: 6, md: 3 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Employment Type</InputLabel>
-              <Select value={employmentType} label="Employment Type" onChange={(e) => setEmploymentType(e.target.value)} sx={{ borderRadius: "8px" }}>
+              <Select value={employmentType} label="Employment Type" onChange={(e) => setEmploymentType(e.target.value)} sx={{ borderRadius: "12px" }}>
                 {employmentTypeOptions.map((t) => (
                   <MenuItem key={t} value={t}>{t}</MenuItem>
                 ))}
@@ -588,13 +588,13 @@ function JobFormDialog({
             </FormControl>
           </Grid>
           <Grid size={{ xs: 12, md: 2 }}>
-            <TextField label="Closing Date" type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }} />
+            <TextField label="Closing Date" type="date" value={closingDate} onChange={(e) => setClosingDate(e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }} />
           </Grid>
           {isEdit && (
             <Grid size={{ xs: 12, md: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Status</InputLabel>
-                <Select value={status} label="Status" onChange={(e) => setStatus(e.target.value)} sx={{ borderRadius: "8px" }}>
+                <Select value={status} label="Status" onChange={(e) => setStatus(e.target.value)} sx={{ borderRadius: "12px" }}>
                   <MenuItem value="New">New (Active)</MenuItem>
                   <MenuItem value="Closed">Closed</MenuItem>
                 </Select>
@@ -608,8 +608,8 @@ function JobFormDialog({
         <MiniFormBuilder fields={customFields} onChange={setCustomFields} />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button onClick={onClose} sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}>Cancel</Button>
-        <Button variant="contained" onClick={handleSave} disabled={!title.trim() || saving} sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}>
+        <Button onClick={onClose} sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={!title.trim() || saving} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4" }}>
           {saving ? "Saving..." : isEdit ? "Update Opportunity" : "Create Opportunity"}
         </Button>
       </DialogActions>
@@ -624,14 +624,14 @@ function OpportunitiesLoadingSkeleton() {
         sx={{
           p: 2,
           mb: 3,
-          borderRadius: "8px",
+          borderRadius: "12px",
           boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
-          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "8px", flex: "1 1 300px", minWidth: { xs: "100%", sm: 280 } }} />
-          <Skeleton variant="rounded" width={132} height={40} sx={{ borderRadius: "8px" }} />
-          <Skeleton variant="rounded" width={82} height={32} sx={{ borderRadius: "8px" }} />
+          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "12px", flex: "1 1 300px", minWidth: { xs: "100%", sm: 280 } }} />
+          <Skeleton variant="rounded" width={132} height={40} sx={{ borderRadius: "12px" }} />
+          <Skeleton variant="rounded" width={82} height={32} sx={{ borderRadius: "12px" }} />
         </Box>
       </Paper>
 
@@ -644,16 +644,16 @@ function OpportunitiesLoadingSkeleton() {
         }}
       >
         {[1, 2, 3].map((item) => (
-          <Skeleton key={item} variant="rounded" height={92} sx={{ borderRadius: "8px" }} />
+          <Skeleton key={item} variant="rounded" height={92} sx={{ borderRadius: "12px" }} />
         ))}
       </Box>
 
-      <TableContainer component={Paper} sx={{ borderRadius: "8px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <TableContainer component={Paper} sx={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Table>
           <TableHead>
             <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
               {["Role", "Company", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
-                <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
+                <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -664,12 +664,12 @@ function OpportunitiesLoadingSkeleton() {
                   <Skeleton variant="text" width={150} />
                   <Skeleton variant="text" width={96} height={14} />
                 </TableCell>
-                <TableCell><Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
-                <TableCell><Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: "12px" }} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: "12px" }} /></TableCell>
                 <TableCell><Skeleton variant="text" width={92} /></TableCell>
-                <TableCell><Skeleton variant="rounded" width={72} height={24} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={72} height={24} sx={{ borderRadius: "12px" }} /></TableCell>
                 <TableCell><Skeleton variant="text" width={44} /></TableCell>
-                <TableCell><Skeleton variant="rounded" width={92} height={32} sx={{ borderRadius: "8px" }} /></TableCell>
+                <TableCell><Skeleton variant="rounded" width={92} height={32} sx={{ borderRadius: "12px" }} /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -969,7 +969,7 @@ export default function AdminJobManagePage() {
               sx={{
                 ...careerSearchFieldSx,
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
+                  borderRadius: "12px",
                   backgroundColor: editorial.white,
                 },
               }}
@@ -1016,7 +1016,7 @@ export default function AdminJobManagePage() {
               <Chip
                 label={`${filteredJobs.length} of ${jobs.length} openings`}
                 size="small"
-                sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800, fontSize: "0.75rem", borderRadius: "8px", fontVariantNumeric: "tabular-nums" }}
+                sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 700, fontSize: "0.78rem", borderRadius: "12px", fontVariantNumeric: "tabular-nums" }}
               />
             )}
           </Box>
@@ -1036,7 +1036,7 @@ export default function AdminJobManagePage() {
                   value={statusFilter}
                   label="Status"
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
                 >
                   <MenuItem value="">All statuses</MenuItem>
                   <MenuItem value="Active">Active</MenuItem>
@@ -1050,7 +1050,7 @@ export default function AdminJobManagePage() {
                   value={companyFilter}
                   label="Company"
                   onChange={(e) => setCompanyFilter(e.target.value)}
-                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
                 >
                   <MenuItem value="">All companies</MenuItem>
                   {jobCompanyOptions.map((company) => (
@@ -1065,7 +1065,7 @@ export default function AdminJobManagePage() {
                   value={typeFilter}
                   label="Type"
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
                 >
                   <MenuItem value="">All types</MenuItem>
                   {jobTypeOptions.map((type) => (
@@ -1080,7 +1080,7 @@ export default function AdminJobManagePage() {
                   value={sortBy}
                   label="Sort"
                   onChange={(e) => setSortBy(e.target.value as JobSortOption)}
-                  sx={{ borderRadius: "8px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
                 >
                   <MenuItem value="newest">Newest first</MenuItem>
                   <MenuItem value="title">Role A-Z</MenuItem>
@@ -1135,7 +1135,7 @@ export default function AdminJobManagePage() {
             title="No opportunities"
             description="Create the first internal advancement opening for PMW employees."
             action={
-              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#0078D4" }}>
+              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4" }}>
                 Create Opening
               </Button>
             }
@@ -1156,7 +1156,7 @@ export default function AdminJobManagePage() {
               <TableHead>
                 <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
                   {["Role", "Company", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>{h}</TableCell>
+                    <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -1164,22 +1164,22 @@ export default function AdminJobManagePage() {
                 {pagedJobs.map((job) => (
                   <TableRow key={job.id} hover sx={{ "&:hover": { backgroundColor: "#FAFBFC" } }}>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.85rem" }}>{job.title}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.845rem" }}>{job.title}</Typography>
                       {job.location && <Typography variant="caption" sx={{ color: "#9CA3AF" }}>{job.location}</Typography>}
                     </TableCell>
                     <TableCell>
                       {job.company ? (
-                        <Chip label={job.company} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800 }} />
+                        <Chip label={job.company} size="small" sx={{ borderRadius: "12px", fontSize: "0.72rem", backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 700 }} />
                       ) : (
                         <Typography variant="caption" sx={{ color: "#9CA3AF" }}>Unassigned</Typography>
                       )}
                     </TableCell>
-                    <TableCell><Chip label={job.department} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: editorial.pmwPurple, color: "#fff", fontWeight: 800 }} /></TableCell>
-                    <TableCell><Typography variant="body2" sx={{ color: "#374151", fontSize: "0.8rem" }}>{job.employmentType}</Typography></TableCell>
+                    <TableCell><Chip label={job.department} size="small" sx={{ borderRadius: "12px", fontSize: "0.72rem", backgroundColor: editorial.pmwPurple, color: "#fff", fontWeight: 700 }} /></TableCell>
+                    <TableCell><Typography variant="body2" sx={{ color: "#374151", fontSize: "0.78rem" }}>{job.employmentType}</Typography></TableCell>
                     <TableCell>
-                      <Chip label={job.status === "New" ? "Active" : "Closed"} size="small" sx={{ borderRadius: "8px", fontSize: "0.7rem", backgroundColor: job.status === "New" ? "#E6F4EA" : "#F3F4F6", color: job.status === "New" ? "#34A853" : "#6B7280", fontWeight: 600 }} />
+                      <Chip label={job.status === "New" ? "Active" : "Closed"} size="small" sx={{ borderRadius: "12px", fontSize: "0.72rem", backgroundColor: job.status === "New" ? "#E6F4EA" : "#F3F4F6", color: job.status === "New" ? "#34A853" : "#6B7280", fontWeight: 600 }} />
                     </TableCell>
-                    <TableCell><Typography variant="body2" sx={{ fontWeight: 800, color: editorial.pmwBlueDark, fontSize: "0.85rem", fontVariantNumeric: "tabular-nums" }}>{job.applicationCount}</Typography></TableCell>
+                    <TableCell><Typography variant="body2" sx={{ fontWeight: 700, color: editorial.pmwBlueDark, fontSize: "0.845rem", fontVariantNumeric: "tabular-nums" }}>{job.applicationCount}</Typography></TableCell>
                     <TableCell>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
                         <IconButton size="small" onClick={() => handleEdit(job)} sx={{ color: "#6B7280" }}><Edit sx={{ fontSize: 18 }} /></IconButton>
@@ -1246,7 +1246,7 @@ export default function AdminJobManagePage() {
       />
 
       {/* Close Confirmation Dialog */}
-      <Dialog open={!!closeConfirmJob} onClose={() => setCloseConfirmJob(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "8px" } } }}>
+      <Dialog open={!!closeConfirmJob} onClose={() => setCloseConfirmJob(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
           <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
             Close opportunity?
@@ -1261,7 +1261,7 @@ export default function AdminJobManagePage() {
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button
             onClick={() => setCloseConfirmJob(null)}
-            sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}
+            sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}
           >
             Cancel
           </Button>
@@ -1272,7 +1272,7 @@ export default function AdminJobManagePage() {
               setCloseConfirmJob(null);
               if (job) handleClose(job);
             }}
-            sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#F59E0B", "&:hover": { backgroundColor: "#D97706" } }}
+            sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#F59E0B", "&:hover": { backgroundColor: "#D97706" } }}
           >
             Close Opening
           </Button>
@@ -1292,7 +1292,7 @@ export default function AdminJobManagePage() {
           <Button
             onClick={() => setDeleteConfirmJob(null)}
             disabled={!!deletingJobId}
-            sx={{ borderRadius: "8px", textTransform: "none", color: "#6B7280" }}
+            sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}
           >
             Cancel
           </Button>
@@ -1300,7 +1300,7 @@ export default function AdminJobManagePage() {
             variant="contained"
             disabled={!!deletingJobId}
             onClick={() => deleteConfirmJob && handleDeleteJob(deleteConfirmJob)}
-            sx={{ borderRadius: "8px", textTransform: "none", backgroundColor: "#DC2626", "&:hover": { backgroundColor: "#B91C1C" } }}
+            sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#DC2626", "&:hover": { backgroundColor: "#B91C1C" } }}
           >
             {deletingJobId ? "Deleting..." : "Delete"}
           </Button>
@@ -1314,9 +1314,9 @@ export default function AdminJobManagePage() {
             severity={snackbar.severity}
             onClose={() => setSnackbar(null)}
             sx={{
-              borderRadius: "8px",
+              borderRadius: "12px",
               fontWeight: 700,
-              fontSize: "0.9rem",
+              fontSize: "0.875rem",
               boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
               color: "#111827",
               "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },

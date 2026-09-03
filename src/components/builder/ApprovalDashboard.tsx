@@ -2680,9 +2680,9 @@ export default function ApprovalDashboard() {
   if (adminChecked && (!isAdmin || !isSuperuser)) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
+        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
           <div style={{ color: C.textSecond }}>You need HR Forms Owner and Form Builder Superuser permissions to view this page.</div>
         </div>
       </div>
@@ -2692,9 +2692,9 @@ export default function ApprovalDashboard() {
   if (!isAuthenticated) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
+        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <div style={{ color: C.textSecond }}>You must be signed in to view approvals.</div>
         </div>
       </div>
@@ -2705,16 +2705,16 @@ export default function ApprovalDashboard() {
     <div style={{ minHeight: "100vh", background: C.bg, padding: 24 }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         {/* Auth banner — topmost */}
-        <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 10, padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 12, padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 34, height: 34, borderRadius: "50%", background: `linear-gradient(135deg,${C.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
             {((accounts[0]?.username?.[0] || "?").toUpperCase())}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>Signed in</div>
-            <div style={{ fontSize: 11, color: C.textSecond }}>{accounts[0]?.username || "—"}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.green }}>Signed in</div>
+            <div style={{ fontSize: 11.5, color: C.textSecond }}>{accounts[0]?.username || "—"}</div>
           </div>
           <button onClick={() => { clearStoredAuthDecision(); instance.logoutRedirect({ postLogoutRedirectUri: window.location.href }); }}
-            style={{ fontSize: 11, color: C.textSecond, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>
+            style={{ fontSize: 11.5, color: C.textSecond, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>
             Sign out
           </button>
         </div>
@@ -2744,8 +2744,8 @@ export default function ApprovalDashboard() {
                 key={stage}
                 onClick={() => setStageFilter(stage)}
                 style={{
-                  padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
-                  fontSize: 13, fontWeight: 600,
+                  padding: "6px 16px", borderRadius: 12, border: "none", cursor: "pointer",
+                  fontSize: 13.5, fontWeight: 600,
                   background: stageFilter === stage ? C.purple : "#fff",
                   color: stageFilter === stage ? "#fff" : C.textSecond,
                   boxShadow: stageFilter === stage ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
@@ -2759,13 +2759,13 @@ export default function ApprovalDashboard() {
 
         {/* Workflow type — a filter, not a structural split */}
         <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: C.textSecond }}>Workflow type</label>
+          <label style={{ fontSize: 12.5, fontWeight: 600, color: C.textSecond }}>Workflow type</label>
           <select
             value={workflowTypeFilter}
             onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
             style={{
               padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-              fontSize: 13, color: C.textPrimary, outline: "none", background: "#fff",
+              fontSize: 13.5, color: C.textPrimary, outline: "none", background: "#fff",
             }}
           >
             <option value="all">All</option>
@@ -2808,13 +2808,13 @@ export default function ApprovalDashboard() {
           >
             <div
               style={{
-                background: C.cardBg, borderRadius: 14, padding: 24, width: 420, maxWidth: "90vw",
+                background: C.cardBg, borderRadius: 12, padding: 24, width: 420, maxWidth: "90vw",
                 boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
               }}
               onClick={e => e.stopPropagation()}
             >
               <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Reject Submission</div>
-              <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 16 }}>
+              <div style={{ fontSize: 12.5, color: C.textSecond, marginBottom: 16 }}>
                 Provide a reason for rejecting this submission.
               </div>
               <textarea
@@ -2825,7 +2825,7 @@ export default function ApprovalDashboard() {
                 autoFocus
                 style={{
                   width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-                  fontSize: 13, color: C.textPrimary, resize: "vertical", outline: "none",
+                  fontSize: 13.5, color: C.textPrimary, resize: "vertical", outline: "none",
                   fontFamily: "inherit", boxSizing: "border-box",
                 }}
               />
@@ -2834,7 +2834,7 @@ export default function ApprovalDashboard() {
                   onClick={() => { setShowRejectDialog(false); setRejectionReason(""); }}
                   style={{
                     padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
-                    background: "#fff", color: C.textSecond, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    background: "#fff", color: C.textSecond, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
                   }}
                 >
                   Cancel
@@ -2850,7 +2850,7 @@ export default function ApprovalDashboard() {
                     padding: "9px 18px", borderRadius: 8, border: "none",
                     background: rejectionReason.trim() && !actionLoading ? C.red : C.border,
                     color: rejectionReason.trim() && !actionLoading ? "#fff" : C.textMuted,
-                    fontSize: 13, fontWeight: 600, cursor: rejectionReason.trim() && !actionLoading ? "pointer" : "not-allowed",
+                    fontSize: 13.5, fontWeight: 600, cursor: rejectionReason.trim() && !actionLoading ? "pointer" : "not-allowed",
                   }}
                 >
                   Confirm Reject
@@ -2870,7 +2870,7 @@ export default function ApprovalDashboard() {
           >
             <div
               style={{
-                background: C.cardBg, borderRadius: 14, padding: 24, width: 460, maxWidth: "90vw",
+                background: C.cardBg, borderRadius: 12, padding: 24, width: 460, maxWidth: "90vw",
                 boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
               }}
               onClick={e => e.stopPropagation()}
@@ -2881,15 +2881,15 @@ export default function ApprovalDashboard() {
                 </div>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary }}>Delete Submission Permanently</div>
-                  <div style={{ fontSize: 12, color: C.textSecond }}>This removes the submission item and related managed files where possible.</div>
+                  <div style={{ fontSize: 12.5, color: C.textSecond }}>This removes the submission item and related managed files where possible.</div>
                 </div>
               </div>
-              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, margin: "14px 0", fontSize: 12, color: C.textSecond }}>
+              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, margin: "14px 0", fontSize: 12.5, color: C.textSecond }}>
                 <div style={{ fontWeight: 700, color: C.textPrimary }}>{deleteTarget.Title}</div>
                 <div>Submitted by {deleteTarget.SubmittedBy || "Unknown"} on {formatDateTime(deleteTarget.SubmittedAt)}</div>
                 <div>Item ID: {deleteTarget.Id}</div>
               </div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>
                 Type DELETE to confirm
               </label>
               <input
@@ -2899,7 +2899,7 @@ export default function ApprovalDashboard() {
                 autoFocus
                 style={{
                   width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, fontSize: 13, color: C.textPrimary, outline: "none",
+                  border: `1px solid ${C.border}`, fontSize: 13.5, color: C.textPrimary, outline: "none",
                 }}
               />
               <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
@@ -2908,7 +2908,7 @@ export default function ApprovalDashboard() {
                   disabled={deleteLoading}
                   style={{
                     padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
-                    background: "#fff", color: C.textSecond, fontSize: 13, fontWeight: 600,
+                    background: "#fff", color: C.textSecond, fontSize: 13.5, fontWeight: 600,
                     cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.6 : 1,
                   }}
                 >
@@ -2921,7 +2921,7 @@ export default function ApprovalDashboard() {
                     padding: "9px 18px", borderRadius: 8, border: "none",
                     background: deleteConfirmText === "DELETE" && !deleteLoading ? C.red : C.border,
                     color: deleteConfirmText === "DELETE" && !deleteLoading ? "#fff" : C.textMuted,
-                    fontSize: 13, fontWeight: 600,
+                    fontSize: 13.5, fontWeight: 600,
                     cursor: deleteConfirmText === "DELETE" && !deleteLoading ? "pointer" : "not-allowed",
                   }}
                 >
@@ -2940,7 +2940,7 @@ export default function ApprovalDashboard() {
               <span style={{ fontWeight: 600, color: C.purple }}>
                 {lifecycleLabel(stageFilter)} ({filteredItems.length})
               </span>
-              <span style={{ fontSize: 11, color: C.textSecond }}>
+              <span style={{ fontSize: 11.5, color: C.textSecond }}>
                 Newest first
               </span>
             </div>
@@ -2971,33 +2971,33 @@ export default function ApprovalDashboard() {
                         <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
                           {item.Title}
                           {isTestRow(item as unknown as Record<string, unknown>) && (
-                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 10, fontWeight: 700 }} />
+                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
                           )}
                         </div>
                         {getItemTrainingTitle(item) && (
                           <div style={{
                             display: "inline-block", marginBottom: 4,
-                            fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
+                            fontSize: 11.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
                             background: C.purplePale, color: C.purple,
                           }}>
                             {getItemTrainingTitle(item)}
                           </div>
                         )}
-                        <div style={{ fontSize: 13, color: C.textSecond }}>
+                        <div style={{ fontSize: 13.5, color: C.textSecond }}>
                           By {item.SubmittedBy} • {formatDateTime(item.SubmittedAt)}
                         </div>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           <span>v{item.FormVersion || "Legacy"}</span>
                           <span
                             title="Profile (developer-reference metadata)"
                             style={{
-                            fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
+                            fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
                             background: "#F3F4F6", color: C.textMuted,
                           }}>
                             {getItemProfileLabel(item)}
                           </span>
                         </div>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>
+                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>
                           {formatLayerProgress(item)}
                         </div>
                         {isEvaluationItem && (isAdmin || isSuperuser) && (
@@ -3011,7 +3011,7 @@ export default function ApprovalDashboard() {
                               : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
                             style={{
                               display: "inline-flex", alignItems: "center", marginTop: 6,
-                              fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+                              fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
                               background: hasPendingEmailSchedule ? C.amberPale
                                 : emailStatus.status === "sent" ? C.greenPale
                                 : emailStatus.status === "failed" ? C.redPale
@@ -3038,7 +3038,7 @@ export default function ApprovalDashboard() {
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             style={{
-                              fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 8,
+                              fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 8,
                               background: C.purplePale, color: C.purple, textDecoration: "none",
                             }}
                           >
@@ -3047,7 +3047,7 @@ export default function ApprovalDashboard() {
                         )}
                         <span
                           style={{
-                            fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
+                            fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
                             background: getItemStatus(item) === "approved" ? C.greenPale
                               : getItemStatus(item) === "rejected" ? C.redPale : C.amberPale,
                             color: getItemStatus(item) === "approved" ? "#065F46"
@@ -3059,7 +3059,7 @@ export default function ApprovalDashboard() {
                         {needsBranchPick(item) && (
                           <span
                             style={{
-                              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
                               background: C.amberPale, color: "#92400E",
                             }}
                           >
@@ -3130,7 +3130,7 @@ export default function ApprovalDashboard() {
             </div>
             {filteredItems.length > SUBMISSIONS_PER_PAGE && (
               <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <div style={{ fontSize: 12, color: C.textSecond }}>
+                <div style={{ fontSize: 12.5, color: C.textSecond }}>
                   Showing {(listPage - 1) * SUBMISSIONS_PER_PAGE + 1}-{Math.min(listPage * SUBMISSIONS_PER_PAGE, filteredItems.length)} of {filteredItems.length}
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -3140,19 +3140,19 @@ export default function ApprovalDashboard() {
                     style={{
                       padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
                       background: "#fff", color: listPage <= 1 ? C.textMuted : C.textSecond,
-                      fontSize: 12, fontWeight: 600, cursor: listPage <= 1 ? "not-allowed" : "pointer",
+                      fontSize: 12.5, fontWeight: 600, cursor: listPage <= 1 ? "not-allowed" : "pointer",
                     }}
                   >
                     Previous
                   </button>
-                  <span style={{ fontSize: 12, color: C.textSecond }}>Page {listPage} of {totalListPages}</span>
+                  <span style={{ fontSize: 12.5, color: C.textSecond }}>Page {listPage} of {totalListPages}</span>
                   <button
                     onClick={() => setListPage((page) => Math.min(totalListPages, page + 1))}
                     disabled={listPage >= totalListPages}
                     style={{
                       padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
                       background: "#fff", color: listPage >= totalListPages ? C.textMuted : C.textSecond,
-                      fontSize: 12, fontWeight: 600, cursor: listPage >= totalListPages ? "not-allowed" : "pointer",
+                      fontSize: 12.5, fontWeight: 600, cursor: listPage >= totalListPages ? "not-allowed" : "pointer",
                     }}
                   >
                     Next
@@ -3170,19 +3170,19 @@ export default function ApprovalDashboard() {
               <>
                 <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ fontWeight: 600, color: C.textPrimary }}>{selectedItem.Title}</div>
-                  <div style={{ fontSize: 13, color: C.textSecond, marginTop: 4 }}>
+                  <div style={{ fontSize: 13.5, color: C.textSecond, marginTop: 4 }}>
                     Submitted by {selectedItem.SubmittedBy} • {formatDateTime(selectedItem.SubmittedAt)}
                   </div>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                  <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
                     Form Version: {selectedItem.FormVersion || "Legacy"}
                   </div>
                   {selectedCompany && (
-                    <div style={{ fontSize: 12, color: C.purple, marginTop: 2, fontWeight: 600 }}>
+                    <div style={{ fontSize: 12.5, color: C.purple, marginTop: 2, fontWeight: 600 }}>
                       Company: {selectedCompany}
                     </div>
                   )}
                   {selectedItem.SelectedBranch && (
-                    <div style={{ fontSize: 12, color: C.purple, marginTop: 2, fontWeight: 500 }}>
+                    <div style={{ fontSize: 12.5, color: C.purple, marginTop: 2, fontWeight: 500 }}>
                       Branch: {(() => {
                         const configSource = itemLayerConfigsRef.current[getPendingItemKey(selectedItem)]
                           || formLayerConfigsRef.current[selectedItem.Title];
@@ -3209,8 +3209,8 @@ export default function ApprovalDashboard() {
                   )}
                   {(isAdmin || isSuperuser) && selectedActiveLayers.length > 0 && currentLayerConfig && (
                     <div style={{ marginTop: 12, padding: 12, borderRadius: 9, border: `1px solid ${C.purpleMid}`, background: C.purplePale }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Workflow email controls</div>
-                      <div style={{ fontSize: 11, color: C.textSecond, marginTop: 3 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: C.purple }}>Workflow email controls</div>
+                      <div style={{ fontSize: 11.5, color: C.textSecond, marginTop: 3 }}>
                         {(() => {
                           const layerNumber = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
                           const delivery = getWorkflowEmailStatus(selectedItem.WorkflowEmailLog, layerNumber);
@@ -3231,7 +3231,7 @@ export default function ApprovalDashboard() {
                           aria-label="Manual workflow email recipient"
                           style={{
                             flex: "1 1 220px", minWidth: 190, padding: "7px 9px", borderRadius: 7,
-                            border: `1px solid ${C.border}`, fontSize: 11, background: "#fff",
+                            border: `1px solid ${C.border}`, fontSize: 11.5, background: "#fff",
                           }}
                         />
                         {currentLayerType === "evaluation" && (
@@ -3241,14 +3241,14 @@ export default function ApprovalDashboard() {
                               value={customEmailDate}
                               min={toDateTimeLocalValue(new Date())}
                               onChange={(event) => setCustomEmailDate(event.target.value)}
-                              style={{ padding: "7px 9px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 11, background: "#fff" }}
+                              style={{ padding: "7px 9px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 11.5, background: "#fff" }}
                             />
                             <button
                               onClick={() => void handleSaveCustomEmailDate()}
                               disabled={scheduleSaving || !customEmailDate}
                               style={{
                                 padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
-                                background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
+                                background: "#fff", color: C.purple, fontSize: 11.5, fontWeight: 700,
                                 cursor: scheduleSaving || !customEmailDate ? "not-allowed" : "pointer",
                                 opacity: scheduleSaving || !customEmailDate ? 0.55 : 1,
                               }}
@@ -3262,7 +3262,7 @@ export default function ApprovalDashboard() {
                           disabled={resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim()}
                           style={{
                             padding: "7px 11px", borderRadius: 7, border: "none",
-                            background: C.purple, color: "#fff", fontSize: 11, fontWeight: 700,
+                            background: C.purple, color: "#fff", fontSize: 11.5, fontWeight: 700,
                             cursor: resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim() ? "not-allowed" : "pointer",
                             opacity: resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim() ? 0.55 : 1,
                           }}
@@ -3270,7 +3270,7 @@ export default function ApprovalDashboard() {
                           Send now / resend
                         </button>
                       </div>
-                      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 5 }}>
+                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>
                         The address above replaces the current layer recipient for this submission before sending. Send now works after sent, scheduled, or failed email states.
                       </div>
                     </div>
@@ -3280,7 +3280,7 @@ export default function ApprovalDashboard() {
                 {needsBranchSelection && getItemStatus(selectedItem) === "pending" ? (
                   <>
                     <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
                         Submitted Form Details
                       </div>
                       <ReadOnlySubmissionPreview
@@ -3293,21 +3293,21 @@ export default function ApprovalDashboard() {
                     </div>
                     <div style={{ padding: 24, textAlign: "center", borderTop: `1px solid ${C.border}` }}>
                       <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>⑂</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Select Branch</div>
-                      <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 20, maxWidth: 360, margin: "0 auto 20px" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Select Branch</div>
+                      <div style={{ fontSize: 12.5, color: C.textSecond, marginBottom: 20, maxWidth: 360, margin: "0 auto 20px" }}>
                         Review the submitted form details, then assign the branch that should handle this approval/evaluation flow.
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 260, margin: "0 auto" }}>
                         {availableBranches.map((branch) => (
                           <button key={branch.name} onClick={() => handleSelectBranch(branch.name)} disabled={branchLoading}
-                            style={{ padding: "12px 16px", borderRadius: 10, border: `1.5px solid ${C.purpleMid}`, background: C.cardBg, cursor: branchLoading ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, color: C.purple, fontFamily: "inherit", opacity: branchLoading ? 0.6 : 1 }}
+                            style={{ padding: "12px 16px", borderRadius: 12, border: `1.5px solid ${C.purpleMid}`, background: C.cardBg, cursor: branchLoading ? "not-allowed" : "pointer", fontSize: 13.5, fontWeight: 600, color: C.purple, fontFamily: "inherit", opacity: branchLoading ? 0.6 : 1 }}
                             onMouseEnter={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.background = C.purplePale; }}}
                             onMouseLeave={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purpleMid; e.currentTarget.style.background = C.cardBg; }}}>
                             {branch.label || branch.name}
                           </button>
                         ))}
                       </div>
-                      {branchLoading && <div style={{ marginTop: 12, fontSize: 11, color: C.textMuted }}>Saving branch selection...</div>}
+                      {branchLoading && <div style={{ marginTop: 12, fontSize: 11.5, color: C.textMuted }}>Saving branch selection...</div>}
                     </div>
                   </>
                 ) : (
@@ -3318,7 +3318,7 @@ export default function ApprovalDashboard() {
                       <LockIcon style={{ fontSize: 24 }} />
                     </div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>Item Locked</div>
-                    <div style={{ fontSize: 12, color: C.textSecond, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
+                    <div style={{ fontSize: 12.5, color: C.textSecond, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
                       This layer is assigned to {selectedLayerAccess?.assignedEmail || "another approver"}. Only that assignee can review or act on it unless a superuser overrides access.
                     </div>
                   </div>
@@ -3337,7 +3337,7 @@ export default function ApprovalDashboard() {
                 {/* Layer History: show completed layers for context */}
                 {Object.keys(completedLayers).length > 0 && (
                   <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 8 }}>Layer History</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 8 }}>Layer History</div>
                     {Object.entries(completedLayers)
                       .sort(([a], [b]) => parseInt(a) - parseInt(b))
                       .map(([layerNum, layer]) => {
@@ -3346,7 +3346,7 @@ export default function ApprovalDashboard() {
                         return (
                           <div key={layerNum} style={{
                             display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", marginBottom: 4,
-                            borderRadius: 8, fontSize: 12,
+                            borderRadius: 8, fontSize: 12.5,
                             background: isRejected ? C.redPale : isApproved ? C.greenPale : "transparent",
                           }}>
                             <span style={{
@@ -3379,7 +3379,7 @@ export default function ApprovalDashboard() {
                 {/* Evaluation Form: editable SurveyJS for evaluation layers */}
                 {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) && evalForm && (
                   <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
                       Evaluation Form
                     </div>
                     <div className="approval-survey-preview">
@@ -3393,7 +3393,7 @@ export default function ApprovalDashboard() {
                   getItemStatus(selectedItem) === "pending" &&
                   !isCurrentLayerTerminal(selectedItem, completedLayers) && (
                     <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 10 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 10 }}>
                         Approval signature
                       </div>
                       <SignatureCapture value={approvalSignature} onChange={setApprovalSignature} disabled={actionLoading} />
@@ -3425,7 +3425,7 @@ export default function ApprovalDashboard() {
                       </button>
                     </>
                   ) : (
-                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap", color: C.textMuted, fontSize: 13 }}>
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap", color: C.textMuted, fontSize: 13.5 }}>
                       <span>
                         {getItemDisplayStatus(selectedItem)} — {selectedItem.PdfUrl ? (
                           <a href={absoluteSharePointUrl(selectedItem.PdfUrl, SP_SITE_URL)}
@@ -3439,7 +3439,7 @@ export default function ApprovalDashboard() {
                           disabled={pdfRegeneratingItemKey === getPendingItemKey(selectedItem)}
                           style={{
                             padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
-                            background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
+                            background: "#fff", color: C.purple, fontSize: 11.5, fontWeight: 700,
                             cursor: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "not-allowed" : "pointer",
                             opacity: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? 0.55 : 1,
                           }}
@@ -3470,16 +3470,16 @@ export default function ApprovalDashboard() {
             </span>
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: actionSuccess.type === "rejected" ? C.red : C.green }}>{actionSuccessTitle}</div>
-            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, fontWeight: 500 }}>{actionSuccess.message}</div>
+            <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 8, fontWeight: 500 }}>{actionSuccess.message}</div>
             {actionSuccess.pdfUrl && (
               <a href={absoluteSharePointUrl(actionSuccess.pdfUrl, SP_SITE_URL)}
-                target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13.5, fontWeight: 600, textDecoration: "none" }}>
                 <DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> View PDF
               </a>
             )}
             <div style={{ marginTop: 12 }}>
               <button onClick={() => { setActionSuccess(null); setSelectedItem(null); }}
-                style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${C.border}`, background: "#fff", color: C.textSecond, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: "#fff", color: C.textSecond, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
                 Back to Approvals
               </button>
             </div>

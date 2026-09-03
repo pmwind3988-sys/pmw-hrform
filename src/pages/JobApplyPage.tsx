@@ -128,7 +128,7 @@ function SuccessView({
       >
         <CheckCircle sx={{ fontSize: 40, color: editorial.success }} />
       </Box>
-      <Typography variant="h3" sx={{ fontWeight: 800, color: editorial.ink, mb: 1, textWrap: "balance" }}>
+      <Typography variant="h3" sx={{ fontWeight: 700, color: editorial.ink, mb: 1, textWrap: "balance" }}>
         Application submitted
       </Typography>
       <Typography variant="body1" sx={{ color: editorial.muted, mb: 3, fontWeight: 600 }}>
@@ -142,7 +142,7 @@ function SuccessView({
           gap: 1.5,
           px: 3,
           py: 2,
-          borderRadius: "14px",
+          borderRadius: "12px",
           borderColor: editorial.pmwBlueSoft,
           backgroundColor: editorial.blueWash,
           mb: 4,
@@ -153,7 +153,7 @@ function SuccessView({
         </Typography>
         <Typography
           variant="h6"
-          sx={{ fontWeight: 800, color: editorial.ink, letterSpacing: 0, fontFamily: "monospace" }}
+          sx={{ fontWeight: 700, color: editorial.ink, letterSpacing: 0, fontFamily: "monospace" }}
         >
           {submissionRef}
         </Typography>
@@ -167,7 +167,7 @@ function SuccessView({
         onClick={onBrowseMore}
         sx={{
           ...careerActionButtonSx,
-          fontWeight: 800,
+          fontWeight: 700,
           px: 4,
           py: 1.2,
         }}
@@ -186,12 +186,12 @@ function JobSummarySkeleton() {
           <Skeleton variant="text" width="88%" height={28} />
           <Skeleton variant="text" width="54%" height={18} />
         </Box>
-        <Skeleton variant="rounded" width={36} height={36} sx={{ borderRadius: "8px" }} />
+        <Skeleton variant="rounded" width={36} height={36} sx={{ borderRadius: "12px" }} />
       </Box>
-      <Skeleton variant="rounded" width={96} height={24} sx={{ borderRadius: "8px", mb: 1.5 }} />
+      <Skeleton variant="rounded" width={96} height={24} sx={{ borderRadius: "12px", mb: 1.5 }} />
       <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1.5 }}>
         <Skeleton variant="text" width="46%" height={20} />
-        <Skeleton variant="rounded" width={92} height={24} sx={{ borderRadius: "8px" }} />
+        <Skeleton variant="rounded" width={92} height={24} sx={{ borderRadius: "12px" }} />
       </Box>
     </>
   );
@@ -200,17 +200,17 @@ function JobSummarySkeleton() {
 function ApplicationFormSkeleton() {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
-      <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
-      <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
+      <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "12px" }} />
+      <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "12px" }} />
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "120px 1fr" }, gap: 1.5 }}>
-        <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
-        <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "8px" }} />
+        <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "12px" }} />
+        <Skeleton variant="rounded" width="100%" height={56} sx={{ borderRadius: "12px" }} />
       </Box>
       <Divider />
-      <Skeleton variant="rounded" width="100%" height={92} sx={{ borderRadius: "8px" }} />
-      <Skeleton variant="rounded" width="100%" height={92} sx={{ borderRadius: "8px" }} />
-      <Skeleton variant="rounded" width="100%" height={120} sx={{ borderRadius: "8px" }} />
-      <Skeleton variant="rounded" width={180} height={42} sx={{ borderRadius: "8px", alignSelf: "flex-end" }} />
+      <Skeleton variant="rounded" width="100%" height={92} sx={{ borderRadius: "12px" }} />
+      <Skeleton variant="rounded" width="100%" height={92} sx={{ borderRadius: "12px" }} />
+      <Skeleton variant="rounded" width="100%" height={120} sx={{ borderRadius: "12px" }} />
+      <Skeleton variant="rounded" width={180} height={42} sx={{ borderRadius: "12px", alignSelf: "flex-end" }} />
     </Box>
   );
 }
@@ -230,7 +230,7 @@ function FormSectionHeader({
         sx={{
           width: 34,
           height: 34,
-          borderRadius: "10px",
+          borderRadius: "12px",
           backgroundColor: editorial.blueWash,
           color: editorial.pmwBlueDark,
           display: "flex",
@@ -243,7 +243,7 @@ function FormSectionHeader({
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="subtitle1" sx={{ color: editorial.ink, fontWeight: 900, lineHeight: 1.2 }}>
+        <Typography variant="subtitle1" sx={{ color: editorial.ink, fontWeight: 700, lineHeight: 1.2 }}>
           {title}
         </Typography>
         <Typography variant="body2" sx={{ color: editorial.muted, lineHeight: 1.45, textWrap: "pretty" }}>
@@ -328,7 +328,7 @@ function FileUploadArea({
 
   return (
     <Box>
-      <Typography variant="body2" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5 }}>
+      <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink, mb: 0.5 }}>
         {label}
         {!singleFile && <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 400, ml: 0.5 }}>(Max {maxFiles} files)</Typography>}
       </Typography>
@@ -366,7 +366,7 @@ function FileUploadArea({
             sx={{
               borderStyle: "dashed",
               borderColor: sizeError ? editorial.error : dragging ? editorial.pmwBlue : editorial.pmwBlueSoft,
-              borderRadius: "14px",
+              borderRadius: "12px",
               p: 3,
               textAlign: "center",
               cursor: "pointer",
@@ -429,13 +429,13 @@ function FileUploadArea({
                 gap: 1,
                 px: 1.5,
                 py: 1,
-                borderRadius: "14px",
+                borderRadius: "12px",
                 borderColor: editorial.border,
               }}
             >
               <Description sx={{ fontSize: 18, color: editorial.muted, flexShrink: 0 }} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" sx={{ color: editorial.ink, fontSize: "0.8rem" }} noWrap>
+                <Typography variant="body2" sx={{ color: editorial.ink, fontSize: "0.78rem" }} noWrap>
                   {file.name}
                 </Typography>
                 {file.size > 0 && (
@@ -454,7 +454,7 @@ function FileUploadArea({
             </Paper>
           ))}
           {singleFile && (
-            <Button size="small" onClick={() => onRemove(0)} sx={{ alignSelf: "flex-start", borderRadius: "8px", textTransform: "none", color: "#DC2626", fontSize: "0.75rem", mt: -0.5 }}>
+            <Button size="small" onClick={() => onRemove(0)} sx={{ alignSelf: "flex-start", borderRadius: "12px", textTransform: "none", color: "#DC2626", fontSize: "0.78rem", mt: -0.5 }}>
               Remove file
             </Button>
           )}
@@ -858,7 +858,7 @@ export default function JobApplyPage() {
             <Paper
               sx={{
                 p: 2.5,
-                borderRadius: "18px",
+                borderRadius: "12px",
                 border: `1px solid ${editorial.border}`,
                 boxShadow: "none",
                 position: "sticky",
@@ -871,7 +871,7 @@ export default function JobApplyPage() {
                 <>
                   {/* Row 1: Title left · Icon right (vertically centered) */}
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 800, color: editorial.ink, fontSize: "1rem", flex: 1, lineHeight: 1.3 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, fontSize: "0.9375rem", flex: 1, lineHeight: 1.3 }}>
                       {job.title}
                     </Typography>
                     <Box
@@ -902,8 +902,8 @@ export default function JobApplyPage() {
                           mb: 0.75,
                           backgroundColor: editorial.blueWash,
                           color: editorial.pmwBlueDark,
-                          fontWeight: 800,
-                          fontSize: "0.7rem",
+                          fontWeight: 700,
+                          fontSize: "0.72rem",
                           borderRadius: "999px",
                           "& .MuiChip-icon": { color: editorial.pmwBlue },
                         }}
@@ -912,7 +912,7 @@ export default function JobApplyPage() {
                     <Chip
                       label={job.department}
                       size="small"
-                      sx={{ backgroundColor: editorial.purpleWash, color: editorial.pmwPurpleDark, fontWeight: 800, fontSize: "0.7rem", borderRadius: "999px", border: `1px solid ${editorial.pmwPurpleSoft}` }}
+                      sx={{ backgroundColor: editorial.purpleWash, color: editorial.pmwPurpleDark, fontWeight: 700, fontSize: "0.72rem", borderRadius: "999px", border: `1px solid ${editorial.pmwPurpleSoft}` }}
                     />
                   </Box>
 
@@ -921,7 +921,7 @@ export default function JobApplyPage() {
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
                         <LocationOn sx={{ fontSize: 14, color: editorial.muted, flexShrink: 0 }} />
-                        <Typography variant="body2" sx={{ color: editorial.muted, fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" sx={{ color: editorial.muted, fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {job.location}
                         </Typography>
                       </Box>
@@ -929,7 +929,7 @@ export default function JobApplyPage() {
                         label={job.employmentType}
                         size="small"
                         variant="outlined"
-                        sx={{ borderRadius: "999px", fontSize: "0.7rem", borderColor: editorial.border, color: editorial.muted, flexShrink: 0 }}
+                        sx={{ borderRadius: "999px", fontSize: "0.72rem", borderColor: editorial.border, color: editorial.muted, flexShrink: 0 }}
                       />
                     </Box>
                   ) : (
@@ -937,7 +937,7 @@ export default function JobApplyPage() {
                       label={job.employmentType}
                       size="small"
                       variant="outlined"
-                      sx={{ borderRadius: "999px", fontSize: "0.7rem", borderColor: editorial.border, color: editorial.muted }}
+                      sx={{ borderRadius: "999px", fontSize: "0.72rem", borderColor: editorial.border, color: editorial.muted }}
                     />
                   )}
                 </>
@@ -966,7 +966,7 @@ export default function JobApplyPage() {
                 </Box>
               )}
               {isSignedIn && profile.error && (
-                <Alert severity="warning" sx={{ mb: 2, borderRadius: "8px" }}>
+                <Alert severity="warning" sx={{ mb: 2, borderRadius: "12px" }}>
                   Could not load profile. Please fill in your details manually.
                 </Alert>
               )}
@@ -1006,7 +1006,7 @@ export default function JobApplyPage() {
                       input: {
                         readOnly: nameLockedFromProfile,
                         sx: {
-                          borderRadius: "8px",
+                          borderRadius: "12px",
                           ...(nameLockedFromProfile ? { backgroundColor: "#F9FAFB" } : {}),
                         },
                       },
@@ -1037,7 +1037,7 @@ export default function JobApplyPage() {
                       input: {
                         readOnly: emailLockedFromProfile,
                         sx: {
-                          borderRadius: "8px",
+                          borderRadius: "12px",
                           ...(emailLockedFromProfile ? { backgroundColor: "#F9FAFB" } : {}),
                         },
                       },
@@ -1060,7 +1060,7 @@ export default function JobApplyPage() {
                               form.controls.phone.setValue(`${e.target.value} ${num}`);
                             }}
                             variant="outlined"
-                            sx={{ borderRadius: "8px" }}
+                            sx={{ borderRadius: "12px" }}
                           >
                             {COUNTRY_CODES.map((cc) => (
                               <MenuItem key={cc.code} value={cc.code}>
@@ -1093,7 +1093,7 @@ export default function JobApplyPage() {
                           placeholder="e.g. 12-345 6789"
                           variant="outlined"
                           slotProps={{
-                            input: { sx: { borderRadius: "8px" } },
+                            input: { sx: { borderRadius: "12px" } },
                           }}
                         />
                       </Grid>
@@ -1109,7 +1109,7 @@ export default function JobApplyPage() {
                     variant="outlined"
                     placeholder="e.g. Senior Engineer"
                     slotProps={{
-                      input: { sx: { borderRadius: "8px" } },
+                      input: { sx: { borderRadius: "12px" } },
                     }}
                   />
 
@@ -1122,7 +1122,7 @@ export default function JobApplyPage() {
                     variant="outlined"
                     placeholder="e.g. Information Technology"
                     slotProps={{
-                      input: { sx: { borderRadius: "8px" } },
+                      input: { sx: { borderRadius: "12px" } },
                     }}
                   />
 
@@ -1137,7 +1137,7 @@ export default function JobApplyPage() {
                     variant="outlined"
                     placeholder="Explain your interest in this position and why you'd be a great fit..."
                     slotProps={{
-                      input: { sx: { borderRadius: "8px" } },
+                      input: { sx: { borderRadius: "12px" } },
                     }}
                   />
 
@@ -1205,7 +1205,7 @@ export default function JobApplyPage() {
                                   value={String(customAnswers[field.name] ?? "")}
                                   label={`${field.label}${field.required ? " *" : ""}`}
                                   onChange={(e) => { setCustomAnswer(field.name, e.target.value); setCustomFieldErrors((prev) => { const n = { ...prev }; delete n[field.name]; return n; }); }}
-                                  sx={{ borderRadius: "8px" }}
+                                  sx={{ borderRadius: "12px" }}
                                 >
                                   {(field.choices || []).map((opt) => (
                                     <MenuItem key={opt} value={opt}>{opt}</MenuItem>
@@ -1224,7 +1224,7 @@ export default function JobApplyPage() {
                                 variant="outlined"
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
-                                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                               />
                             ) : field.type === "number" ? (
                               <TextField
@@ -1236,7 +1236,7 @@ export default function JobApplyPage() {
                                 variant="outlined"
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
-                                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                               />
                             ) : field.type === "date" ? (
                               <TextField
@@ -1249,7 +1249,7 @@ export default function JobApplyPage() {
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
                                 slotProps={{
-                                  input: { sx: { borderRadius: "8px" } },
+                                  input: { sx: { borderRadius: "12px" } },
                                   inputLabel: { shrink: true },
                                 }}
                               />
@@ -1262,7 +1262,7 @@ export default function JobApplyPage() {
                                 variant="outlined"
                                 error={hasError}
                                 helperText={hasError ? fieldError : undefined}
-                                slotProps={{ input: { sx: { borderRadius: "8px" } } }}
+                                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
                               />
                             )}
                           </Box>
@@ -1276,9 +1276,9 @@ export default function JobApplyPage() {
                     <Alert
                       severity={duplicateBlocked ? "warning" : "error"}
                       sx={{
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         fontWeight: 700,
-                        fontSize: "0.85rem",
+                        fontSize: "0.845rem",
                         ...(duplicateBlocked ? {} : {
                           backgroundColor: "#FEF2F2",
                           color: "#991B1B",
@@ -1291,7 +1291,7 @@ export default function JobApplyPage() {
                   )}
 
                   {adminOverrideMode && (
-                    <Alert severity="warning" sx={{ borderRadius: "8px", fontWeight: 700, fontSize: "0.85rem" }}>
+                    <Alert severity="warning" sx={{ borderRadius: "12px", fontWeight: 700, fontSize: "0.845rem" }}>
                       You already applied for this position. Admin override mode is active and will create a duplicate test application.
                     </Alert>
                   )}
@@ -1306,7 +1306,7 @@ export default function JobApplyPage() {
                       sx={{
                         ...careerActionButtonSx,
                         fontWeight: 600,
-                        fontSize: "0.9rem",
+                        fontSize: "0.875rem",
                         py: 1.3,
                         borderColor: "#E67635",
                         color: "#E67635",
@@ -1355,7 +1355,7 @@ export default function JobApplyPage() {
                               mutedColor={editorial.muted}
                             />
                           </Box>
-                          <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800, lineHeight: 1.6 }}>
+                          <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, lineHeight: 1.6 }}>
                             {pdpa.consentLabel}
                           </Typography>
                           <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.5, lineHeight: 1.7 }}>
@@ -1391,10 +1391,10 @@ export default function JobApplyPage() {
                     })}
                     sx={{
                       ...careerActionButtonSx,
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: editorial.pmwBlue,
-                      fontWeight: 800,
-                      fontSize: "0.95rem",
+                      fontWeight: 700,
+                      fontSize: "0.9375rem",
                       py: 1.5,
                       boxShadow: "none",
                       "&:hover": {

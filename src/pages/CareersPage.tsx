@@ -283,7 +283,7 @@ function CareersLoadingSkeleton() {
         sx={{
           p: { xs: 2.5, md: 3 },
           mb: 3,
-          borderRadius: "8px",
+          borderRadius: "12px",
           border: "1px solid rgba(17, 24, 39, 0.08)",
           boxShadow: "0 10px 30px rgba(17, 24, 39, 0.06)",
           background: "linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 48%, #F7F7FF 100%)",
@@ -298,19 +298,19 @@ function CareersLoadingSkeleton() {
           }}
         >
           <Box sx={{ order: { xs: 2, md: 1 } }}>
-            <Skeleton variant="rounded" width={124} height={26} sx={{ borderRadius: "8px", mb: 1.5 }} />
+            <Skeleton variant="rounded" width={124} height={26} sx={{ borderRadius: "12px", mb: 1.5 }} />
             <Skeleton variant="text" width="72%" height={38} />
             <Skeleton variant="text" width="88%" height={24} sx={{ mb: 2 }} />
-            <Skeleton variant="rounded" width={150} height={38} sx={{ borderRadius: "8px" }} />
+            <Skeleton variant="rounded" width={150} height={38} sx={{ borderRadius: "12px" }} />
           </Box>
           <Box sx={{ order: { xs: 1, md: 2 }, minWidth: 0 }}>
-            <Skeleton variant="rounded" width="100%" height={280} sx={{ borderRadius: "8px" }} />
+            <Skeleton variant="rounded" width="100%" height={280} sx={{ borderRadius: "12px" }} />
           </Box>
         </Box>
 
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1, mt: { xs: 2, md: 2.5 } }}>
           {[1, 2, 3].map((item) => (
-            <Skeleton key={item} variant="rounded" height={74} sx={{ borderRadius: "8px" }} />
+            <Skeleton key={item} variant="rounded" height={74} sx={{ borderRadius: "12px" }} />
           ))}
         </Box>
       </Paper>
@@ -319,15 +319,15 @@ function CareersLoadingSkeleton() {
         sx={{
           p: 2,
           mb: 3,
-          borderRadius: "8px",
+          borderRadius: "12px",
           border: "1px solid rgba(17, 24, 39, 0.08)",
           boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
-          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "8px", flex: "1 1 360px", minWidth: { xs: "100%", sm: 320 } }} />
-          <Skeleton variant="rounded" width={40} height={40} sx={{ borderRadius: "8px" }} />
-          <Skeleton variant="rounded" width={96} height={32} sx={{ borderRadius: "8px" }} />
+          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "12px", flex: "1 1 360px", minWidth: { xs: "100%", sm: 320 } }} />
+          <Skeleton variant="rounded" width={40} height={40} sx={{ borderRadius: "12px" }} />
+          <Skeleton variant="rounded" width={96} height={32} sx={{ borderRadius: "12px" }} />
         </Box>
       </Paper>
 
@@ -337,18 +337,18 @@ function CareersLoadingSkeleton() {
             <Paper
               sx={{
                 p: 3,
-                borderRadius: "8px",
+                borderRadius: "12px",
                 border: "1px solid rgba(17, 24, 39, 0.08)",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               }}
             >
               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1.5, mb: 1.5 }}>
                 <Skeleton variant="text" width="64%" height={30} />
-                <Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "8px" }} />
+                <Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "12px" }} />
               </Box>
               <Box sx={{ display: "flex", gap: 0.5, mb: 2 }}>
-                <Skeleton variant="rounded" width={82} height={24} sx={{ borderRadius: "8px" }} />
-                <Skeleton variant="rounded" width={116} height={24} sx={{ borderRadius: "8px" }} />
+                <Skeleton variant="rounded" width={82} height={24} sx={{ borderRadius: "12px" }} />
+                <Skeleton variant="rounded" width={116} height={24} sx={{ borderRadius: "12px" }} />
               </Box>
               <Skeleton variant="text" width="72%" height={20} />
               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mt: 1 }}>
@@ -690,7 +690,7 @@ export default function CareersPage() {
                     flex: "1 1 auto",
                     minWidth: 0,
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "10px",
+                      borderRadius: "12px",
                       backgroundColor: editorial.white,
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: editorial.blueSoft },
@@ -717,7 +717,7 @@ export default function CareersPage() {
                     onClick={() => setShowJobAdvancedFilters((open) => !open)}
                     sx={{
                       ...careerIconButtonSx,
-                      borderRadius: "10px",
+                      borderRadius: "12px",
                       borderColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.pmwBlue : editorial.border,
                       color: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.pmwBlueDark : editorial.muted,
                       backgroundColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.blueWash : "#ffffff",
@@ -735,7 +735,7 @@ export default function CareersPage() {
                       badgeContent={jobAdvancedFilterCount}
                       color="primary"
                       invisible={jobAdvancedFilterCount === 0}
-                      sx={{ "& .MuiBadge-badge": { fontSize: "0.62rem", minWidth: 16, height: 16 } }}
+                      sx={{ "& .MuiBadge-badge": { fontSize: "0.72rem", minWidth: 16, height: 16 } }}
                     >
                       <FilterList sx={{ fontSize: 20 }} />
                     </Badge>
@@ -756,7 +756,7 @@ export default function CareersPage() {
                   }}
                   sx={{
                     ...careerActionButtonSx,
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     color: editorial.muted,
                     fontWeight: 700,
                   }}
@@ -771,8 +771,8 @@ export default function CareersPage() {
                   sx={{
                     backgroundColor: editorial.blueWash,
                     color: editorial.pmwBlueDark,
-                    fontWeight: 800,
-                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    fontSize: "0.78rem",
                     height: 32,
                     fontVariantNumeric: "tabular-nums",
                     animation: `${scaleIn} 0.22s ease both`,
@@ -798,7 +798,7 @@ export default function CareersPage() {
                     label="Company"
                     onChange={(e) => setCompanyFilter(e.target.value)}
                     sx={{
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: "#F8F9FC",
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: "#ffffff" },
@@ -818,7 +818,7 @@ export default function CareersPage() {
                     label="Department"
                     onChange={(e) => setDeptFilter(e.target.value)}
                     sx={{
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: "#F8F9FC",
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: "#ffffff" },
@@ -838,7 +838,7 @@ export default function CareersPage() {
                     label="Type"
                     onChange={(e) => setTypeFilter(e.target.value)}
                     sx={{
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: "#F8F9FC",
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: "#ffffff" },
@@ -859,7 +859,7 @@ export default function CareersPage() {
                       label="Applied"
                       onChange={(e) => setAppliedFilter(e.target.value)}
                       sx={{
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         backgroundColor: "#F8F9FC",
                         transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                         "&:hover": { backgroundColor: "#ffffff" },
@@ -879,7 +879,7 @@ export default function CareersPage() {
                     label="Sort"
                     onChange={(e) => setSortBy(e.target.value)}
                     sx={{
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: "#F8F9FC",
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: "#ffffff" },
@@ -962,7 +962,7 @@ export default function CareersPage() {
                     flex: "1 1 auto",
                     minWidth: 0,
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "10px",
+                      borderRadius: "12px",
                       backgroundColor: editorial.white,
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: editorial.purpleWash },
@@ -989,7 +989,7 @@ export default function CareersPage() {
                     onClick={() => setShowMyAppsAdvancedFilters((open) => !open)}
                     sx={{
                       ...careerIconButtonSx,
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       borderColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.pmwPurple : editorial.border,
                       color: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.pmwPurpleDark : editorial.muted,
                       backgroundColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.purpleWash : "#ffffff",
@@ -1007,7 +1007,7 @@ export default function CareersPage() {
                       badgeContent={myAppsAdvancedFilterCount}
                       color="secondary"
                       invisible={myAppsAdvancedFilterCount === 0}
-                      sx={{ "& .MuiBadge-badge": { fontSize: "0.62rem", minWidth: 16, height: 16 } }}
+                      sx={{ "& .MuiBadge-badge": { fontSize: "0.72rem", minWidth: 16, height: 16 } }}
                     >
                       <FilterList sx={{ fontSize: 20 }} />
                     </Badge>
@@ -1027,7 +1027,7 @@ export default function CareersPage() {
                   }}
                   sx={{
                     ...careerActionButtonSx,
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     color: editorial.muted,
                     fontWeight: 700,
                     "&:hover": { transform: "translateY(-1px)", backgroundColor: editorial.purpleWash },
@@ -1041,7 +1041,7 @@ export default function CareersPage() {
                 <Chip
                   label={`${filteredMyApps.length} of ${myApps.length} applications`}
                   size="small"
-                  sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 800, fontSize: "0.75rem", fontVariantNumeric: "tabular-nums", animation: `${scaleIn} 0.22s ease both`, ...reduceMotionSx }}
+                  sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 700, fontSize: "0.78rem", fontVariantNumeric: "tabular-nums", animation: `${scaleIn} 0.22s ease both`, ...reduceMotionSx }}
                 />
               )}
             </Box>
@@ -1062,7 +1062,7 @@ export default function CareersPage() {
                     label="Timeline"
                     onChange={(e) => setMyAppsTimeline(e.target.value)}
                     sx={{
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: "#F8F9FC",
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: "#ffffff" },
@@ -1085,7 +1085,7 @@ export default function CareersPage() {
                       onChange={(e) => setMyAppsFrom(e.target.value)}
                       size="small"
                       fullWidth
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
                     />
                     <TextField
                       type="date"
@@ -1094,7 +1094,7 @@ export default function CareersPage() {
                       onChange={(e) => setMyAppsTo(e.target.value)}
                       size="small"
                       fullWidth
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "8px" } } }}
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
                     />
                   </>
                 )}
@@ -1105,7 +1105,7 @@ export default function CareersPage() {
                     label="Sort"
                     onChange={(e) => setMyAppsSort(e.target.value)}
                     sx={{
-                      borderRadius: "8px",
+                      borderRadius: "12px",
                       backgroundColor: "#F8F9FC",
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: "#ffffff" },
@@ -1135,10 +1135,10 @@ export default function CareersPage() {
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Reference</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Role</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.75rem", textTransform: "uppercase" }}>Submitted</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>Reference</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>Role</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>Submitted</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1162,12 +1162,12 @@ export default function CareersPage() {
                     onClick={() => setSelectedApp(app)}
                   >
                     <TableCell>
-                      <Typography className="application-ref" variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4", fontSize: "0.8rem", transition: "color 0.18s ease" }}>
+                      <Typography className="application-ref" variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4", fontSize: "0.78rem", transition: "color 0.18s ease" }}>
                         {app.submissionRef}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.85rem" }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.845rem" }}>
                         {app.jobTitle}
                       </Typography>
                       {app.company && (
@@ -1181,8 +1181,8 @@ export default function CareersPage() {
                         label={app.status || "New"}
                         size="small"
                         sx={{
-                          borderRadius: "8px",
-                          fontSize: "0.7rem",
+                          borderRadius: "12px",
+                          fontSize: "0.72rem",
                           fontWeight: 600,
                           backgroundColor: app.status === "Reviewed" ? "#E6F4EA" : "#F0F7FF",
                           color: app.status === "Reviewed" ? "#34A853" : "#0078D4",
@@ -1190,7 +1190,7 @@ export default function CareersPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.8rem" }}>
+                      <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.78rem" }}>
                         {app.submittedAt ? formatDate(app.submittedAt) : "—"}
                       </Typography>
                     </TableCell>
@@ -1281,7 +1281,7 @@ export default function CareersPage() {
             },
             paper: {
               sx: {
-                borderRadius: "8px",
+                borderRadius: "12px",
                 overflow: "hidden",
                 border: "1px solid rgba(17, 24, 39, 0.08)",
                 animation: `${scaleIn} 0.24s ease both`,
@@ -1321,7 +1321,7 @@ export default function CareersPage() {
                     {selectedApp.company && <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>{selectedApp.company}</Typography>}
                   </Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Applicant</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>{selectedApp.applicantName}</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.applicantEmail}</Typography>{selectedApp.applicantPhone && <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>{selectedApp.applicantPhone}</Typography>}</Box>
-                  <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Status</Typography><Chip label={selectedApp.status || "New"} size="small" sx={{ borderRadius: "8px", fontWeight: 600, backgroundColor: selectedApp.status === "Reviewed" ? "#E6F4EA" : "#F0F7FF", color: selectedApp.status === "Reviewed" ? "#34A853" : "#0078D4" }} /></Box>
+                  <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Status</Typography><Chip label={selectedApp.status || "New"} size="small" sx={{ borderRadius: "12px", fontWeight: 600, backgroundColor: selectedApp.status === "Reviewed" ? "#E6F4EA" : "#F0F7FF", color: selectedApp.status === "Reviewed" ? "#34A853" : "#0078D4" }} /></Box>
                   <Box><Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>Submitted</Typography><Typography variant="body2" sx={{ color: "#6B7280" }}>{selectedApp.submittedAt ? formatDate(selectedApp.submittedAt) : "—"}</Typography></Box>
 
                   {(selectedApp.resumeUrl || selectedSupportingDocuments.length > 0) && (
@@ -1336,8 +1336,8 @@ export default function CareersPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "8px",
-                              color: "#0078D4", fontWeight: 600, fontSize: "0.85rem",
+                              px: 1.5, py: 0.75, borderRadius: "12px",
+                              color: "#0078D4", fontWeight: 600, fontSize: "0.845rem",
                               backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
                               transition: "transform 0.18s ease, background-color 0.18s ease",
@@ -1359,8 +1359,8 @@ export default function CareersPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "8px",
-                              color: "#0078D4", fontWeight: 600, fontSize: "0.85rem",
+                              px: 1.5, py: 0.75, borderRadius: "12px",
+                              color: "#0078D4", fontWeight: 600, fontSize: "0.845rem",
                               backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
                               transition: "transform 0.18s ease, background-color 0.18s ease",
@@ -1402,7 +1402,7 @@ export default function CareersPage() {
                 <Button
                   onClick={() => setSelectedApp(null)}
                   sx={{
-                    borderRadius: "8px",
+                    borderRadius: "12px",
                     textTransform: "none",
                     color: "#6B7280",
                     fontWeight: 700,

@@ -93,8 +93,8 @@ const inp: React.CSSProperties = {
   border: `1px solid ${C.border}`,
   borderRadius: 7,
   padding: "0 9px",
-  fontSize: 12,
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontSize: 12.5,
+  fontFamily: "var(--pmw-font-main)",
   color: C.textPrimary,
   background: C.white,
   outline: "none",
@@ -109,11 +109,11 @@ const textareaStyle: React.CSSProperties = {
   lineHeight: 1.5,
 };
 const labelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 600,
   color: C.textMuted,
   textTransform: "uppercase" as const,
-  letterSpacing: "0.04em",
+  letterSpacing: "0.03em",
   display: "block",
   marginBottom: 4,
 };
@@ -121,13 +121,13 @@ const toggleBtn = (active: boolean): React.CSSProperties => ({
   flex: 1,
   height: 26,
   border: `1px solid ${active ? C.purple : C.border}`,
-  borderRadius: 6,
+  borderRadius: 8,
   background: active ? C.purplePale : C.white,
   color: active ? C.purple : C.textMuted,
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 600,
   cursor: "pointer",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+  fontFamily: "var(--pmw-font-main)",
   transition: "all .1s",
 });
 
@@ -137,7 +137,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
     <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 0" }}>
       <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)}
         style={{ width: 15, height: 15, accentColor: C.purple, margin: 0, flexShrink: 0 }} />
-      {label && <span style={{ fontSize: 12, color: C.textSecond }}>{label}</span>}
+      {label && <span style={{ fontSize: 12.5, color: C.textSecond }}>{label}</span>}
     </label>
   );
 }
@@ -162,18 +162,18 @@ function ChoicesEditor({ choices, onChange }: { choices: (string | { value: stri
         const val = typeof c === "string" ? c : c.text || c.value;
         return (
           <div key={i} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: C.textMuted, width: 14, flexShrink: 0 }}>{i + 1}.</span>
+            <span style={{ fontSize: 11, color: C.textMuted, width: 14, flexShrink: 0 }}>{i + 1}.</span>
             <input value={val} onChange={e => updateChoice(i, e.target.value)}
-              placeholder={`Option ${i + 1}`} style={{ ...inp, flex: 1, height: 26, fontSize: 11 }} />
+              placeholder={`Option ${i + 1}`} style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }} />
             <button onClick={() => removeChoice(i)}
-              style={{ width: 22, height: 22, border: "none", background: C.redPale, color: C.red, borderRadius: 5, cursor: "pointer", fontSize: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              style={{ width: 22, height: 22, border: "none", background: C.redPale, color: C.red, borderRadius: 5, cursor: "pointer", fontSize: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <CloseIcon sx={{ fontSize: 14 }} />
             </button>
           </div>
         );
       })}
       <button onClick={addChoice}
-        style={{ width: "100%", height: 26, border: `1px dashed ${C.border}`, borderRadius: 6, background: "none", color: C.purple, fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+        style={{ width: "100%", height: 26, border: `1px dashed ${C.border}`, borderRadius: 8, background: "none", color: C.purple, fontSize: 11.5, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
         <AddIcon sx={{ fontSize: 14 }} /> Add choice
       </button>
     </div>
@@ -202,8 +202,8 @@ function EvalElementPropertyPanel({
         {(["general", "validation", "options"] as const).filter(t => t !== "options" || hasChoices).map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{
-              padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer",
-              fontSize: 10, fontWeight: 600,
+              padding: "4px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+              fontSize: 11, fontWeight: 600,
               background: tab === t ? C.purple : C.offWhite,
               color: tab === t ? "#fff" : C.textMuted,
               fontFamily: "inherit",
@@ -241,14 +241,14 @@ function EvalElementPropertyPanel({
                 <textarea value={(el.expression as string) || ""} onChange={e => onChange(idx, "expression", e.target.value)}
                   placeholder="e.g. {field1} + {field2}" rows={3}
                   style={{ ...inp, height: "auto", minHeight: 56, padding: "8px 9px", resize: "vertical", lineHeight: 1.5, fontFamily: "monospace" }} />
-                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 3, lineHeight: 1.4 }}>
-                  Use <code style={{ background: "#F3F4F6", padding: "1px 3px", borderRadius: 2, fontSize: 9 }}>{'{field_name}'}</code> syntax.
+                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, lineHeight: 1.4 }}>
+                  Use <code style={{ background: "#F3F4F6", padding: "1px 3px", borderRadius: 2, fontSize: 11 }}>{'{field_name}'}</code> syntax.
                   Supports +, -, *, / and parentheses.
                 </div>
               </div>
               {allElements.length > 1 && (
                 <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${C.borderLight}` }}>
-                  <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 4 }}>
                     Insert field
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 3, maxHeight: 72, overflowY: "auto" }}>
@@ -259,7 +259,7 @@ function EvalElementPropertyPanel({
                       }}
                         title={`${(e.title as string) || ""}`}
                         style={{
-                          padding: "1px 5px", fontSize: 9, fontFamily: "monospace",
+                          padding: "1px 5px", fontSize: 11, fontFamily: "monospace",
                           border: `1px solid ${C.border}`, borderRadius: 3,
                           background: C.offWhite, color: C.purple, cursor: "pointer",
                           lineHeight: 1.6, whiteSpace: "nowrap",
@@ -404,11 +404,11 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
       {/* ── Selected elements list ── */}
       {elements.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 }}>
             Evaluation Fields ({elements.length})
           </div>
           {elements.length > 0 && !elements.some(el => el.isRequired) && (
-            <div style={{ fontSize: 10, color: C.red, background: C.redPale, borderRadius: 6, padding: "6px 8px", marginBottom: 8, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 11, color: C.red, background: C.redPale, borderRadius: 8, padding: "6px 8px", marginBottom: 8, lineHeight: 1.4 }}>
               <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4 }} /> At least one field must be marked as <strong>Required</strong> before this evaluation layer can be used.
             </div>
           )}
@@ -428,22 +428,22 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
                   cursor: "pointer", background: expandedIdx === i ? `${C.purplePale}80` : "transparent",
                 }}
               >
-                <span style={{ fontSize: 16, display: "flex", alignItems: "center", flexShrink: 0, color: C.purple }}>
+                <span style={{ fontSize: 15, display: "flex", alignItems: "center", flexShrink: 0, color: C.purple }}>
                   {getTypeIcon(el.type as string)}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: C.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {(el.title as string) || (el.name as string) || "Untitled"}
                   </div>
-                  <div style={{ fontSize: 9, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {el.name as string} · {getTypeLabel(el.type as string)}
                   </div>
                 </div>
-                <span style={{ fontSize: 9, color: C.textMuted, background: `${C.purple}15`, padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
+                <span style={{ fontSize: 11, color: C.textMuted, background: `${C.purple}15`, padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
                   {el.type as string}
                 </span>
                 <button onClick={e => { e.stopPropagation(); removeElement(i); }}
-                  style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textMuted, borderRadius: 5, cursor: "pointer", fontSize: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textMuted, borderRadius: 5, cursor: "pointer", fontSize: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <DeleteIcon sx={{ fontSize: 14 }} />
                 </button>
                 <span style={{ color: C.textMuted, display: "flex", alignItems: "center" }}>
@@ -465,7 +465,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
       {/* ── Add field button / type grid ── */}
       {!showGrid ? (
         <button onClick={() => setShowGrid(true)}
-          style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: 7, background: "none", color: C.purple, fontSize: 11, cursor: "pointer", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+          style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: 7, background: "none", color: C.purple, fontSize: 11.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
           <AddIcon sx={{ fontSize: 14 }} /> Add evaluation field
         </button>
       ) : (
@@ -477,7 +477,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
             </span>
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search field types..." autoFocus
-              style={{ ...inp, paddingLeft: 28, height: 28, fontSize: 11 }} />
+              style={{ ...inp, paddingLeft: 28, height: 28, fontSize: 11.5 }} />
             {searchQuery && (
               <button onClick={() => setSearchQuery("")}
                 style={{ position: "absolute", right: 6, top: 5, border: "none", background: "none", color: C.textMuted, cursor: "pointer", padding: 0, display: "flex" }}>
@@ -490,7 +490,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginBottom: 8, maxHeight: 240, overflowY: "auto" }}>
             {filteredTypes.map(td => (
               <button key={td.type} onClick={() => addElement(td)}
-                style={{ padding: "6px 4px", border: `1px solid ${C.border}`, borderRadius: 6, background: C.white, cursor: "pointer", fontSize: 10, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif", color: C.textSecond, textAlign: "center" as const, transition: "all .1s", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}
+                style={{ padding: "6px 4px", border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, cursor: "pointer", fontSize: 11, fontFamily: "var(--pmw-font-main)", color: C.textSecond, textAlign: "center" as const, transition: "all .1s", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.purpleMid; e.currentTarget.style.background = C.purplePale; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.white; }}>
                 <span style={{ fontSize: 16, display: "flex", alignItems: "center", color: C.purple }}>{getTypeIcon(td.type)}</span>
@@ -498,16 +498,16 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
               </button>
             ))}
             {filteredTypes.length === 0 && (
-              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 12, color: C.textMuted, fontSize: 11 }}>No field types match</div>
+              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 12, color: C.textMuted, fontSize: 11.5 }}>No field types match</div>
             )}
           </div>
 
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button onClick={() => { setShowGrid(false); setSearchQuery(""); }}
-              style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: C.white, color: C.textMuted, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
               Cancel
             </button>
-            <span style={{ fontSize: 9, color: C.textMuted }}>{filteredTypes.length} type{filteredTypes.length !== 1 ? "s" : ""}</span>
+            <span style={{ fontSize: 11, color: C.textMuted }}>{filteredTypes.length} type{filteredTypes.length !== 1 ? "s" : ""}</span>
           </div>
         </div>
       )}

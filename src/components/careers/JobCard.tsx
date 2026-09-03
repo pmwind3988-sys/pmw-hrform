@@ -104,7 +104,7 @@ export default function JobCard({ job, onOpen, applied = false }: JobCardProps) 
               width: 40,
               height: 40,
               flexShrink: 0,
-              borderRadius: "10px",
+              borderRadius: "12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -129,7 +129,7 @@ export default function JobCard({ job, onOpen, applied = false }: JobCardProps) 
               {job.title}
             </Typography>
             {job.company && (
-              <Typography variant="body1" sx={{ color: editorial.ink, fontSize: "1rem" }}>
+              <Typography variant="body1" sx={{ color: editorial.ink, fontSize: "0.9375rem" }}>
                 {job.company}
               </Typography>
             )}

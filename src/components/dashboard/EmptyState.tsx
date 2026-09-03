@@ -26,7 +26,7 @@ export default function EmptyState({ hasFilters }: EmptyStateProps) {
           sx={{
             width: 64,
             height: 64,
-            borderRadius: "16px",
+            borderRadius: "12px",
             backgroundColor: editorial.blueWash,
             border: `1px solid ${editorial.pmwBlueSoft}`,
             display: "flex",
@@ -45,7 +45,7 @@ export default function EmptyState({ hasFilters }: EmptyStateProps) {
         <Typography
           variant="h5"
           sx={{
-            fontWeight: 800,
+            fontWeight: 700,
             color: editorial.ink,
             letterSpacing: 0,
           }}
