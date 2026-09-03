@@ -178,6 +178,15 @@ export function describeScanPlan(plan: DirectoryScanPlan): string {
   if (plan.formsScanned.length === 0 && plan.formsFailed.length === 0) {
     return "No form is set to add its submitters yet. Switch it on in the form builder, under Approval routing.";
   }
+  // "Read 0 submissions, everybody is already listed" is a sentence about
+  // nobody. Said plainly, it points at the real question: whether those forms
+  // have any submissions to read.
+  if (plan.submissionsRead === 0) {
+    const forms = plan.formsScanned.length;
+    return forms === 0
+      ? "No form's submissions could be read. See the reasons below."
+      : `No submissions found on ${forms === 1 ? "the form" : `the ${forms} forms`} set to add submitters.`;
+  }
   if (plan.proposals.length === 0) {
     return `Read ${plan.submissionsRead} submission${plan.submissionsRead === 1 ? "" : "s"}. `
       + "Everybody they name is already in the directory.";

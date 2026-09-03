@@ -36,6 +36,22 @@ import { DIRECTORY_SOURCE, type DirectorySource } from "./directoryHarvest";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
 
+/**
+ * Whether a row is an answer routing may act on.
+ *
+ * An unconfirmed row is a guess a form made and nobody has checked — a
+ * question put to an admin, not an answer. Treating it as one would route
+ * somebody's appraisal to an address that was invented from their name.
+ * Skipping it makes the layer park instead, which is the whole point of
+ * marking it unconfirmed in the first place.
+ *
+ * A directory without the `Confirmed` column reads every row as confirmed, so
+ * a hand-kept list routes exactly as it always has.
+ */
+function isRoutableRow(row: ApprovalDirectoryRow): boolean {
+  return row.isActive && row.confirmed;
+}
+
 function escapeODataString(value: string): string {
   return value.replace(/'/g, "''");
 }
@@ -369,7 +385,7 @@ export function createApprovalDirectoryReader(token: string) {
     const map = await columns();
     const row = map
       ? await queryDirectory(token, map, `${map.personEmail} eq '${escapeODataString(key)}'`, 2)
-        .then((matches) => matches.find((candidate) => candidate.isActive) ?? null)
+        .then((matches) => matches.find(isRoutableRow) ?? null)
         .catch(() => null)
       : null;
 
@@ -400,7 +416,7 @@ export function createApprovalDirectoryReader(token: string) {
         ].join(" and "),
         2,
       );
-      const holder = matches.find((candidate) => candidate.isActive && candidate.personEmail);
+      const holder = matches.find((candidate) => isRoutableRow(candidate) && candidate.personEmail);
       return holder ? { email: holder.personEmail, name: holder.personName } : null;
     } catch {
       return null;

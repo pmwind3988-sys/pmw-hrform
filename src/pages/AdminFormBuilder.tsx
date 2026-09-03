@@ -23,6 +23,12 @@ import "../components/builder/BuilderShell.css";
 import { validateLayerConfig } from "../components/builder/layerValidation";
 import DirectoryHarvestPanel from "../components/builder/DirectoryHarvestPanel";
 import { hasEvaluationLayer } from "../utils/directoryHarvest";
+import {
+  applyHarvestToFormConfig,
+  applyHarvestToProfiles,
+  describeApplyResults,
+  type FormProfileRef,
+} from "../utils/directoryHarvestProfile";
 import { fieldsFromSurveyJson } from "../utils/formFieldCatalog";
 import type { LayerFieldOption } from "../components/builder/layerValidation";
 import { flattenQuestions } from "../utils/FormBuilderEngine";
@@ -686,6 +692,34 @@ export default function AdminFormBuilder() {
   const setDirectoryHarvest = useCallback((next: DirectoryHarvestSettings) => {
     setLayerConfig((current) => (current ? { ...current, directoryHarvest: next } : current));
   }, []);
+  const [harvestApplying, setHarvestApplying] = useState(false);
+
+  /**
+   * The form's published profiles, as the harvest panel addresses them.
+   *
+   * Deduplicated by version and key: the version list can hold several rows
+   * for one profile and only the newest matters here.
+   */
+  const harvestProfiles = useMemo<FormProfileRef[]>(() => {
+    const seen = new Set<string>();
+    const profiles: FormProfileRef[] = [];
+    for (const entry of versionHistory) {
+      const publishKey = (entry.PublishKey || "").trim() || DEFAULT_PUBLISH_KEY;
+      const version = (entry.FormVersion || "").trim();
+      const key = `${version}|${publishKey}`;
+      if (!version || seen.has(key)) continue;
+      seen.add(key);
+      profiles.push({
+        version,
+        publishKey,
+        publishLabel: (entry.PublishLabel || "").trim() || publishKey,
+        publishStatus: entry.PublishStatus === "off" ? "off" : "active",
+      });
+    }
+    return profiles;
+  }, [versionHistory]);
+
+
   const [profileLayerEdit, setProfileLayerEdit] = useState<{ version: string; publishKey: string; publishLabel: string } | null>(null);
   const [profileLayerSaving, setProfileLayerSaving] = useState(false);
   const [renameProfileBusy, setRenameProfileBusy] = useState("");
@@ -703,6 +737,40 @@ export default function AdminFormBuilder() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  /**
+   * Writes the harvest setting into the chosen live profiles.
+   *
+   * Deliberately not a publish. `saveFormVersion` would rewrite each profile's
+   * whole row from the builder's current state, and two profiles of one
+   * version can hold different questions — so republishing to change a routing
+   * setting is how a live form silently changes. This patches one key.
+   */
+  const applyHarvestToLiveProfiles = useCallback(async (profiles: FormProfileRef[]) => {
+    const token = tokenRef.current;
+    const harvest = layerConfig?.directoryHarvest;
+    if (!token || !harvest || profiles.length === 0) return;
+
+    setHarvestApplying(true);
+    try {
+      const title = meta.formTitle.trim();
+      const results = await applyHarvestToProfiles(token, title, profiles, harvest);
+      // Also onto the form itself, so the directory scan and this panel agree
+      // with what submissions will actually do.
+      const formProblem = results.some((result) => result.applied)
+        ? await applyHarvestToFormConfig(token, title, harvest)
+        : "";
+      const failed = results.filter((result) => !result.applied);
+      const message = formProblem
+        ? `${describeApplyResults(results)} But ${formProblem}, so the routing page's scan will not see it.`
+        : describeApplyResults(results);
+      showToast(message, failed.length === 0 && !formProblem ? "ok" : "err");
+    } catch (error) {
+      showToast(`Could not apply the setting: ${(error as Error).message}`, "err");
+    } finally {
+      setHarvestApplying(false);
+    }
+  }, [layerConfig, meta.formTitle, showToast]);
 
   useEffect(() => {
     if (accessDenied) {
@@ -2284,6 +2352,9 @@ export default function AdminFormBuilder() {
                     settings={layerConfig?.directoryHarvest}
                     onChange={setDirectoryHarvest}
                     options={harvestFieldOptions}
+                    profiles={harvestProfiles}
+                    onApplyToProfiles={(profiles) => void applyHarvestToLiveProfiles(profiles)}
+                    applying={harvestApplying}
                   />
                 </Disclosure>
               )}

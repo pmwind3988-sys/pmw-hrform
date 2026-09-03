@@ -163,3 +163,39 @@ describe("toApprovalDirectoryRow, on origin", () => {
     expect(row.confirmed).toBe(true);
   });
 });
+
+describe("what routing may act on", () => {
+  /**
+   * `isRoutableRow` is private to each transport copy of approvalDirectory, so
+   * this pins the rule it is built from: the two flags a row carries, and what
+   * they mean together.
+   */
+  const routable = (row: { isActive: boolean; confirmed: boolean }) => row.isActive && row.confirmed;
+
+  it("acts on an ordinary confirmed row", () => {
+    expect(routable(toApprovalDirectoryRow({
+      PersonEmail: "ali@pmw.com", ApproverEmail: "siti@pmw.com", IsActive: true, Confirmed: true,
+    }))).toBe(true);
+  });
+
+  it("refuses a harvested row nobody has checked", () => {
+    // The guess is a question for an admin, not an answer. Acting on it would
+    // route an appraisal to an address invented from somebody's name.
+    expect(routable(toApprovalDirectoryRow({
+      PersonEmail: "ali@pmw.com", ApproverEmail: "siti@pmw.com", IsActive: true,
+      Source: "auto-email-guessed", Confirmed: false,
+    }))).toBe(false);
+  });
+
+  it("refuses a leaver, confirmed or not", () => {
+    expect(routable(toApprovalDirectoryRow({
+      PersonEmail: "ali@pmw.com", ApproverEmail: "siti@pmw.com", IsActive: false, Confirmed: true,
+    }))).toBe(false);
+  });
+
+  it("acts on every row of a directory that predates the Confirmed column", () => {
+    expect(routable(toApprovalDirectoryRow({
+      PersonEmail: "ali@pmw.com", ApproverEmail: "siti@pmw.com",
+    }))).toBe(true);
+  });
+});

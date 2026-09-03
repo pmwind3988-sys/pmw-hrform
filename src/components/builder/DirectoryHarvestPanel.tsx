@@ -12,19 +12,29 @@
  * instead of the subject's would be invisible until somebody's appraisal went
  * to the wrong desk.
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { DirectoryHarvestSettings } from "../../types";
 import {
   harvestFieldGuesses,
   type HarvestFieldOption,
 } from "../../utils/directoryHarvest";
+import type { FormProfileRef } from "../../utils/directoryHarvestProfile";
 
 interface Props {
   /** The form's stored settings, or undefined on a form never switched on. */
   settings: DirectoryHarvestSettings | undefined;
   onChange: (next: DirectoryHarvestSettings) => void;
-  /** Every question on the form, for the three dropdowns. */
+  /** Every question on the form, for the dropdowns. */
   options: HarvestFieldOption[];
+  /**
+   * The form's live profiles. A submission reads its workflow from the profile
+   * it came in on, so the setting has to be written into those rather than
+   * waiting for the next publish.
+   */
+  profiles?: FormProfileRef[];
+  /** Writes the setting into the ticked profiles. Absent on an unsaved form. */
+  onApplyToProfiles?: (profiles: FormProfileRef[]) => void;
+  applying?: boolean;
 }
 
 const FIELD_ROWS: Array<{
@@ -64,8 +74,38 @@ const FIELD_ROWS: Array<{
   },
 ];
 
-export default function DirectoryHarvestPanel({ settings, onChange, options }: Props) {
+export default function DirectoryHarvestPanel({
+  settings,
+  onChange,
+  options,
+  profiles = [],
+  onApplyToProfiles,
+  applying = false,
+}: Props) {
   const enabled = !!settings?.enabled;
+
+  /**
+   * Which live profiles to write the setting into. Nothing is ticked to begin
+   * with: this writes to a form staff are submitting right now, so it should
+   * be a thing an admin chose, never a default they did not notice.
+   */
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+
+  // Off profiles cannot be submitted, so switching harvesting on for one would
+  // change nothing and only invite the question of why it is listed.
+  const liveProfiles = useMemo(
+    () => profiles.filter((profile) => profile.publishStatus === "active"),
+    [profiles],
+  );
+
+  const toggleProfile = (publishKey: string): void => {
+    setTicked((current) => {
+      const next = new Set(current);
+      if (next.has(publishKey)) next.delete(publishKey);
+      else next.add(publishKey);
+      return next;
+    });
+  };
 
   const guess = useMemo(() => harvestFieldGuesses(options), [options]);
 
@@ -152,8 +192,53 @@ export default function DirectoryHarvestPanel({ settings, onChange, options }: P
 
           {mapsNothing && (
             <div className="bx-meta" style={{ marginTop: 12, color: "var(--bx-warn)" }}>
-              None of the three is mapped, so nothing can be harvested. Pick at least the name, or the
-              department, before publishing.
+              None of name, employee ID or department is mapped, so nothing can be harvested. Pick at least
+              one of those.
+            </div>
+          )}
+
+          {onApplyToProfiles && liveProfiles.length > 0 && (
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--bx-line, #e3e3e3)" }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+                Apply to the live form
+              </div>
+              <p className="bx-meta" style={{ marginBottom: 12 }}>
+                A submission reads its workflow from the profile it arrived on, so this setting only takes
+                effect once it is written into one. This writes just this setting — the questions, the publish
+                status and the expiry of each profile are left exactly as they are, and nothing is republished.
+              </p>
+
+              {liveProfiles.map((profile) => (
+                <label className="bx-check" key={`${profile.version}|${profile.publishKey}`}>
+                  <input
+                    type="checkbox"
+                    checked={ticked.has(profile.publishKey)}
+                    disabled={applying || mapsNothing}
+                    onChange={() => toggleProfile(profile.publishKey)}
+                  />
+                  <span>
+                    <span style={{ display: "block" }}>
+                      {profile.publishLabel || profile.publishKey}
+                      <span className="bx-meta" style={{ marginLeft: 8 }}>v{profile.version}</span>
+                    </span>
+                    <span className="bx-check-hint">{profile.publishKey}</span>
+                  </span>
+                </label>
+              ))}
+
+              <button
+                type="button"
+                className="bx-btn bx-btn-secondary"
+                style={{ marginTop: 12 }}
+                disabled={applying || mapsNothing || ticked.size === 0}
+                onClick={() => onApplyToProfiles(
+                  liveProfiles.filter((profile) => ticked.has(profile.publishKey)),
+                )}
+              >
+                {applying
+                  ? "Applying…"
+                  : `Apply to ${ticked.size || "no"} ${ticked.size === 1 ? "profile" : "profiles"}`}
+              </button>
             </div>
           )}
         </>

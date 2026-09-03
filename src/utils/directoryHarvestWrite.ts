@@ -32,7 +32,7 @@ import {
   type DirectoryColumnMap,
 } from "./approvalDirectorySchema";
 import { loadDepartmentApproverDirectory } from "./departmentApproverDirectory";
-import { getAllFormConfigs, listExists, spGet } from "./formBuilderSP";
+import { getAllFormConfigs, spGet } from "./formBuilderSP";
 import {
   planDirectoryScan,
   scannableForms,
@@ -276,17 +276,39 @@ async function readFormResponses(
   token: string,
   formTitle: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const listName = `${formTitle} Responses`;
-  if (!await listExists(token, listName)) return [];
+  /*
+    Two conventions are in the ground, so both are tried.
 
-  // No $select: the answers live in columns named after the form's own
-  // questions, and the field mapping is what decides which of them matter.
-  const data = await spGet(
-    token,
-    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items`
-    + `?$orderby=Id desc&$top=${SCAN_RESPONSES_PER_FORM}`,
-  ) as { value?: Array<Record<string, unknown>> };
-  return data.value ?? [];
+    `provisionFormList` — the path a publish takes — creates the response list
+    named exactly the form title, described as "Form responses for X". The
+    older `provisionResponseList` used `<title> Responses`. Which one a form
+    has depends on when it was made, and there is no flag saying which.
+
+    Asked for directly rather than probed with `listExists` first: that helper
+    answers false for any failure at all — a 403, a timeout, an expired token —
+    so it would report a perfectly healthy list as missing and send an admin
+    hunting for submissions that were never lost.
+
+    No $select: the answers live in columns named after the form's own
+    questions, and the field mapping decides which of them matter.
+  */
+  const candidates = [formTitle, `${formTitle} Responses`];
+  const failures: string[] = [];
+
+  for (const listName of candidates) {
+    try {
+      const data = await spGet(
+        token,
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items`
+        + `?$orderby=Id desc&$top=${SCAN_RESPONSES_PER_FORM}`,
+      ) as { value?: Array<Record<string, unknown>> };
+      return data.value ?? [];
+    } catch (error) {
+      failures.push(`"${listName}": ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  throw new Error(`no readable response list — tried ${failures.join("; ")}`);
 }
 
 export interface ScanApplyResult {

@@ -27,6 +27,22 @@ import { logWarn } from "./logger.js";
  * Walking a chain re-reads the same rows (a hop's target becomes the next hop's
  * subject), and a submission with several chain layers walks overlapping paths.
  */
+/**
+ * Whether a row is an answer routing may act on.
+ *
+ * An unconfirmed row is a guess a form made and nobody has checked — a
+ * question put to an admin, not an answer. Treating it as one would route
+ * somebody's appraisal to an address that was invented from their name.
+ * Skipping it makes the layer park instead, which is the whole point of
+ * marking it unconfirmed in the first place.
+ *
+ * A directory without the `Confirmed` column reads every row as confirmed, so
+ * a hand-kept list routes exactly as it always has.
+ */
+function isRoutableRow(row: ApprovalDirectoryRow): boolean {
+  return row.isActive && row.confirmed;
+}
+
 export function createApprovalDirectoryReader(token: string) {
   const people = new Map<string, ApprovalDirectoryRow | null>();
   let columnsPromise: Promise<DirectoryColumnMap | null> | null = null;
@@ -74,7 +90,7 @@ export function createApprovalDirectoryReader(token: string) {
         });
         row = matches
           .map((match) => toApprovalDirectoryRow(match.fields, map))
-          .find((candidate) => candidate.isActive) ?? null;
+          .find(isRoutableRow) ?? null;
       } catch (error) {
         // Treat a failure as "nobody is listed" so chain layers park with a
         // useful message instead of failing the submission outright.
@@ -112,7 +128,7 @@ export function createApprovalDirectoryReader(token: string) {
       });
       const holder = matches
         .map((match) => toApprovalDirectoryRow(match.fields, map))
-        .find((candidate) => candidate.isActive && candidate.personEmail);
+        .find((candidate) => isRoutableRow(candidate) && candidate.personEmail);
       return holder ? { email: holder.personEmail, name: holder.personName } : null;
     } catch (error) {
       logWarn("api:approval-directory", "Role holder lookup failed", {

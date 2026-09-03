@@ -210,6 +210,22 @@ describe("describeScanPlan", () => {
     })).toContain("No form is set to add its submitters");
   });
 
+  it("does not claim everybody is listed when it read nothing at all", () => {
+    const line = describeScanPlan({
+      formsScanned: ["Training Evaluation Form"], formsFailed: [], submissionsRead: 0,
+      proposals: [], unkeyable: 0, alreadyListed: 0,
+    });
+    expect(line).toBe("No submissions found on the form set to add submitters.");
+    expect(line).not.toContain("already in the directory");
+  });
+
+  it("points at the reasons when no form could be read at all", () => {
+    expect(describeScanPlan({
+      formsScanned: [], formsFailed: [{ formTitle: "Appraisal", reason: "no such list" }],
+      submissionsRead: 0, proposals: [], unkeyable: 0, alreadyListed: 0,
+    })).toBe("No form's submissions could be read. See the reasons below.");
+  });
+
   it("says so when everybody is already listed", () => {
     expect(describeScanPlan({
       formsScanned: ["Appraisal"], formsFailed: [], submissionsRead: 12, proposals: [], unkeyable: 0, alreadyListed: 12,
