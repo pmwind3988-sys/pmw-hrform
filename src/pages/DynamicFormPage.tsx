@@ -930,10 +930,10 @@ export default function DynamicFormPage() {
           }
 
           // Main field spFilteredListSource
-          const fls = el.spFilteredListSource as { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string } | undefined;
+          const fls = el.spFilteredListSource as { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; includeBlankFilter?: boolean } | undefined;
           if (fls?.list && fls?.valueColumn) {
             pending.push(
-              getFilteredListChoices(fls.list, fls.valueColumn, token, fls.filterColumn, fls.filterValue, fls.labelColumn)
+              getFilteredListChoices(fls.list, fls.valueColumn, token, fls.filterColumn, fls.filterValue, fls.labelColumn, fls.includeBlankFilter)
                 .then((choices) => {
                   if (choices.length > 0) el.choices = choices;
                 })

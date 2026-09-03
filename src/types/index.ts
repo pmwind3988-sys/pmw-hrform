@@ -680,6 +680,15 @@ export interface FormBuilderField {
     labelColumn?: string;
     filterColumn?: string;
     filterValue?: string;
+    /**
+     * Treat a blank filter cell as matching every value.
+     *
+     * What makes a shared department work: a Departments row with no company
+     * belongs to all of them, so filtering on equality alone would hide every
+     * shared department the moment a company was named. See
+     * `resolveScopedChoices` in src/utils/orgDirectory.ts.
+     */
+    includeBlankFilter?: boolean;
     choicesLoaded?: boolean;
   };
   // Data Table

@@ -17,6 +17,7 @@ import {
 } from "./workflowEmailTemplate";
 import { ensureLinkToken } from "./linkToken";
 import { listChoiceValues, toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions";
+import { resolveScopedChoices } from "./orgDirectory";
 import { resolveSite, HOME_SITE_KEY, type SiteKey } from '../config/sites';
 import { encodeMatrixRow, decodeMatrixRow, type MatrixColumn } from "./matrixData";
 
@@ -697,6 +698,7 @@ export async function getFilteredListChoices(
   filterColumn?: string,
   filterValue?: string,
   labelColumn?: string,
+  includeBlankFilter?: boolean,
 ): Promise<ListChoiceOption[]> {
   const encoded = encodeURIComponent(listTitle);
   // Resolve display names → internal names (SP REST returns fields under internal names)
@@ -714,19 +716,49 @@ export async function getFilteredListChoices(
     .filter((column, index, all) => all.indexOf(column) === index)
     .map(encodeURIComponent)
     .join(",");
-  let url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${select}&$top=5000`;
-  if (internalFilterCol && filterValue) {
+  /*
+    A scope column whose blank cells mean "all of them" cannot be filtered in
+    OData: `Company eq 'X'` would drop every shared row. So the filter column
+    is selected and the rows are resolved here instead, by the same rule the
+    department list uses.
+  */
+  const scoped = !!(internalFilterCol && includeBlankFilter);
+  const selectColumns = scoped ? [select, encodeURIComponent(internalFilterCol!)].join(",") : select;
+
+  let url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/items?$select=${selectColumns}&$top=5000`;
+  if (internalFilterCol && filterValue && !scoped) {
     url += `&$filter=${encodeURIComponent(internalFilterCol)} eq '${encodeURIComponent(sanitizeODataValue(filterValue))}'`;
   }
   try {
     const data = await spGet(token, url) as { value?: Record<string, unknown>[] };
-    return toListChoiceOptions((data.value || []).map((item) => ({
+    const rows = data.value || [];
+
+    if (scoped) {
+      return resolveScopedChoices(
+        rows.map((item) => ({
+          value: cellToText(item[internalValCol]),
+          label: internalLabelCol ? cellToText(item[internalLabelCol]) : undefined,
+          scope: cellToText(item[internalFilterCol!]),
+        })),
+        filterValue || "",
+      ).map((choice) => (choice.text === choice.value ? choice.value : choice));
+    }
+
+    return toListChoiceOptions(rows.map((item) => ({
       value: item[internalValCol],
       label: internalLabelCol ? item[internalLabelCol] : undefined,
     })));
   } catch {
     return [];
   }
+}
+
+/** A list cell as text, for the scoped path where every field is compared. */
+function cellToText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }
 
 export function slugify(str: string): string {
@@ -1930,7 +1962,13 @@ async function resolveChoiceValues(
 ): Promise<string[] | undefined> {
   const src = question.spChoicesSource as { list?: string; column?: string } | undefined;
   const flSrc = question.spFilteredListSource as
-    | { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string }
+    | {
+      list?: string;
+      valueColumn?: string;
+      filterColumn?: string;
+      filterValue?: string;
+      includeBlankFilter?: boolean;
+    }
     | undefined;
 
   if (src?.list && src?.column) {
@@ -1954,6 +1992,8 @@ async function resolveChoiceValues(
         token,
         flSrc.filterColumn,
         flSrc.filterValue,
+        undefined,
+        flSrc.includeBlankFilter,
       ));
       onLog(`  Source choices: ${choices.length} from "${flSrc.list}.${flSrc.valueColumn}"`, 'info');
       return choices;

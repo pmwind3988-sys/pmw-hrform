@@ -268,6 +268,12 @@ export default function Header({
                       <Typography variant="body2">Approval Routing</Typography>
                     </MenuItem>
                   )}
+                  {canUseFormBuilder && (
+                    <MenuItem onClick={() => navigateFromMenu("/admin/org", handleMainMenuClose)} sx={menuItemSx}>
+                      <RoutingIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
+                      <Typography variant="body2">Companies &amp; Departments</Typography>
+                    </MenuItem>
+                  )}
                   {isAdmin && (
                     <>
                       <MenuItem onClick={() => navigateFromMenu("/admin/career/applications", handleMainMenuClose)} sx={menuItemSx}>

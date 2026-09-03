@@ -280,6 +280,7 @@ const loadResponseViewer = () => import("./components/builder/ResponseViewer");
 const loadAdminFormBuilder = () => import("./pages/AdminFormBuilder");
 const loadAdminHomePage = () => import("./pages/AdminHomePage");
 const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
+const loadAdminOrgPage = () => import("./pages/AdminOrgPage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadCareersPage = () => import("./pages/CareersPage");
 const loadJobApplyPage = () => import("./pages/JobApplyPage");
@@ -1623,6 +1624,18 @@ export default function App() {
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
+                  </Box>
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/org"
+            element={
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                    <LazyRoute load={loadAdminOrgPage} fallback={<LoadingScreen status="Loading companies and departments..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>
