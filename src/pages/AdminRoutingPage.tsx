@@ -46,6 +46,8 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import DownloadIcon from "@mui/icons-material/Download";
@@ -67,9 +69,14 @@ import {
   confirmApprovalDirectoryRow,
   createApprovalDirectoryRow,
   deleteApprovalDirectoryRow,
+  dependentsOf,
+  editOrigin,
   ensureApprovalDirectory,
   loadApprovalDirectory,
   updateApprovalDirectoryRow,
+  updateDirectoryApproverEmail,
+  updateDirectoryPersonEmail,
+  validateApprovalDirectoryInput,
   type ApprovalDirectoryInput,
 } from "../utils/approvalDirectory";
 import {
@@ -157,6 +164,16 @@ export default function AdminRoutingPage() {
   // The review queue: rows a form guessed, which nobody has checked yet.
   const [reviewOnly, setReviewOnly] = useState(false);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  /**
+   * Which row's address is open for typing, and what has been typed into it.
+   *
+   * Held here rather than in the row so Enter can hand the editor straight to
+   * the next person: a harvested directory arrives with an invented address on
+   * almost every row, and a correction pass that costs four clicks each is one
+   * nobody finishes.
+   */
+  const [emailEdit, setEmailEdit] = useState<{ id: number; value: string } | null>(null);
+  const [emailSavingId, setEmailSavingId] = useState<number | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanLabel, setScanLabel] = useState("");
@@ -266,14 +283,31 @@ export default function AdminRoutingPage() {
     }
   };
 
-  const handleSave = async (input: ApprovalDirectoryInput, id?: number) => {
+  const handleSave = async (input: ApprovalDirectoryInput, id?: number, confirm = false) => {
     if (!token || !columns) return;
     setSaving(true);
     try {
-      if (id === undefined) await createApprovalDirectoryRow(token, input, columns);
-      else await updateApprovalDirectoryRow(token, id, input, columns);
+      let note = "";
+      if (id === undefined) {
+        await createApprovalDirectoryRow(token, input, columns);
+        note = "Person added.";
+      } else {
+        const previous = rows.find((row) => row.id === id);
+        const emailChanged = !!previous
+          && directoryEmailKey(previous.personEmail) !== directoryEmailKey(input.personEmail);
+        await updateApprovalDirectoryRow(token, id, input, columns, editOrigin(previous, emailChanged, confirm));
+        note = "Changes saved.";
+        if (previous && emailChanged) {
+          const { moved, failed } = await repointDependents(previous.personEmail, input.personEmail, id);
+          if (failed > 0) {
+            note += ` ${moved.length} of ${moved.length + failed} people below them moved to the new address; the rest still point at the old one.`;
+          } else if (moved.length > 0) {
+            note += ` ${moved.length} ${moved.length === 1 ? "person" : "people"} below them moved with it.`;
+          }
+        }
+      }
       setEditorOpen(false);
-      setSnackbar({ message: id === undefined ? "Person added." : "Changes saved.", severity: "success" });
+      setSnackbar({ message: note, severity: "success" });
       await load(token);
     } catch (error) {
       setSnackbar({ message: errorMessage(error, "Could not save that person."), severity: "error" });
@@ -331,6 +365,113 @@ export default function AdminRoutingPage() {
       severity: failures.length === 0 ? "success" : "error",
     });
     await load(token);
+  };
+
+  /**
+   * Moves everyone whose approver was the old address onto the new one.
+   *
+   * A row is joined to its approver by the address alone, so a corrected email
+   * would otherwise leave the people below pointing at nobody — a broken line
+   * that only surfaces weeks later as a parked submission. Reports rather than
+   * aborts on a failure: the address has already changed by this point, and
+   * knowing which rows were left behind beats a silent half-move.
+   */
+  const repointDependents = async (
+    oldEmail: string,
+    newEmail: string,
+    excludeId: number,
+  ): Promise<{ moved: number[]; failed: number }> => {
+    if (!token || !columns) return { moved: [], failed: 0 };
+    const moved: number[] = [];
+    let failed = 0;
+    for (const dependent of dependentsOf(rows, oldEmail, excludeId)) {
+      if (dependent.id === undefined) continue;
+      try {
+        await updateDirectoryApproverEmail(token, dependent.id, newEmail, columns);
+        moved.push(dependent.id);
+      } catch {
+        failed++;
+      }
+    }
+    return { moved, failed };
+  };
+
+  /** The row's editable fields, for validating a change against the list. */
+  const inputOf = (row: ApprovalDirectoryRow): ApprovalDirectoryInput => ({
+    personEmail: row.personEmail,
+    personName: row.personName,
+    department: row.department,
+    company: row.company,
+    position: row.position,
+    employeeId: row.employeeId,
+    approverEmail: row.approverEmail,
+    isActive: row.isActive,
+  });
+
+  /**
+   * Opens the next visible row's address for editing, so a correction pass is
+   * type-Enter-type rather than four clicks per person. Most of a harvested
+   * directory has an invented address, and anything slower than this is a
+   * reason not to fix them.
+   */
+  const editNextEmail = (after: ApprovalDirectoryRow) => {
+    const index = visibleRows.findIndex((row) => row.id === after.id);
+    const next = visibleRows.slice(index + 1).find((row) => row.id !== undefined);
+    setEmailEdit(next ? { id: next.id as number, value: next.personEmail } : null);
+  };
+
+  /**
+   * Writes one corrected address, and nothing else on the row.
+   *
+   * Deliberately does not confirm the row: fixing an address is not the same
+   * as agreeing the reporting line above it, and rolling the two together
+   * would put a hundred unreviewed lines live in a single typing pass.
+   */
+  const handleEmailSave = async (row: ApprovalDirectoryRow, raw: string, advance: boolean) => {
+    if (!token || !columns || row.id === undefined) return;
+    const id = row.id;
+    const email = raw.trim();
+
+    if (!email || directoryEmailKey(email) === directoryEmailKey(row.personEmail)) {
+      setEmailEdit(null);
+      if (advance) editNextEmail(row);
+      return;
+    }
+
+    const problems = validateApprovalDirectoryInput({ ...inputOf(row), personEmail: email }, rows, id);
+    if (problems.length > 0) {
+      setSnackbar({ message: problems[0], severity: "error" });
+      return;
+    }
+
+    setEmailSavingId(id);
+    try {
+      const origin = editOrigin(row, true, false);
+      await updateDirectoryPersonEmail(token, id, email, columns, origin);
+      const { moved, failed } = await repointDependents(row.personEmail, email, id);
+      const lower = email.toLowerCase();
+      setRows((prev) => prev.map((existing) => {
+        if (existing.id === id) return { ...existing, personEmail: lower, ...origin };
+        if (existing.id !== undefined && moved.includes(existing.id)) {
+          return { ...existing, approverEmail: lower };
+        }
+        return existing;
+      }));
+      setEmailEdit(null);
+      setSnackbar({
+        message: failed > 0
+          ? `Address saved, but ${failed} ${failed === 1 ? "person" : "people"} below them still point at the old one.`
+          : moved.length > 0
+            ? `Address saved; ${moved.length} ${moved.length === 1 ? "person" : "people"} below them moved with it.`
+            : "Address saved.",
+        severity: failed > 0 ? "error" : "success",
+      });
+      if (advance) editNextEmail(row);
+    } catch (error) {
+      setSnackbar({ message: errorMessage(error, "Could not change that address."), severity: "error" });
+    } finally {
+      setEmailSavingId(null);
+    }
   };
 
   /**
@@ -679,10 +820,74 @@ export default function AdminRoutingPage() {
                                     <Typography sx={{ fontSize: "0.845rem", fontWeight: 700, color: editorial.ink }}>
                                       {row.personName || row.personEmail}
                                     </Typography>
-                                    <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted }}>
-                                      {row.personEmail}
-                                      {row.employeeId ? ` - ${row.employeeId}` : ""}
-                                    </Typography>
+                                    {emailEdit?.id === row.id
+                                      ? (
+                                        <Stack direction="row" sx={{ alignItems: "center", gap: 0.5, mt: 0.25 }}>
+                                          <TextField
+                                            value={emailEdit?.value ?? ""}
+                                            onChange={(event) => setEmailEdit({ id: row.id as number, value: event.target.value })}
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter") {
+                                                event.preventDefault();
+                                                void handleEmailSave(row, emailEdit?.value ?? "", true);
+                                              } else if (event.key === "Escape") {
+                                                setEmailEdit(null);
+                                              }
+                                            }}
+                                            size="small"
+                                            autoFocus
+                                            disabled={emailSavingId === row.id}
+                                            placeholder="name@pmw-group.com"
+                                            sx={{ width: 260, "& .MuiInputBase-input": { fontSize: "0.78rem", py: 0.5 } }}
+                                          />
+                                          <Tooltip title="Save this address. Enter saves and moves to the next person.">
+                                            <IconButton
+                                              size="small"
+                                              aria-label={`Save the address for ${row.personName || row.personEmail}`}
+                                              onClick={() => void handleEmailSave(row, emailEdit?.value ?? "", false)}
+                                              disabled={emailSavingId === row.id}
+                                              sx={{ color: editorial.success }}
+                                            >
+                                              <CheckIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>
+                                          <IconButton
+                                            size="small"
+                                            aria-label="Stop editing this address"
+                                            onClick={() => setEmailEdit(null)}
+                                            disabled={emailSavingId === row.id}
+                                          >
+                                            <CloseIcon fontSize="small" />
+                                          </IconButton>
+                                        </Stack>
+                                      )
+                                      : (
+                                        <Typography sx={{ fontSize: "0.72rem", color: editorial.softMuted }}>
+                                          <Tooltip title="Click to correct this address">
+                                            <Box
+                                              component="span"
+                                              role="button"
+                                              tabIndex={0}
+                                              aria-label={`Change the address for ${row.personName || row.personEmail}`}
+                                              onClick={() => setEmailEdit({ id: row.id as number, value: row.personEmail })}
+                                              onKeyDown={(event) => {
+                                                if (event.key === "Enter" || event.key === " ") {
+                                                  event.preventDefault();
+                                                  setEmailEdit({ id: row.id as number, value: row.personEmail });
+                                                }
+                                              }}
+                                              sx={{
+                                                cursor: "pointer",
+                                                borderBottom: `1px dashed ${editorial.border}`,
+                                                "&:hover": { color: editorial.pmwBlueDark },
+                                              }}
+                                            >
+                                              {row.personEmail}
+                                            </Box>
+                                          </Tooltip>
+                                          {row.employeeId ? ` - ${row.employeeId}` : ""}
+                                        </Typography>
+                                      )}
                                   </Box>
                                   {!row.isActive && (
                                     <Chip size="small" label="Off" sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
@@ -861,7 +1066,7 @@ export default function AdminRoutingPage() {
         columns={columns}
         saving={saving}
         onClose={() => setEditorOpen(false)}
-        onSave={(input, id) => void handleSave(input, id)}
+        onSave={(input, id, confirm) => void handleSave(input, id, confirm)}
       />
 
       <DirectoryImportDialog

@@ -12,6 +12,7 @@ import {
   Autocomplete,
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,9 +27,11 @@ import { editorial } from "../../theme/editorial";
 import { traceApprovalChain } from "../../utils/approvalDirectoryHealth";
 import {
   EMPTY_APPROVAL_DIRECTORY_INPUT,
+  dependentsOf,
   validateApprovalDirectoryInput,
   type ApprovalDirectoryInput,
 } from "../../utils/approvalDirectory";
+import { isUnconfirmedRow } from "../../utils/directoryHarvestWrite";
 import {
   directoryEmailKey,
   type ApprovalDirectoryRow,
@@ -49,7 +52,13 @@ interface DirectoryPersonDialogProps {
   columns: DirectoryColumnMap | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (input: ApprovalDirectoryInput, id?: number) => void;
+  /**
+   * `confirm` is the admin's own tick, not an inference from having saved.
+   * Correcting an address is one pass and agreeing the reporting line is
+   * another, and a hundred guessed rows make running them together a good way
+   * to declare the second pass done without having made it.
+   */
+  onSave: (input: ApprovalDirectoryInput, id?: number, confirm?: boolean) => void;
 }
 
 const HELP: Record<string, string> = {
@@ -72,10 +81,15 @@ export default function DirectoryPersonDialog({
 }: DirectoryPersonDialogProps) {
   const [input, setInput] = useState<ApprovalDirectoryInput>(EMPTY_APPROVAL_DIRECTORY_INPUT);
   const [touched, setTouched] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  /** Whether this row is a form's guess that nobody has checked yet. */
+  const needsReview = !!editing && isUnconfirmedRow(editing);
 
   useEffect(() => {
     if (!open) return;
     setTouched(false);
+    setConfirm(false);
     setInput(editing
       ? {
         personEmail: editing.personEmail,
@@ -108,6 +122,17 @@ export default function DirectoryPersonDialog({
     [rows],
   );
 
+  /**
+   * Who would be left pointing at the old address, so the consequence is on
+   * screen before the save rather than in a stuck submission afterwards.
+   */
+  const emailChanged = !!editing
+    && directoryEmailKey(input.personEmail) !== directoryEmailKey(editing.personEmail);
+  const dependents = useMemo(
+    () => (emailChanged && editing ? dependentsOf(rows, editing.personEmail, editing.id) : []),
+    [emailChanged, editing, rows],
+  );
+
   const companies = useMemo(
     () => [...new Set(rows.map((row) => row.company).filter(Boolean))].sort(),
     [rows],
@@ -119,20 +144,21 @@ export default function DirectoryPersonDialog({
    */
   const preview = useMemo(() => {
     if (!input.personEmail.trim()) return null;
-    // Saving is itself a review, so the preview shows the row as confirmed
-    // even while the stored one is still a guess.
+    // Shown as it would be stored, including whether routing may act on it —
+    // an unreviewed row parks a submission rather than routing it, and the
+    // preview would be a lie if it pretended otherwise.
     const pending: ApprovalDirectoryRow = {
       ...input,
       id: editing?.id,
       source: editing?.source ?? "manual",
-      confirmed: true,
+      confirmed: !needsReview || confirm,
     };
     const merged = [
       pending,
       ...rows.filter((row) => directoryEmailKey(row.personEmail) !== directoryEmailKey(input.personEmail)),
     ];
     return traceApprovalChain(merged, input.personEmail);
-  }, [input, rows, editing]);
+  }, [input, rows, editing, needsReview, confirm]);
 
   /** Whether the list has somewhere to put this field at all. */
   const has = (key: keyof DirectoryColumnMap): boolean => !columns || !!columns[key];
@@ -156,7 +182,7 @@ export default function DirectoryPersonDialog({
   const handleSave = () => {
     setTouched(true);
     if (problems.length > 0) return;
-    onSave(input, editing?.id);
+    onSave(input, editing?.id, confirm);
   };
 
   return (
@@ -171,12 +197,11 @@ export default function DirectoryPersonDialog({
             required
             value={input.personEmail}
             onChange={(event) => setInput((prev) => ({ ...prev, personEmail: event.target.value }))}
-            helperText={HELP.personEmail}
+            helperText={dependents.length > 0
+              ? `${dependents.length} ${dependents.length === 1 ? "person reports" : "people report"} to the old address; they will be moved across with it.`
+              : HELP.personEmail}
             size="small"
             fullWidth
-            // Changing the key of an existing row would orphan anybody pointing
-            // at it, so it is fixed once saved.
-            disabled={!!editing}
           />
           {has("personName") && field("Full name", "personName")}
 
@@ -237,6 +262,19 @@ export default function DirectoryPersonDialog({
                   {input.isActive
                     ? "Active — submissions can route to and from this person"
                     : "Switched off — kept for history, but nothing new routes here"}
+                </Typography>
+              )}
+            />
+          )}
+
+          {needsReview && (
+            <FormControlLabel
+              control={<Checkbox checked={confirm} onChange={(event) => setConfirm(event.target.checked)} />}
+              label={(
+                <Typography sx={{ fontSize: "0.845rem" }}>
+                  {confirm
+                    ? "Reviewed — this row is correct, and submissions may route through it"
+                    : "Still needs review — fixes are saved, but nothing routes here until it is confirmed"}
                 </Typography>
               )}
             />

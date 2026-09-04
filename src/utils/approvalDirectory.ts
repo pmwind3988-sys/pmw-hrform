@@ -326,6 +326,105 @@ export async function confirmApprovalDirectoryRow(
 }
 
 /**
+ * What a row's origin becomes after an admin edits it.
+ *
+ * An edit used to make every row manual and confirmed, which meant correcting
+ * one wrong field — an address the harvester invented, most often — also
+ * declared the rest of the row checked and let routing act on it. With a
+ * hundred guessed addresses to fix that is the wrong default: the two passes
+ * an admin actually makes are "get the addresses right" and then "agree the
+ * reporting line", and the first must not silently perform the second.
+ *
+ * So an edit preserves what the row is, and only the admin's own tick moves it
+ * to confirmed. Two details matter:
+ *
+ * - The source is kept rather than reset to manual, because `isUnconfirmedRow`
+ *   reads it: turning it manual would drop the row out of the review list
+ *   whatever `Confirmed` said.
+ * - A corrected address downgrades `auto-email-guessed` to `auto`, so the
+ *   "address guessed" badge stops claiming something that is no longer true.
+ *
+ * A row an admin created, or has already confirmed, has nothing to preserve.
+ */
+export function editOrigin(
+  previous: { source: string; confirmed: boolean } | undefined,
+  emailChanged: boolean,
+  confirm: boolean,
+): DirectoryRowOrigin {
+  if (!previous || previous.source === DIRECTORY_SOURCE.manual) return ADMIN_ORIGIN;
+  const source = emailChanged && previous.source === DIRECTORY_SOURCE.autoEmailGuessed
+    ? DIRECTORY_SOURCE.auto
+    : previous.source as DirectorySource;
+  return { source, confirmed: previous.confirmed || confirm };
+}
+
+/**
+ * Everyone whose approver is this address.
+ *
+ * An address is the only thing a row is joined on, so changing somebody's
+ * email leaves every row that pointed at the old one pointing at nobody — a
+ * broken line that shows up as a parked submission weeks later. The callers
+ * use this to move those rows across in the same action.
+ */
+export function dependentsOf(
+  rows: ApprovalDirectoryRow[],
+  email: string,
+  excludeId?: number,
+): ApprovalDirectoryRow[] {
+  const key = directoryEmailKey(email);
+  if (!key) return [];
+  return rows.filter((row) => (
+    row.id !== undefined
+    && row.id !== excludeId
+    && directoryEmailKey(row.approverEmail) === key
+  ));
+}
+
+/**
+ * Changes one person's address, leaving the rest of the row alone.
+ *
+ * A whole-row save would work, but this is what the table's inline edit sends
+ * and a narrower write is a narrower blast radius: an admin fixing a hundred
+ * addresses cannot accidentally overwrite a field they never looked at.
+ */
+export async function updateDirectoryPersonEmail(
+  token: string,
+  id: number,
+  email: string,
+  columns: DirectoryColumnMap,
+  origin?: DirectoryRowOrigin,
+): Promise<void> {
+  if (!columns.personEmail) {
+    throw new Error(
+      `"${APPROVAL_DIRECTORY_LIST}" has no ${APPROVAL_DIRECTORY_COLUMNS.personEmail} column.`,
+    );
+  }
+  const body: Record<string, unknown> = { [columns.personEmail]: email.trim().toLowerCase() };
+  if (origin) {
+    if (columns.source) body[columns.source] = origin.source;
+    if (columns.confirmed) body[columns.confirmed] = origin.confirmed;
+  }
+  await spPatch(token, `${listUrl()}/items(${id})`, body);
+}
+
+/** Repoints one row at a different approver, leaving the rest of it alone. */
+export async function updateDirectoryApproverEmail(
+  token: string,
+  id: number,
+  email: string,
+  columns: DirectoryColumnMap,
+): Promise<void> {
+  if (!columns.approverEmail) {
+    throw new Error(
+      `"${APPROVAL_DIRECTORY_LIST}" has no ${APPROVAL_DIRECTORY_COLUMNS.approverEmail} column.`,
+    );
+  }
+  await spPatch(token, `${listUrl()}/items(${id})`, {
+    [columns.approverEmail]: email.trim().toLowerCase(),
+  });
+}
+
+/**
  * Removes a row outright. Prefer switching `isActive` off for a leaver: their
  * old submissions stay readable, and the resolver already skips inactive rows.
  */
