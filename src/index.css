@@ -11,21 +11,34 @@
 
 :root {
   --pmw-font-main: "Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
-  --pmw-ink: #101010;
-  --pmw-muted: #5f646d;
-  --pmw-paper: #f7f5ef;
+  /* Values mirror src/theme/editorial.ts. The two are the same facts spelled
+     twice - one for MUI's sx, one for plain CSS - so they change together. */
+  --pmw-ink: #101828;
+  --pmw-muted: #5a6880;
+  --pmw-paper: #f6f8fb;
   --pmw-panel: #ffffff;
-  --pmw-blue: #0078d4;
-  --pmw-blue-dark: #005a9e;
-  --pmw-purple: #6264a7;
-  --pmw-purple-dark: #4b4d89;
-  --pmw-sky: #bfddf4;
-  --pmw-sky-soft: #eaf5fc;
-  --pmw-blue-wash: #eaf5fc;
-  --pmw-purple-wash: #f1f0fa;
-  --pmw-yellow: #fff546;
-  --pmw-border: #d6dce5;
-  --app-bg-fallback: linear-gradient(180deg, #eaf5fc 0%, #f7fafd 48%, #ffffff 100%);
+  --pmw-blue: #0f3d91;
+  --pmw-blue-dark: #0b2f70;
+  --pmw-navy-mid: #1e4fa0;
+  --pmw-navy-line: #2c5aa8;
+  --pmw-navy-dim: #9fb6e0;
+  /* Historical names. `purple` is navy mid and `yellow` is amber: neither hue
+     exists in this system, and the names survive only for their call sites. */
+  --pmw-purple: #1e4fa0;
+  --pmw-purple-dark: #0b2f70;
+  --pmw-sky: #d7e1f3;
+  --pmw-sky-soft: #eef2f9;
+  --pmw-blue-wash: #e8edf7;
+  --pmw-purple-wash: #fbf3e6;
+  --pmw-yellow: #f59e0b;
+  --pmw-accent: #f59e0b;
+  --pmw-accent-text: #9d6507;
+  --pmw-accent-soft: #fde7c4;
+  --pmw-border: #e5e9f0;
+  /* The canvas, flat. It was a sky-to-cream gradient, duplicated inline in
+     seven files and already drifted into three variants; all of them now
+     resolve here. The dashboard background picker still overrides --app-bg. */
+  --app-bg-fallback: #f6f8fb;
 }
 
 body {
@@ -152,4 +165,71 @@ html {
    columns without switching to a monospace face. */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   The navy brand surface: the sidebar, the phone bottom bar, the builder's
+   mode rail. Defined once so those three cannot drift into three navies that
+   meet at a corner and don't match.
+
+   Animating background-position rather than a transform is deliberate: the
+   sidebar is a scroll container, and a transformed overlay large enough to
+   drift visibly would push its scroll extent out and give it a stray
+   scrollbar.
+--------------------------------------------------------------------------- */
+
+.si-navy {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(160deg, #0f3d91 0%, #0b2f70 100%);
+}
+
+.si-navy::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(38% 30% at 20% 12%, rgba(245, 158, 11, 0.22), transparent 70%),
+    radial-gradient(44% 34% at 84% 82%, rgba(96, 165, 250, 0.2), transparent 72%);
+  background-repeat: no-repeat;
+  background-size:
+    170% 170%,
+    180% 180%;
+  animation: siSheenDrift 22s ease-in-out infinite;
+}
+
+@keyframes siSheenDrift {
+  0%,
+  100% {
+    background-position:
+      0% 0%,
+      100% 100%;
+  }
+  50% {
+    background-position:
+      34% 24%,
+      66% 72%;
+  }
+}
+
+/* Decoration only - nothing here carries meaning, so switching it off costs
+   the user nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .si-navy::before {
+    animation: none;
+  }
+}
+
+/* Horizontal strips that must scroll but shouldn't show a scrollbar sitting on
+   top of the content. The section tab strip is the one that needs it: on a
+   phone the Admin category's eight tabs are wider than any screen. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

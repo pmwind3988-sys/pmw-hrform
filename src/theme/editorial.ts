@@ -1,31 +1,116 @@
+/* ---------------------------------------------------------------------------
+   The PMW HR Forms palette, expressed in the SI-CMMS design language.
+
+   Every name in `editorial` predates the overhaul and is kept, because ~48
+   files import them and 860 call sites spell colours out by hand. The names
+   stayed; the values are all SI's now. Where a name no longer describes what it
+   holds (`pmwPurple`, `yellow`, `sky`) the comment says what it resolves to, so
+   a call site reading `editorial.purpleWash` can see it is getting an amber
+   wash before wondering why the page looks wrong.
+
+   ONE DELIBERATE DIVERGENCE from SI's own token file, and it is the important
+   one on this codebase.
+
+   SI names its semantic colours after the FILL and hangs the readable value off
+   a `.text` suffix: `danger` is the bright `#EF4444`, `danger.text` the darker
+   `#C1291F`. That is the right default for SI, where those tokens are reached
+   for to paint a chip.
+
+   Here it would be a regression. `editorial.success` today is `#107C10` — dark,
+   4.5:1 on white — and it is used as a TEXT colour at most of its call sites
+   (`<Typography sx={{ color: editorial.success }}>`). Renaming the bright green
+   onto `success` would silently drop every one of those to 2.28:1 while the
+   diff looked like a palette swap. There are too many for "check each one" to
+   be honest.
+
+   So the polarity is inverted: the bare name is the READABLE value, and the
+   bright fill is the opt-in `*Fill`. Existing text call sites stay legible
+   without being touched, and a call site that wants the bright chip has to say
+   so. Same two values SI has, same rule about which is for words — reached from
+   the safe end.
+--------------------------------------------------------------------------- */
+
 export const editorial = {
   black: "#000000",
-  ink: "#101010",
-  muted: "#5F646D",
-  softMuted: "#747B86",
+  /** SI ink. Was #101010. */
+  ink: "#101828",
+  /** SI's `ink.soft`. #5A6880 rather than #64748B: the latter measures 4.47:1
+      on the canvas, under 4.5 by a hair, and this is the colour of nearly every
+      secondary line in the app. */
+  muted: "#5A6880",
+  softMuted: "#6E7B92",
   white: "#FFFFFF",
-  sky: "#BFDDF4",
-  skySoft: "#EEF7FD",
-  blueWash: "#EDF7FE",
-  blueSoft: "#F6FAFD",
-  purpleWash: "#F4F3FB",
-  paper: "#F8FAFC",
-  appSurface: "#F6F9FC",
-  paperSoft: "#F9FBFD",
+
+  /* ----- navy: the brand, actions, links, focus, active navigation ----- */
+  navy: "#0F3D91",
+  navyDeep: "#0B2F70",
+  /** The active-navigation fill in the sidebar. */
+  navyMid: "#1E4FA0",
+  /** Hairlines on navy surfaces. */
+  navyLine: "#2C5AA8",
+  /** Inactive text and icons on navy. Not for use on white — it fails there. */
+  navyDim: "#9FB6E0",
+
+  /* ----- washes. The `sky`/`blue`/`purple` names are historical ----- */
+  /** Strong navy wash. Was PMW sky #BFDDF4. */
+  sky: "#D7E1F3",
+  /** Was #EAF5FC. */
+  skySoft: "#EEF2F9",
+  blueWash: "#E8EDF7",
+  blueSoft: "#F2F5FB",
+  /** Now an AMBER wash — `purple` has no value in this system. See `pmwPurple`. */
+  purpleWash: "#FBF3E6",
+
+  /* ----- surfaces ----- */
+  /** SI's canvas. Was the cream #F7F5EF. */
+  paper: "#F6F8FB",
+  /** The fill behind inputs and table headers. Same canvas, by design. */
+  appSurface: "#F6F8FB",
+  paperSoft: "#FAFBFD",
   panel: "#FFFFFF",
-  border: "#DDE4EC",
-  borderStrong: "#111111",
-  pmwBlue: "#0078D4",
-  pmwBlueDark: "#005A9E",
-  pmwBlueSoft: "#D7ECFA",
-  pmwPurple: "#6264A7",
-  pmwPurpleDark: "#4B4D89",
-  pmwPurpleSoft: "#E6E7F6",
-  yellow: "#FFF546",
-  yellowSoft: "#FFF4D6",
-  success: "#107C10",
-  warning: "#B15C00",
-  error: "#C62828",
+  border: "#E5E9F0",
+  /** Deliberate ink-on-ink border, for the few places that draw a hard edge. */
+  borderStrong: "#101828",
+
+  /* ----- the brand names, retargeted ----- */
+  /** Navy. The name is kept for its ~61 call sites. */
+  pmwBlue: "#0F3D91",
+  pmwBlueDark: "#0B2F70",
+  pmwBlueSoft: "#D7E1F3",
+  /**
+   * NAVY MID, not a purple. SI has no purple, and purple was this app's
+   * "admin/secondary" accent across 71 sites — most of them decorative, where
+   * navy is the correct resolution. The sites where the colour genuinely
+   * carried a second signal move to `accent` explicitly, one at a time; this
+   * default makes the decorative majority right without inventing a signal.
+   */
+  pmwPurple: "#1E4FA0",
+  pmwPurpleDark: "#0B2F70",
+  pmwPurpleSoft: "#D7E1F3",
+
+  /* ----- accent: SI's amber. The secondary signal, and the one that shouts ----- */
+  /** The fill. Bright by design — this is what a primary action sits on. */
+  accent: "#F59E0B",
+  /** Amber darkened until it clears 4.5:1 as text on white. For words. */
+  accentText: "#9D6507",
+  accentSoft: "#FDE7C4",
+  /**
+   * Was the PMW attention yellow #FFF546. Resolves to amber so the two do not
+   * both exist; `yellow` is kept only for its existing call sites.
+   */
+  yellow: "#F59E0B",
+  yellowSoft: "#FDE7C4",
+
+  /* ----- semantics. Bare name = readable. `*Fill` = the bright chip. ----- */
+  success: "#178640",
+  successFill: "#22C55E",
+  successSoft: "#DCFCE7",
+  warning: "#9D6507",
+  warningFill: "#F59E0B",
+  warningSoft: "#FDE7C4",
+  error: "#C1291F",
+  errorFill: "#EF4444",
+  errorSoft: "#FEE2E2",
 } as const;
 
 export const editorialFonts = {
@@ -34,19 +119,22 @@ export const editorialFonts = {
   mono: '"Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif',
 } as const;
 
-export const editorialShadow = "0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06), 0 14px 36px rgba(0, 90, 158, 0.08)";
-export const editorialShadowHover = "0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.1), 0 18px 42px rgba(0, 90, 158, 0.12)";
+/**
+ * SI keeps ONE card elevation and gets hierarchy from size and position. These
+ * two names are kept for their call sites but now both resolve to that single
+ * shadow — `editorialShadowHover` is no longer heavier, because a card that
+ * deepens on hover is the exact hierarchy-by-shadow the system refuses.
+ */
+export const editorialShadow = "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)";
+export const editorialShadowHover = editorialShadow;
 export const editorialHairline = `1px solid ${editorial.border}`;
 export const editorialInkline = `1px solid ${editorial.borderStrong}`;
 
 /* ---------------------------------------------------------------------------
    SI design-language tokens.
 
-   Ported from SI-CMMS (`docs/SI_Design_System.md`) so the two products read as
-   one family. Shape, elevation and rhythm only — the colours above stay PMW's.
-
-   Three rules the SI system keeps, and the reason each token is a single value
-   rather than a scale:
+   Shape, elevation and rhythm. Three rules the SI system keeps, and the reason
+   each token is a single value rather than a scale:
      1. One radius. 12px on anything that is a container you act inside (card,
         button, input, dialog, menu); 5px on badges, because a tag is not a
         container and reading like one makes every row look boxed-in.
@@ -74,15 +162,32 @@ export const si = {
   rowHeightTwoLine: 52,
   /** Minimum touch target on mobile. */
   touchTarget: 44,
+  /** The navigation chrome. Read by the shell; nothing else should need them. */
+  sidebarWidth: 224,
+  bottomBarHeight: 60,
+  topBarHeight: 52,
+  /** Where the sidebar hands over to the bottom bar. Matches SI's own switch. */
+  shellBreakpoint: 1024,
 } as const;
 
 /**
- * Keyboard focus ring. SI uses its amber accent here; PMW has no amber, so the
- * ring is PMW blue — the role is "the thing you are about to act on", which is
- * what blue already means in this app.
+ * The navy brand surface: the sidebar, the bottom bar, the builder's mode rail.
+ * A 160deg gradient with two slow-drifting highlights over it, in the amber and
+ * the pale blue the rest of the system uses.
+ *
+ * Exported as a value rather than left to a CSS class so the MUI `sx` call
+ * sites and the builder's plain CSS can both reach the same one. The drifting
+ * overlay is `.si-navy` in index.css; this is the fill underneath it.
+ */
+export const siNavySurface = `linear-gradient(160deg, ${editorial.navy} 0%, ${editorial.navyDeep} 100%)`;
+
+/**
+ * Keyboard focus ring. SI uses its amber accent here; this app uses navy,
+ * because the role is "the thing you are about to act on" and navy is what that
+ * means throughout — amber is reserved for the secondary signal.
  */
 export const siFocusRing = {
-  outline: `2px solid ${editorial.pmwBlue}`,
+  outline: `2px solid ${editorial.navy}`,
   outlineOffset: "2px",
 } as const;
 
@@ -102,9 +207,9 @@ export const siTracking = {
 
      <Typography sx={{ ...siType.cardTitle }}>
 
-   Every value is SI's (`docs/SI_Design_System.md` §2.2). Roles exist so a call
-   site names what the text *is* rather than picking a number — the reason the
-   original inline sizes drifted into two dozen variants of "slightly bold".
+   Roles exist so a call site names what the text *is* rather than picking a
+   number — the reason the original inline sizes drifted into two dozen variants
+   of "slightly bold".
 --------------------------------------------------------------------------- */
 export const siType = {
   /** 21px. The page's one title. */

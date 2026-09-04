@@ -35,13 +35,13 @@ const theme = createTheme({
   palette: {
     primary: {
       main: editorial.pmwBlue,
-      light: "#2F96DD",
+      light: editorial.navyMid,
       dark: editorial.pmwBlueDark,
       contrastText: editorial.white,
     },
     secondary: {
       main: editorial.pmwPurple,
-      light: "#7A7CC0",
+      light: editorial.navyLine,
       dark: editorial.pmwPurpleDark,
       contrastText: editorial.white,
     },
@@ -54,31 +54,34 @@ const theme = createTheme({
       secondary: editorial.muted,
     },
     success: {
-      main: editorial.success,
-      light: "rgba(16, 124, 16, 0.12)",
-      contrastText: editorial.white,
+      main: editorial.successFill,
+      light: editorial.successSoft,
+      dark: editorial.success,
+      contrastText: editorial.ink,
     },
     warning: {
-      main: editorial.warning,
-      light: "rgba(255, 245, 70, 0.42)",
-      contrastText: editorial.black,
+      main: editorial.warningFill,
+      light: editorial.warningSoft,
+      dark: editorial.warning,
+      contrastText: editorial.ink,
     },
     error: {
-      main: editorial.error,
-      light: "rgba(198, 40, 40, 0.12)",
+      main: editorial.errorFill,
+      light: editorial.errorSoft,
+      dark: editorial.error,
       contrastText: editorial.white,
     },
     grey: {
-      50: "#FBFAF5",
-      100: "#F7F5EF",
-      200: "#E7E2D6",
-      300: "#D6DCE5",
-      400: "#A7ADB6",
-      500: "#747B86",
-      600: "#5F646D",
-      700: "#3F444C",
-      800: "#24262B",
-      900: "#101010",
+      50: "#FAFBFD",
+      100: "#F6F8FB",
+      200: "#EEF2F9",
+      300: "#E5E9F0",
+      400: "#A9B4C6",
+      500: "#6E7B92",
+      600: "#5A6880",
+      700: "#3D4859",
+      800: "#232B38",
+      900: "#101828",
     },
   },
   /**
@@ -202,7 +205,7 @@ const theme = createTheme({
       styleOverrides: {
         body: {
           minHeight: "100vh",
-          background: "var(--app-bg, linear-gradient(180deg, #EAF5FC 0%, #F7FAFD 48%, #FFFFFF 100%))",
+          background: `var(--app-bg, ${editorial.paper})`,
           color: editorial.ink,
           textRendering: "optimizeLegibility",
         },
@@ -488,18 +491,18 @@ const theme = createTheme({
           // both shapes so the theme survives a version move in either
           // direction.
           "&.MuiAlert-standardSuccess, &.MuiAlert-outlinedSuccess, &.MuiAlert-colorSuccess.MuiAlert-standard, &.MuiAlert-colorSuccess.MuiAlert-outlined": {
-            backgroundColor: "#F1FAF1",
-            borderColor: "rgba(16, 124, 16, 0.38)",
+            backgroundColor: editorial.successSoft,
+            borderColor: editorial.successFill,
             color: editorial.ink,
           },
           "&.MuiAlert-standardWarning, &.MuiAlert-outlinedWarning, &.MuiAlert-colorWarning.MuiAlert-standard, &.MuiAlert-colorWarning.MuiAlert-outlined": {
-            backgroundColor: "#FFF3E0",
-            borderColor: "rgba(177, 92, 0, 0.4)",
+            backgroundColor: editorial.warningSoft,
+            borderColor: editorial.warningFill,
             color: editorial.ink,
           },
           "&.MuiAlert-standardError, &.MuiAlert-outlinedError, &.MuiAlert-colorError.MuiAlert-standard, &.MuiAlert-colorError.MuiAlert-outlined": {
-            backgroundColor: "#FFF1F1",
-            borderColor: "rgba(198, 40, 40, 0.4)",
+            backgroundColor: editorial.errorSoft,
+            borderColor: editorial.errorFill,
             color: editorial.ink,
           },
           "&.MuiAlert-standardInfo, &.MuiAlert-outlinedInfo, &.MuiAlert-colorInfo.MuiAlert-standard, &.MuiAlert-colorInfo.MuiAlert-outlined": {
@@ -508,15 +511,15 @@ const theme = createTheme({
             color: editorial.ink,
           },
           "&.MuiAlert-filledSuccess, &.MuiAlert-colorSuccess.MuiAlert-filled": {
-            backgroundColor: editorial.success,
-            color: editorial.white,
+            backgroundColor: editorial.successFill,
+            color: editorial.ink,
           },
           "&.MuiAlert-filledWarning, &.MuiAlert-colorWarning.MuiAlert-filled": {
-            backgroundColor: editorial.warning,
-            color: editorial.black,
+            backgroundColor: editorial.warningFill,
+            color: editorial.ink,
           },
           "&.MuiAlert-filledError, &.MuiAlert-colorError.MuiAlert-filled": {
-            backgroundColor: editorial.error,
+            backgroundColor: editorial.errorFill,
             color: editorial.white,
           },
           "&.MuiAlert-filledInfo, &.MuiAlert-colorInfo.MuiAlert-filled": {
