@@ -5,6 +5,7 @@ import {
 } from "./graphClient.js";
 import { ensureListViaSPRest, ensureTextFieldViaSPRest } from "./sharepointRest.js";
 import { logWarn } from "./logger.js";
+import { withCause } from "./errorCause.js";
 
 /**
  * The named record of which guest member opened which learning material, and
@@ -192,9 +193,10 @@ export async function readAccessLog(graphToken: string): Promise<AccessLogEntry[
     const message = error instanceof Error ? error.message : String(error);
     logWarn("api:learning", "Could not read the guest access log", { errorMessage: message });
     if (message.includes(`List "${LEARNING_ACCESS_LOG_LIST}" not found`)) return [];
-    throw new Error("The access log could not be read from SharePoint. Try again, or run Set up.", {
-      cause: error,
-    });
+    throw withCause(
+      new Error("The access log could not be read from SharePoint. Try again, or run Set up."),
+      error,
+    );
   }
 
   return sortAccessLogEntries(items.map(toEntry).filter((entry) => entry.email && entry.materialId));

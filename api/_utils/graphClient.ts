@@ -1,6 +1,8 @@
 import { createHash, createSign, randomUUID, X509Certificate } from "node:crypto";
 import forge from "node-forge";
 import { toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions.js";
+import { withCause } from "./errorCause.js";
+import { asFetchBody } from "./fetchBody.js";
 
 // Microsoft Graph client for serverless API (Sites.Selected compatible)
 // Uses client credentials flow with Graph API scope
@@ -135,10 +137,12 @@ function extractCertificateMaterialFromPfx(target: string): SharePointCertificat
       certificatePem: forge.pki.certificateToPem(certificate),
     };
   } catch (error) {
-    throw new Error(
-      `${target} certificate PFX could not be read. Check SHAREPOINT_CERT_PFX_BASE64 and SHAREPOINT_CERT_PASSWORD. ` +
-      `${error instanceof Error ? error.message : String(error)}`,
-      { cause: error }
+    throw withCause(
+      new Error(
+        `${target} certificate PFX could not be read. Check SHAREPOINT_CERT_PFX_BASE64 and SHAREPOINT_CERT_PASSWORD. ` +
+        `${error instanceof Error ? error.message : String(error)}`
+      ),
+      error
     );
   }
 }
@@ -1045,7 +1049,8 @@ export async function uploadFileToDriveItem(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/octet-stream",
       },
-      body: content as Uint8Array,
+      // See `asFetchBody`: the two compiles disagree about byte bodies.
+      body: asFetchBody(content),
     },
   );
 

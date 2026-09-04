@@ -4,6 +4,7 @@ import { readCareerPortalAccess } from "./_utils/careerPortalAccess.js";
 import { resolveSignedInViewer } from "./_utils/viewerIdentity.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { logError, logInfo, logWarn } from "./_utils/logger.js";
+import { asFetchBody } from "./_utils/fetchBody.js";
 
 function errorMessage(error: unknown, maxLength?: number): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -531,7 +532,8 @@ async function uploadFileViaSPRest(
         "Content-Type": "application/octet-stream",
         "X-RequestDigest": digest,
       },
-      body: content,
+      // See `asFetchBody`: the two compiles disagree about byte bodies.
+      body: asFetchBody(content),
     },
   );
   const data = await readJsonOrThrow<{ ServerRelativeUrl?: string; LinkingUrl?: string }>(res, "SP REST upload file");

@@ -14,6 +14,7 @@
  */
 import { escapeGraphODataString, graphGet } from "./graphClient.js";
 import { parseValidEmailList } from "./layerRecipients.js";
+import { withCause } from "./errorCause.js";
 
 const MEMBER_PAGE_SIZE = 200;
 /** Guards against a runaway nested group; far above any realistic approver DL. */
@@ -51,16 +52,18 @@ async function findGroupId(token: string, address: string): Promise<string> {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     if (detail.includes("403")) {
-      throw new Error(
-        `Reading the members of ${address} was refused. Grant Group.Read.All as a `
-        + "Microsoft Graph *application* permission on the app registration and "
-        + "admin-consent it — granting it under SharePoint has no effect here.",
-        { cause: error },
+      throw withCause(
+        new Error(
+          `Reading the members of ${address} was refused. Grant Group.Read.All as a `
+          + "Microsoft Graph *application* permission on the app registration and "
+          + "admin-consent it — granting it under SharePoint has no effect here.",
+        ),
+        error,
       );
     }
-    throw new Error(
-      `Could not look up the distribution list ${address}: ${detail}`,
-      { cause: error },
+    throw withCause(
+      new Error(`Could not look up the distribution list ${address}: ${detail}`),
+      error,
     );
   }
 }

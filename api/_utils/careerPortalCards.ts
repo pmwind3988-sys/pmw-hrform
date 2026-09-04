@@ -7,6 +7,7 @@ import {
   type GraphColumnSpec,
   type GraphListItem,
 } from "./graphClient.js";
+import { withCause } from "./errorCause.js";
 
 export interface CareerPortalCardRecord {
   id: string;
@@ -332,7 +333,7 @@ async function updateSystemDefaultCard(
   try {
     settingsItems = await queryListItems(token, SETTINGS_LIST, { top: 100 });
   } catch (error) {
-    throw new Error(settingsListSetupMessage(), { cause: error });
+    throw withCause(new Error(settingsListSetupMessage()), error);
   }
 
   const settingItem = settingsItems.find((item) => String(item.fields.Title || "") === SYSTEM_DEFAULT_SETTING_TITLE);
@@ -357,7 +358,7 @@ async function updateSystemDefaultCard(
       await createListItem(token, SETTINGS_LIST, fields);
     }
   } catch (error) {
-    throw new Error(settingsListSetupMessage(), { cause: error });
+    throw withCause(new Error(settingsListSetupMessage()), error);
   }
 }
 
@@ -366,7 +367,7 @@ async function withCardListSetupMessage<T>(operation: () => Promise<T>): Promise
     return await operation();
   } catch (error) {
     if (isMissingCardListError(error) || isCardSchemaError(error)) {
-      throw new Error(cardListSetupMessage(), { cause: error });
+      throw withCause(new Error(cardListSetupMessage()), error);
     }
     throw error;
   }
