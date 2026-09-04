@@ -14,6 +14,7 @@ import { C } from "./constants";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { sharePointManageScope } from "../../utils/sharePointScope";
 import { testRunFormUrl } from "../../utils/testRunLaunch";
+import { editorial } from "../../theme/editorial";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
@@ -142,7 +143,7 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
           </div>
         )}
         {blockedUrl && (
-          <div style={{ fontSize: 12.5, color: C.textSecond, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 7, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12.5, color: C.textSecond, background: editorial.accentSoft, border: "1px solid #FDE68A", borderRadius: 7, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
             The test run started, but your browser blocked the popup. Open it yourself:{" "}
             <a href={blockedUrl} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600, wordBreak: "break-all" }}>
               {blockedUrl}

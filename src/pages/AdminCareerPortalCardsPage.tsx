@@ -246,14 +246,14 @@ function PortalCardDialog({
     >
       <DialogTitle sx={{ pb: 1 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
             {initial ? "Edit Card" : "Add Card"}
           </Typography>
           {isSystemDefault && (
             <Chip
               label="System Default"
               size="small"
-              sx={{ borderRadius: "12px", backgroundColor: "#EEF2FF", color: "#4F46E5", fontWeight: 700 }}
+              sx={{ borderRadius: "12px", backgroundColor: editorial.blueSoft, color: editorial.pmwBlue, fontWeight: 700 }}
             />
           )}
         </Stack>
@@ -304,10 +304,10 @@ function PortalCardDialog({
                   />
                   <Box>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.25 }}>
-                      <Typography variant="caption" sx={{ color: "#374151", fontWeight: 700 }}>
+                      <Typography variant="caption" sx={{ color: editorial.ink, fontWeight: 700 }}>
                         Image Opacity
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700 }}>
+                      <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
                         {Math.round(safeImageOpacity(form.imageOpacity) * 100)}%
                       </Typography>
                     </Box>
@@ -321,7 +321,7 @@ function PortalCardDialog({
                         updateField("imageOpacity", safeImageOpacity(nextValue / 100));
                       }}
                       aria-label="Image opacity"
-                      sx={{ color: "#0078D4" }}
+                      sx={{ color: editorial.pmwBlue }}
                     />
                   </Box>
                 </>
@@ -406,14 +406,14 @@ function PortalCardDialog({
                   overflow: "hidden",
                   border: "1px solid #E5E7EB",
                   minHeight: 190,
-                  backgroundColor: "#F3F4F6",
+                  backgroundColor: editorial.skySoft,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
                 {!isSystemDefault && form.imageUrl ? (
-                  <Box sx={{ width: "100%", height: 190, position: "relative", backgroundColor: "#111827" }}>
+                  <Box sx={{ width: "100%", height: 190, position: "relative", backgroundColor: editorial.ink }}>
                     <Box
                       component="img"
                       src={form.imageUrl}
@@ -439,7 +439,7 @@ function PortalCardDialog({
                       alignItems: "center",
                       justifyContent: "center",
                       background: cardGradient(form),
-                      color: "#ffffff",
+                      color: editorial.white,
                     }}
                   >
                     <AutoAwesome />
@@ -499,7 +499,7 @@ function PortalCardDialog({
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button onClick={onClose} disabled={saving} sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}>
+        <Button onClick={onClose} disabled={saving} sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}>
           Cancel
         </Button>
         <Button
@@ -517,7 +517,7 @@ function PortalCardDialog({
             colorEnd: safeColor(form.colorEnd, DEFAULT_CARD_COLORS.end),
             colorAccent: safeColor(form.colorAccent, DEFAULT_CARD_COLORS.accent),
           })}
-          sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4", fontWeight: 700 }}
+          sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: editorial.pmwBlue, fontWeight: 700 }}
         >
           {saving ? "Saving..." : initial ? "Update Card" : "Add Card"}
         </Button>
@@ -678,7 +678,7 @@ export default function AdminCareerPortalCardsPage() {
               startIcon={<Refresh />}
               onClick={() => void load()}
               disabled={loading}
-              sx={{ ...careerActionButtonSx, backgroundColor: "#ffffff", borderColor: editorial.pmwBlueSoft, color: editorial.pmwBlueDark }}
+              sx={{ ...careerActionButtonSx, backgroundColor: editorial.white, borderColor: editorial.pmwBlueSoft, color: editorial.pmwBlueDark }}
             >
               Refresh
             </Button>
@@ -686,7 +686,7 @@ export default function AdminCareerPortalCardsPage() {
               variant="contained"
               startIcon={<Add />}
               onClick={handleCreate}
-              sx={{ ...careerActionButtonSx, backgroundColor: editorial.pmwBlue, color: "#ffffff" }}
+              sx={{ ...careerActionButtonSx, backgroundColor: editorial.pmwBlue, color: editorial.white }}
             >
               Add Card
             </Button>
@@ -773,7 +773,7 @@ export default function AdminCareerPortalCardsPage() {
                       height: 150,
                       position: "relative",
                       overflow: "hidden",
-                      background: card.imageUrl ? "#111827" : cardGradient(card),
+                      background: card.imageUrl ? editorial.ink : cardGradient(card),
                     }}
                   >
                     {card.imageUrl && (
@@ -891,7 +891,7 @@ export default function AdminCareerPortalCardsPage() {
                           onClick={() => setDeleteConfirm(card)}
                           sx={{ color: deletingId === card.id ? editorial.softMuted : editorial.error }}
                         >
-                          {deletingId === card.id ? <CircularProgress size={18} sx={{ color: "#DC2626" }} /> : <Delete sx={{ fontSize: 18 }} />}
+                          {deletingId === card.id ? <CircularProgress size={18} sx={{ color: editorial.error }} /> : <Delete sx={{ fontSize: 18 }} />}
                         </IconButton>
                       )}
                     </Box>
@@ -927,7 +927,7 @@ export default function AdminCareerPortalCardsPage() {
       >
         <DialogTitle sx={{ fontWeight: 700 }}>Delete card?</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ color: "#4B5563" }}>
+          <Typography variant="body2" sx={{ color: editorial.muted }}>
             This removes "{deleteConfirm?.title}" from the careers page carousel.
           </Typography>
         </DialogContent>

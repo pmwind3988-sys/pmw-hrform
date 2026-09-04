@@ -26,7 +26,7 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
         sx={{
           borderRadius: "12px",
           border: "1px solid rgba(177, 92, 0, 0.38)",
-          backgroundColor: "#FFF3E0",
+          backgroundColor: editorial.accentSoft,
           boxShadow: "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)",
           color: editorial.ink,
           "& .MuiAlert-message": {

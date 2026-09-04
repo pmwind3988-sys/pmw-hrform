@@ -17,6 +17,7 @@ import {
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
+import { editorial } from "../../theme/editorial";
 
 interface RestrictedAccessScreenProps {
   userEmail: string;
@@ -41,7 +42,7 @@ export default function RestrictedAccessScreen({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#F8F9FC",
+        background: editorial.paperSoft,
         position: "relative",
         overflow: "hidden",
         py: 4,
@@ -82,7 +83,7 @@ export default function RestrictedAccessScreen({
                   height: 64,
                   borderRadius: "50%",
                   backgroundColor: "rgba(0, 120, 212, 0.08)",
-                  color: "#0078D4",
+                  color: editorial.pmwBlue,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -97,7 +98,7 @@ export default function RestrictedAccessScreen({
                   variant="h2"
                   sx={{
                     fontWeight: 700,
-                    color: "#111827",
+                    color: editorial.ink,
                     letterSpacing: 0,
                     textAlign: "center",
                     fontSize: isMobile ? "1.8rem" : "2.3rem",
@@ -109,7 +110,7 @@ export default function RestrictedAccessScreen({
                 <Typography
                   variant="body1"
                   sx={{
-                    color: "#4B5563",
+                    color: editorial.muted,
                     lineHeight: 1.65,
                     textAlign: "center",
                     maxWidth: 460,
@@ -122,7 +123,7 @@ export default function RestrictedAccessScreen({
                   <Typography
                     variant="body2"
                     sx={{
-                      color: "#111827",
+                      color: editorial.ink,
                       fontWeight: 600,
                       overflowWrap: "anywhere",
                       textAlign: "center",
@@ -135,7 +136,7 @@ export default function RestrictedAccessScreen({
                 <Typography
                   variant="body2"
                   sx={{
-                    color: "#6B7280",
+                    color: editorial.muted,
                     lineHeight: 1.6,
                     textAlign: "center",
                     maxWidth: 460,
@@ -153,13 +154,13 @@ export default function RestrictedAccessScreen({
                   startIcon={<RefreshIcon />}
                   onClick={onRetry}
                   sx={{
-                    backgroundColor: "#0078D4",
+                    backgroundColor: editorial.pmwBlue,
                     borderRadius: "12px",
                     py: 1.5,
                     fontWeight: 600,
                     boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
                     "&:hover": {
-                      backgroundColor: "#0068C4",
+                      backgroundColor: editorial.pmwBlue,
                       boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
                     },
                   }}
@@ -178,10 +179,10 @@ export default function RestrictedAccessScreen({
                     py: 1.5,
                     fontWeight: 600,
                     borderColor: "rgba(0, 120, 212, 0.3)",
-                    color: "#0078D4",
+                    color: editorial.pmwBlue,
                     borderWidth: "1.5px",
                     "&:hover": {
-                      borderColor: "#0078D4",
+                      borderColor: editorial.pmwBlue,
                       backgroundColor: "rgba(0, 120, 212, 0.04)",
                     },
                   }}
@@ -198,7 +199,7 @@ export default function RestrictedAccessScreen({
                   sx={{
                     borderRadius: "12px",
                     py: 1.25,
-                    color: "#6B7280",
+                    color: editorial.muted,
                     fontWeight: 600,
                     "&:hover": {
                       backgroundColor: "rgba(17, 24, 39, 0.04)",

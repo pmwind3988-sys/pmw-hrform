@@ -28,9 +28,9 @@ const STOP_TONE: Record<ChainStopReason, "ok" | "warn" | "bad"> = {
 };
 
 const TONE_STYLE = {
-  ok: { color: editorial.success, background: "#EAF6EA", icon: <CheckCircleIcon fontSize="small" /> },
+  ok: { color: editorial.success, background: editorial.successSoft, icon: <CheckCircleIcon fontSize="small" /> },
   warn: { color: editorial.warning, background: editorial.yellowSoft, icon: <InfoOutlinedIcon fontSize="small" /> },
-  bad: { color: editorial.error, background: "#FBE9E9", icon: <ErrorOutlinedIcon fontSize="small" /> },
+  bad: { color: editorial.error, background: editorial.errorSoft, icon: <ErrorOutlinedIcon fontSize="small" /> },
 } as const;
 
 interface ChainTraceViewProps {

@@ -43,28 +43,29 @@ import { isTestRow } from "../../utils/testRun";
 import { isTestColumnKnownMissing, setTestColumnKnownMissing } from "../../utils/testColumnProbeCache";
 import { absoluteSharePointUrl } from "../../utils/sharePointUrl";
 import Chip from "@mui/material/Chip";
+import { editorial } from "../../theme/editorial";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // Theme
 const C = {
-  purple: "#0078D4",
-  purpleLight: "#106EBE",
-  purplePale: "#E6F2FB",
-  purpleMid: "#B4D5F0",
-  bg: "#F9FAFB",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  textPrimary: "#111827",
-  textSecond: "#6B7280",
-  textMuted: "#9CA3AF",
-  green: "#059669",
-  greenPale: "#D1FAE5",
-  greenBorder: "#6EE7B7",
-  red: "#DC2626",
-  redPale: "#FEE2E2",
-  amber: "#D97706",
-  amberPale: "#FEF3C7",
+  purple: editorial.pmwBlue,
+  purpleLight: editorial.pmwBlueDark,
+  purplePale: editorial.blueSoft,
+  purpleMid: editorial.sky,
+  bg: editorial.paperSoft,
+  cardBg: editorial.white,
+  border: editorial.border,
+  textPrimary: editorial.ink,
+  textSecond: editorial.muted,
+  textMuted: editorial.softMuted,
+  green: editorial.success,
+  greenPale: editorial.successSoft,
+  greenBorder: editorial.successFill,
+  red: editorial.error,
+  redPale: editorial.errorSoft,
+  amber: editorial.accentText,
+  amberPale: editorial.accentSoft,
 };
 
 interface MatrixTableEntry {

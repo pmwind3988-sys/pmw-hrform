@@ -118,7 +118,7 @@ function SuccessView({
           width: 72,
           height: 72,
           borderRadius: "50%",
-          backgroundColor: "#E3F1E3",
+          backgroundColor: editorial.successSoft,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -330,10 +330,10 @@ function FileUploadArea({
     <Box>
       <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink, mb: 0.5 }}>
         {label}
-        {!singleFile && <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 400, ml: 0.5 }}>(Max {maxFiles} files)</Typography>}
+        {!singleFile && <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 400, ml: 0.5 }}>(Max {maxFiles} files)</Typography>}
       </Typography>
       {hint && (
-        <Typography variant="caption" sx={{ color: "#9CA3AF", display: "block", mb: 1.5 }}>
+        <Typography variant="caption" sx={{ color: editorial.softMuted, display: "block", mb: 1.5 }}>
           {hint}
         </Typography>
       )}
@@ -447,14 +447,14 @@ function FileUploadArea({
                 )}
               </Box>
               {!singleFile && (
-                <IconButton size="small" onClick={() => onRemove(i)} sx={{ color: "#9CA3AF" }}>
+                <IconButton size="small" onClick={() => onRemove(i)} sx={{ color: editorial.softMuted }}>
                   <Close sx={{ fontSize: 16 }} />
                 </IconButton>
               )}
             </Paper>
           ))}
           {singleFile && (
-            <Button size="small" onClick={() => onRemove(0)} sx={{ alignSelf: "flex-start", borderRadius: "12px", textTransform: "none", color: "#DC2626", fontSize: "0.78rem", mt: -0.5 }}>
+            <Button size="small" onClick={() => onRemove(0)} sx={{ alignSelf: "flex-start", borderRadius: "12px", textTransform: "none", color: editorial.error, fontSize: "0.78rem", mt: -0.5 }}>
               Remove file
             </Button>
           )}
@@ -1007,7 +1007,7 @@ export default function JobApplyPage() {
                         readOnly: nameLockedFromProfile,
                         sx: {
                           borderRadius: "12px",
-                          ...(nameLockedFromProfile ? { backgroundColor: "#F9FAFB" } : {}),
+                          ...(nameLockedFromProfile ? { backgroundColor: editorial.paperSoft } : {}),
                         },
                       },
                     }}
@@ -1038,7 +1038,7 @@ export default function JobApplyPage() {
                         readOnly: emailLockedFromProfile,
                         sx: {
                           borderRadius: "12px",
-                          ...(emailLockedFromProfile ? { backgroundColor: "#F9FAFB" } : {}),
+                          ...(emailLockedFromProfile ? { backgroundColor: editorial.paperSoft } : {}),
                         },
                       },
                     }}
@@ -1046,8 +1046,8 @@ export default function JobApplyPage() {
 
                   {/* Phone */}
                   <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
-                      Phone Number <span style={{ color: "#DC2626" }}>*</span>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: editorial.ink, mb: 0.5 }}>
+                      Phone Number <span style={{ color: editorial.error }}>*</span>
                     </Typography>
                     <Grid container spacing={1}>
                       <Grid size={{ xs: 4, sm: 3 }}>
@@ -1162,7 +1162,7 @@ export default function JobApplyPage() {
                     hint="Required. Upload your current resume or CV."
                   />
                   {resumeError && (
-                    <Typography variant="caption" sx={{ color: "#DC2626", fontWeight: 500, display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: editorial.error, fontWeight: 500, display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
                       {resumeError}
                     </Typography>
                   )}
@@ -1280,9 +1280,9 @@ export default function JobApplyPage() {
                         fontWeight: 700,
                         fontSize: "0.845rem",
                         ...(duplicateBlocked ? {} : {
-                          backgroundColor: "#FEF2F2",
-                          color: "#991B1B",
-                          "& .MuiAlert-icon": { color: "#DC2626" },
+                          backgroundColor: editorial.errorSoft,
+                          color: editorial.error,
+                          "& .MuiAlert-icon": { color: editorial.error },
                         }),
                       }}
                     >
@@ -1308,9 +1308,9 @@ export default function JobApplyPage() {
                         fontWeight: 600,
                         fontSize: "0.875rem",
                         py: 1.3,
-                        borderColor: "#E67635",
-                        color: "#E67635",
-                        "&:hover": { borderColor: "#D4621A", backgroundColor: "rgba(230, 118, 53, 0.06)" },
+                        borderColor: editorial.accent,
+                        color: editorial.accent,
+                        "&:hover": { borderColor: editorial.accentText, backgroundColor: "rgba(230, 118, 53, 0.06)" },
                       }}
                     >
                       Enable Override Apply
@@ -1402,13 +1402,13 @@ export default function JobApplyPage() {
                         boxShadow: "none",
                       },
                       "&:disabled": {
-                        backgroundColor: "#A7ADB6",
+                        backgroundColor: editorial.softMuted,
                       },
                     }}
                   >
                     {submitting ? (
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <CircularProgress size={18} sx={{ color: "#ffffff" }} />
+                        <CircularProgress size={18} sx={{ color: editorial.white }} />
                         <span>Submitting...</span>
                       </Box>
                     ) : adminOverrideMode ? (

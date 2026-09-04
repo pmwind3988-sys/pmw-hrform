@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { editorial } from "../../theme/editorial";
 import {
   Alert,
   Box,
@@ -106,8 +107,8 @@ export default function BackgroundPicker({
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, pb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0 }}>
-          <ImageSearch sx={{ color: "#0078D4" }} />
-          <Typography variant="h6" sx={{ fontWeight: 700, color: "#111827" }}>
+          <ImageSearch sx={{ color: editorial.pmwBlue }} />
+          <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink }}>
             Dashboard Background
           </Typography>
         </Box>
@@ -149,23 +150,23 @@ export default function BackgroundPicker({
                       transition: "border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease",
                       boxShadow: selected ? "0 0 0 3px rgba(0,120,212,0.14)" : "0 1px 3px rgba(17,24,39,0.08)",
                       "&:hover": {
-                        borderColor: "#0078D4",
+                        borderColor: editorial.pmwBlue,
                         transform: "translateY(-1px)",
                       },
                     }}
                   >
                     <Box sx={{ position: "relative", height: 90, background: buildDashboardBackgroundDefCss(background, imageOpacity, true) }}>
                       {selected && (
-                        <Box sx={{ position: "absolute", top: 8, right: 8, width: 22, height: 22, borderRadius: "50%", backgroundColor: "#0078D4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Box sx={{ position: "absolute", top: 8, right: 8, width: 22, height: 22, borderRadius: "50%", backgroundColor: editorial.pmwBlue, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <Check sx={{ fontSize: 15, color: "#fff" }} />
                         </Box>
                       )}
                     </Box>
                     <Box sx={{ px: 1.25, py: 1 }}>
-                      <Typography variant="body2" sx={{ color: "#111827", fontWeight: 700, lineHeight: 1.2 }}>
+                      <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, lineHeight: 1.2 }}>
                         {background.label}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#6B7280", display: "block", mt: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.25 }}>
                         {background.source || background.category}
                       </Typography>
                     </Box>
@@ -175,7 +176,7 @@ export default function BackgroundPicker({
             </Box>
 
             <Box sx={{ mt: 2.5, p: 2, border: selectedId === "custom" ? "2px solid #0078D4" : "1px solid rgba(17,24,39,0.12)", borderRadius: "12px", backgroundColor: "#fff" }}>
-              <Typography variant="subtitle2" sx={{ color: "#111827", fontWeight: 700, mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
                 Custom Image
               </Typography>
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr auto" }, gap: 1 }}>
@@ -221,10 +222,10 @@ export default function BackgroundPicker({
 
             <Box sx={{ mt: 2, p: 2, border: "1px solid rgba(17,24,39,0.12)", borderRadius: "12px", backgroundColor: "#fff" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, mb: 0.75 }}>
-                <Typography variant="subtitle2" sx={{ color: "#111827", fontWeight: 700 }}>
+                <Typography variant="subtitle2" sx={{ color: editorial.ink, fontWeight: 700 }}>
                   Image Opacity
                 </Typography>
-                <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 700 }}>
+                <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
                   {Math.round(imageOpacity * 100)}%
                 </Typography>
               </Box>
@@ -238,13 +239,13 @@ export default function BackgroundPicker({
                   setImageOpacity(normalizeImageOpacity(nextValue / 100));
                 }}
                 aria-label="Image opacity"
-                sx={{ color: "#0078D4" }}
+                sx={{ color: editorial.pmwBlue }}
               />
             </Box>
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" sx={{ color: "#111827", fontWeight: 700, mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
               Preview
             </Typography>
             <Box
@@ -267,11 +268,11 @@ export default function BackgroundPicker({
               )}
             </Box>
             {selectedId === "custom" && customPreviewUrl && (
-              <Typography variant="caption" sx={{ color: "#6B7280", display: "block", mt: 1, wordBreak: "break-all", lineHeight: 1.35 }}>
+              <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 1, wordBreak: "break-all", lineHeight: 1.35 }}>
                 {customPreviewUrl}
               </Typography>
             )}
-            <Typography variant="caption" sx={{ color: "#6B7280", display: "block", mt: 0.75, wordBreak: "break-word", lineHeight: 1.35 }}>
+            <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.75, wordBreak: "break-word", lineHeight: 1.35 }}>
               {selectedId === "custom" ? customSource.trim() : selectedBackground.source || selectedBackground.category}
             </Typography>
           </Box>

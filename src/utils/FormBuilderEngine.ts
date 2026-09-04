@@ -1,3 +1,4 @@
+import { editorial } from "../theme/editorial";
 import type {
   FormBuilderField,
   SurveyJson,
@@ -220,8 +221,8 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     defaultProps: {
       signatureWidth: 400,
       signatureHeight: 200,
-      penColor: "#000000",
-      backgroundColor: "#FFFFFF",
+      penColor: editorial.black,
+      backgroundColor: editorial.white,
       exportFormat: "PNG",
     },
   },
@@ -292,7 +293,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Layout",
     description: "Horizontal rule separator",
     spColumnKind: null,
-    defaultProps: { style: "solid", color: "#E5E3F0", margin: "16px 0" },
+    defaultProps: { style: "solid", color: editorial.sky, margin: "16px 0" },
   },
   {
     type: "pagebreak",
@@ -402,7 +403,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Display",
     description: "Render chart inline",
     spColumnKind: null,
-    defaultProps: { chartType: "bar", dataSource: "static", colors: ["#5B21B6", "#7C3AED"] },
+    defaultProps: { chartType: "bar", dataSource: "static", colors: [editorial.pmwBlue, editorial.accent] },
   },
 ];
 
@@ -574,7 +575,7 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
       return {
         ...field,
         type: "html",
-        html: `<div style="padding:12px 16px;border-radius:8px;background:${field.alertType === "error" ? "#FEE2E2" : field.alertType === "warning" ? "#FEF3C7" : field.alertType === "success" ? "#D1FAE5" : "#EFF6FF"};color:${field.alertType === "error" ? "#DC2626" : field.alertType === "warning" ? "#D97706" : field.alertType === "success" ? "#059669" : "#2563EB"}">${field.alertTitle ? `<strong>${field.alertTitle}</strong><br/>` : ""}${field.alertBody || ""}</div>`,
+        html: `<div style="padding:12px 16px;border-radius:8px;background:${field.alertType === "error" ? editorial.errorSoft : field.alertType === "warning" ? editorial.accentSoft : field.alertType === "success" ? editorial.successSoft : editorial.blueSoft};color:${field.alertType === "error" ? editorial.error : field.alertType === "warning" ? editorial.accentText : field.alertType === "success" ? editorial.success : editorial.pmwBlue}">${field.alertTitle ? `<strong>${field.alertTitle}</strong><br/>` : ""}${field.alertBody || ""}</div>`,
       };
     case "videoembed":
       return {
@@ -597,7 +598,7 @@ function mapFieldToSurveyJs(field: FormBuilderField): FormBuilderField {
     case "spacer":
       return { ...field, type: "html", html: `<div style="height:${field.height || 16}px"></div>` };
     case "divider":
-      return { ...field, type: "html", html: `<hr style="border-top:1px ${field.dividerStyle || "solid"} ${field.dividerColor || "#E5E3F0"};margin:${field.dividerMargin || "16px 0"};border-bottom:none;">` };
+      return { ...field, type: "html", html: `<hr style="border-top:1px ${field.dividerStyle || "solid"} ${field.dividerColor || editorial.sky};margin:${field.dividerMargin || "16px 0"};border-bottom:none;">` };
     case "columns":
       return { ...field, type: "panel", colCount: field.columnCount || 2 };
     case "repeater":

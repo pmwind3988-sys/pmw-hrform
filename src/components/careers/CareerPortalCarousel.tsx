@@ -4,9 +4,9 @@ import type { CareerPortalCard } from "../../types";
 import { editorial } from "../../theme/editorial";
 
 const DEFAULT_CARD_COLORS = {
-  start: "#0078D4",
-  end: "#6264A7",
-  accent: "#EAF5FC",
+  start: editorial.pmwBlue,
+  end: editorial.pmwPurple,
+  accent: editorial.skySoft,
 };
 const DEFAULT_CARD_IMAGE_OPACITY = 0.72;
 
@@ -232,7 +232,7 @@ export default function CareerPortalCarousel({
                   justifyContent: "flex-end",
                   borderRadius: "12px",
                   overflow: "hidden",
-                  backgroundColor: "#111827",
+                  backgroundColor: editorial.ink,
                   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)",
                   cursor: canOpen ? "pointer" : "default",
                   outline: "none",
@@ -296,7 +296,7 @@ export default function CareerPortalCarousel({
                   <Typography
                     variant="h6"
                     sx={{
-                      color: "#ffffff",
+                      color: editorial.white,
                       fontWeight: 700,
                       fontSize: { xs: "1.05rem", sm: "1.18rem" },
                       lineHeight: 1.24,
@@ -375,12 +375,12 @@ export default function CareerPortalCarousel({
                 border: 0,
                 borderRadius: 999,
                 cursor: "pointer",
-                backgroundColor: selected ? "#ffffff" : "rgba(255,255,255,0.52)",
+                backgroundColor: selected ? editorial.white : "rgba(255,255,255,0.52)",
                 boxShadow: selected ? "0 0 0 1px rgba(255,255,255,0.38), 0 2px 8px rgba(0,0,0,0.18)" : "none",
                 transition: "width 0.2s ease, background-color 0.2s ease, transform 0.2s ease",
                 "&:hover": {
                   transform: "translateY(-1px)",
-                  backgroundColor: "#ffffff",
+                  backgroundColor: editorial.white,
                 },
                 "&:focus-visible": {
                   outline: "2px solid #ffffff",

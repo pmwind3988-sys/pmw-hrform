@@ -3,6 +3,7 @@
  * instead of crashing the entire page.
  */
 import { Component } from "react";
+import { editorial } from "../theme/editorial";
 
 interface Props {
   children: React.ReactNode;
@@ -47,7 +48,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               width: 48,
               height: 48,
               borderRadius: "50%",
-              background: "#FEE2E2",
+              background: editorial.errorSoft,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -57,13 +58,13 @@ export default class ErrorBoundary extends Component<Props, State> {
           >
             ⚠
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: "#111827", margin: "0 0 8px" }}>
+          <h2 style={{ fontSize: 20, fontWeight: 600, color: editorial.ink, margin: "0 0 8px" }}>
             Something went wrong
           </h2>
-          <p style={{ fontSize: 14, color: "#6B7280", margin: "0 0 16px", lineHeight: 1.5 }}>
+          <p style={{ fontSize: 14, color: editorial.muted, margin: "0 0 16px", lineHeight: 1.5 }}>
             An unexpected error occurred. Try refreshing the page.
           </p>
-          <details style={{ fontSize: 12, color: "#9CA3AF", whiteSpace: "pre-wrap" }}>
+          <details style={{ fontSize: 12, color: editorial.softMuted, whiteSpace: "pre-wrap" }}>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>Error details</summary>
             {this.state.error?.stack || this.state.error?.message || "Unknown error"}
           </details>
@@ -74,7 +75,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               padding: "10px 24px",
               borderRadius: 12,
               border: "none",
-              background: "#0078D4",
+              background: editorial.pmwBlue,
               color: "#fff",
               fontWeight: 600,
               fontSize: 14,

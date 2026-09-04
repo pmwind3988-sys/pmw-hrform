@@ -179,7 +179,7 @@ function MiniFormBuilder({
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#374151" }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: editorial.ink }}>
           Custom Application Questions
         </Typography>
         <Button
@@ -194,7 +194,7 @@ function MiniFormBuilder({
 
       {/* Question list */}
       {fields.length === 0 && !showForm && (
-        <Typography variant="body2" sx={{ color: "#9CA3AF", py: 2, textAlign: "center" }}>
+        <Typography variant="body2" sx={{ color: editorial.softMuted, py: 2, textAlign: "center" }}>
           No custom questions added yet.
         </Typography>
       )}
@@ -204,19 +204,19 @@ function MiniFormBuilder({
           <Paper
             key={i}
             variant="outlined"
-            sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 1, borderRadius: "12px", borderColor: "#E5E7EB" }}
+            sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 1, borderRadius: "12px", borderColor: editorial.border }}
           >
             <Box sx={{ flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.845rem" }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: editorial.ink, fontSize: "0.845rem" }}>
                 {field.label}
               </Typography>
               <Box sx={{ display: "flex", gap: 0.5, mt: 0.25 }}>
-                <Chip label={field.type} size="small" sx={{ height: 20, fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#F3F4F6", color: "#6B7280" }} />
-                {field.required && <Chip label="Required" size="small" sx={{ height: 20, fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#FEF3C7", color: "#92400E" }} />}
+                <Chip label={field.type} size="small" sx={{ height: 20, fontSize: "0.72rem", borderRadius: "4px", backgroundColor: editorial.skySoft, color: editorial.muted }} />
+                {field.required && <Chip label="Required" size="small" sx={{ height: 20, fontSize: "0.72rem", borderRadius: "4px", backgroundColor: editorial.accentSoft, color: editorial.accentText }} />}
               </Box>
             </Box>
-            <IconButton size="small" onClick={() => handleEdit(i)} sx={{ color: "#6B7280" }}><Edit sx={{ fontSize: 16 }} /></IconButton>
-            <IconButton size="small" onClick={() => handleDelete(i)} sx={{ color: "#DC2626" }}><Delete sx={{ fontSize: 16 }} /></IconButton>
+            <IconButton size="small" onClick={() => handleEdit(i)} sx={{ color: editorial.muted }}><Edit sx={{ fontSize: 16 }} /></IconButton>
+            <IconButton size="small" onClick={() => handleDelete(i)} sx={{ color: editorial.error }}><Delete sx={{ fontSize: 16 }} /></IconButton>
           </Paper>
         ))}
       </Stack>
@@ -224,7 +224,7 @@ function MiniFormBuilder({
       {/* Add/Edit form */}
       <Dialog open={showForm} onClose={resetForm} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
             {editIndex !== null ? "Edit Question" : "Add Question"}
           </Typography>
         </DialogTitle>
@@ -266,8 +266,8 @@ function MiniFormBuilder({
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={resetForm} sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={!editField.label.trim()} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4" }}>
+          <Button onClick={resetForm} sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave} disabled={!editField.label.trim()} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: editorial.pmwBlue }}>
             {editIndex !== null ? "Update" : "Add"}
           </Button>
         </DialogActions>
@@ -336,7 +336,7 @@ function RichTextEditor({
         borderRadius: "12px",
         overflow: "hidden",
         "&:focus-within": {
-          borderColor: "#0078D4",
+          borderColor: editorial.pmwBlue,
           boxShadow: "0 0 0 2px rgba(0, 120, 212, 0.15)",
         },
       }}
@@ -348,7 +348,7 @@ function RichTextEditor({
           gap: 0.5,
           p: 0.5,
           borderBottom: "1px solid #E5E7EB",
-          backgroundColor: "#F9FAFB",
+          backgroundColor: editorial.paperSoft,
         }}
       >
         <Tooltip title="Bold">
@@ -373,7 +373,7 @@ function RichTextEditor({
             <FormatItalic sx={{ fontSize: 18 }} />
           </ToggleButton>
         </Tooltip>
-        <Box sx={{ width: 1, backgroundColor: "#E5E7EB", mx: 0.5 }} />
+        <Box sx={{ width: 1, backgroundColor: editorial.border, mx: 0.5 }} />
         <Tooltip title="Bullet List">
           <ToggleButton
             value="ul"
@@ -413,10 +413,10 @@ function RichTextEditor({
           outline: "none",
           fontSize: "0.875rem",
           lineHeight: 1.7,
-          color: "#374151",
+          color: editorial.ink,
           "&:empty:before": {
             content: '"Describe the opportunity, responsibilities, and requirements..."',
-            color: "#9CA3AF",
+            color: editorial.softMuted,
             pointerEvents: "none",
           },
           "& ul, & ol": { pl: 3, mb: 1 },
@@ -527,7 +527,7 @@ function JobFormDialog({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px", m: { xs: 1, sm: 2 } } } }}>
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
-        <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
+        <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
           {isEdit ? "Edit Opportunity" : "Create Opportunity"}
         </Typography>
         <IconButton onClick={onClose} size="small"><Close /></IconButton>
@@ -572,7 +572,7 @@ function JobFormDialog({
             </FormControl>
           </Grid>
           <Grid size={{ xs: 12 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: "#374151", mb: 0.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: editorial.ink, mb: 0.5 }}>
               Opportunity Description
             </Typography>
             <RichTextEditor value={jobDescription} onChange={setJobDescription} minHeight={180} />
@@ -608,8 +608,8 @@ function JobFormDialog({
         <MiniFormBuilder fields={customFields} onChange={setCustomFields} />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button onClick={onClose} sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}>Cancel</Button>
-        <Button variant="contained" onClick={handleSave} disabled={!title.trim() || saving} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4" }}>
+        <Button onClick={onClose} sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={!title.trim() || saving} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: editorial.pmwBlue }}>
           {saving ? "Saving..." : isEdit ? "Update Opportunity" : "Create Opportunity"}
         </Button>
       </DialogActions>
@@ -651,9 +651,9 @@ function OpportunitiesLoadingSkeleton() {
       <TableContainer component={Paper} sx={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+            <TableRow sx={{ backgroundColor: editorial.paperSoft }}>
               {["Role", "Company", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
-                <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
+                <TableCell key={h} sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -1036,7 +1036,7 @@ export default function AdminJobManagePage() {
                   value={statusFilter}
                   label="Status"
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: editorial.paperSoft }}
                 >
                   <MenuItem value="">All statuses</MenuItem>
                   <MenuItem value="Active">Active</MenuItem>
@@ -1050,7 +1050,7 @@ export default function AdminJobManagePage() {
                   value={companyFilter}
                   label="Company"
                   onChange={(e) => setCompanyFilter(e.target.value)}
-                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: editorial.paperSoft }}
                 >
                   <MenuItem value="">All companies</MenuItem>
                   {jobCompanyOptions.map((company) => (
@@ -1065,7 +1065,7 @@ export default function AdminJobManagePage() {
                   value={typeFilter}
                   label="Type"
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: editorial.paperSoft }}
                 >
                   <MenuItem value="">All types</MenuItem>
                   {jobTypeOptions.map((type) => (
@@ -1080,7 +1080,7 @@ export default function AdminJobManagePage() {
                   value={sortBy}
                   label="Sort"
                   onChange={(e) => setSortBy(e.target.value as JobSortOption)}
-                  sx={{ borderRadius: "12px", backgroundColor: "#F8F9FC" }}
+                  sx={{ borderRadius: "12px", backgroundColor: editorial.paperSoft }}
                 >
                   <MenuItem value="newest">Newest first</MenuItem>
                   <MenuItem value="title">Role A-Z</MenuItem>
@@ -1135,7 +1135,7 @@ export default function AdminJobManagePage() {
             title="No opportunities"
             description="Create the first internal advancement opening for PMW employees."
             action={
-              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#0078D4" }}>
+              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: editorial.pmwBlue }}>
                 Create Opening
               </Button>
             }
@@ -1156,42 +1156,42 @@ export default function AdminJobManagePage() {
               <TableHead>
                 <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
                   {["Role", "Company", "Department", "Type", "Status", "Applicants", "Actions"].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
+                    <TableCell key={h} sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
                   ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {pagedJobs.map((job) => (
-                  <TableRow key={job.id} hover sx={{ "&:hover": { backgroundColor: "#FAFBFC" } }}>
+                  <TableRow key={job.id} hover sx={{ "&:hover": { backgroundColor: editorial.paperSoft } }}>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.845rem" }}>{job.title}</Typography>
-                      {job.location && <Typography variant="caption" sx={{ color: "#9CA3AF" }}>{job.location}</Typography>}
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: editorial.ink, fontSize: "0.845rem" }}>{job.title}</Typography>
+                      {job.location && <Typography variant="caption" sx={{ color: editorial.softMuted }}>{job.location}</Typography>}
                     </TableCell>
                     <TableCell>
                       {job.company ? (
                         <Chip label={job.company} size="small" sx={{ borderRadius: "12px", fontSize: "0.72rem", backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 700 }} />
                       ) : (
-                        <Typography variant="caption" sx={{ color: "#9CA3AF" }}>Unassigned</Typography>
+                        <Typography variant="caption" sx={{ color: editorial.softMuted }}>Unassigned</Typography>
                       )}
                     </TableCell>
                     <TableCell><Chip label={job.department} size="small" sx={{ borderRadius: "12px", fontSize: "0.72rem", backgroundColor: editorial.pmwPurple, color: "#fff", fontWeight: 700 }} /></TableCell>
-                    <TableCell><Typography variant="body2" sx={{ color: "#374151", fontSize: "0.78rem" }}>{job.employmentType}</Typography></TableCell>
+                    <TableCell><Typography variant="body2" sx={{ color: editorial.ink, fontSize: "0.78rem" }}>{job.employmentType}</Typography></TableCell>
                     <TableCell>
-                      <Chip label={job.status === "New" ? "Active" : "Closed"} size="small" sx={{ borderRadius: "12px", fontSize: "0.72rem", backgroundColor: job.status === "New" ? "#E6F4EA" : "#F3F4F6", color: job.status === "New" ? "#34A853" : "#6B7280", fontWeight: 600 }} />
+                      <Chip label={job.status === "New" ? "Active" : "Closed"} size="small" sx={{ borderRadius: "12px", fontSize: "0.72rem", backgroundColor: job.status === "New" ? editorial.successSoft : editorial.skySoft, color: job.status === "New" ? editorial.success : editorial.muted, fontWeight: 600 }} />
                     </TableCell>
                     <TableCell><Typography variant="body2" sx={{ fontWeight: 700, color: editorial.pmwBlueDark, fontSize: "0.845rem", fontVariantNumeric: "tabular-nums" }}>{job.applicationCount}</Typography></TableCell>
                     <TableCell>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
-                        <IconButton size="small" onClick={() => handleEdit(job)} sx={{ color: "#6B7280" }}><Edit sx={{ fontSize: 18 }} /></IconButton>
+                        <IconButton size="small" onClick={() => handleEdit(job)} sx={{ color: editorial.muted }}><Edit sx={{ fontSize: 18 }} /></IconButton>
                         {job.status === "New" && (
                           <IconButton
                             size="small"
                             disabled={closingJobId === job.id || !!closeConfirmJob}
                             onClick={() => setCloseConfirmJob(job)}
-                            sx={{ color: closingJobId === job.id || closeConfirmJob?.id === job.id ? "#9CA3AF" : "#DC2626" }}
+                            sx={{ color: closingJobId === job.id || closeConfirmJob?.id === job.id ? editorial.softMuted : editorial.error }}
                           >
                             {closingJobId === job.id ? (
-                              <CircularProgress size={18} sx={{ color: "#DC2626" }} />
+                              <CircularProgress size={18} sx={{ color: editorial.error }} />
                             ) : (
                               <Delete sx={{ fontSize: 18 }} />
                             )}
@@ -1201,10 +1201,10 @@ export default function AdminJobManagePage() {
                           size="small"
                           disabled={deletingJobId === job.id}
                           onClick={() => setDeleteConfirmJob(job)}
-                          sx={{ color: deletingJobId === job.id ? "#9CA3AF" : "#6B7280" }}
+                          sx={{ color: deletingJobId === job.id ? editorial.softMuted : editorial.muted }}
                         >
                           {deletingJobId === job.id ? (
-                            <CircularProgress size={18} sx={{ color: "#DC2626" }} />
+                            <CircularProgress size={18} sx={{ color: editorial.error }} />
                           ) : (
                             <DeleteForever sx={{ fontSize: 18 }} />
                           )}
@@ -1248,12 +1248,12 @@ export default function AdminJobManagePage() {
       {/* Close Confirmation Dialog */}
       <Dialog open={!!closeConfirmJob} onClose={() => setCloseConfirmJob(null)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
         <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
             Close opportunity?
           </Typography>
         </DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ color: "#6B7280" }}>
+          <Typography variant="body2" sx={{ color: editorial.muted }}>
             Are you sure you want to close <strong>{closeConfirmJob?.title}</strong>?
             This will stop new applications and mark the opening as closed.
           </Typography>
@@ -1261,7 +1261,7 @@ export default function AdminJobManagePage() {
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button
             onClick={() => setCloseConfirmJob(null)}
-            sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}
+            sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}
           >
             Cancel
           </Button>
@@ -1272,7 +1272,7 @@ export default function AdminJobManagePage() {
               setCloseConfirmJob(null);
               if (job) handleClose(job);
             }}
-            sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#F59E0B", "&:hover": { backgroundColor: "#D97706" } }}
+            sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: editorial.accent, "&:hover": { backgroundColor: editorial.accentText } }}
           >
             Close Opening
           </Button>
@@ -1292,7 +1292,7 @@ export default function AdminJobManagePage() {
           <Button
             onClick={() => setDeleteConfirmJob(null)}
             disabled={!!deletingJobId}
-            sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}
+            sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}
           >
             Cancel
           </Button>
@@ -1300,7 +1300,7 @@ export default function AdminJobManagePage() {
             variant="contained"
             disabled={!!deletingJobId}
             onClick={() => deleteConfirmJob && handleDeleteJob(deleteConfirmJob)}
-            sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: "#DC2626", "&:hover": { backgroundColor: "#B91C1C" } }}
+            sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: editorial.error, "&:hover": { backgroundColor: editorial.error } }}
           >
             {deletingJobId ? "Deleting..." : "Delete"}
           </Button>
@@ -1318,7 +1318,7 @@ export default function AdminJobManagePage() {
               fontWeight: 700,
               fontSize: "0.875rem",
               boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
-              color: "#111827",
+              color: editorial.ink,
               "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },
             }}
           >

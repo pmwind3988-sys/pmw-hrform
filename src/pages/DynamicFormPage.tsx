@@ -53,6 +53,7 @@ import { NEEDS_ROUTING_LAYER_STATUS } from "../utils/submissionLifecycle";
 import { sampleAnswersFor } from "../utils/testRunLaunch";
 import { getTabularFields, rowsToHtml, type MatrixRow, type MatrixColumn } from "../utils/matrixData";
 import { readStoredGuestSession } from "../utils/guestMemberService";
+import { editorial } from "../theme/editorial";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -429,24 +430,26 @@ const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-
 
 // Theme tokens
 const LIGHT = {
-  purple: "#101010", purpleLight: "#333333", purplePale: "#EAF5FC", purpleMid: "#BFDDF4",
-  purpleDark: "#000000", bg: "linear-gradient(180deg,#BFDDF4 0%,#DCECF8 46%,#F7F5EF 100%)", cardBg: "#FFFFFF", offWhite: "#F7F5EF", border: "#D6DCE5",
-  textPrimary: "#101010", textSecond: "#5F646D", textMuted: "#747B86",
-  green: "#107C10", greenPale: "#E3F1E3", greenBorder: "#107C10",
-  red: "#C62828", redPale: "#F8E4E4", amber: "#805800", amberPale: "#FFF7BD",
+  purple: editorial.ink, purpleLight: editorial.muted, purplePale: editorial.skySoft, purpleMid: editorial.sky,
+  purpleDark: editorial.black, bg: editorial.paper, cardBg: editorial.white, offWhite: editorial.paper, border: editorial.border,
+  textPrimary: editorial.ink, textSecond: editorial.muted, textMuted: editorial.softMuted,
+  green: editorial.success, greenPale: editorial.successSoft, greenBorder: editorial.success,
+  red: editorial.error, redPale: editorial.errorSoft, amber: editorial.accentText, amberPale: editorial.accentSoft,
   shadow: "none",
   shadowLg: "0 18px 42px rgba(16,16,16,0.14)", shadowFab: "0 10px 28px rgba(16,16,16,0.10)",
 };
 
 const DARK = {
   ...LIGHT, bg: "#101923", cardBg: "#17212B", offWhite: "#111B25", border: "#2F3B47",
-  textPrimary: "#F8FAFC", textSecond: "#CBD5E1", textMuted: "#94A3B8",
-  greenPale: "#052e16", greenBorder: "#166534", redPale: "#3b0707", amberPale: "#2d1b00",
+  textPrimary: editorial.paperSoft, textSecond: "#CBD5E1", textMuted: "#94A3B8",
+  greenPale: "#052e16", greenBorder: editorial.success, redPale: "#3b0707", amberPale: "#2d1b00",
   shadow: "0 1px 3px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3)",
   shadowLg: "0 8px 40px rgba(0,0,0,.5)", shadowFab: "0 4px 20px rgba(0,0,0,.4)",
 };
 
-const globalCss = (t: typeof LIGHT) => `
+type FormTheme = { [K in keyof typeof LIGHT]: string };
+
+const globalCss = (t: FormTheme) => `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;font-family:${APP_FONT_FAMILY}!important}
   body{font-family:${APP_FONT_FAMILY};background:${t.bg};color:${t.textPrimary};transition:background .3s,color .3s}
@@ -510,7 +513,7 @@ const globalCss = (t: typeof LIGHT) => `
   ::-webkit-scrollbar-thumb{background:${t.purpleMid};border-radius:10px}
 `;
 
-const Spinner = ({ size = 30, t }: { size?: number; t: typeof LIGHT }) => (
+const Spinner = ({ size = 30, t }: { size?: number; t: FormTheme }) => (
   <div style={{ width: size, height: size, border: `2.5px solid ${t.purpleMid}`, borderTop: `2.5px solid ${t.purple}`, borderRadius: "50%", animation: "spin .85s linear infinite", flexShrink: 0 }} />
 );
 
@@ -523,7 +526,7 @@ const MsIcon = () => (
   </svg>
 );
 
-const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
+const ScrollProgress = ({ t }: { t: FormTheme }) => {
   const [pct, setPct] = useState(0);
   useEffect(() => {
     const fn = () => {
@@ -550,7 +553,7 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
  * loaded as a GIF so it stays sharp at any size, follows the theme's green,
  * and needs no network request on the one screen that must never look broken.
  */
-const SuccessCheck = ({ t }: { t: typeof LIGHT }) => (
+const SuccessCheck = ({ t }: { t: FormTheme }) => (
   <div className="dfp-check" aria-hidden="true" style={{ position: "relative", width: 96, height: 96, margin: "0 auto 22px" }}>
     <div className="dfp-check-ripple" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: t.green, opacity: 0, animation: "dfpRipple .9s .25s ease-out forwards" }} />
     <div className="dfp-check-disc" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: t.greenPale, animation: "dfpPop .45s cubic-bezier(.34,1.56,.64,1) forwards" }} />
@@ -567,7 +570,7 @@ const SuccessCheck = ({ t }: { t: typeof LIGHT }) => (
  * away, press Submit again, or close the tab mid-send. This takes over the
  * screen, says plainly not to close it, and leaves when the answer comes back.
  */
-const SubmittingOverlay = ({ t, hasUploads }: { t: typeof LIGHT; hasUploads: boolean }) => (
+const SubmittingOverlay = ({ t, hasUploads }: { t: FormTheme; hasUploads: boolean }) => (
   <div className="dfp-overlay" role="alertdialog" aria-modal="true" aria-busy="true" aria-live="assertive" aria-label="Submitting your response">
     <div className="dfp-overlay-card">
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Spinner size={42} t={t} /></div>
@@ -584,10 +587,10 @@ const SubmittingOverlay = ({ t, hasUploads }: { t: typeof LIGHT; hasUploads: boo
   </div>
 );
 
-const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string }) => (
+const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; t: FormTheme; isTestRun?: boolean; testEmailDisplay?: string }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     {isTestRun && (
-      <div role="status" style={{ maxWidth: 420, margin: "0 auto 20px", padding: "10px 16px", background: "#B91C1C", color: "#fff", borderRadius: 12, fontSize: 12, fontWeight: 700 }}>
+      <div role="status" style={{ maxWidth: 420, margin: "0 auto 20px", padding: "10px 16px", background: editorial.error, color: "#fff", borderRadius: 12, fontSize: 12, fontWeight: 700 }}>
         TEST RUN — this was a rehearsal, not a real submission. Every email it generated went only to {testEmailDisplay || "the nominated test address"}.
       </div>
     )}
@@ -610,7 +613,7 @@ const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay 
   </div>
 );
 
-const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: typeof LIGHT }) => (
+const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: FormTheme }) => (
   <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
     <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
       <div style={{ width: 66, height: 66, borderRadius: 12, margin: "0 auto 22px", background: t.purplePale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>LOCK</div>
@@ -1820,7 +1823,7 @@ export default function DynamicFormPage() {
     let cancelled = false;
     import("qrcode")
       .then(({ default: QRCode }) =>
-        QRCode.toDataURL(shareUrl, { width: 280, margin: 2, color: { dark: "#1E1B4B", light: "#FFFFFF" } }),
+        QRCode.toDataURL(shareUrl, { width: 280, margin: 2, color: { dark: editorial.navyDeep, light: editorial.white } }),
       )
       .then((dataUrl) => {
         if (!cancelled) setQrDataUrl(dataUrl);
@@ -1887,7 +1890,7 @@ export default function DynamicFormPage() {
           <div
             role="status"
             style={{
-              background: "#B91C1C",
+              background: editorial.error,
               color: "#fff",
               fontSize: 13,
               fontWeight: 700,
@@ -1972,7 +1975,7 @@ export default function DynamicFormPage() {
             {formReady && isLastSurveyPage && (
               <>
                 {isTestRun && (
-                  <div role="status" style={{ marginTop: 18, padding: "12px 16px", background: "#FEE2E2", border: "1px solid #B91C1C", borderRadius: 12, color: "#7F1D1D", fontSize: 13, fontWeight: 700, textAlign: "center" }}>
+                  <div role="status" style={{ marginTop: 18, padding: "12px 16px", background: editorial.errorSoft, border: "1px solid #B91C1C", borderRadius: 12, color: editorial.error, fontSize: 13, fontWeight: 700, textAlign: "center" }}>
                     You are about to submit a TEST RUN, not a real request. Every email it generates will go only to {testEmailDisplay || "the nominated test address"}.
                   </div>
                 )}
@@ -2044,18 +2047,18 @@ export default function DynamicFormPage() {
       {showQr && (
         <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, animation: "fadeUp .2s ease", backdropFilter: "blur(2px)" }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: "32px 28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
-            <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: "#1E1B4B", marginBottom: 4 }}>Share this form</div>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 20, lineHeight: 1.5 }}>Scan the QR code or copy the link below</div>
+            <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: editorial.navyDeep, marginBottom: 4 }}>Share this form</div>
+            <div style={{ fontSize: 12, color: editorial.muted, marginBottom: 20, lineHeight: 1.5 }}>Scan the QR code or copy the link below</div>
             {qrDataUrl ? (
               <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 12 }} />
             ) : (
-              <div style={{ width: 200, height: 200, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF", fontSize: 12 }}>Generating...</div>
+              <div style={{ width: 200, height: 200, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: editorial.softMuted, fontSize: 12 }}>Generating...</div>
             )}
-            <div style={{ fontSize: 11, color: "#6B7280", wordBreak: "break-all", padding: "10px 12px", background: "#F3F4F6", borderRadius: 12, marginBottom: 18, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: editorial.muted, wordBreak: "break-all", padding: "10px 12px", background: editorial.skySoft, borderRadius: 12, marginBottom: 18, lineHeight: 1.5 }}>
               {shareUrl}
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? "#059669" : "#E5E3F0"}`, borderRadius: 12, background: copied ? "#D1FAE5" : "none", color: copied ? "#059669" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
+              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? editorial.success : editorial.sky}`, borderRadius: 12, background: copied ? editorial.successSoft : "none", color: copied ? editorial.success : editorial.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
               <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 12, background: "linear-gradient(135deg,#005A9E,#0078D4)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
             </div>
           </div>

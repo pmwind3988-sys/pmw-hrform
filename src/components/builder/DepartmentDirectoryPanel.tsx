@@ -29,6 +29,7 @@ import {
 } from "../../utils/departmentApproverDirectory";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import type { DepartmentApproverLayerAssignee } from "../../types";
+import { editorial } from "../../theme/editorial";
 
 interface DepartmentDirectoryPanelProps {
   assignee: DepartmentApproverLayerAssignee;
@@ -66,7 +67,7 @@ function actionBtn(tone: "primary" | "quiet" | "danger", disabled = false): Reac
   const palette = tone === "primary"
     ? { fg: C.white, bg: C.purple, bd: C.purple }
     : tone === "danger"
-      ? { fg: C.red, bg: C.white, bd: "#F0C7C7" }
+      ? { fg: C.red, bg: C.white, bd: editorial.errorSoft }
       : { fg: C.textSecond, bg: C.white, bd: C.border };
   return {
     minHeight: 32,
@@ -373,7 +374,7 @@ export default function DepartmentDirectoryPanel({ assignee, token }: Department
           {notice && (
             <div style={{
               background: notice.tone === "ok" ? C.greenPale : C.redPale,
-              border: `1px solid ${notice.tone === "ok" ? "#A7D7A7" : "#F0C7C7"}`,
+              border: `1px solid ${notice.tone === "ok" ? editorial.successFill : editorial.errorSoft}`,
               borderRadius: 8,
               padding: "8px 9px",
               fontSize: 11,

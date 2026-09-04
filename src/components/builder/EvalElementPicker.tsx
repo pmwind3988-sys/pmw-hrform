@@ -45,6 +45,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
+import { editorial } from "../../theme/editorial";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   text: <TextFieldsIcon sx={{ fontSize: 16 }} />,
@@ -242,7 +243,7 @@ function EvalElementPropertyPanel({
                   placeholder="e.g. {field1} + {field2}" rows={3}
                   style={{ ...inp, height: "auto", minHeight: 56, padding: "8px 9px", resize: "vertical", lineHeight: 1.5, fontFamily: "monospace" }} />
                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, lineHeight: 1.4 }}>
-                  Use <code style={{ background: "#F3F4F6", padding: "1px 3px", borderRadius: 2, fontSize: 11 }}>{'{field_name}'}</code> syntax.
+                  Use <code style={{ background: editorial.skySoft, padding: "1px 3px", borderRadius: 2, fontSize: 11 }}>{'{field_name}'}</code> syntax.
                   Supports +, -, *, / and parentheses.
                 </div>
               </div>

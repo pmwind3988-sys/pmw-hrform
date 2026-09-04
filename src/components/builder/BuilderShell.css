@@ -27,35 +27,35 @@
 @import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap");
 
 .bx-root {
-  --bx-bg: #f2f4f7;
-  --bx-surface: #e7ebf0;
-  --bx-panel: #f7f9fb;
+  --bx-bg: #f1f4f9;
+  --bx-surface: #e4e9f1;
+  --bx-panel: #f8fafc;
   --bx-white: #ffffff;
-  --bx-text: #1a1f2b;
-  --bx-accent: #0078d4;
-  --bx-a100: #eaf4fd;
-  --bx-a200: #cfe7fa;
-  --bx-a300: #a5cff3;
-  --bx-a400: #6fade2;
-  --bx-a600: #0067b8;
-  --bx-a700: #135e96;
-  --bx-a800: #0e4770;
-  --bx-a900: #0a3050;
-  --bx-n300: #d4d9e1;
-  --bx-n400: #b3bac6;
-  --bx-n500: #8a929e;
-  --bx-n600: #667181;
-  --bx-n700: #4e5866;
-  --bx-n800: #363e4a;
-  --bx-divider: rgba(26, 31, 43, 0.11);
-  --bx-hairline: rgba(26, 31, 43, 0.06);
+  --bx-text: #101828;
+  --bx-accent: #0f3d91;
+  --bx-a100: #eaeff9;
+  --bx-a200: #d7e1f3;
+  --bx-a300: #aabde3;
+  --bx-a400: #6e8cc9;
+  --bx-a600: #0d3682;
+  --bx-a700: #0b2f70;
+  --bx-a800: #0a2a63;
+  --bx-a900: #071c45;
+  --bx-n300: #dde3ec;
+  --bx-n400: #b6bfce;
+  --bx-n500: #8a94a6;
+  --bx-n600: #636f88;
+  --bx-n700: #4a5568;
+  --bx-n800: #2e3646;
+  --bx-divider: rgba(16, 24, 40, 0.11);
+  --bx-hairline: rgba(16, 24, 40, 0.06);
   /* Separators may be faint; the edge of an *interactive control* may not.
      The old --bx-divider on a control read 1.35:1 against its own fill, well
      under WCAG 1.4.11's 3:1 for component boundaries. Field edges get their
      own token, and every input/select/secondary-button border points at it. */
-  --bx-line-field: #7f8794;
-  --bx-danger: #c62828;
-  --bx-warn: #b15c00;
+  --bx-line-field: #7c8698;
+  --bx-danger: #c1291f;
+  --bx-warn: #855405;
 
   /* SI's geometry: 12px on anything that is a container you act inside, 8px on
      elements nested within one. The sheet and dialog read as paper. */
@@ -189,7 +189,11 @@
   height: 30px;
   display: grid;
   place-items: center;
-  background: var(--bx-a800);
+  /* The same gradient as the app sidebar (`.si-navy` in index.css), not a flat
+     fill: the rail now sits directly beside that sidebar, and two different
+     navies meeting at a corner reads as a rendering fault rather than a
+     design. */
+  background: linear-gradient(160deg, #0f3d91 0%, #0b2f70 100%);
   color: var(--bx-bg);
 }
 

@@ -48,6 +48,7 @@ import PowerIcon from "@mui/icons-material/Power";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ChromeReaderModeIcon from "@mui/icons-material/ChromeReaderMode";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import { editorial } from "../../theme/editorial";
 
 
 const APP_FONT_NAME = "Inter";
@@ -67,7 +68,7 @@ function IconBtn({ icon, title, onClick, danger, disabled }: { icon: React.React
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
   return <label className="fb-toggle">
-    <div onClick={() => onChange(!checked)} className="fb-toggle-track" style={{ background: checked ? C.purple : "#D1D5DB" }}>
+    <div onClick={() => onChange(!checked)} className="fb-toggle-track" style={{ background: checked ? C.purple : editorial.border }}>
       <div className="fb-toggle-knob" style={{ left: checked ? 21 : 3, background: C.white }} />
     </div>
     {label && <span className="fb-toggle-label" style={{ color: C.textSecond }}>{label}</span>}
@@ -1433,7 +1434,7 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
         <div>
           <Textarea value={field.expression || ""} onChange={v => onChange({ expression: v })} rows={3} placeholder="e.g. {field1} + {field2}" />
           <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
-            Use <code style={{ background: "#F3F4F6", padding: "1px 4px", borderRadius: 3, fontSize: 11 }}>{'{field_name}'}</code> syntax to reference other fields.
+            Use <code style={{ background: editorial.skySoft, padding: "1px 4px", borderRadius: 3, fontSize: 11 }}>{'{field_name}'}</code> syntax to reference other fields.
             Supports <strong>+</strong>, <strong>-</strong>, <strong>*</strong>, <strong>/</strong>, parentheses, and SurveyJS expression functions.
           </div>
         </div>
@@ -2179,7 +2180,7 @@ function JsonPreview({ json, onClose }: { json: SurveyJson; onClose: () => void 
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{charCount} chars</span>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 11, color: copied ? "#6EE7B7" : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>{copied ? "Copied!" : "Copy JSON"}</button>
+        <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 11, color: copied ? editorial.successFill : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>{copied ? "Copied!" : "Copy JSON"}</button>
         <ExpandLessIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} />
       </div>
     </div>
@@ -2398,10 +2399,10 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       textUpdateMode: initialJson.textUpdateMode || "onTyping",
       showProgressBar: !!initialJson.showProgressBar,
       showPageTitles: !!initialJson.showPageTitles,
-      primaryColor: initialJson.primaryColor || "#0078D4",
-      backgroundColor: initialJson.backgroundColor || "#FFFFFF",
-      textColor: initialJson.textColor || "#1A1F2B",
-      errorColor: initialJson.errorColor || "#DC2626",
+      primaryColor: initialJson.primaryColor || editorial.pmwBlue,
+      backgroundColor: initialJson.backgroundColor || editorial.white,
+      textColor: initialJson.textColor || editorial.ink,
+      errorColor: initialJson.errorColor || editorial.error,
       fontFamily: APP_FONT_NAME,
       borderRadius: initialJson.borderRadius || "8px",
       labelPosition: initialJson.labelPosition || "top",
@@ -2468,10 +2469,10 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         textUpdateMode: initialJson.textUpdateMode || "onTyping",
         showProgressBar: !!initialJson.showProgressBar,
         showPageTitles: !!initialJson.showPageTitles,
-        primaryColor: initialJson.primaryColor || "#0078D4",
-        backgroundColor: initialJson.backgroundColor || "#FFFFFF",
-        textColor: initialJson.textColor || "#1A1F2B",
-        errorColor: initialJson.errorColor || "#DC2626",
+        primaryColor: initialJson.primaryColor || editorial.pmwBlue,
+        backgroundColor: initialJson.backgroundColor || editorial.white,
+        textColor: initialJson.textColor || editorial.ink,
+        errorColor: initialJson.errorColor || editorial.error,
         fontFamily: APP_FONT_NAME,
         borderRadius: initialJson.borderRadius || "8px",
         labelPosition: initialJson.labelPosition || "top",
@@ -2487,10 +2488,10 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         textUpdateMode: "onTyping",
         showProgressBar: false,
         showPageTitles: false,
-        primaryColor: "#0078D4",
-        backgroundColor: "#FFFFFF",
-        textColor: "#1A1F2B",
-        errorColor: "#DC2626",
+        primaryColor: editorial.pmwBlue,
+        backgroundColor: editorial.white,
+        textColor: editorial.ink,
+        errorColor: editorial.error,
         fontFamily: APP_FONT_NAME,
         borderRadius: "8px",
         labelPosition: "top",
@@ -3008,10 +3009,10 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Colors</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || "#0078D4")} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Background</label><input type="color" value={String(surveySettings.backgroundColor || "#FFFFFF")} onChange={(e) => setSurveySettings({ ...surveySettings, backgroundColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || "#1A1F2B")} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Error Color</label><input type="color" value={String(surveySettings.errorColor || "#DC2626")} onChange={(e) => setSurveySettings({ ...surveySettings, errorColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || editorial.pmwBlue)} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Background</label><input type="color" value={String(surveySettings.backgroundColor || editorial.white)} onChange={(e) => setSurveySettings({ ...surveySettings, backgroundColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || editorial.ink)} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Error Color</label><input type="color" value={String(surveySettings.errorColor || editorial.error)} onChange={(e) => setSurveySettings({ ...surveySettings, errorColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>

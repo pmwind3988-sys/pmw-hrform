@@ -6,6 +6,7 @@ import { C } from "./constants";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { editorial } from "../../theme/editorial";
 
 interface ProvisionOverlayProps {
   logs: { m: string; t: string }[];
@@ -77,7 +78,7 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
           }}>
             {logs.map((l, i) => (
               <div key={i} style={{
-                color: l.t === "err" ? "#FCA5A5" : l.t === "ok" ? "#6EE7B7" : l.t === "warn" ? "#FCD34D" : "rgba(255,255,255,.7)",
+                color: l.t === "err" ? editorial.errorFill : l.t === "ok" ? editorial.successFill : l.t === "warn" ? editorial.accent : "rgba(255,255,255,.7)",
                 display: "flex",
                 alignItems: "center",
                 gap: 4,

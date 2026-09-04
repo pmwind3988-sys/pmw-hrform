@@ -38,7 +38,12 @@ export const editorial = {
       on the canvas, under 4.5 by a hair, and this is the colour of nearly every
       secondary line in the app. */
   muted: "#5A6880",
-  softMuted: "#6E7B92",
+  /**
+   * #636F88, not the #6E7B92 this started as: that measured 4.02:1 on the
+   * canvas, and it is the colour of every "not set" placeholder and every
+   * lowest-priority caption. Measured, not chosen by eye.
+   */
+  softMuted: "#636F88",
   white: "#FFFFFF",
 
   /* ----- navy: the brand, actions, links, focus, active navigation ----- */
@@ -91,8 +96,13 @@ export const editorial = {
   /* ----- accent: SI's amber. The secondary signal, and the one that shouts ----- */
   /** The fill. Bright by design — this is what a primary action sits on. */
   accent: "#F59E0B",
-  /** Amber darkened until it clears 4.5:1 as text on white. For words. */
-  accentText: "#9D6507",
+  /**
+   * Amber darkened until it clears 4.5:1 as text -- on white, on the canvas AND
+   * on `accentSoft`. SI's #9D6507 clears the first two and fails the third at
+   * 4.05:1, which is exactly where this colour is most used: the text of an
+   * amber badge.
+   */
+  accentText: "#855405",
   accentSoft: "#FDE7C4",
   /**
    * Was the PMW attention yellow #FFF546. Resolves to amber so the two do not
@@ -102,10 +112,16 @@ export const editorial = {
   yellowSoft: "#FDE7C4",
 
   /* ----- semantics. Bare name = readable. `*Fill` = the bright chip. ----- */
-  success: "#178640",
+  /**
+   * #137536 rather than SI's own #178640. SI measures its readable green
+   * against WHITE, where #178640 clears 4.65:1 -- but nearly every use here is
+   * on the canvas (4.37) or inside a green badge (4.23), and both of those
+   * fail. This value clears all three surfaces with room to spare.
+   */
+  success: "#137536",
   successFill: "#22C55E",
   successSoft: "#DCFCE7",
-  warning: "#9D6507",
+  warning: "#855405",
   warningFill: "#F59E0B",
   warningSoft: "#FDE7C4",
   error: "#C1291F",

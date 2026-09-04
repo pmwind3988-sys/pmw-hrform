@@ -98,14 +98,14 @@ export function kindStyle(kind: LearningMaterialKind): KindStyle {
       return {
         label: "Image",
         color: editorial.success,
-        wash: "#E8F5E9",
+        wash: editorial.successSoft,
         icon: <ImageOutlined />,
       };
     case "pdf":
       return {
         label: "PDF",
         color: editorial.error,
-        wash: "#FDECEC",
+        wash: editorial.errorSoft,
         icon: <PictureAsPdfOutlined />,
       };
     case "document":

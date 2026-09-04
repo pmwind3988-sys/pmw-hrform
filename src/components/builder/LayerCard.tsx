@@ -10,6 +10,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import type { LayerConfigItem } from "../../types";
+import { editorial } from "../../theme/editorial";
 
 interface LayerCardProps {
   layer: LayerConfigItem;
@@ -25,7 +26,7 @@ interface LayerCardProps {
 }
 
 const TYPE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
-  approval: { bg: "#DBEAFE", color: "#1D4ED8", label: "Approval" },
+  approval: { bg: editorial.blueWash, color: editorial.pmwBlue, label: "Approval" },
   evaluation: { bg: C.greenPale, color: C.green, label: "Evaluation" },
 };
 

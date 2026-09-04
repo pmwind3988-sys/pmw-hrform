@@ -66,22 +66,40 @@ const theme = createTheme({
       contrastText: editorial.ink,
     },
     error: {
-      main: editorial.errorFill,
+      /**
+       * The READABLE red, not the bright fill -- unlike success and warning
+       * above, which keep theirs.
+       *
+       * `main` is what MUI paints a contained button and a filled chip with,
+       * and then writes `contrastText` on top. White on the bright #EF4444 is
+       * 3.76:1, so "Delete permanently" -- the most consequential button in the
+       * app -- would have shipped failing. White on this red is 5.83:1.
+       *
+       * Success and warning do not have the same problem because their
+       * contrastText is ink rather than white, and ink on those fills measures
+       * 7.8:1 and 8.3:1.
+       */
+      main: editorial.error,
       light: editorial.errorSoft,
       dark: editorial.error,
       contrastText: editorial.white,
     },
     grey: {
-      50: "#FAFBFD",
-      100: "#F6F8FB",
-      200: "#EEF2F9",
-      300: "#E5E9F0",
+      50: editorial.paperSoft,
+      100: editorial.paper,
+      200: editorial.skySoft,
+      300: editorial.border,
       400: "#A9B4C6",
-      500: "#6E7B92",
-      600: "#5A6880",
+      // #636F88, matching `editorial.softMuted`. It was #6E7B92, which is the
+      // value that token was darkened AWAY from for measuring 4.02:1 on the
+      // canvas -- and MUI reaches for grey.500 for placeholder and disabled
+      // text, so leaving it here would have kept the failure alive under a
+      // different name.
+      500: "#636F88",
+      600: editorial.muted,
       700: "#3D4859",
       800: "#232B38",
-      900: "#101828",
+      900: editorial.ink,
     },
   },
   /**
@@ -519,7 +537,9 @@ const theme = createTheme({
             color: editorial.ink,
           },
           "&.MuiAlert-filledError, &.MuiAlert-colorError.MuiAlert-filled": {
-            backgroundColor: editorial.errorFill,
+            // Same reason as `palette.error.main`: white on the bright red is
+            // 3.76:1. `errorFill` stays the colour of dots and borders.
+            backgroundColor: editorial.error,
             color: editorial.white,
           },
           "&.MuiAlert-filledInfo, &.MuiAlert-colorInfo.MuiAlert-filled": {

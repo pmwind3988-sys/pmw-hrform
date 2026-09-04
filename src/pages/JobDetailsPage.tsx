@@ -374,7 +374,7 @@ export default function JobDetailsPage() {
                     variant="contained"
                     disabled
                     fullWidth
-                    sx={{ ...jobBoardPrimaryButtonSx, backgroundColor: "#9CA3AF" }}
+                    sx={{ ...jobBoardPrimaryButtonSx, backgroundColor: editorial.softMuted }}
                   >
                     Already submitted
                   </Button>

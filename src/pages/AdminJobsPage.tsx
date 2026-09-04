@@ -237,9 +237,9 @@ function AdminApplicationsLoadingSkeleton() {
       <TableContainer component={Paper} sx={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: "#F9FAFB" }}>
+            <TableRow sx={{ backgroundColor: editorial.paperSoft }}>
               {["", "Reference", "Applicant", "Role", "Status", "Submitted", "Actions"].map((h) => (
-                <TableCell key={h || "select"} sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
+                <TableCell key={h || "select"} sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -762,11 +762,11 @@ export default function AdminJobsPage() {
               display: "flex",
               alignItems: "center",
               gap: 2,
-              backgroundColor: "#FEF2F2",
+              backgroundColor: editorial.errorSoft,
               border: "1px solid #FECACA",
             }}
           >
-            <Typography variant="body2" sx={{ color: "#991B1B", fontWeight: 600, flex: 1 }}>
+            <Typography variant="body2" sx={{ color: editorial.error, fontWeight: 600, flex: 1 }}>
               {selectedIds.size} application{selectedIds.size !== 1 ? "s" : ""} selected
             </Typography>
             <Button
@@ -782,7 +782,7 @@ export default function AdminJobsPage() {
             <Button
               size="small"
               onClick={() => setSelectedIds(new Set())}
-              sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280", fontWeight: 500 }}
+              sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted, fontWeight: 500 }}
             >
               Clear
             </Button>
@@ -808,22 +808,22 @@ export default function AdminJobsPage() {
                       sx={{ color: editorial.border, "&.Mui-checked": { color: editorial.pmwBlue } }}
                     />
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Reference
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Applicant
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Role
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Status
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Submitted
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: "#6B7280", fontSize: "0.78rem", textTransform: "uppercase" }}>
+                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
                     Actions
                   </TableCell>
                 </TableRow>
@@ -845,24 +845,24 @@ export default function AdminJobsPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4", fontSize: "0.78rem" }}>
+                      <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: editorial.pmwBlue, fontSize: "0.78rem" }}>
                         {app.submissionRef}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#111827", fontSize: "0.845rem" }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: editorial.ink, fontSize: "0.845rem" }}>
                         {app.applicantName}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#9CA3AF" }}>
+                      <Typography variant="caption" sx={{ color: editorial.softMuted }}>
                         {app.applicantEmail}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ color: "#374151", fontSize: "0.845rem" }}>
+                      <Typography variant="body2" sx={{ color: editorial.ink, fontSize: "0.845rem" }}>
                         {app.jobTitle}
                       </Typography>
                       {app.company && (
-                        <Typography variant="caption" sx={{ color: "#6B7280", display: "block" }}>
+                        <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
                           {app.company}
                         </Typography>
                       )}
@@ -871,7 +871,7 @@ export default function AdminJobsPage() {
                       <StatusChip status={app.status} />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ color: "#6B7280", fontSize: "0.78rem" }}>
+                      <Typography variant="body2" sx={{ color: editorial.muted, fontSize: "0.78rem" }}>
                         {formatDate(app.submittedAt)}
                       </Typography>
                     </TableCell>
@@ -887,7 +887,7 @@ export default function AdminJobsPage() {
                             fontSize: "0.78rem",
                             minWidth: 120,
                             opacity: updatingStatusId === app.id ? 0.6 : 1,
-                            "& .MuiOutlinedInput-notchedOutline": { borderColor: "#E5E7EB" },
+                            "& .MuiOutlinedInput-notchedOutline": { borderColor: editorial.border },
                           }}
                         >
                           {STATUS_OPTIONS.map((opt) => (
@@ -902,7 +902,7 @@ export default function AdminJobsPage() {
                             sx={{
                               position: "absolute",
                               right: 28,
-                              color: "#0078D4",
+                              color: editorial.pmwBlue,
                               pointerEvents: "none",
                             }}
                           />
@@ -945,7 +945,7 @@ export default function AdminJobsPage() {
           {selectedApp && (
             <>
               <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
-                <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
+                <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
                   Application Details
                 </Typography>
                 <IconButton onClick={() => setSelectedApp(null)} size="small">
@@ -955,39 +955,39 @@ export default function AdminJobsPage() {
               <DialogContent>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <Box>
-                    <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                    <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
                       Reference
                     </Typography>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#0078D4" }}>
+                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: editorial.pmwBlue }}>
                       {selectedApp.submissionRef}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                    <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
                       Applicant
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600, color: "#111827" }}>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: editorial.ink }}>
                       {selectedApp.applicantName}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: "#6B7280" }}>
+                    <Typography variant="body2" sx={{ color: editorial.muted }}>
                       {selectedApp.applicantEmail}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                    <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
                       Position
                     </Typography>
-                    <Typography variant="body1" sx={{ color: "#374151" }}>
+                    <Typography variant="body1" sx={{ color: editorial.ink }}>
                       {selectedApp.jobTitle}
                     </Typography>
                     {selectedApp.company && (
-                      <Typography variant="body2" sx={{ color: "#6B7280", mt: 0.25 }}>
+                      <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.25 }}>
                         {selectedApp.company}
                       </Typography>
                     )}
                   </Box>
                   <Box>
-                    <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                    <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
                       Status
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>
@@ -995,17 +995,17 @@ export default function AdminJobsPage() {
                     </Box>
                   </Box>
                   <Box>
-                    <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                    <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
                       Submitted
                     </Typography>
-                    <Typography variant="body2" sx={{ color: "#6B7280" }}>
+                    <Typography variant="body2" sx={{ color: editorial.muted }}>
                       {formatDate(selectedApp.submittedAt)}
                     </Typography>
                   </Box>
 
                   {(selectedApp.resumeUrl || selectedSupportingDocuments.length > 0) && (
                     <Box>
-                      <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                      <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
                         Documents
                       </Typography>
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
@@ -1018,10 +1018,10 @@ export default function AdminJobsPage() {
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
                               px: 1.5, py: 0.75, borderRadius: "12px",
-                              color: "#0078D4", fontWeight: 600, fontSize: "0.845rem",
-                              backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
+                              color: editorial.pmwBlue, fontWeight: 600, fontSize: "0.845rem",
+                              backgroundColor: editorial.blueSoft, border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
-                              "&:hover": { backgroundColor: "#DBEAFE" },
+                              "&:hover": { backgroundColor: editorial.blueWash },
                             }}
                           >
                             <Description sx={{ fontSize: 16 }} />
@@ -1038,10 +1038,10 @@ export default function AdminJobsPage() {
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
                               px: 1.5, py: 0.75, borderRadius: "12px",
-                              color: "#0078D4", fontWeight: 600, fontSize: "0.845rem",
-                              backgroundColor: "#F0F7FF", border: "1px solid rgba(0,120,212,0.15)",
+                              color: editorial.pmwBlue, fontWeight: 600, fontSize: "0.845rem",
+                              backgroundColor: editorial.blueSoft, border: "1px solid rgba(0,120,212,0.15)",
                               textDecoration: "none", width: "fit-content",
-                              "&:hover": { backgroundColor: "#DBEAFE" },
+                              "&:hover": { backgroundColor: editorial.blueWash },
                             }}
                           >
                             <Description sx={{ fontSize: 16 }} />
@@ -1054,16 +1054,16 @@ export default function AdminJobsPage() {
 
                   {selectedApp.customAnswers && Object.keys(selectedApp.customAnswers).length > 0 && (
                     <Box>
-                      <Typography variant="caption" sx={{ color: "#9CA3AF", fontWeight: 500 }}>
+                      <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
                         Additional Responses
                       </Typography>
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 0.5 }}>
                         {Object.entries(selectedApp.customAnswers).map(([key, value]) => (
                           <Box key={key}>
-                            <Typography variant="caption" sx={{ color: "#6B7280", fontWeight: 600, display: "block" }}>
+                            <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 600, display: "block" }}>
                               {key}
                             </Typography>
-                            <Typography variant="body2" sx={{ color: "#374151" }}>
+                            <Typography variant="body2" sx={{ color: editorial.ink }}>
                               {String(value ?? "")}
                             </Typography>
                           </Box>
@@ -1077,7 +1077,7 @@ export default function AdminJobsPage() {
                 <Button
                   variant="outlined"
                   onClick={() => setSelectedApp(null)}
-                  sx={{ borderRadius: "12px", textTransform: "none", borderColor: "#D1D5DB", color: "#6B7280" }}
+                  sx={{ borderRadius: "12px", textTransform: "none", borderColor: editorial.border, color: editorial.muted }}
                 >
                   Close
                 </Button>
@@ -1089,12 +1089,12 @@ export default function AdminJobsPage() {
         {/* Delete confirmation dialog */}
         <Dialog open={confirmDeleteOpen} onClose={() => !deleting && setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
           <DialogTitle sx={{ pb: 1 }}>
-            <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: "#111827" }}>
+            <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
               Delete Applications
             </Typography>
           </DialogTitle>
           <DialogContent>
-            <Typography variant="body2" sx={{ color: "#6B7280" }}>
+            <Typography variant="body2" sx={{ color: editorial.muted }}>
               Are you sure you want to delete <strong>{selectedIds.size}</strong> application{selectedIds.size !== 1 ? "s" : ""}? This action cannot be undone.
             </Typography>
             {deleting && <LinearProgress sx={{ mt: 2, borderRadius: "4px" }} />}
@@ -1106,7 +1106,7 @@ export default function AdminJobsPage() {
             <Button
               onClick={() => setConfirmDeleteOpen(false)}
               disabled={deleting}
-              sx={{ borderRadius: "12px", textTransform: "none", color: "#6B7280" }}
+              sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}
             >
               Cancel
             </Button>
@@ -1138,7 +1138,7 @@ export default function AdminJobsPage() {
                 fontWeight: 700,
                 fontSize: "0.875rem",
                 boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
-                color: "#111827",
+                color: editorial.ink,
                 "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },
               }}
             >

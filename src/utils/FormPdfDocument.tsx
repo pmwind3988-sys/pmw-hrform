@@ -7,6 +7,7 @@ import { buildFormSubmissionSections, type FormSubmissionField } from "./formSub
 import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
 import type { DocumentControlHeader, PdfConfig } from "../types";
+import { editorial } from "../theme/editorial";
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export interface PdfFormData {
@@ -54,30 +55,30 @@ export interface PdfLayerResult {
 // ── Colors ────────────────────────────────────────────────────────────────
 
 const C = {
-  primary: "#0078D4",
-  secondary: "#6264A7",
-  border: "#D1D5DB",
-  borderLight: "#E5E7EB",
-  bg: "#F3F4F6",
-  bgAlt: "#FAFBFC",
-  text: "#111827",
-  muted: "#6B7280",
-  white: "#FFFFFF",
+  primary: editorial.pmwBlue,
+  secondary: editorial.pmwPurple,
+  border: editorial.border,
+  borderLight: editorial.border,
+  bg: editorial.skySoft,
+  bgAlt: editorial.paperSoft,
+  text: editorial.ink,
+  muted: editorial.muted,
+  white: editorial.white,
   // Status colors
-  greenBg: "#D1FAE5",
-  greenText: "#065F46",
-  greenBorder: "#6EE7B7",
-  redBg: "#FEE2E2",
-  redText: "#991B1B",
-  redBorder: "#FCA5A5",
-  blueBg: "#DBEAFE",
-  blueText: "#1E40AF",
-  blueBorder: "#93C5FD",
-  amberBg: "#FEF3C7",
-  amberText: "#92400E",
-  amberBorder: "#FCD34D",
-  grayBg: "#F3F4F6",
-  grayText: "#374151",
+  greenBg: editorial.successSoft,
+  greenText: editorial.success,
+  greenBorder: editorial.successFill,
+  redBg: editorial.errorSoft,
+  redText: editorial.error,
+  redBorder: editorial.errorFill,
+  blueBg: editorial.blueWash,
+  blueText: editorial.pmwBlueDark,
+  blueBorder: editorial.sky,
+  amberBg: editorial.accentSoft,
+  amberText: editorial.accentText,
+  amberBorder: editorial.accent,
+  grayBg: editorial.skySoft,
+  grayText: editorial.ink,
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────

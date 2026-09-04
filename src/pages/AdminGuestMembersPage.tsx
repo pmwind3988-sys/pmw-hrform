@@ -312,7 +312,7 @@ function MemberRow({
           <Chip
             label="Profile not completed"
             size="small"
-            sx={{ mt: 0.5, fontSize: "0.72rem", fontWeight: 700, backgroundColor: "#F3F1EA" }}
+            sx={{ mt: 0.5, fontSize: "0.72rem", fontWeight: 700, backgroundColor: editorial.paperSoft }}
           />
         ) : null}
       </TableCell>
@@ -337,7 +337,7 @@ function MemberRow({
           size="small"
           disabled={busy}
           onClick={() => onStatus(disabled ? "active" : "disabled")}
-          sx={{ fontWeight: 700, textTransform: "none", color: disabled ? editorial.pmwBlueDark : "#B3261E" }}
+          sx={{ fontWeight: 700, textTransform: "none", color: disabled ? editorial.pmwBlueDark : editorial.error }}
         >
           {disabled ? "Re-enable" : "Disable"}
         </Button>

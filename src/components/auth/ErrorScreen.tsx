@@ -21,6 +21,7 @@ import {
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 import type { LoadingStep, LoadingStepStatus } from "./LoadingScreen";
+import { editorial } from "../../theme/editorial";
 
 interface ErrorScreenProps {
   errorMsg: string;
@@ -33,10 +34,10 @@ interface ErrorScreenProps {
 }
 
 function getStepColor(status: LoadingStepStatus): string {
-  if (status === "complete") return "#107C10";
-  if (status === "error") return "#DC2626";
-  if (status === "active") return "#0078D4";
-  return "#9CA3AF";
+  if (status === "complete") return editorial.success;
+  if (status === "error") return editorial.error;
+  if (status === "active") return editorial.pmwBlue;
+  return editorial.softMuted;
 }
 
 function StepIcon({ status }: { status: LoadingStepStatus }) {
@@ -78,7 +79,7 @@ export default function ErrorScreen({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#F8F9FC",
+        background: editorial.paperSoft,
         position: "relative",
         overflow: "hidden",
         py: 4,
@@ -178,7 +179,7 @@ export default function ErrorScreen({
                 variant="h2"
                 sx={{
                   fontWeight: 700,
-                  color: "#DC2626",
+                  color: editorial.error,
                   letterSpacing: 0,
                   textAlign: "center",
                   fontSize: isMobile ? "1.75rem" : "2.25rem",
@@ -191,7 +192,7 @@ export default function ErrorScreen({
               <Typography
                 variant="body1"
                 sx={{
-                  color: "#6B7280",
+                  color: editorial.muted,
                   lineHeight: 1.6,
                   textAlign: "center",
                   wordBreak: "break-word",
@@ -244,7 +245,7 @@ export default function ErrorScreen({
                           <Typography
                             variant="body2"
                             sx={{
-                              color: step.status === "pending" ? "#6B7280" : "#111827",
+                              color: step.status === "pending" ? editorial.muted : editorial.ink,
                               fontWeight: isActive ? 700 : 600,
                               lineHeight: 1.35,
                             }}
@@ -277,7 +278,7 @@ export default function ErrorScreen({
                 startIcon={primaryIcon}
                 onClick={onRetry}
                 sx={{
-                  backgroundColor: "#0078D4",
+                  backgroundColor: editorial.pmwBlue,
                   borderRadius: "12px",
                   py: 1.75,
                   fontSize: "0.9375rem",
@@ -285,7 +286,7 @@ export default function ErrorScreen({
                   boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
                   transition: "background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.2, 0, 0, 1)",
                   "&:hover": {
-                    backgroundColor: "#0068C4",
+                    backgroundColor: editorial.pmwBlue,
                     boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
                   },
                   "&:active": {
@@ -309,12 +310,12 @@ export default function ErrorScreen({
                     fontSize: "0.9375rem",
                     fontWeight: 500,
                     borderColor: "rgba(17, 24, 39, 0.15)",
-                    color: "#6B7280",
+                    color: editorial.muted,
                     borderWidth: "1.5px",
                     transition: "border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s cubic-bezier(0.2, 0, 0, 1)",
                     "&:hover": {
-                      borderColor: "#0078D4",
-                      color: "#0078D4",
+                      borderColor: editorial.pmwBlue,
+                      color: editorial.pmwBlue,
                       backgroundColor: "rgba(0, 120, 212, 0.04)",
                     },
                     "&:active": {

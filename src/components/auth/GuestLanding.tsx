@@ -249,7 +249,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                 boxShadow: "none",
                 transition: "background-color 0.2s ease, box-shadow 0.2s ease",
                 "&:hover": {
-                  backgroundColor: "#333333",
+                  backgroundColor: editorial.muted,
                   boxShadow: "none",
                 },
               }}

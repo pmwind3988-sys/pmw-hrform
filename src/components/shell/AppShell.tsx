@@ -158,7 +158,19 @@ export default function AppShell({
           }}
           aria-label="PMW HR Forms — dashboard"
         >
-          <Logo size={30} sx={{ borderRadius: `${si.radiusSm}px`, flexShrink: 0 }} />
+          {/* On a white tile. The PMW mark is a dark navy oval, so directly on
+              the navy sidebar it was very nearly invisible -- the same reason
+              SI gives its own mark a white plate in the equivalent spot. */}
+          <Logo
+            size={22}
+            sx={{
+              flexShrink: 0,
+              p: 0.5,
+              boxSizing: "content-box",
+              borderRadius: `${si.radiusSm}px`,
+              backgroundColor: editorial.white,
+            }}
+          />
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ ...siType.cardTitle, fontWeight: 800, color: editorial.white, lineHeight: 1 }}>
               PMW

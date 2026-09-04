@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
+import { editorial } from "../../theme/editorial";
 import {
   collectPreviewSections,
   formatFieldLabel,
@@ -12,15 +13,15 @@ import {
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 const C = {
-  border: "#E5E7EB",
-  cardBg: "#FFFFFF",
-  softBg: "#F9FAFB",
-  textPrimary: "#111827",
-  textSecond: "#4B5563",
-  textMuted: "#6B7280",
-  purple: "#0078D4",
-  purplePale: "#E6F2FB",
-  red: "#DC2626",
+  border: editorial.border,
+  cardBg: editorial.white,
+  softBg: editorial.paperSoft,
+  textPrimary: editorial.ink,
+  textSecond: editorial.muted,
+  textMuted: editorial.muted,
+  purple: editorial.pmwBlue,
+  purplePale: editorial.blueSoft,
+  red: editorial.error,
 } as const;
 
 interface ReadOnlySubmissionPreviewProps {
@@ -372,7 +373,7 @@ function RatingValue({ field, value }: { field: PreviewField; value: unknown }) 
         <span style={{ color: C.textMuted, fontSize: 12.5 }}>of {max}</span>
         {selectedLabel && <span style={{ color: C.textSecond, fontSize: 12.5, fontWeight: 700 }}>{selectedLabel}</span>}
       </div>
-      <div style={{ position: "relative", height: 8, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
+      <div style={{ position: "relative", height: 8, borderRadius: 999, background: editorial.border, overflow: "hidden" }}>
         <div style={{ width: `${percent}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #F7C948, #0078D4)" }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", color: C.textMuted, fontSize: 11.5, gap: 12, textWrap: "pretty" }}>

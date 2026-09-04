@@ -30,7 +30,7 @@ import {
 } from "../utils/guestMemberService";
 
 const PRIMARY_BLUE = editorial.pmwBlueDark;
-const PRIMARY_BLUE_HOVER = "#004A82";
+const PRIMARY_BLUE_HOVER = editorial.pmwBlueDark;
 
 interface GuestProfileSetupPageProps {
   /** The signed session's token — the server reads the address from it, not from the form. */

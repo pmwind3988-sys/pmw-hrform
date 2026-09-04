@@ -1,3 +1,4 @@
+import { editorial } from "../theme/editorial";
 /**
  * qrWithLogo.ts — render a QR code as a PNG data URL with an optional company
  * logo composited in the centre.
@@ -62,8 +63,8 @@ export async function generateQrWithLogo(
   const {
     width = 320,
     margin = 2,
-    dark = "#000000",
-    light = "#FFFFFF",
+    dark = editorial.black,
+    light = editorial.white,
     logoUrl,
     logoSizeRatio = 0.22,
   } = options;

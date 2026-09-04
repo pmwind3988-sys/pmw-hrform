@@ -13,6 +13,7 @@ import ErrorOutlinedIcon from "@mui/icons-material/ErrorOutlined";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
+import { editorial } from "../../theme/editorial";
 
 export type LoadingStepStatus = "pending" | "active" | "complete" | "error";
 
@@ -30,10 +31,10 @@ interface LoadingScreenProps {
 }
 
 function getStepColor(status: LoadingStepStatus): string {
-  if (status === "complete") return "#107C10";
-  if (status === "error") return "#DC2626";
-  if (status === "active") return "#0078D4";
-  return "#9CA3AF";
+  if (status === "complete") return editorial.success;
+  if (status === "error") return editorial.error;
+  if (status === "active") return editorial.pmwBlue;
+  return editorial.softMuted;
 }
 
 function StepIcon({ status }: { status: LoadingStepStatus }) {
@@ -68,7 +69,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        background: "#F8F9FC",
+        background: editorial.paperSoft,
         position: "relative",
         overflow: "hidden",
         padding: isMobile ? 2 : 4,
@@ -171,10 +172,10 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
                 value={progress}
                 size={80}
                 thickness={4}
-                sx={{ color: "#0078D4" }}
+                sx={{ color: editorial.pmwBlue }}
               />
             ) : (
-              <CircularProgress size={72} thickness={4} sx={{ color: "#0078D4" }} />
+              <CircularProgress size={72} thickness={4} sx={{ color: editorial.pmwBlue }} />
             )}
           </Box>
 
@@ -184,7 +185,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
               variant="h2"
               sx={{
                 fontWeight: 700,
-                color: "#111827",
+                color: editorial.ink,
                 letterSpacing: 0,
                 fontSize: "2.25rem",
               }}
@@ -198,7 +199,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
               variant="h6"
               sx={{
                 fontWeight: 600,
-                color: "#111827",
+                color: editorial.ink,
                 letterSpacing: 0,
               }}
             >
@@ -209,7 +210,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
               <Typography
                 variant="body1"
                 sx={{
-                  color: "#6B7280",
+                  color: editorial.muted,
                   textAlign: "center",
                   minHeight: "1.5em",
                   maxWidth: 400,
@@ -234,7 +235,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
                 backgroundColor: "rgba(0, 120, 212, 0.1)",
                 "& .MuiLinearProgress-bar": {
                   borderRadius: 4,
-                  backgroundColor: "#0078D4",
+                  backgroundColor: editorial.pmwBlue,
                 },
               }}
             />
@@ -283,7 +284,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
                       <Typography
                         variant="body2"
                         sx={{
-                          color: step.status === "pending" ? "#6B7280" : "#111827",
+                          color: step.status === "pending" ? editorial.muted : editorial.ink,
                           fontWeight: isActive ? 700 : 600,
                           lineHeight: 1.35,
                         }}
@@ -313,7 +314,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
             <Typography
               variant="caption"
               sx={{
-                color: "#9CA3AF",
+                color: editorial.softMuted,
                 fontSize: "0.78rem",
                 lineHeight: 1.5,
                 letterSpacing: 0,

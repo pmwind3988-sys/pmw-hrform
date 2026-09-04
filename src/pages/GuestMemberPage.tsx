@@ -231,7 +231,7 @@ function LearningPanel({ approved }: { approved: boolean }) {
           sx={{
             fontWeight: 700,
             fontSize: "0.72rem",
-            backgroundColor: approved ? editorial.blueWash : "#F3F1EA",
+            backgroundColor: approved ? editorial.blueWash : editorial.paperSoft,
             color: approved ? editorial.pmwBlueDark : editorial.muted,
           }}
         />
@@ -261,7 +261,7 @@ function LearningPanel({ approved }: { approved: boolean }) {
               fontWeight: 700,
               textTransform: "none",
               backgroundColor: PRIMARY_BLUE,
-              "&:hover": { backgroundColor: "#004A82" },
+              "&:hover": { backgroundColor: editorial.pmwBlueDark },
             }}
           >
             Open the learning hub
@@ -419,7 +419,7 @@ function ProfilePanel({
                 fontWeight: 700,
                 textTransform: "none",
                 backgroundColor: PRIMARY_BLUE,
-                "&:hover": { backgroundColor: "#004A82" },
+                "&:hover": { backgroundColor: editorial.pmwBlueDark },
               }}
             >
               {saving ? "Saving…" : "Save"}

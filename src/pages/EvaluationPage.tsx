@@ -34,6 +34,7 @@ import { parseLayerConfig } from "../utils/workflowReviewLink";
 import { getActiveLayers } from "../components/builder/approvalDashboardLayerProgress";
 import { apiIdentityHeaders } from "../utils/apiIdentity";
 import { approverDisplayName } from "../utils/approverIdentity";
+import { editorial } from "../theme/editorial";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -145,11 +146,11 @@ type PublicPreviousLayerSummary = {
 
 // ── Styling ──
 const COLORS = {
-  purple: "#0078D4", purpleLight: "#106EBE", purplePale: "#EAF5FC",
-  bg: "linear-gradient(180deg, #EEF6FC 0%, #F7FAFD 48%, #F7F8FA 100%)", cardBg: "#FFFFFF", border: "#D6DCE5",
-  textPrimary: "#101010", textSecond: "#5F646D", textMuted: "#747B86",
-  green: "#107C10", greenPale: "#E3F1E3",
-  red: "#C62828", redPale: "#F8E4E4",
+  purple: editorial.pmwBlue, purpleLight: editorial.pmwBlueDark, purplePale: editorial.skySoft,
+  bg: "linear-gradient(180deg, #EEF6FC 0%, #F7FAFD 48%, #F7F8FA 100%)", cardBg: editorial.white, border: editorial.border,
+  textPrimary: editorial.ink, textSecond: editorial.muted, textMuted: editorial.softMuted,
+  green: editorial.success, greenPale: editorial.successSoft,
+  red: editorial.error, redPale: editorial.errorSoft,
   shadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(26, 31, 43, 0.06)",
   shadowHover: "0 0 0 1px rgba(0, 120, 212, 0.18), 0 2px 4px -1px rgba(0, 120, 212, 0.12), 0 10px 24px rgba(26, 31, 43, 0.08)",
 };

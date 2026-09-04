@@ -80,6 +80,7 @@ import {
   getActiveBuilderSiteUrl,
 } from "../utils/formBuilderSP";
 import { resolveSite, availableSites, isSiteKey, siteAppOrigin, HOME_SITE_KEY, type SiteKey } from "../config/sites";
+import { editorial } from "../theme/editorial";
 
 /**
  * `isGroupMember` returns false for a missing group, a 403 and a network error
@@ -131,8 +132,8 @@ const DEFAULT_PDF_CONFIG: PdfConfig = {
   showStatusBadge: true,
   includeEmptyEvaluationFields: false,
   density: "compact",
-  primaryColor: "#0078D4",
-  secondaryColor: "#6264A7",
+  primaryColor: editorial.pmwBlue,
+  secondaryColor: editorial.pmwPurple,
 };
 const DEFAULT_DOCUMENT_HEADER: DocumentControlHeader = {
   documentNumber: "",
@@ -426,16 +427,16 @@ function makeCanvasPng(width: number, height: number, draw: (ctx: CanvasRenderin
 
 function makeSamplePdfAssets(): SampleAssets {
   const signatureDataUrl = makeCanvasPng(360, 120, (ctx) => {
-    ctx.fillStyle = "#FFFFFF";
+    ctx.fillStyle = editorial.white;
     ctx.fillRect(0, 0, 360, 120);
-    ctx.strokeStyle = "#111827";
+    ctx.strokeStyle = editorial.ink;
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(36, 72);
     ctx.bezierCurveTo(88, 18, 120, 110, 168, 58);
     ctx.bezierCurveTo(205, 18, 230, 98, 316, 46);
     ctx.stroke();
-    ctx.strokeStyle = "#D1D5DB";
+    ctx.strokeStyle = editorial.border;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(28, 94);
@@ -444,13 +445,13 @@ function makeSamplePdfAssets(): SampleAssets {
   });
   const photoDataUrl = makeCanvasPng(360, 220, (ctx) => {
     const gradient = ctx.createLinearGradient(0, 0, 360, 220);
-    gradient.addColorStop(0, "#DBEAFE");
-    gradient.addColorStop(1, "#EEF2FF");
+    gradient.addColorStop(0, editorial.blueWash);
+    gradient.addColorStop(1, editorial.blueSoft);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 360, 220);
-    ctx.fillStyle = "#0078D4";
+    ctx.fillStyle = editorial.pmwBlue;
     ctx.fillRect(28, 28, 304, 164);
-    ctx.fillStyle = "#FFFFFF";
+    ctx.fillStyle = editorial.white;
     ctx.font = "bold 26px Arial";
     ctx.fillText("SAMPLE PHOTO", 72, 116);
     ctx.font = "14px Arial";
@@ -2531,11 +2532,11 @@ export default function AdminFormBuilder() {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <div className="bx-field">
                         <label htmlFor="pdf-c1">Primary colour</label>
-                        <input id="pdf-c1" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.primaryColor || "#0078D4"} onChange={e => setPdfConfig({ primaryColor: e.target.value })} />
+                        <input id="pdf-c1" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.primaryColor || editorial.pmwBlue} onChange={e => setPdfConfig({ primaryColor: e.target.value })} />
                       </div>
                       <div className="bx-field">
                         <label htmlFor="pdf-c2">Secondary colour</label>
-                        <input id="pdf-c2" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.secondaryColor || "#6264A7"} onChange={e => setPdfConfig({ secondaryColor: e.target.value })} />
+                        <input id="pdf-c2" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.secondaryColor || editorial.pmwPurple} onChange={e => setPdfConfig({ secondaryColor: e.target.value })} />
                       </div>
                     </div>
                   </div>
@@ -2871,7 +2872,7 @@ export default function AdminFormBuilder() {
             textAlign: "center",
           }}>
             <div style={{ fontSize: 36, marginBottom: 8 }}>💀</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#991B1B", marginBottom: 6 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: editorial.error, marginBottom: 6 }}>
               Permanently delete ALL data for &ldquo;{hardDeleteConfirm.Title}&rdquo;?
             </div>
             <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.6, marginBottom: 6 }}>
@@ -2879,11 +2880,11 @@ export default function AdminFormBuilder() {
             </div>
             <div style={{
               fontSize: 12.5,
-              color: "#991B1B",
+              color: editorial.error,
               lineHeight: 1.7,
               marginBottom: 16,
               textAlign: "left",
-              background: "#FEF2F2",
+              background: editorial.errorSoft,
               borderRadius: 8,
               padding: "10px 14px",
               border: "1px solid #FECACA",

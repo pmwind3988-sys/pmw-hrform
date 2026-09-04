@@ -11,24 +11,25 @@
  * below it.
  */
 import { useEffect, useRef, useState } from "react";
+import { editorial } from "../theme/editorial";
 
 // -- Theme (inline, no MUI) --------------------------------------------
 /** Local palette, matching the convention in `builder/constants`. */
 export const C = {
-  purple: "#5B21B6",
-  purpleDark: "#3B0764",
-  purplePale: "#EDE9FE",
-  purpleMid: "#DDD6FE",
-  white: "#FFFFFF",
-  offWhite: "#F8F7FF",
-  border: "#E5E3F0",
-  textPrimary: "#1E1B4B",
-  textSecond: "#6B7280",
-  textMuted: "#9CA3AF",
-  red: "#DC2626",
-  redPale: "#FEE2E2",
-  green: "#059669",
-  greenPale: "#D1FAE5",
+  purple: editorial.pmwBlue,
+  purpleDark: editorial.pmwBlueDark,
+  purplePale: editorial.sky,
+  purpleMid: editorial.sky,
+  white: editorial.white,
+  offWhite: editorial.blueSoft,
+  border: editorial.sky,
+  textPrimary: editorial.navyDeep,
+  textSecond: editorial.muted,
+  textMuted: editorial.softMuted,
+  red: editorial.error,
+  redPale: editorial.errorSoft,
+  green: editorial.success,
+  greenPale: editorial.successSoft,
 } as const;
 
 function getPointerCoordinates(
@@ -190,7 +191,7 @@ export function SignatureModal({
     setHasContent(false);
   };
 
-  const colors = ["#000000", "#1E1B4B", "#5B21B6", "#DC2626", "#059669", "#D97706", "#2563EB"];
+  const colors = [editorial.black, editorial.navyDeep, editorial.pmwBlue, editorial.error, editorial.success, editorial.accentText, editorial.pmwBlue];
 
   return (
     <div
@@ -359,8 +360,8 @@ export function SignatureCapture({
         <SignatureModal
           width={600}
           height={240}
-          penColor="#000000"
-          backgroundColor="#FFFFFF"
+          penColor={editorial.black}
+          backgroundColor={editorial.white}
           existingDataUrl={value}
           onSave={(dataUrl) => {
             onChange(dataUrl);

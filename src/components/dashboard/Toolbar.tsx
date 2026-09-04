@@ -109,7 +109,7 @@ export default function Toolbar({
         backgroundColor: editorial.blueSoft,
       },
       "&.Mui-focused": {
-        backgroundColor: "#ffffff",
+        backgroundColor: editorial.white,
         boxShadow: `0 0 0 3px ${editorial.pmwBlueSoft}`,
       },
     },

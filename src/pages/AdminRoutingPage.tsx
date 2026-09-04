@@ -1051,8 +1051,8 @@ export default function AdminRoutingPage() {
                             gap: 1.5,
                             p: 1.5,
                             borderRadius: "12px",
-                            border: `1px solid ${problem.blocking ? "#F0C9C9" : editorial.border}`,
-                            backgroundColor: problem.blocking ? "#FDF3F3" : editorial.paperSoft,
+                            border: `1px solid ${problem.blocking ? editorial.errorSoft : editorial.border}`,
+                            backgroundColor: problem.blocking ? editorial.errorSoft : editorial.paperSoft,
                           }}
                         >
                           <Chip
@@ -1062,7 +1062,7 @@ export default function AdminRoutingPage() {
                               fontWeight: 700,
                               fontSize: "0.72rem",
                               color: problem.blocking ? editorial.error : editorial.warning,
-                              backgroundColor: problem.blocking ? "#FBE9E9" : editorial.yellowSoft,
+                              backgroundColor: problem.blocking ? editorial.errorSoft : editorial.yellowSoft,
                             }}
                           />
                           <Typography sx={{ flex: 1, fontSize: "0.845rem", color: editorial.ink }}>

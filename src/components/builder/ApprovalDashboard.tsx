@@ -90,6 +90,7 @@ import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLa
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
 import Chip from "@mui/material/Chip";
+import { editorial } from "../../theme/editorial";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONFIGURED_SENDER_EMAIL = (
@@ -130,23 +131,23 @@ const TEST_RUN_ACTION_BLOCKED_MESSAGE = 'This is a test run. Turn on "Show test 
 
 // Theme
 const C = {
-  purple: "#0078D4",
-  purpleLight: "#106EBE",
-  purplePale: "#E6F2FB",
-  purpleMid: "#B4D5F0",
-  bg: "#F9FAFB",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  textPrimary: "#111827",
-  textSecond: "#6B7280",
-  textMuted: "#9CA3AF",
-  green: "#059669",
-  greenPale: "#D1FAE5",
-  greenBorder: "#6EE7B7",
-  red: "#DC2626",
-  redPale: "#FEE2E2",
-  amber: "#D97706",
-  amberPale: "#FEF3C7",
+  purple: editorial.pmwBlue,
+  purpleLight: editorial.pmwBlueDark,
+  purplePale: editorial.blueSoft,
+  purpleMid: editorial.sky,
+  bg: editorial.paperSoft,
+  cardBg: editorial.white,
+  border: editorial.border,
+  textPrimary: editorial.ink,
+  textSecond: editorial.muted,
+  textMuted: editorial.softMuted,
+  green: editorial.success,
+  greenPale: editorial.successSoft,
+  greenBorder: editorial.successFill,
+  red: editorial.error,
+  redPale: editorial.errorSoft,
+  amber: editorial.accentText,
+  amberPale: editorial.accentSoft,
 };
 
 interface PendingItem {
@@ -2730,7 +2731,7 @@ export default function ApprovalDashboard() {
           </div>
         )}
         {emailNotice && (
-          <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: 12, color: "#065F46", marginBottom: 16 }}>
+          <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: 12, color: editorial.success, marginBottom: 16 }}>
             {emailNotice}
           </div>
         )}
@@ -2992,7 +2993,7 @@ export default function ApprovalDashboard() {
                             title="Profile (developer-reference metadata)"
                             style={{
                             fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
-                            background: "#F3F4F6", color: C.textMuted,
+                            background: editorial.skySoft, color: C.textMuted,
                           }}>
                             {getItemProfileLabel(item)}
                           </span>
@@ -3015,11 +3016,11 @@ export default function ApprovalDashboard() {
                               background: hasPendingEmailSchedule ? C.amberPale
                                 : emailStatus.status === "sent" ? C.greenPale
                                 : emailStatus.status === "failed" ? C.redPale
-                                  : emailSchedule ? C.amberPale : "#F3F4F6",
-                              color: hasPendingEmailSchedule ? "#92400E"
-                                : emailStatus.status === "sent" ? "#065F46"
-                                : emailStatus.status === "failed" ? "#991B1B"
-                                  : emailSchedule ? "#92400E" : C.textSecond,
+                                  : emailSchedule ? C.amberPale : editorial.skySoft,
+                              color: hasPendingEmailSchedule ? editorial.accentText
+                                : emailStatus.status === "sent" ? editorial.success
+                                : emailStatus.status === "failed" ? editorial.error
+                                  : emailSchedule ? editorial.accentText : C.textSecond,
                             }}
                           >
                             {hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
@@ -3050,8 +3051,8 @@ export default function ApprovalDashboard() {
                             fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
                             background: getItemStatus(item) === "approved" ? C.greenPale
                               : getItemStatus(item) === "rejected" ? C.redPale : C.amberPale,
-                            color: getItemStatus(item) === "approved" ? "#065F46"
-                              : getItemStatus(item) === "rejected" ? "#991B1B" : "#92400E",
+                            color: getItemStatus(item) === "approved" ? editorial.success
+                              : getItemStatus(item) === "rejected" ? editorial.error : editorial.accentText,
                           }}
                         >
                           {getItemDisplayStatus(item)}
@@ -3060,7 +3061,7 @@ export default function ApprovalDashboard() {
                           <span
                             style={{
                               fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
-                              background: C.amberPale, color: "#92400E",
+                              background: C.amberPale, color: editorial.accentText,
                             }}
                           >
                             Branch not selected
@@ -3356,7 +3357,7 @@ export default function ApprovalDashboard() {
                             <span style={{ fontWeight: 600, color: C.textPrimary, minWidth: 16 }}>
                               L{layerNum}
                             </span>
-                            <span style={{ color: isRejected ? C.red : isApproved ? "#065F46" : C.textMuted, fontWeight: 500, minWidth: 80 }}>
+                            <span style={{ color: isRejected ? C.red : isApproved ? editorial.success : C.textMuted, fontWeight: 500, minWidth: 80 }}>
                               {layer.status || "Pending"}
                             </span>
                             {layer.email && (

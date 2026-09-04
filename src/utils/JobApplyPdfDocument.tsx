@@ -3,9 +3,10 @@
  * Printer-friendly, B&W clear, suitable for HR records.
  */
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
+import { editorial } from "../theme/editorial";
 
 const C = {
-  primary: "#1a1a1a",
+  primary: editorial.ink,
   border: "#999",
   borderLight: "#ccc",
   text: "#000",
@@ -31,11 +32,11 @@ const S = StyleSheet.create({
   infoValue: { width: "70%", fontSize: 8, color: C.text },
   // Field rows
   fieldRow: { flexDirection: "row", paddingVertical: 3, paddingHorizontal: 2, borderBottomWidth: 0.3, borderBottomColor: C.borderLight },
-  fieldRowAlt: { backgroundColor: "#f9f9f9" },
+  fieldRowAlt: { backgroundColor: editorial.paperSoft },
   fieldLabel: { width: "35%", fontSize: 7.5, color: C.muted, paddingRight: 4 },
   fieldValue: { width: "65%", fontSize: 7.5, color: C.text },
   // Reasoning box
-  reasoningBox: { marginTop: 8, padding: 10, borderWidth: 0.5, borderColor: C.borderLight, backgroundColor: "#fafafa" },
+  reasoningBox: { marginTop: 8, padding: 10, borderWidth: 0.5, borderColor: C.borderLight, backgroundColor: editorial.paperSoft },
   reasoningText: { fontSize: 7.5, color: C.text, lineHeight: 1.6 },
   // Footer
   footer: { position: "absolute", bottom: 20, left: 36, right: 36, flexDirection: "row", justifyContent: "space-between", paddingTop: 4, borderTopWidth: 0.5, borderTopColor: C.borderLight, fontSize: 6, color: C.muted },

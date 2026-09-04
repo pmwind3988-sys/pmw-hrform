@@ -592,7 +592,7 @@ function FieldCard({ fieldKey, label, value }: { fieldKey: string; label?: strin
         <FieldLabel>{label ?? formatFieldName(fieldKey)}</FieldLabel>
         <Box
           sx={{
-            backgroundColor: "#ffffff",
+            backgroundColor: editorial.white,
             border: editorialHairline,
             borderRadius: "12px",
             p: 2,
@@ -626,7 +626,7 @@ function FieldCard({ fieldKey, label, value }: { fieldKey: string; label?: strin
       <FieldLabel>{label ?? formatFieldName(fieldKey)}</FieldLabel>
       <Box
         sx={{
-          backgroundColor: "#ffffff",
+          backgroundColor: editorial.white,
           border: editorialHairline,
           borderRadius: "12px",
           p: 2,
@@ -656,7 +656,7 @@ function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
       <FieldLabel>{field.label}</FieldLabel>
       <Box
         sx={{
-          backgroundColor: "#ffffff",
+          backgroundColor: editorial.white,
           border: editorialHairline,
           borderRadius: "12px",
           overflowX: "auto",
@@ -842,7 +842,7 @@ function SignatureCard({ signature }: { signature: SignatureField }) {
       sx={{
         border: editorialHairline,
         borderRadius: "12px",
-        backgroundColor: "#ffffff",
+        backgroundColor: editorial.white,
         p: 2,
       }}
     >
@@ -861,7 +861,7 @@ function SignatureCard({ signature }: { signature: SignatureField }) {
             maxWidth: "100%",
             borderRadius: "12px",
             border: "1px solid rgba(0, 0, 0, 0.1)",
-            backgroundColor: "#ffffff",
+            backgroundColor: editorial.white,
             p: 1,
             mb: signature.link ? 1 : 0,
           }}
@@ -938,7 +938,7 @@ function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; valu
         border: editorialHairline,
         borderRadius: "12px",
         p: 1.75,
-        backgroundColor: "#ffffff",
+        backgroundColor: editorial.white,
         display: "grid",
         gridTemplateColumns: "34px minmax(0, 1fr)",
         gap: 1.25,
@@ -990,7 +990,7 @@ function DocumentLinkCard({ title, link, icon }: { title: string; link: LinkValu
         border: editorialHairline,
         borderRadius: "12px",
         p: 1.75,
-        backgroundColor: "#ffffff",
+        backgroundColor: editorial.white,
         display: "grid",
         gridTemplateColumns: "40px minmax(0, 1fr)",
         gap: 1.25,
@@ -1263,7 +1263,7 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
                 borderRadius: "12px",
                 outline: "1px solid rgba(0, 0, 0, 0.1)",
                 outlineOffset: "-1px",
-                backgroundColor: "#ffffff",
+                backgroundColor: editorial.white,
                 p: 1,
               }}
             />
@@ -1351,7 +1351,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
     >
       <DialogTitle
         sx={{
-          backgroundColor: "#ffffff",
+          backgroundColor: editorial.white,
           color: editorial.ink,
           py: { xs: 2, sm: 2.5 },
           px: { xs: 2, sm: 3 },
@@ -1461,7 +1461,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                     mt: 1.5,
                     borderRadius: "12px",
                     border: `1px solid ${editorial.pmwBlueSoft}`,
-                    backgroundColor: "#ffffff",
+                    backgroundColor: editorial.white,
                     color: editorial.ink,
                     "& .MuiAlert-message": {
                       width: "100%",
@@ -1582,7 +1582,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
           px: { xs: 2, sm: 3 },
           py: 2,
           borderTop: editorialHairline,
-          backgroundColor: "#ffffff",
+          backgroundColor: editorial.white,
           display: "flex",
           gap: 1.5,
           flexWrap: "wrap",

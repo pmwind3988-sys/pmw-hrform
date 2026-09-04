@@ -244,7 +244,7 @@ export default function SubmissionRow({
         transition: "background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
         outline: "none",
         "&:hover": {
-          backgroundColor: "#ffffff",
+          backgroundColor: editorial.white,
           boxShadow: "inset 3px 0 0 rgba(0, 120, 212, 0.55), 0 8px 22px rgba(0, 90, 158, 0.08)",
           transform: "translateY(-1px)",
         },

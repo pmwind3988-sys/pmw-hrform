@@ -18,6 +18,7 @@ import {
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import theme from "../../theme";
+import { editorial } from "../../theme/editorial";
 
 interface AdminGuardProps {
   isAdmin: boolean;
@@ -103,14 +104,14 @@ export default function AdminGuard({ isAdmin, restrictedTo = "HR Form Owners", c
               border: "1px solid rgba(220, 38, 38, 0.12)",
             }}
           >
-            <LockOutlinedIcon sx={{ fontSize: 34, color: "#DC2626" }} />
+            <LockOutlinedIcon sx={{ fontSize: 34, color: editorial.error }} />
           </Box>
 
           <Typography
             variant="h4"
             sx={{
               fontWeight: 700,
-              color: "#111827",
+              color: editorial.ink,
               mb: 1,
               letterSpacing: 0,
             }}
@@ -120,14 +121,14 @@ export default function AdminGuard({ isAdmin, restrictedTo = "HR Form Owners", c
 
           <Typography
             variant="body1"
-            sx={{ color: "#6B7280", mb: 0.5, lineHeight: 1.6 }}
+            sx={{ color: editorial.muted, mb: 0.5, lineHeight: 1.6 }}
           >
             You don&apos;t have permission to access this page.
           </Typography>
 
           <Typography
             variant="body2"
-            sx={{ color: "#9CA3AF", mb: 4, lineHeight: 1.5 }}
+            sx={{ color: editorial.softMuted, mb: 4, lineHeight: 1.5 }}
           >
             This area is restricted to {restrictedTo}. You&apos;ll be redirected
             to the dashboard shortly.
@@ -143,8 +144,8 @@ export default function AdminGuard({ isAdmin, restrictedTo = "HR Form Owners", c
               fontWeight: 600,
               px: 4,
               py: 1.25,
-              backgroundColor: "#0078D4",
-              "&:hover": { backgroundColor: "#106EBE" },
+              backgroundColor: editorial.pmwBlue,
+              "&:hover": { backgroundColor: editorial.pmwBlueDark },
             }}
           >
             Go to Dashboard

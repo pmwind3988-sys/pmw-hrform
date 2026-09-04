@@ -10,6 +10,7 @@ import { C } from "./constants";
 import { flattenQuestions } from "../../utils/FormBuilderEngine";
 import { DEFAULT_PUBLISH_KEY, normalizePublishKey } from "../../utils/formBuilderSP";
 import { generateQrWithLogo } from "../../utils/qrWithLogo";
+import { editorial } from "../../theme/editorial";
 import {
   PREFILLED_QR_PARAM,
   encodePrefilledQrPayload,
@@ -111,7 +112,7 @@ export default function PrefilledQrPanel({ surveyJson, slug, appOrigin, canGener
       width: 320,
       margin: 2,
       dark: C.textPrimary,
-      light: "#FFFFFF",
+      light: editorial.white,
       logoUrl: "/logo-128.png",
     })
       .then(dataUrl => {

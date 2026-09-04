@@ -37,6 +37,7 @@ import type {
   RoleHolderLayerAssignee,
 } from "../../types";
 import { isLayerEmail, joinEmailList, parseEmailList } from "../../utils/layerRecipients";
+import { editorial } from "../../theme/editorial";
 
 interface LayerConfigPanelProps {
   value: LayerConfig | null;
@@ -1309,7 +1310,7 @@ export default function LayerConfigPanel({
             minWidth: 82,
             borderRadius: 8,
             background: layer.type === "approval" ? C.purplePale : C.greenPale,
-            border: `1px solid ${layer.type === "approval" ? C.purpleMid : "#6EE7B7"}`,
+            border: `1px solid ${layer.type === "approval" ? C.purpleMid : editorial.successFill}`,
             padding: "6px 7px",
             color: C.textPrimary,
           }}>

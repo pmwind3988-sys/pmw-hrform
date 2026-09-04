@@ -193,7 +193,7 @@ export default function DirectoryScanDialog({
                                       fontSize: "0.66rem",
                                       fontWeight: 700,
                                       color: editorial.error,
-                                      backgroundColor: "#FBE9E9",
+                                      backgroundColor: editorial.errorSoft,
                                     }}
                                   />
                                 )}

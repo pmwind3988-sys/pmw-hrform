@@ -1,3 +1,4 @@
+import { editorial } from "../theme/editorial";
 /**
  * The one look every PMW HR Form notification wears.
  *
@@ -239,10 +240,10 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
 
 /** The status pills the workflow notices use, so the colours stay consistent. */
 export const WORKFLOW_EMAIL_STATUS = {
-  actionRequired: { label: "Action required", color: "#1E40AF", background: "#EFF6FF", border: "#BFDBFE" },
-  pending: { label: "Pending review", color: "#92400E", background: "#FFFBEB", border: "#FDE68A" },
-  manual: { label: "Manual paper workflow", color: "#92400E", background: "#FFFBEB", border: "#FDE68A" },
-  awaitingRouting: { label: "Awaiting routing", color: "#92400E", background: "#FFFBEB", border: "#FDE68A" },
-  completed: { label: "Completed", color: "#065F46", background: "#ECFDF5", border: "#A7F3D0" },
-  rejected: { label: "Rejected", color: "#991B1B", background: "#FEF2F2", border: "#FECACA" },
+  actionRequired: { label: "Action required", color: editorial.pmwBlueDark, background: editorial.blueSoft, border: editorial.sky },
+  pending: { label: "Pending review", color: editorial.accentText, background: editorial.accentSoft, border: editorial.accentSoft },
+  manual: { label: "Manual paper workflow", color: editorial.accentText, background: editorial.accentSoft, border: editorial.accentSoft },
+  awaitingRouting: { label: "Awaiting routing", color: editorial.accentText, background: editorial.accentSoft, border: editorial.accentSoft },
+  completed: { label: "Completed", color: editorial.success, background: editorial.successSoft, border: editorial.successSoft },
+  rejected: { label: "Rejected", color: editorial.error, background: editorial.errorSoft, border: editorial.errorSoft },
 } as const;

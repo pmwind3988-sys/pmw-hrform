@@ -33,7 +33,7 @@ import {
  * the lighter blue for large text and non-text edges.
  */
 const PRIMARY_BLUE = editorial.pmwBlueDark;
-const PRIMARY_BLUE_HOVER = "#004A82";
+const PRIMARY_BLUE_HOVER = editorial.pmwBlueDark;
 
 interface ChoiceScreenProps {
   onLogin: () => void;

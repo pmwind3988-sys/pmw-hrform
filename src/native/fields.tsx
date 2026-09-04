@@ -24,6 +24,7 @@ import type { NativeChoice, NativeElement, NativeRateStep } from "./schema";
 import { formatNumber } from "./expression";
 import SearchableSelect from "./SearchableSelect";
 import { shouldSearchChoices } from "./choiceSearch";
+import { editorial } from "../theme/editorial";
 
 export interface ControlProps {
   element: NativeElement;
@@ -749,7 +750,7 @@ export function FileControl({ element, value, onChange, disabled, invalid, contr
 }
 
 /** Ink is always dark, because the paper it is drawn on is always white. */
-const SIGNATURE_INK = "#101828";
+const SIGNATURE_INK = editorial.ink;
 
 function PenGlyph() {
   return (

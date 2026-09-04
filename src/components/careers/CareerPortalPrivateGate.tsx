@@ -78,7 +78,7 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
                   fontWeight: 700,
                   textTransform: "none",
                   boxShadow: "none",
-                  "&:hover": { backgroundColor: "#333333", boxShadow: "none" },
+                  "&:hover": { backgroundColor: editorial.muted, boxShadow: "none" },
                 }}
               >
                 Sign in with Microsoft 365

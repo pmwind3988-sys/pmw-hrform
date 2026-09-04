@@ -53,15 +53,32 @@ export const SP_STATIC = {
   excludeAlways: [...EXCLUDE_ALWAYS],
 } as const;
 
+/**
+ * The rotating colour set that distinguishes one form category from another.
+ *
+ * THE ONE PLACE THIS SYSTEM CARRIES MORE THAN FOUR HUES, and deliberately so.
+ * Everywhere else colour means something fixed -- navy is action, amber is
+ * secondary, green and red are outcomes. Here colour means only "not the same
+ * as the card next to it", and eight categories need eight telbare hues.
+ * Collapsing them onto the semantic four would paint every form card navy and
+ * delete the distinction the field exists to draw.
+ *
+ * So these stay literal, like the background gallery, rather than pointing at
+ * tokens. What changed in the overhaul: they were Google's brand hues
+ * (#1a73e8, #ea4335, #fbbc04...), which read as another product's palette
+ * dropped into this one. Each is now its own hue at SI's depth and saturation,
+ * anchored on the navy/amber axis, and each `pale` is its own tint -- the
+ * chip's fill, with `color` as the text on it.
+ */
 const META_PALETTES = [
-  { color: "#1a73e8", pale: "#e8f0fe" },
-  { color: "#34a853", pale: "#e6f4ea" },
-  { color: "#fbbc04", pale: "#fef7e0" },
-  { color: "#ea4335", pale: "#fce8e6" },
-  { color: "#9c27b0", pale: "#f3e5f5" },
-  { color: "#ff6d00", pale: "#fff3e0" },
-  { color: "#00897b", pale: "#e0f2f1" },
-  { color: "#5c6bc0", pale: "#e8eaf6" },
+  { color: "#0F3D91", pale: "#E8EDF7" },
+  { color: "#137536", pale: "#DCFCE7" },
+  { color: "#855405", pale: "#FDE7C4" },
+  { color: "#C1291F", pale: "#FEE2E2" },
+  { color: "#0F766E", pale: "#D6F3F0" },
+  { color: "#3F3D9E", pale: "#E5E4F5" },
+  { color: "#475569", pale: "#E4E8EF" },
+  { color: "#8A3070", pale: "#F6E4F0" },
 ] as const;
 
 const ICON_POOL = [

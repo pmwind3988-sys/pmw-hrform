@@ -5,6 +5,7 @@ import { C } from "./constants";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
+import { editorial } from "../../theme/editorial";
 
 interface FormLibraryProps {
   forms: { Id?: string; Title: string; FormID?: string; CurrentVersion?: string; Slug?: string; IsPublished?: boolean }[];
@@ -152,8 +153,8 @@ export default function FormLibrary({ forms, onEdit, onNew, onDelete, onHardDele
                 }}
                 onMouseEnter={e => {
                   e.stopPropagation();
-                  e.currentTarget.style.background = "#FEE2E2";
-                  e.currentTarget.style.color = "#DC2626";
+                  e.currentTarget.style.background = editorial.errorSoft;
+                  e.currentTarget.style.color = editorial.error;
                 }}
                 onMouseLeave={e => {
                   e.stopPropagation();

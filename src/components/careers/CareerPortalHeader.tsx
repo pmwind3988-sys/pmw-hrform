@@ -288,13 +288,13 @@ export default function CareerPortalHeader({
                   height: 40,
                   borderRadius: "12px",
                   color: editorial.pmwBlueDark,
-                  backgroundColor: "#ffffff",
+                  backgroundColor: editorial.white,
                   border: `1px solid ${editorial.border}`,
                   transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease",
                   "&:hover": {
                     transform: "translateY(-1px)",
                     color: editorial.pmwBlue,
-                    backgroundColor: "#F0F7FF",
+                    backgroundColor: editorial.blueSoft,
                     borderColor: editorial.pmwBlue,
                   },
                   "&:active": { transform: "scale(0.96)" },
@@ -423,8 +423,8 @@ export default function CareerPortalHeader({
                     <Typography variant="body2">Switch account</Typography>
                   </MenuItem>,
                   <MenuItem key="signout" onClick={handleSignOut} sx={{ py: 1.25, px: 2.5 }}>
-                    <Logout sx={{ mr: 1.5, fontSize: 20, color: "#DC2626" }} />
-                    <Typography variant="body2" sx={{ color: "#DC2626" }}>Sign out</Typography>
+                    <Logout sx={{ mr: 1.5, fontSize: 20, color: editorial.error }} />
+                    <Typography variant="body2" sx={{ color: editorial.error }}>Sign out</Typography>
                   </MenuItem>,
                 ]
               ) : (

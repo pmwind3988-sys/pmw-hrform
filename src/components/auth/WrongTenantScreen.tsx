@@ -12,6 +12,7 @@ import {
 import { Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
+import { editorial } from "../../theme/editorial";
 
 interface WrongTenantScreenProps {
   userEmail: string;
@@ -34,7 +35,7 @@ export default function WrongTenantScreen({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#F8F9FC",
+        background: editorial.paperSoft,
         position: "relative",
         overflow: "hidden",
         py: 4,
@@ -134,7 +135,7 @@ export default function WrongTenantScreen({
                 variant="h2"
                 sx={{
                   fontWeight: 700,
-                  color: "#DC2626",
+                  color: editorial.error,
                   letterSpacing: 0,
                   textAlign: "center",
                   fontSize: isMobile ? "1.75rem" : "2.25rem",
@@ -146,7 +147,7 @@ export default function WrongTenantScreen({
               <Typography
                 variant="body1"
                 sx={{
-                  color: "#6B7280",
+                  color: editorial.muted,
                   lineHeight: 1.6,
                   textAlign: "center",
                 }}
@@ -155,7 +156,7 @@ export default function WrongTenantScreen({
                   component="span"
                   sx={{
                     fontFamily: "inherit",
-                    color: "#111827",
+                    color: editorial.ink,
                     fontWeight: 600,
                   }}
                 >
@@ -171,7 +172,7 @@ export default function WrongTenantScreen({
                 startIcon={<RefreshIcon />}
                 onClick={onSwitch}
                 sx={{
-                  backgroundColor: "#0078D4",
+                  backgroundColor: editorial.pmwBlue,
                   borderRadius: "12px",
                   py: 1.75,
                   fontSize: "0.9375rem",
@@ -179,7 +180,7 @@ export default function WrongTenantScreen({
                   boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
                   transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
-                    backgroundColor: "#0068C4",
+                    backgroundColor: editorial.pmwBlue,
                     boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
                   },
                 }}
@@ -199,11 +200,11 @@ export default function WrongTenantScreen({
                   fontSize: "0.9375rem",
                   fontWeight: 500,
                   borderColor: "rgba(220, 38, 38, 0.3)",
-                  color: "#DC2626",
+                  color: editorial.error,
                   borderWidth: "1.5px",
                   transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                   "&:hover": {
-                    borderColor: "#DC2626",
+                    borderColor: editorial.error,
                     backgroundColor: "rgba(220, 38, 38, 0.04)",
                   },
                 }}
