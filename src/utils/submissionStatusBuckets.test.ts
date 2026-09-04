@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Submission } from "../types";
 import { bucketSubmissions, isApprovedStatus, isRejectedFormStatus } from "./submissionStatusBuckets";
 
-function row(formStatus: string | null): Submission {
-  return { formStatus } as Submission;
+function row(formStatus: string | null, isTest = false): Submission {
+  return { formStatus, isTest } as Submission;
 }
 
 describe("isApprovedStatus", () => {
@@ -66,12 +66,39 @@ describe("bucketSubmissions", () => {
     expect(bucketSubmissions([row("Cancelled")]).approved).toBe(0);
   });
 
+  /**
+   * A rehearsal is a real row in the real list. The list hides it; the tiles
+   * must too, or one test run silently inflates the headline count above a
+   * list that does not contain it.
+   */
+  it("excludes test-run rows from every bucket", () => {
+    expect(
+      bucketSubmissions([
+        row("Completed"),
+        row("Completed", true),
+        row("Submitted", true),
+        row("Rejected", true),
+      ]),
+    ).toEqual({ total: 1, approved: 1, pending: 0, rejected: 0 });
+  });
+
+  it("returns zeroes when every row is a rehearsal", () => {
+    expect(bucketSubmissions([row("Submitted", true)])).toEqual({
+      total: 0,
+      approved: 0,
+      pending: 0,
+      rejected: 0,
+    });
+  });
+
   it("returns zeroes for an empty set", () => {
     expect(bucketSubmissions([])).toEqual({ total: 0, approved: 0, pending: 0, rejected: 0 });
   });
 
   it("always accounts for every row", () => {
-    const rows = ["Completed", "Rejected", "Submitted", "weird", null].map(row);
+    // `.map(row)` would hand the array index in as `isTest`, quietly marking
+    // every row after the first as a rehearsal.
+    const rows = ["Completed", "Rejected", "Submitted", "weird", null].map((s) => row(s));
     const { total, approved, pending, rejected } = bucketSubmissions(rows);
     expect(approved + pending + rejected).toBe(total);
   });

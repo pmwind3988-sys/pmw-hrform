@@ -51,6 +51,7 @@ import {
 import { createApprovalDirectoryReader } from "../utils/approvalDirectory";
 import { NEEDS_ROUTING_LAYER_STATUS } from "../utils/submissionLifecycle";
 import { sampleAnswersFor } from "../utils/testRunLaunch";
+import { getMultiChoiceFieldNames } from "../utils/multiChoiceFields";
 import { getTabularFields, rowsToHtml, type MatrixRow, type MatrixColumn } from "../utils/matrixData";
 import { readStoredGuestSession } from "../utils/guestMemberService";
 import { editorial } from "../theme/editorial";
@@ -1233,6 +1234,12 @@ export default function DynamicFormPage() {
       const tabularColumns = new Map(
         getTabularFields(enrichedSurveyJsonRef.current || formData?.surveyJson).map(f => [f.name, f.columns]),
       );
+      // Checkbox groups live in SharePoint MultiChoice columns, which take a
+      // real array. Everything else that arrives as an array is stored as JSON
+      // in a text column. See `getMultiChoiceFieldNames`.
+      const multiChoiceColumns = getMultiChoiceFieldNames(
+        enrichedSurveyJsonRef.current || formData?.surveyJson,
+      );
       for (const [k, v] of Object.entries(raw)) {
         if (urlFieldPatchNames.has(k)) continue;
         if (tabularColumns.has(k)) {
@@ -1245,7 +1252,22 @@ export default function DynamicFormPage() {
         if (v && typeof v === "object" && (v as Record<string, unknown>).html && (v as Record<string, unknown>).json) {
           body[`${k}_Response`] = (v as Record<string, unknown>).html;
           body[`${k}_Json`] = typeof (v as Record<string, unknown>).json === "string" ? (v as Record<string, unknown>).json : JSON.stringify((v as Record<string, unknown>).json);
-        } else if (Array.isArray(v)) { body[k] = JSON.stringify(v); }
+        } else if (Array.isArray(v)) {
+          /**
+           * A MultiChoice column takes the array itself. Stringifying it made
+           * SharePoint reject the whole item with "A 'StartArray' node was
+           * expected", so no form with a checkbox group could be submitted.
+           *
+           * `odata=nometadata` is in use throughout, so a plain JSON array is
+           * the right shape here -- the verbose
+           * `{ __metadata: { type: "Collection(Edm.String)" }, results: [...] }`
+           * form belongs to the metadata dialect this app does not speak.
+           *
+           * Every other array stays a JSON string, because its column is Text
+           * or Note and would reject an array just as firmly.
+           */
+          body[k] = multiChoiceColumns.has(k) ? v : JSON.stringify(v);
+        }
         else if (v && typeof v === "object") {
           if ("Url" in (v as Record<string, unknown>)) {
             body[k] = v;
