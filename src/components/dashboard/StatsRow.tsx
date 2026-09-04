@@ -157,13 +157,24 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 overflow: "hidden",
               }}
             >
+              {/**
+                * Scaled, not resized. Animating `width` runs layout on every
+                * frame; `transform` runs on the compositor. Same pattern as
+                * `ScrollProgress` in DynamicFormPage.
+                *
+                * The fill carries NO radius of its own -- a horizontal scale
+                * would squash its rounded caps into ellipses. The rounded ends
+                * come from the track clipping it (`borderRadius` + `overflow:
+                * hidden` above), which is undistortable.
+                */}
               <Box
                 sx={{
                   height: "100%",
-                  width: `${stat.progress}%`,
-                  borderRadius: 999,
+                  width: "100%",
+                  transformOrigin: "left center",
+                  transform: `scaleX(${stat.progress / 100})`,
                   backgroundColor: stat.accent,
-                  transition: "width 0.28s ease",
+                  transition: "transform 0.28s ease",
                   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
                 }}
               />
