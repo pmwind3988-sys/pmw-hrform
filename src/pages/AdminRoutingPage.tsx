@@ -96,6 +96,8 @@ import type { DirectoryScanPlan, ScanProposal } from "../utils/directoryScan";
 import { findDirectoryProblems, traceApprovalChain } from "../utils/approvalDirectoryHealth";
 import ChainTraceView from "../components/routing/ChainTraceView";
 import DirectoryPersonDialog from "../components/routing/DirectoryPersonDialog";
+import { orgKey } from "../utils/orgDirectory";
+import { loadCompanies, loadDepartments } from "../utils/orgDirectorySP";
 import DirectoryImportDialog, { type DirectoryImportProgress } from "../components/routing/DirectoryImportDialog";
 import DirectoryScanDialog, { type DirectoryScanProgress } from "../components/routing/DirectoryScanDialog";
 
@@ -125,6 +127,22 @@ function errorMessage(error: unknown, fallback: string): string {
   return detail ? `${fallback} ${detail}` : fallback;
 }
 
+/**
+ * The display names of active org rows, de-duplicated case-insensitively.
+ *
+ * A directory row stores the name a person is filed under, so that is what
+ * these dropdowns offer; a row with only a code falls back to the code.
+ */
+function orgNames(rows: { name: string; code: string; isActive: boolean }[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const row of rows) {
+    if (!row.isActive) continue;
+    const label = (row.name || row.code).trim();
+    if (label && !byKey.has(orgKey(label))) byKey.set(orgKey(label), label);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
 export default function AdminRoutingPage() {
   const navigate = useNavigate();
   const { instance, accounts, inProgress } = useMsal();
@@ -132,6 +150,13 @@ export default function AdminRoutingPage() {
 
   useEffect(() => { document.title = "Approval routing - PMW HR Form"; }, []);
 
+  /**
+   * The companies and departments admin/org holds, so a name added there can
+   * be picked here straight away instead of only after somebody has already
+   * been filed under it.
+   */
+  const [orgCompanies, setOrgCompanies] = useState<string[]>([]);
+  const [orgDepartments, setOrgDepartments] = useState<string[]>([]);
   const [token, setToken] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -218,7 +243,15 @@ export default function AdminRoutingPage() {
         return;
       }
       setListExists(true);
-      const result = await loadApprovalDirectory(activeToken);
+      // Missing or unreadable org lists must not stop the directory loading;
+      // they only cost the dropdowns their suggestions.
+      const [result, companies, departments] = await Promise.all([
+        loadApprovalDirectory(activeToken),
+        loadCompanies(activeToken).catch(() => []),
+        loadDepartments(activeToken).catch(() => []),
+      ]);
+      setOrgCompanies(orgNames(companies));
+      setOrgDepartments(orgNames(departments));
       setRows(result.rows);
       setColumns(result.columns);
       setMissingColumns(result.missingColumns);
@@ -1064,6 +1097,8 @@ export default function AdminRoutingPage() {
         editing={editing}
         rows={rows}
         columns={columns}
+        orgDepartments={orgDepartments}
+        orgCompanies={orgCompanies}
         saving={saving}
         onClose={() => setEditorOpen(false)}
         onSave={(input, id, confirm) => void handleSave(input, id, confirm)}
