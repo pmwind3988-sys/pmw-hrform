@@ -6,6 +6,7 @@ import Logo from "../Logo";
 import SectionTabs from "./SectionTabs";
 import { NAV_ICONS } from "./navIcons";
 import { editorial, si, siType } from "../../theme/editorial";
+import { useDashboardBackground } from "../../hooks/useDashboardBackground";
 import {
   categoryLandingPath,
   resolveNavLocation,
@@ -70,6 +71,24 @@ export default function AppShell({
 }: AppShellProps) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+
+  /**
+   * Applies the tenant's chosen dashboard background, for its side effect only.
+   *
+   * This has to run somewhere that mounts on EVERY signed-in screen, and the
+   * shell is now the only such place. It used to run in `dashboard/Header.tsx`,
+   * which the landing dashboard rendered -- so deleting that Header in favour
+   * of this shell quietly reduced a tenant-wide setting to "applies only while
+   * Profile > Appearance is open". Caught against the live site, where the
+   * setting is a full-opacity photograph an administrator chose in June and the
+   * app was rendering the flat fallback instead.
+   *
+   * `AppearancePage` keeps its own instance for the editing UI. That costs one
+   * extra GET when someone opens that page, and saving from there calls
+   * `applyDashboardBackground` itself, so this copy going stale cannot leave the
+   * wrong background on screen.
+   */
+  useDashboardBackground(isAdmin);
 
   const permissions = useMemo<NavPermissions>(
     () => ({ isAdmin, canUseFormBuilder }),

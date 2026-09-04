@@ -21,7 +21,13 @@ export interface DashboardBackgroundSetting {
 
 const CSS_VAR = "--app-bg";
 const FALLBACK_CSS_VAR = "--app-bg-fallback";
-const DEFAULT_FALLBACK = "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%)";
+/**
+ * The flat SI canvas, matching `editorial.paper` and `--app-bg-fallback` in
+ * index.css. It was the old sky-to-cream gradient, and because
+ * `applyDashboardBackground` writes this into `--app-bg-fallback` at runtime,
+ * that stale value overrode the canvas set in the stylesheet on every load.
+ */
+const DEFAULT_FALLBACK = "#F6F8FB";
 export const DEFAULT_IMAGE_OPACITY = 0.22;
 
 function clampImageOpacity(value: number): number {
@@ -38,8 +44,19 @@ function overlayAlpha(imageOpacity: number, scale: number): string {
   return (1 - normalizeImageOpacity(imageOpacity) * scale).toFixed(3);
 }
 
+/**
+ * The scrim over a photographic background.
+ *
+ * Retuned to the navy family: it was the old sky #DCECF8 into cream #F7F5EF,
+ * which put a warm wash under cool white SI cards and read as two products
+ * layered on each other. Now the SI wash #D7E1F3 into the canvas #F6F8FB.
+ *
+ * The gradient CHOICES in DASHBOARD_BACKGROUNDS below stay as they are -- they
+ * are the options the picker exists to offer, not chrome. This scrim is chrome:
+ * it sits over whichever option is chosen, so it has to belong to the system.
+ */
 function photo(url: string, imageOpacity = DEFAULT_IMAGE_OPACITY): string {
-  return `linear-gradient(180deg, rgba(220,236,248,${overlayAlpha(imageOpacity, 0.55)}) 0%, rgba(247,245,239,${overlayAlpha(imageOpacity, 1)}) 42%, rgba(220,236,248,${overlayAlpha(imageOpacity, 0.45)}) 100%), url("${url}") center/cover no-repeat`;
+  return `linear-gradient(180deg, rgba(215,225,243,${overlayAlpha(imageOpacity, 0.55)}) 0%, rgba(246,248,251,${overlayAlpha(imageOpacity, 1)}) 42%, rgba(215,225,243,${overlayAlpha(imageOpacity, 0.45)}) 100%), url("${url}") center/cover no-repeat`;
 }
 
 export const DASHBOARD_BACKGROUNDS: DashboardBackgroundDef[] = [

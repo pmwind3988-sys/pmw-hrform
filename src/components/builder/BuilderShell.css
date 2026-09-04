@@ -189,11 +189,7 @@
   height: 30px;
   display: grid;
   place-items: center;
-  /* The same gradient as the app sidebar (`.si-navy` in index.css), not a flat
-     fill: the rail now sits directly beside that sidebar, and two different
-     navies meeting at a corner reads as a rendering fault rather than a
-     design. */
-  background: linear-gradient(160deg, #0f3d91 0%, #0b2f70 100%);
+  background: var(--bx-a800);
   color: var(--bx-bg);
 }
 
@@ -427,7 +423,11 @@
   height: 52px;
   display: flex;
   align-items: stretch;
-  background: var(--bx-a900);
+  /* The same gradient as the app sidebar (`.si-navy` in index.css) rather than
+     the flat a900 fill. The builder now renders inside that shell, so the rail
+     sits directly beside the sidebar; two different navies meeting at a corner
+     reads as a rendering fault rather than as a design. */
+  background: linear-gradient(160deg, #0f3d91 0%, #0b2f70 100%);
   color: var(--bx-a100);
 }
 

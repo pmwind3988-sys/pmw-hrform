@@ -4,6 +4,7 @@ import { PaletteOutlined } from "@mui/icons-material";
 import { useDashboard } from "../contexts/DashboardContext";
 import { useDashboardBackground } from "../hooks/useDashboardBackground";
 import BackgroundPicker from "../components/dashboard/BackgroundPicker";
+import { findDashboardBackground } from "../utils/dashboardBackgrounds";
 import { editorial, si, siType } from "../theme/editorial";
 
 /**
@@ -29,11 +30,16 @@ export default function AppearancePage() {
   const { setting, loading, saving, error, save } = useDashboardBackground(isAdmin);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  /**
+   * The gallery's own label, not the stored id. Reading it live showed
+   * "city-glass" where a person expects "City Glass" -- the id is a storage
+   * key, and putting it on screen leaks the database into the interface.
+   */
   const currentLabel = loading
     ? "Loading…"
     : setting.backgroundId === "custom"
       ? "Custom image"
-      : setting.backgroundId;
+      : findDashboardBackground(setting.backgroundId).label;
 
   return (
     <Box sx={{ maxWidth: 860, mx: "auto" }}>

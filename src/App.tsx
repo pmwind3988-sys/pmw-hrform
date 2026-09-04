@@ -1896,12 +1896,31 @@ export default function App() {
           <Route path="/approval/:formSlug/:responseId/:layerNumber" element={workflowActionInner} />
           <Route
             path="/career-portal"
+            /**
+             * The one route that lives in both worlds, so it resolves by who is
+             * asking rather than being described twice.
+             *
+             * Signed in, it is the Job Portal tab of Internal Portal and the
+             * shell supplies the chrome -- without this, that tab navigated
+             * staff clean out of the shell and left them pressing Back to find
+             * the menu again.
+             *
+             * Not signed in, it stays bare with its own top bar: an external
+             * applicant has no sections to move between, and a five-category
+             * menu would offer four buttons that bounce to a sign-in screen.
+             */
             element={
-              <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
-                  <LazyRoute load={loadCareersPage} fallback={<LoadingScreen status="Loading career portal..." />} />
-                </Box>
-              </ErrorBoundary>
+              isAuthenticated && !memberModeActive ? (
+                inShell(
+                  <LazyRoute load={loadCareersPage} fallback={<LoadingScreen status="Loading career portal..." />} />,
+                )
+              ) : (
+                <ErrorBoundary>
+                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                    <LazyRoute load={loadCareersPage} fallback={<LoadingScreen status="Loading career portal..." />} />
+                  </Box>
+                </ErrorBoundary>
+              )
             }
           />
           {/* Ranked matching puts /career-portal/:jobId/apply ahead of this,
