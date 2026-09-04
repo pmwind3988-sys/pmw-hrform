@@ -114,6 +114,13 @@ links, and the careers portal when the visitor is not signed in. They have no
 sections to move between. `/career-portal` is the one route in both worlds and
 resolves by auth state.
 
+**The form builder is full bleed**, and is the only signed-in screen outside the
+shell. It is a three-pane authoring surface, and inside the shell the pane that
+surrendered the sidebar's 224px was the form sheet — the thing being authored.
+It can afford to leave because it brings its own header, mode rail and home
+button; no other screen does. Its rail carries the same `.si-navy` gradient as
+the sidebar, so leaving the shell does not mean leaving the design.
+
 ## Builder world
 
 **Thesis.** The builder authors controlled documents — forms with document

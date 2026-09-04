@@ -255,9 +255,17 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 ## The shell
 
 Every signed-in screen renders inside `src/components/shell/AppShell.tsx`,
-wrapped by `App.tsx`'s `inShell` helper. Pages draw NO chrome of their own — the
-old `dashboard/Header.tsx` was imported by the dashboard alone, which is why the
+wrapped by `App.tsx`'s `inShell` helper — except the form builder, which is
+full bleed (see below). Pages draw NO chrome of their own: the old
+`dashboard/Header.tsx` was imported by the dashboard alone, which is why the
 other twelve screens could only be reached by typing a URL.
+
+- **The builder is the one full-bleed screen.** `/admin/builder[/:formTitle]`
+  renders outside the shell so its three panes get the whole viewport; inside
+  it, the sheet was the pane giving up the sidebar's 224px. It can leave because
+  it carries its own header, mode rail and home button. Its nav tab is marked
+  `fullBleed: true`, and `categoryLandingPath` avoids landing a category button
+  there so the sidebar never vanishes on the click that opened a section.
 
 - `src/config/navigation.ts` is the single source for categories, tabs, icons and
   role gating. Four things read it; change it, not the components.

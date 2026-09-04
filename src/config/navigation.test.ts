@@ -161,13 +161,36 @@ describe("categoryLandingPath", () => {
   });
 
   /**
-   * The whole point of landing on the first *visible* tab: an admin who is not
-   * a superuser cannot open the builder, so the Admin button must not take them
-   * there only to have AdminGuard bounce them to a restricted-access screen.
+   * An admin who is not a superuser cannot open the builder, so the Admin
+   * button must not take them there only to have AdminGuard bounce them to a
+   * restricted-access screen.
    */
   it("lands each group on a tab it can actually open", () => {
-    expect(categoryLandingPath(admin, SUPERUSER)).toBe("/admin/builder");
     expect(categoryLandingPath(admin, ADMIN)).toBe("/admin/career/opportunities");
+  });
+
+  /**
+   * The builder is full bleed, so it renders with no sidebar. It is a
+   * superuser's first visible Admin tab, and landing them there would make the
+   * menu disappear on the same click that opened the section. Routing is the
+   * next tab they can see and it keeps the shell.
+   */
+  it("skips the full-bleed builder when the category has a shell tab", () => {
+    expect(categoryLandingPath(admin, SUPERUSER)).toBe("/admin/routing");
+  });
+
+  it("never lands anyone on a tab they cannot open", () => {
+    for (const perms of [NOBODY, ADMIN, SUPERUSER, BOTH]) {
+      for (const category of visibleCategories(perms)) {
+        const landing = categoryLandingPath(category, perms);
+        const tab = category.tabs.find((t) => t.path === landing);
+        // Dashboard has no tabs; every other landing must be a visible tab.
+        if (category.key !== "dashboard") {
+          expect(tab, `${category.key} -> ${landing}`).toBeDefined();
+          expect(canSee(tab!.visibleTo, perms)).toBe(true);
+        }
+      }
+    }
   });
 
   it("every category's landing path resolves back to that category", () => {

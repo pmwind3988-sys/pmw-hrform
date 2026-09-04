@@ -73,6 +73,18 @@ export interface NavTab {
    * Applications rather than nothing.
    */
   alsoMatches?: string[];
+  /**
+   * This tab's screen renders OUTSIDE the shell, at full viewport width.
+   *
+   * Only the form builder does. It is a three-pane authoring surface that was
+   * losing 224px of the sheet to the sidebar, and it carries its own header,
+   * mode rail and home button, so it can afford to leave.
+   *
+   * Recorded here because `categoryLandingPath` has to know: landing a category
+   * button on a full-bleed tab means the menu disappears the instant you click
+   * it, which reads as the app breaking rather than as a screen opening.
+   */
+  fullBleed?: boolean;
 }
 
 export interface NavCategory {
@@ -173,6 +185,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
         icon: "builder",
         visibleTo: "superuser",
         alsoMatches: ["/admin/builder/"],
+        fullBleed: true,
       },
       { label: "Routing", path: "/admin/routing", icon: "routing", visibleTo: "superuser" },
       { label: "Organisation", path: "/admin/org", icon: "org", visibleTo: "superuser" },
@@ -301,9 +314,18 @@ export function resolveNavLocation(pathname: string): NavLocation {
 }
 
 /**
- * Where a category's button goes. The first tab this account can see — so the
- * Admin button lands a superuser on Form Builder and an admin-only account on
- * Opportunities, rather than either of them on a restricted-access screen.
+ * Where a category's button goes: the first tab this account can both SEE and
+ * stay in the shell for.
+ *
+ * "Can see" keeps an admin-only account off the builder, which would bounce
+ * them to a restricted-access screen. "Stays in the shell" keeps a
+ * form-builder superuser off it too -- for them the builder is the first
+ * visible tab, so clicking Admin would drop them straight into a full-bleed
+ * screen with no sidebar, which looks like the menu vanishing rather than like
+ * a section opening. They reach the builder by choosing its tab, deliberately.
+ *
+ * A full-bleed tab is still the fallback if a category has nothing else, since
+ * landing somewhere beats landing nowhere.
  */
 export function categoryLandingPath(
   category: NavCategory,
@@ -312,6 +334,7 @@ export function categoryLandingPath(
   if (category.key === "dashboard") {
     return permissions.isAdmin ? "/admin/dashboard" : "/user/dashboard";
   }
-  const firstVisible = category.tabs.find((tab) => canSee(tab.visibleTo, permissions));
-  return firstVisible?.path ?? "/user/dashboard";
+  const visible = category.tabs.filter((tab) => canSee(tab.visibleTo, permissions));
+  const inShell = visible.find((tab) => !tab.fullBleed);
+  return (inShell ?? visible[0])?.path ?? "/user/dashboard";
 }

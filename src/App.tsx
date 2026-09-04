@@ -1726,10 +1726,25 @@ export default function App() {
             path="/admin/builder"
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+                {/**
+                  * FULL BLEED -- the one signed-in screen deliberately outside
+                  * the shell.
+                  *
+                  * The builder is a three-pane authoring surface: palette left,
+                  * the form sheet centred on its desk, properties docked right
+                  * while a field is selected. Inside the shell it lost 224px to
+                  * the sidebar, and at laptop widths the sheet -- the thing
+                  * being authored, and the only pane that matters -- was the
+                  * pane that gave up the room.
+                  *
+                  * It can afford to leave the shell because it carries its own
+                  * navigation: a brand header, a mode rail for the four modes,
+                  * and a home button in that rail. Nothing else here does.
+                  */}
                 <ErrorBoundary>
-                  {inShell(
+                  <Box sx={{ minHeight: "100vh" }}>
                     <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
-                  )}
+                  </Box>
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1738,10 +1753,11 @@ export default function App() {
             path="/admin/builder/:formTitle"
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+                {/* Full bleed, for the reason given on /admin/builder above. */}
                 <ErrorBoundary>
-                  {inShell(
+                  <Box sx={{ minHeight: "100vh" }}>
                     <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
-                  )}
+                  </Box>
                 </ErrorBoundary>
               </AdminGuard>
             }

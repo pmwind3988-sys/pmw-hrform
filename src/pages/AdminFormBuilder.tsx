@@ -2024,7 +2024,18 @@ export default function AdminFormBuilder() {
 
       {/* ── Mode rail ────────────────────────────────────────────────── */}
       <nav className="bx-nav" aria-label="Builder modes">
-        <button type="button" className="bx-navitem bx-navhome" title="Back to the admin dashboard" onClick={() => window.location.assign("/")}>
+        {/* The builder renders full bleed, outside the app shell, so this is
+            the only way back to the rest of the app -- which is also why it
+            navigates rather than calling window.location.assign("/"). That
+            reloaded the whole SPA: a fresh MSAL handshake, every list
+            rediscovered, and all 100+ submissions refetched, to reach a screen
+            the router can already render. */}
+        <button
+          type="button"
+          className="bx-navitem bx-navhome"
+          title="Back to the dashboard"
+          onClick={() => navigate("/")}
+        >
           <Icon name="home" size={19} strokeWidth={1.6} />
         </button>
         {MODES.map(m => (
