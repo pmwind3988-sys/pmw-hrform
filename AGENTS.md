@@ -8,7 +8,7 @@
   `src/utils/AGENTS.md`, `src/components/builder/AGENTS.md`, `src/pages/AGENTS.md`,
   `api/AGENTS.md`, `src/components/auth/AGENTS.md`, `src/components/dashboard/AGENTS.md`,
   `src/native/AGENTS.md`
-- **Only context**: `src/contexts/DashboardContext.tsx` — used by `AdminHomePage`; everything else uses local `useState`.
+- **Only context**: `src/contexts/DashboardContext.tsx` — provided by `App.tsx` around every shelled route, consumed by `DashboardPage`, `FormsPage`, `MySubmissionsPage`, `ProfilePage` and `AppearancePage`; everything else uses local `useState`.
 
 ## Commands
 ```bash
@@ -139,7 +139,7 @@ Builder:   AdminFormBuilder.tsx → raw token → src/utils/formBuilderSP.ts (st
   - `job-apply` keeps taking the **SharePoint** token in the request *body* (that is what writes the item, and it decides `isPublicSubmission`). The Graph token rides in the header and only answers "are you signed in". Two tokens, two jobs — do not merge them.
   - The career pages send the identity token via `acquireCareerPortalToken()` and render `CareerPortalPrivateGate` on `isCareerPortalPrivateError(err)`. The client gate is presentation only — the API is the control.
   - `acquireCareerPortalToken` uses `instance.acquireTokenSilent` directly, **never** `acquireAccessTokenSilentOrRedirect`: that helper redirects to Microsoft when the silent call fails, which would throw a visitor off a career page they were reading — including a guest on a portal that is fully public. Failing quietly to `""` is the point.
-  - Every caller of `fetchJobs` / `fetchJob` / `fetchCareersPortalData` must pass the token, `AdminHomePage`'s dashboard carousel included, or it 403s once the portal is closed.
+  - Every caller of `fetchJobs` / `fetchJob` / `fetchCareersPortalData` must pass the token, `DashboardPage`'s carousel included, or it 403s once the portal is closed.
   - A private portal responds per-caller, so `jobs-list` switches its `Cache-Control` to `private, no-store`.
 
 ### Guest members (Google sign-in, no Microsoft identity)
@@ -225,7 +225,7 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 - **PowerShell**: use `workdir` parameter with `bash` tool
 - **Prefer `import type`** for type-only imports (`verbatimModuleSyntax` requires it)
 - **Styling**: Form builder uses inline styles via `C` color object (`src/components/builder/constants.ts`). Published form uses CSS-in-JS with theme tokens. Dashboard uses MUI components with theme overrides. Careers pages use MUI `sx` with inline theme-aware values.
-- **State**: Local `useState` only — no context stores except `DashboardContext` in `AdminHomePage`.
+- **State**: Local `useState` only — no context stores except `DashboardContext`, provided by `App.tsx`'s `inShell` wrapper.
 - **Responsive**: Dashboard uses `useMediaQuery` for mobile detection (SubmissionRow has stacked card layout on mobile). Header collapses all nav items into a single hamburger menu on mobile.
 - **Hooks**: 3 custom hooks in `src/hooks/` — `useUserProfile` (MS Graph user info), `useDashboardBackground` (background image/gradient), `useReactiveForm` (generic form state management).
 
@@ -252,6 +252,31 @@ The `api/_utils/graphClient.ts` helper `queryListItemById(token, listName, itemI
 
 For Vercel deployment setup see `VERCEL_SETUP.md`.
 
+## The shell
+
+Every signed-in screen renders inside `src/components/shell/AppShell.tsx`,
+wrapped by `App.tsx`'s `inShell` helper. Pages draw NO chrome of their own — the
+old `dashboard/Header.tsx` was imported by the dashboard alone, which is why the
+other twelve screens could only be reached by typing a URL.
+
+- `src/config/navigation.ts` is the single source for categories, tabs, icons and
+  role gating. Four things read it; change it, not the components.
+- `visibleTo` there MUST track the `AdminGuard` on each route in `App.tsx`.
+  `admin` and `superuser` are two independent SharePoint groups, not a hierarchy —
+  a tab drawn for an account that cannot open it bounces to a restricted screen.
+- `inShell` is a plain function, not a component. Declaring a component inside
+  `App`'s render would remount the whole subtree on every state change and throw
+  away scroll position, open dialogs and unsaved form fields.
+- The shell sits OUTSIDE `AdminGuard`, so a restricted-access screen still has
+  navigation to leave with.
+- `withSubmissions` gates the three pages that read `submissions` behind that
+  fetch; their paths are listed in `DASHBOARD_ROUTE_PATHS`. A page added to the
+  shell without being added to that set renders as though the account had
+  submitted nothing — it fails quietly, not loudly.
+- Navigation is derived FROM the path, never the reverse. No route may be
+  re-slugged to tidy the menu: approval emails link to `/approval/:token` and
+  printed QR codes point at `/form/:formId`.
+
 ## Routing
 | Route | Component | File |
 |---|---|---|
@@ -259,8 +284,13 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 | `/admin/builder[/:formTitle]` | `AdminFormBuilder` (superuser-only) | `src/pages/AdminFormBuilder.tsx` |
 | `/admin/approvals` | `ApprovalDashboard` (superuser-only) | `src/components/builder/ApprovalDashboard.tsx` |
 | `/admin/responses/:formTitle` | `ResponseViewer` | `src/components/builder/ResponseViewer.tsx` |
-| `/admin/dashboard` | admin dashboard (AdminGuard) | `AdminHomePage` (via `adminDashboardInner`) |
-| `/user/dashboard` | user dashboard (no guard) | `AdminHomePage` (via `adminDashboardInner`) |
+| `/admin/dashboard` | overview (AdminGuard) | `src/pages/DashboardPage.tsx` |
+| `/user/dashboard` | overview (no guard) | `src/pages/DashboardPage.tsx` |
+| `/forms` | My Work → Forms | `src/pages/FormsPage.tsx` |
+| `/submissions` | My Work → My Submissions (own rows) | `src/pages/MySubmissionsPage.tsx` |
+| `/admin/submissions` | My Work → All Submissions (superuser-only) | `src/components/builder/ApprovalDashboard.tsx` |
+| `/profile` | Profile → My Profile | `src/pages/ProfilePage.tsx` |
+| `/profile/appearance` | Profile → Appearance | `src/pages/AppearancePage.tsx` |
 | `/admin/career/applications` | `AdminJobsPage` | `src/pages/AdminJobsPage.tsx` |
 | `/admin/career/opportunities` | `AdminJobManagePage` | `src/pages/AdminJobManagePage.tsx` |
 | `/admin/career/cards` | `AdminCareerPortalCardsPage` | `src/pages/AdminCareerPortalCardsPage.tsx` |
@@ -268,7 +298,7 @@ For Vercel deployment setup see `VERCEL_SETUP.md`.
 | `/admin/learning` | `AdminLearningPage` (AdminGuard) | `src/pages/AdminLearningPage.tsx` |
 | `/admin/jobs` | redirect → `/admin/career/applications` | — |
 | `/admin/jobs/manage` | redirect → `/admin/career/opportunities` | — |
-| `/adminhomepage` | (legacy) redirect via catch-all | `AdminHomePage` |
+| `/adminhomepage` | (legacy) redirect via catch-all | — |
 | `/privacy` | `PrivacyNoticePage` | `src/pages/PrivacyNoticePage.tsx` |
 | `/career-portal` | `CareersPage` | `src/pages/CareersPage.tsx` |
 | `/career-portal/:jobId/apply` | `JobApplyPage` | `src/pages/JobApplyPage.tsx` |

@@ -39,8 +39,13 @@ export default function CareerHero({ title, subtitle, children }: CareerHeroProp
           inset: 0,
           // Template lays flat black over the photo. Angling it toward PMW blue
           // keeps the brand present without lifting text contrast off AA.
+          // The navy family, and four points lighter than it was. The old
+          // overlay ran near-black #101010 into an off-system #00335A at 0.84
+          // and 0.88, which sat the hero photograph so far under the scrim that
+          // the band read as a flat dark rectangle. White text still clears AA
+          // against both stops.
           background:
-            "linear-gradient(180deg, rgba(16, 16, 16, 0.84) 0%, rgba(0, 51, 90, 0.88) 100%)",
+            "linear-gradient(180deg, rgba(11, 47, 112, 0.8) 0%, rgba(15, 61, 145, 0.84) 100%)",
         },
         ...careerReduceMotionSx,
       }}
