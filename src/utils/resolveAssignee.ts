@@ -267,8 +267,20 @@ async function walkChain(
   ports: AssigneeResolverPorts,
   options: { skipSelf?: boolean; submitterEmail?: string },
 ): Promise<
-  | { ok: true; person: DirectoryPerson; trail: string[] }
-  | { ok: false; reason: string; trail: string[] }
+  /*
+    `reason` is declared on both branches, the successful one as absent, so it
+    can be read without narrowing the union first.
+
+    Narrowing would be the obvious way to write this, and it is what the
+    project's own build does. The deployment platform compiles these routes a
+    second time against different globals, and there the narrowing does not
+    hold: `walked.reason` after `if (!walked.ok)` was rejected on every build.
+    Declaring the property on both members sidesteps the disagreement — the
+    successful branch still cannot carry a reason, because `undefined` is the
+    only value its type admits.
+  */
+  | { ok: true; person: DirectoryPerson; trail: string[]; reason?: undefined }
+  | { ok: false; person?: undefined; reason: string; trail: string[] }
 > {
   const lookupPerson = ports.lookupPerson;
   if (!lookupPerson) return { ok: false, reason: "the approval directory is not available here", trail: [] };
@@ -372,7 +384,15 @@ async function resolveChain(
   });
 
   if (!walked.ok) {
-    return applyChainFallback(assignee, submittedData, ports, label, walked.reason);
+    // The fallback is unreachable: every unsuccessful walk sets a reason. It
+    // is here because `reason` is optional on the union — see `walkChain`.
+    return applyChainFallback(
+      assignee,
+      submittedData,
+      ports,
+      label,
+      walked.reason ?? "the approval line could not be followed",
+    );
   }
   if (!EMAIL_RE.test(walked.person.email)) {
     return parked(`${label} resolved to "${walked.person.email}", which is not a valid email address.`);
