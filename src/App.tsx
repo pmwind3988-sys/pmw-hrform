@@ -56,6 +56,7 @@ import AdminGuard from "./components/auth/AdminGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LazyRoute from "./components/LazyRoute";
 import { DashboardProvider } from "./contexts/DashboardContext";
+import AppShell from "./components/shell/AppShell";
 
 
 
@@ -64,9 +65,21 @@ const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
 // Rows per request. `queryList` follows SharePoint's page links from here to the
 // end of each list, so this is a page size and not a ceiling on what is shown.
 const DASHBOARD_LIST_PAGE_SIZE = 500;
-// The only two screens that read `submissions`. Everything else - the builder,
+// The screens that read `submissions`. Everything else - the builder,
 // approvals, routing, careers - is served without them.
-const DASHBOARD_ROUTE_PATHS = new Set(["/admin/dashboard", "/user/dashboard"]);
+//
+// Forms and My Submissions joined the two dashboards when the single dashboard
+// page was split into sections: the form cards show a per-form submission count
+// and the submissions list is the rows themselves, so both need the fetch that
+// used to happen only on `/admin/dashboard`. Missing one off this set does not
+// fail loudly -- the page simply renders as though the account had submitted
+// nothing, which reads as data loss rather than as a missing fetch.
+const DASHBOARD_ROUTE_PATHS = new Set([
+  "/admin/dashboard",
+  "/user/dashboard",
+  "/forms",
+  "/submissions",
+]);
 type SubmissionsLoadStatus = "idle" | "loading" | "ready";
 const AUTH_PROFILE_REAUTH_TIMEOUT_MS = 60000;
 const INTERNAL_EMAIL_DOMAINS = String(import.meta.env.VITE_INTERNAL_EMAIL_DOMAINS || "pmw-group.com")
@@ -278,7 +291,11 @@ const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
 const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboard");
 const loadResponseViewer = () => import("./components/builder/ResponseViewer");
 const loadAdminFormBuilder = () => import("./pages/AdminFormBuilder");
-const loadAdminHomePage = () => import("./pages/AdminHomePage");
+const loadDashboardPage = () => import("./pages/DashboardPage");
+const loadFormsPage = () => import("./pages/FormsPage");
+const loadMySubmissionsPage = () => import("./pages/MySubmissionsPage");
+const loadProfilePage = () => import("./pages/ProfilePage");
+const loadAppearancePage = () => import("./pages/AppearancePage");
 const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
 const loadAdminOrgPage = () => import("./pages/AdminOrgPage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
@@ -1518,41 +1535,81 @@ export default function App() {
     );
   }
 
-  // ---- Dashboard (ready state) ----
-  const adminDashboardInner = (
+  // ---- The application shell ----
+  //
+  // Every signed-in screen renders inside it, so navigation is drawn once here
+  // rather than by each page. Before the overhaul the dashboard imported a
+  // `Header` of its own and the other twelve screens had none, which is why
+  // most of the app could only be reached by typing a URL.
+  //
+  // `roleLabel` names every group held, highest first, because "why can I not
+  // see the builder?" was unanswerable when permissions were implied only by
+  // which menu items appeared.
+  const roleLabel = [isAdmin ? "Administrator" : "", canUseFormBuilder ? "Form Builder" : ""]
+    .filter(Boolean)
+    .join(" · ");
+
+  const dashboardValue = {
+    userEmail,
+    isAdmin,
+    canUseFormBuilder,
+    submissions,
+    visibleLists,
+    listMetaMap,
+    missingConfigs,
+    hasFilters,
+    detailItem,
+    setDetailItem,
+    filters,
+    setFilters,
+    sortBy,
+    setSortBy,
+    sortedSubmissions,
+    onSignOut: handleSignOut,
+    onSwitchAccount: handleSwitchAccount,
+    onOpenBuilder: () => navigate("/admin/builder"),
+    onEditForm: (listTitle: string) =>
+      navigate(`/admin/builder/${encodeURIComponent(listTitle)}`),
+    onHardDeleteSubmission: handleHardDeleteSubmission,
+  };
+
+  /**
+   * Wrap a page in the shell.
+   *
+   * A plain function rather than a component, deliberately: a component
+   * declared inside a render is a new type on every render, so React unmounts
+   * and remounts its whole subtree -- which would throw away the scroll
+   * position, every open dialog and every unsaved form field on each keystroke
+   * that touches App's state.
+   *
+   * The shell sits OUTSIDE `AdminGuard` at each call site, so an account that
+   * lands on a screen it may not open still has the navigation to leave with.
+   * Inside the guard, the restricted-access screen would be a dead end.
+   */
+  const inShell = (node: React.ReactNode) => (
     <ErrorBoundary>
-      <DashboardProvider
-        userEmail={userEmail}
-        isAdmin={isAdmin}
-        canUseFormBuilder={canUseFormBuilder}
-        submissions={submissions}
-        visibleLists={visibleLists}
-        listMetaMap={listMetaMap}
-        missingConfigs={missingConfigs}
-        hasFilters={hasFilters}
-        detailItem={detailItem}
-        setDetailItem={setDetailItem}
-        filters={filters}
-        setFilters={setFilters}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        sortedSubmissions={sortedSubmissions}
-        onSignOut={handleSignOut}
-        onSwitchAccount={handleSwitchAccount}
-        onOpenBuilder={() => navigate("/admin/builder")}
-        onEditForm={(listTitle: string) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
-        onHardDeleteSubmission={handleHardDeleteSubmission}
-      >
-        <LazyRoute load={loadAdminHomePage} fallback={<LoadingScreen status="Loading dashboard..." />} />
+      <DashboardProvider {...dashboardValue}>
+        <AppShell
+          userName={activeAccount?.name || ""}
+          userEmail={userEmail}
+          roleLabel={roleLabel}
+          isAdmin={isAdmin}
+          canUseFormBuilder={canUseFormBuilder}
+          onSignOut={handleSignOut}
+          onSwitchAccount={handleSwitchAccount}
+        >
+          {node}
+        </AppShell>
       </DashboardProvider>
     </ErrorBoundary>
   );
 
-  // Until the submissions land, the dashboard would render as an empty state -
-  // "no submissions" is a claim, not a wait - so it holds on the loading screen.
-  const dashboardRouteElement =
+  // Until the submissions land, a page that reads them would render an empty
+  // state - "no submissions" is a claim, not a wait - so it holds on the
+  // loading screen. Shared by Dashboard, Forms and My Submissions.
+  const withSubmissions = (node: React.ReactNode) =>
     submissionsStatus === "ready" ? (
-      adminDashboardInner
+      inShell(node)
     ) : (
       <LoadingScreen
         userEmail={userEmail || undefined}
@@ -1610,9 +1667,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading submissions..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1622,9 +1679,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1634,9 +1691,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadAdminOrgPage} fallback={<LoadingScreen status="Loading companies and departments..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1646,9 +1703,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadAdminRoutingPage} fallback={<LoadingScreen status="Loading approval routing..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1658,9 +1715,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadResponseViewer} fallback={<LoadingScreen status="Loading responses..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1670,9 +1727,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh" }}>
+                  {inShell(
                     <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1682,9 +1739,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh" }}>
+                  {inShell(
                     <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1693,26 +1750,52 @@ export default function App() {
             path="/admin/dashboard"
             element={
               <AdminGuard isAdmin={isAdmin}>
-                {dashboardRouteElement}
+                {withSubmissions(
+                  <LazyRoute load={loadDashboardPage} fallback={<LoadingScreen status="Loading dashboard..." />} />,
+                )}
               </AdminGuard>
             }
           />
           <Route
             path="/user/dashboard"
-            element={
-              <ErrorBoundary>
-                {dashboardRouteElement}
-              </ErrorBoundary>
-            }
+            element={withSubmissions(
+              <LazyRoute load={loadDashboardPage} fallback={<LoadingScreen status="Loading dashboard..." />} />,
+            )}
+          />
+          {/* My Work. Both read `submissions`, so both wait for the fetch. */}
+          <Route
+            path="/forms"
+            element={withSubmissions(
+              <LazyRoute load={loadFormsPage} fallback={<LoadingScreen status="Loading forms..." />} />,
+            )}
+          />
+          <Route
+            path="/submissions"
+            element={withSubmissions(
+              <LazyRoute load={loadMySubmissionsPage} fallback={<LoadingScreen status="Loading submissions..." />} />,
+            )}
+          />
+          {/* Profile. Neither page reads `submissions`, so neither waits. */}
+          <Route
+            path="/profile"
+            element={inShell(
+              <LazyRoute load={loadProfilePage} fallback={<LoadingScreen status="Loading profile..." />} />,
+            )}
+          />
+          <Route
+            path="/profile/appearance"
+            element={inShell(
+              <LazyRoute load={loadAppearancePage} fallback={<LoadingScreen status="Loading appearance..." />} />,
+            )}
           />
           <Route
             path="/admin/career/applications"
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadAdminJobsPage} fallback={<LoadingScreen status="Loading applications..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1722,9 +1805,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadAdminJobManagePage} fallback={<LoadingScreen status="Loading opportunities..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1734,9 +1817,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadAdminCareerPortalCardsPage} fallback={<LoadingScreen status="Loading cards..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1748,9 +1831,9 @@ export default function App() {
             path="/learning"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                {inShell(
                   <LazyRoute load={loadLearningMaterialsPage} fallback={<LoadingScreen status="Loading learning materials..." />} />
-                </Box>
+                )}
               </ErrorBoundary>
             }
           />
@@ -1759,9 +1842,9 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute load={loadAdminLearningPage} fallback={<LoadingScreen status="Loading library manager..." />} />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1771,12 +1854,12 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  {inShell(
                     <LazyRoute
                       load={loadAdminGuestMembersPage}
                       fallback={<LoadingScreen status="Loading guest members..." />}
                     />
-                  </Box>
+                  )}
                 </ErrorBoundary>
               </AdminGuard>
             }
@@ -1863,7 +1946,7 @@ export default function App() {
               pageState === "ready" ? (
                 <CatchAllRedirect to={isAdmin ? "/admin/dashboard" : "/user/dashboard"} />
               ) : (
-                adminDashboardInner
+                <LoadingScreen userEmail={userEmail || undefined} status="Loading..." />
               )
             }
           />

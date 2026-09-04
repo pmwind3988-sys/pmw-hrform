@@ -1,29 +1,42 @@
 import { Box, Grid, Typography } from "@mui/material";
-import { Description as DescriptionIcon, CheckCircle as CheckCircleIcon, AccessTime as AccessTimeIcon, Cancel as CancelIcon } from "@mui/icons-material";
+import {
+  CancelOutlined as CancelIcon,
+  CheckCircleOutlined as CheckCircleIcon,
+  DescriptionOutlined as DescriptionIcon,
+  AccessTimeOutlined as AccessTimeIcon,
+} from "@mui/icons-material";
 import type { Submission } from "../../types";
-import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
+import { editorial, si, siType } from "../../theme/editorial";
+import { bucketSubmissions } from "../../utils/submissionStatusBuckets";
 
 interface StatsRowProps {
   submissions: Submission[];
 }
 
+/**
+ * The four KPI tiles.
+ *
+ * Redrawn to SI's StatCard: a flat white card at the one card elevation, a
+ * micro uppercase label, the number in tabular figures, and a thin progress
+ * bar. Three things it deliberately no longer does:
+ *
+ *   - It does not lift on hover. Every card in this system sits at the same
+ *     depth and hierarchy comes from size and position, so a tile that rises
+ *     when the pointer crosses it claims an importance it does not have —
+ *     especially as these are not clickable.
+ *   - It does not tint its own background. `rgba(255,255,255,0.94)` was a
+ *     translucent white that let the old page gradient bleed through; the
+ *     canvas is flat now, so the card is simply white with a hairline.
+ *   - It does not compute its own status buckets. That rule is shared with the
+ *     Dashboard section's summary line — see `submissionStatusBuckets`.
+ *
+ * The `accent` on each tile is the bright FILL (a 3px cap and a progress bar,
+ * no text on it); `color` is the readable variant, because it tints a 24px icon
+ * that has to be legible.
+ */
 export default function StatsRow({ submissions }: StatsRowProps) {
-  let approved = 0;
-  let pending = 0;
-  let rejected = 0;
+  const { total, approved, pending, rejected } = bucketSubmissions(submissions);
 
-  for (const s of submissions) {
-    const status = (s.formStatus ?? "").toLowerCase().replace(/[\s_-]/g, "");
-    if (status === "fullyapproved" || status === "approved" || status === "completed") {
-      approved++;
-    } else if (status.includes("reject")) {
-      rejected++;
-    } else {
-      pending++;
-    }
-  }
-
-  const total = submissions.length;
   const percent = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
   const submissionLabel = (value: number, label: string) =>
     `${value} ${label} submission${value === 1 ? "" : "s"}`;
@@ -36,8 +49,8 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       progress: total > 0 ? 100 : 0,
       icon: <DescriptionIcon sx={{ fontSize: 24 }} />,
       bg: editorial.blueWash,
-      color: editorial.pmwBlueDark,
-      accent: editorial.pmwBlue,
+      color: editorial.navyDeep,
+      accent: editorial.navy,
     },
     {
       label: "Approved",
@@ -45,9 +58,9 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       helper: submissionLabel(approved, "approved"),
       progress: percent(approved),
       icon: <CheckCircleIcon sx={{ fontSize: 24 }} />,
-      bg: "rgba(16, 124, 16, 0.08)",
+      bg: editorial.successSoft,
       color: editorial.success,
-      accent: editorial.success,
+      accent: editorial.successFill,
     },
     {
       label: "Pending",
@@ -55,9 +68,9 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       helper: submissionLabel(pending, "pending"),
       progress: percent(pending),
       icon: <AccessTimeIcon sx={{ fontSize: 24 }} />,
-      bg: editorial.yellowSoft,
-      color: editorial.warning,
-      accent: editorial.warning,
+      bg: editorial.accentSoft,
+      color: editorial.accentText,
+      accent: editorial.accent,
     },
     {
       label: "Rejected",
@@ -65,9 +78,9 @@ export default function StatsRow({ submissions }: StatsRowProps) {
       helper: submissionLabel(rejected, "rejected"),
       progress: percent(rejected),
       icon: <CancelIcon sx={{ fontSize: 24 }} />,
-      bg: "rgba(198, 40, 40, 0.08)",
+      bg: editorial.errorSoft,
       color: editorial.error,
-      accent: editorial.error,
+      accent: editorial.errorFill,
     },
   ];
 
@@ -77,16 +90,15 @@ export default function StatsRow({ submissions }: StatsRowProps) {
         <Grid size={{ xs: 6, md: 3 }} key={stat.label}>
           <Box
             sx={{
-              minHeight: 154,
-              backgroundColor: "rgba(255, 255, 255, 0.94)",
-              borderRadius: "12px",
-              p: { xs: 1.5, sm: 2 },
+              minHeight: 138,
+              backgroundColor: editorial.panel,
+              border: `1px solid ${editorial.border}`,
+              borderRadius: `${si.radius}px`,
+              p: { xs: 1.5, sm: `${si.padTight}px` },
               display: "grid",
               gridTemplateRows: "auto 1fr auto",
               gap: 1.5,
-              transition: "box-shadow 0.2s ease, transform 0.2s ease",
-              boxShadow: editorialShadow,
-              cursor: "default",
+              boxShadow: si.shadow,
               position: "relative",
               overflow: "hidden",
               "&::before": {
@@ -96,43 +108,24 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 height: 3,
                 backgroundColor: stat.accent,
               },
-              "&:hover": {
-                boxShadow: editorialShadowHover,
-                transform: "translateY(-2px)",
-              },
-              "@media (prefers-reduced-motion: reduce)": {
-                transition: "box-shadow 0.2s ease",
-                "&:hover": {
-                  transform: "none",
-                },
-              },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  textTransform: "uppercase",
-                  letterSpacing: 0,
-                  color: editorial.muted,
-                  fontWeight: 700,
-                  fontSize: "0.72rem",
-                  display: "block",
-                }}
-              >
+            <Box
+              sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}
+            >
+              <Typography sx={{ ...siType.micro, color: editorial.muted, display: "block" }}>
                 {stat.label}
               </Typography>
               <Box
                 sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: "12px",
+                  width: 38,
+                  height: 38,
+                  borderRadius: `${si.radiusSm}px`,
                   backgroundColor: stat.bg,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   color: stat.color,
-                  boxShadow: `inset 0 0 0 1px ${stat.accent}26`,
                   flexShrink: 0,
                 }}
               >
@@ -141,27 +134,26 @@ export default function StatsRow({ submissions }: StatsRowProps) {
             </Box>
             <Box sx={{ alignSelf: "end" }}>
               <Typography
-                variant="h4"
                 sx={{
                   fontWeight: 700,
                   color: editorial.ink,
-                  letterSpacing: 0,
                   lineHeight: 1,
-                  fontSize: { xs: "1.9rem", sm: "2.25rem" },
+                  letterSpacing: "-0.02em",
+                  fontSize: { xs: "1.75rem", sm: "2rem" },
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {stat.value}
               </Typography>
-              <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 700 }}>
+              <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 0.25 }}>
                 {stat.helper}
               </Typography>
             </Box>
             <Box
               sx={{
-                height: 6,
+                height: 5,
                 borderRadius: 999,
-                backgroundColor: "rgba(16, 16, 16, 0.08)",
+                backgroundColor: editorial.skySoft,
                 overflow: "hidden",
               }}
             >
@@ -172,6 +164,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                   borderRadius: 999,
                   backgroundColor: stat.accent,
                   transition: "width 0.28s ease",
+                  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
                 }}
               />
             </Box>
