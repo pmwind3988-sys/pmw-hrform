@@ -6,6 +6,7 @@ import {
   forgetListColumns,
   listHasColumnLive,
   sanitizeODataValue,
+  spDelete,
   spGet,
   spPatch,
   spPost,
@@ -214,6 +215,21 @@ export async function updateFormInstance(
   if (Object.keys(body).length === 0) return;
 
   await spPatch(token, `${activeSiteUrl()}/_api/web/lists/getbytitle('${LIST_PATH}')/items(${id})`, body);
+}
+
+/**
+ * Removes an instance.
+ *
+ * Its submissions stay. They are grouped by a field VALUE, not by the instance,
+ * so deleting one loses the link and its window — not the responses or the
+ * group they sit in. What does go is the record of which link each response
+ * arrived through, which is why this is a deliberate action and not a tidy-up.
+ */
+export async function deleteFormInstance(token: string, id: string): Promise<void> {
+  await spDelete(
+    token,
+    `${activeSiteUrl()}/_api/web/lists/getbytitle('${LIST_PATH}')/items(${id})`,
+  );
 }
 
 /**

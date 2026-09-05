@@ -10,6 +10,7 @@ import { editorial } from "../../theme/editorial";
 import { flattenQuestions } from "../../utils/FormBuilderEngine";
 import {
   createFormInstance,
+  deleteFormInstance,
   listFormInstances,
   updateFormInstance,
 } from "../../utils/formInstancesSP";
@@ -77,6 +78,8 @@ export default function FormInstancesPanel({
   /** Which instance's QR is open, and the PNG behind it. */
   const [qrFor, setQrFor] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
+  /** The instance awaiting a yes/no on deletion. */
+  const [deleteTarget, setDeleteTarget] = useState<FormInstance | null>(null);
 
   const fields = getPrefillEligibleFields(surveyJson, flattenQuestions);
 
@@ -170,6 +173,21 @@ export default function FormInstancesPanel({
       resetDraft();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create the instance.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (row: FormInstance) => {
+    setBusyId(row.id);
+    setError("");
+    try {
+      const token = await getToken();
+      await deleteFormInstance(token, row.id);
+      setInstances((prev) => prev.filter((i) => i.id !== row.id));
+      setDeleteTarget(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete the instance.");
     } finally {
       setBusyId(null);
     }
@@ -459,6 +477,13 @@ export default function FormInstancesPanel({
                   >
                     QR
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(row)}
+                    style={{ height: 28, padding: "0 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.white, color: C.red, fontSize: 11.5, cursor: "pointer" }}
+                  >
+                    Delete
+                  </button>
                 </div>
                 <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4, wordBreak: "break-all" }}>
                   {url}
@@ -507,6 +532,50 @@ export default function FormInstancesPanel({
           })}
         </div>
       </div>
+
+      {deleteTarget && (
+        /*
+          Yes/no, never a typed confirmation. What is at stake is said plainly:
+          the responses survive, because they group by a field value rather than
+          by the instance — what goes is the link, its window, and the record of
+          which link each response arrived through.
+        */
+        <div
+          onClick={(e) => { e.stopPropagation(); setDeleteTarget(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 10001, background: "rgba(17,24,39,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.white, borderRadius: 12, width: 420, maxWidth: "100%", padding: 20, fontFamily: font, boxShadow: "0 20px 48px rgba(0,0,0,0.28)" }}
+          >
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: C.textPrimary }}>
+              Delete "{deleteTarget.title}"?
+            </div>
+            <p style={{ fontSize: 12.5, color: C.textSecond, lineHeight: 1.6, marginTop: 8 }}>
+              Its link and QR code stop working straight away. The responses already
+              submitted through it are kept and stay grouped as before — what is lost is
+              the record of which link each one came through. This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                style={{ height: 32, padding: "0 14px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}
+              >
+                No, keep it
+              </button>
+              <button
+                type="button"
+                disabled={busyId === deleteTarget.id}
+                onClick={() => void remove(deleteTarget)}
+                style={{ height: 32, padding: "0 14px", borderRadius: 8, border: "none", background: C.red, color: C.white, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+              >
+                {busyId === deleteTarget.id ? "Deleting…" : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
