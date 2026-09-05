@@ -202,6 +202,42 @@ async function getExistingColumnNames(token: string, listTitle: string): Promise
   return names;
 }
 
+/**
+ * Forgets what we think a list's columns are, so the next check asks SharePoint.
+ *
+ * The cache is an optimisation with one sharp edge: `createColumn` calls
+ * `rememberColumn` when SharePoint answers "already exists", so a response that
+ * looks like a duplicate but was not one leaves the cache asserting a column
+ * that is not there — and every later `ensureColumns` then skips creating it,
+ * silently. Any provisioning that must actually be true should clear first.
+ */
+export function forgetListColumns(listTitle: string): void {
+  columnCache.delete(columnCacheKey(listTitle));
+}
+
+/**
+ * Whether a list really has a column, asked of SharePoint rather than the cache.
+ *
+ * Deliberately uncached: this exists to CHECK provisioning, so answering from
+ * the same cache the provisioning wrote to would prove nothing.
+ */
+export async function listHasColumnLive(
+  token: string,
+  listTitle: string,
+  columnName: string,
+): Promise<boolean> {
+  const data = (await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields?$select=Title,InternalName,StaticName,EntityPropertyName&$top=5000`,
+  )) as { value?: ExistingFieldInfo[] };
+  const wanted = normalizeColumnName(columnName);
+  return (data.value || []).some((field) =>
+    [field.Title, field.InternalName, field.StaticName, field.EntityPropertyName].some(
+      (name) => name && normalizeColumnName(name) === wanted,
+    ),
+  );
+}
+
 export function createSharePointColumnKeyResolver(
   fields: ExistingFieldInfo[],
 ): (fieldName: string) => string | null {

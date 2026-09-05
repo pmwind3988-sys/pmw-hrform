@@ -3,6 +3,8 @@ import {
   activeSiteUrl,
   ensureColumns,
   ensureFormInstancesList,
+  forgetListColumns,
+  listHasColumnLive,
   sanitizeODataValue,
   spGet,
   spPatch,
@@ -221,5 +223,28 @@ export async function updateFormInstance(
  * exists, and rows written before it simply hold an empty value.
  */
 export async function ensureInstanceIdColumn(token: string, formTitle: string): Promise<void> {
+  /*
+    Ask SharePoint, not the cache.
+
+    `createColumn` remembers a column whenever SharePoint answers "already
+    exists", so one such reply for a column that is not really there leaves the
+    cache asserting it forever, and every later `ensureColumns` skips the
+    creation without a word. That is exactly how this failed the first time:
+    instances were created, reported success, and their submissions had nowhere
+    to record which link they came through.
+  */
+  forgetListColumns(formTitle);
   await ensureColumns(token, formTitle, [{ n: INSTANCE_ID_FIELD, k: SP_FIELD_KIND.text }]);
+
+  /*
+    And then check it for real. `ensureColumns` returning is not evidence: the
+    whole point of this column is provenance, so an instance whose submissions
+    cannot be stamped must fail loudly at creation rather than hand out a link
+    that quietly loses the one thing it exists to record.
+  */
+  if (!(await listHasColumnLive(token, formTitle, INSTANCE_ID_FIELD))) {
+    throw new Error(
+      `Could not add the ${INSTANCE_ID_FIELD} column to "${formTitle}". Its submissions could not be traced back to this instance, so the instance was not created. Check that you can edit that list's columns.`,
+    );
+  }
 }
