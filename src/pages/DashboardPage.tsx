@@ -81,6 +81,10 @@ function DashboardCareerCarousel() {
  * exactly once, and it cost the first screenful of every visit thereafter. The
  * shell's own header says which section you are in; the stat tiles say how
  * things stand.
+ *
+ * ORDER: carousel, then what needs attention, then the tiles. The carousel is
+ * the only block here anyone authors deliberately -- an admin picks its cards
+ * and points them somewhere -- so it leads.
  */
 export default function DashboardPage() {
   const { submissions, missingConfigs, visibleLists, isAdmin } = useDashboard();
@@ -98,6 +102,8 @@ export default function DashboardPage() {
           <ConfigWarningBanner missingLists={missingConfigs} />
         </Box>
       )}
+
+      <DashboardCareerCarousel />
 
       <Box
         component="section"
@@ -132,8 +138,6 @@ export default function DashboardPage() {
       <Box sx={{ mb: 3 }}>
         <StatsRow submissions={submissions} />
       </Box>
-
-      <DashboardCareerCarousel />
 
       <Typography sx={{ ...siType.subtext, color: editorial.muted }}>
         {visibleLists.length} form{visibleLists.length === 1 ? "" : "s"} available to you
