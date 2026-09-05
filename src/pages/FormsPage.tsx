@@ -7,7 +7,7 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { sharePointManageScope } from "../utils/sharePointScope";
 import { getAllFormConfigs } from "../utils/formBuilderSP";
-import { editorial, siType } from "../theme/editorial";
+import { editorial, onCanvasMuted, siType } from "../theme/editorial";
 import Card from "../components/common/Card";
 
 /**
@@ -94,7 +94,7 @@ export default function FormsPage() {
 
   return (
     <Box sx={{ maxWidth: 1000, mx: "auto" }}>
-      <Typography sx={{ ...siType.subtext, color: editorial.muted, mb: 2 }}>
+      <Typography sx={{ ...siType.subtext, ...onCanvasMuted, mb: 2 }}>
         {visibleLists.length === 0
           ? "No forms are available to this account."
           : `${visibleLists.length} form${visibleLists.length === 1 ? "" : "s"} available to you.${

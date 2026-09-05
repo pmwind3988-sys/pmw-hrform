@@ -8,7 +8,7 @@ import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
 import type { CareerPortalCard } from "../types";
-import { editorial, siType } from "../theme/editorial";
+import { editorial, onCanvasMuted, siType } from "../theme/editorial";
 import { bucketSubmissions } from "../utils/submissionStatusBuckets";
 import Card from "../components/common/Card";
 
@@ -130,7 +130,7 @@ export default function DashboardPage() {
         <StatsRow submissions={submissions} />
       </Box>
 
-      <Typography sx={{ ...siType.subtext, color: editorial.muted }}>
+      <Typography sx={{ ...siType.subtext, ...onCanvasMuted }}>
         {visibleLists.length} form{visibleLists.length === 1 ? "" : "s"} available to you
         {isAdmin ? " · administrator access" : ""}.
       </Typography>

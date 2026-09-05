@@ -1,3 +1,4 @@
+import { relativeLuminance } from "../theme/contrast";
 export interface DashboardBackgroundDef {
   id: string;
   label: string;
@@ -194,7 +195,107 @@ export function buildDashboardBackgroundCss(setting: DashboardBackgroundSetting)
   return buildDashboardBackgroundDefCss(findDashboardBackground(setting.backgroundId), imageOpacity);
 }
 
+/**
+ * Text sitting on the canvas itself — no card, no panel, nothing painted behind
+ * it — has to survive whichever background an admin picked. The dashboard's
+ * "N forms available to you" line was the case that proved it: grey on a dark
+ * photograph, technically present and effectively invisible.
+ *
+ * These three variables are the answer, published whenever the background is
+ * applied. A call site uses `var(--app-bg-ink)` instead of a fixed colour and
+ * stops caring what is behind it.
+ */
+const INK_VAR = "--app-bg-ink";
+const INK_MUTED_VAR = "--app-bg-ink-muted";
+const INK_SHADOW_VAR = "--app-bg-text-shadow";
+
+/** Every hex or rgb() colour written into a background's CSS, in order. */
+function backgroundStops(css: string): string[] {
+  return css.match(/#[0-9a-fA-F]{3,6}|rgba?\([^)]*\)/g) ?? [];
+}
+
+/**
+ * How much of the scrim survives at its thinnest point.
+ *
+ * `photo()` lays a near-white wash over the image at three stops, and the
+ * middle one is the weakest: `1 - imageOpacity`. That single number says how
+ * much of the picture shows through at its strongest, which is the only part
+ * that matters for whether text can be read.
+ */
+function weakestScrimAlpha(imageOpacity: number): number {
+  return 1 - normalizeImageOpacity(imageOpacity);
+}
+
+/**
+ * Below this, the photograph rather than the wash decides what is behind the
+ * text — and a photograph's brightness is not knowable from here. White with a
+ * shadow is the honest answer to an unknown background: it stays legible on a
+ * dark picture and, because of the shadow, on a light one too.
+ */
+const SCRIM_DOMINATES = 0.7;
+
+export interface CanvasInk {
+  ink: string;
+  muted: string;
+  shadow: string;
+}
+
+const DARK_CANVAS_INK: CanvasInk = {
+  ink: "#101828",
+  muted: "#5A6880",
+  shadow: "none",
+};
+
+const LIGHT_CANVAS_INK: CanvasInk = {
+  ink: "#FFFFFF",
+  // Still white, only quieter. Dropping to grey on an unknown photograph would
+  // reintroduce exactly the problem this solves.
+  muted: "rgba(255,255,255,0.88)",
+  // Carries the contrast when the picture underneath happens to be pale.
+  shadow: "0 1px 3px rgba(0,0,0,0.55), 0 0 10px rgba(0,0,0,0.35)",
+};
+
+/**
+ * The ink this background needs.
+ *
+ * A gradient is knowable: its stops are written down, so their average
+ * luminance decides. A photograph is not, so the scrim's strength decides
+ * instead — thick wash, treat it as the light surface it is; thin wash, assume
+ * nothing and use white with a shadow.
+ */
+export function canvasInkFor(setting: DashboardBackgroundSetting): CanvasInk {
+  const imageOpacity = normalizeImageOpacity(setting.imageOpacity);
+  const hasImage =
+    setting.backgroundId === "custom"
+      ? normalizeImageUrl(setting.customImageUrl) !== null
+      : Boolean(findDashboardBackground(setting.backgroundId).imageUrl);
+
+  if (hasImage) {
+    return weakestScrimAlpha(imageOpacity) >= SCRIM_DOMINATES
+      ? DARK_CANVAS_INK
+      : LIGHT_CANVAS_INK;
+  }
+
+  const stops = backgroundStops(buildDashboardBackgroundCss(setting));
+  const luminances = stops
+    .map((stop) => relativeLuminance(stop))
+    .filter((value): value is number => value !== null);
+
+  // No readable stop means no basis for a decision, and dark ink is the safer
+  // default on a palette whose surfaces are light.
+  if (luminances.length === 0) return DARK_CANVAS_INK;
+
+  const average = luminances.reduce((sum, value) => sum + value, 0) / luminances.length;
+  return average < 0.4 ? LIGHT_CANVAS_INK : DARK_CANVAS_INK;
+}
+
 export function applyDashboardBackground(setting: DashboardBackgroundSetting): void {
-  document.documentElement.style.setProperty(CSS_VAR, buildDashboardBackgroundCss(setting));
-  document.documentElement.style.setProperty(FALLBACK_CSS_VAR, DEFAULT_FALLBACK);
+  const root = document.documentElement.style;
+  root.setProperty(CSS_VAR, buildDashboardBackgroundCss(setting));
+  root.setProperty(FALLBACK_CSS_VAR, DEFAULT_FALLBACK);
+
+  const { ink, muted, shadow } = canvasInkFor(setting);
+  root.setProperty(INK_VAR, ink);
+  root.setProperty(INK_MUTED_VAR, muted);
+  root.setProperty(INK_SHADOW_VAR, shadow);
 }

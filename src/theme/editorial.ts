@@ -266,6 +266,29 @@ function fluid(minRem: number, maxRem: number): string {
   return `clamp(${minRem}rem, ${base.toFixed(4)}rem + ${vw.toFixed(4)}vw, ${maxRem}rem)`;
 }
 
+/**
+ * For text placed straight onto the page canvas — no card, no panel, nothing
+ * painted behind it.
+ *
+ * The canvas is whichever background an admin chose, so its brightness is not
+ * known when this code is written. `applyDashboardBackground` works it out and
+ * publishes the answer as CSS variables; this reads them. The fallbacks are the
+ * palette's own ink, which is what a page with no background applied gets.
+ *
+ * Use `onCanvas` for a heading and `onCanvasMuted` for supporting text. Do not
+ * reach for `editorial.muted` out here: grey on a photograph is how the
+ * dashboard's "N forms available to you" line came to be invisible.
+ */
+export const onCanvas = {
+  color: `var(--app-bg-ink, ${editorial.ink})`,
+  textShadow: "var(--app-bg-text-shadow, none)",
+} as const;
+
+export const onCanvasMuted = {
+  color: `var(--app-bg-ink-muted, ${editorial.muted})`,
+  textShadow: "var(--app-bg-text-shadow, none)",
+} as const;
+
 export const siType = {
   /** 21px. The page's one title. */
   pageTitle: {
