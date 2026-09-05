@@ -16,6 +16,7 @@ import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import PrefilledQrPanel from "../components/builder/PrefilledQrPanel";
 import TestRunLauncher from "../components/builder/TestRunLauncher";
 import TestRunPanel from "../components/builder/TestRunPanel";
+import FormInstancesPanel from "../components/builder/FormInstancesPanel";
 import { C } from "../components/builder/constants";
 import { Icon } from "../components/builder/BuilderIcons";
 import type { BuilderMode, BuilderToolCommand, BuilderToolKey } from "../components/builder/builderTheme";
@@ -638,6 +639,7 @@ export default function AdminFormBuilder() {
   const [isFormBuilderSuperuser, setIsFormBuilderSuperuser] = useState(false);
   const [testRunOpen, setTestRunOpen] = useState(false);
   const [testRunPanelOpen, setTestRunPanelOpen] = useState(false);
+  const [instancesPanelOpen, setInstancesPanelOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [previewMenuOpen, setPreviewMenuOpen] = useState(false);
   const [toolCommand, setToolCommand] = useState<BuilderToolCommand | null>(null);
@@ -2012,6 +2014,16 @@ export default function AdminFormBuilder() {
               Test runs
             </button>
           )}
+          {isFormBuilderSuperuser && isEditing && (
+            <button
+              type="button"
+              className="bx-btn bx-btn-sm"
+              title="Named runs of this form — a training event, an induction — each with its own link and closing date"
+              onClick={() => setInstancesPanelOpen(true)}
+            >
+              Instances
+            </button>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }} />
@@ -2989,6 +3001,19 @@ export default function AdminFormBuilder() {
           open={testRunPanelOpen}
           onClose={() => setTestRunPanelOpen(false)}
           form={{ Title: meta.formTitle, Slug: meta.slug }}
+          siteUrl={activeSite?.url}
+        />
+      )}
+
+      {instancesPanelOpen && (
+        <FormInstancesPanel
+          open={instancesPanelOpen}
+          onClose={() => setInstancesPanelOpen(false)}
+          form={{ Title: meta.formTitle, Slug: meta.slug }}
+          groupByField=""
+          layerConfig={layerConfig}
+          surveyJson={surveyJson}
+          appOrigin={appOrigin}
           siteUrl={activeSite?.url}
         />
       )}
