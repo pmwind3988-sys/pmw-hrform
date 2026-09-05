@@ -40,6 +40,7 @@ import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload 
  * than the stored row — the endpoint is public. See api/_utils/formInstance.ts.
  */
 interface PublicFormInstance {
+  id: string;
   title: string;
   state: "open" | "closed" | "expired";
   expiresAt: string;
@@ -1472,6 +1473,34 @@ export default function DynamicFormPage() {
         }
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
         const resolveColumnKey = await getSharePointColumnKeyResolver(token, cfg.Title as string);
+
+        /*
+          Instance answers on the signed-in path, which writes to SharePoint
+          directly and so never passes through api/submit-form's enforcement.
+
+          Be clear about what this is: for a signed-in member of staff it is a
+          correctness measure, NOT a security boundary. They hold a delegated
+          token with write access to the response list, so they can already put
+          any value in any column, instance or no instance. The boundary that
+          matters guards the people an instance link is actually handed to —
+          anonymous and guest respondents, who can only reach the list through
+          the API, where the locked values are written from the record.
+
+          What this does buy is that a stale tab or an edited read-only field
+          cannot quietly file a response under the wrong event, and that the
+          row records which link it came through either way.
+        */
+        if (instanceInfo) {
+          for (const name of instanceInfo.lockedFields) {
+            if (Object.prototype.hasOwnProperty.call(instanceInfo.prefill, name)) {
+              body[name] = instanceInfo.prefill[name];
+            }
+          }
+          // Guarded like ReferenceNo: an unrecognised column fails the whole
+          // create, and the submission is worth more than the stamp.
+          if (resolveColumnKey("InstanceId")) body.InstanceId = instanceInfo.id;
+        }
+
         let result: { Id?: number } | undefined;
         try {
           result = await spPost(
@@ -1859,7 +1888,7 @@ export default function DynamicFormPage() {
       // Success — function returns normally; errors propagate to caller (useEffect)
       // pdpaLocale must stay in the deps: a stale closure would stamp the consent
       // record with a language the respondent was no longer reading.
-  }, [formData, userEmail, accounts, pdpaLocale]);
+  }, [formData, userEmail, accounts, pdpaLocale, instanceInfo]);
 
   // Which page the respondent is on is runtime state now, not something to
   // mirror into React through event subscriptions.

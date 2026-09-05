@@ -122,7 +122,7 @@ describe("publicInstanceView", () => {
     expect(view.createdBy).toBeUndefined();
     expect(view.createdByEmail).toBeUndefined();
     expect(Object.keys(view).sort()).toEqual(
-      ["expiresAt", "lockedFields", "prefill", "requireSignIn", "state", "title"],
+      ["expiresAt", "id", "lockedFields", "prefill", "requireSignIn", "state", "title"],
     );
   });
 });

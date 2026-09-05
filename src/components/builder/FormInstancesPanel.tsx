@@ -5,6 +5,8 @@ import { C } from "./constants";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { sharePointManageScope } from "../../utils/sharePointScope";
 import { getPrefillEligibleFields } from "../../utils/prefilledQr";
+import { generateQrWithLogo } from "../../utils/qrWithLogo";
+import { editorial } from "../../theme/editorial";
 import { flattenQuestions } from "../../utils/FormBuilderEngine";
 import {
   createFormInstance,
@@ -72,6 +74,9 @@ export default function FormInstancesPanel({
   const [values, setValues] = useState<Record<string, string>>({});
   const [locked, setLocked] = useState<Record<string, boolean>>({});
   const [confirming, setConfirming] = useState(false);
+  /** Which instance's QR is open, and the PNG behind it. */
+  const [qrFor, setQrFor] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState("");
 
   const fields = getPrefillEligibleFields(surveyJson, flattenQuestions);
 
@@ -106,6 +111,23 @@ export default function FormInstancesPanel({
       cancelled = true;
     };
   }, [open, form.Title, getToken]);
+
+  const openQr = (id: string, url: string) => {
+    if (qrFor === id) { setQrFor(null); setQrDataUrl(""); return; }
+    setQrFor(id);
+    setQrDataUrl("");
+    generateQrWithLogo(url, {
+      width: 320,
+      margin: 2,
+      dark: C.textPrimary,
+      light: editorial.white,
+      logoUrl: "/logo-128.png",
+    })
+      .then((dataUrl) => setQrDataUrl(dataUrl))
+      // A QR that will not draw leaves the link, which still works. Better a
+      // missing picture than a dialog that reports failure over a convenience.
+      .catch(() => setQrDataUrl(""));
+  };
 
   if (!open) return null;
 
@@ -429,10 +451,49 @@ export default function FormInstancesPanel({
                   >
                     Copy link
                   </button>
+                  <button
+                    type="button"
+                    aria-expanded={qrFor === row.id}
+                    onClick={() => openQr(row.id, url)}
+                    style={{ height: 28, padding: "0 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: qrFor === row.id ? C.purplePale : C.white, color: C.textSecond, fontSize: 11.5, cursor: "pointer" }}
+                  >
+                    QR
+                  </button>
                 </div>
                 <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4, wordBreak: "break-all" }}>
                   {url}
                 </div>
+                {qrFor === row.id && (
+                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
+                    {qrDataUrl ? (
+                      <>
+                        <img
+                          src={qrDataUrl}
+                          alt={`QR code linking to ${row.title}`}
+                          style={{ width: 128, height: 128, borderRadius: 8, border: `1px solid ${C.border}` }}
+                        />
+                        <div style={{ display: "grid", gap: 6 }}>
+                          <a
+                            href={qrDataUrl}
+                            download={`${row.formSlug || form.Slug || "form"}-${row.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-qr.png`}
+                            style={{ minHeight: 30, padding: "0 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 11.5, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+                          >
+                            Download PNG
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => void navigator.clipboard?.writeText(url)}
+                            style={{ minHeight: 30, padding: "0 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            Copy link
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: C.textMuted }}>Drawing the QR code…</span>
+                    )}
+                  </div>
+                )}
                 <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
                   {row.expiresAt ? `Closes ${new Date(row.expiresAt).toLocaleDateString()}` : "No closing date"}
                   {row.requireSignIn ? " · signed-in only" : " · open link"}

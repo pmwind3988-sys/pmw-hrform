@@ -28,6 +28,45 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Sample values for the `<input type>`s that cannot hold a sentence.
+ *
+ * A text question is only textual when its input type is. Anything temporal,
+ * numeric or a colour has a format SharePoint parses, and handing it
+ * "Test answer — dateTime" fails the whole submission with "Cannot convert a
+ * primitive value to the expected type 'Edm.DateTime'" — which reads as a
+ * broken form rather than a broken rehearsal.
+ */
+function typedInputSample(inputType: string): unknown {
+  const now = new Date();
+  switch (inputType) {
+    case "number":
+    case "range":
+      return 1;
+    case "date":
+      return todayIso();
+    case "datetime-local":
+    case "datetime":
+      return now.toISOString().slice(0, 16);
+    case "time":
+      return now.toISOString().slice(11, 16);
+    case "month":
+      return now.toISOString().slice(0, 7);
+    case "week": {
+      // ISO week, from the Thursday of the current week.
+      const thursday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      thursday.setUTCDate(thursday.getUTCDate() + 3 - ((thursday.getUTCDay() + 6) % 7));
+      const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
+      const week = 1 + Math.round(((thursday.getTime() - firstThursday.getTime()) / 86400000 - 3) / 7);
+      return `${thursday.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+    }
+    case "color":
+      return "#0F3D91";
+    default:
+      return undefined;
+  }
+}
+
 function firstChoiceValue(choices: SurveyElement["choices"]): unknown {
   if (!Array.isArray(choices) || choices.length === 0) return undefined;
   const first = choices[0];
@@ -42,8 +81,8 @@ function sampleValueFor(el: SurveyElement): unknown {
   const name = el.name || "";
 
   if (type === "text") {
-    if (el.inputType === "number") return 1;
-    if (el.inputType === "date") return todayIso();
+    const typed = typedInputSample(el.inputType || "");
+    if (typed !== undefined) return typed;
     return `Test answer — ${name}`;
   }
   if (type === "comment") {

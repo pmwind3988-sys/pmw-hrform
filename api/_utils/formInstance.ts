@@ -157,6 +157,12 @@ export function applyLockedValues(
  */
 export function publicInstanceView(instance: ServerFormInstance, now: Date = new Date()) {
   return {
+    /*
+      The row id, so a submission can be stamped with which instance it came
+      through. Not a credential — the link token is the secret, and it is
+      already in the URL of whoever is reading this.
+    */
+    id: instance.id,
     title: instance.title,
     state: instanceState(instance, now),
     expiresAt: instance.expiresAt,
