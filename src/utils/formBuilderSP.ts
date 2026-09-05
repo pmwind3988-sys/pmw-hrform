@@ -34,6 +34,14 @@ import { encodeMatrixRow, decodeMatrixRow, type MatrixColumn } from "./matrixDat
  * site — reading this variable is not a decision a caller has to make.
  */
 let SP_SITE_URL = resolveSite(HOME_SITE_KEY).url;
+/**
+ * The active site, for modules that build their own SharePoint URLs. A getter
+ * rather than the binding itself: `setActiveSite` reassigns it, and an importer
+ * holding the old value would quietly query the wrong site.
+ */
+export function activeSiteUrl(): string {
+  return SP_SITE_URL;
+}
 let activeSiteKey: SiteKey = HOME_SITE_KEY;
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
 
@@ -360,7 +368,7 @@ async function ensureIndexedColumns(
 }
 
 /** Escape single quotes for OData filter string values to prevent injection */
-function sanitizeODataValue(val: string): string {
+export function sanitizeODataValue(val: string): string {
   return val.replace(/'/g, "''");
 }
 
@@ -416,7 +424,7 @@ async function getDigest(token: string): Promise<string> {
 
 export async function getFormConfig(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig,GroupByField&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -1297,17 +1305,19 @@ interface FormConfigData {
   LayerConfig?: string;
   /** JSON `ReferenceNumberConfig`; see src/utils/referenceNumber.ts. */
   ReferenceConfig?: string;
+  /** Field whose value groups this form's submissions; "" for no grouping. */
+  GroupByField?: string;
 }
 
 export async function getAllFormConfigs(token: string): Promise<FormConfigData[]> {
   if (!await listExists(token, 'Master Form')) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig,GroupByField&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
   return data.value || [];
 }
 
 export async function getFormConfigByTitle(token: string, listTitle: string): Promise<FormConfigData | null> {
   if (!await listExists(token, 'Master Form')) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig&$top=1`) as { value?: FormConfigData[] };
+  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig,ReferenceConfig,GroupByField&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
 
@@ -1750,6 +1760,28 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
     { n: 'ConditionField', k: 2 }, { n: 'ApprovalRules', k: 3, ml: true },
     { n: 'LayerConfig', k: 3, ml: true },
     { n: REFERENCE_CONFIG_FIELD, k: 3, ml: true },
+    // The field whose value groups this form's submissions. Empty means the
+    // form has no grouping and All Submissions stays flat, as before.
+    { n: 'GroupByField', k: 2 },
+  ]},
+  /**
+   * A named run of a form — a training event, an induction — carrying fixed
+   * answers, a window and a link. It holds no questions, no version and no
+   * routing: those stay on the main form, so an edit there reaches every
+   * instance at once. See docs/superpowers/specs/2026-09-05-form-instances-design.md.
+   */
+  'Form Instances': { t: 100, desc: 'Tracked runs of a form', cols: [
+    { n: 'FormTitle', k: 2 }, { n: 'FormSlug', k: 2 },
+    { n: 'InstanceToken', k: 2 },
+    { n: 'PrefillJson', k: 3, ml: true },
+    { n: 'LockedFields', k: 3, ml: true },
+    // Denormalised prefill[GroupByField], so a group is one query rather than
+    // parsing every instance's JSON.
+    { n: 'GroupValue', k: 2 },
+    { n: 'ExpiresAt', k: 4 },
+    { n: 'InstanceStatus', k: 2 },
+    { n: 'RequireSignIn', k: 8 },
+    { n: 'CreatedByEmail', k: 2 },
   ]},
   'Approvers': { t: 100, desc: 'Approver layers per form', cols: [
     { n: 'FormTitle', k: 2 }, { n: 'LayerNumber', k: 9 },
@@ -1806,6 +1838,10 @@ export async function ensureCareerPortalCardList(token: string): Promise<void> {
 
 export async function ensureDashboardBackgroundSettingsList(token: string): Promise<void> {
   await ensureListExists(token, 'AdminPanelSettings');
+}
+
+export async function ensureFormInstancesList(token: string): Promise<void> {
+  await ensureListExists(token, 'Form Instances');
 }
 
 /**
