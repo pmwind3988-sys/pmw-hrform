@@ -4,6 +4,18 @@ import type { ListMetaEntry } from "../../types";
 import { editorial, si, siType } from "../../theme/editorial";
 import Card from "../common/Card";
 
+/** Wraps on a phone, one line with an ellipsis once there is room for it. */
+const clampLines = {
+  display: { xs: "-webkit-box", sm: "block" },
+  WebkitBoxOrient: "vertical" as const,
+  // Three, not two: the Open button and the edit icon leave a narrow column,
+  // and a two-line clamp still cut the last word off the longer form names.
+  WebkitLineClamp: 3,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: { xs: "normal", sm: "nowrap" },
+} as const;
+
 export interface FormListEntry {
   /** The SharePoint response list title, and the form's display name. */
   title: string;
@@ -87,7 +99,16 @@ export default function FormList({
             </Box>
 
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography noWrap sx={{ ...siType.cardTitle, color: editorial.ink }}>
+              {/*
+                Wraps to two lines on a phone instead of truncating.
+
+                A form list where every row reads "Training Requisition…" names
+                nothing the reader can choose between, and choosing is the whole
+                purpose of this list. Two lines costs a little height; an
+                ellipsis costs the identity of the row. Past the phone
+                breakpoint there is room for one line, so it stays one line.
+              */}
+              <Typography sx={{ ...siType.cardTitle, color: editorial.ink, ...clampLines }}>
                 {form.title}
               </Typography>
               <Typography noWrap sx={{ ...siType.subtext, color: editorial.muted }}>

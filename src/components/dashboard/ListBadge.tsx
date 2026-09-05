@@ -1,4 +1,5 @@
 import { Chip } from "@mui/material";
+import { ensureReadable } from "../../theme/contrast";
 import { DescriptionOutlined as DescriptionIcon } from "@mui/icons-material";
 
 interface ListBadgeProps {
@@ -8,6 +9,14 @@ interface ListBadgeProps {
 }
 
 export default function ListBadge({ title, color, pale }: ListBadgeProps) {
+  /*
+    The pale wash is chosen per form, so this pairing is only known at render.
+    Keep the form's own colour where it reads, and fall back to legible ink
+    where it does not — a tint someone picked should not decide whether the
+    label can be read.
+  */
+  const ink = ensureReadable(color, pale);
+
   return (
     <Chip
       icon={<DescriptionIcon sx={{ color: `${color} !important`, fontSize: "0.9375rem" }} />}
@@ -15,7 +24,7 @@ export default function ListBadge({ title, color, pale }: ListBadgeProps) {
       size="small"
       sx={{
         backgroundColor: pale,
-        color,
+        color: ink,
         boxShadow: `inset 0 0 0 1px ${color}33`,
         fontWeight: 700,
         fontSize: "0.78rem",

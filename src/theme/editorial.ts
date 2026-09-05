@@ -243,49 +243,72 @@ export const siTracking = {
    number — the reason the original inline sizes drifted into two dozen variants
    of "slightly bold".
 --------------------------------------------------------------------------- */
+/**
+ * A size that shrinks on a narrow screen and stops at the design size.
+ *
+ * `clamp(min, preferred, max)` where the preferred term carries a `vw` share:
+ * at phone widths the vw term is small and the size settles near `min`; past
+ * roughly a tablet it reaches `max` and stays there. So the desktop design is
+ * unchanged and only small screens are affected.
+ *
+ * This exists because labels were being ellipsised down to a word or two on a
+ * phone — a form list where every row reads "Training Requisition…" tells the
+ * reader nothing. Shrinking the type buys back the characters. It is paired
+ * with wrapping rather than truncation at the call sites that were worst hit;
+ * neither alone is enough.
+ *
+ * The floors stay at or above 11px: past that, buying characters costs
+ * legibility, which is a bad trade on the device with the least of it.
+ */
+function fluid(minRem: number, maxRem: number): string {
+  const vw = ((maxRem - minRem) / (48 - 20)) * 100;
+  const base = minRem - (vw * 20) / 100;
+  return `clamp(${minRem}rem, ${base.toFixed(4)}rem + ${vw.toFixed(4)}vw, ${maxRem}rem)`;
+}
+
 export const siType = {
   /** 21px. The page's one title. */
   pageTitle: {
-    fontSize: "1.3125rem",
+    fontSize: fluid(1.0625, 1.3125),
     fontWeight: 700,
     lineHeight: 1.3,
     letterSpacing: "-0.01em",
   },
   /** 19px. A titled section within a page. */
   sectionTitle: {
-    fontSize: "1.1875rem",
+    fontSize: fluid(1.0, 1.1875),
     fontWeight: 700,
     lineHeight: 1.3,
     letterSpacing: "-0.01em",
   },
   /** 17px. A subsection under a section title. */
   subsectionTitle: {
-    fontSize: "1.0625rem",
+    fontSize: fluid(0.9375, 1.0625),
     fontWeight: 700,
     lineHeight: 1.3,
     letterSpacing: "-0.01em",
   },
   /** 15px semibold. The header row of a card. */
   cardTitle: {
-    fontSize: "0.9375rem",
+    fontSize: fluid(0.875, 0.9375),
     fontWeight: 600,
     lineHeight: 1.4,
   },
   /** 13.5px. Body copy, and the default for anything unlabelled. */
   body: {
-    fontSize: "0.845rem",
+    fontSize: fluid(0.8125, 0.845),
     fontWeight: 400,
     lineHeight: 1.5,
   },
   /** 12.5px. Helper text, metadata, timestamps — SI's "small". */
   subtext: {
-    fontSize: "0.78rem",
+    fontSize: fluid(0.75, 0.78),
     fontWeight: 400,
     lineHeight: 1.45,
   },
   /** 11.5px uppercase bold. Eyebrows and table column headers, nothing else. */
   micro: {
-    fontSize: "0.72rem",
+    fontSize: fluid(0.6875, 0.72),
     fontWeight: 700,
     lineHeight: 1.3,
     letterSpacing: "0.03em",
@@ -293,7 +316,7 @@ export const siType = {
   },
   /** 13px medium, tabular. Codes, counts, dates, money — digits that align. */
   data: {
-    fontSize: "0.8125rem",
+    fontSize: fluid(0.78, 0.8125),
     fontWeight: 500,
     lineHeight: 1.4,
     fontVariantNumeric: "tabular-nums",

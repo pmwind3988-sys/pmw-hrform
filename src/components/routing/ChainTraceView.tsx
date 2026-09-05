@@ -12,6 +12,7 @@ import ErrorOutlinedIcon from "@mui/icons-material/ErrorOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { editorial } from "../../theme/editorial";
 import type { ChainStopReason, ChainTrace } from "../../utils/approvalDirectoryHealth";
+import { ensureReadable } from "../../theme/contrast";
 
 /**
  * How each stopping point should read. Only a loop or an over-long line is a
@@ -41,6 +42,9 @@ interface ChainTraceViewProps {
 
 export default function ChainTraceView({ trace, startLabel = "Submits" }: ChainTraceViewProps) {
   const tone = TONE_STYLE[STOP_TONE[trace.stoppedBecause]];
+  // The summary sits on a tinted panel whose pairing is decided by the outcome,
+  // so guard it rather than assume every tone was checked.
+  const traceInk = ensureReadable(tone.color, tone.background);
 
   return (
     <Box>
@@ -83,11 +87,11 @@ export default function ChainTraceView({ trace, startLabel = "Submits" }: ChainT
           p: 1.25,
           borderRadius: "12px",
           backgroundColor: tone.background,
-          color: tone.color,
+          color: traceInk,
         }}
       >
         {tone.icon}
-        <Typography sx={{ fontSize: "0.78rem", color: tone.color, fontWeight: 600 }}>
+        <Typography sx={{ fontSize: "0.78rem", color: traceInk, fontWeight: 600 }}>
           {trace.summary}
         </Typography>
       </Stack>

@@ -1,4 +1,5 @@
 import { Chip } from "@mui/material";
+import { ensureReadable } from "../../theme/contrast";
 import {
   AccessTime as AccessTimeIcon,
   Cancel as CancelIcon,
@@ -46,6 +47,10 @@ function getStatusIcon(key: string, color: string) {
 export default function StatusBadge({ status }: StatusBadgeProps) {
   const key = normalizeStatus(status);
   const cfg = STATUS_CFG[key] ?? STATUS_CFG.pending;
+  // Guards the pairing rather than replacing it: every shipped status already
+  // passes, so this only bites if a tint is ever retuned to something that
+  // does not.
+  const ink = ensureReadable(cfg.color, cfg.bg);
 
   return (
     <Chip
@@ -54,7 +59,7 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       size="small"
       sx={{
         backgroundColor: cfg.bg,
-        color: cfg.color,
+        color: ink,
         boxShadow: `inset 0 0 0 1px ${cfg.dot}33`,
         fontWeight: 700,
         fontSize: "0.78rem",

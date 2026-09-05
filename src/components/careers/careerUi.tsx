@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ensureReadable } from "../../theme/contrast";
 import { Alert, Box, Button, Paper, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material/styles";
 import { Refresh, SearchOff } from "@mui/icons-material";
@@ -337,7 +338,8 @@ export function CareerMetricPill({
           height: { xs: 32, sm: 38 },
           borderRadius: "12px",
           backgroundColor: colors.bg,
-          color: colors.color,
+          // The tile's tint comes from config, so the pairing is only known here.
+          color: ensureReadable(colors.color, colors.bg),
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
