@@ -155,6 +155,12 @@ export default function CareerPortalHeader({
   return (
     <Paper
       sx={{
+        /**
+         * Inside the shell this bar was the top bar twice: the same logo, a
+         * title beside the shell's own, and a second account button. It stays
+         * only when the page hangs actions on it, and then carries just those.
+         */
+        display: inShell && !actions ? "none" : "block",
         borderRadius: 0,
         boxShadow: "none",
         backgroundColor: "rgba(255,255,255,0.88)",
@@ -208,7 +214,8 @@ export default function CareerPortalHeader({
                 height: { xs: 38, sm: 46 },
                 borderRadius: "12px",
                 border: `1px solid ${editorial.pmwBlueSoft}`,
-                display: "flex",
+                // The shell's top bar already carries the mark.
+                display: inShell ? "none" : "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: "rgba(255,255,255,0.82)",
@@ -224,7 +231,9 @@ export default function CareerPortalHeader({
             >
               <Logo size={{ xs: 30, sm: 38 }} />
             </Box>
-            <Box sx={{ minWidth: 0, display: { xs: "none", sm: "block" } }}>
+            {/* The shell's top bar is already an h1 naming the section; a
+                second one here made two page titles on one screen. */}
+            <Box sx={{ minWidth: 0, display: inShell ? "none" : { xs: "none", sm: "block" } }}>
               <Typography
                 variant="h5"
                 component="h1"
@@ -258,6 +267,9 @@ export default function CareerPortalHeader({
               aria-label="Open account menu"
               sx={{
                 ...careerIconButtonSx,
+                // The shell has its own account menu in the top bar; a second
+                // one here is the same control twice on one screen.
+                display: inShell ? "none" : undefined,
                 p: 0.45,
                 "&:hover": {
                   transform: "translateY(-1px)",
@@ -337,6 +349,9 @@ export default function CareerPortalHeader({
               aria-label="Open account menu"
               sx={{
                 ...careerIconButtonSx,
+                // The shell has its own account menu in the top bar; a second
+                // one here is the same control twice on one screen.
+                display: inShell ? "none" : undefined,
                 p: 0.45,
                 "&:hover": {
                   transform: "translateY(-1px)",

@@ -140,23 +140,22 @@ export const NAV_CATEGORIES: NavCategory[] = [
         icon: "submissions",
         visibleTo: "everyone",
       },
-      {
-        label: "Approvals",
-        path: "/admin/approvals",
-        icon: "approvals",
-        visibleTo: "superuser",
-      },
       /**
-       * The superuser-wide submissions view, distinct from "My Submissions"
-       * above: that one is this account's own rows, this one is everybody's.
-       * Both existed before; only the first was reachable without knowing the
-       * URL.
+       * The superuser-wide view, distinct from "My Submissions" above: that one
+       * is this account's own rows, this one is everybody's.
+       *
+       * There used to be an "Approvals" tab beside it. Both pointed at the same
+       * component behind the same guard, differing only in a loading message —
+       * two tabs that opened the same screen, so choosing between them was a
+       * coin toss that taught you nothing. `/admin/approvals` still resolves
+       * here, so an old bookmark lights this tab rather than none.
        */
       {
         label: "All Submissions",
         path: "/admin/submissions",
         icon: "submissions",
         visibleTo: "superuser",
+        alsoMatches: ["/admin/approvals"],
       },
     ],
   },

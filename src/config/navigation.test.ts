@@ -61,6 +61,20 @@ describe("resolveNavLocation", () => {
     expect(resolveNavLocation("/admin/submissions").tabPath).toBe("/admin/submissions");
   });
 
+  /**
+   * /admin/approvals had its own tab until someone noticed it rendered the
+   * identical screen. It redirects now, and must light the tab it lands on
+   * rather than leaving the strip with nothing selected on the way through.
+   */
+  it("resolves the retired approvals path to All Submissions", () => {
+    expect(resolveNavLocation("/admin/approvals").tabPath).toBe("/admin/submissions");
+  });
+
+  it("offers one superuser submissions tab, not two", () => {
+    const work = visibleCategories(BOTH).find((c) => c.key === "work");
+    expect(work?.tabs.map((t) => t.label)).toEqual(["Available forms", "My Submissions", "All Submissions"]);
+  });
+
   it("keeps the two profile paths apart", () => {
     expect(resolveNavLocation("/profile").tabPath).toBe("/profile");
     expect(resolveNavLocation("/profile/appearance").tabPath).toBe("/profile/appearance");

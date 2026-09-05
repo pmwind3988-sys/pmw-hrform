@@ -885,15 +885,45 @@ export default function App() {
 
   
   useEffect(() => {
-    if (pageState !== "loading" || !isAuthenticated || isPublicRoute || !activeAccount || inProgress !== "none") return;
+    if (!isAuthenticated || !activeAccount || inProgress !== "none") return;
+    /**
+     * Normally this runs while the app is on its loading screen. It also runs
+     * on a PUBLIC route when someone is signed in, which it used to skip.
+     *
+     * A public route sends an authenticated user straight to `ready` (see the
+     * auth state machine above) so the page paints without waiting — but this
+     * effect is what sets `isAdmin` and `canUseFormBuilder`, so skipping it
+     * left those false. That cost nothing while public routes rendered bare.
+     * Now that /career-portal and /privacy render inside the shell when signed
+     * in, it cost them the Admin button and their role label: the navigation
+     * quietly claimed the account had no permissions.
+     *
+     * The page still paints first; this fills the permissions in behind it.
+     */
+    /**
+     * Moves the app's screen, unless a public page is already showing.
+     *
+     * On a public route this effect runs purely to fill in permissions behind a
+     * page that has already painted. Every `restricted` and `error` branch
+     * below would otherwise replace the careers portal or the privacy notice
+     * with an error screen for a signed-in visitor who simply lacks staff
+     * access — people for whom those pages are meant to work.
+     */
+    const advancePageState = (next: PageState) => {
+      if (!isPublicRoute) setPageState(next);
+    };
+    const loadingBehindAPublicPage = isPublicRoute && pageState === "ready";
+    if (pageState !== "loading" && !loadingBehindAPublicPage) return;
     if (reauthRedirectInProgressRef.current) return;
     if (authProfileLoadingRef.current) return;
     if (authProfileReady) {
-      setPageState("ready");
+      // Already known — and on a public route the page is showing, so there is
+      // nothing to advance.
+      advancePageState("ready");
       return;
     }
     if (authProfileRestricted) {
-      setPageState("restricted");
+      advancePageState("restricted");
       return;
     }
 
@@ -919,7 +949,7 @@ export default function App() {
       setAuthErrorMode("reauth");
       setAuthErrorStep("reauth");
       setAuthProfileStatus("unknown");
-      setPageState("error");
+      advancePageState("error");
     };
     const redirectToFreshSignIn = () => {
       window.clearTimeout(reauthTimeoutId);
@@ -1005,7 +1035,7 @@ export default function App() {
         authProfileAccountRef.current = accountKey;
         finishProfileLoad();
         setAuthProfileStatus("ready");
-        setPageState("ready");
+        advancePageState("ready");
       } catch (err: unknown) {
         if (cancelled) return;
         if (isAuthTimeoutReloginRequiredError(err)) {
@@ -1028,12 +1058,12 @@ export default function App() {
             setAuthErrorMode("generic");
             setAuthErrorStep(null);
             setAuthProfileStatus("unknown");
-            setPageState("error");
+            advancePageState("error");
             return;
           }
           authProfileAccountRef.current = accountKey;
           setAuthProfileStatus("restricted");
-          setPageState("restricted");
+          advancePageState("restricted");
           return;
         }
         const message = err instanceof Error ? err.message : "Unknown error occurred";
@@ -1042,7 +1072,7 @@ export default function App() {
         setAuthErrorMode("generic");
         setAuthErrorStep(null);
         setAuthProfileStatus("unknown");
-        setPageState("error");
+        advancePageState("error");
       }
     }
 
@@ -1688,13 +1718,15 @@ export default function App() {
           />
           <Route
             path="/admin/approvals"
+            /**
+             * An alias for /admin/submissions, which renders the identical
+             * screen. It kept its own tab and its own route until someone
+             * noticed the two were the same thing. Redirected rather than
+             * deleted so an existing bookmark still lands somewhere real.
+             */
             element={
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
-                <ErrorBoundary>
-                  {inShell(
-                    <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
-                  )}
-                </ErrorBoundary>
+                <CatchAllRedirect to="/admin/submissions" />
               </AdminGuard>
             }
           />
