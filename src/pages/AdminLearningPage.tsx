@@ -42,6 +42,7 @@ import {
 } from "@mui/icons-material";
 import LearningHeader from "../components/learning/LearningHeader";
 import SetLockPasswordDialog from "../components/learning/SetLockPasswordDialog";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import {
   LearningEmptyState,
   kindStyle,
@@ -116,6 +117,18 @@ export default function AdminLearningPage() {
    * than a boolean so the dialog can be mounted only while it is open — a
    * password must not sit in state after the dialog that collected it is gone.
    */
+  /**
+   * The question the confirmation dialog is currently asking, and what to do if
+   * the answer is yes. One descriptor rather than a flag per call site: four
+   * actions on this page need confirming, and they differ only in their words.
+   */
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    body: string;
+    confirmLabel: string;
+    destructive?: boolean;
+    run: () => void | Promise<void>;
+  } | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<
     { scope: "material"; material: LearningMaterial } | { scope: "topic"; topic: LearningTopic } | null
   >(null);
@@ -210,24 +223,30 @@ export default function AdminLearningPage() {
   };
 
   const handleDeleteFolder = (topic: LearningTopic) => {
-    if (
-      !window.confirm(
-        `Delete "${topic.name}" and everything inside it? ${topic.totalMaterialCount} material(s) will be removed from SharePoint.`,
-      )
-    ) {
-      return;
-    }
-    void runAction(async () => {
-      await deleteLearningFolder(topic.path, spToken);
-      setSelectedPath(topic.parentPath);
-    }, `Topic "${topic.name}" deleted.`);
+    setPendingConfirm({
+      title: "Delete this topic?",
+      body: `"${topic.name}" and everything inside it — ${topic.totalMaterialCount} material(s) — will be removed from SharePoint. This cannot be undone.`,
+      confirmLabel: "Delete topic",
+      destructive: true,
+      run: () =>
+        runAction(async () => {
+          await deleteLearningFolder(topic.path, spToken);
+          setSelectedPath(topic.parentPath);
+        }, `Topic "${topic.name}" deleted.`),
+    });
   };
 
   const handleDeleteMaterial = (material: LearningMaterial) => {
-    if (!window.confirm(`Delete "${material.title}"? This removes the file from SharePoint.`)) return;
-    void runAction(async () => {
-      await deleteLearningMaterial(material.id, spToken);
-    }, `"${material.title}" deleted.`);
+    setPendingConfirm({
+      title: "Delete this material?",
+      body: `"${material.title}" will be removed from SharePoint. This cannot be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+      run: () =>
+        runAction(async () => {
+          await deleteLearningMaterial(material.id, spToken);
+        }, `"${material.title}" deleted.`),
+    });
   };
 
   const handleToggleDownloadable = (material: LearningMaterial, downloadable: boolean) => {
@@ -251,12 +270,15 @@ export default function AdminLearningPage() {
       setPasswordTarget({ scope: "material", material });
       return;
     }
-    if (!window.confirm(`Remove the password from "${material.title}"? Anyone signed in will be able to open it.`)) {
-      return;
-    }
-    void runAction(async () => {
-      await setLearningMaterialPassword(material.id, "", spToken);
-    }, "Password removed.");
+    setPendingConfirm({
+      title: "Remove this password?",
+      body: `Anyone signed in will be able to open "${material.title}".`,
+      confirmLabel: "Remove password",
+      run: () =>
+        runAction(async () => {
+          await setLearningMaterialPassword(material.id, "", spToken);
+        }, "Password removed."),
+    });
   };
 
   const handleToggleTopicLock = (topic: LearningTopic, locked: boolean) => {
@@ -264,16 +286,15 @@ export default function AdminLearningPage() {
       setPasswordTarget({ scope: "topic", topic });
       return;
     }
-    if (
-      !window.confirm(
-        `Remove the password from "${topic.name}"? Everything inside it becomes visible to anyone signed in.`,
-      )
-    ) {
-      return;
-    }
-    void runAction(async () => {
-      await setLearningTopicPassword(topic.path, "", spToken);
-    }, "Password removed.");
+    setPendingConfirm({
+      title: "Remove this password?",
+      body: `Everything inside "${topic.name}" becomes visible to anyone signed in.`,
+      confirmLabel: "Remove password",
+      run: () =>
+        runAction(async () => {
+          await setLearningTopicPassword(topic.path, "", spToken);
+        }, "Password removed."),
+    });
   };
 
   const savePassword = (password: string) => {
@@ -940,6 +961,20 @@ export default function AdminLearningPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        title={pendingConfirm?.title ?? ""}
+        body={pendingConfirm?.body ?? ""}
+        confirmLabel={pendingConfirm?.confirmLabel ?? "Confirm"}
+        destructive={pendingConfirm?.destructive}
+        onConfirm={() => {
+          const target = pendingConfirm;
+          setPendingConfirm(null);
+          void target?.run();
+        }}
+        onClose={() => setPendingConfirm(null)}
+      />
 
       {/* Mounted only while open, so the typed password never outlives it. */}
       {passwordTarget && (

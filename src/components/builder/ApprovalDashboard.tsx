@@ -14,6 +14,8 @@ import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getForm
 import { SignatureCapture } from "../../utils/signatureCapture";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
+import ConfirmDialog from "../common/ConfirmDialog";
+import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import { SP_STATIC } from "../../utils/spConfig";
 import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
@@ -89,6 +91,7 @@ import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
 import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
+import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import { editorial } from "../../theme/editorial";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -707,8 +710,8 @@ export default function ApprovalDashboard() {
   const [needsBranchSelection, setNeedsBranchSelection] = useState(false);
   const [availableBranches, setAvailableBranches] = useState<ManualBranch[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PendingItem | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [resendingItemKey, setResendingItemKey] = useState("");
   const [emailNotice, setEmailNotice] = useState("");
@@ -2442,7 +2445,6 @@ export default function ApprovalDashboard() {
         setCompletedLayers({});
       }
       setDeleteTarget(null);
-      setDeleteConfirmText("");
       if (result.warnings.length > 0) {
         setError(`Submission deleted. Cleanup warnings: ${result.warnings.join(" ")}`);
       }
@@ -2861,77 +2863,41 @@ export default function ApprovalDashboard() {
           </div>
         )}
 
-        {deleteTarget && (
-          <div
-            style={{
-              position: "fixed", inset: 0, background: "rgba(0,0,0,0.42)", zIndex: 1000,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-            onClick={() => { if (!deleteLoading) { setDeleteTarget(null); setDeleteConfirmText(""); } }}
-          >
-            <div
-              style={{
-                background: C.cardBg, borderRadius: 12, padding: 24, width: 460, maxWidth: "90vw",
-                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.redPale, color: C.red, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <DeleteIcon style={{ fontSize: 18 }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary }}>Delete Submission Permanently</div>
-                  <div style={{ fontSize: 12.5, color: C.textSecond }}>This removes the submission item and related managed files where possible.</div>
-                </div>
-              </div>
-              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, margin: "14px 0", fontSize: 12.5, color: C.textSecond }}>
-                <div style={{ fontWeight: 700, color: C.textPrimary }}>{deleteTarget.Title}</div>
-                <div>Submitted by {deleteTarget.SubmittedBy || "Unknown"} on {formatDateTime(deleteTarget.SubmittedAt)}</div>
-                <div>Item ID: {deleteTarget.Id}</div>
-              </div>
-              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>
-                Type DELETE to confirm
-              </label>
-              <input
-                value={deleteConfirmText}
-                onChange={e => setDeleteConfirmText(e.target.value)}
-                disabled={deleteLoading}
-                autoFocus
-                style={{
-                  width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, fontSize: 13.5, color: C.textPrimary, outline: "none",
-                }}
-              />
-              <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}
-                  disabled={deleteLoading}
-                  style={{
-                    padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
-                    background: "#fff", color: C.textSecond, fontSize: 13.5, fontWeight: 600,
-                    cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.6 : 1,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteSubmission}
-                  disabled={deleteConfirmText !== "DELETE" || deleteLoading}
-                  style={{
-                    padding: "9px 18px", borderRadius: 8, border: "none",
-                    background: deleteConfirmText === "DELETE" && !deleteLoading ? C.red : C.border,
-                    color: deleteConfirmText === "DELETE" && !deleteLoading ? "#fff" : C.textMuted,
-                    fontSize: 13.5, fontWeight: 600,
-                    cursor: deleteConfirmText === "DELETE" && !deleteLoading ? "pointer" : "not-allowed",
-                  }}
-                >
-                  {deleteLoading ? "Deleting..." : "Delete permanently"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmDialog
+          open={Boolean(deleteTarget)}
+          title="Delete this submission permanently?"
+          body={
+            <>
+              {/* The row is still named. That is not friction -- it is the
+                  difference between confirming an action and confirming THIS
+                  action, and it costs the reader nothing. */}
+              <Box component="span" sx={{ display: "block", fontWeight: 700, color: editorial.ink }}>
+                {deleteTarget?.Title}
+              </Box>
+              <Box component="span" sx={{ display: "block", mt: 0.5 }}>
+                Submitted by {deleteTarget?.SubmittedBy || "Unknown"} on{" "}
+                {formatDateTime(deleteTarget?.SubmittedAt)} · Item ID {deleteTarget?.Id}
+              </Box>
+              <Box component="span" sx={{ display: "block", mt: 1 }}>
+                This also removes its generated PDFs, signature images, uploaded files and matrix
+                rows. It cannot be undone.
+              </Box>
+            </>
+          }
+          confirmLabel={deleteLoading ? "Deleting…" : "Delete permanently"}
+          destructive
+          busy={deleteLoading}
+          onConfirm={handleDeleteSubmission}
+          onClose={() => { setDeleteTarget(null); }}
+        />
+
+        <PdfPreviewDialog
+          open={Boolean(pdfPreview)}
+          url={pdfPreview?.url ?? ""}
+          filename={pdfPreview?.filename ?? ""}
+          siteUrl={SP_SITE_URL}
+          onClose={() => setPdfPreview(null)}
+        />
 
         {/* Items + Detail Grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
@@ -3073,7 +3039,6 @@ export default function ApprovalDashboard() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeleteTarget(item);
-                            setDeleteConfirmText("");
                           }}
                           disabled={deleteLoading}
                           style={{
@@ -3429,9 +3394,15 @@ export default function ApprovalDashboard() {
                     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap", color: C.textMuted, fontSize: 13.5 }}>
                       <span>
                         {getItemDisplayStatus(selectedItem)} — {selectedItem.PdfUrl ? (
-                          <a href={absoluteSharePointUrl(selectedItem.PdfUrl, SP_SITE_URL)}
-                            target="_blank" rel="noopener noreferrer"
-                            style={{ color: C.purple, fontWeight: 600 }}>View PDF</a>
+                          <button
+                            type="button"
+                            onClick={() => setPdfPreview({
+                              url: absoluteSharePointUrl(selectedItem.PdfUrl, SP_SITE_URL),
+                              filename: `${selectedItem.Title}-${selectedItem.Id}.pdf`,
+                            })}
+                            style={{ background: "none", border: "none", padding: 0, font: "inherit",
+                              color: C.purple, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+                          >View PDF</button>
                         ) : "No PDF available"}
                       </span>
                       {(isAdmin || isSuperuser) && (
@@ -3473,10 +3444,15 @@ export default function ApprovalDashboard() {
             <div style={{ fontSize: 20, fontWeight: 700, color: actionSuccess.type === "rejected" ? C.red : C.green }}>{actionSuccessTitle}</div>
             <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 8, fontWeight: 500 }}>{actionSuccess.message}</div>
             {actionSuccess.pdfUrl && (
-              <a href={absoluteSharePointUrl(actionSuccess.pdfUrl, SP_SITE_URL)}
-                target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13.5, fontWeight: 600, textDecoration: "none" }}>
+              <button
+                type="button"
+                onClick={() => setPdfPreview({
+                  url: absoluteSharePointUrl(actionSuccess.pdfUrl, SP_SITE_URL),
+                  filename: `${selectedItem?.Title ?? "submission"}.pdf`,
+                })}
+                style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer" }}>
                 <DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> View PDF
-              </a>
+              </button>
             )}
             <div style={{ marginTop: 12 }}>
               <button onClick={() => { setActionSuccess(null); setSelectedItem(null); }}

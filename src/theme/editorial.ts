@@ -184,6 +184,18 @@ export const si = {
   topBarHeight: 52,
   /** Where the sidebar hands over to the bottom bar. Matches SI's own switch. */
   shellBreakpoint: 1024,
+  /**
+   * The stacking level for a shared dialog.
+   *
+   * MUI's own default is 1300, which is under the form builder: its panels and
+   * overlays sit at 10000-10001 (see `BuilderShell.css`), so a confirmation
+   * opened from one rendered BEHIND it -- the click appeared to do nothing.
+   *
+   * 11000 clears those and still sits under the builder's toast at 12000,
+   * which is the right order: the toast reports what the dialog's action did,
+   * so it must not be covered by the dialog that started it.
+   */
+  zDialog: 11000,
 } as const;
 
 /**

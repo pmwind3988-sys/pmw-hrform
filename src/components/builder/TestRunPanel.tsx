@@ -16,6 +16,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { C } from "./constants";
+import ConfirmDialog from "../common/ConfirmDialog";
+import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { sharePointManageScope } from "../../utils/sharePointScope";
 import { absoluteSharePointUrl } from "../../utils/sharePointUrl";
@@ -209,6 +211,13 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
   const [pdfErrorById, setPdfErrorById] = useState<Record<string, string>>({});
   /** True if the listing stopped before exhausting every page — shown so "N test runs" never silently understates what's really there. */
   const [rowsTruncated, setRowsTruncated] = useState(false);
+  /**
+   * What the confirmation dialog is currently asking about. `null` means it is
+   * closed. Held as one value rather than an open flag plus a target, so the
+   * dialog cannot be open with nothing to act on.
+   */
+  const [pendingDelete, setPendingDelete] = useState<{ kind: "one"; id: string } | { kind: "all" } | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
 
   const getDelegatedToken = useCallback(async (): Promise<string> => {
     return acquireAccessTokenSilentOrRedirect(instance, {
@@ -260,9 +269,9 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
 
   if (!open) return null;
 
+
   const deleteOne = async (itemId: string) => {
     if (!form.Slug) { setError("This form has no published slug yet — publish it before managing test runs."); return; }
-    if (!window.confirm("Delete this test run? This cannot be undone.")) return;
     setBusyRowId(itemId);
     setError("");
     try {
@@ -279,8 +288,6 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
   const clearAll = async () => {
     if (rows.length === 0) return;
     if (!form.Slug) { setError("This form has no published slug yet — publish it before managing test runs."); return; }
-    const countLabel = rowsTruncated ? `at least ${rows.length}` : String(rows.length);
-    if (!window.confirm(`Delete all ${countLabel} test run(s) for this form? This cannot be undone.`)) return;
     setBusyAll(true);
     setError("");
     try {
@@ -314,10 +321,15 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
       const pdfUrl = await generateAndStorePdf(delegatedToken, form.Title, Number(row.id), pdfData, {
         onGeneratedBlob: (blob) => { bytes = blob.size; },
       });
-      // `generateAndStorePdf` returns SharePoint's server-relative path. Opened
-      // as-is the browser resolves it against this app's own origin and the
-      // user gets a Vercel 404 for a file that uploaded perfectly well.
-      window.open(absoluteSharePointUrl(pdfUrl, siteUrl || SP_SITE_URL), "_blank", "noopener");
+      // `generateAndStorePdf` returns SharePoint's server-relative path, which
+      // must be absolute before it leaves this app: resolved against our own
+      // origin it is a Vercel 404 for a file that uploaded perfectly well.
+      // Shown in a dialog rather than a new tab -- the dialog keeps its own
+      // "Open in new tab" for when the preview cannot load.
+      setPdfPreview({
+        url: absoluteSharePointUrl(pdfUrl, siteUrl || SP_SITE_URL),
+        filename: `${form.Title}-${row.id}.pdf`,
+      });
       const step: Omit<TestRunStep, "at"> = { step: "pdf", label: "PDF rendered", status: "pass", order: 1100, detail: `${bytes} bytes` };
       await callTestRunAction({ action: "record-test-run-step", slug: form.Slug, itemId: row.id, delegatedToken, step });
       setRows((prev) => prev.map((candidate) => (
@@ -357,7 +369,7 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={clearAll}
+              onClick={() => setPendingDelete({ kind: "all" })}
               disabled={busyAll || rows.length === 0}
               style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.red, fontSize: 12.5, fontWeight: 600, cursor: busyAll || rows.length === 0 ? "default" : "pointer", opacity: busyAll || rows.length === 0 ? 0.5 : 1 }}
             >
@@ -423,7 +435,7 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
                     </div>
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); deleteOne(row.id); }}
+                    onClick={(e) => { e.stopPropagation(); setPendingDelete({ kind: "one", id: row.id }); }}
                     disabled={busyRowId === row.id}
                     style={{ height: 26, padding: "0 10px", border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.red, fontSize: 11.5, fontWeight: 600, cursor: busyRowId === row.id ? "default" : "pointer", opacity: busyRowId === row.id ? 0.5 : 1 }}
                   >
@@ -470,6 +482,34 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
           })}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete?.kind === "all" ? "Delete every test run for this form?" : "Delete this test run?"}
+        body={
+          pendingDelete?.kind === "all"
+            ? `This removes ${rowsTruncated ? `at least ${rows.length}` : rows.length} rehearsal row${rows.length === 1 ? "" : "s"} and everything recorded against them. It cannot be undone.`
+            : "This removes the rehearsal row and everything recorded against it. It cannot be undone."
+        }
+        confirmLabel={pendingDelete?.kind === "all" ? "Delete all" : "Delete"}
+        destructive
+        busy={busyAll || busyRowId !== null}
+        onConfirm={() => {
+          const target = pendingDelete;
+          setPendingDelete(null);
+          if (target?.kind === "all") void clearAll();
+          else if (target) void deleteOne(target.id);
+        }}
+        onClose={() => setPendingDelete(null)}
+      />
+
+      <PdfPreviewDialog
+        open={Boolean(pdfPreview)}
+        url={pdfPreview?.url ?? ""}
+        filename={pdfPreview?.filename ?? ""}
+        siteUrl={siteUrl || SP_SITE_URL}
+        onClose={() => setPdfPreview(null)}
+      />
     </div>
   );
 }
