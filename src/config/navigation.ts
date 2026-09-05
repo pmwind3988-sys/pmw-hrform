@@ -122,12 +122,18 @@ export const NAV_CATEGORIES: NavCategory[] = [
   },
   {
     key: "work",
-    label: "My Work",
-    shortLabel: "Work",
+    label: "Forms",
+    shortLabel: "Forms",
     icon: "forms",
     visibleTo: "everyone",
     tabs: [
-      { label: "Forms", path: "/forms", icon: "forms", visibleTo: "everyone" },
+      /**
+       * "Available forms", not "Forms": the category is already called Forms,
+       * and a Forms tab under a Forms button says nothing about what the tab
+       * holds. The path stays `/forms` -- labels are presentation, and no route
+       * moves.
+       */
+      { label: "Available forms", path: "/forms", icon: "forms", visibleTo: "everyone" },
       {
         label: "My Submissions",
         path: "/submissions",
