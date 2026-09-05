@@ -10,6 +10,8 @@ import { parseForm, type NativeForm } from "../../native/schema";
 import { useNativeForm } from "../../native/useNativeForm";
 import "../../native/native-form.css";
 
+import { buildSubmissionGroups, instanceState, type FormInstance } from "../../utils/formInstances";
+import { listFormInstances } from "../../utils/formInstancesSP";
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
 import { SignatureCapture } from "../../utils/signatureCapture";
 import { createSpClient } from "../../utils/sharepointClient";
@@ -701,6 +703,11 @@ export default function ApprovalDashboard() {
   const [answersLoading, setAnswersLoading] = useState(false);
   const [workflowTypeFilter, setWorkflowTypeFilter] = useState<"all" | "approval" | "evaluation">("all");
   const [listPage, setListPage] = useState(1);
+  /** Each form's grouping field, from Master Form. "" or absent means no grouping. */
+  const [groupByFieldByForm, setGroupByFieldByForm] = useState<Record<string, string>>({});
+  const [formInstances, setFormInstances] = useState<FormInstance[]>([]);
+  /** null = showing the group index; a string = drilled into that group. */
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperuser, setIsSuperuser] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
@@ -901,10 +908,57 @@ export default function ApprovalDashboard() {
     return mergeObservedValues(base, answers);
   }, [pendingItems, filters.formType, filters.publishProfile, filters.formVersion, formSchemaSnapshots, itemAnswers]);
 
-  const filteredItems = useMemo(
-    () => categoryItems.filter(i => getItemLifecycleStage(i) === stageFilter),
-    [categoryItems, stageFilter],
-  );
+  /*
+    Grouping needs one form in view: the field is a per-form setting, and the
+    answers this reads are only loaded for the selected form. With every form
+    listed at once the page behaves exactly as it always has.
+  */
+  const activeGroupByField = filters.formType ? groupByFieldByForm[filters.formType] || "" : "";
+
+  useEffect(() => {
+    if (!token || !activeGroupByField || !filters.formType) { setFormInstances([]); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await listFormInstances(token, filters.formType);
+        if (!cancelled) setFormInstances(rows);
+      } catch {
+        // An unreadable instance list must not take the page down: the groups
+        // still build from the submissions, they simply carry no expiry or link.
+        if (!cancelled) setFormInstances([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token, filters.formType, activeGroupByField]);
+
+  // Leaving a form, or turning grouping off, drops you back to the index rather
+  // than stranding you inside a group that no longer exists.
+  useEffect(() => { setSelectedGroup(null); }, [filters.formType, activeGroupByField]);
+
+  /*
+    Built from every stage, not the selected one: a group's count is how many
+    responses it holds, and a heading that changed as you flipped between
+    Pending and Approved would be reporting the tab rather than the event.
+  */
+  const submissionGroups = useMemo(() => {
+    if (!activeGroupByField) return [];
+    const rows = categoryItems.map((item) => ({
+      submissionData: itemAnswers.get(getPendingItemKey(item)) ?? {},
+    })) as unknown as Parameters<typeof buildSubmissionGroups>[0];
+    return buildSubmissionGroups(rows, activeGroupByField, formInstances)
+      .sort((a, b) => (b.count - a.count) || a.value.localeCompare(b.value));
+  }, [activeGroupByField, categoryItems, itemAnswers, formInstances]);
+
+  const showGroupIndex = Boolean(activeGroupByField) && selectedGroup === null;
+
+  const filteredItems = useMemo(() => {
+    const byStage = categoryItems.filter(i => getItemLifecycleStage(i) === stageFilter);
+    if (!activeGroupByField || selectedGroup === null) return byStage;
+    return byStage.filter((item) => {
+      const raw = itemAnswers.get(getPendingItemKey(item))?.[activeGroupByField];
+      return (raw === null || raw === undefined ? "" : String(raw).trim()) === selectedGroup;
+    });
+  }, [categoryItems, stageFilter, activeGroupByField, selectedGroup, itemAnswers]);
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
@@ -974,6 +1028,12 @@ export default function ApprovalDashboard() {
           }
         }
         formLayerConfigsRef.current = formLayerConfigMap;
+
+        setGroupByFieldByForm(
+          Object.fromEntries(
+            (forms ?? []).map((form) => [form.Title, typeof form.GroupByField === "string" ? form.GroupByField : ""]),
+          ),
+        );
 
         // Load version-specific LayerConfig from Web Form Versions
         const versionLayerMap: Record<string, LayerConfigSource> = {};
@@ -2904,15 +2964,82 @@ export default function ApprovalDashboard() {
           {/* Items List */}
           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ fontWeight: 600, color: C.purple }}>
-                {lifecycleLabel(stageFilter)} ({filteredItems.length})
-              </span>
-              <span style={{ fontSize: 11.5, color: C.textSecond }}>
-                Newest first
-              </span>
+              {showGroupIndex ? (
+                <>
+                  <span style={{ fontWeight: 600, color: C.purple }}>
+                    Events ({submissionGroups.length})
+                  </span>
+                  <span style={{ fontSize: 11.5, color: C.textSecond }}>Most responses first</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontWeight: 600, color: C.purple, minWidth: 0 }}>
+                    {selectedGroup !== null && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGroup(null)}
+                        style={{ border: "none", background: "none", padding: 0, marginRight: 8, color: C.purple, fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        All events
+                      </button>
+                    )}
+                    {selectedGroup ? `${selectedGroup} — ` : selectedGroup === "" ? "Not in an event — " : ""}
+                    {lifecycleLabel(stageFilter)} ({filteredItems.length})
+                  </span>
+                  <span style={{ fontSize: 11.5, color: C.textSecond }}>
+                    Newest first
+                  </span>
+                </>
+              )}
             </div>
             <div style={{ maxHeight: 600, overflow: "auto" }}>
-              {filteredItems.length === 0 ? (
+              {showGroupIndex ? (
+                /*
+                  The index. A group with no instance behind it is the historical
+                  case — links handed out before instances existed were never
+                  recorded, so it shows the name and count with no date and no
+                  link, because there never was one.
+                */
+                submissionGroups.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions</div>
+                ) : (
+                  submissionGroups.map((group) => {
+                    const state = group.instance ? instanceState(group.instance) : null;
+                    return (
+                      <button
+                        key={group.value || "__ungrouped__"}
+                        type="button"
+                        onClick={() => setSelectedGroup(group.value)}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left", border: "none",
+                          borderBottom: `1px solid ${C.border}`, background: "none",
+                          padding: "13px 16px", cursor: "pointer", font: "inherit",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600, color: group.value ? C.textPrimary : C.textMuted }}>
+                            {group.value || "Not in an event"}
+                          </span>
+                          <span style={{ fontSize: 12.5, color: C.textSecond }}>
+                            {group.count} {group.count === 1 ? "response" : "responses"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 3 }}>
+                          {group.instance
+                            ? `${state === "open" ? "Open" : state === "expired" ? "Closed on its date" : "Closed"}${
+                                group.instance.expiresAt
+                                  ? ` · ${new Date(group.instance.expiresAt).toLocaleDateString()}`
+                                  : ""
+                              }`
+                            : group.value
+                              ? "No instance — filled in before this event was recorded"
+                              : "Responses with nothing in the grouping field"}
+                        </div>
+                      </button>
+                    );
+                  })
+                )
+              ) : filteredItems.length === 0 ? (
                 <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions</div>
               ) : (
                 pagedItems.map((item) => {
