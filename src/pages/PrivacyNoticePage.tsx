@@ -5,7 +5,6 @@ import {
   Container,
   Divider,
   Link,
-  Paper,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
@@ -14,8 +13,9 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useInShell } from "../components/shell/ShellContext";
 import ShieldIcon from "@mui/icons-material/Shield";
-import { editorial, si, siType } from "../theme/editorial";
+import { editorial, siType } from "../theme/editorial";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
+import Card from "../components/common/Card";
 import {
   getPdpaContent,
   getPdpaNoticeVersion,
@@ -146,7 +146,7 @@ export default function PrivacyNoticePage() {
           </Button>
         )}
 
-        <Paper sx={{ borderRadius: "12px", overflow: "hidden", border: `1px solid ${editorial.border}`, boxShadow: si.shadow }}>
+        <Card pad="none" clip>
           <Box sx={{ p: { xs: 3, md: 4 }, backgroundColor: editorial.white, color: editorial.ink, borderBottom: `1px solid ${editorial.border}` }}>
             <Box
               sx={{
@@ -247,7 +247,7 @@ export default function PrivacyNoticePage() {
               {ui.returnHome}
             </Button>
           </Box>
-        </Paper>
+        </Card>
       </Container>
     </Box>
   );

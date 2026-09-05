@@ -8,6 +8,7 @@ import {
 import type { Submission } from "../../types";
 import { editorial, si, siType } from "../../theme/editorial";
 import { bucketSubmissions } from "../../utils/submissionStatusBuckets";
+import Card from "../common/Card";
 
 interface StatsRowProps {
   submissions: Submission[];
@@ -88,19 +89,16 @@ export default function StatsRow({ submissions }: StatsRowProps) {
     <Grid container spacing={2}>
       {stats.map((stat) => (
         <Grid size={{ xs: 6, md: 3 }} key={stat.label}>
-          <Box
+          <Card
+            pad="none"
+            clip
             sx={{
               minHeight: 138,
-              backgroundColor: editorial.panel,
-              border: `1px solid ${editorial.border}`,
-              borderRadius: `${si.radius}px`,
               p: { xs: 1.5, sm: `${si.padTight}px` },
               display: "grid",
               gridTemplateRows: "auto 1fr auto",
               gap: 1.5,
-              boxShadow: si.shadow,
               position: "relative",
-              overflow: "hidden",
               "&::before": {
                 content: '""',
                 position: "absolute",
@@ -179,7 +177,7 @@ export default function StatsRow({ submissions }: StatsRowProps) {
                 }}
               />
             </Box>
-          </Box>
+          </Card>
         </Grid>
       ))}
     </Grid>

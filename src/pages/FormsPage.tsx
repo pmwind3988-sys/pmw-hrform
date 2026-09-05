@@ -7,7 +7,8 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { sharePointManageScope } from "../utils/sharePointScope";
 import { getAllFormConfigs } from "../utils/formBuilderSP";
-import { editorial, si, siType } from "../theme/editorial";
+import { editorial, siType } from "../theme/editorial";
+import Card from "../components/common/Card";
 
 /**
  * Forms → Available forms: the forms this account can open and fill in.
@@ -117,16 +118,7 @@ export default function FormsPage() {
          * permissions question, and not one they can fix on this page, so the
          * copy points at who can.
          */
-        <Box
-          sx={{
-            p: `${si.padLoose}px`,
-            textAlign: "center",
-            borderRadius: `${si.radius}px`,
-            backgroundColor: editorial.panel,
-            border: `1px solid ${editorial.border}`,
-            boxShadow: si.shadow,
-          }}
-        >
+        <Card sx={{ textAlign: "center" }}>
           <Typography sx={{ ...siType.subsectionTitle, color: editorial.ink }}>
             No forms available yet
           </Typography>
@@ -134,7 +126,7 @@ export default function FormsPage() {
             This account has not been granted access to any form libraries. Ask an HR Forms
             administrator to add you to the group for the forms you need.
           </Typography>
-        </Box>
+        </Card>
       )}
 
       <ConfirmDialog

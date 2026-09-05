@@ -37,6 +37,7 @@ import { downloadCsv } from "../utils/csv";
 import type { HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, si, siType } from "../theme/editorial";
 import { bucketSubmissions } from "../utils/submissionStatusBuckets";
+import Card from "../components/common/Card";
 
 /**
  * Forms → My Submissions.
@@ -221,17 +222,18 @@ export default function MySubmissionsPage() {
       </Typography>
 
       {ownSubmissions.length > 0 ? (
-        <Box
+        <Card
+          pad="none"
           sx={{
-            // The card exists only where the table does. Below md the rows are
-            // already self-contained cards, and wrapping those in another card
-            // put a card inside a card -- the very thing the desktop rows drop
-            // their own shadow to avoid.
-            borderRadius: { md: `${si.radius}px` },
-            border: { md: `1px solid ${editorial.border}` },
-            boxShadow: { md: si.shadow },
-            // Clips the header band's corners and the last row's border to the
-            // card's radius, so the table reads as one object.
+            // The card surface exists only where the table does. Below md the
+            // rows are already self-contained cards, and wrapping those in
+            // another card put a card inside a card -- the very thing the
+            // desktop rows drop their own shadow to avoid. Switched off rather
+            // than swapped for a different component.
+            borderRadius: { xs: 0, md: `${si.radius}px` },
+            border: { xs: "none", md: `1px solid ${editorial.border}` },
+            boxShadow: { xs: "none", md: si.shadow },
+            backgroundColor: { xs: "transparent", md: editorial.panel },
             overflow: { md: "hidden" },
           }}
         >
@@ -254,7 +256,7 @@ export default function MySubmissionsPage() {
               />
             ))}
           </Box>
-        </Box>
+        </Card>
       ) : (
         <EmptyState hasFilters={hasFilters} />
       )}

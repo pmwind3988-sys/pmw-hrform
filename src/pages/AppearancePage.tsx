@@ -6,6 +6,7 @@ import { useDashboardBackground } from "../hooks/useDashboardBackground";
 import BackgroundPicker from "../components/dashboard/BackgroundPicker";
 import { findDashboardBackground } from "../utils/dashboardBackgrounds";
 import { editorial, si, siType } from "../theme/editorial";
+import Card from "../components/common/Card";
 
 /**
  * Profile → Appearance.
@@ -43,15 +44,7 @@ export default function AppearancePage() {
 
   return (
     <Box sx={{ maxWidth: 860, mx: "auto" }}>
-      <Box
-        sx={{
-          p: `${si.padLoose}px`,
-          borderRadius: `${si.radius}px`,
-          backgroundColor: editorial.panel,
-          border: `1px solid ${editorial.border}`,
-          boxShadow: si.shadow,
-        }}
-      >
+      <Card>
         <Typography sx={{ ...siType.sectionTitle, color: editorial.ink }}>
           Dashboard background
         </Typography>
@@ -107,7 +100,7 @@ export default function AppearancePage() {
         {error && (
           <Typography sx={{ ...siType.subtext, color: editorial.error, mt: 2 }}>{error}</Typography>
         )}
-      </Box>
+      </Card>
 
       {isAdmin && (
         <BackgroundPicker

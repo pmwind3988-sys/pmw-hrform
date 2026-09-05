@@ -1636,10 +1636,22 @@ export default function App() {
         <Routes>
           <Route
             path="/privacy"
+            /**
+             * Like /career-portal, this lives in both worlds: it is the Privacy
+             * Notice tab under Profile for anyone signed in, and a public page
+             * for anyone who is not. Unshelled for everyone, the tab dropped
+             * staff out of the app with only the page's own Back to return.
+             */
             element={
-              <ErrorBoundary>
-                <LazyRoute load={loadPrivacyNoticePage} fallback={<LoadingScreen status="Loading page..." />} />
-              </ErrorBoundary>
+              isAuthenticated && !memberModeActive ? (
+                inShell(
+                  <LazyRoute load={loadPrivacyNoticePage} fallback={<LoadingScreen status="Loading page..." />} />,
+                )
+              ) : (
+                <ErrorBoundary>
+                  <LazyRoute load={loadPrivacyNoticePage} fallback={<LoadingScreen status="Loading page..." />} />
+                </ErrorBoundary>
+              )
             }
           />
           <Route

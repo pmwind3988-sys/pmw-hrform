@@ -2,6 +2,7 @@ import { Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
 import { DescriptionOutlined, EditOutlined, OpenInNewOutlined } from "@mui/icons-material";
 import type { ListMetaEntry } from "../../types";
 import { editorial, si, siType } from "../../theme/editorial";
+import Card from "../common/Card";
 
 export interface FormListEntry {
   /** The SharePoint response list title, and the form's display name. */
@@ -43,15 +44,7 @@ export default function FormList({
   onEditForm,
 }: FormListProps) {
   return (
-    <Box
-      sx={{
-        borderRadius: `${si.radius}px`,
-        backgroundColor: editorial.panel,
-        border: `1px solid ${editorial.border}`,
-        boxShadow: si.shadow,
-        overflow: "hidden",
-      }}
-    >
+    <Card pad="none" clip>
       {forms.map((form, index) => {
         const meta = listMetaMap[form.title];
         const openable = Boolean(form.slug);
@@ -138,6 +131,6 @@ export default function FormList({
           </Box>
         );
       })}
-    </Box>
+    </Card>
   );
 }

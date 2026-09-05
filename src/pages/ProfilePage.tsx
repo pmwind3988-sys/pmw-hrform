@@ -10,6 +10,7 @@ import type { SvgIconComponent } from "@mui/icons-material";
 import { useDashboard } from "../contexts/DashboardContext";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { editorial, si, siType } from "../theme/editorial";
+import Card from "../components/common/Card";
 
 interface DetailRow {
   label: string;
@@ -55,17 +56,9 @@ export default function ProfilePage() {
     { label: "Phone", value: profile.phone, icon: PhoneOutlined },
   ];
 
-  const cardSx = {
-    p: `${si.padLoose}px`,
-    borderRadius: `${si.radius}px`,
-    backgroundColor: editorial.panel,
-    border: `1px solid ${editorial.border}`,
-    boxShadow: si.shadow,
-  };
-
   return (
     <Box sx={{ maxWidth: 860, mx: "auto", display: "grid", gap: 3 }}>
-      <Box sx={cardSx}>
+      <Card>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Box
             sx={{
@@ -134,9 +127,9 @@ export default function ProfilePage() {
             </Box>
           ))}
         </Box>
-      </Box>
+      </Card>
 
-      <Box sx={cardSx}>
+      <Card>
         <Typography sx={{ ...siType.sectionTitle, color: editorial.ink }}>Your access</Typography>
         <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 0.5, mb: 2 }}>
           These come from SharePoint group membership. An HR Forms administrator changes them.
@@ -191,7 +184,7 @@ export default function ProfilePage() {
             You have standard employee access: fill in forms and track your own submissions.
           </Typography>
         )}
-      </Box>
+      </Card>
     </Box>
   );
 }

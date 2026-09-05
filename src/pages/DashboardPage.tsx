@@ -8,8 +8,9 @@ import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
 import type { CareerPortalCard } from "../types";
-import { editorial, si, siType } from "../theme/editorial";
+import { editorial, siType } from "../theme/editorial";
 import { bucketSubmissions } from "../utils/submissionStatusBuckets";
+import Card from "../components/common/Card";
 
 /**
  * The careers carousel, fetched on its own.
@@ -105,17 +106,7 @@ export default function DashboardPage() {
 
       <DashboardCareerCarousel />
 
-      <Box
-        component="section"
-        sx={{
-          mb: 3,
-          p: `${si.padTight}px`,
-          borderRadius: `${si.radius}px`,
-          backgroundColor: editorial.panel,
-          border: `1px solid ${editorial.border}`,
-          boxShadow: si.shadow,
-        }}
-      >
+      <Card component="section" pad="tight" sx={{ mb: 3 }}>
         <Typography sx={{ ...siType.micro, color: editorial.muted }}>
           Needs your attention
         </Typography>
@@ -133,7 +124,7 @@ export default function DashboardPage() {
               ? `All ${total} submission${total === 1 ? "" : "s"} in view have finished their approval chain.`
               : "Open Forms → My Submissions to see where each one has stopped."}
         </Typography>
-      </Box>
+      </Card>
 
       <Box sx={{ mb: 3 }}>
         <StatsRow submissions={submissions} />

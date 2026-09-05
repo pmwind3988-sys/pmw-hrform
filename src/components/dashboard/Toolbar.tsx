@@ -35,7 +35,7 @@ import {
   RestartAlt as ClearFiltersIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
-import { editorial, si } from "../../theme/editorial";
+import { editorial } from "../../theme/editorial";
 import {
   EMPTY_SUBMISSION_FILTERS,
   applyFormTypeChange,
@@ -51,6 +51,7 @@ import {
 import type { FilterableField } from "../../utils/formFieldCatalog";
 import { LIFECYCLE_STAGES, lifecycleLabel } from "../../utils/submissionLifecycle";
 import { AddFieldCondition, FieldConditionRow } from "./FieldConditions";
+import Card from "../common/Card";
 
 interface ToolbarProps {
   filters: SubmissionFilterState;
@@ -190,15 +191,7 @@ export default function Toolbar({
   }
 
   return (
-    <Box
-      sx={{
-        backgroundColor: editorial.panel,
-        borderRadius: `${si.radius}px`,
-        border: `1px solid ${editorial.border}`,
-        boxShadow: si.shadow,
-        p: { xs: 1.5, sm: 2 },
-      }}
-    >
+    <Card pad="none" sx={{ p: { xs: 1.5, sm: 2 } }}>
       <Stack spacing={{ xs: 1.5, sm: 2 }}>
         <Box
           sx={{
@@ -600,6 +593,6 @@ export default function Toolbar({
           </Box>
         )}
       </Stack>
-    </Box>
+    </Card>
   );
 }
