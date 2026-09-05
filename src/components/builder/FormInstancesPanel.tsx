@@ -12,6 +12,7 @@ import {
   updateFormInstance,
 } from "../../utils/formInstancesSP";
 import {
+  effectiveGroupValue,
   instanceState,
   lockedRoutingFields,
   type FormInstance,
@@ -113,7 +114,8 @@ export default function FormInstancesPanel({
   const routingLocked = lockedRoutingFields(lockedNames, layerConfig);
   const groupValue = groupByField ? (values[groupByField] ?? "") : "";
   const duplicateGroup = Boolean(
-    groupValue && instances.some((i) => i.groupValue.trim() === groupValue.trim()),
+    groupValue &&
+      instances.some((i) => effectiveGroupValue(i, groupByField) === groupValue.trim()),
   );
 
   const resetDraft = () => {
@@ -434,7 +436,10 @@ export default function FormInstancesPanel({
                 <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
                   {row.expiresAt ? `Closes ${new Date(row.expiresAt).toLocaleDateString()}` : "No closing date"}
                   {row.requireSignIn ? " · signed-in only" : " · open link"}
-                  {row.groupValue ? ` · groups as "${row.groupValue}"` : ""}
+                  {(() => {
+                    const value = effectiveGroupValue(row, groupByField);
+                    return value ? ` · groups as "${value}"` : "";
+                  })()}
                 </div>
               </div>
             );

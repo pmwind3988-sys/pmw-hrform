@@ -1334,6 +1334,8 @@ interface UpsertFormConfigParams {
   approvalRules?: unknown;
   layerConfig?: string;
   referenceConfig?: string;
+  /** Field whose value groups this form's submissions; "" for no grouping. */
+  groupByField?: string;
 }
 
 export async function upsertFormConfig(
@@ -1357,6 +1359,12 @@ export async function upsertFormConfig(
     ConditionField: config.conditionField || '',
     ApprovalRules: config.approvalRules ? JSON.stringify(config.approvalRules) : '',
     [REFERENCE_CONFIG_FIELD]: config.referenceConfig || '',
+    /*
+      Safe to write unconditionally: `ensureListExists` above runs the Master
+      Form schema, which now names GroupByField, so the column is there by the
+      time this PATCH goes out even on a site provisioned before it existed.
+    */
+    GroupByField: config.groupByField || '',
   };
 
   if (existing?.Id) {

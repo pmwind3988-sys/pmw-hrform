@@ -618,6 +618,11 @@ export default function AdminFormBuilder() {
   const [showBanner, setShowBanner] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
   const [referenceConfig, setReferenceConfig] = useState<ReferenceNumberConfig>(DEFAULT_REFERENCE_CONFIG);
+  /*
+    The field whose value gathers this form's submissions into events. "" means
+    the form has no grouping and behaves exactly as it always has.
+  */
+  const [groupByField, setGroupByField] = useState("");
   const [samplePdfGenerating, setSamplePdfGenerating] = useState<"" | "filled" | "manual">("");
   const setM = useCallback((k: MetaTextKey, v: string) => setMeta(m => ({ ...m, [k]: v })), []);
   const setPdfConfig = useCallback((patch: Partial<PdfConfig>) => {
@@ -956,6 +961,7 @@ export default function AdminFormBuilder() {
       setIsDraft(c.IsPublished === false);
       setIsPublic(c.IsPublic !== false);
       setReferenceConfig(parseReferenceNumberConfig(c.ReferenceConfig));
+      setGroupByField(typeof c.GroupByField === "string" ? c.GroupByField : "");
       if (c.ApprovalRules) {
         try {
           setApprovalRules(JSON.parse(c.ApprovalRules as string));
@@ -1027,6 +1033,7 @@ export default function AdminFormBuilder() {
     setIsDraft(false);
     setIsPublic(true);
     setReferenceConfig(DEFAULT_REFERENCE_CONFIG);
+    setGroupByField("");
     setMode("build");
     setDisc({});
     setSavedSignature(null);
@@ -1130,6 +1137,7 @@ export default function AdminFormBuilder() {
         approvalRules: approvalRules || null,
         layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
         referenceConfig: serializeReferenceNumberConfig(referenceConfig),
+        groupByField,
       });
       await saveFormVersion(token, {
         listTitle: meta.formTitle.trim(),
@@ -1155,7 +1163,7 @@ export default function AdminFormBuilder() {
     } finally {
       setSaveBusy("");
     }
-  }, [meta, surveyJson, numLayers, layers, slugError, isPublic, referenceConfig, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib, markSaved]);
+  }, [meta, surveyJson, numLayers, layers, slugError, isPublic, referenceConfig, groupByField, showBanner, approvalRules, layerConfig, accounts, showToast, refreshLib, markSaved]);
 
   const handleDelete = (f: { Id?: string; Title: string }) => {
     setDeleteConfirm({ Id: f.Id, Title: f.Title });
@@ -1625,6 +1633,7 @@ export default function AdminFormBuilder() {
           approvalRules: approvalRules || null,
           layerConfig: layerConfigToSave ? JSON.stringify(layerConfigToSave) : "",
           referenceConfig: serializeReferenceNumberConfig(referenceConfig),
+          groupByField,
         });
         pLog(`Form Config saved`, "ok");
       } else {
@@ -1728,7 +1737,7 @@ export default function AdminFormBuilder() {
       pLog(`Could not ${intent === "live" ? "publish" : "save profile"}: ${(e as Error).message}`, "err");
       setProvErr(true);
     }
-  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, slugError, isPublic, referenceConfig, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast, markSaved]);
+  }, [meta, surveyJson, numLayers, layers, isEditing, originalVersion, slugError, isPublic, referenceConfig, groupByField, showBanner, pLog, refreshLib, approvalRules, layerConfig, accounts, showToast, markSaved]);
 
   /**
    * The header's save dot reflects the real thing: this builder does not
@@ -1736,8 +1745,8 @@ export default function AdminFormBuilder() {
    * loaded, saved or published rather than running a fake timer.
    */
   const stateSignature = useMemo(
-    () => JSON.stringify([surveyJson, meta, showBanner, isPublic, layerConfig, referenceConfig]),
-    [surveyJson, meta, showBanner, isPublic, layerConfig, referenceConfig]
+    () => JSON.stringify([surveyJson, meta, showBanner, isPublic, layerConfig, referenceConfig, groupByField]),
+    [surveyJson, meta, showBanner, isPublic, layerConfig, referenceConfig, groupByField]
   );
   const signatureRef = useRef(stateSignature);
   signatureRef.current = stateSignature;
@@ -2442,6 +2451,58 @@ export default function AdminFormBuilder() {
                   </>
                 )}
               </Disclosure>
+
+              <Disclosure
+                open={!!disc.grouping}
+                onToggle={() => toggleDisc("grouping")}
+                title="Group submissions by"
+                sub="Gathers responses under the event they belong to"
+                summary={
+                  groupByField
+                    ? harvestFieldOptions.find(f => f.name === groupByField)?.title || groupByField
+                    : "Off"
+                }
+              >
+                <p className="bx-lede" style={{ fontSize: 14, marginBottom: 14 }}>
+                  Pick the field that names the occasion — a training title, a briefing name. All Submissions then
+                  lists this form's responses under that value instead of one long list, and an instance sets the
+                  field to its own name so its responses gather there automatically.
+                </p>
+                <p className="bx-lede" style={{ fontSize: 14, marginBottom: 14 }}>
+                  This is also how older responses are found again. Links handed out before instances existed were
+                  never recorded, but the answers still carry the event, so they group alongside the new ones.
+                </p>
+                <div className="bx-field">
+                  <label htmlFor="set-group-field">Grouping field</label>
+                  <select
+                    id="set-group-field"
+                    value={groupByField}
+                    onChange={e => setGroupByField(e.target.value)}
+                  >
+                    <option value="">No grouping — one flat list</option>
+                    {harvestFieldOptions.map(field => (
+                      <option key={field.name} value={field.name}>
+                        {field.title || field.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: 13.5, color: C.textSecond, marginTop: 5 }}>
+                    Changing this regroups what is already there — nothing is rewritten, and setting it back to
+                    "No grouping" restores the flat list.
+                  </div>
+                </div>
+                {groupByField && !harvestFieldOptions.some(f => f.name === groupByField) && (
+                  /*
+                    The renamed-or-deleted case from the spec. Instances would go
+                    on setting a field that no longer exists, so say so here
+                    rather than letting it fail quietly at submit.
+                  */
+                  <div style={{ background: C.amberPale, border: "1px solid #F0D79A", padding: "9px 12px", fontSize: 13.5, color: C.amber, marginTop: 8 }}>
+                    This form no longer has a field called "{groupByField}". Existing responses stay grouped by it,
+                    but new ones will not — pick a field that still exists, or turn grouping off.
+                  </div>
+                )}
+              </Disclosure>
             </div>
           </div>
         )}
@@ -3010,7 +3071,7 @@ export default function AdminFormBuilder() {
           open={instancesPanelOpen}
           onClose={() => setInstancesPanelOpen(false)}
           form={{ Title: meta.formTitle, Slug: meta.slug }}
-          groupByField=""
+          groupByField={groupByField}
           layerConfig={layerConfig}
           surveyJson={surveyJson}
           appOrigin={appOrigin}

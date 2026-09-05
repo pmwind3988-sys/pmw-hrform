@@ -3,6 +3,7 @@ import type { Submission } from "../types";
 import {
   buildSubmissionGroups,
   canAcceptSubmission,
+  effectiveGroupValue,
   instanceState,
   lockedRoutingFields,
   type FormInstance,
@@ -181,5 +182,37 @@ describe("lockedRoutingFields", () => {
       layers: [{ assignee: { kind: "reportingLine", startFrom: { field: "requesterEmail" } } }],
     };
     expect(lockedRoutingFields(["requesterEmail"], layerConfig)).toEqual(["requesterEmail"]);
+  });
+});
+
+describe("effectiveGroupValue", () => {
+  /**
+   * The ordinary drift case: an instance created before the form had a
+   * grouping field has an empty stored value, and would otherwise stay
+   * permanently ungrouped even though its prefill says where it belongs.
+   */
+  it("falls back to the prefill when the stored value is empty", () => {
+    const stale = instance({ groupValue: "" });
+    expect(effectiveGroupValue(stale, "trainingTitle")).toBe("Fire Safety Briefing, March 2026");
+  });
+
+  it("prefers the stored value when there is one", () => {
+    expect(effectiveGroupValue(instance({ groupValue: "Stored" }), "trainingTitle")).toBe("Stored");
+  });
+
+  it("is empty when neither the stored value nor the prefill has one", () => {
+    expect(effectiveGroupValue(instance({ groupValue: "", prefill: {} }), "trainingTitle")).toBe("");
+    expect(effectiveGroupValue(instance({ groupValue: "" }), "")).toBe("");
+  });
+
+  /** And the fallback must actually reach the grouping. */
+  it("groups an instance whose stored value was never written", () => {
+    const groups = buildSubmissionGroups(
+      [row("Fire Safety Briefing, March 2026")],
+      "trainingTitle",
+      [instance({ groupValue: "" })],
+    );
+    const matched = groups.find((g) => g.value === "Fire Safety Briefing, March 2026");
+    expect(matched?.instance?.token).toBe("tok-1");
   });
 });

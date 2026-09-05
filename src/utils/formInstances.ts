@@ -56,6 +56,23 @@ export function canAcceptSubmission(instance: FormInstance, now: Date = new Date
   return instanceState(instance, now) === "open";
 }
 
+/**
+ * The value this instance actually groups under.
+ *
+ * `groupValue` is a denormalised copy of `prefill[groupByField]`, written when
+ * the instance is saved. The two drift in one ordinary case: an instance
+ * created before the form had a grouping field, or before it was changed to a
+ * different one. The prefill is the source of truth, so read through to it
+ * rather than leaving those instances permanently ungrouped.
+ */
+export function effectiveGroupValue(instance: FormInstance, groupByField: string): string {
+  const stored = instance.groupValue.trim();
+  if (stored) return stored;
+  if (!groupByField) return "";
+  const raw = instance.prefill?.[groupByField];
+  return raw === null || raw === undefined ? "" : String(raw).trim();
+}
+
 export interface SubmissionGroup {
   /** The grouping field's value. "" is the bucket for blank and missing values. */
   value: string;
@@ -101,7 +118,7 @@ export function buildSubmissionGroups(
   // definition, and the group's identity is the value, not either instance.
   const instanceByValue = new Map<string, FormInstance>();
   for (const instance of instances) {
-    const key = instance.groupValue.trim();
+    const key = effectiveGroupValue(instance, groupByField);
     if (!key) continue;
     if (!instanceByValue.has(key)) instanceByValue.set(key, instance);
     if (!counts.has(key)) counts.set(key, 0);
