@@ -36,6 +36,7 @@ import { buildSubmissionCsv } from "../utils/submissionCsv";
 import { downloadCsv } from "../utils/csv";
 import type { HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, si, siType } from "../theme/editorial";
+import { bucketSubmissions } from "../utils/submissionStatusBuckets";
 
 /**
  * My Work → My Submissions.
@@ -112,6 +113,16 @@ export default function MySubmissionsPage() {
   });
 
   const exportRows = exportScope === "all" ? submissions : ownSubmissions;
+
+  /**
+   * The counts that used to sit on each form card, now beside the rows they
+   * describe and scoped to what is actually on screen.
+   *
+   * One line, not the dashboard's four tiles: those already state the same
+   * figures, and repeating them here in a heavier weight would say the number
+   * twice and leave a reader wondering which was authoritative.
+   */
+  const counts = bucketSubmissions(ownSubmissions);
 
   const openDeleteDialog = (item: Submission) => {
     setDeleteTarget(item);
@@ -203,8 +214,27 @@ export default function MySubmissionsPage() {
         </Alert>
       )}
 
+      <Typography sx={{ ...siType.subtext, color: editorial.muted, mb: 1.5 }}>
+        {counts.total === 0
+          ? "Nothing to show yet."
+          : `${counts.total} submission${counts.total === 1 ? "" : "s"} · ${counts.approved} approved · ${counts.pending} pending · ${counts.rejected} rejected`}
+      </Typography>
+
       {ownSubmissions.length > 0 ? (
-        <>
+        <Box
+          sx={{
+            // The card exists only where the table does. Below md the rows are
+            // already self-contained cards, and wrapping those in another card
+            // put a card inside a card -- the very thing the desktop rows drop
+            // their own shadow to avoid.
+            borderRadius: { md: `${si.radius}px` },
+            border: { md: `1px solid ${editorial.border}` },
+            boxShadow: { md: si.shadow },
+            // Clips the header band's corners and the last row's border to the
+            // card's radius, so the table reads as one object.
+            overflow: { md: "hidden" },
+          }}
+        >
           <ListHeader isAdmin={isAdmin} />
           <Box sx={{ display: "flex", flexDirection: "column" }}>
             {ownSubmissions.map((item) => (
@@ -224,7 +254,7 @@ export default function MySubmissionsPage() {
               />
             ))}
           </Box>
-        </>
+        </Box>
       ) : (
         <EmptyState hasFilters={hasFilters} />
       )}

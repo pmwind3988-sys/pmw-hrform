@@ -178,12 +178,16 @@ export const si = {
   rowHeightTwoLine: 52,
   /** Minimum touch target on mobile. */
   touchTarget: 44,
-  /** The navigation chrome. Read by the shell; nothing else should need them. */
-  sidebarWidth: 224,
+  /**
+   * The navigation chrome. Read by the shell; nothing else should need them.
+   *
+   * There is no `sidebarWidth` or `shellBreakpoint` any more: the shell used to
+   * swap a 224px sidebar for a bottom bar at 1024px, and now shows the one bar
+   * at every width. Both tokens went with the sidebar rather than lingering as
+   * numbers nothing reads.
+   */
   bottomBarHeight: 60,
   topBarHeight: 52,
-  /** Where the sidebar hands over to the bottom bar. Matches SI's own switch. */
-  shellBreakpoint: 1024,
   /**
    * The stacking level for a shared dialog.
    *

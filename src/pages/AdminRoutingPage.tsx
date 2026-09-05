@@ -49,6 +49,7 @@ import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useInShell } from "../components/shell/ShellContext";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
@@ -145,6 +146,7 @@ function orgNames(rows: { name: string; code: string; isActive: boolean }[]): st
 
 export default function AdminRoutingPage() {
   const navigate = useNavigate();
+  const inShell = useInShell();
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -595,9 +597,12 @@ export default function AdminRoutingPage() {
       <Box sx={{ backgroundColor: editorial.white, borderBottom: `1px solid ${editorial.border}` }}>
         <Container maxWidth="lg" sx={{ py: 2.5 }}>
           <Stack direction="row" sx={{ alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-            <IconButton onClick={() => navigate("/admin/dashboard")} size="small" aria-label="Back to dashboard">
-              <ArrowBackIcon fontSize="small" />
-            </IconButton>
+            {/* Hidden inside the shell: this returns to a page the tab strip and bottom bar already reach. Public and guest renders get no shell, so they keep it. */}
+            {!inShell && (
+              <IconButton onClick={() => navigate("/admin/dashboard")} size="small" aria-label="Back to dashboard">
+                <ArrowBackIcon fontSize="small" />
+              </IconButton>
+            )}
             <Box sx={{ flex: 1, minWidth: 220 }}>
               <Typography sx={{ fontSize: "1.15rem", fontWeight: 700, color: editorial.ink, lineHeight: 1.2 }}>
                 Approval routing

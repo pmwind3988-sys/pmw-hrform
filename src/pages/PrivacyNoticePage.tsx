@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useInShell } from "../components/shell/ShellContext";
 import ShieldIcon from "@mui/icons-material/Shield";
 import { editorial, si, siType } from "../theme/editorial";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
@@ -128,18 +129,22 @@ function NoticeSection({ section, content }: { section: PdpaNoticeSection; conte
 export default function PrivacyNoticePage() {
   const navigate = useNavigate();
   const { locale, setLocale, content } = usePdpaLocale();
+  const inShell = useInShell();
   const { ui } = content;
 
   return (
     <Box sx={{ minHeight: "100vh", background: "var(--app-bg, var(--app-bg-fallback))", py: { xs: 3, md: 5 } }}>
       <Container maxWidth="md">
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate(-1)}
-          sx={{ mb: 2, textTransform: "none", color: editorial.pmwBlueDark, fontWeight: 600 }}
-        >
-          {ui.back}
-        </Button>
+        {/* Hidden inside the shell: this returns to a page the tab strip and bottom bar already reach. Public and guest renders get no shell, so they keep it. */}
+        {!inShell && (
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate(-1)}
+            sx={{ mb: 2, textTransform: "none", color: editorial.pmwBlueDark, fontWeight: 600 }}
+          >
+            {ui.back}
+          </Button>
+        )}
 
         <Paper sx={{ borderRadius: "12px", overflow: "hidden", border: `1px solid ${editorial.border}`, boxShadow: si.shadow }}>
           <Box sx={{ p: { xs: 3, md: 4 }, backgroundColor: editorial.white, color: editorial.ink, borderBottom: `1px solid ${editorial.border}` }}>

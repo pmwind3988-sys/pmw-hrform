@@ -29,6 +29,7 @@ import { clearStoredAuthDecision } from "../../utils/authDecision";
 import Logo from "../Logo";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { careerActionButtonSx, careerIconButtonSx } from "./careerUi";
+import { useInShell } from "../shell/ShellContext";
 
 const reduceMotionSx = {
   "@media (prefers-reduced-motion: reduce)": {
@@ -87,6 +88,7 @@ export default function CareerPortalHeader({
   showPrivacyLink = true,
   showBack = true,
 }: CareerPortalHeaderProps) {
+  const inShell = useInShell();
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
@@ -180,7 +182,11 @@ export default function CareerPortalHeader({
               onClick={() => navigate(backPath)}
               aria-label={backLabel}
               sx={{
-                display: showBack ? "inline-flex" : "none",
+                // Hidden inside the shell: the bottom bar and the tab strip
+                // already lead everywhere this arrow went. The subpages that
+                // genuinely need it -- a job detail, an application form --
+                // render OUTSIDE the shell, so they keep it automatically.
+                display: showBack && !inShell ? "inline-flex" : "none",
                 color: editorial.pmwBlueDark,
                 p: { xs: 0.75, sm: 1 },
                 flexShrink: 0,

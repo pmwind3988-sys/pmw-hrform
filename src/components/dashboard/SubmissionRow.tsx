@@ -20,7 +20,7 @@ import type { KeyboardEvent, MouseEvent } from "react";
 import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
-import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
+import { editorial, editorialShadow, editorialShadowHover, si } from "../../theme/editorial";
 import { SUBMISSION_GRID_COLUMNS, SUBMISSION_GRID_GAP } from "./submissionGrid";
 import {
   formatDashboardDate,
@@ -235,23 +235,25 @@ export default function SubmissionRow({
         gridTemplateColumns: isAdmin ? SUBMISSION_GRID_COLUMNS.admin : SUBMISSION_GRID_COLUMNS.member,
         gap: SUBMISSION_GRID_GAP,
         px: 2.5,
-        py: 2,
-        backgroundColor: "rgba(255, 255, 255, 0.92)",
+        py: 1.5,
+        minHeight: si.rowHeightTwoLine,
+        // Solid, and no shadow of its own: the rows sit inside one card now, so
+        // a row that lifted on hover was a card floating out of a card.
+        backgroundColor: editorial.panel,
         borderRadius: 0,
         borderBottom: `1px solid ${editorial.border}`,
         alignItems: "center",
         cursor: "pointer",
-        transition: "background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
+        transition: "background-color 0.15s ease",
         outline: "none",
         "&:hover": {
-          backgroundColor: editorial.white,
-          boxShadow: "inset 3px 0 0 rgba(0, 120, 212, 0.55), 0 8px 22px rgba(0, 90, 158, 0.08)",
-          transform: "translateY(-1px)",
+          backgroundColor: editorial.appSurface,
         },
         "&:focus-visible": {
-          backgroundColor: editorial.blueSoft,
-          boxShadow: `inset 0 0 0 3px ${editorial.pmwBlueSoft}`,
+          backgroundColor: editorial.appSurface,
+          boxShadow: `inset 0 0 0 2px ${editorial.navy}`,
         },
+        "@media (prefers-reduced-motion: reduce)": { transition: "none" },
       }}
     >
       {/* Submission */}

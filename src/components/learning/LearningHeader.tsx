@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Box, Container, IconButton, Paper, Stack, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
+import { useInShell } from "../shell/ShellContext";
 import { useNavigate } from "react-router-dom";
 import Logo from "../Logo";
 import { editorial, editorialHairline } from "../../theme/editorial";
@@ -27,6 +28,8 @@ export default function LearningHeader({
   actions,
   showBack = true,
 }: LearningHeaderProps) {
+  // Hidden inside the shell: this returns to a page the tab strip and bottom bar already reach. Public and guest renders get no shell, so they keep it.
+  const inShell = useInShell();
   const navigate = useNavigate();
 
   return (
@@ -53,7 +56,7 @@ export default function LearningHeader({
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.5 }, minWidth: 0 }}>
-            {showBack && (
+            {showBack && !inShell && (
               <IconButton
                 onClick={() => navigate(backPath)}
                 aria-label={backLabel}

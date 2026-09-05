@@ -35,7 +35,7 @@ import {
   RestartAlt as ClearFiltersIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
-import { editorial, editorialShadow } from "../../theme/editorial";
+import { editorial, si } from "../../theme/editorial";
 import {
   EMPTY_SUBMISSION_FILTERS,
   applyFormTypeChange,
@@ -192,27 +192,31 @@ export default function Toolbar({
   return (
     <Box
       sx={{
-        backgroundColor: "rgba(255, 255, 255, 0.92)",
-        borderRadius: "12px",
-        boxShadow: editorialShadow,
+        backgroundColor: editorial.panel,
+        borderRadius: `${si.radius}px`,
+        border: `1px solid ${editorial.border}`,
+        boxShadow: si.shadow,
         p: { xs: 1.5, sm: 2 },
       }}
     >
       <Stack spacing={{ xs: 1.5, sm: 2 }}>
         <Box
           sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 260px) auto" },
+            display: "flex",
+            flexWrap: "wrap",
             gap: { xs: 1, sm: 1.5 },
             alignItems: "center",
           }}
         >
           <TextField
-            placeholder="Search reference no, form or ID..."
+            placeholder="Search reference, form or ID…"
             value={filters.search}
             onChange={(e) => patch({ search: e.target.value })}
             size="small"
-            sx={searchFieldSx}
+            // 280px, not a stretching column. The search was the widest thing
+            // on the page at every size, which made a filter bar look like the
+            // subject of the screen rather than a control over the list below.
+            sx={{ ...searchFieldSx, width: { xs: "100%", sm: 280 }, flexShrink: 0 }}
             slotProps={{
               input: {
                 startAdornment: (
@@ -224,7 +228,7 @@ export default function Toolbar({
             }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 0, gridColumn: { xs: "1 / -1", md: "auto" } }}>
+          <FormControl size="small" sx={{ width: { xs: "100%", sm: 200 }, flexShrink: 0 }}>
             <InputLabel>Form type</InputLabel>
             <Select
               value={filters.formType}

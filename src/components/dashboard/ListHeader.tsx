@@ -1,5 +1,5 @@
 import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { editorial } from "../../theme/editorial";
+import { editorial, siType } from "../../theme/editorial";
 import { SUBMISSION_GRID_COLUMNS, SUBMISSION_GRID_GAP } from "./submissionGrid";
 
 interface ListHeaderProps {
@@ -20,73 +20,38 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         gridTemplateColumns: isAdmin ? SUBMISSION_GRID_COLUMNS.admin : SUBMISSION_GRID_COLUMNS.member,
         gap: SUBMISSION_GRID_GAP,
         px: 2.5,
-        py: 1.5,
-        backgroundColor: "rgba(255, 255, 255, 0.9)",
-        borderRadius: "8px 8px 0 0",
-        border: `1px solid ${editorial.border}`,
-        borderBottom: 0,
+        py: 1.25,
+        // The canvas, so the header strip reads as a label band over the rows
+        // rather than as one more white row among them.
+        backgroundColor: editorial.appSurface,
+        borderBottom: `1px solid ${editorial.border}`,
         alignItems: "center",
       }}
     >
       <Typography
-        variant="caption"
-        sx={{
-          textTransform: "uppercase",
-          letterSpacing: 0,
-          color: editorial.muted,
-          fontWeight: 600,
-          fontSize: "0.72rem",
-        }}
+        sx={{ ...siType.micro, color: editorial.muted }}
       >
         Submission
       </Typography>
       {isAdmin && (
         <Typography
-          variant="caption"
-          sx={{
-            textTransform: "uppercase",
-            letterSpacing: 0,
-            color: editorial.muted,
-            fontWeight: 600,
-            fontSize: "0.72rem",
-          }}
+          sx={{ ...siType.micro, color: editorial.muted }}
         >
           Submitted By
         </Typography>
       )}
       <Typography
-        variant="caption"
-        sx={{
-          textTransform: "uppercase",
-          letterSpacing: 0,
-          color: editorial.muted,
-          fontWeight: 600,
-          fontSize: "0.72rem",
-        }}
+        sx={{ ...siType.micro, color: editorial.muted }}
       >
         List
       </Typography>
       <Typography
-        variant="caption"
-        sx={{
-          textTransform: "uppercase",
-          letterSpacing: 0,
-          color: editorial.muted,
-          fontWeight: 600,
-          fontSize: "0.72rem",
-        }}
+        sx={{ ...siType.micro, color: editorial.muted }}
       >
         Submitted
       </Typography>
       <Typography
-        variant="caption"
-        sx={{
-          textTransform: "uppercase",
-          letterSpacing: 0,
-          color: editorial.muted,
-          fontWeight: 600,
-          fontSize: "0.72rem",
-        }}
+        sx={{ ...siType.micro, color: editorial.muted }}
       >
         Status
       </Typography>
