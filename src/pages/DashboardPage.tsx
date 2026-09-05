@@ -72,7 +72,7 @@ function DashboardCareerCarousel() {
  * This page used to be the whole application. It carried a hero heading, the
  * stat tiles, the form cards, a filter toolbar, and every submission the
  * account could see — one scroll, five jobs. Forms and submissions are now
- * their own sections under My Work, which is what makes each of them
+ * their own sections under Forms, which is what makes each of them
  * addressable and what leaves this page room to answer one question: what
  * needs looking at.
  *
@@ -131,7 +131,7 @@ export default function DashboardPage() {
             ? "Forms you submit will appear here as they enter their approval chain."
             : pending === 0
               ? `All ${total} submission${total === 1 ? "" : "s"} in view have finished their approval chain.`
-              : "Open My Work to see where each one has stopped."}
+              : "Open Forms → My Submissions to see where each one has stopped."}
         </Typography>
       </Box>
 

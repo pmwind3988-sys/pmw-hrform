@@ -107,8 +107,10 @@ export default function FormList({
                 <IconButton
                   size="small"
                   onClick={() => onEditForm(form.title)}
+                  // No `title` here: this IconButton is the Tooltip's direct
+                  // child, and MUI errors when a child carries its own title.
+                  // `aria-label` still names the control for a screen reader.
                   aria-label={`Edit ${form.title} in the form builder`}
-                  title={`Edit ${form.title} in the form builder`}
                   sx={{ color: editorial.muted }}
                 >
                   <EditOutlined fontSize="small" />

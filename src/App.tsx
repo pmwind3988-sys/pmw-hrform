@@ -1778,7 +1778,7 @@ export default function App() {
               <LazyRoute load={loadDashboardPage} fallback={<LoadingScreen status="Loading dashboard..." />} />,
             )}
           />
-          {/* My Work. Both read `submissions`, so both wait for the fetch. */}
+          {/* Forms. Both read `submissions`, so both wait for the fetch. */}
           <Route
             path="/forms"
             element={withSubmissions(

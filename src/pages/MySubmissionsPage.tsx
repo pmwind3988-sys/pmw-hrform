@@ -39,7 +39,7 @@ import { editorial, si, siType } from "../theme/editorial";
 import { bucketSubmissions } from "../utils/submissionStatusBuckets";
 
 /**
- * My Work → My Submissions.
+ * Forms → My Submissions.
  *
  * The filter toolbar, the row list, the detail modal, and the export and
  * permanent-delete flows — all of which used to sit at the bottom of the
