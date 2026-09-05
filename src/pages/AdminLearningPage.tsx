@@ -492,6 +492,10 @@ export default function AdminLearningPage() {
                           setFolderName("");
                           setFolderDialog({ mode: "create", path: "" });
                         }}
+                        // Same reason as the row buttons below: the Tooltip's
+                        // title lands on the <span>, never on the control.
+                        aria-label="New top-level topic"
+                        title="New top-level topic"
                         sx={{ color: editorial.pmwBlueDark }}
                       >
                         <CreateNewFolderOutlined fontSize="small" />
@@ -807,9 +811,24 @@ export default function AdminLearningPage() {
                                     ))}
                                 </Select>
                               </FormControl>
+                              {/* The name goes on the BUTTON, not on the
+                                  Tooltip. A Tooltip wrapping a <span> — which a
+                                  disabled button needs — lands its title on the
+                                  span, so the control itself had no accessible
+                                  name at all: a screen reader read six
+                                  identical "button"s per topic, one of each
+                                  pair deleting a file from SharePoint for good.
+                                  The material is named too, because "Delete
+                                  material" six times over does not say which. */}
                               <Tooltip title="Edit details">
                                 <span>
-                                  <IconButton size="small" disabled={busy} onClick={() => openEditor(material)}>
+                                  <IconButton
+                                    size="small"
+                                    disabled={busy}
+                                    onClick={() => openEditor(material)}
+                                    aria-label={`Edit details of ${material.title}`}
+                                    title={`Edit details of ${material.title}`}
+                                  >
                                     <EditOutlined fontSize="small" />
                                   </IconButton>
                                 </span>
@@ -820,6 +839,8 @@ export default function AdminLearningPage() {
                                     size="small"
                                     disabled={busy}
                                     onClick={() => handleDeleteMaterial(material)}
+                                    aria-label={`Delete ${material.title}`}
+                                    title={`Delete ${material.title}`}
                                     sx={{ color: editorial.error }}
                                   >
                                     <DeleteOutlined fontSize="small" />
