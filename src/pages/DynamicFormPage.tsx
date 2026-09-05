@@ -34,6 +34,19 @@ import { getPdpaNoticeVersion, getPdpaRetentionUntil } from "../utils/pdpa";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
 import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
+
+/**
+ * What `/api/form-config` discloses about an instance link. Deliberately less
+ * than the stored row — the endpoint is public. See api/_utils/formInstance.ts.
+ */
+interface PublicFormInstance {
+  title: string;
+  state: "open" | "closed" | "expired";
+  expiresAt: string;
+  requireSignIn: boolean;
+  prefill: Record<string, unknown>;
+  lockedFields: string[];
+}
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { buildWorkflowReviewLink } from "../utils/workflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
@@ -633,6 +646,15 @@ export default function DynamicFormPage() {
   const pinVersion = searchParams.get("version");
   const publishKey = searchParams.get("publish") || searchParams.get("batch");
   const prefilledQrPayload = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
+  const instanceToken = searchParams.get("instance") || "";
+  /*
+    `undefined` while it is being looked up, `null` for a token that matched
+    nothing. The three states are distinct: a bad QR must say so rather than
+    quietly serving the general form.
+  */
+  const [instanceInfo, setInstanceInfo] = useState<PublicFormInstance | null | undefined>(
+    instanceToken ? undefined : null,
+  );
   // A test run in progress: the ticket is what the server verifies before it
   // redirects any email this submission generates. `testEmail` is display-only
   // — it came back from the mint call and is shown in the banner below, but
@@ -896,6 +918,55 @@ export default function DynamicFormPage() {
     return () => { cancelled = true; };
   }, [formId, pinVersion, publishKey, isAuthenticated, authStateSettled, instance, activeAccountId]);
 
+  /*
+    Resolve the instance link.
+
+    Always through the public endpoint, whichever way the form itself loaded.
+    Signed-in staff read the form straight from SharePoint, but they may have no
+    permission on the Form Instances list, and an instance that silently failed
+    to resolve would drop its fixed answers without saying anything. The app-only
+    credential behind this endpoint answers the same way for everyone.
+  */
+  useEffect(() => {
+    if (!instanceToken) { setInstanceInfo(null); return; }
+    let cancelled = false;
+    setInstanceInfo(undefined);
+
+    void (async () => {
+      try {
+        const params = new URLSearchParams({ slug: formId || "", instance: instanceToken });
+        const res = await fetch(`/api/form-config?${params.toString()}`, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+          },
+        });
+        const parsed = (await res.json().catch(() => ({}))) as { instance?: PublicFormInstance | null };
+        if (!cancelled) setInstanceInfo(parsed.instance ?? null);
+      } catch {
+        if (!cancelled) setInstanceInfo(null);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [instanceToken, formId]);
+
+  /*
+    An instance's fixed answers reuse the prefilled-QR machinery: same shape,
+    same read-only treatment. The two never arrive together in practice, and
+    where they did the instance is the recorded one, so it wins.
+  */
+  const effectivePrefill = useMemo(() => {
+    if (instanceInfo) {
+      return {
+        v: 1 as const,
+        values: instanceInfo.prefill || {},
+        locked: instanceInfo.lockedFields || [],
+      };
+    }
+    return prefilledQrPayload;
+  }, [instanceInfo, prefilledQrPayload]);
+
   // Enrich survey JSON with SharePoint-sourced choices
   useEffect(() => {
     const baseJson = formData?.surveyJson;
@@ -903,7 +974,7 @@ export default function DynamicFormPage() {
 
     const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Inter" });
     const applyPrefill = (json: Record<string, unknown>): Record<string, unknown> =>
-      cloneAndApplyPrefilledQr(withAppFont(json), prefilledQrPayload);
+      cloneAndApplyPrefilledQr(withAppFont(json), effectivePrefill);
     // When the direct SharePoint reads are unavailable the config already arrived
     // from the public endpoint with its choices resolved server-side.
     const tokenRaw = spDirectUnavailableRef.current ? null : tokenRef.current;
@@ -996,11 +1067,11 @@ export default function DynamicFormPage() {
       forEachSurveyElement(clone, collect);
 
       await Promise.all(pending);
-      setEnrichedSurveyJson(cloneAndApplyPrefilledQr(clone, prefilledQrPayload));
+      setEnrichedSurveyJson(cloneAndApplyPrefilledQr(clone, effectivePrefill));
     }
 
     enrich().catch(() => setEnrichedSurveyJson(applyPrefill(baseJson)));
-  }, [formData, prefilledQrPayload]);
+  }, [formData, effectivePrefill]);
 
   /**
    * The published document, parsed into the native engine's shape.
@@ -1768,6 +1839,9 @@ export default function DynamicFormPage() {
             pdpaNoticeVersion: getPdpaNoticeVersion(pdpaLocale),
             pdpaConsentedAt: body.PDPAConsentAt,
             retentionUntil: body.RetentionUntil,
+            // The server re-reads the instance and writes the locked answers
+            // from the record. Sending it is a claim, not a shortcut.
+            ...(instanceToken ? { instanceToken } : {}),
             ...(isTestRun ? { testTicket } : {}),
           }),
         });
@@ -1886,6 +1960,53 @@ export default function DynamicFormPage() {
         <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
         <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form not found</div>
         <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>{error}</p>
+      </div>
+    </div>
+  );
+
+  // Still resolving the link: hold the spinner rather than flashing the general
+  // form and then rewriting it with the event's answers a moment later.
+  if (instanceToken && instanceInfo === undefined) return (
+    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+      <style>{globalCss(t)}</style>
+      <Spinner t={t} />
+      <div style={{ fontSize: 13, color: t.textMuted, animation: "pulse 1.5s infinite" }}>Loading form...</div>
+    </div>
+  );
+
+  if (instanceToken && instanceInfo === null) return (
+    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <style>{globalCss(t)}</style>
+      <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
+        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Link not recognised</div>
+        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>
+          This link does not match any current event for {formTitle}. Please check with whoever shared it.
+        </p>
+      </div>
+    </div>
+  );
+
+  /*
+    Closed and expired get a page naming the event, deliberately NOT a 404.
+    Someone scanning a poster after the event should learn they are late, not
+    that the link is broken.
+  */
+  if (instanceInfo && instanceInfo.state !== "open") return (
+    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <style>{globalCss(t)}</style>
+      <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 440, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
+        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.textPrimary, marginBottom: 10 }}>
+          This form has closed
+        </div>
+        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>
+          {instanceInfo.title || formTitle} is no longer accepting responses
+          {instanceInfo.state === "expired" && instanceInfo.expiresAt
+            ? `. It closed on ${new Date(instanceInfo.expiresAt).toLocaleDateString()}.`
+            : "."}
+        </p>
+        <p style={{ color: t.textMuted, fontSize: 12.5, lineHeight: 1.7, marginTop: 12 }}>
+          If you still need to respond, please contact HR.
+        </p>
       </div>
     </div>
   );

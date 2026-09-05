@@ -4,6 +4,7 @@ import { resolveScopedChoices } from "./_utils/orgDirectory.js";
 import { forEachSurveyElement } from "./_utils/surveyWalk.js";
 import { redactLayerConfigForPublic } from "./_utils/publicLayerConfig.js";
 import { logError } from "./_utils/logger.js";
+import { loadInstanceByToken, publicInstanceView } from "./_utils/formInstance.js";
 
 // Minimal Vercel request/response types
 interface ApiRequest {
@@ -216,6 +217,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const slug = req.query.slug as string;
   const pinVersion = req.query.version as string | undefined;
   const requestedPublishKey = (req.query.publish || req.query.batch) as string | undefined;
+  const instanceToken = (req.query.instance as string | undefined) || "";
   if (!slug) return res.status(400).json({ error: "Missing slug parameter" });
 
   // Errors must never reach the edge cache: a single transient Graph failure would
@@ -285,8 +287,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ? await enrichSurveyJson(token, surveyJson as Record<string, unknown>)
       : { spSources: 0, choicesFetched: 0, errors: ["No surveyJson.pages found"] };
 
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+    /*
+      An instance's state must be current. The shared cache is keyed on the URL
+      so an instance link never reads a plain form's cached body, but a 60s
+      window would still let a just-closed event keep accepting scans.
+    */
+    const instance = instanceToken ? await loadInstanceByToken(token, instanceToken) : null;
+    if (instanceToken) res.setHeader("Cache-Control", "no-store");
+    else res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+
     return res.status(200).json({
+      /*
+        `null` distinguishes a token that matched nothing from one that was
+        never asked about, so the page can say "no such link" rather than
+        silently serving the general form to someone holding a bad QR.
+      */
+      ...(instanceToken ? { instance: instance ? publicInstanceView(instance) : null } : {}),
       formConfig: {
         ...formConfig,
         CurrentVersion: targetVersion,

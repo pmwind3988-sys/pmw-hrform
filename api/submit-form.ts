@@ -18,6 +18,13 @@ import {
   queryAllListItems,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
+import {
+  applyLockedValues,
+  canAcceptSubmission,
+  instanceState,
+  loadInstanceByToken,
+  INSTANCE_ID_FIELD,
+} from "./_utils/formInstance.js";
 import { bearerFromHeaders } from "./_utils/viewerIdentity.js";
 import { isGuestSessionCurrent } from "./_utils/guestMembers.js";
 import { looksLikeGuestToken, verifyGuestSession } from "./_utils/guestSession.js";
@@ -1700,6 +1707,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     pdpaConsentedAt?: string;
     retentionUntil?: string;
   };
+  const instanceToken =
+    typeof (req.body as Record<string, unknown>)?.instanceToken === "string"
+      ? ((req.body as Record<string, unknown>).instanceToken as string)
+      : "";
 
   if (!listTitle || typeof listTitle !== "string") {
     return res.status(400).json({ error: "Missing or invalid listTitle" });
@@ -1757,8 +1768,62 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const surveyJson = publishedSnapshot.surveyJson;
 
+    /*
+      The instance gate.
+
+      Everything here is settled against the record, never the request body.
+      A body that names an instance is a claim; this is where it is checked,
+      and it runs BEFORE any file is uploaded so a refusal cannot orphan one.
+    */
+    let instanceFields: Record<string, unknown> = {};
+    let effectiveBody = formBody;
+    if (instanceToken) {
+      const instance = await loadInstanceByToken(token, instanceToken);
+      if (!instance) {
+        return res.status(404).json({ error: "This link is not valid." });
+      }
+      /*
+        A token issued for one form must not be usable on another. Without
+        this, anyone holding any instance link could name a different list in
+        the body and submit through a window that was never opened for it.
+      */
+      if (instance.formTitle !== listTitle) {
+        return res.status(403).json({ error: "This link is not for this form." });
+      }
+      if (!canAcceptSubmission(instance)) {
+        const state = instanceState(instance);
+        return res.status(403).json({
+          error:
+            state === "expired"
+              ? "This form closed on its closing date and is no longer accepting responses."
+              : "This form has been closed and is no longer accepting responses.",
+          instanceState: state,
+        });
+      }
+      /*
+        Sign-in, on the path where it can be checked. M365 staff never reach
+        this endpoint — they write to SharePoint directly — so an unidentified
+        caller here is genuinely anonymous.
+      */
+      if (instance.requireSignIn && !(await resolveGuestSubmitter(req.headers, token))) {
+        return res.status(401).json({ error: "Please sign in to fill in this form." });
+      }
+
+      const locked = applyLockedValues(formBody, instance);
+      effectiveBody = locked.data;
+      instanceFields = { [INSTANCE_ID_FIELD]: instance.id };
+      if (locked.overridden.length > 0) {
+        // Worth a line in the log: it is either a stale tab or someone editing
+        // a read-only field, and the two look identical from here.
+        logWarn("api:submit-form", "Locked instance answers were overwritten from the record", {
+          listTitle,
+          fields: locked.overridden.join(","),
+        });
+      }
+    }
+
     const schema = collectSubmissionSchema(surveyJson);
-    const submission = await buildSubmissionFields(token, listTitle, formBody, formConfig, schema);
+    const submission = await buildSubmissionFields(token, listTitle, effectiveBody, formConfig, schema);
     uploadedFilesForCleanup = submission.uploadedFiles;
     const submissionBody = submission.fields;
 
@@ -1808,6 +1873,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (guestSubmitter) submissionBody.SubmittedBy = guestSubmitter;
 
     const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
+
+    /*
+      Which instance this response came through, stamped at create time for the
+      same reason IsTest is: a later patch could fail after the row exists,
+      leaving a response that belongs to an instance with no way to tell.
+
+      Guarded like ReferenceNo, because an unrecognised column fails the whole
+      create. The column is provisioned when the instance is made, so a missing
+      one means it was removed afterwards — the submission is still worth more
+      than the stamp, so it goes through and the loss is logged.
+    */
+    if (Object.keys(instanceFields).length > 0) {
+      if (resolveColumnKey(INSTANCE_ID_FIELD)) Object.assign(submissionBody, instanceFields);
+      else
+        logWarn("api:submit-form", "Instance submission has nowhere to record its instance", {
+          listTitle,
+        });
+    }
 
     // Claimed after the column check rather than before it: a list provisioned
     // before reference numbers existed has nowhere to put one, and burning a
