@@ -48,11 +48,27 @@ export const CAREER_PORTAL_CARD_LIST = "Career Portal Cards";
 const SETTINGS_LIST = "AdminPanelSettings";
 const SYSTEM_DEFAULT_SETTING_TITLE = "career-portal-system-default-cards";
 const SYSTEM_DEFAULT_CARD_IDS = ["system-default-1", "system-default-2", "system-default-3"] as const;
-const DEFAULT_COLOR_START = "#0078D4";
-const DEFAULT_COLOR_END = "#6264A7";
-const DEFAULT_COLOR_ACCENT = "#16A34A";
+/* The fallbacks a card falls back to when its stored colour is missing or
+   malformed. SI navy / deep / mid, mirroring `editorial` in src/theme. */
+const DEFAULT_COLOR_START = "#0F3D91";
+const DEFAULT_COLOR_END = "#0B2F70";
+const DEFAULT_COLOR_ACCENT = "#1E4FA0";
 const DEFAULT_CARD_IMAGE_OPACITY = 0.72;
 
+/**
+ * The cards the portal shows before anyone authors their own.
+ *
+ * The colours are the SI navy family — #0F3D91 navy, #0B2F70 deep, #1E4FA0 mid
+ * — spelled out rather than imported, because `api/` is built separately from
+ * `src/` and cannot reach `src/theme/editorial.ts`. They mirror `editorial`'s
+ * `navy`, `navyDeep` and `navyMid`; change them together.
+ *
+ * They were #0078D4, #6264A7, #16A34A and #E67635 — PMW blue, purple, a green
+ * and an orange — which survived the palette overhaul only because that pass
+ * swept `src/` and these live server-side. On screen the third stop was the
+ * giveaway: a card faded from blue through violet to near-white or green, next
+ * to a navy bottom bar.
+ */
 const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
   {
     id: "system-default-1",
@@ -65,9 +81,9 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#0078D4",
-    colorEnd: "#6264A7",
-    colorAccent: "#16A34A",
+    colorStart: "#0F3D91",
+    colorEnd: "#0B2F70",
+    colorAccent: "#1E4FA0",
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -84,9 +100,9 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#6264A7",
-    colorEnd: "#0078D4",
-    colorAccent: "#E67635",
+    colorStart: "#0B2F70",
+    colorEnd: "#0F3D91",
+    colorAccent: "#1E4FA0",
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -103,9 +119,9 @@ const SYSTEM_DEFAULT_CARDS: CareerPortalCardRecord[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: "#16A34A",
-    colorEnd: "#0078D4",
-    colorAccent: "#6264A7",
+    colorStart: "#0F3D91",
+    colorEnd: "#1E4FA0",
+    colorAccent: "#0B2F70",
     isSystemDefault: true,
     locked: true,
     source: "system",

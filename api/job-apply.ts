@@ -1012,14 +1012,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 <html><head><meta charset="UTF-8">
 <style>
   body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;color:#1a1a1a;font-size:13px;line-height:1.5;padding:24px}
-  h2{color:#0078D4;font-size:20px;font-weight:600;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid #0078D4}
+  h2{color:#0F3D91;font-size:20px;font-weight:600;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid #0F3D91}
   table{border-collapse:collapse;width:100%;max-width:600px;margin-bottom:16px}
   td{padding:8px 12px;border:1px solid #d1d5db;font-size:13px;vertical-align:top}
   td:first-child{background:#f3f4f6;font-weight:600;width:30%;white-space:nowrap}
-  a{color:#0078D4;text-decoration:none}
-  blockquote{background:#f5f5f5;padding:12px;border-left:4px solid #0078D4;margin:0 0 12px;font-size:13px}
+  a{color:#0F3D91;text-decoration:none}
+  blockquote{background:#f5f5f5;padding:12px;border-left:4px solid #0F3D91;margin:0 0 12px;font-size:13px}
   .section{margin-top:16px}
-  .section-title{font-weight:600;font-size:14px;color:#0078D4;margin:0 0 8px;padding-bottom:4px;border-bottom:1px solid #e5e7eb}
+  .section-title{font-weight:600;font-size:14px;color:#0F3D91;margin:0 0 8px;padding-bottom:4px;border-bottom:1px solid #e5e7eb}
 </style>
 </head><body>
   <h2>New Job Application</h2>

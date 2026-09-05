@@ -3,10 +3,23 @@ import { Box, Chip, Skeleton, Typography } from "@mui/material";
 import type { CareerPortalCard } from "../../types";
 import { editorial } from "../../theme/editorial";
 
+/**
+ * The three stops of a card's gradient, all in the navy family.
+ *
+ * The middle stop used to be a second hue and the last one `skySoft`, a
+ * near-white — so a card began navy and faded out to pale blue, which read as a
+ * violet-to-white wash rather than as a navy card, and sat oddly beside the
+ * navy bottom bar. Ending on `navyMid` keeps the card the same object from
+ * corner to corner while still giving the gradient somewhere to travel.
+ *
+ * These are FALLBACKS. A card authored in Admin → Portal Cards carries its own
+ * three colours in SharePoint, and `safeColor` prefers those — so an existing
+ * card keeps whatever an administrator picked until they pick again.
+ */
 const DEFAULT_CARD_COLORS = {
-  start: editorial.pmwBlue,
-  end: editorial.pmwPurple,
-  accent: editorial.skySoft,
+  start: editorial.navy,
+  end: editorial.navyDeep,
+  accent: editorial.navyMid,
 };
 const DEFAULT_CARD_IMAGE_OPACITY = 0.72;
 
@@ -41,9 +54,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: editorial.pmwPurple,
-    colorEnd: editorial.pmwBlue,
-    colorAccent: editorial.pmwBlueSoft,
+    colorStart: editorial.navyDeep,
+    colorEnd: editorial.navy,
+    colorAccent: editorial.navyMid,
     isSystemDefault: true,
     locked: true,
     source: "system",
@@ -60,9 +73,9 @@ const DEFAULT_PORTAL_CARDS: CareerPortalCard[] = [
     status: "Active",
     targetType: "none",
     targetValue: "",
-    colorStart: editorial.pmwBlueDark,
-    colorEnd: editorial.pmwPurple,
-    colorAccent: editorial.blueWash,
+    colorStart: editorial.navy,
+    colorEnd: editorial.navyMid,
+    colorAccent: editorial.navyDeep,
     isSystemDefault: true,
     locked: true,
     source: "system",
