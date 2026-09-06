@@ -38,6 +38,8 @@ import {
   type DirectoryColumnMap,
 } from "../../utils/approvalDirectorySchema";
 import ChainTraceView from "./ChainTraceView";
+import PersonEmailField from "./PersonEmailField";
+import type { DirectoryPerson } from "../../utils/peopleSearch";
 
 interface DirectoryPersonDialogProps {
   open: boolean;
@@ -134,13 +136,33 @@ export default function DirectoryPersonDialog({
     [input, rows, editing],
   );
 
-  /** Every address already known, so an approver can be picked not typed. */
-  const knownPeople = useMemo(
+  /** Everybody already in the list, so an approver can be picked not typed. */
+  const knownPeople = useMemo<DirectoryPerson[]>(
     () => rows
       .filter((row) => row.personEmail && directoryEmailKey(row.personEmail) !== directoryEmailKey(input.personEmail))
-      .map((row) => row.personEmail),
+      .map((row) => ({
+        email: row.personEmail,
+        name: row.personName,
+        department: row.department,
+        position: row.position,
+      })),
     [rows, input.personEmail],
   );
+
+  /**
+   * What a picked colleague fills in. Only blanks are taken: a department
+   * already typed here is the admin's decision and outranks whatever the
+   * company directory happens to hold.
+   */
+  const applyPicked = (person: DirectoryPerson) => {
+    setInput((prev) => ({
+      ...prev,
+      personEmail: person.email,
+      personName: prev.personName || person.name,
+      department: prev.department || person.department,
+      position: prev.position || person.position,
+    }));
+  };
 
   const departments = useMemo(
     () => mergeChoices(rows.map((row) => row.department), orgDepartments),
@@ -217,16 +239,15 @@ export default function DirectoryPersonDialog({
       </DialogTitle>
       <DialogContent dividers>
         <Stack sx={{ gap: 2, pt: 0.5 }}>
-          <TextField
+          <PersonEmailField
             label="Person's email"
             required
             value={input.personEmail}
-            onChange={(event) => setInput((prev) => ({ ...prev, personEmail: event.target.value }))}
+            onChange={(email) => setInput((prev) => ({ ...prev, personEmail: email }))}
+            onPickPerson={applyPicked}
             helperText={dependents.length > 0
               ? `${dependents.length} ${dependents.length === 1 ? "person reports" : "people report"} to the old address; they will be moved across with it.`
               : HELP.personEmail}
-            size="small"
-            fullWidth
           />
           {has("personName") && field("Full name", "personName")}
 
@@ -263,15 +284,12 @@ export default function DirectoryPersonDialog({
 
           {has("employeeId") && field("Employee ID", "employeeId")}
 
-          <Autocomplete
-            freeSolo
-            options={knownPeople}
+          <PersonEmailField
+            label="Approved by"
             value={input.approverEmail}
-            onInputChange={(_, value) => setInput((prev) => ({ ...prev, approverEmail: value }))}
-            fullWidth
-            renderInput={(params) => (
-              <TextField {...params} label="Approved by" size="small" helperText={HELP.approverEmail} />
-            )}
+            onChange={(email) => setInput((prev) => ({ ...prev, approverEmail: email }))}
+            localPeople={knownPeople}
+            helperText={HELP.approverEmail}
           />
 
           {has("isActive") && (
