@@ -51,6 +51,7 @@ import {
 import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGate";
 import type { JobListing, CustomFieldDefinition } from "../types";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
+import { registerWorkInProgress, consumeWorkInProgress } from "../utils/workInProgress";
 import { getPdpaNoticeVersion, getPdpaRetentionUntil } from "../utils/pdpa";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
 import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
@@ -79,6 +80,22 @@ interface FileEntry {
   /** File size in bytes (only for display/validation) */
   size: number;
 }
+
+/**
+ * What is worth keeping if Microsoft 365 forces a sign-in mid-application. The
+ * attachments cannot come along — a File lives only in this tab — so the
+ * snapshot only remembers that one was picked, and the person is asked to
+ * attach it again.
+ */
+type JobApplyDraft = {
+  values: Pick<FormValues, "name" | "email" | "phone" | "currentPosition" | "currentDepartment" | "coverLetter">;
+  customAnswers: Record<string, unknown>;
+  phoneCountryCode: string;
+  pdpaAccepted: boolean;
+  hadResume: boolean;
+};
+
+const WIP_KEY = "job-apply";
 
 const COUNTRY_CODES = [
   { code: "+60", flag: "🇲🇾", label: "Malaysia" },
@@ -595,10 +612,81 @@ export default function JobApplyPage() {
     supportingDocs: { value: [] },
   });
 
+  // The provider is called long after this render, at the moment a sign-in
+  // redirect starts, so it has to read the answers through a ref rather than
+  // closing over them — otherwise it would hand over whatever was typed at the
+  // time it was registered.
+  const wipStateRef = useRef({ form, customAnswers, phoneCountryCode, pdpaAccepted, submitted });
+  wipStateRef.current = { form, customAnswers, phoneCountryCode, pdpaAccepted, submitted };
+
+  useEffect(() => {
+    return registerWorkInProgress(WIP_KEY, () => {
+      const { form: liveForm, customAnswers: answers, phoneCountryCode: code, pdpaAccepted: consented, submitted: done } = wipStateRef.current;
+      // A finished application is already safe on SharePoint, and an untouched
+      // form has nothing to lose — restoring either would only be noise.
+      if (done) return null;
+      const { resume, supportingDocs } = liveForm.value;
+      const values: JobApplyDraft["values"] = {
+        name: liveForm.value.name,
+        email: liveForm.value.email,
+        phone: liveForm.value.phone,
+        currentPosition: liveForm.value.currentPosition,
+        currentDepartment: liveForm.value.currentDepartment,
+        coverLetter: liveForm.value.coverLetter,
+      };
+      const typedSomething = Object.values(values).some((value) => value.trim() !== "" && value.trim() !== code);
+      if (!typedSomething && Object.keys(answers).length === 0 && !consented && !resume && supportingDocs.length === 0) {
+        return null;
+      }
+      const draft: JobApplyDraft = {
+        values,
+        customAnswers: answers,
+        phoneCountryCode: code,
+        pdpaAccepted: consented,
+        hadResume: !!resume,
+      };
+      return draft;
+    });
+    // Registering once is the point — the ref above keeps the snapshot current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Held rather than applied blindly: the profile prefill below owns the fields
+   * Microsoft supplies, and it reads the form as it looked at render time — so
+   * it needs the restored answers here to fall back on instead of blanking
+   * them a moment after they were put back.
+   */
+  const restoredIdentityRef = useRef<JobApplyDraft["values"] | null>(null);
+
+  useEffect(() => {
+    const draft = consumeWorkInProgress<JobApplyDraft>(WIP_KEY);
+    if (!draft) return;
+    restoredIdentityRef.current = draft.values;
+    form.setValue({
+      name: draft.values.name,
+      email: draft.values.email,
+      phone: draft.values.phone,
+      currentPosition: draft.values.currentPosition,
+      currentDepartment: draft.values.currentDepartment,
+      coverLetter: draft.values.coverLetter,
+    });
+    setCustomAnswers(draft.customAnswers);
+    setPhoneCountryCode(draft.phoneCountryCode);
+    setPdpaAccepted(draft.pdpaAccepted);
+    if (draft.hadResume) {
+      setResumeError("Signing in again cleared your attached files. Please attach your resume or CV once more.");
+    }
+    // Restoring is a one-off on arrival, before anything else can be typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Pre-fill from profile once loaded
   useEffect(() => {
     if (!profile.loading && !profile.error) {
-      let phoneVal = profile.phone || form.value.phone;
+      const restored = restoredIdentityRef.current;
+      restoredIdentityRef.current = null;
+      let phoneVal = profile.phone || restored?.phone || form.value.phone;
       // Detect country code from profile phone
       if (profile.phone) {
         for (const cc of COUNTRY_CODES) {
@@ -613,11 +701,11 @@ export default function JobApplyPage() {
         phoneVal = `${phoneCountryCode} ${profile.phone}`;
       }
       form.setValue({
-        name: profile.displayName || form.value.name,
-        email: profile.email || form.value.email,
+        name: profile.displayName || restored?.name || form.value.name,
+        email: profile.email || restored?.email || form.value.email,
         phone: phoneVal,
-        currentPosition: profile.jobTitle || form.value.currentPosition,
-        currentDepartment: profile.department || form.value.currentDepartment,
+        currentPosition: profile.jobTitle || restored?.currentPosition || form.value.currentPosition,
+        currentDepartment: profile.department || restored?.currentDepartment || form.value.currentDepartment,
       });
     }
     // Only run when profile loads

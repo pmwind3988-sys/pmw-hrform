@@ -46,6 +46,12 @@ export interface NativeFormRuntime {
   getValue: (name: string) => unknown;
   /** Replace every answer at once — used to seed prefilled links. */
   reset: (next?: ValueBag) => void;
+  /**
+   * Put back answers captured earlier — a draft kept across a forced sign-in.
+   * Merges over what is already there and optionally returns to the page the
+   * respondent was on, without disturbing validation messages.
+   */
+  restore: (saved: ValueBag, page?: number) => void;
 
   stateOf: (element: NativeElement) => FieldState;
 
@@ -380,6 +386,15 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
 
   const getValue = useCallback((name: string) => merged[name], [merged]);
 
+  const restore = useCallback((saved: ValueBag, page?: number) => {
+    if (saved && typeof saved === "object") {
+      setValues((prev) => ({ ...prev, ...saved }));
+    }
+    if (typeof page === "number" && Number.isFinite(page) && page >= 0) {
+      setPageIndex(Math.floor(page));
+    }
+  }, []);
+
   const clearError = useCallback((name: string) => {
     setErrors((prev) => {
       if (!(name in prev)) return prev;
@@ -514,6 +529,7 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
     setValue,
     getValue,
     reset,
+    restore,
     stateOf,
     page,
     pageIndex: safeIndex,

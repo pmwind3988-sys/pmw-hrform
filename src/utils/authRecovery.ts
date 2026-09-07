@@ -6,6 +6,7 @@ import {
   type SilentRequest,
 } from "@azure/msal-browser";
 import { setStoredAuthDecision } from "./authDecision";
+import { captureWorkInProgress } from "./workInProgress";
 
 const STALE_AUTH_ERROR_CODES = new Set([
   "interaction_required",
@@ -156,6 +157,10 @@ export async function fetchWithAuthRecovery(
 }
 
 function preserveCurrentRoute(): void {
+  // Answers first: the redirect below tears the page down, and a respondent
+  // sent to sign in mid-form should come back to what they had typed.
+  captureWorkInProgress();
+
   try {
     sessionStorage.setItem("pmw_post_login_redirect", window.location.pathname + window.location.search);
     sessionStorage.removeItem("msal.interaction.status");

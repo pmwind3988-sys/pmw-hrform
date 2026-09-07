@@ -9,6 +9,7 @@ import { buildQuestionTree, removeFieldRecursive, duplicateFieldRecursive, moveF
 import NativeFormView from "../../native/NativeForm";
 import { parseForm } from "../../native/schema";
 import { useNativeForm } from "../../native/useNativeForm";
+import { clearWorkInProgress, peekWorkInProgress, registerWorkInProgress } from "../../utils/workInProgress";
 import { getAllColumnsForList, getChoiceColumnsForList, getSharePointLists } from "../../utils/formBuilderSP";
 import DOMPurify from "dompurify";
 import { C } from "./constants";
@@ -2359,6 +2360,12 @@ interface FormBuilderProps {
   toolCommand?: BuilderToolCommand | null;
 }
 
+/** The unpublished work an author would want back after a forced sign-in. */
+type FormBuilderDraft = {
+  fields: FormBuilderField[];
+  surveySettings: Record<string, unknown>;
+};
+
 export default function FormBuilder({ initialJson, onChange, height = "calc(100vh - 56px)", token: _token = "", showBanner = true, meta = {}, formId: _formId, isAdmin: _isAdmin, onClose: _onClose, readOnly: _readOnly = false, companyChoice, sheet, onTitleChange, toolCommand }: FormBuilderProps) {
   const [fields, setFields] = useState<FormBuilderField[]>(() => {
     if (!initialJson) return [];
@@ -2520,36 +2527,54 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
 
-  // Auto-save key
-  const AUTOSAVE_KEY = "pmw_formbuilder_draft";
+  /*
+    The draft that survives a forced sign-in.
+
+    An expired Microsoft 365 session sends the whole tab to the sign-in host,
+    and an unpublished form would go with it. The snapshot is handed over at the
+    instant that redirect starts, and offered back — never applied silently —
+    when the author returns to the same builder.
+  */
+  const AUTOSAVE_KEY = "form-builder";
+  const savedDraftRef = useRef<FormBuilderDraft | null>(null);
+
+  // Read without removing: this component remounts when the form it is editing
+  // finishes loading, so an early mount must not swallow the draft the real one
+  // is about to offer. It is cleared once the author has answered the prompt.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(AUTOSAVE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.fields?.length > 0) {
-          setShowRestorePrompt(true);
-        }
-      }
-    } catch { /* Non-critical — autosave parse failure */ }
-  }, []);
+    if (_readOnly) return;
+    const draft = peekWorkInProgress<FormBuilderDraft>(AUTOSAVE_KEY);
+    if (!draft || !(draft.fields?.length > 0)) return;
+    savedDraftRef.current = draft;
+    setShowRestorePrompt(true);
+  }, [_readOnly]);
+
+  // What the snapshot would be taken from, refreshed every render so the
+  // registration below can stay a one-off rather than re-running on every edit.
+  const draftSourceRef = useRef<() => FormBuilderDraft | null>(() => null);
+  draftSourceRef.current = () => {
+    // An old version being viewed is not the author's work in progress, and an
+    // empty canvas has nothing to keep.
+    if (_readOnly || fields.length === 0) return null;
+    return { fields, surveySettings };
+  };
+
+  useEffect(() => registerWorkInProgress(AUTOSAVE_KEY, () => draftSourceRef.current()), []);
 
   const restoreDraft = () => {
-    try {
-      const saved = localStorage.getItem(AUTOSAVE_KEY);
-      if (saved) {
-        const { fields: savedFields, surveySettings: savedSettings } = JSON.parse(saved);
-        if (savedFields?.length > 0) {
-          pushHistory(savedFields);
-          setSurveySettings(saved => ({ ...saved, ...savedSettings }));
-        }
-      }
-    } catch { /* Non-critical — autosave parse failure */ }
+    const draft = savedDraftRef.current;
+    if (draft && draft.fields?.length > 0) {
+      pushHistory(draft.fields);
+      setSurveySettings(current => ({ ...current, ...draft.surveySettings }));
+    }
+    savedDraftRef.current = null;
+    clearWorkInProgress(AUTOSAVE_KEY);
     setShowRestorePrompt(false);
   };
 
   const discardDraft = () => {
-    localStorage.removeItem(AUTOSAVE_KEY);
+    savedDraftRef.current = null;
+    clearWorkInProgress(AUTOSAVE_KEY);
     setShowRestorePrompt(false);
   };
 
@@ -2804,7 +2829,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
         <div className="bx-toast" role="status">
           <span className="bx-dot" style={{ background: "var(--bx-a300)", marginTop: 6 }} />
           <span style={{ flex: 1 }}>
-            An unsaved local draft of this form was found.
+            You were signed in again. The unsaved form you were building is still here.
             <span style={{ display: "flex", gap: 8, marginTop: 9 }}>
               <button type="button" className="bx-btn bx-btn-primary bx-btn-sm" onClick={restoreDraft}>Restore it</button>
               <button type="button" className="bx-btn bx-btn-secondary bx-btn-sm" onClick={discardDraft}>Discard</button>

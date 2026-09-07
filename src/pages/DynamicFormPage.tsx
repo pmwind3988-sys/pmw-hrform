@@ -27,6 +27,7 @@ import { harvestSubmitter } from "../utils/directoryHarvestWrite";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
+import { consumeWorkInProgress, registerWorkInProgress } from "../utils/workInProgress";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import Logo from "../components/Logo";
 import type { PdfFormData } from "../utils/FormPdfDocument";
@@ -167,6 +168,14 @@ function documentHeaderFromMeta(meta: Record<string, unknown> | undefined, formI
 function isExpiredPublishProfile(value: unknown): boolean {
   return typeof value === "string" && value.trim() !== "" && Date.parse(value) <= Date.now();
 }
+
+/** What is worth carrying across a forced sign-in: the answers, where the
+ *  respondent had got to, and whether they had already agreed to the notice. */
+type WorkInProgressSnapshot = {
+  values: Record<string, unknown>;
+  pageIndex: number;
+  pdpaAccepted: boolean;
+};
 
 type LoadedFormData = {
   formConfig: Record<string, unknown>;
@@ -1105,6 +1114,58 @@ export default function DynamicFormPage() {
   );
   const runtime = useNativeForm(nativeForm ?? placeholderForm, testRunSeed);
   const formReady = nativeForm !== null;
+
+  /*
+    Answers survive a forced sign-in.
+
+    When Microsoft 365 stops trusting the tab the only way back is a full-page
+    redirect, which throws the half-filled form away. The snapshot is handed
+    over at the instant that redirect starts and picked up when the respondent
+    lands back on the same link.
+  */
+  const [restoredAfterSignIn, setRestoredAfterSignIn] = useState(false);
+  // Read once, on the first render, before anything can be typed over it.
+  const savedWorkRef = useRef<WorkInProgressSnapshot | null | undefined>(undefined);
+  if (savedWorkRef.current === undefined) {
+    savedWorkRef.current = consumeWorkInProgress<WorkInProgressSnapshot>("dynamic-form");
+  }
+  const restoreAppliedRef = useRef(false);
+
+  // What the snapshot would be taken from, kept current on every render so the
+  // registration below can stay a one-off rather than re-running on every
+  // keystroke.
+  const workInProgressRef = useRef<() => WorkInProgressSnapshot | null>(() => null);
+  workInProgressRef.current = () => {
+    // Nothing worth keeping before the form exists, or once the submission has
+    // already been recorded — coming back to a filled-in copy of something
+    // already sent would invite sending it twice.
+    if (!formReady) return null;
+    if (submitStatus === "success" || submittedReference) return null;
+    const values = runtime.values;
+    const answered = Object.values(values).some(
+      (v) => !(v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)),
+    );
+    if (!answered) return null;
+    return { values, pageIndex: runtime.pageIndex, pdpaAccepted };
+  };
+
+  useEffect(() => registerWorkInProgress("dynamic-form", () => workInProgressRef.current()), []);
+
+  /*
+    Put the answers back only once the real form is in place. The runtime
+    reseeds its values when the form identity changes from the empty
+    placeholder to the published document, so anything restored before that
+    would be wiped a moment later.
+  */
+  useEffect(() => {
+    if (!formReady || restoreAppliedRef.current) return;
+    const saved = savedWorkRef.current;
+    if (!saved) return;
+    restoreAppliedRef.current = true;
+    runtime.restore(saved.values || {}, saved.pageIndex);
+    setPdpaAccepted(!!saved.pdpaAccepted);
+    setRestoredAfterSignIn(true);
+  }, [formReady, nativeForm, runtime]);
 
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
   const formIdValue = String(formData?.formConfig?.FormID || "");
@@ -2141,6 +2202,18 @@ export default function DynamicFormPage() {
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg,${t.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>{(userEmail?.[0] || "?").toUpperCase()}</div>
                 <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: t.green }}>Submitting as yourself</div><div style={{ fontSize: 11, color: t.textSecond }}>{userEmail}</div></div>
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
+              </div>
+            )}
+            {restoredAfterSignIn && (
+              // Said plainly rather than left as a surprise: a form that
+              // silently refills itself looks like a bug. Worded around what
+              // actually survives — a large attachment or signature is dropped
+              // rather than stored, so it cannot be promised back.
+              <div role="status" style={{ background: t.amberPale, border: `1px solid ${t.amber}`, borderRadius: 12, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ flex: 1, fontSize: 12, lineHeight: 1.7, color: t.textSecond }}>
+                  <strong style={{ color: t.textPrimary }}>You were signed in again.</strong> The answers you had already filled in are back. Please check them before you submit — any files or signatures you had attached may need adding again.
+                </div>
+                <button onClick={() => setRestoredAfterSignIn(false)} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'", flexShrink: 0 }}>Dismiss</button>
               </div>
             )}
             {formReady ? <div className="dfp-survey-wrap"><NativeFormView runtime={runtime} dark={dark} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
