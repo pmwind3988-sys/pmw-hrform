@@ -5,6 +5,10 @@ import { resolveSignedInViewer } from "./_utils/viewerIdentity.js";
 import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { logError, logInfo, logWarn } from "./_utils/logger.js";
 import { asFetchBody } from "./_utils/fetchBody.js";
+import { checkRateLimit, clientIp } from "./_utils/rateLimit.js";
+
+/** Per caller address. See the note at the check itself. */
+const JOB_APPLY_RATE_LIMIT = { limit: 10, windowMs: 10 * 60 * 1000 };
 
 function errorMessage(error: unknown, maxLength?: number): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -626,6 +630,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  /*
+    The career portal accepts applications from the public, so this is keyed on
+    the caller's address rather than an identity. Each accepted application
+    writes a list row and uploads the attached files, so a loop costs storage
+    and buries the real applicants — and it also sends mail. Well above anyone
+    applying for several jobs in a sitting.
+  */
+  const limit = checkRateLimit(`job-apply:${clientIp(req.headers)}`, JOB_APPLY_RATE_LIMIT);
+  if (!limit.allowed) {
+    res.setHeader("Retry-After", String(limit.retryAfterSeconds));
+    return res.status(429).json({
+      error: "Too many applications have been submitted from this connection. Please try again shortly.",
+    });
+  }
 
   const body = req.body as unknown as JobApplyBody;
   const {

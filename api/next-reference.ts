@@ -17,6 +17,10 @@ import { getGraphToken, queryMasterFormByTitle } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 import { allocateReferenceNumber, ReferenceAllocationError } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig } from "./_utils/referenceNumber.js";
+import { checkRateLimit, clientIp } from "./_utils/rateLimit.js";
+
+/** Per caller address. See the note at the check itself. */
+const REFERENCE_RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -39,6 +43,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  /*
+    Anyone opening a public form reaches this, so there is no identity to key
+    on and the caller's address has to do. Each call permanently consumes a
+    reference number, which is what makes an unlimited version worth abusing:
+    a loop would run a form's numbering into the millions and leave HR's
+    records renumbered around a gap nobody can explain.
+
+    One per second sustained is far above filling in a form and far below
+    anything worth doing on purpose.
+  */
+  const limit = checkRateLimit(`next-reference:${clientIp(req.headers)}`, REFERENCE_RATE_LIMIT);
+  if (!limit.allowed) {
+    res.setHeader("Retry-After", String(limit.retryAfterSeconds));
+    return res.status(429).json({ error: "Too many requests. Please try again shortly." });
+  }
 
   const listTitle = typeof req.body?.listTitle === "string" ? req.body.listTitle.trim() : "";
   if (!listTitle) return res.status(400).json({ error: "Missing or invalid listTitle" });

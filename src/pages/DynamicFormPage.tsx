@@ -14,6 +14,7 @@ import "../native/native-form.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, getScopedListRows, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
+import { apiIdentityHeaders } from "../utils/apiIdentity";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
 import { planLayerRouting } from "../utils/layerRoutingPlan";
@@ -1859,7 +1860,10 @@ export default function DynamicFormPage() {
                   headers: {
                     "Content-Type": "application/json",
                     "X-Requested-With": "XMLHttpRequest",
-                    ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+                    // Signed-in submission branch only — the guest path below
+                    // never reaches here, and the endpoint requires a caller it
+                    // can name before it will send anything.
+                    ...(await apiIdentityHeaders(instance, accounts[0])),
                   },
                   body: JSON.stringify({
                     sendToConfiguredSender: true,

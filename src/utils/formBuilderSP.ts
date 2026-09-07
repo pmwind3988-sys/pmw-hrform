@@ -2,6 +2,7 @@ import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, Eva
 import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 import { fetchWithAuthRecovery } from "./authRecovery";
+import { currentApiIdentityHeaders } from "./apiIdentity";
 import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 import { SharePointHttpError } from "./sharepointClient";
 import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
@@ -43,7 +44,6 @@ export function activeSiteUrl(): string {
   return SP_SITE_URL;
 }
 let activeSiteKey: SiteKey = HOME_SITE_KEY;
-const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
 
 /**
  * Points this module at one of the configured sites. Throws on an unknown or
@@ -2532,11 +2532,14 @@ export async function sendSpEmail(_token: string, { to, subject, body, attachmen
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
 
+  // The endpoint will not send for a caller it cannot name — see the comment on
+  // the identity check in `api/send-email.ts`. Every path that reaches here runs
+  // in a signed-in member of staff's browser, so the token is always available.
   const response = await fetchWithTimeout(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(API_KEY ? { 'X-Api-Key': API_KEY } : {}),
+      ...(await currentApiIdentityHeaders()),
     },
     body: JSON.stringify({
       to,

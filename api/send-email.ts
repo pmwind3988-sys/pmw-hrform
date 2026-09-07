@@ -9,6 +9,15 @@ import {
 } from "./_utils/workflowEmail.js";
 import { applySendEmailTestRun } from "./_utils/sendEmailTestRun.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
+import { checkRateLimit } from "./_utils/rateLimit.js";
+import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
+
+/**
+ * Per sender. Generous on purpose: one finished workflow step can send several
+ * notices in a row, and an approver working through a backlog does that
+ * repeatedly. Nothing legitimate approaches this; a script does immediately.
+ */
+const SEND_EMAIL_RATE_LIMIT = { limit: 60, windowMs: 5 * 60 * 1000 };
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -53,6 +62,61 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  /*
+    Who is sending — established before a single field of the request is read.
+
+    This endpoint puts a message into the company's own mailbox, with a
+    recipient, a subject, a body and attachments all taken from the request. The
+    API key cannot gate that: it ships to every browser inside the bundle, so
+    "has the key" means "has visited the site". Left on the key alone this was
+    an open relay — anyone could mail anyone, from an address that passes SPF
+    and DKIM and looks exactly like real internal mail.
+
+    A verified Microsoft 365 identity is the right bar because every caller
+    already has one. Both browser paths that reach here — the workflow notices
+    from `sendSpEmail`, and the manual-paper notice on submission — run in a
+    signed-in member of staff's browser. The public reviewer path never calls
+    this: a decision made from an emailed link goes to `api/evaluate.ts`, and
+    the server sends the next reviewer's mail itself, in process, without
+    coming back through here.
+
+    Guest members are refused rather than merely rate-limited. Signing in with
+    Google is open to anybody, so accepting one would leave the relay open to
+    anyone willing to spend thirty seconds making an account.
+  */
+  let token: string;
+  let viewer: Awaited<ReturnType<typeof requireSignedInViewer>>;
+  try {
+    token = await getGraphToken();
+    viewer = await requireSignedInViewer(req.headers, token);
+  } catch (e) {
+    logError("api:send-email", "Could not establish who is sending", e);
+    return res.status(500).json({ error: "Internal server error. Please try again." });
+  }
+
+  if (!viewer) {
+    return res.status(401).json({ error: "Sign in to send this message." });
+  }
+  if (viewer.kind !== "m365") {
+    return res.status(403).json({ error: "Only signed-in staff accounts can send messages." });
+  }
+
+  /*
+    Keyed on the sender, not their address, so a compromised or careless account
+    cannot be turned into a bulk mailer — and so one person's runaway loop
+    cannot spend everybody else's budget. The ceiling is set well above what
+    ordinary use needs: finishing a workflow step sends a handful of notices at
+    once, and a busy approver clearing a queue sends a few handfuls.
+  */
+  const limit = checkRateLimit(`send-email:${viewer.id}`, SEND_EMAIL_RATE_LIMIT);
+  if (!limit.allowed) {
+    logWarn("api:send-email", "Sender is over the rate limit", { sender: viewer.id });
+    res.setHeader("Retry-After", String(limit.retryAfterSeconds));
+    return res.status(429).json({
+      error: "Too many messages have been sent from this account just now. Please try again shortly.",
+    });
+  }
+
   const { to, subject, body, workflow, sendToConfiguredSender, attachments, testTicket, slug } = req.body as Record<string, unknown>;
   const configuredSender = process.env.HR_FORM_EMAIL_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "";
 
@@ -74,7 +138,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
-    const token = await getGraphToken();
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments.map(normalizeAttachment).filter((attachment): attachment is WorkflowEmailAttachment => attachment !== null)
       : [];

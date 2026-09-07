@@ -17,6 +17,15 @@
         ],
         "createdAt": "2026-08-14T11:41:24.357Z",
         "reason": "Builder canvas list rows, not cards. The 3px left bar is transparent by default and encodes three states (is-selected / is-error / is-dropover), each paired with a background fill, so selection is never carried by colour alone."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "api/job-apply.ts"
+        ],
+        "createdAt": "2026-09-07T01:01:45.310Z",
+        "reason": "Not a UI card: this is the border-left:4px on a <blockquote> inside the job-application HTML EMAIL template. A left rule on a blockquote is the standard quoting convention and one of the few layout devices that renders reliably across Outlook/Gmail, where flexbox and modern CSS are unavailable. Category error, not an AI-UI side-tab."
       }
     ]
   }

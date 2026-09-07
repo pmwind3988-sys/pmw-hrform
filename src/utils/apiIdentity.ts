@@ -55,3 +55,31 @@ export async function apiIdentityHeaders(
   }
   return headers;
 }
+
+/**
+ * The same headers, for callers with no MSAL hook in reach.
+ *
+ * Components take `instance` and `account` from `useMsal` and should keep
+ * using `apiIdentityHeaders` above. This exists for the plain functions in
+ * `utils/` — `sendSpEmail` and the notification helpers that call it — which
+ * are several layers below any component and would otherwise have to thread an
+ * MSAL instance through half a dozen signatures to name their caller.
+ *
+ * It reads the one application-wide instance directly. That is the same object
+ * `useMsal` hands out, so this cannot disagree with what a component would have
+ * passed. An active account is preferred, falling back to the first signed in —
+ * matching how the rest of the app picks one (`accounts[0]`).
+ *
+ * The instance is imported here rather than at the top of the file, and that is
+ * load-bearing: `msalConfig` builds its `PublicClientApplication` as its module
+ * body runs, reading `window.location`. A static import would drag that into
+ * every module that transitively imports this one — including `formBuilderSP`,
+ * whose unit tests run under Node with no `window` and would fail on import
+ * alone. Deferring it to the call keeps this usable from a module graph that
+ * never reaches a browser.
+ */
+export async function currentApiIdentityHeaders(): Promise<Record<string, string>> {
+  const { msalInstance } = await import("../auth/msalConfig");
+  const account = msalInstance.getActiveAccount() ?? msalInstance.getAllAccounts()[0];
+  return apiIdentityHeaders(msalInstance, account);
+}
