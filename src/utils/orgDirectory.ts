@@ -83,6 +83,51 @@ export function companyChoices(companies: CompanyRow[]): OrgChoice[] {
     .map((company) => ({ value: company.code, text: company.name || company.code }));
 }
 
+function rowText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
+/**
+ * Maps raw list rows — from the REST reader or the Graph reader, which wrap the
+ * columns under `fields` — to company rows.
+ *
+ * A blank or absent IsActive reads as active, the same rule the approval
+ * directory uses: a column nobody has filled in must never silently switch a
+ * company off.
+ */
+export function companyRowsFromItems(
+  items: Array<{ fields?: Record<string, unknown> } | Record<string, unknown>>,
+): CompanyRow[] {
+  return items.map((raw) => {
+    const item = raw as { fields?: Record<string, unknown> } & Record<string, unknown>;
+    const fields = (item.fields ?? item) as Record<string, unknown>;
+    const active = fields[ORG_COLUMNS.isActive];
+    return {
+      id: Number((fields.id ?? fields.Id) as unknown) || undefined,
+      name: rowText(fields[ORG_COLUMNS.name]),
+      code: rowText(fields[ORG_COLUMNS.code]),
+      isActive: active === undefined || active === null || active === "" ? true : Boolean(active),
+    };
+  });
+}
+
+/**
+ * The managed Company selector, spotted in stored survey JSON.
+ *
+ * The banner chooser carries these markers; the name/title/type triple is the
+ * fallback for forms saved before the markers existed. Kept in step with
+ * `isManagedCompanyQuestion` in src/utils/companySelection.ts.
+ */
+export function isManagedCompanyElement(el: Record<string, unknown>): boolean {
+  if (el.isManagedCompanyChoice === true || el.managedPlacement === "banner") return true;
+  const name = String(el.name ?? "").trim().toLowerCase();
+  const title = String(el.title ?? "").trim().toLowerCase();
+  const type = String(el.type ?? "").trim().toLowerCase();
+  return name === "company" && title === "company" && type === "radiogroup";
+}
+
 /**
  * The departments a form should offer once a company has been picked.
  *

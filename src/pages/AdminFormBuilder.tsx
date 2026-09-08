@@ -34,6 +34,8 @@ import { fieldsFromSurveyJson } from "../utils/formFieldCatalog";
 import type { LayerFieldOption } from "../components/builder/layerValidation";
 import { flattenQuestions } from "../utils/FormBuilderEngine";
 import { createSpClient } from "../utils/sharepointClient";
+import { companyChoices, type OrgChoice } from "../utils/orgDirectory";
+import { loadCompanies } from "../utils/orgDirectorySP";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import { SP_STATIC } from "../utils/spConfig";
 import {
@@ -616,6 +618,11 @@ export default function AdminFormBuilder() {
     pdfConfig: DEFAULT_PDF_CONFIG,
   });
   const [showBanner, setShowBanner] = useState(true);
+  // The official company list from Admin → Companies and departments. The
+  // banner Company selector follows it rather than a list typed per form.
+  const [orgCompanies, setOrgCompanies] = useState<OrgChoice[]>([]);
+  const [orgCompaniesLoaded, setOrgCompaniesLoaded] = useState(false);
+  const [orgCompaniesError, setOrgCompaniesError] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [referenceConfig, setReferenceConfig] = useState<ReferenceNumberConfig>(DEFAULT_REFERENCE_CONFIG);
   /*
@@ -893,6 +900,10 @@ export default function AdminFormBuilder() {
           setSiteUsers((ud.value || []).filter((u: { Email: string }) => u.Email).map((u: { Email: string; Title: string }) => ({ email: u.Email, name: u.Title })));
         } catch { /* ignore */ }
         getAllFormConfigs(token).then(setAllForms).catch(e => showToast(`Could not load forms: ${e.message}`, "err"));
+        loadCompanies(token)
+          .then((rows) => { setOrgCompanies(companyChoices(rows)); })
+          .catch(() => { setOrgCompaniesError(true); })
+          .finally(() => { setOrgCompaniesLoaded(true); });
       } catch (e) {
         showToast("Authentication error. Please refresh.", "err");
       }
@@ -1089,9 +1100,8 @@ export default function AdminFormBuilder() {
       setMode("settings");
       return;
     }
-    const draftCompanyOptions = meta.companies.split(/\r?\n/).map(c => c.trim()).filter(Boolean);
-    if (meta.companyChoiceEnabled && draftCompanyOptions.length < 2) {
-      showToast("Add at least two companies before saving the required Company selector.", "err");
+    if (meta.companyChoiceEnabled && companyOptions.length < 2) {
+      showToast("The official company list needs at least two active companies before the required Company selector can be saved. Add them in Admin → Companies and departments.", "err");
       setMode("settings");
       return;
     }
@@ -1146,7 +1156,7 @@ export default function AdminFormBuilder() {
         publishKey,
         publishLabel,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
+        meta: { isoStandards: meta.isoStandards, companies: companiesSnapshot, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
         changedBy: userEmail,
         layerConfig: layerConfigToSave,
       });
@@ -1550,9 +1560,8 @@ export default function AdminFormBuilder() {
       setMode("settings");
       return;
     }
-    const publishCompanyOptions = meta.companies.split(/\r?\n/).map(c => c.trim()).filter(Boolean);
-    if (meta.companyChoiceEnabled && publishCompanyOptions.length < 2) {
-      showToast("Add at least two companies before publishing the required Company selector.", "err");
+    if (meta.companyChoiceEnabled && companyOptions.length < 2) {
+      showToast("The official company list needs at least two active companies before the required Company selector can be published. Add them in Admin → Companies and departments.", "err");
       setMode("settings");
       return;
     }
@@ -1664,7 +1673,7 @@ export default function AdminFormBuilder() {
         publishKey,
         publishLabel,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: meta.companies, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
+        meta: { isoStandards: meta.isoStandards, companies: companiesSnapshot, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
         changedBy: userEmail,
         layerConfig: layerConfigToSave,
       });
@@ -1793,10 +1802,14 @@ export default function AdminFormBuilder() {
   // Recomputed on every render rather than memoised on the date: the builder can
   // be left open across midnight, and a stale preview would misstate the format.
   const referencePreview = previewReferenceNumber(referenceConfig);
-  const companyOptions = meta.companies
-    .split(/\r?\n/)
-    .map(c => c.trim())
-    .filter(Boolean);
+  // The banner Company selector follows the official list from Admin. The
+  // hard-coded default is only a fallback for when that list cannot be read.
+  const companyOptions = orgCompaniesError
+    ? DEFAULT_COMPANIES.split(/\r?\n/).map(c => c.trim()).filter(Boolean)
+    : orgCompanies.map(c => c.text);
+  // Baked into the published form as the fallback the live company read uses
+  // if it ever fails. Live forms otherwise resolve the current list at load.
+  const companiesSnapshot = companyOptions.join("\n");
   const companyFieldCandidates = surveyJson
     ? flattenQuestions(surveyJson).filter(q => {
         const name = String(q.name || "").toLowerCase();
@@ -2191,7 +2204,7 @@ export default function AdminFormBuilder() {
             readOnly={!!viewingOld}
             token={tokenRef.current || undefined}
             showBanner={showBanner}
-            meta={{ isoStandards: meta.isoStandards, companies: meta.companies, formTitle: meta.formTitle, logoUrl: meta.logoUrl, companyChoiceEnabled: meta.companyChoiceEnabled }}
+            meta={{ isoStandards: meta.isoStandards, companies: companiesSnapshot, formTitle: meta.formTitle, logoUrl: meta.logoUrl, companyChoiceEnabled: meta.companyChoiceEnabled }}
             companyChoice={{
               enabled: meta.companyChoiceEnabled,
               choices: companyOptions,
@@ -2317,14 +2330,27 @@ export default function AdminFormBuilder() {
               <Disclosure open={!!disc.branding} onToggle={() => toggleDisc("branding")} title="Branding & banner" summary={showBanner ? "Banner on" : "Banner off"}>
                 <TextField id="set-iso" label="ISO standards" value={meta.isoStandards} onChange={v => setM("isoStandards", v)} placeholder="ISO 9001 · ISO 14001" />
                 <div className="bx-field">
-                  <label htmlFor="set-companies">Companies (one per line)</label>
-                  <textarea
-                    id="set-companies"
-                    className="bx-input"
-                    rows={4}
-                    value={meta.companies}
-                    onChange={e => setM("companies", e.target.value)}
-                  />
+                  <label>Companies</label>
+                  <div style={{ border: `1px solid ${C.border}`, background: C.offWhite, borderRadius: 8, padding: "10px 12px" }}>
+                    {!orgCompaniesLoaded ? (
+                      <div style={{ fontSize: 13.5, color: C.textMuted }}>Loading the official company list…</div>
+                    ) : orgCompaniesError ? (
+                      <div style={{ fontSize: 13.5, color: C.amber }}>
+                        Could not read the official company list — showing the built-in default for now. Reload the page to try again.
+                      </div>
+                    ) : companyOptions.length === 0 ? (
+                      <div style={{ fontSize: 13.5, color: C.textMuted }}>
+                        No active companies yet. Add them in Admin → Companies and departments.
+                      </div>
+                    ) : (
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, color: C.textSecond }}>
+                        {companyOptions.map(name => <li key={name}>{name}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 6 }}>
+                    Managed in Admin → Companies and departments. Every form's Company selector follows this list, and changes there reach live forms without republishing.
+                  </div>
                 </div>
                 <TextField id="set-logo" label="Logo URL" value={meta.logoUrl} onChange={v => setM("logoUrl", v)} placeholder="/logo-128.png" />
                 <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 4 }}>
@@ -2338,12 +2364,12 @@ export default function AdminFormBuilder() {
                     checked={meta.companyChoiceEnabled}
                     onChange={v => setMeta(m => ({ ...m, companyChoiceEnabled: v }))}
                     label="Required company selector"
-                    hint={`Adds a required single-select field (${COMPANY_FIELD_LABEL} / ${COMPANY_FIELD_NAME}) using the company list above.`}
+                    hint={`Adds a required single-select field (${COMPANY_FIELD_LABEL} / ${COMPANY_FIELD_NAME}) using the official company list.`}
                   />
                 </div>
-                {meta.companyChoiceEnabled && companyOptions.length < 2 && (
+                {meta.companyChoiceEnabled && orgCompaniesLoaded && companyOptions.length < 2 && (
                   <div style={{ background: C.amberPale, border: "1px solid #F0D79A", padding: "9px 12px", fontSize: 13.5, color: C.amber, marginTop: 8 }}>
-                    Add at least two company lines before publishing the selector.
+                    The selector needs at least two active companies. Add them in Admin → Companies and departments.
                   </div>
                 )}
                 {meta.companyChoiceEnabled && extraCompanyFields.length > 0 && (

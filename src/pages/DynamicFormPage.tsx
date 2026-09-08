@@ -22,7 +22,8 @@ import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { hasEvaluationLayer, readHarvestConfig } from "../utils/directoryHarvest";
-import { resolveScopedChoices } from "../utils/orgDirectory";
+import { companyChoices, isManagedCompanyElement, resolveScopedChoices } from "../utils/orgDirectory";
+import { loadCompanies } from "../utils/orgDirectorySP";
 import { forEachSurveyElement } from "../utils/surveyWalk";
 import { harvestSubmitter } from "../utils/directoryHarvestWrite";
 import { loginRequest } from "../auth/msalConfig";
@@ -1004,10 +1005,33 @@ export default function DynamicFormPage() {
     async function enrich(): Promise<void> {
       const pending: Promise<void>[] = [];
 
+      // The official company list, read once however many managed selectors a
+      // form carries. A failed read leaves the baked fallback choices in place.
+      let companyChoicesPromise: Promise<{ value: string; text: string }[]> | null = null;
+      const loadCompanyChoicesOnce = () => {
+        if (!companyChoicesPromise) {
+          companyChoicesPromise = loadCompanies(token).then(companyChoices).catch(() => []);
+        }
+        return companyChoicesPromise;
+      };
+
       // Every question, whatever container it sits in. This recursed into
       // panels alone, so a question inside a column layout never had its
       // choices loaded at all.
       function collect(el: Record<string, unknown>) {
+          // The managed Company selector always follows the official company
+          // list, so a company added or retired in Admin reaches a signed-in
+          // user's form without a republish.
+          if (isManagedCompanyElement(el)) {
+            pending.push(
+              loadCompanyChoicesOnce()
+                .then((choices) => {
+                  if (choices.length > 0) el.choices = choices;
+                })
+                .catch(() => {})
+            );
+          }
+
           // Main field spChoicesSource
           const src = el.spChoicesSource as { list?: string; column?: string } | undefined;
           if (src?.list && src?.column) {

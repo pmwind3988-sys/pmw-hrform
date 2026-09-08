@@ -1,6 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryMasterFormBySlug, queryWebFormVersion, getListColumnChoices, getListColumnValues, getListScopedRows } from "./_utils/graphClient.js";
-import { resolveScopedChoices } from "./_utils/orgDirectory.js";
+import { companyChoices, isManagedCompanyElement, resolveScopedChoices, type OrgChoice } from "./_utils/orgDirectory.js";
+import { loadCompaniesGraph } from "./_utils/orgDirectoryGraph.js";
 import { forEachSurveyElement } from "./_utils/surveyWalk.js";
 import { redactLayerConfigForPublic } from "./_utils/publicLayerConfig.js";
 import { logError } from "./_utils/logger.js";
@@ -55,6 +56,21 @@ async function enrichSurveyJson(
   let choicesFetched = 0;
   const pending: Promise<void>[] = [];
 
+  // The official company list, read once however many managed selectors a form
+  // carries. A failed read leaves the field's baked fallback choices in place.
+  let companyChoicesPromise: Promise<OrgChoice[]> | null = null;
+  const loadCompanyChoicesOnce = (): Promise<OrgChoice[]> => {
+    if (!companyChoicesPromise) {
+      companyChoicesPromise = loadCompaniesGraph(token)
+        .then(companyChoices)
+        .catch((e: unknown) => {
+          errors.push(`companies: ${e instanceof Error ? e.message : String(e)}`);
+          return [];
+        });
+    }
+    return companyChoicesPromise;
+  };
+
   /*
     Every question, whatever it is nested inside — see `forEachSurveyElement`.
     This used to recurse into panels alone, so a Company dropdown inside a
@@ -63,6 +79,21 @@ async function enrichSurveyJson(
   */
   {
     const collect = (el: Record<string, unknown>): void => {
+      // The managed Company selector always follows the official company list,
+      // so a company added or retired in Admin reaches every live form without
+      // a republish.
+      if (isManagedCompanyElement(el)) {
+        spSources++;
+        pending.push(
+          loadCompanyChoicesOnce().then((choices) => {
+            if (choices.length > 0) {
+              el.choices = choices;
+              choicesFetched++;
+            }
+          })
+        );
+      }
+
       // Main field spChoicesSource
       const src = el.spChoicesSource as
         | { list?: string; column?: string }

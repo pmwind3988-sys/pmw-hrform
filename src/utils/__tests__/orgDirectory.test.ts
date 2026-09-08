@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   companyChoices,
+  companyRowsFromItems,
   departmentChoices,
   departmentScopeLabel,
+  isManagedCompanyElement,
   nearDuplicateGroups,
   orgKey,
   validateCompany,
@@ -46,6 +48,40 @@ describe("companyChoices", () => {
   it("falls back to the code when a row has no name", () => {
     expect(companyChoices([{ code: "PMWC", name: "", isActive: true }]))
       .toEqual([{ value: "PMWC", text: "PMWC" }]);
+  });
+});
+
+describe("companyRowsFromItems", () => {
+  it("reads Graph rows (columns under fields) into company rows", () => {
+    const rows = companyRowsFromItems([
+      { fields: { id: "3", Title: "PMW Concrete", Code: "PMWC", IsActive: true } },
+    ]);
+    expect(rows).toEqual([{ id: 3, name: "PMW Concrete", code: "PMWC", isActive: true }]);
+  });
+
+  it("reads REST rows (columns at the top level) into company rows", () => {
+    const rows = companyRowsFromItems([{ Id: 5, Title: "PMW Lighting", Code: "PMWL", IsActive: false }]);
+    expect(rows).toEqual([{ id: 5, name: "PMW Lighting", code: "PMWL", isActive: false }]);
+  });
+
+  it("treats a blank IsActive as active, never silently switching a company off", () => {
+    expect(companyRowsFromItems([{ fields: { Title: "PMW", Code: "PMW" } }])[0].isActive).toBe(true);
+    expect(companyRowsFromItems([{ fields: { Title: "PMW", Code: "PMW", IsActive: "" } }])[0].isActive).toBe(true);
+  });
+});
+
+describe("isManagedCompanyElement", () => {
+  it("spots the banner chooser by its markers", () => {
+    expect(isManagedCompanyElement({ isManagedCompanyChoice: true })).toBe(true);
+    expect(isManagedCompanyElement({ managedPlacement: "banner" })).toBe(true);
+  });
+
+  it("falls back to the company radiogroup for forms saved before the markers", () => {
+    expect(isManagedCompanyElement({ name: "company", title: "Company", type: "radiogroup" })).toBe(true);
+  });
+
+  it("leaves ordinary questions alone", () => {
+    expect(isManagedCompanyElement({ name: "companyAddress", title: "Company address", type: "text" })).toBe(false);
   });
 });
 
