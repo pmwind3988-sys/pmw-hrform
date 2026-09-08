@@ -5,6 +5,7 @@ import {
   shouldSearchChoices,
   shouldOfferSearchableCombobox,
   SEARCHABLE_FROM,
+  DIRECTORY_FROM,
 } from "./choiceSearch";
 
 const option = (text: string, value = text) => ({ text, value });
@@ -66,16 +67,28 @@ describe("shouldOfferSearchableCombobox", () => {
     expect(shouldOfferSearchableCombobox(3, keyboard)).toBe(false);
   });
 
-  it("hands a long list to the native picker on touch, at every length", () => {
-    // The whole point of the change: a phone or tablet gets the OS dialog/wheel
-    // even for the org lists people used to have to scroll a hand-built listbox.
+  it("hands a moderate long list to the native picker on touch", () => {
+    // The org lists people used to scroll a hand-built listbox now open the OS
+    // dialog/wheel: below a directory's worth, the native picker is better.
     expect(shouldOfferSearchableCombobox(24, touch)).toBe(false);
     expect(shouldOfferSearchableCombobox(10, touch)).toBe(false);
     expect(shouldOfferSearchableCombobox(SEARCHABLE_FROM + 1, touch)).toBe(false);
+    expect(shouldOfferSearchableCombobox(DIRECTORY_FROM - 1, touch)).toBe(false);
+  });
+
+  it("keeps search on a directory even on touch", () => {
+    // Scrolling a native wheel through hundreds of names is worse than typing,
+    // so a list this long stays a searchable combobox on phones and tablets.
+    expect(shouldOfferSearchableCombobox(DIRECTORY_FROM, touch)).toBe(true);
+    expect(shouldOfferSearchableCombobox(300, touch)).toBe(true);
+    // And still searchable on a keyboard, as any long list is.
+    expect(shouldOfferSearchableCombobox(DIRECTORY_FROM, keyboard)).toBe(true);
   });
 
   it("keeps an unlisted (Other) value on the native control so the text shows", () => {
+    // True even for a directory-sized list — the typed value has no row to find.
     expect(shouldOfferSearchableCombobox(24, { coarsePointer: false, isUnlisted: true })).toBe(false);
+    expect(shouldOfferSearchableCombobox(300, { coarsePointer: true, isUnlisted: true })).toBe(false);
   });
 });
 

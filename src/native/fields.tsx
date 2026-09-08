@@ -227,12 +227,12 @@ export function SelectControl(props: ControlProps) {
   const isUnlisted = current !== "" && !options.some((o) => o.value === current);
   const showOther = element.hasOther && (isUnlisted || otherIsChosen(options, [current]));
 
-  // A long list becomes typeable — but only with a keyboard to type on. On a
-  // phone or tablet the native control wins at every length: the operating
-  // system draws its own scrollable picker (the Android dialog, the iOS
-  // wheel), which a hand-built listbox cannot match. So the searchable
-  // combobox is offered only on a fine pointer; touch falls through to the
-  // native <select> below. (See shouldOfferSearchableCombobox.)
+  // A long list becomes typeable — but on a phone or tablet a moderate list is
+  // better as the native control, whose OS picker (the Android dialog, the iOS
+  // wheel) a hand-built listbox cannot match. A directory of hundreds is the
+  // exception: there, typing beats scrolling a wheel, so search is kept even on
+  // touch. All three cuts live in shouldOfferSearchableCombobox; a false here
+  // falls through to the native <select> below.
   if (shouldOfferSearchableCombobox(options.length, { coarsePointer, isUnlisted })) {
     return (
       <>

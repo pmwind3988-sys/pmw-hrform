@@ -27,26 +27,49 @@ export function shouldSearchChoices(optionCount: number): boolean {
 }
 
 /**
+ * The number of options above which a list is a *directory* — searched, not
+ * scrolled — even on a phone.
+ *
+ * The touch rule below hands moderate lists to the native picker, because the
+ * OS dialog/wheel is the better control for the ten companies or twenty-four
+ * departments people hunt through. A directory is a different thing: a native
+ * wheel through several hundred names is worse than typing three letters, so
+ * once a list is this long the searchable combobox is kept on touch too.
+ *
+ * Set well above the largest ordinary org list (24) so those still open the
+ * native picker, and low enough that any real staff/customer directory clears
+ * it. A list between 25 and here is rare; where it exists, the native picker
+ * is still perfectly usable, so the boundary is deliberately generous.
+ */
+export const DIRECTORY_FROM = 40;
+
+/**
  * Whether a dropdown should render the typeable combobox rather than a native
- * `<select>`. Three things must all hold:
+ * `<select>`. The rules, in order:
  *
- *   - the list is long enough that typing beats scanning (`shouldSearchChoices`);
- *   - the current value is one of the listed options — an "Other" free-text
- *     answer read back from a saved response has no row to search to, so it
- *     stays on the native control that can show the typed value; and
- *   - there is a keyboard to type on. On a coarse pointer (a phone or tablet)
- *     the operating system's own picker — the Android dialog, the iOS wheel —
- *     is more usable and more accessible than any hand-built listbox at every
- *     length, so touch always falls through to the native `<select>`.
+ *   - an "Other" free-text answer read back from a saved response has no row to
+ *     search to, so it stays on the native control that can show the typed
+ *     value (`isUnlisted`);
+ *   - a short list is never searched — scanning beats typing, and the native
+ *     control is best on a phone (`shouldSearchChoices`);
+ *   - on a coarse pointer (a phone or tablet) a *moderate* long list falls
+ *     through to the native `<select>`, whose OS picker — the Android dialog,
+ *     the iOS wheel — is more usable and accessible than a hand-built listbox;
+ *   - but a directory (`DIRECTORY_FROM` or more) keeps its search everywhere,
+ *     touch included, because scrolling a wheel through hundreds is worse than
+ *     typing.
  *
- * Kept here, beside the length rule it builds on, so the whole "which control"
+ * Kept here, beside the length rules it builds on, so the whole "which control"
  * decision can be read and tested without a browser.
  */
 export function shouldOfferSearchableCombobox(
   optionCount: number,
   { coarsePointer, isUnlisted }: { coarsePointer: boolean; isUnlisted: boolean },
 ): boolean {
-  return shouldSearchChoices(optionCount) && !isUnlisted && !coarsePointer;
+  if (isUnlisted) return false;
+  if (!shouldSearchChoices(optionCount)) return false;
+  if (coarsePointer && optionCount < DIRECTORY_FROM) return false;
+  return true;
 }
 
 /**
