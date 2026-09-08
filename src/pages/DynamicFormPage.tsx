@@ -454,9 +454,16 @@ const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-
  */
 
 // Theme tokens
+//
+// The `purple*` family is the ACTION colour — submit, sign-in, links, the
+// progress bar, the spinner. The name is historical (this page predates the
+// SI-CMMS overhaul); an earlier pass had resolved it to `ink`, which quietly
+// painted every button near-black. It now resolves to SI navy, so actions read
+// as the navy the rest of the app uses. `purpleMid`/`purplePale` stay the pale
+// navy washes used for tracks, borders and quiet badges.
 const LIGHT = {
-  purple: editorial.ink, purpleLight: editorial.muted, purplePale: editorial.skySoft, purpleMid: editorial.sky,
-  purpleDark: editorial.black, bg: editorial.paper, cardBg: editorial.white, offWhite: editorial.paper, border: editorial.border,
+  purple: editorial.navy, purpleLight: editorial.navyMid, purplePale: editorial.skySoft, purpleMid: editorial.sky,
+  purpleDark: editorial.navyDeep, bg: editorial.paper, cardBg: editorial.white, offWhite: editorial.paper, border: editorial.border,
   textPrimary: editorial.ink, textSecond: editorial.muted, textMuted: editorial.softMuted,
   green: editorial.success, greenPale: editorial.successSoft, greenBorder: editorial.success,
   red: editorial.error, redPale: editorial.errorSoft, amber: editorial.accentText, amberPale: editorial.accentSoft,
@@ -501,15 +508,15 @@ const globalCss = (t: FormTheme) => `
      and lets the fields line up with everything above and below them. */
   .dfp-survey-wrap .nf-shell{max-width:100%;padding:0 0 8px}
   .dfp-banner-logo img{max-height:48px!important}
-  /* The document control block is the banner row's flexible half, sitting to the
-     right of the logo rather than in a full-width band of its own. */
-  .dfp-doc-control{flex:1;min-width:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:${t.cardBg}}
-  .dfp-doc-cell{min-height:42px;padding:7px 8px;border-right:1px solid ${t.border};display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:${t.textPrimary};line-height:1.35}
+  /* The document-control numbers run as a full-width band beneath the masthead,
+     hairline-separated, the way an auditor scans them off the printed form. */
+  .dfp-doc-control{min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid ${t.border};background:${t.cardBg}}
+  .dfp-doc-cell{min-height:38px;padding:8px 16px;border-right:1px solid ${t.border};display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:11px;color:${t.textPrimary};line-height:1.4}
   .dfp-doc-cell:last-child{border-right:none}
-  .dfp-doc-label{font-weight:700}
-  .dfp-doc-value{font-weight:600;color:${t.textSecond}}
+  .dfp-doc-label{font-weight:700;white-space:nowrap}
+  .dfp-doc-value{font-weight:500;color:${t.textSecond};font-variant-numeric:tabular-nums}
   @media(max-width:1024px){
-    .dfp-doc-cell{font-size:11px;padding:6px}
+    .dfp-doc-cell{padding:7px 12px}
   }
   @media(max-width:768px){
     .dfp-banner-logo{width:116px!important}
@@ -2166,32 +2173,35 @@ export default function DynamicFormPage() {
 
       {showBanner && (
         <div className="dfp-banner" style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
-          <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "14px 20px" }}>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandardsText}</div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 17, color: "#fff" }}>{formTitle}</div>
-          </div>
-          {/* Logo beside the document control block, the way the printed form
-              carries them. The company used to sit here, because SurveyJS could
-              not draw the managed field — the engine draws it inside the form
-              now, so a chooser up here would only ask the same question twice. */}
-          <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${t.border}` }}>
+          {/* A controlled document's masthead, flat on the SI canvas rather than
+              the old near-black title band: the logo sits beside the ISO line
+              and the form name, the way the printed form carries them, then the
+              document-control numbers run as a full-width band beneath. The
+              company used to sit here, because SurveyJS could not draw the
+              managed field — the engine draws it inside the form now, so a
+              chooser up here would only ask the same question twice. */}
+          <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch" }}>
             <div className="dfp-banner-logo" style={{ width: 150, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 48, objectFit: "contain" }} />
             </div>
-            <div className="dfp-doc-control" aria-label="Document control metadata">
-              {[
-                ["Document Number:", documentHeader.documentNumber],
-                ["Issue Number:", documentHeader.issueNumber],
-                ["Effective Date:", documentHeader.effectiveDate],
-                ["Revision Number:", documentHeader.revisionNumber],
-                ["Revision Date:", documentHeader.revisionDate],
-              ].map(([label, value]) => (
-                <div className="dfp-doc-cell" key={label}>
-                  <span className="dfp-doc-label">{label}</span>
-                  {value && <span className="dfp-doc-value">{value}</span>}
-                </div>
-              ))}
+            <div className="dfp-banner-head" style={{ flex: 1, minWidth: 0, padding: "12px 20px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>{isoStandardsText}</div>
+              <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", color: t.textPrimary, marginTop: 3 }}>{formTitle}</div>
             </div>
+          </div>
+          <div className="dfp-doc-control" aria-label="Document control metadata">
+            {[
+              ["Document Number:", documentHeader.documentNumber],
+              ["Issue Number:", documentHeader.issueNumber],
+              ["Effective Date:", documentHeader.effectiveDate],
+              ["Revision Number:", documentHeader.revisionNumber],
+              ["Revision Date:", documentHeader.revisionDate],
+            ].map(([label, value]) => (
+              <div className="dfp-doc-cell" key={label}>
+                <span className="dfp-doc-label">{label}</span>
+                {value && <span className="dfp-doc-value">{value}</span>}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -2270,7 +2280,7 @@ export default function DynamicFormPage() {
                     marginTop: 14,
                     border: "none",
                     borderRadius: 12,
-                    background: submitStatus === "loading" ? t.purpleMid : t.purple,
+                    background: submitStatus === "loading" ? t.purpleLight : t.purple,
                     color: "#fff",
                     fontSize: 14,
                     fontWeight: 700,
@@ -2308,7 +2318,7 @@ export default function DynamicFormPage() {
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
               <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? editorial.success : editorial.sky}`, borderRadius: 12, background: copied ? editorial.successSoft : "none", color: copied ? editorial.success : editorial.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
-              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 12, background: "linear-gradient(135deg,#005A9E,#0078D4)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
+              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 12, background: editorial.navy, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
             </div>
           </div>
         </div>

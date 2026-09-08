@@ -7,7 +7,7 @@
         "rule": "overused-font",
         "value": "inter",
         "createdAt": "2026-08-01T12:51:30.559Z",
-        "reason": "Matches Microsoft 365 system faces; shared with pmw-hrform"
+        "reason": "Impeccable/Claude: Inter is the mandated system-wide typeface for this app (APP_FONT_FAMILY in src/theme/editorial.ts and DESIGN.md's SI-CMMS design language); matching SI-CMMS requires it. Pre-existing, not introduced by this change."
       },
       {
         "rule": "side-tab",
@@ -26,6 +26,12 @@
         ],
         "createdAt": "2026-09-07T01:01:45.310Z",
         "reason": "Not a UI card: this is the border-left:4px on a <blockquote> inside the job-application HTML EMAIL template. A left rule on a blockquote is the standard quoting convention and one of the few layout devices that renders reliably across Outlook/Gmail, where flexbox and modern CSS are unavailable. Category error, not an AI-UI side-tab."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(.34, 1.56, .64, 1)",
+        "createdAt": "2026-09-08T15:20:51.150Z",
+        "reason": "Impeccable/Claude: intentional single-use overshoot on the submission-success confirmation checkmark disc (SuccessCheck 'pop'); domain-appropriate celebratory motion, pre-existing and untouched by the SI-CMMS layout change."
       }
     ]
   }

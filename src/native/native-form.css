@@ -31,25 +31,29 @@
   --nf-line: #e4e9f0;
   --nf-line-strong: #cbd5e1;
 
-  /* Brand — the PMW blue and purple the rest of the app already uses. */
-  --nf-brand: #0078d4;
-  --nf-brand-deep: #005a9e;
-  --nf-brand-wash: #eaf4fc;
+  /* Brand — SI-CMMS navy, the actions/links/focus colour the rest of the app
+     now uses. Was PMW blue #0078d4; the overhaul that moved every other surface
+     to navy had left this engine behind. */
+  --nf-brand: #0f3d91;
+  --nf-brand-deep: #0b2f70;
+  --nf-brand-wash: #e8edf7;
   /* Text and glyphs that sit *on* `--nf-brand-wash`. Separate from
-     `--nf-brand-deep` because the wash inverts in dark mode and the deep blue
-     does not: on the dark wash it drops to roughly 1.4:1 and the section
-     numbers disappear. This is the only token the two themes disagree about in
+     `--nf-brand-deep` because the wash inverts in dark mode and the deep navy
+     does not: on the dark wash it drops far too low and the section numbers
+     disappear. This is the only token the two themes disagree about in
      direction rather than in shade. */
-  --nf-brand-ink: #005a9e;
-  --nf-accent: #6264a7;
+  --nf-brand-ink: #0f3d91;
+  /* SI's active-selection fill (navy-mid). Was purple #6264a7; SI has no
+     purple, and its secondary/active signal is this mid navy. */
+  --nf-accent: #1e4fa0;
 
   /* Status */
-  --nf-danger: #c62828;
-  --nf-danger-wash: #fdeded;
-  --nf-good: #107c10;
-  --nf-good-wash: #e8f4e8;
-  --nf-warn: #b15c00;
-  --nf-warn-wash: #fff6e5;
+  --nf-danger: #c1291f;
+  --nf-danger-wash: #fee2e2;
+  --nf-good: #137536;
+  --nf-good-wash: #dcfce7;
+  --nf-warn: #855405;
+  --nf-warn-wash: #fde7c4;
 
   /* Geometry */
   /* 12px, matching SI's system-wide container radius. */
@@ -59,7 +63,7 @@
   --nf-control-h: 40px;
   /* SI's single card elevation, verbatim. */
   --nf-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05);
-  --nf-ring: 0 0 0 3px rgba(0, 120, 212, 0.14);
+  --nf-ring: 0 0 0 3px rgba(15, 61, 145, 0.16);
 
   /* Type */
   --nf-fs-label: 12.5px;
@@ -91,8 +95,8 @@
   --nf-sunken: #111b26;
   --nf-line: #2a3646;
   --nf-line-strong: #3b4a5c;
-  --nf-brand-wash: #10293c;
-  --nf-brand-ink: #8ecbf7;
+  --nf-brand-wash: #152a46;
+  --nf-brand-ink: #aec6ec;
   --nf-danger-wash: #331314;
   --nf-good-wash: #102814;
   --nf-warn-wash: #2e2003;
@@ -1219,25 +1223,25 @@
 }
 
 .nf-note[data-tone="info"] {
-  border-color: rgba(0, 120, 212, 0.3);
+  border-color: rgba(15, 61, 145, 0.3);
   background: var(--nf-brand-wash);
   color: var(--nf-brand-ink);
 }
 
 .nf-note[data-tone="warning"] {
-  border-color: rgba(177, 92, 0, 0.3);
+  border-color: rgba(133, 84, 5, 0.3);
   background: var(--nf-warn-wash);
   color: var(--nf-warn);
 }
 
 .nf-note[data-tone="error"] {
-  border-color: rgba(198, 40, 40, 0.3);
+  border-color: rgba(193, 41, 31, 0.3);
   background: var(--nf-danger-wash);
   color: var(--nf-danger);
 }
 
 .nf-note[data-tone="success"] {
-  border-color: rgba(16, 124, 16, 0.3);
+  border-color: rgba(19, 117, 54, 0.3);
   background: var(--nf-good-wash);
   color: var(--nf-good);
 }
