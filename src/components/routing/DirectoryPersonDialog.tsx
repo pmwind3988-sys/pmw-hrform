@@ -32,6 +32,7 @@ import {
   type ApprovalDirectoryInput,
 } from "../../utils/approvalDirectory";
 import { isUnconfirmedRow } from "../../utils/directoryHarvestWrite";
+import { mergeChoices } from "../../utils/dedupeChoices";
 import {
   directoryEmailKey,
   type ApprovalDirectoryRow,
@@ -78,22 +79,6 @@ const HELP: Record<string, string> = {
   position: "Their job title. A form set to 'Whoever holds a role' looks for the title you type here, such as HOD.",
   employeeId: "Their ID in whichever system HR keys off. Free text; nothing routes on it.",
 };
-
-/**
- * The org list first, then any name already in use that it does not cover.
- *
- * Kept rather than dropped: a person filed under a department that admin/org
- * no longer lists must not silently lose it just by having their row opened.
- */
-function mergeChoices(used: string[], configured: string[]): string[] {
-  const byKey = new Map<string, string>();
-  const key = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
-  for (const value of [...configured, ...used]) {
-    const label = (value || "").trim();
-    if (label && !byKey.has(key(label))) byKey.set(key(label), label);
-  }
-  return [...byKey.values()].sort((a, b) => a.localeCompare(b));
-}
 
 export default function DirectoryPersonDialog({
   open,
