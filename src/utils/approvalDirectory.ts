@@ -172,6 +172,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  *
  * A person may legitimately have no approver — that is the top of the line, and
  * the resolver treats it as a stopping point rather than an error.
+ *
+ * A person may also legitimately have no email: someone who filled a form as a
+ * public user never had a company mailbox, but their row still has to exist so
+ * their submissions route to an approver. Such a row is identified by name
+ * instead, which is why the name is required exactly when the email is missing.
  */
 export function validateApprovalDirectoryInput(
   input: ApprovalDirectoryInput,
@@ -182,7 +187,9 @@ export function validateApprovalDirectoryInput(
   const email = input.personEmail.trim();
 
   if (!email) {
-    problems.push("A person's email is required — it is what the row is keyed on.");
+    if (!input.personName.trim()) {
+      problems.push("Add an email, or a name — a row with neither cannot be told apart from any other.");
+    }
   } else if (!EMAIL_RE.test(email)) {
     problems.push(`"${email}" is not a valid email address.`);
   } else if (

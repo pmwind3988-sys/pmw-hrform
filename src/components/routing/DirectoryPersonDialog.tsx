@@ -71,7 +71,7 @@ interface DirectoryPersonDialogProps {
 }
 
 const HELP: Record<string, string> = {
-  personEmail: "Their work email. This is what a submission is matched on, so it has to be exact.",
+  personEmail: "Their work email. This is what a submission is matched on, so it has to be exact. Leave it empty for someone who has no company email — their row is then found by name instead.",
   approverEmail: "Who signs off this person's forms. Leave empty if nobody is above them.",
   department: "Used when a form routes to a whole department's head rather than to this person's own approver.",
   company: "Which company they belong to. Two companies can have a department of the same name, so this is what tells them apart.",
@@ -241,7 +241,6 @@ export default function DirectoryPersonDialog({
         <Stack sx={{ gap: 2, pt: 0.5 }}>
           <PersonEmailField
             label="Person's email"
-            required
             value={input.personEmail}
             onChange={(email) => setInput((prev) => ({ ...prev, personEmail: email }))}
             onPickPerson={applyPicked}
