@@ -27,6 +27,29 @@ export function shouldSearchChoices(optionCount: number): boolean {
 }
 
 /**
+ * Whether a dropdown should render the typeable combobox rather than a native
+ * `<select>`. Three things must all hold:
+ *
+ *   - the list is long enough that typing beats scanning (`shouldSearchChoices`);
+ *   - the current value is one of the listed options — an "Other" free-text
+ *     answer read back from a saved response has no row to search to, so it
+ *     stays on the native control that can show the typed value; and
+ *   - there is a keyboard to type on. On a coarse pointer (a phone or tablet)
+ *     the operating system's own picker — the Android dialog, the iOS wheel —
+ *     is more usable and more accessible than any hand-built listbox at every
+ *     length, so touch always falls through to the native `<select>`.
+ *
+ * Kept here, beside the length rule it builds on, so the whole "which control"
+ * decision can be read and tested without a browser.
+ */
+export function shouldOfferSearchableCombobox(
+  optionCount: number,
+  { coarsePointer, isUnlisted }: { coarsePointer: boolean; isUnlisted: boolean },
+): boolean {
+  return shouldSearchChoices(optionCount) && !isUnlisted && !coarsePointer;
+}
+
+/**
  * Reduces a string to what a search should compare.
  *
  * Case and the punctuation around words both go, so "qa/qc" finds "QA/QC" and

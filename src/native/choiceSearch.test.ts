@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { filterChoices, nextActiveIndex, shouldSearchChoices, SEARCHABLE_FROM } from "./choiceSearch";
+import {
+  filterChoices,
+  nextActiveIndex,
+  shouldSearchChoices,
+  shouldOfferSearchableCombobox,
+  SEARCHABLE_FROM,
+} from "./choiceSearch";
 
 const option = (text: string, value = text) => ({ text, value });
 
@@ -42,6 +48,34 @@ describe("shouldSearchChoices", () => {
 
   it("leaves an ordinary short question alone", () => {
     for (const count of [2, 3, 4, 5]) expect(shouldSearchChoices(count)).toBe(false);
+  });
+});
+
+describe("shouldOfferSearchableCombobox", () => {
+  const keyboard = { coarsePointer: false, isUnlisted: false };
+  const touch = { coarsePointer: true, isUnlisted: false };
+
+  it("offers the combobox for a long list on a keyboard device", () => {
+    expect(shouldOfferSearchableCombobox(24, keyboard)).toBe(true);
+    expect(shouldOfferSearchableCombobox(SEARCHABLE_FROM + 1, keyboard)).toBe(true);
+  });
+
+  it("never offers it for a short list, on any device", () => {
+    expect(shouldOfferSearchableCombobox(SEARCHABLE_FROM, keyboard)).toBe(false);
+    expect(shouldOfferSearchableCombobox(SEARCHABLE_FROM, touch)).toBe(false);
+    expect(shouldOfferSearchableCombobox(3, keyboard)).toBe(false);
+  });
+
+  it("hands a long list to the native picker on touch, at every length", () => {
+    // The whole point of the change: a phone or tablet gets the OS dialog/wheel
+    // even for the org lists people used to have to scroll a hand-built listbox.
+    expect(shouldOfferSearchableCombobox(24, touch)).toBe(false);
+    expect(shouldOfferSearchableCombobox(10, touch)).toBe(false);
+    expect(shouldOfferSearchableCombobox(SEARCHABLE_FROM + 1, touch)).toBe(false);
+  });
+
+  it("keeps an unlisted (Other) value on the native control so the text shows", () => {
+    expect(shouldOfferSearchableCombobox(24, { coarsePointer: false, isUnlisted: true })).toBe(false);
   });
 });
 

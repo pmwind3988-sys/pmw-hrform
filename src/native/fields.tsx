@@ -23,7 +23,8 @@ import DOMPurify from "dompurify";
 import type { NativeChoice, NativeElement, NativeRateStep } from "./schema";
 import { formatNumber } from "./expression";
 import SearchableSelect from "./SearchableSelect";
-import { shouldSearchChoices } from "./choiceSearch";
+import { shouldOfferSearchableCombobox } from "./choiceSearch";
+import { useCoarsePointer } from "./useCoarsePointer";
 import { editorial } from "../theme/editorial";
 
 export interface ControlProps {
@@ -219,15 +220,20 @@ export function SelectControl(props: ControlProps) {
   const { element, value, onChange, disabled, invalid, controlId } = props;
   const current = value === null || value === undefined ? "" : String(value);
   const options = buildOptions(element);
+  const coarsePointer = useCoarsePointer();
 
   // A value that matches no option is an "Other" answer read back from a saved
   // response, where the free text has already replaced the literal "other".
   const isUnlisted = current !== "" && !options.some((o) => o.value === current);
   const showOther = element.hasOther && (isUnlisted || otherIsChosen(options, [current]));
 
-  // A long list becomes typeable. Short ones keep the native control, which no
-  // custom widget improves on and which a phone renders as its own picker.
-  if (shouldSearchChoices(options.length) && !isUnlisted) {
+  // A long list becomes typeable — but only with a keyboard to type on. On a
+  // phone or tablet the native control wins at every length: the operating
+  // system draws its own scrollable picker (the Android dialog, the iOS
+  // wheel), which a hand-built listbox cannot match. So the searchable
+  // combobox is offered only on a fine pointer; touch falls through to the
+  // native <select> below. (See shouldOfferSearchableCombobox.)
+  if (shouldOfferSearchableCombobox(options.length, { coarsePointer, isUnlisted })) {
     return (
       <>
         <SearchableSelect
