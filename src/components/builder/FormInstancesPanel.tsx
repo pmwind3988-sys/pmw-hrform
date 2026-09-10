@@ -8,6 +8,7 @@ import { getPrefillEligibleFields } from "../../utils/prefilledQr";
 import { generateQrWithLogo } from "../../utils/qrWithLogo";
 import { editorial } from "../../theme/editorial";
 import { flattenQuestions } from "../../utils/FormBuilderEngine";
+import type { FormBuilderField } from "../../types";
 import {
   createFormInstance,
   deleteFormInstance,
@@ -36,6 +37,63 @@ interface FormInstancesPanelProps {
 }
 
 const font = "var(--pmw-font-main)";
+
+/** What the draft holds while the author is filling in a fixed answer. */
+type DraftValue = string | string[] | boolean;
+
+interface ChoiceOption {
+  value: string;
+  text: string;
+}
+
+function choiceOptions(field: FormBuilderField): ChoiceOption[] {
+  if (!Array.isArray(field.choices)) return [];
+  return field.choices.map((choice) => {
+    if (typeof choice === "string") return { value: choice, text: choice };
+    return { value: String(choice.value), text: String(choice.text || choice.value) };
+  });
+}
+
+function isEmptyDraftValue(value: DraftValue | undefined): boolean {
+  if (value === undefined) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "boolean") return false;
+  return value.trim() === "";
+}
+
+/**
+ * The draft value in the shape the form fill expects. Instances reuse the
+ * prefilled-QR machinery, so a checkbox is an array, a boolean is a boolean,
+ * and a number is a number — not the string a plain text box would have given.
+ * `undefined` means the field is blank and should not become a fixed answer.
+ */
+function normalizeDraftValue(field: FormBuilderField, value: DraftValue | undefined): unknown | undefined {
+  if (value === undefined || isEmptyDraftValue(value)) return undefined;
+  if (field.type === "checkbox") {
+    return Array.isArray(value) ? value : String(value).split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  if (field.type === "boolean") return value === true || value === "true";
+  if (field.inputType === "number" || ["number", "rating", "slider", "counter", "currency", "duration"].includes(field.type)) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  }
+  return value;
+}
+
+/** The native input type for a field with no choices of its own. */
+function inputTypeForField(field: FormBuilderField): string {
+  if (field.inputType === "date") return "date";
+  if (field.inputType === "datetime-local") return "datetime-local";
+  if (field.inputType === "number") return "number";
+  return "text";
+}
+
+/** How a chosen value reads back on the confirmation screen. */
+function displayDraftValue(value: DraftValue): string {
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return value;
+}
 
 function instanceUrl(appOrigin: string, slug: string, token: string): string {
   return `${appOrigin}/form/${slug}?instance=${token}`;
@@ -72,7 +130,7 @@ export default function FormInstancesPanel({
   const [title, setTitle] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [requireSignIn, setRequireSignIn] = useState(true);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, DraftValue>>({});
   const [locked, setLocked] = useState<Record<string, boolean>>({});
   const [confirming, setConfirming] = useState(false);
   /** Which instance's QR is open, and the PNG behind it. */
@@ -134,10 +192,15 @@ export default function FormInstancesPanel({
 
   if (!open) return null;
 
-  const chosen = Object.entries(values).filter(([, v]) => v !== "");
+  // Only fields with a real value become fixed answers, each normalised to the
+  // shape the form fill expects (array for a checkbox, boolean, number, …).
+  const chosen = fields
+    .map((field) => [field.name, normalizeDraftValue(field, values[field.name])] as const)
+    .filter((entry): entry is readonly [string, unknown] => entry[1] !== undefined);
   const lockedNames = chosen.map(([name]) => name).filter((name) => locked[name]);
   const routingLocked = lockedRoutingFields(lockedNames, layerConfig);
-  const groupValue = groupByField ? (values[groupByField] ?? "") : "";
+  const groupRaw = groupByField ? chosen.find(([name]) => name === groupByField)?.[1] : undefined;
+  const groupValue = groupRaw === undefined || groupRaw === null ? "" : String(groupRaw);
   const duplicateGroup = Boolean(
     groupValue &&
       instances.some((i) => effectiveGroupValue(i, groupByField) === groupValue.trim()),
@@ -336,29 +399,99 @@ export default function FormInstancesPanel({
             </div>
 
             <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
-              {fields.map((field) => (
-                <div key={field.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ flex: "0 0 150px", fontSize: 12.5, color: C.textSecond, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {field.title || field.name}
-                    {field.name === groupByField && (
-                      <span style={{ color: C.purple, fontWeight: 700 }}> · groups</span>
-                    )}
-                  </span>
-                  <input
-                    value={values[field.name] ?? ""}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [field.name]: e.target.value }))}
-                    style={{ ...inputSx, flex: 1, height: 30 }}
-                  />
-                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.textMuted }}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(locked[field.name])}
-                      onChange={(e) => setLocked((prev) => ({ ...prev, [field.name]: e.target.checked }))}
+              {fields.map((field) => {
+                const draft = values[field.name];
+                const options = choiceOptions(field);
+                const setDraft = (value: DraftValue) =>
+                  setValues((prev) => ({ ...prev, [field.name]: value }));
+                const controlSx = { ...inputSx, flex: 1, height: 30 };
+                let control;
+                if (field.type === "checkbox" && options.length > 0) {
+                  const selected = Array.isArray(draft) ? draft : [];
+                  control = (
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                      {options.map((option) => (
+                        <label key={option.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.textSecond }}>
+                          <input
+                            type="checkbox"
+                            checked={selected.includes(option.value)}
+                            onChange={(e) =>
+                              setDraft(
+                                e.target.checked
+                                  ? [...selected, option.value]
+                                  : selected.filter((v) => v !== option.value),
+                              )
+                            }
+                          />
+                          {option.text}
+                        </label>
+                      ))}
+                    </div>
+                  );
+                } else if (options.length > 0) {
+                  control = (
+                    <select
+                      value={typeof draft === "string" ? draft : ""}
+                      onChange={(e) => setDraft(e.target.value)}
+                      style={{ ...controlSx, padding: "0 8px" }}
+                    >
+                      <option value="">Leave blank</option>
+                      {options.map((option) => (
+                        <option key={option.value} value={option.value}>{option.text}</option>
+                      ))}
+                    </select>
+                  );
+                } else if (field.type === "boolean") {
+                  control = (
+                    <select
+                      value={draft === true ? "true" : draft === false ? "false" : ""}
+                      onChange={(e) => setDraft(e.target.value === "true")}
+                      style={{ ...controlSx, padding: "0 8px" }}
+                    >
+                      <option value="">Leave blank</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  );
+                } else if (field.type === "comment") {
+                  control = (
+                    <textarea
+                      value={typeof draft === "string" ? draft : ""}
+                      onChange={(e) => setDraft(e.target.value)}
+                      rows={2}
+                      style={{ ...controlSx, height: "auto", padding: "6px 10px", resize: "vertical", fontFamily: font }}
                     />
-                    Lock
-                  </label>
-                </div>
-              ))}
+                  );
+                } else {
+                  control = (
+                    <input
+                      type={inputTypeForField(field)}
+                      value={typeof draft === "string" ? draft : ""}
+                      onChange={(e) => setDraft(e.target.value)}
+                      style={controlSx}
+                    />
+                  );
+                }
+                return (
+                  <div key={field.name} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                    <span style={{ flex: "0 0 150px", fontSize: 12.5, color: C.textSecond, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingTop: 7 }}>
+                      {field.title || field.name}
+                      {field.name === groupByField && (
+                        <span style={{ color: C.purple, fontWeight: 700 }}> · groups</span>
+                      )}
+                    </span>
+                    {control}
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.textMuted, paddingTop: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(locked[field.name])}
+                        onChange={(e) => setLocked((prev) => ({ ...prev, [field.name]: e.target.checked }))}
+                      />
+                      Lock
+                    </label>
+                  </div>
+                );
+              })}
             </div>
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
@@ -391,9 +524,9 @@ export default function FormInstancesPanel({
               <div style={{ marginTop: 6 }}>
                 {chosen.length === 0
                   ? "No fixed answers."
-                  : chosen.map(([name, value]) => (
+                  : chosen.map(([name]) => (
                       <div key={name}>
-                        {name}: {value}{locked[name] ? " (locked)" : ""}
+                        {name}: {displayDraftValue(values[name])}{locked[name] ? " (locked)" : ""}
                       </div>
                     ))}
               </div>
