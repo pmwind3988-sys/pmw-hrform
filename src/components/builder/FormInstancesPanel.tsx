@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { useMsal } from "@azure/msal-react";
 import type { SurveyJson } from "../../types";
 import { C } from "./constants";
@@ -95,6 +95,35 @@ function displayDraftValue(value: DraftValue): string {
   return value;
 }
 
+/**
+ * A stored closing date in the shape a date box wants (yyyy-mm-dd), in local
+ * time — the same reading the list shows. An empty or unparseable date gives
+ * an empty box, which reads as "runs until you close it".
+ */
+function dateInputValue(iso: string): string {
+  const parsed = new Date(iso || "");
+  if (Number.isNaN(parsed.getTime())) return "";
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${parsed.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * A saved instance's fixed answers back in the shape the editor's boxes want.
+ * Numbers come back as text because that is what an input holds; they are
+ * normalised again on the way out, so the round trip is lossless.
+ */
+function draftFromPrefill(prefill: Record<string, unknown>): Record<string, DraftValue> {
+  const draft: Record<string, DraftValue> = {};
+  for (const [name, value] of Object.entries(prefill || {})) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value)) draft[name] = value.map((item) => String(item));
+    else if (typeof value === "boolean") draft[name] = value;
+    else draft[name] = String(value);
+  }
+  return draft;
+}
+
 function instanceUrl(appOrigin: string, slug: string, token: string): string {
   return `${appOrigin}/form/${slug}?instance=${token}`;
 }
@@ -138,6 +167,13 @@ export default function FormInstancesPanel({
   const [qrDataUrl, setQrDataUrl] = useState("");
   /** The instance awaiting a yes/no on deletion. */
   const [deleteTarget, setDeleteTarget] = useState<FormInstance | null>(null);
+  /** Which instance's closing date is open for editing, and the date in the box. */
+  const [dateFor, setDateFor] = useState<string | null>(null);
+  const [dateDraft, setDateDraft] = useState("");
+  /** Which published instance's fixed answers are open for editing, and the draft. */
+  const [editFor, setEditFor] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, DraftValue>>({});
+  const [editLocked, setEditLocked] = useState<Record<string, boolean>>({});
 
   const fields = getPrefillEligibleFields(surveyJson, flattenQuestions);
 
@@ -194,13 +230,24 @@ export default function FormInstancesPanel({
 
   // Only fields with a real value become fixed answers, each normalised to the
   // shape the form fill expects (array for a checkbox, boolean, number, …).
-  const chosen = fields
-    .map((field) => [field.name, normalizeDraftValue(field, values[field.name])] as const)
-    .filter((entry): entry is readonly [string, unknown] => entry[1] !== undefined);
-  const lockedNames = chosen.map(([name]) => name).filter((name) => locked[name]);
+  const chosenFrom = (draftValues: Record<string, DraftValue>) =>
+    fields
+      .map((field) => [field.name, normalizeDraftValue(field, draftValues[field.name])] as const)
+      .filter((entry): entry is readonly [string, unknown] => entry[1] !== undefined);
+  const lockedNamesOf = (
+    entries: ReadonlyArray<readonly [string, unknown]>,
+    lockedMap: Record<string, boolean>,
+  ) => entries.map(([name]) => name).filter((name) => lockedMap[name]);
+  const groupValueOf = (entries: ReadonlyArray<readonly [string, unknown]>) => {
+    if (!groupByField) return "";
+    const raw = entries.find(([name]) => name === groupByField)?.[1];
+    return raw === undefined || raw === null ? "" : String(raw);
+  };
+
+  const chosen = chosenFrom(values);
+  const lockedNames = lockedNamesOf(chosen, locked);
   const routingLocked = lockedRoutingFields(lockedNames, layerConfig);
-  const groupRaw = groupByField ? chosen.find(([name]) => name === groupByField)?.[1] : undefined;
-  const groupValue = groupRaw === undefined || groupRaw === null ? "" : String(groupRaw);
+  const groupValue = groupValueOf(chosen);
   const duplicateGroup = Boolean(
     groupValue &&
       instances.some((i) => effectiveGroupValue(i, groupByField) === groupValue.trim()),
@@ -270,6 +317,64 @@ export default function FormInstancesPanel({
     }
   };
 
+  /**
+   * Moves an instance's closing date — later, earlier, or away entirely.
+   *
+   * An expired instance reopens the moment the new date is in the future,
+   * because the state is read from the date rather than stored. One closed by
+   * hand stays closed: that was a decision, and a new date should not undo it.
+   */
+  const saveExpiry = async (row: FormInstance) => {
+    const expiresAt = dateDraft ? new Date(dateDraft).toISOString() : "";
+    setBusyId(row.id);
+    setError("");
+    try {
+      const token = await getToken();
+      await updateFormInstance(token, row.id, { expiresAt });
+      setInstances((prev) => prev.map((i) => (i.id === row.id ? { ...i, expiresAt } : i)));
+      setDateFor(null);
+      setDateDraft("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not change the closing date.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /**
+   * Rewrites a published instance's fixed answers.
+   *
+   * Responses already submitted keep exactly what they were submitted with —
+   * the answers are copied onto each response as it arrives, not read back
+   * from here. The change applies to everyone who opens the link from now on.
+   */
+  const saveFields = async (row: FormInstance) => {
+    const entries = chosenFrom(editValues);
+    const prefill = Object.fromEntries(entries);
+    const lockedForRow = lockedNamesOf(entries, editLocked);
+    const nextGroup = groupValueOf(entries);
+    setBusyId(row.id);
+    setError("");
+    try {
+      const token = await getToken();
+      await updateFormInstance(token, row.id, {
+        prefill,
+        lockedFields: lockedForRow,
+        groupValue: nextGroup,
+      });
+      setInstances((prev) =>
+        prev.map((i) =>
+          i.id === row.id ? { ...i, prefill, lockedFields: lockedForRow, groupValue: nextGroup } : i,
+        ),
+      );
+      setEditFor(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save the fixed answers.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const labelSx = { fontSize: 11.5, fontWeight: 700, color: C.textPrimary, display: "block", marginBottom: 4 };
   const inputSx = {
     width: "100%",
@@ -281,6 +386,114 @@ export default function FormInstancesPanel({
     fontSize: 13.5,
     fontFamily: font,
   };
+
+  /**
+   * The fixed-answers grid. Shared by the new-instance draft and the editor on
+   * a published instance so the two cannot drift apart — the same controls,
+   * the same locking, the same reading of which field groups.
+   */
+  const renderFixedAnswers = (
+    draftValues: Record<string, DraftValue>,
+    setDraftValues: Dispatch<SetStateAction<Record<string, DraftValue>>>,
+    lockedMap: Record<string, boolean>,
+    setLockedMap: Dispatch<SetStateAction<Record<string, boolean>>>,
+  ) => (
+        <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
+          {fields.map((field) => {
+            const draft = draftValues[field.name];
+            const options = choiceOptions(field);
+            const setDraft = (value: DraftValue) =>
+              setDraftValues((prev) => ({ ...prev, [field.name]: value }));
+            const controlSx = { ...inputSx, flex: 1, height: 30 };
+            let control;
+            if (field.type === "checkbox" && options.length > 0) {
+              const selected = Array.isArray(draft) ? draft : [];
+              control = (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {options.map((option) => (
+                    <label key={option.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.textSecond }}>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(option.value)}
+                        onChange={(e) =>
+                          setDraft(
+                            e.target.checked
+                              ? [...selected, option.value]
+                              : selected.filter((v) => v !== option.value),
+                          )
+                        }
+                      />
+                      {option.text}
+                    </label>
+                  ))}
+                </div>
+              );
+            } else if (options.length > 0) {
+              control = (
+                <select
+                  value={typeof draft === "string" ? draft : ""}
+                  onChange={(e) => setDraft(e.target.value)}
+                  style={{ ...controlSx, padding: "0 8px" }}
+                >
+                  <option value="">Leave blank</option>
+                  {options.map((option) => (
+                    <option key={option.value} value={option.value}>{option.text}</option>
+                  ))}
+                </select>
+              );
+            } else if (field.type === "boolean") {
+              control = (
+                <select
+                  value={draft === true ? "true" : draft === false ? "false" : ""}
+                  onChange={(e) => setDraft(e.target.value === "true")}
+                  style={{ ...controlSx, padding: "0 8px" }}
+                >
+                  <option value="">Leave blank</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              );
+            } else if (field.type === "comment") {
+              control = (
+                <textarea
+                  value={typeof draft === "string" ? draft : ""}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={2}
+                  style={{ ...controlSx, height: "auto", padding: "6px 10px", resize: "vertical", fontFamily: font }}
+                />
+              );
+            } else {
+              control = (
+                <input
+                  type={inputTypeForField(field)}
+                  value={typeof draft === "string" ? draft : ""}
+                  onChange={(e) => setDraft(e.target.value)}
+                  style={controlSx}
+                />
+              );
+            }
+            return (
+              <div key={field.name} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <span style={{ flex: "0 0 150px", fontSize: 12.5, color: C.textSecond, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingTop: 7 }}>
+                  {field.title || field.name}
+                  {field.name === groupByField && (
+                    <span style={{ color: C.purple, fontWeight: 700 }}> · groups</span>
+                  )}
+                </span>
+                {control}
+                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.textMuted, paddingTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(lockedMap[field.name])}
+                    onChange={(e) => setLockedMap((prev) => ({ ...prev, [field.name]: e.target.checked }))}
+                  />
+                  Lock
+                </label>
+              </div>
+            );
+          })}
+        </div>
+  );
 
   return (
     <div
@@ -398,101 +611,7 @@ export default function FormInstancesPanel({
               what you set.
             </div>
 
-            <div style={{ display: "grid", gap: 8, maxHeight: 220, overflowY: "auto" }}>
-              {fields.map((field) => {
-                const draft = values[field.name];
-                const options = choiceOptions(field);
-                const setDraft = (value: DraftValue) =>
-                  setValues((prev) => ({ ...prev, [field.name]: value }));
-                const controlSx = { ...inputSx, flex: 1, height: 30 };
-                let control;
-                if (field.type === "checkbox" && options.length > 0) {
-                  const selected = Array.isArray(draft) ? draft : [];
-                  control = (
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                      {options.map((option) => (
-                        <label key={option.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.textSecond }}>
-                          <input
-                            type="checkbox"
-                            checked={selected.includes(option.value)}
-                            onChange={(e) =>
-                              setDraft(
-                                e.target.checked
-                                  ? [...selected, option.value]
-                                  : selected.filter((v) => v !== option.value),
-                              )
-                            }
-                          />
-                          {option.text}
-                        </label>
-                      ))}
-                    </div>
-                  );
-                } else if (options.length > 0) {
-                  control = (
-                    <select
-                      value={typeof draft === "string" ? draft : ""}
-                      onChange={(e) => setDraft(e.target.value)}
-                      style={{ ...controlSx, padding: "0 8px" }}
-                    >
-                      <option value="">Leave blank</option>
-                      {options.map((option) => (
-                        <option key={option.value} value={option.value}>{option.text}</option>
-                      ))}
-                    </select>
-                  );
-                } else if (field.type === "boolean") {
-                  control = (
-                    <select
-                      value={draft === true ? "true" : draft === false ? "false" : ""}
-                      onChange={(e) => setDraft(e.target.value === "true")}
-                      style={{ ...controlSx, padding: "0 8px" }}
-                    >
-                      <option value="">Leave blank</option>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
-                  );
-                } else if (field.type === "comment") {
-                  control = (
-                    <textarea
-                      value={typeof draft === "string" ? draft : ""}
-                      onChange={(e) => setDraft(e.target.value)}
-                      rows={2}
-                      style={{ ...controlSx, height: "auto", padding: "6px 10px", resize: "vertical", fontFamily: font }}
-                    />
-                  );
-                } else {
-                  control = (
-                    <input
-                      type={inputTypeForField(field)}
-                      value={typeof draft === "string" ? draft : ""}
-                      onChange={(e) => setDraft(e.target.value)}
-                      style={controlSx}
-                    />
-                  );
-                }
-                return (
-                  <div key={field.name} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                    <span style={{ flex: "0 0 150px", fontSize: 12.5, color: C.textSecond, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingTop: 7 }}>
-                      {field.title || field.name}
-                      {field.name === groupByField && (
-                        <span style={{ color: C.purple, fontWeight: 700 }}> · groups</span>
-                      )}
-                    </span>
-                    {control}
-                    <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.textMuted, paddingTop: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(locked[field.name])}
-                        onChange={(e) => setLocked((prev) => ({ ...prev, [field.name]: e.target.checked }))}
-                      />
-                      Lock
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
+            {renderFixedAnswers(values, setValues, locked, setLocked)}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
               <button type="button" onClick={() => { setCreating(false); resetDraft(); }} style={{ height: 32, padding: "0 14px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}>
@@ -597,6 +716,31 @@ export default function FormInstancesPanel({
                   </button>
                   <button
                     type="button"
+                    aria-expanded={dateFor === row.id}
+                    onClick={() => {
+                      if (dateFor === row.id) { setDateFor(null); setDateDraft(""); return; }
+                      setDateFor(row.id);
+                      setDateDraft(dateInputValue(row.expiresAt));
+                    }}
+                    style={{ height: 28, padding: "0 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: dateFor === row.id ? C.purplePale : C.white, color: C.textSecond, fontSize: 11.5, cursor: "pointer" }}
+                  >
+                    {row.expiresAt ? "Extend" : "Set date"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-expanded={editFor === row.id}
+                    onClick={() => {
+                      if (editFor === row.id) { setEditFor(null); return; }
+                      setEditFor(row.id);
+                      setEditValues(draftFromPrefill(row.prefill));
+                      setEditLocked(Object.fromEntries(row.lockedFields.map((name) => [name, true])));
+                    }}
+                    style={{ height: 28, padding: "0 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: editFor === row.id ? C.purplePale : C.white, color: C.textSecond, fontSize: 11.5, cursor: "pointer" }}
+                  >
+                    Edit answers
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void navigator.clipboard?.writeText(url)}
                     style={{ height: 28, padding: "0 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 11.5, cursor: "pointer" }}
                   >
@@ -618,6 +762,93 @@ export default function FormInstancesPanel({
                     Delete
                   </button>
                 </div>
+                {dateFor === row.id && (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <input
+                      type="date"
+                      value={dateDraft}
+                      onChange={(e) => setDateDraft(e.target.value)}
+                      aria-label={`New closing date for ${row.title}`}
+                      style={{ ...inputSx, width: 170, height: 30 }}
+                    />
+                    <button
+                      type="button"
+                      disabled={busyId === row.id}
+                      onClick={() => void saveExpiry(row)}
+                      style={{ height: 30, padding: "0 12px", borderRadius: 7, border: "none", background: C.purple, color: C.white, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      {busyId === row.id ? "Saving…" : "Save date"}
+                    </button>
+                    {dateDraft && (
+                      <button
+                        type="button"
+                        onClick={() => setDateDraft("")}
+                        style={{ height: 30, padding: "0 12px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 11.5, cursor: "pointer" }}
+                      >
+                        No closing date
+                      </button>
+                    )}
+                    {state === "expired" && dateDraft && new Date(dateDraft).getTime() > Date.now() && (
+                      <span style={{ fontSize: 11.5, color: C.textMuted }}>
+                        Saving this reopens the link.
+                      </span>
+                    )}
+                    {row.status === "closed" && (
+                      <span style={{ fontSize: 11.5, color: C.textMuted }}>
+                        This instance was closed by hand — reopen it to start taking responses again.
+                      </span>
+                    )}
+                  </div>
+                )}
+                {editFor === row.id && (() => {
+                  const entries = chosenFrom(editValues);
+                  const nextGroup = groupValueOf(entries);
+                  const wasGroup = effectiveGroupValue(row, groupByField);
+                  const groupMoved = Boolean(groupByField) && nextGroup.trim() !== wasGroup;
+                  const nowLocked = lockedNamesOf(entries, editLocked);
+                  const nowRoutingLocked = lockedRoutingFields(nowLocked, layerConfig);
+                  return (
+                    <div style={{ marginTop: 10, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12 }}>
+                      <div style={labelSx}>Fixed answers</div>
+                      <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, lineHeight: 1.5 }}>
+                        Changes apply to everyone who opens the link from now on. Responses already
+                        submitted keep the answers they were submitted with.
+                      </div>
+                      {renderFixedAnswers(editValues, setEditValues, editLocked, setEditLocked)}
+                      {nowRoutingLocked.length > 0 && (
+                        <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.5, color: C.amber, background: C.amberPale, borderRadius: 7, padding: "9px 11px" }}>
+                          This form's approval routing reads {nowRoutingLocked.join(", ")}, and you have
+                          locked {nowRoutingLocked.length === 1 ? "it" : "them"}. New responses in this
+                          instance all go to the same approver.
+                        </div>
+                      )}
+                      {groupMoved && (
+                        <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.5, color: C.amber, background: C.amberPale, borderRadius: 7, padding: "9px 11px" }}>
+                          {wasGroup
+                            ? `This changes the grouping answer from "${wasGroup}" to ${nextGroup.trim() ? `"${nextGroup}"` : "blank"}. Responses already in stay under "${wasGroup}", so this instance will show up under both in All Submissions.`
+                            : `This instance will start grouping as "${nextGroup}". Responses already in stay ungrouped.`}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditFor(null)}
+                          style={{ height: 30, padding: "0 12px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 11.5, cursor: "pointer" }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busyId === row.id}
+                          onClick={() => void saveFields(row)}
+                          style={{ height: 30, padding: "0 12px", borderRadius: 7, border: "none", background: C.purple, color: C.white, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          {busyId === row.id ? "Saving…" : "Save answers"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4, wordBreak: "break-all" }}>
                   {url}
                 </div>
