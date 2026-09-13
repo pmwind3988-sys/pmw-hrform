@@ -1809,9 +1809,6 @@ export default function AdminFormBuilder() {
     {
       name: "Content",
       items: [
-        { key: "templates", label: "Field templates", hint: "Templates" },
-        { key: "i18n", label: "Translations", hint: "i18n" },
-        { key: "comments", label: "Field comments", hint: "Comments" },
         { key: "theme", label: "Theme editor", hint: "Theme" },
         { key: "display", label: "Form display", hint: "SurveyJS" },
       ],
@@ -1819,18 +1816,7 @@ export default function AdminFormBuilder() {
     {
       name: "Data",
       items: [
-        { key: "data", label: "Data sources", hint: "SharePoint" },
-        { key: "integrations", label: "Integrations", hint: "Webhooks" },
-        { key: "export", label: "Export", hint: "JSON / XLSX" },
         { key: "provisioning", label: "Provisioning preview", hint: "SP columns" },
-        { key: "json", label: "Survey JSON", hint: "Raw" },
-      ],
-    },
-    {
-      name: "Governance",
-      items: [
-        { key: "permissions", label: "Field permissions", hint: "Roles" },
-        { key: "submission", label: "Submission settings", hint: "Behaviour" },
       ],
     },
   ];
