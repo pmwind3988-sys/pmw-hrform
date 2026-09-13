@@ -22,9 +22,6 @@ interface VersionHistoryProps {
   onSetExpiry?: (v: string, publishKey: string, expiry: string) => void;
   onCopyLink?: (publishKey: string) => void;
   onEditLayers?: (v: string, publishKey: string, publishLabel: string) => void;
-  onOpenQr?: (v: string, publishKey: string, publishLabel: string) => void;
-  /** `${version}::${publishKey}` of the row whose QR is currently loading. */
-  qrBusyKey?: string;
   onOpenDocHeader?: (v: string, publishKey: string, publishLabel: string) => void;
   /** `${version}::${publishKey}` of the row whose document header is currently loading. */
   docHeaderBusyKey?: string;
@@ -70,8 +67,6 @@ export default function VersionHistory({
   onSetExpiry,
   onCopyLink,
   onEditLayers,
-  onOpenQr,
-  qrBusyKey,
   onOpenDocHeader,
   docHeaderBusyKey,
   onRename,
@@ -97,8 +92,6 @@ export default function VersionHistory({
             onSetExpiry={onSetExpiry}
             onCopyLink={onCopyLink}
             onEditLayers={onEditLayers}
-            onOpenQr={onOpenQr}
-            qrBusyKey={qrBusyKey}
             onOpenDocHeader={onOpenDocHeader}
             docHeaderBusyKey={docHeaderBusyKey}
             onRename={onRename}
@@ -122,8 +115,6 @@ function ProfileCard({
   onSetExpiry,
   onCopyLink,
   onEditLayers,
-  onOpenQr,
-  qrBusyKey,
   onOpenDocHeader,
   docHeaderBusyKey,
   onRename,
@@ -304,14 +295,6 @@ function ProfileCard({
             style={profileBtn(C.textSecond, C.white, C.border, !slug)}
           >
             Copy link
-          </button>
-          <button
-            onClick={() => onOpenQr?.(version, publishKey, publishLabel)}
-            disabled={!slug || off || expired || qrBusyKey === rowKey}
-            title={off || expired ? "Turn this profile on to create a QR for it" : "Create a prefilled QR for this profile"}
-            style={profileBtn(C.purple, C.white, C.purpleMid, !slug || off || expired || qrBusyKey === rowKey)}
-          >
-            {qrBusyKey === rowKey ? "Loading…" : "Prefilled QR"}
           </button>
           <button
             onClick={() => onOpenDocHeader?.(version, publishKey, publishLabel)}

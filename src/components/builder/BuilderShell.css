@@ -1350,7 +1350,7 @@ textarea.bx-input {
 }
 
 /* ── Legacy panels ──────────────────────────────────────────────────────── */
-/* LayerConfigPanel, VersionHistory, AuditLog and PrefilledQrPanel keep their
+/* LayerConfigPanel, VersionHistory and AuditLog keep their
    own markup — the redesign only re-homes them. This strips the rounded corners
    they were drawn with so they sit inside the square world without a seam. */
 
