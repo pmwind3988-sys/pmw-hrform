@@ -156,6 +156,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Structural check only. Individual blocks are validated at render time, where
  * a bad one is skipped rather than costing the whole document.
+ * Deliberately shallow: it doesn't check `version` or that `kind` is a known
+ * value, so a structurally-plausible-but-wrong block (e.g. a "table" with no
+ * `rows`) passes here and only fails later, in isolation, at render time.
  */
 export function isPdfTemplate(value: unknown): value is PdfTemplate {
   if (!isRecord(value)) return false;

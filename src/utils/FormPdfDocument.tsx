@@ -92,13 +92,29 @@ function BuiltInBody({ ctx }: { ctx: PdfSectionContext }) {
   ];
 }
 
+// Renders the template, falling back to the built-in layout (and dropping the
+// template's footer override) if anything throws outside an individual
+// block's own safeRenderBlock guard — e.g. inside TemplateBody's array
+// processing or element cloning. Per-block isolation still handles a single
+// bad block; this is the document-level backstop the spec promises.
+function renderBody(template: PdfTemplate | null, ctx: PdfSectionContext): { body: ReturnType<typeof BuiltInBody>; footer: PdfTemplate["footer"] | undefined } {
+  if (!template) return { body: BuiltInBody({ ctx }), footer: undefined };
+  try {
+    return { body: TemplateBody({ template, ctx }), footer: template.footer };
+  } catch (error) {
+    console.warn("PDF template: falling back to built-in layout (document-level render failure)", error);
+    return { body: BuiltInBody({ ctx }), footer: undefined };
+  }
+}
+
 export default function FormPdfDocument(data: PdfFormData) {
   const ctx = buildPdfSectionContext(data);
   const template = readTemplate(data.pdfTemplate);
+  const { body, footer } = renderBody(template, ctx);
   return (
     <Document>
       <Page size="A4" style={[S.page, ctx.comfortable ? { fontSize: 9.3, lineHeight: 1.35 } : {}]}>
-        {[...(template ? TemplateBody({ template, ctx }) : BuiltInBody({ ctx })), FooterChrome({ ctx, footer: template?.footer })]}
+        {[...body, FooterChrome({ ctx, footer })]}
       </Page>
     </Document>
   );

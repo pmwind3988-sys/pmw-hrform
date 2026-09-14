@@ -5,6 +5,16 @@ import FormPdfDocument from "../FormPdfDocument";
 import { readTemplate } from "./safeTemplate";
 import { safeRenderBlock } from "./renderTemplate";
 import type { PdfBlock } from "./types";
+import * as renderTemplateModule from "./renderTemplate";
+
+// TemplateBody is mocked to throw for one test below, simulating a failure
+// outside any single block's safeRenderBlock try (e.g. in the .map/cloning
+// itself), which the per-block guard cannot reach. Other tests are
+// unaffected since they don't touch this spy.
+vi.mock("./renderTemplate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./renderTemplate")>();
+  return { ...actual, TemplateBody: vi.fn(actual.TemplateBody) };
+});
 
 describe("readTemplate", () => {
   it("accepts a template object", () => {
@@ -47,5 +57,20 @@ describe("FormPdfDocument fallback", () => {
     const legacy = renderToJson(FormPdfDocument(sampleFormData()));
     const empty = renderToJson(FormPdfDocument({ ...sampleFormData(), pdfTemplate: { version: 1, blocks: [] } }));
     expect(empty).toEqual(legacy);
+  });
+
+  it("falls back to the built-in layout when the template throws outside any single block's guard", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const templateBody = vi.mocked(renderTemplateModule.TemplateBody);
+    templateBody.mockImplementationOnce(() => {
+      throw new Error("document-level render failure");
+    });
+    const legacy = renderToJson(FormPdfDocument(sampleFormData()));
+    const validTemplate = { version: 1 as const, blocks: [{ id: "1", kind: "smart", smart: "header" } as PdfBlock] };
+    const withThrowingBody = renderToJson(FormPdfDocument({ ...sampleFormData(), pdfTemplate: validTemplate }));
+    expect(withThrowingBody).toEqual(legacy);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+    templateBody.mockRestore();
   });
 });
