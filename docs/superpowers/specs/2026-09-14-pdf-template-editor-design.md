@@ -166,5 +166,22 @@ Deliberately excluded, each a later feature if wanted:
 
 - Sharing one template across several forms
 - Conditional blocks ("hide unless rejected")
-- Per-page running headers and footers beyond today's
+- Per-page running **headers**
 - Importing or exporting a template as a file
+
+## Amendment, 2026-09-14: footers per sheet
+
+Added at the user's request after the design was approved.
+
+The footer is page chrome rather than a block — it is painted on every sheet,
+not placed in document order — but its **content** becomes the admin's. A
+template may carry a footer with two modes: one strip repeated on every sheet,
+or that strip plus overrides for named sheets. A sheet is a page number; where
+pages break is governed by content and by page-break blocks.
+
+Because the footer repeats through a render callback that must return a string,
+its content is plain text plus variables — no per-word bold or colour. Two
+variables exist only here: page number and page count. A template that sets no
+footer leaves today's behaviour and `pdfConfig.footerText` alone.
+
+Implemented as Task 13 of the plan.

@@ -2107,6 +2107,162 @@ git commit -m "Let admins open the PDF document editor from the form builder"
 
 ---
 
+### Task 13: Footers per page
+
+Added after the plan was written, at the user's request: the footer must be controllable — the same strip on every sheet, or a different one on a particular sheet.
+
+Today the footer is a single `fixed` element painted identically on every page, its text taken from `pdfConfig.footerText`. `@react-pdf` gives `fixed` elements a `render={({ pageNumber, totalPages }) => ...}` callback, which is what makes per-page content possible without abandoning the repeat-on-every-page behaviour. A "sheet" is therefore a page number; where the page breaks fall is governed by content and by `pageBreak` blocks, which is the only handle an admin has on it.
+
+**Files:**
+- Modify: `src/utils/pdfTemplate/types.ts` (a `footer` field on `PdfTemplate`)
+- Modify: `src/utils/pdfSections/sections.tsx` (`FooterChrome` reads it)
+- Create: `src/utils/pdfTemplate/footer.ts` (which footer content a given page gets)
+- Modify: `src/components/builder/pdfEditor/BlockSettings.tsx` (footer controls)
+- Test: `src/utils/pdfTemplate/footer.test.ts`
+
+**Interfaces:**
+- Consumes: `RichText`, `PdfTemplate` (Task 1); `resolveSpan` (Task 6); `PdfSectionContext` (Task 2).
+- Produces:
+  - `interface TemplateFooter { mode: "all" | "perPage"; content: RichText; pages?: { page: number; content: RichText }[]; hideOnFirstPage?: boolean }`
+  - `footerContentForPage(footer: TemplateFooter | undefined, pageNumber: number): RichText | null`
+
+Two new variables join the catalogue for footer text only: `meta:pageNumber` and `meta:pageCount`. They resolve from the `render` callback's arguments, so Task 6's resolver gains an optional page argument rather than learning about pagination.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `src/utils/pdfTemplate/footer.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { footerContentForPage } from "./footer";
+import type { TemplateFooter } from "./types";
+
+const text = (t: string) => [{ spans: [{ text: t }] }];
+
+describe("footerContentForPage", () => {
+  it("gives every page the same content in 'all' mode", () => {
+    const footer: TemplateFooter = { mode: "all", content: text("Confidential") };
+    expect(footerContentForPage(footer, 1)).toEqual(text("Confidential"));
+    expect(footerContentForPage(footer, 7)).toEqual(text("Confidential"));
+  });
+
+  it("overrides the named page in 'perPage' mode", () => {
+    const footer: TemplateFooter = {
+      mode: "perPage",
+      content: text("Page footer"),
+      pages: [{ page: 2, content: text("Only on sheet two") }],
+    };
+    expect(footerContentForPage(footer, 2)).toEqual(text("Only on sheet two"));
+  });
+
+  it("falls back to the default content for pages with no override", () => {
+    const footer: TemplateFooter = {
+      mode: "perPage",
+      content: text("Page footer"),
+      pages: [{ page: 2, content: text("Only on sheet two") }],
+    };
+    expect(footerContentForPage(footer, 3)).toEqual(text("Page footer"));
+  });
+
+  it("honours hideOnFirstPage", () => {
+    const footer: TemplateFooter = { mode: "all", content: text("Confidential"), hideOnFirstPage: true };
+    expect(footerContentForPage(footer, 1)).toBeNull();
+    expect(footerContentForPage(footer, 2)).toEqual(text("Confidential"));
+  });
+
+  it("returns null when the template defines no footer, so the built-in one stands", () => {
+    expect(footerContentForPage(undefined, 1)).toBeNull();
+  });
+
+  it("ignores a page override with a nonsense page number", () => {
+    const footer: TemplateFooter = { mode: "perPage", content: text("d"), pages: [{ page: 0, content: text("x") }] };
+    expect(footerContentForPage(footer, 1)).toEqual(text("d"));
+  });
+
+  it("uses the last override when a page is listed twice", () => {
+    const footer: TemplateFooter = {
+      mode: "perPage", content: text("d"),
+      pages: [{ page: 2, content: text("first") }, { page: 2, content: text("second") }],
+    };
+    expect(footerContentForPage(footer, 2)).toEqual(text("second"));
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run src/utils/pdfTemplate/footer.test.ts`
+Expected: FAIL — cannot resolve `./footer`.
+
+- [ ] **Step 3: Implement**
+
+Add `TemplateFooter` and `footer?: TemplateFooter` to `types.ts`, then create `src/utils/pdfTemplate/footer.ts`:
+
+```ts
+/**
+ * footer.ts — Which footer content a given sheet gets.
+ *
+ * A "sheet" is a page number. `all` repeats one strip on every page; `perPage`
+ * repeats it too, but lets named pages override it. No footer at all means the
+ * template is not overriding the built-in footer, which keeps using
+ * `pdfConfig.footerText`.
+ */
+import type { RichText, TemplateFooter } from "./types";
+
+export function footerContentForPage(footer: TemplateFooter | undefined, pageNumber: number): RichText | null {
+  if (!footer) return null;
+  if (footer.hideOnFirstPage && pageNumber === 1) return null;
+  if (footer.mode === "perPage" && Array.isArray(footer.pages)) {
+    const override = [...footer.pages].reverse().find((entry) => entry.page === pageNumber && entry.page >= 1);
+    if (override) return override.content;
+  }
+  return footer.content;
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run src/utils/pdfTemplate/footer.test.ts`
+Expected: PASS, 7 tests.
+
+- [ ] **Step 5: Render it**
+
+In `sections.tsx`, `FooterChrome` gains the template's footer. Keep the existing built-in behaviour when there is none:
+
+```tsx
+export function FooterChrome({ ctx, footer }: { ctx: PdfSectionContext; footer?: TemplateFooter }) {
+  return (
+    <View style={S.footer} fixed>
+      <Text render={({ pageNumber, totalPages }) => {
+        const content = footerContentForPage(footer, pageNumber);
+        if (!content) return ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`;
+        return content.flatMap((p) => p.spans).map((span) => resolveSpan(span, ctx, { pageNumber, totalPages })).join("");
+      }} />
+      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+    </View>
+  );
+}
+```
+
+`resolveSpan` gains an optional third argument `page?: { pageNumber: number; totalPages: number }`; when present, `meta:pageNumber` and `meta:pageCount` resolve from it, and every other token resolves as before. Add those two tokens to `BUILTIN_VARIABLES` in `variables.ts`, grouped as `"Footer"`.
+
+Because the footer is `fixed` and its content comes from a `render` callback, formatting is limited to plain text — `render` must return a string. Note this in the editor UI: the footer controls offer text and variables, not per-span bold or colour.
+
+- [ ] **Step 6: Editor controls**
+
+In `BlockSettings.tsx`, add a **Footer** panel shown when nothing is selected (it is document-level, not block-level): a mode toggle (Same on every sheet / Different on some sheets), a text field with the variable picker for the default content, a "hide on the first sheet" checkbox, and in `perPage` mode a small list of page-number + text rows with add and remove.
+
+- [ ] **Step 7: Verify and commit**
+
+Run: `npx vitest run src/utils/pdfTemplate/ && npx tsc -b`
+
+```bash
+git add src/utils/pdfTemplate/ src/utils/pdfSections/sections.tsx src/components/builder/pdfEditor/BlockSettings.tsx
+git commit -m "Let a template set its footer per sheet"
+```
+
+---
+
 ## Self-review notes
 
 **Spec coverage.** Block model → Task 1. Storage on form meta and version pinning → Tasks 1, 12. Smart blocks and their fidelity → Tasks 2, 3, 4. Content blocks → Tasks 6, 7. Variables, catalogue, fallback text, warnings list → Tasks 5, 6, 11. Unlock → Task 9. Rendering branch → Task 4. Failure handling → Task 8 (and per-block skip in `renderBlock`). Editor UI, live preview, reorder/delete/restyle → Tasks 10, 11. Equivalence test → Task 4. Out-of-scope items are absent, as intended.
