@@ -21,6 +21,7 @@ import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
+import { readTemplate } from "../utils/pdfTemplate/safeTemplate";
 import { rowsToHtml } from "../utils/matrixData";
 import { SignatureCapture } from "../utils/signatureCapture";
 import { getSelectedCompany } from "../utils/companySelection";
@@ -124,6 +125,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
       pdfConfig: typeof versionMeta.pdfConfig === "object" && versionMeta.pdfConfig !== null && !Array.isArray(versionMeta.pdfConfig)
         ? versionMeta.pdfConfig as PdfFormData["pdfConfig"]
         : undefined,
+      pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
       documentHeader: typeof versionMeta.documentHeader === "object" && versionMeta.documentHeader !== null && !Array.isArray(versionMeta.documentHeader)
         ? versionMeta.documentHeader as PdfFormData["documentHeader"]
         : undefined,

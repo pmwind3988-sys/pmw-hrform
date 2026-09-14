@@ -50,6 +50,9 @@ import {
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "../utils/FormPdfDocument";
 import type { DirectoryHarvestSettings, SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../types";
 import type { DocumentControlHeader } from "../types";
+import { PdfTemplateEditor } from "../components/builder";
+import { readTemplate } from "../utils/pdfTemplate/safeTemplate";
+import type { PdfTemplate } from "../utils/pdfTemplate/types";
 
 // MUI Icons
 import WarningIcon from "@mui/icons-material/Warning";
@@ -615,6 +618,7 @@ export default function AdminFormBuilder() {
     publishLabel: "Production",
     documentHeader: DEFAULT_DOCUMENT_HEADER,
     pdfConfig: DEFAULT_PDF_CONFIG,
+    pdfTemplate: undefined as PdfTemplate | undefined,
   });
   const [showBanner, setShowBanner] = useState(true);
   // The official company list from Admin → Companies and departments. The
@@ -630,6 +634,7 @@ export default function AdminFormBuilder() {
   */
   const [groupByField, setGroupByField] = useState("");
   const [samplePdfGenerating, setSamplePdfGenerating] = useState<"" | "filled" | "manual">("");
+  const [pdfEditorOpen, setPdfEditorOpen] = useState(false);
   const setM = useCallback((k: MetaTextKey, v: string) => setMeta(m => ({ ...m, [k]: v })), []);
   const setPdfConfig = useCallback((patch: Partial<PdfConfig>) => {
     setMeta(m => ({ ...m, pdfConfig: { ...m.pdfConfig, ...patch } }));
@@ -960,6 +965,7 @@ export default function AdminFormBuilder() {
         pdfConfig: loadedMeta.pdfConfig && typeof loadedMeta.pdfConfig === "object" && !Array.isArray(loadedMeta.pdfConfig)
           ? { ...DEFAULT_PDF_CONFIG, ...(loadedMeta.pdfConfig as Partial<PdfConfig>) }
           : DEFAULT_PDF_CONFIG,
+        pdfTemplate: readTemplate(loadedMeta.pdfTemplate) ?? undefined,
       });
       setShowBanner((data.meta as Record<string, unknown>)?.showBanner !== false);
       setOriginalVersion(c.CurrentVersion as string);
@@ -1034,6 +1040,7 @@ export default function AdminFormBuilder() {
       publishLabel: "Production",
       documentHeader: DEFAULT_DOCUMENT_HEADER,
       pdfConfig: DEFAULT_PDF_CONFIG,
+      pdfTemplate: undefined,
     });
     setNumLayers(0);
     setLayers(Array.from({ length: 5 }, () => ({ email: "", name: "" })));
@@ -1048,6 +1055,31 @@ export default function AdminFormBuilder() {
     navigate(builderPath());
   };
 
+  /** Builds fake-data PdfFormData for local preview: the "sample generation" download and the document editor's live preview both use this. */
+  const buildSamplePdfData = useCallback((mode: "filled" | "manual" = "filled"): PdfFormData => {
+    const assets = makeSamplePdfAssets();
+    const manualPhysical = mode === "manual";
+    const survey = surveyJson ?? { pages: [] };
+    return {
+      surveyJson: survey,
+      responseData: buildSampleResponseData(survey, assets),
+      layerResults: buildSampleLayerResults(layerConfig, assets, manualPhysical),
+      meta: {
+        submittedBy: "sample.submitter@example.com",
+        submittedAt: "2026-06-29T09:30:00.000Z",
+        formTitle: meta.formTitle,
+        formVersion: proposedVersion || meta.formVersion,
+        formStatus: manualPhysical ? "manual evaluation sample" : "sample",
+      },
+      isoStandards: meta.isoStandards,
+      logoUrl: meta.logoUrl || "/logo-128.png",
+      pdfConfig: manualPhysical
+        ? { ...meta.pdfConfig, enabled: true, title: meta.pdfConfig.title || "Manual Evaluation Form", includeEmptyEvaluationFields: true, showEvaluationDetails: true }
+        : meta.pdfConfig,
+      documentHeader: withDocumentHeaderDefaults(meta.documentHeader, meta.formId, proposedVersion || meta.formVersion),
+    };
+  }, [surveyJson, layerConfig, meta, proposedVersion]);
+
   const handleGenerateSamplePdf = async (mode: "filled" | "manual") => {
     if (!isEditing || !meta.formTitle.trim() || !surveyJson) {
       showToast("Select an existing form before generating a sample PDF.", "err");
@@ -1060,26 +1092,8 @@ export default function AdminFormBuilder() {
 
     setSamplePdfGenerating(mode);
     try {
-      const assets = makeSamplePdfAssets();
       const manualPhysical = mode === "manual";
-      const sampleData: PdfFormData = {
-        surveyJson,
-        responseData: buildSampleResponseData(surveyJson, assets),
-        layerResults: buildSampleLayerResults(layerConfig, assets, manualPhysical),
-        meta: {
-          submittedBy: "sample.submitter@example.com",
-          submittedAt: "2026-06-29T09:30:00.000Z",
-          formTitle: meta.formTitle,
-          formVersion: proposedVersion || meta.formVersion,
-          formStatus: manualPhysical ? "manual evaluation sample" : "sample",
-        },
-        isoStandards: meta.isoStandards,
-        logoUrl: meta.logoUrl || "/logo-128.png",
-        pdfConfig: manualPhysical
-          ? { ...meta.pdfConfig, enabled: true, title: meta.pdfConfig.title || "Manual Evaluation Form", includeEmptyEvaluationFields: true, showEvaluationDetails: true }
-          : meta.pdfConfig,
-        documentHeader: withDocumentHeaderDefaults(meta.documentHeader, meta.formId, proposedVersion || meta.formVersion),
-      };
+      const sampleData = buildSamplePdfData(mode);
       const blob = await pdf(FormPdfDocument(sampleData)).toBlob();
       const safeTitle = slugify(meta.formTitle) || "form";
       downloadPdfBlob(blob, `${safeTitle}-${manualPhysical ? "manual-physical-evaluation-sample" : "sample-layout"}.pdf`);
@@ -1153,7 +1167,7 @@ export default function AdminFormBuilder() {
         publishKey,
         publishLabel,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: companiesSnapshot, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
+        meta: { isoStandards: meta.isoStandards, companies: companiesSnapshot, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig, pdfTemplate: meta.pdfTemplate },
         changedBy: userEmail,
         layerConfig: layerConfigToSave,
       });
@@ -1644,7 +1658,7 @@ export default function AdminFormBuilder() {
         publishKey,
         publishLabel,
         surveyJson: usedJson,
-        meta: { isoStandards: meta.isoStandards, companies: companiesSnapshot, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig },
+        meta: { isoStandards: meta.isoStandards, companies: companiesSnapshot, companyChoiceEnabled: meta.companyChoiceEnabled, formId: meta.formId, formVersion: version, publishKey, publishLabel, documentHeader, showBanner, logoUrl: meta.logoUrl, pdfConfig: meta.pdfConfig, pdfTemplate: meta.pdfTemplate },
         changedBy: userEmail,
         layerConfig: layerConfigToSave,
       });
@@ -2572,7 +2586,26 @@ export default function AdminFormBuilder() {
                 />
               </Disclosure>
 
-              <Disclosure open={!!disc.pdf} onToggle={() => toggleDisc("pdf")} title="PDF layout" sub="Document title, colours, sections, sample generation" summary={meta.pdfConfig.enabled ? "Custom" : "Default"}>
+              <Disclosure open={!!disc.pdf} onToggle={() => toggleDisc("pdf")} title="PDF layout" sub="Document title, colours, sections, sample generation" summary={meta.pdfTemplate ? "Custom document" : meta.pdfConfig.enabled ? "Custom" : "Default"}>
+                <ActionRow
+                  label="Document editor"
+                  hint="Reorder, add, remove and restyle the blocks that make up the generated PDF."
+                  action="Edit document"
+                  onAction={() => setPdfEditorOpen(true)}
+                  disabled={!isEditing || !surveyJson}
+                />
+                {pdfEditorOpen && (
+                  <PdfTemplateEditor
+                    open
+                    template={meta.pdfTemplate}
+                    surveyJson={surveyJson}
+                    layerCount={layers.length}
+                    pdfConfig={meta.pdfConfig}
+                    sampleData={buildSamplePdfData()}
+                    onSave={(pdfTemplate) => { setMeta((m) => ({ ...m, pdfTemplate })); setPdfEditorOpen(false); }}
+                    onClose={() => setPdfEditorOpen(false)}
+                  />
+                )}
                 <ActionRow
                   label="Custom PDF layout"
                   hint="Off falls back to the default layout."

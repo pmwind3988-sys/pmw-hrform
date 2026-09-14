@@ -78,6 +78,7 @@ import { setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentDat
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import WorkflowAssignmentEditor from "./WorkflowAssignmentEditor";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
+import { readTemplate } from "../../utils/pdfTemplate/safeTemplate";
 import type { WorkflowAssignmentSaveInput } from "./WorkflowAssignmentEditor";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission, FormBuilderField } from "../../types";
@@ -302,6 +303,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
       pdfConfig: isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as PdfFormData["pdfConfig"] : undefined,
+      pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
       documentHeader: isRecord(versionMeta.documentHeader) ? versionMeta.documentHeader as PdfFormData["documentHeader"] : undefined,
     };
   } catch {
