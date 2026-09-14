@@ -48,15 +48,7 @@ export default function PdfTemplateEditor({
   const handleResetToDefault = () => {
     const ok = window.confirm("Reset the document to the built-in layout? Your current blocks will be replaced.");
     if (!ok) return;
-    const defaultBlocks = buildDefaultTemplate().blocks;
-    const currentIds = state.template.blocks.map((b) => b.id);
-    if (currentIds.length === 0) {
-      defaultBlocks.forEach((block) => dispatch({ type: "insert", block, after: null }));
-      return;
-    }
-    const [firstId, ...restIds] = currentIds;
-    dispatch({ type: "replace", id: firstId, blocks: defaultBlocks });
-    restIds.forEach((id) => dispatch({ type: "delete", id }));
+    dispatch({ type: "reset", template: buildDefaultTemplate() });
   };
 
   return (

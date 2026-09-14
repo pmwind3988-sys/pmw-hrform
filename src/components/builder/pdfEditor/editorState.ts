@@ -22,6 +22,7 @@ export type EditorAction =
   | { type: "delete"; id: string }
   | { type: "update"; id: string; patch: Partial<PdfBlock> }
   | { type: "replace"; id: string; blocks: PdfBlock[] }
+  | { type: "reset"; template: PdfTemplate }
   | { type: "undo" };
 
 const HISTORY_LIMIT = 50;
@@ -86,6 +87,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       const next = [...blocks.slice(0, index), ...action.blocks, ...blocks.slice(index + 1)];
       return { ...state, past: pushHistory(state), template: { ...state.template, blocks: next } };
     }
+
+    case "reset":
+      return { ...state, past: pushHistory(state), template: action.template, selectedId: null };
 
     case "undo": {
       if (state.past.length === 0) return state;

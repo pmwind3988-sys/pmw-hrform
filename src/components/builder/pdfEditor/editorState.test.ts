@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { editorReducer, initialEditorState, newBlock } from "./editorState";
+import { buildDefaultTemplate, DEFAULT_SMART_ORDER } from "../../../utils/pdfTemplate/defaultTemplate";
 
 const kinds = (state: { template: { blocks: { kind: string }[] } }) => state.template.blocks.map((b) => b.kind);
 
@@ -93,6 +94,31 @@ describe("editorReducer", () => {
     const state = initialEditorState(undefined);
     const selected = editorReducer(state, { type: "select", id: state.template.blocks[0].id });
     expect(selected.past).toHaveLength(0);
+  });
+
+  it("reset replaces the whole template with the nine default blocks", () => {
+    const state = initialEditorState({ version: 1, blocks: [newBlock("text"), newBlock("divider")] });
+    const next = editorReducer(state, { type: "reset", template: buildDefaultTemplate() });
+    expect(next.template.blocks).toHaveLength(9);
+    expect(kinds(next)).toEqual(Array(9).fill("smart"));
+  });
+
+  it("reset pushes exactly one history entry, so a single undo restores the pre-reset template intact", () => {
+    const state = initialEditorState({ version: 1, blocks: [newBlock("text"), newBlock("divider")] });
+    const beforeReset = state.template;
+    const reset = editorReducer(state, { type: "reset", template: buildDefaultTemplate() });
+    expect(reset.past).toHaveLength(1);
+    const undone = editorReducer(reset, { type: "undo" });
+    expect(undone.template).toBe(beforeReset);
+    expect(undone.template.blocks.map((b) => b.id)).toEqual(beforeReset.blocks.map((b) => b.id));
+  });
+
+  it("reset from an already-default template still behaves, yielding fresh blocks rather than the ones it replaced", () => {
+    const state = initialEditorState(buildDefaultTemplate());
+    const next = editorReducer(state, { type: "reset", template: buildDefaultTemplate() });
+    expect(next.template).not.toBe(state.template);
+    expect(next.template.blocks[0]).not.toBe(state.template.blocks[0]);
+    expect(next.template.blocks.map((b) => b.id)).toEqual(DEFAULT_SMART_ORDER.map((smart) => `default-${smart}`));
   });
 });
 

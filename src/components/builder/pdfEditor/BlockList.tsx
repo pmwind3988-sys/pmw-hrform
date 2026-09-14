@@ -1,5 +1,5 @@
 /** BlockList.tsx — The document column: block cards, reorder, add, delete, unlock. */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch } from "react";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -37,8 +37,26 @@ export interface BlockListProps {
 
 function AddBlockRow({ onAdd }: { onAdd: (kind: PdfBlock["kind"]) => void }) {
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
   return (
-    <div style={{ position: "relative", display: "flex", justifyContent: "center", margin: "4px 0" }}>
+    <div ref={rootRef} style={{ position: "relative", display: "flex", justifyContent: "center", margin: "4px 0" }}>
       <button
         type="button"
         className="bx-btn bx-btn-sm bx-btn-secondary"
