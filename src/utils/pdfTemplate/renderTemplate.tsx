@@ -124,6 +124,15 @@ export function renderBlock(block: PdfBlock, ctx: PdfSectionContext): ReactEleme
   return null;
 }
 
+export function safeRenderBlock(block: PdfBlock, ctx: PdfSectionContext): ReactElement | null {
+  try {
+    return renderBlock(block, ctx);
+  } catch (error) {
+    console.warn(`PDF template: skipped block ${block?.id} (${block?.kind})`, error);
+    return null;
+  }
+}
+
 // Returns a plain array, not a JSX fragment: a <>...</> wrapper is itself an
 // element and would add an extra node around the blocks' sections, breaking
 // equivalence with the built-in, unwrapped composition (see BuiltInBody in
@@ -131,7 +140,7 @@ export function renderBlock(block: PdfBlock, ctx: PdfSectionContext): ReactEleme
 // (via cloneElement) rather than a keyed <Fragment>, for the same reason.
 export function TemplateBody({ template, ctx }: { template: PdfTemplate; ctx: PdfSectionContext }) {
   return template.blocks
-    .map((block) => ({ id: block.id, element: renderBlock(block, ctx) }))
+    .map((block) => ({ id: block.id, element: safeRenderBlock(block, ctx) }))
     .filter((entry): entry is { id: string; element: ReactElement } => entry.element !== null)
     .map(({ id, element }) => cloneElement(element, { key: id }));
 }

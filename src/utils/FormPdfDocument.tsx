@@ -17,9 +17,9 @@ import {
   IsoStandardsSection,
   FooterChrome,
 } from "./pdfSections/sections";
-import { isPdfTemplate } from "./pdfTemplate/types";
-import type { PdfTemplate } from "./pdfTemplate/types";
+import { readTemplate } from "./pdfTemplate/safeTemplate";
 import { TemplateBody } from "./pdfTemplate/renderTemplate";
+import type { PdfTemplate } from "./pdfTemplate/types";
 import type { DocumentControlHeader, PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ function BuiltInBody({ ctx }: { ctx: PdfSectionContext }) {
 
 export default function FormPdfDocument(data: PdfFormData) {
   const ctx = buildPdfSectionContext(data);
-  const template = isPdfTemplate(data.pdfTemplate) ? data.pdfTemplate : null;
+  const template = readTemplate(data.pdfTemplate);
   return (
     <Document>
       <Page size="A4" style={[S.page, ctx.comfortable ? { fontSize: 9.3, lineHeight: 1.35 } : {}]}>
