@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'api/_utils/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'api/_utils/**/*.test.ts'],
     /**
      * Capped because the suite was failing at random, and the cause was memory,
      * not the code under test.
