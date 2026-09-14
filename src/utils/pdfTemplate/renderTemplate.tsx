@@ -7,14 +7,15 @@
  */
 import type { ReactElement } from "react";
 import { cloneElement } from "react";
-import { View, Text } from "@react-pdf/renderer";
+import { View, Text, Image } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import {
   HeaderSection, DocumentControlSection, StatusBadgeSection, SubmissionMetaSection,
   AnswersSection, ApprovalsSection, SignaturesSection, EvaluationDetailsSection, IsoStandardsSection,
 } from "../pdfSections/sections";
 import type { PdfSectionContext } from "../pdfSections/context";
-import type { BlockStyle, PdfBlock, PdfTemplate, RichSpan, SmartBlockType, TextBlock } from "./types";
+import { C } from "../pdfSections/styles";
+import type { BlockStyle, PdfBlock, PdfTemplate, RichSpan, SmartBlockType, TableBlock, TextBlock } from "./types";
 import { resolveSpan } from "./resolve";
 
 const SMART: Record<SmartBlockType, (props: { ctx: PdfSectionContext }) => ReactElement | null> = {
@@ -60,6 +61,29 @@ function spanStyle(span: RichSpan): Record<string, unknown> {
   return out;
 }
 
+function TableBlockView({ block, ctx }: { block: TableBlock; ctx: PdfSectionContext }): ReactElement {
+  const widths = block.widths.length ? block.widths : block.rows[0]?.map(() => 100 / (block.rows[0]?.length || 1)) ?? [];
+  return (
+    <View style={{ ...blockStyleToPdf(block.style) } as Style} break={block.style?.breakBefore}>
+      {block.rows.map((row, r) => (
+        <View key={r} style={{ flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: C.borderLight } as Style} wrap={false}>
+          {row.map((cell, c) => (
+            <View key={c} style={{ width: `${widths[c] ?? 100 / row.length}%`, padding: 4 } as Style}>
+              {cell.map((paragraph, p) => (
+                <Text key={p} style={block.hasHeader && r === 0 ? { fontWeight: "bold" } as Style : {}}>
+                  {paragraph.spans.map((span, s) => (
+                    <Text key={s} style={spanStyle(span) as Style}>{resolveSpan(span, ctx)}</Text>
+                  ))}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function TextBlockView({ block, ctx }: { block: TextBlock; ctx: PdfSectionContext }): ReactElement {
   return (
     <View style={{ ...blockStyleToPdf(block.style) } as Style} break={block.style?.breakBefore}>
@@ -87,7 +111,17 @@ export function renderBlock(block: PdfBlock, ctx: PdfSectionContext): ReactEleme
     return <View style={style as Style} break={block.style?.breakBefore}>{element}</View>;
   }
   if (block.kind === "text") return TextBlockView({ block, ctx });
-  return null; // content blocks arrive in Tasks 6 and 7
+  if (block.kind === "table") return TableBlockView({ block, ctx });
+  if (block.kind === "image") {
+    if (!block.src.trim()) return null;
+    return <Image src={block.src} style={{ ...blockStyleToPdf(block.style), width: block.width, height: block.height, objectFit: "contain" } as Style} />;
+  }
+  if (block.kind === "divider") {
+    return <View style={{ ...blockStyleToPdf(block.style), borderBottomWidth: block.style?.borderWidth ?? 0.5, borderBottomColor: block.style?.borderColor ?? C.borderLight, marginVertical: 6 } as Style} />;
+  }
+  if (block.kind === "spacer") return <View style={{ height: block.height } as Style} />;
+  if (block.kind === "pageBreak") return <View break />;
+  return null;
 }
 
 // Returns a plain array, not a JSX fragment: a <>...</> wrapper is itself an
