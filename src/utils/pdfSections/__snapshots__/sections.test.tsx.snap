@@ -1,0 +1,1188 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FormPdfDocument > renders the same element tree after the section extraction 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    "LOGO",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#0F3D91",
+                      "fontSize": 14,
+                      "fontWeight": "bold",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "flexShrink": 0,
+                  "height": 42,
+                  "marginRight": 18,
+                  "width": 90,
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Leave Application",
+                  ],
+                  "props": {
+                    "style": [
+                      {
+                        "color": "#0F3D91",
+                        "fontSize": 15,
+                        "fontWeight": "heavy",
+                        "lineHeight": 1.12,
+                        "marginBottom": 3,
+                        "textAlign": "right",
+                      },
+                      {
+                        "color": "#0F3D91",
+                      },
+                    ],
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "Document Ref: ",
+                    "Leave Application",
+                    " / v",
+                    "3",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 6.5,
+                      "lineHeight": 1.2,
+                      "textAlign": "right",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "alignItems": "flex-end",
+                  "flexGrow": 1,
+                  "flexShrink": 1,
+                },
+              },
+              "type": "VIEW",
+            },
+          ],
+          "props": {
+            "style": [
+              {
+                "alignItems": "flex-start",
+                "borderBottomColor": "#0F3D91",
+                "borderBottomWidth": 2.5,
+                "flexDirection": "row",
+                "marginBottom": 14,
+                "paddingBottom": 12,
+              },
+              {
+                "borderBottomColor": "#0F3D91",
+              },
+            ],
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    "Document No.",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 5.5,
+                      "letterSpacing": 0.5,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "HR-F-001",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 7.5,
+                      "fontWeight": "bold",
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "borderBottomColor": "#E5E9F0",
+                  "borderBottomWidth": 0.5,
+                  "borderRightColor": "#E5E9F0",
+                  "borderRightWidth": 0.5,
+                  "paddingHorizontal": 7,
+                  "paddingVertical": 3.5,
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Issue No.",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 5.5,
+                      "letterSpacing": 0.5,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "2",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 7.5,
+                      "fontWeight": "bold",
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "borderBottomColor": "#E5E9F0",
+                  "borderBottomWidth": 0.5,
+                  "borderRightColor": "#E5E9F0",
+                  "borderRightWidth": 0.5,
+                  "paddingHorizontal": 7,
+                  "paddingVertical": 3.5,
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Effective Date",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 5.5,
+                      "letterSpacing": 0.5,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "01/01/2026",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 7.5,
+                      "fontWeight": "bold",
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "borderBottomColor": "#E5E9F0",
+                  "borderBottomWidth": 0.5,
+                  "borderRightColor": "#E5E9F0",
+                  "borderRightWidth": 0.5,
+                  "paddingHorizontal": 7,
+                  "paddingVertical": 3.5,
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Revision No.",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 5.5,
+                      "letterSpacing": 0.5,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "1",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 7.5,
+                      "fontWeight": "bold",
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "borderBottomColor": "#E5E9F0",
+                  "borderBottomWidth": 0.5,
+                  "borderRightColor": "#E5E9F0",
+                  "borderRightWidth": 0.5,
+                  "paddingHorizontal": 7,
+                  "paddingVertical": 3.5,
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Revision Date",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 5.5,
+                      "letterSpacing": 0.5,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "01/06/2026",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 7.5,
+                      "fontWeight": "bold",
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "borderBottomColor": "#E5E9F0",
+                  "borderBottomWidth": 0.5,
+                  "borderRightColor": "#E5E9F0",
+                  "borderRightWidth": 0.5,
+                  "paddingHorizontal": 7,
+                  "paddingVertical": 3.5,
+                },
+              },
+              "type": "VIEW",
+            },
+          ],
+          "props": {
+            "style": {
+              "borderColor": "#E5E9F0",
+              "borderWidth": 0.5,
+              "flexDirection": "row",
+              "flexWrap": "wrap",
+              "marginBottom": 10,
+            },
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "APPROVED",
+              ],
+              "props": {
+                "style": {
+                  "color": "#137536",
+                },
+              },
+              "type": "TEXT",
+            },
+          ],
+          "props": {
+            "style": [
+              {
+                "alignSelf": "flex-start",
+                "borderRadius": 12,
+                "borderWidth": 1,
+                "fontSize": 8,
+                "fontWeight": "heavy",
+                "letterSpacing": 0.8,
+                "marginBottom": 10,
+                "paddingHorizontal": 10,
+                "paddingVertical": 3,
+                "textTransform": "uppercase",
+              },
+              {
+                "backgroundColor": "#DCFCE7",
+                "borderColor": "#22C55E",
+              },
+            ],
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    "Reference No.",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 6,
+                      "letterSpacing": 0.6,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "LV-010926-0007",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 8,
+                      "lineHeight": 1.25,
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "marginBottom": 4,
+                  "paddingRight": 8,
+                  "width": "50%",
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Submitted By",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 6,
+                      "letterSpacing": 0.6,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "aisyah@example.com",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 8,
+                      "lineHeight": 1.25,
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "marginBottom": 4,
+                  "paddingRight": 8,
+                  "width": "50%",
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Date Submitted",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 6,
+                      "letterSpacing": 0.6,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "01/09/2026 04:30 PM",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 8,
+                      "lineHeight": 1.25,
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "marginBottom": 4,
+                  "paddingRight": 8,
+                  "width": "50%",
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Form",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 6,
+                      "letterSpacing": 0.6,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "Leave Application",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 8,
+                      "lineHeight": 1.25,
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "marginBottom": 4,
+                  "paddingRight": 8,
+                  "width": "50%",
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    "Version",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#5A6880",
+                      "fontSize": 6,
+                      "letterSpacing": 0.6,
+                      "textTransform": "uppercase",
+                    },
+                  },
+                  "type": "TEXT",
+                },
+                {
+                  "children": [
+                    "v",
+                    "3",
+                  ],
+                  "props": {
+                    "style": {
+                      "color": "#101828",
+                      "fontSize": 8,
+                      "lineHeight": 1.25,
+                      "marginTop": 1,
+                    },
+                  },
+                  "type": "TEXT",
+                },
+              ],
+              "props": {
+                "style": {
+                  "marginBottom": 4,
+                  "paddingRight": 8,
+                  "width": "50%",
+                },
+              },
+              "type": "VIEW",
+            },
+            "",
+          ],
+          "props": {
+            "style": {
+              "flexDirection": "row",
+              "flexWrap": "wrap",
+              "marginBottom": 10,
+            },
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "FORM DATA",
+              ],
+              "props": {
+                "style": [
+                  {
+                    "borderBottomColor": "#0F3D91",
+                    "borderBottomWidth": 1.5,
+                    "color": "#101828",
+                    "fontSize": 7.5,
+                    "fontWeight": "heavy",
+                    "marginBottom": 5,
+                    "paddingBottom": 2,
+                  },
+                  {
+                    "borderBottomColor": "#0F3D91",
+                  },
+                ],
+              },
+              "type": "TEXT",
+            },
+            [
+              {
+                "children": [
+                  {
+                    "children": [
+                      "Main Page",
+                    ],
+                    "props": {
+                      "style": {
+                        "color": "#0F3D91",
+                        "fontSize": 7.5,
+                        "fontWeight": "bold",
+                        "marginBottom": 3,
+                        "marginTop": 6,
+                      },
+                    },
+                    "type": "TEXT",
+                  },
+                  [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            "Employee Name",
+                          ],
+                          "props": {
+                            "style": {
+                              "color": "#5A6880",
+                              "fontSize": 7,
+                              "lineHeight": 1.3,
+                              "paddingRight": 6,
+                              "width": "34%",
+                            },
+                          },
+                          "type": "TEXT",
+                        },
+                        {
+                          "children": [
+                            "Aisyah binti Rahman",
+                          ],
+                          "props": {
+                            "style": {
+                              "color": "#101828",
+                              "fontSize": 7,
+                              "lineHeight": 1.3,
+                              "width": "66%",
+                            },
+                          },
+                          "type": "TEXT",
+                        },
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "alignItems": "flex-start",
+                            "borderBottomColor": "#E5E9F0",
+                            "borderBottomWidth": 0.3,
+                            "flexDirection": "row",
+                            "paddingHorizontal": 4,
+                            "paddingVertical": 3,
+                          },
+                          {},
+                        ],
+                        "wrap": false,
+                      },
+                      "type": "VIEW",
+                    },
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            "Reason",
+                          ],
+                          "props": {
+                            "style": {
+                              "color": "#5A6880",
+                              "fontSize": 7,
+                              "lineHeight": 1.3,
+                              "paddingRight": 6,
+                              "width": "34%",
+                            },
+                          },
+                          "type": "TEXT",
+                        },
+                        {
+                          "children": [
+                            "Medical",
+                          ],
+                          "props": {
+                            "style": {
+                              "color": "#101828",
+                              "fontSize": 7,
+                              "lineHeight": 1.3,
+                              "width": "66%",
+                            },
+                          },
+                          "type": "TEXT",
+                        },
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "alignItems": "flex-start",
+                            "borderBottomColor": "#E5E9F0",
+                            "borderBottomWidth": 0.3,
+                            "flexDirection": "row",
+                            "paddingHorizontal": 4,
+                            "paddingVertical": 3,
+                          },
+                          {
+                            "backgroundColor": "#FAFBFD",
+                          },
+                        ],
+                        "wrap": false,
+                      },
+                      "type": "VIEW",
+                    },
+                  ],
+                ],
+                "props": {
+                  "style": {
+                    "marginBottom": 8,
+                  },
+                },
+                "type": "VIEW",
+              },
+            ],
+          ],
+          "props": {
+            "style": {
+              "marginBottom": 24,
+            },
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "APPROVAL / EVALUATION CHAIN",
+              ],
+              "props": {
+                "style": [
+                  {
+                    "borderBottomColor": "#0F3D91",
+                    "borderBottomWidth": 1.5,
+                    "color": "#101828",
+                    "fontSize": 7.5,
+                    "fontWeight": "heavy",
+                    "marginBottom": 5,
+                    "paddingBottom": 2,
+                  },
+                  {
+                    "borderBottomColor": "#0F3D91",
+                  },
+                ],
+              },
+              "type": "TEXT",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        "#",
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "color": "#FFFFFF",
+                            "fontSize": 6,
+                            "fontWeight": "heavy",
+                            "letterSpacing": 0.4,
+                            "paddingHorizontal": 3,
+                            "paddingVertical": 2.5,
+                            "textTransform": "uppercase",
+                          },
+                          {
+                            "width": "6%",
+                          },
+                        ],
+                      },
+                      "type": "TEXT",
+                    },
+                    {
+                      "children": [
+                        "Type",
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "color": "#FFFFFF",
+                            "fontSize": 6,
+                            "fontWeight": "heavy",
+                            "letterSpacing": 0.4,
+                            "paddingHorizontal": 3,
+                            "paddingVertical": 2.5,
+                            "textTransform": "uppercase",
+                          },
+                          {
+                            "width": "12%",
+                          },
+                        ],
+                      },
+                      "type": "TEXT",
+                    },
+                    {
+                      "children": [
+                        "Status",
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "color": "#FFFFFF",
+                            "fontSize": 6,
+                            "fontWeight": "heavy",
+                            "letterSpacing": 0.4,
+                            "paddingHorizontal": 3,
+                            "paddingVertical": 2.5,
+                            "textTransform": "uppercase",
+                          },
+                          {
+                            "width": "13%",
+                          },
+                        ],
+                      },
+                      "type": "TEXT",
+                    },
+                    {
+                      "children": [
+                        "Assignee",
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "color": "#FFFFFF",
+                            "fontSize": 6,
+                            "fontWeight": "heavy",
+                            "letterSpacing": 0.4,
+                            "paddingHorizontal": 3,
+                            "paddingVertical": 2.5,
+                            "textTransform": "uppercase",
+                          },
+                          {
+                            "width": "21%",
+                          },
+                        ],
+                      },
+                      "type": "TEXT",
+                    },
+                    {
+                      "children": [
+                        "Date/Time",
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "color": "#FFFFFF",
+                            "fontSize": 6,
+                            "fontWeight": "heavy",
+                            "letterSpacing": 0.4,
+                            "paddingHorizontal": 3,
+                            "paddingVertical": 2.5,
+                            "textTransform": "uppercase",
+                          },
+                          {
+                            "width": "20%",
+                          },
+                        ],
+                      },
+                      "type": "TEXT",
+                    },
+                    {
+                      "children": [
+                        "Remarks",
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "color": "#FFFFFF",
+                            "fontSize": 6,
+                            "fontWeight": "heavy",
+                            "letterSpacing": 0.4,
+                            "paddingHorizontal": 3,
+                            "paddingVertical": 2.5,
+                            "textTransform": "uppercase",
+                          },
+                          {
+                            "width": "28%",
+                          },
+                        ],
+                      },
+                      "type": "TEXT",
+                    },
+                  ],
+                  "props": {
+                    "style": [
+                      {
+                        "alignItems": "flex-start",
+                        "borderBottomColor": "#E5E9F0",
+                        "borderBottomWidth": 0.5,
+                        "flexDirection": "row",
+                        "paddingVertical": 3.5,
+                      },
+                      {
+                        "backgroundColor": "#0F3D91",
+                      },
+                      {
+                        "backgroundColor": "#0F3D91",
+                      },
+                    ],
+                    "wrap": false,
+                  },
+                  "type": "VIEW",
+                },
+                [
+                  {
+                    "children": [],
+                    "props": {
+                      "isLast": true,
+                      "layer": {
+                        "email": "manager@example.com",
+                        "layerNumber": 1,
+                        "signature": "data:image/png;base64,iVBORw0KGgo=",
+                        "signedAt": "2026-09-02T02:00:00.000Z",
+                        "status": "Approved",
+                        "type": "approval",
+                      },
+                    },
+                    "type": "LayerRow",
+                  },
+                ],
+              ],
+              "props": {
+                "style": {
+                  "borderColor": "#E5E9F0",
+                  "borderWidth": 0.5,
+                  "marginTop": 2,
+                },
+                "wrap": false,
+              },
+              "type": "VIEW",
+            },
+          ],
+          "props": {
+            "break": true,
+            "style": {
+              "marginBottom": 18,
+            },
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "SIGNATURES",
+              ],
+              "props": {
+                "style": [
+                  {
+                    "borderBottomColor": "#0F3D91",
+                    "borderBottomWidth": 1.5,
+                    "color": "#101828",
+                    "fontSize": 7.5,
+                    "fontWeight": "heavy",
+                    "marginBottom": 5,
+                    "paddingBottom": 2,
+                  },
+                  {
+                    "borderBottomColor": "#0F3D91",
+                  },
+                ],
+              },
+              "type": "TEXT",
+            },
+            [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          "Layer ",
+                          1,
+                          " - ",
+                          "Approval",
+                        ],
+                        "props": {
+                          "style": {
+                            "color": "#5A6880",
+                            "fontSize": 5.5,
+                            "letterSpacing": 0.4,
+                            "textTransform": "uppercase",
+                          },
+                        },
+                        "type": "TEXT",
+                      },
+                      {
+                        "children": [
+                          "manager@example.com",
+                          " - ",
+                          {
+                            "children": [
+                              "APPROVED",
+                            ],
+                            "props": {
+                              "style": {
+                                "color": "#137536",
+                              },
+                            },
+                            "type": "TEXT",
+                          },
+                        ],
+                        "props": {
+                          "style": {
+                            "color": "#101828",
+                            "fontSize": 8,
+                            "fontWeight": "bold",
+                            "marginTop": 1,
+                          },
+                        },
+                        "type": "TEXT",
+                      },
+                      {
+                        "children": [
+                          "02/09/2026 10:00 AM",
+                          "",
+                        ],
+                        "props": {
+                          "style": {
+                            "color": "#5A6880",
+                            "fontSize": 5.5,
+                            "marginTop": 1,
+                          },
+                        },
+                        "type": "TEXT",
+                      },
+                    ],
+                    "props": {
+                      "style": {
+                        "flex": 1,
+                      },
+                    },
+                    "type": "VIEW",
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "props": {
+                          "src": "data:image/png;base64,iVBORw0KGgo=",
+                          "style": {
+                            "maxHeight": 34,
+                            "maxWidth": 92,
+                            "objectFit": "contain",
+                          },
+                        },
+                        "type": "IMAGE",
+                      },
+                    ],
+                    "props": {
+                      "style": {
+                        "alignItems": "flex-end",
+                        "justifyContent": "center",
+                        "marginLeft": "auto",
+                        "minHeight": 34,
+                        "width": 92,
+                      },
+                    },
+                    "type": "VIEW",
+                  },
+                ],
+                "props": {
+                  "style": {
+                    "alignItems": "center",
+                    "backgroundColor": "#FAFBFD",
+                    "borderColor": "#E5E9F0",
+                    "borderWidth": 0.5,
+                    "flexDirection": "row",
+                    "marginBottom": 4,
+                    "marginTop": 3,
+                    "padding": 7,
+                  },
+                  "wrap": false,
+                },
+                "type": "VIEW",
+              },
+            ],
+          ],
+          "props": {
+            "style": {
+              "marginBottom": 18,
+            },
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "ISO 9001:2015",
+              ],
+              "props": {
+                "style": {
+                  "color": "#5A6880",
+                  "fontSize": 5.5,
+                  "textAlign": "center",
+                },
+              },
+              "type": "TEXT",
+            },
+          ],
+          "props": {
+            "style": {
+              "borderTopColor": "#E5E9F0",
+              "borderTopWidth": 0.5,
+              "marginTop": 10,
+              "paddingTop": 6,
+            },
+          },
+          "type": "VIEW",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                "Generated 14/09/2026 02:18 PM",
+              ],
+              "props": {},
+              "type": "TEXT",
+            },
+            {
+              "children": [],
+              "props": {
+                "render": [Function],
+              },
+              "type": "TEXT",
+            },
+          ],
+          "props": {
+            "fixed": true,
+            "style": {
+              "borderTopColor": "#E5E9F0",
+              "borderTopWidth": 0.5,
+              "bottom": 22,
+              "color": "#5A6880",
+              "flexDirection": "row",
+              "fontSize": 6,
+              "justifyContent": "space-between",
+              "left": 32,
+              "paddingTop": 5,
+              "position": "absolute",
+              "right": 32,
+            },
+          },
+          "type": "VIEW",
+        },
+      ],
+      "props": {
+        "size": "A4",
+        "style": [
+          {
+            "color": "#101828",
+            "fontFamily": "Helvetica",
+            "fontSize": 8.5,
+            "lineHeight": 1.25,
+            "paddingBottom": 54,
+            "paddingHorizontal": 32,
+            "paddingTop": 32,
+          },
+          {},
+        ],
+      },
+      "type": "PAGE",
+    },
+  ],
+  "props": {},
+  "type": "DOCUMENT",
+}
+`;
