@@ -15,7 +15,10 @@ import {
   evaluationFieldsForLayer,
   renderPaperFieldValue,
 } from "./helpers";
+import { footerContentForPage } from "../pdfTemplate/footer";
+import { resolveSpan } from "../pdfTemplate/resolve";
 import type { PdfSectionContext } from "./context";
+import type { TemplateFooter } from "../pdfTemplate/types";
 
 export { C, S };
 
@@ -215,10 +218,38 @@ function renderPageNumber({ pageNumber, totalPages }: { pageNumber: number; tota
   return `Page ${pageNumber} of ${totalPages}`;
 }
 
-export function FooterChrome({ ctx }: { ctx: PdfSectionContext }) {
+// Memoised per (footer, ctx) pair so repeated renders of the same document
+// hand `Text` the same `render` function instance every time — a fresh
+// closure per call is invisible in the PDF output but makes two otherwise-
+// identical element trees compare unequal in the equivalence tests.
+const footerRenderCache = new WeakMap<TemplateFooter, WeakMap<PdfSectionContext, (args: { pageNumber: number; totalPages: number }) => string>>();
+
+function getFooterContentRender(footer: TemplateFooter, ctx: PdfSectionContext) {
+  let byCtx = footerRenderCache.get(footer);
+  if (!byCtx) {
+    byCtx = new WeakMap();
+    footerRenderCache.set(footer, byCtx);
+  }
+  let render = byCtx.get(ctx);
+  if (!render) {
+    render = ({ pageNumber, totalPages }) => {
+      const content = footerContentForPage(footer, pageNumber);
+      if (!content) return ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`;
+      return content.flatMap((p) => p.spans).map((span) => resolveSpan(span, ctx, { pageNumber, totalPages })).join("");
+    };
+    byCtx.set(ctx, render);
+  }
+  return render;
+}
+
+export function FooterChrome({ ctx, footer }: { ctx: PdfSectionContext; footer?: TemplateFooter }) {
   return (
     <View style={S.footer} fixed>
-      <Text>{ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`}</Text>
+      {footer ? (
+        <Text render={getFooterContentRender(footer, ctx)} />
+      ) : (
+        <Text>{ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`}</Text>
+      )}
       <Text render={renderPageNumber} />
     </View>
   );

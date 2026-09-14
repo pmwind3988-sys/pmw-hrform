@@ -113,7 +113,7 @@ export default function PdfTemplateEditor({
           </div>
 
           <div style={{ flex: "0 0 300px", minWidth: 260, overflow: "auto", borderRight: `1px solid ${C.border}`, background: C.white }}>
-            <BlockSettings block={selectedBlock} dispatch={dispatch} />
+            <BlockSettings block={selectedBlock} footer={state.template.footer} catalogue={catalogue} dispatch={dispatch} />
           </div>
 
           <div style={{ flex: "1 1 40%", minWidth: 0, padding: 16, display: "flex", flexDirection: "column" }}>

@@ -6,7 +6,7 @@
  * onto `past` (capped at 50 entries) before applying itself.
  */
 
-import type { PdfBlock, PdfTemplate } from "../../../utils/pdfTemplate/types";
+import type { PdfBlock, PdfTemplate, TemplateFooter } from "../../../utils/pdfTemplate/types";
 import { buildDefaultTemplate } from "../../../utils/pdfTemplate/defaultTemplate";
 
 export interface EditorState {
@@ -23,6 +23,7 @@ export type EditorAction =
   | { type: "update"; id: string; patch: Partial<PdfBlock> }
   | { type: "replace"; id: string; blocks: PdfBlock[] }
   | { type: "reset"; template: PdfTemplate }
+  | { type: "setFooter"; footer: TemplateFooter | undefined }
   | { type: "undo" };
 
 const HISTORY_LIMIT = 50;
@@ -90,6 +91,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 
     case "reset":
       return { ...state, past: pushHistory(state), template: action.template, selectedId: null };
+
+    case "setFooter":
+      return { ...state, past: pushHistory(state), template: { ...state.template, footer: action.footer } };
 
     case "undo": {
       if (state.past.length === 0) return state;

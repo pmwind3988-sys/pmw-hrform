@@ -98,7 +98,7 @@ export default function FormPdfDocument(data: PdfFormData) {
   return (
     <Document>
       <Page size="A4" style={[S.page, ctx.comfortable ? { fontSize: 9.3, lineHeight: 1.35 } : {}]}>
-        {[...(template ? TemplateBody({ template, ctx }) : BuiltInBody({ ctx })), FooterChrome({ ctx })]}
+        {[...(template ? TemplateBody({ template, ctx }) : BuiltInBody({ ctx })), FooterChrome({ ctx, footer: template?.footer })]}
       </Page>
     </Document>
   );

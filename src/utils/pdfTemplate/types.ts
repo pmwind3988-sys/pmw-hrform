@@ -124,9 +124,29 @@ export type PdfBlock =
   | SpacerBlock
   | PageBreakBlock;
 
+/** One page-number override for a `perPage` footer. */
+export interface TemplateFooterPage {
+  page: number;
+  content: RichText;
+}
+
+/**
+ * The footer is page chrome, not a block: it repeats on every sheet rather
+ * than flowing in document order. `all` repeats one strip everywhere;
+ * `perPage` repeats it too but lets named pages override it. No `footer` at
+ * all means the template is not overriding the built-in footer.
+ */
+export interface TemplateFooter {
+  mode: "all" | "perPage";
+  content: RichText;
+  pages?: TemplateFooterPage[];
+  hideOnFirstPage?: boolean;
+}
+
 export interface PdfTemplate {
   version: 1;
   blocks: PdfBlock[];
+  footer?: TemplateFooter;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

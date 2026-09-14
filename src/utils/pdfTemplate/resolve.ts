@@ -42,9 +42,16 @@ function layerValue(layerNumber: number, property: string, ctx: PdfSectionContex
   return property === "signedAt" ? formatPdfDateTimeValue(value, true) : value;
 }
 
-export function resolveVariable(token: string, ctx: PdfSectionContext): string {
+export interface FooterPageInfo {
+  pageNumber: number;
+  totalPages: number;
+}
+
+export function resolveVariable(token: string, ctx: PdfSectionContext, page?: FooterPageInfo): string {
   const [namespace, a, b] = token.split(":");
   if (namespace === "field" && a) return fieldValue(a, ctx);
+  if (namespace === "meta" && a === "pageNumber") return page ? String(page.pageNumber) : "";
+  if (namespace === "meta" && a === "pageCount") return page ? String(page.totalPages) : "";
   if (namespace === "meta" && a) return metaValue(a, ctx);
   if (namespace === "layer" && a && b) {
     const n = Number(a);
@@ -53,8 +60,8 @@ export function resolveVariable(token: string, ctx: PdfSectionContext): string {
   return "";
 }
 
-export function resolveSpan(span: RichSpan, ctx: PdfSectionContext): string {
-  if (span.variable) return resolveVariable(span.variable, ctx) || span.fallback || "";
+export function resolveSpan(span: RichSpan, ctx: PdfSectionContext, page?: FooterPageInfo): string {
+  if (span.variable) return resolveVariable(span.variable, ctx, page) || span.fallback || "";
   return span.text ?? "";
 }
 

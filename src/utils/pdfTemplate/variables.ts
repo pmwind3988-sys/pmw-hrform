@@ -20,6 +20,8 @@ export const BUILTIN_VARIABLES: PdfVariable[] = [
   { token: "meta:formVersion", label: "Form version", group: "Submission" },
   { token: "meta:company", label: "Company", group: "Submission" },
   { token: "meta:isoStandards", label: "ISO standards", group: "Submission" },
+  { token: "meta:pageNumber", label: "Page number", group: "Footer" },
+  { token: "meta:pageCount", label: "Page count", group: "Footer" },
 ];
 
 const LAYER_PROPERTIES: { key: string; label: string }[] = [

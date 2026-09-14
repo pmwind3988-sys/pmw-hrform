@@ -1,13 +1,205 @@
-/** BlockSettings.tsx — The rail: style controls for the selected block. */
+/** BlockSettings.tsx — The rail: style controls for the selected block, or the document-level footer panel when nothing is selected. */
+import { useState } from "react";
 import type { CSSProperties, Dispatch } from "react";
+import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
+import DataObjectIcon from "@mui/icons-material/DataObject";
 import { C } from "../constants";
 import { blockDisplayName, SMART_CONFIG_SWITCH } from "./blockNames";
+import VariablePicker from "./VariablePicker";
 import type { EditorAction } from "./editorState";
-import type { BlockStyle, PdfBlock } from "../../../utils/pdfTemplate/types";
+import type { BlockStyle, PdfBlock, RichText, TemplateFooter, TemplateFooterPage } from "../../../utils/pdfTemplate/types";
+import type { PdfVariable } from "../../../utils/pdfTemplate/variables";
 
 export interface BlockSettingsProps {
   block: PdfBlock | null;
+  footer?: TemplateFooter;
+  catalogue: PdfVariable[];
   dispatch: Dispatch<EditorAction>;
+}
+
+const EMPTY_CONTENT: RichText = [{ spans: [{ text: "" }] }];
+
+/** Plain-text-plus-variables content editor: the footer renders through a
+ *  callback that must return a string, so unlike a text block it has no
+ *  per-span bold, italic or colour. */
+function FooterContentEditor({
+  content,
+  catalogue,
+  onChange,
+}: {
+  content: RichText;
+  catalogue: PdfVariable[];
+  onChange: (content: RichText) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const spans = content[0]?.spans ?? [{ text: "" }];
+  const variableLabel = (token?: string) => catalogue.find((v) => v.token === token)?.label ?? token ?? "";
+
+  const setSpans = (next: RichText[number]["spans"]) => onChange([{ spans: next }]);
+
+  return (
+    <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 8, padding: 8, background: C.offWhite }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 8 }}>
+        {spans.map((span, si) =>
+          span.variable ? (
+            <span
+              key={si}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                background: C.purplePale,
+                color: C.purple,
+                borderRadius: 12,
+                padding: "2px 8px",
+                fontSize: 12.5,
+                fontWeight: 600,
+              }}
+            >
+              {variableLabel(span.variable)}
+              <button
+                type="button"
+                aria-label={`Remove ${variableLabel(span.variable)} variable`}
+                style={{ display: "flex", background: "none", border: "none", cursor: "pointer", padding: 0, color: C.purple }}
+                onClick={() => setSpans(spans.filter((_, i) => i !== si))}
+              >
+                <CloseIcon sx={{ fontSize: 13 }} />
+              </button>
+            </span>
+          ) : (
+            <input
+              key={si}
+              className="bx-input"
+              style={{ flex: 1, minWidth: 120, height: 30 }}
+              value={span.text ?? ""}
+              placeholder="Footer text…"
+              onChange={(e) => setSpans(spans.map((sp, i) => (i === si ? { ...sp, text: e.target.value } : sp)))}
+            />
+          ),
+        )}
+      </div>
+      <button type="button" className="bx-btn bx-btn-sm bx-btn-secondary" onClick={() => setPickerOpen(true)}>
+        <DataObjectIcon sx={{ fontSize: 16 }} /> Insert variable
+      </button>
+      {pickerOpen && (
+        <VariablePicker
+          catalogue={catalogue}
+          onPick={(token) => {
+            setSpans([...spans, { variable: token }]);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FooterPanel({
+  footer,
+  catalogue,
+  dispatch,
+}: {
+  footer: TemplateFooter | undefined;
+  catalogue: PdfVariable[];
+  dispatch: Dispatch<EditorAction>;
+}) {
+  const mode = footer?.mode ?? "all";
+  const content = footer?.content ?? EMPTY_CONTENT;
+  const pages = footer?.pages ?? [];
+
+  const setFooter = (next: TemplateFooter) => dispatch({ type: "setFooter", footer: next });
+
+  const updatePage = (index: number, patch: Partial<TemplateFooterPage>) =>
+    setFooter({ ...footer, mode, content, pages: pages.map((p, i) => (i === index ? { ...p, ...patch } : p)) });
+
+  const removePage = (index: number) => setFooter({ ...footer, mode, content, pages: pages.filter((_, i) => i !== index) });
+
+  const addPage = () =>
+    setFooter({ ...footer, mode, content, pages: [...pages, { page: pages.length + 1, content: EMPTY_CONTENT }] });
+
+  return (
+    <div style={{ padding: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Footer</div>
+      <div
+        style={{
+          fontSize: 12,
+          color: C.textMuted,
+          background: C.lightGray,
+          border: `1px solid ${C.borderLight}`,
+          borderRadius: 8,
+          padding: "8px 10px",
+          marginBottom: 14,
+        }}
+      >
+        The footer repeats on every sheet, so its text is plain text and variables only — no bold, italic or colour.
+      </div>
+
+      <div style={row}>
+        <label style={label} htmlFor="bs-footer-mode">Repeat</label>
+        <select
+          id="bs-footer-mode"
+          className="bx-input"
+          value={mode}
+          onChange={(e) => setFooter({ mode: e.target.value as TemplateFooter["mode"], content, pages, hideOnFirstPage: footer?.hideOnFirstPage })}
+        >
+          <option value="all">Same on every sheet</option>
+          <option value="perPage">Different on some sheets</option>
+        </select>
+      </div>
+
+      <div style={row}>
+        <label style={label}>Default text</label>
+        <FooterContentEditor
+          content={content}
+          catalogue={catalogue}
+          onChange={(next) => setFooter({ mode, content: next, pages, hideOnFirstPage: footer?.hideOnFirstPage })}
+        />
+      </div>
+
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.textPrimary, marginBottom: 14 }}>
+        <input
+          type="checkbox"
+          checked={!!footer?.hideOnFirstPage}
+          onChange={(e) => setFooter({ mode, content, pages, hideOnFirstPage: e.target.checked || undefined })}
+        />
+        Hide on the first sheet
+      </label>
+
+      {mode === "perPage" && (
+        <div style={row}>
+          <label style={label}>Page overrides</label>
+          {pages.map((p, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 8 }}>
+              <input
+                type="number"
+                className="bx-input"
+                aria-label="Page number"
+                style={{ width: 64, height: 30 }}
+                min={1}
+                value={p.page}
+                onChange={(e) => updatePage(i, { page: Number(e.target.value) || 1 })}
+              />
+              <div style={{ flex: 1 }}>
+                <FooterContentEditor
+                  content={p.content}
+                  catalogue={catalogue}
+                  onChange={(next) => updatePage(i, { content: next })}
+                />
+              </div>
+              <button type="button" className="bx-ghost" aria-label="Remove page override" onClick={() => removePage(i)}>
+                <CloseIcon sx={{ fontSize: 16 }} />
+              </button>
+            </div>
+          ))}
+          <button type="button" className="bx-btn bx-btn-sm bx-btn-secondary" onClick={addPage}>
+            <AddIcon sx={{ fontSize: 16 }} /> Add page override
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const ALIGN_OPTIONS: NonNullable<BlockStyle["align"]>[] = ["left", "center", "right", "justify"];
@@ -24,13 +216,9 @@ const label: CSSProperties = {
   marginBottom: 5,
 };
 
-export default function BlockSettings({ block, dispatch }: BlockSettingsProps) {
+export default function BlockSettings({ block, footer, catalogue, dispatch }: BlockSettingsProps) {
   if (!block) {
-    return (
-      <div style={{ padding: 16, fontSize: 13, color: C.textMuted }}>
-        Select a block to edit its style.
-      </div>
-    );
+    return <FooterPanel footer={footer} catalogue={catalogue} dispatch={dispatch} />;
   }
 
   const style = block.style ?? {};
