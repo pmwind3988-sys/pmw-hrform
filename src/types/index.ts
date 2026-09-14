@@ -1,3 +1,7 @@
+import type { PdfTemplate } from "../utils/pdfTemplate/types";
+
+export type { PdfTemplate } from "../utils/pdfTemplate/types";
+
 // Page state machine states
 export const PAGE_STATES = {
   checking: "checking",
@@ -812,6 +816,8 @@ export interface FormBuilderMeta {
   publishLabel?: string;
   documentHeader?: DocumentControlHeader;
   pdfConfig?: PdfConfig;
+  /** Per-form PDF block template. Absent means the built-in layout. */
+  pdfTemplate?: PdfTemplate;
 }
 
 export interface DocumentControlHeader {

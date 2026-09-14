@@ -12,4 +12,5 @@ export { default as LayerCard } from "./LayerCard";
 export { default as EvalElementPicker } from "./EvalElementPicker";
 export { default as PublicLinkDisplay } from "./PublicLinkDisplay";
 export { default as EvaluationSummary } from "./EvaluationSummary";
+export { default as PdfTemplateEditor } from "./pdfEditor/PdfTemplateEditor";
 export { C } from "./constants";

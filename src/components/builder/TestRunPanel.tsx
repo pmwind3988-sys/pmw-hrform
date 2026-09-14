@@ -32,6 +32,7 @@ import {
 import { mergeTestRunSteps, testRunVerdict, isTestRunFinished } from "../../utils/testRunProgress";
 import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
+import { readTemplate } from "../../utils/pdfTemplate/safeTemplate";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -154,6 +155,7 @@ async function loadPdfDataForRow(
     isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
     logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
     pdfConfig: isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as PdfFormData["pdfConfig"] : undefined,
+    pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
     documentHeader: isRecord(versionMeta.documentHeader) ? versionMeta.documentHeader as PdfFormData["documentHeader"] : undefined,
   };
 }
