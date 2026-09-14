@@ -7,14 +7,15 @@
  */
 import type { ReactElement } from "react";
 import { cloneElement } from "react";
-import { View } from "@react-pdf/renderer";
+import { View, Text } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import {
   HeaderSection, DocumentControlSection, StatusBadgeSection, SubmissionMetaSection,
   AnswersSection, ApprovalsSection, SignaturesSection, EvaluationDetailsSection, IsoStandardsSection,
 } from "../pdfSections/sections";
 import type { PdfSectionContext } from "../pdfSections/context";
-import type { BlockStyle, PdfBlock, PdfTemplate, SmartBlockType } from "./types";
+import type { BlockStyle, PdfBlock, PdfTemplate, RichSpan, SmartBlockType, TextBlock } from "./types";
+import { resolveSpan } from "./resolve";
 
 const SMART: Record<SmartBlockType, (props: { ctx: PdfSectionContext }) => ReactElement | null> = {
   header: HeaderSection,
@@ -49,6 +50,31 @@ export function blockStyleToPdf(style: BlockStyle | undefined): Record<string, u
   return out;
 }
 
+function spanStyle(span: RichSpan): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (span.bold) out.fontWeight = "bold";
+  if (span.italic) out.fontStyle = "italic";
+  if (span.underline) out.textDecoration = "underline";
+  if (span.fontSize !== undefined) out.fontSize = span.fontSize;
+  if (span.color) out.color = span.color;
+  return out;
+}
+
+function TextBlockView({ block, ctx }: { block: TextBlock; ctx: PdfSectionContext }): ReactElement {
+  return (
+    <View style={{ ...blockStyleToPdf(block.style) } as Style} break={block.style?.breakBefore}>
+      {block.content.map((paragraph, i) => (
+        <Text key={i} style={paragraph.align ? { textAlign: paragraph.align } as Style : {}}>
+          {paragraph.list === "bullet" ? "•  " : paragraph.list === "number" ? `${i + 1}.  ` : ""}
+          {paragraph.spans.map((span, j) => (
+            <Text key={j} style={spanStyle(span) as Style}>{resolveSpan(span, ctx)}</Text>
+          ))}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 export function renderBlock(block: PdfBlock, ctx: PdfSectionContext): ReactElement | null {
   if (block.kind === "smart") {
     const Section = SMART[block.smart];
@@ -60,6 +86,7 @@ export function renderBlock(block: PdfBlock, ctx: PdfSectionContext): ReactEleme
     if (Object.keys(style).length === 0 && !block.style?.breakBefore) return element;
     return <View style={style as Style} break={block.style?.breakBefore}>{element}</View>;
   }
+  if (block.kind === "text") return TextBlockView({ block, ctx });
   return null; // content blocks arrive in Tasks 6 and 7
 }
 
