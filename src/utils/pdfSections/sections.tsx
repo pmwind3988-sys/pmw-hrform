@@ -208,11 +208,18 @@ export function IsoStandardsSection({ ctx }: { ctx: PdfSectionContext }) {
   );
 }
 
+// Hoisted so it is the same function reference on every render — an inline
+// arrow here would be a fresh closure each call, which is invisible in the PDF
+// output but makes two otherwise-identical element trees compare unequal.
+function renderPageNumber({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) {
+  return `Page ${pageNumber} of ${totalPages}`;
+}
+
 export function FooterChrome({ ctx }: { ctx: PdfSectionContext }) {
   return (
     <View style={S.footer} fixed>
       <Text>{ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`}</Text>
-      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+      <Text render={renderPageNumber} />
     </View>
   );
 }

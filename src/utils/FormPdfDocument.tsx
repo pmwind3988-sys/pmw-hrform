@@ -4,6 +4,7 @@
 import { Document, Page } from "@react-pdf/renderer";
 import { S } from "./pdfSections/styles";
 import { buildPdfSectionContext } from "./pdfSections/context";
+import type { PdfSectionContext } from "./pdfSections/context";
 import {
   HeaderSection,
   DocumentControlSection,
@@ -16,6 +17,9 @@ import {
   IsoStandardsSection,
   FooterChrome,
 } from "./pdfSections/sections";
+import { isPdfTemplate } from "./pdfTemplate/types";
+import type { PdfTemplate } from "./pdfTemplate/types";
+import { TemplateBody } from "./pdfTemplate/renderTemplate";
 import type { DocumentControlHeader, PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +46,8 @@ export interface PdfFormData {
   pdfConfig?: PdfConfig;
   /** Document control header for the specific published profile. */
   documentHeader?: DocumentControlHeader;
+  /** Per-form block layout; falls back to the built-in layout when absent. */
+  pdfTemplate?: PdfTemplate;
 }
 
 export interface PdfLayerResult {
@@ -63,21 +69,36 @@ export interface PdfLayerResult {
 
 // ── Main Document ─────────────────────────────────────────────────────────
 
+// Sections are composed by direct function call, not JSX (`{Section({ ctx })}`
+// rather than `<Section ctx={ctx} />`). renderToJson in testSupport.tsx reads
+// .type/.props/.children off the literal element without invoking function
+// components, so a JSX element would serialize as an opaque unresolved node
+// and fail to match the characterisation snapshot. This is safe because no
+// section uses hooks. Do not "clean up" back to JSX.
+// Returns a plain array, not a JSX fragment: a <>...</> wrapper is itself an
+// element and would add an extra node around the nine sections, breaking
+// equivalence with the templated path (see renderTemplate.tsx's TemplateBody).
+function BuiltInBody({ ctx }: { ctx: PdfSectionContext }) {
+  return [
+    HeaderSection({ ctx }),
+    DocumentControlSection({ ctx }),
+    StatusBadgeSection({ ctx }),
+    SubmissionMetaSection({ ctx }),
+    AnswersSection({ ctx }),
+    ApprovalsSection({ ctx }),
+    SignaturesSection({ ctx }),
+    EvaluationDetailsSection({ ctx }),
+    IsoStandardsSection({ ctx }),
+  ];
+}
+
 export default function FormPdfDocument(data: PdfFormData) {
   const ctx = buildPdfSectionContext(data);
+  const template = isPdfTemplate(data.pdfTemplate) ? data.pdfTemplate : null;
   return (
     <Document>
       <Page size="A4" style={[S.page, ctx.comfortable ? { fontSize: 9.3, lineHeight: 1.35 } : {}]}>
-        {HeaderSection({ ctx })}
-        {DocumentControlSection({ ctx })}
-        {StatusBadgeSection({ ctx })}
-        {SubmissionMetaSection({ ctx })}
-        {AnswersSection({ ctx })}
-        {ApprovalsSection({ ctx })}
-        {SignaturesSection({ ctx })}
-        {EvaluationDetailsSection({ ctx })}
-        {IsoStandardsSection({ ctx })}
-        {FooterChrome({ ctx })}
+        {[...(template ? TemplateBody({ template, ctx }) : BuiltInBody({ ctx })), FooterChrome({ ctx })]}
       </Page>
     </Document>
   );
