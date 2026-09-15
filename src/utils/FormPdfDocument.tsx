@@ -1,6 +1,8 @@
 /**
  * FormPdfDocument.tsx — Corporate-style PDF for form submissions with approval/evaluation layers.
  */
+import { cloneElement } from "react";
+import type { ReactElement } from "react";
 import { Document, Page } from "@react-pdf/renderer";
 import { S } from "./pdfSections/styles";
 import { buildPdfSectionContext } from "./pdfSections/context";
@@ -78,18 +80,25 @@ export interface PdfLayerResult {
 // Returns a plain array, not a JSX fragment: a <>...</> wrapper is itself an
 // element and would add an extra node around the nine sections, breaking
 // equivalence with the templated path (see renderTemplate.tsx's TemplateBody).
+// Keyed the same way TemplateBody keys its blocks: an unkeyed array of children
+// makes React warn on every generated document. A key lives outside props, so
+// renderToJson does not see it and equivalence with the templated path holds.
 function BuiltInBody({ ctx }: { ctx: PdfSectionContext }) {
-  return [
-    HeaderSection({ ctx }),
-    DocumentControlSection({ ctx }),
-    StatusBadgeSection({ ctx }),
-    SubmissionMetaSection({ ctx }),
-    AnswersSection({ ctx }),
-    ApprovalsSection({ ctx }),
-    SignaturesSection({ ctx }),
-    EvaluationDetailsSection({ ctx }),
-    IsoStandardsSection({ ctx }),
-  ];
+  return (
+    [
+      ["header", HeaderSection({ ctx })],
+      ["documentControl", DocumentControlSection({ ctx })],
+      ["statusBadge", StatusBadgeSection({ ctx })],
+      ["submissionMeta", SubmissionMetaSection({ ctx })],
+      ["answers", AnswersSection({ ctx })],
+      ["approvals", ApprovalsSection({ ctx })],
+      ["signatures", SignaturesSection({ ctx })],
+      ["evaluationDetails", EvaluationDetailsSection({ ctx })],
+      ["isoStandards", IsoStandardsSection({ ctx })],
+    ] as [string, ReactElement | null][]
+  )
+    .filter((entry): entry is [string, ReactElement] => entry[1] !== null)
+    .map(([key, element]) => cloneElement(element, { key }));
 }
 
 // Renders the template, falling back to the built-in layout (and dropping the
