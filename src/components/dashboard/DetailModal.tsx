@@ -44,6 +44,8 @@ import { editorial, editorialHairline } from "../../theme/editorial";
 import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
 import { ratingStepLabel } from "../../utils/ratingLabels";
 import { groupColumnHeaders } from "../../utils/matrixData";
+import { loadMatrixChildRows } from "../../utils/matrixChildRows";
+import { readMatrixChildItems } from "../../utils/formBuilderSP";
 import { loginRequest } from "../../auth/msalConfig";
 import {
   buildFormSubmissionSections,
@@ -1306,11 +1308,56 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
   );
 }
 
+/**
+ * One submission's repeating-table rows, fetched when the card opens.
+ *
+ * Empty while loading and whenever the read fails, so the card renders on its
+ * own data first and gains the tables when they arrive.
+ */
+function useMatrixChildRows(item: Submission | null): Record<string, unknown> {
+  const { instance, accounts } = useMsal();
+  const [childRows, setChildRows] = useState<Record<string, unknown>>({});
+  const itemId = item?.id;
+  const listTitle = item?.listTitle;
+  const surveyJson = item?.surveyJson;
+
+  useEffect(() => {
+    let cancelled = false;
+    setChildRows({});
+    const account = instance.getActiveAccount() ?? accounts[0];
+    const parentId = Number(itemId);
+    if (!account || !listTitle || !surveyJson || !Number.isFinite(parentId)) return () => undefined;
+
+    void (async () => {
+      try {
+        const token = await acquireAccessTokenSilentOrRedirect(instance, { ...loginRequest, account });
+        if (!token || cancelled) return;
+        const loaded = await loadMatrixChildRows(surveyJson, listTitle, (listName, columns) =>
+          readMatrixChildItems(token, listName, parentId, columns),
+        );
+        if (!cancelled) setChildRows(loaded);
+      } catch {
+        // Signed out, or no access to the child lists — the card still opens.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, instance, itemId, listTitle, surveyJson]);
+
+  return childRows;
+}
+
 export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const selectedCompany = getSelectedCompany(item?.submissionData, item?.surveyJson);
-  const submissionData = item?.submissionData ?? {};
+  const matrixChildRows = useMatrixChildRows(item);
+  // A matrix keeps its rows in a child list, so they have to be fetched before
+  // the table can be drawn. Until they arrive the card shows what the parent
+  // column holds — the same thing this view showed before.
+  const submissionData = item?.submissionData ? { ...item.submissionData, ...matrixChildRows } : {};
   const entries = Object.entries(submissionData);
   const signatureFieldKeys = item ? collectSurveyFieldKeysByType(item.surveyJson, new Set(["signaturepad"])) : new Set<string>();
 
