@@ -239,10 +239,18 @@ describe("parseForm — table columns", () => {
   const columnsOf = (columns: unknown) =>
     q({ pages: [{ name: "p", elements: [{ type: "matrixdynamic", name: "x", columns }] }] }, "x").columns;
 
+  it("reads an author's preset values, from a list or from raw text", () => {
+    expect(columnsOf([{ name: "pole", presetValues: ["7.5m", "9.0m"] }])[0].presetValues).toEqual(["7.5m", "9.0m"]);
+    // Published by a builder that stored the textarea verbatim; the blank
+    // tail line is a trailing newline, not an unlabelled row.
+    expect(columnsOf([{ name: "pole", presetValues: "7.5m\n 9.0m \n\n" }])[0].presetValues).toEqual(["7.5m", "9.0m"]);
+    expect(columnsOf([{ name: "serial" }])[0].presetValues).toEqual([]);
+  });
+
   it("reads a header-only column list as text columns", () => {
     expect(columnsOf(["Name", "Qty"])).toEqual([
-      { name: "Name", title: "Name", cellType: "text", choices: [] },
-      { name: "Qty", title: "Qty", cellType: "text", choices: [] },
+      { name: "Name", title: "Name", cellType: "text", choices: [], presetValues: [] },
+      { name: "Qty", title: "Qty", cellType: "text", choices: [], presetValues: [] },
     ]);
   });
 

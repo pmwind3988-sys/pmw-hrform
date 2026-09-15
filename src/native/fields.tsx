@@ -26,6 +26,7 @@ import SearchableSelect from "./SearchableSelect";
 import { shouldOfferSearchableCombobox } from "./choiceSearch";
 import { useCoarsePointer } from "./useCoarsePointer";
 import { groupColumnHeaders } from "../utils/matrixData";
+import { applyPresetRows, hasPresetRows, presetRowCount } from "./presetRows";
 import { editorial } from "../theme/editorial";
 
 export interface ControlProps {
@@ -1014,14 +1015,20 @@ type TableRow = Record<string, unknown>;
 
 export function TableControl({ element, value, onChange, disabled }: ControlProps) {
   const columns = element.columns;
-  const minRows = Math.max(0, element.minRows);
-  const maxRows = element.maxRows > 0 ? element.maxRows : Infinity;
+  // A table whose author fixed its rows is a checklist, not a growable list:
+  // the preset list decides the row count outright, and Min/Max rows no longer
+  // apply. `applyPresetRows` also writes the labels in, so a respondent who
+  // never touches a cell still submits them.
+  const preset = hasPresetRows(columns);
+  const minRows = preset ? presetRowCount(columns) : Math.max(0, element.minRows);
+  const maxRows = preset ? minRows : element.maxRows > 0 ? element.maxRows : Infinity;
 
   const rows: TableRow[] = Array.isArray(value) ? (value as TableRow[]) : [];
   // A matrix opens showing the rows the author asked for, so the respondent
   // sees a table to fill rather than an empty box with an "Add" button.
-  const shown: TableRow[] =
-    rows.length >= minRows
+  const shown: TableRow[] = preset
+    ? applyPresetRows(columns, rows)
+    : rows.length >= minRows
       ? rows
       : [...rows, ...Array.from({ length: minRows - rows.length }, (): TableRow => ({}))];
 
@@ -1062,7 +1069,7 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
                   #
                 </th>
                 {bannerCells}
-                {!disabled && <th scope="col" rowSpan={2} aria-label="Row actions" />}
+                {!disabled && !preset && <th scope="col" rowSpan={2} aria-label="Row actions" />}
               </tr>
             )}
             <tr>
@@ -1078,7 +1085,7 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
                     {column.title}
                   </th>
                 ))}
-              {!disabled && banner.length === 0 && <th scope="col" aria-label="Row actions" />}
+              {!disabled && !preset && banner.length === 0 && <th scope="col" aria-label="Row actions" />}
             </tr>
           </thead>
           <tbody>
@@ -1087,7 +1094,12 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
                 <td className="nf-table-index">{rowIndex + 1}</td>
                 {columns.map((column) => (
                   <td key={column.name}>
-                    {column.cellType === "select" ? (
+                    {column.presetValues.length > 0 ? (
+                      // The author's own label. Drawn as text rather than a
+                      // disabled input so it reads as part of the sheet, and
+                      // so nothing suggests it could be edited.
+                      <span className="nf-table-preset">{String(row[column.name] ?? "")}</span>
+                    ) : column.cellType === "select" ? (
                       <select
                         className="nf-select"
                         value={row[column.name] === undefined ? "" : String(row[column.name])}
@@ -1122,7 +1134,7 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
                     )}
                   </td>
                 ))}
-                {!disabled && (
+                {!disabled && !preset && (
                   <td>
                     <button
                       type="button"
@@ -1140,7 +1152,7 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
           </tbody>
         </table>
       </div>
-      {!disabled && (
+      {!disabled && !preset && (
         <div className="nf-table-foot">
           <button
             type="button"

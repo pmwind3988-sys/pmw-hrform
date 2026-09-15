@@ -22,6 +22,11 @@ export interface MatrixColumn {
    * the column stands alone and spans both header rows.
    */
   group?: string;
+  /**
+   * Fixed cell values the author wrote, one per row. A column that has them
+   * renders locked and fixes the table's row count — see `native/presetRows`.
+   */
+  presetValues?: string[];
   choices?: string[];
   multiSelect?: boolean;
   choicesSource?: { list?: string; column?: string };

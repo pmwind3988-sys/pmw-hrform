@@ -68,6 +68,12 @@ export interface NativeColumn {
   /** Banner this column sits under in a two-row header. Absent when it stands alone. */
   group?: string;
   choices: NativeChoice[];
+  /**
+   * Fixed cell values the author wrote, one per row. Empty for an ordinary
+   * column; when present the table opens with these rows already filled and
+   * locked, and the respondent cannot add or remove rows. See `presetRows.ts`.
+   */
+  presetValues: string[];
 }
 
 export interface NativeValidator {
@@ -322,13 +328,25 @@ function toValidators(raw: unknown): NativeValidator[] {
   });
 }
 
+/**
+ * An author's preset list, as typed. Blank lines are dropped — they come from
+ * a trailing newline in the textarea, not from a row nobody labelled — but the
+ * values themselves are left exactly as written, since a pole code's spacing is
+ * the author's business.
+ */
+function toPresetValues(raw: unknown): string[] {
+  if (typeof raw === "string") return raw.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry) => str(entry)).filter((entry) => entry !== "");
+}
+
 function toColumns(raw: unknown): NativeColumn[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((entry, i): NativeColumn[] => {
     // A matrix authored as a plain list of headers — the `dynamicmatrix`
     // builder default — carries no cell type, so it is a text column.
     if (typeof entry === "string") {
-      return [{ name: entry || `col${i + 1}`, title: entry || `Column ${i + 1}`, cellType: "text", choices: [] }];
+      return [{ name: entry || `col${i + 1}`, title: entry || `Column ${i + 1}`, cellType: "text", choices: [], presetValues: [] }];
     }
     if (!entry || typeof entry !== "object") return [];
     const o = entry as Raw;
@@ -340,7 +358,7 @@ function toColumns(raw: unknown): NativeColumn[] {
     // list the author configured.
     const cellType = CELL_TYPES[declared] ?? (choices.length > 0 ? "select" : "text");
     const group = str(o.group).trim();
-    return [{ name, title: str(o.title, name), cellType, choices, group: group || undefined }];
+    return [{ name, title: str(o.title, name), cellType, choices, group: group || undefined, presetValues: toPresetValues(o.presetValues) }];
   });
 }
 

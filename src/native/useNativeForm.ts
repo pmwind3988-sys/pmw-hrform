@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NativeChoice, NativeElement, NativeForm, NativePage } from "./schema";
 import { evaluateCondition, evaluateFormula, referencedFields, type ValueBag } from "./expression";
+import { applyPresetRows, hasPresetRows } from "./presetRows";
 import { resolveScopedChoices } from "../utils/orgDirectory";
 
 export interface FieldState {
@@ -109,6 +110,13 @@ function initialValues(form: NativeForm): ValueBag {
     }
     if (expr === "now()" || q.defaultValue === "__now__") {
       values[q.name] = new Date().toISOString().slice(0, 16);
+      continue;
+    }
+    // A table whose author fixed its rows opens with those rows in the answer,
+    // not merely drawn on screen, so a submission carries the labels as real
+    // row data for the PDF and the SharePoint child rows to read back.
+    if (q.kind === "table" && hasPresetRows(q.columns)) {
+      values[q.name] = applyPresetRows(q.columns, undefined);
       continue;
     }
     if (q.defaultValue !== undefined && q.defaultValue !== null && q.defaultValue !== "") {

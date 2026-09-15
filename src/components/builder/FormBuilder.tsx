@@ -1553,13 +1553,25 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
     </>}
 
     {/* Matrix / Table: minRows / maxRows / addRowText */}
-    {matrixTypes.includes(field.type) && <>
-      <div style={{ display: "flex", gap: 8 }}>
-        <PropRow label="Min rows"><Input type="number" value={field.minRows ?? ""} onChange={v => onChange({ minRows: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
-        <PropRow label="Max rows"><Input type="number" value={field.maxRows ?? ""} onChange={v => onChange({ maxRows: v === "" ? undefined : Number(v) })} placeholder="10" /></PropRow>
-      </div>
-      <PropRow label="Add row text"><Input value={field.addRowText || ""} onChange={v => onChange({ addRowText: v || undefined })} placeholder="Add Row" /></PropRow>
-    </>}
+    {matrixTypes.includes(field.type) && (() => {
+      // A preset column fixes the rows outright, so the row settings below it
+      // have nothing left to decide. They stay visible but inert rather than
+      // vanishing, so an author who set them earlier can see why they stopped
+      // mattering.
+      const presetRows = Math.max(0, ...(field.columns ?? []).map(column => column.presetValues?.length ?? 0));
+      return <>
+        <div style={{ display: "flex", gap: 8, opacity: presetRows > 0 ? 0.5 : 1 }}>
+          <PropRow label="Min rows"><Input type="number" disabled={presetRows > 0} value={field.minRows ?? ""} onChange={v => onChange({ minRows: v === "" ? undefined : Number(v) })} placeholder="1" /></PropRow>
+          <PropRow label="Max rows"><Input type="number" disabled={presetRows > 0} value={field.maxRows ?? ""} onChange={v => onChange({ maxRows: v === "" ? undefined : Number(v) })} placeholder="10" /></PropRow>
+        </div>
+        {presetRows > 0 && <div style={{ fontSize: 11, color: C.textMuted, marginTop: -2, lineHeight: 1.45 }}>
+          Preset values set this table to {presetRows} fixed {presetRows === 1 ? "row" : "rows"}, so the row settings do not apply.
+        </div>}
+        <div style={{ opacity: presetRows > 0 ? 0.5 : 1 }}>
+          <PropRow label="Add row text"><Input disabled={presetRows > 0} value={field.addRowText || ""} onChange={v => onChange({ addRowText: v || undefined })} placeholder="Add Row" /></PropRow>
+        </div>
+      </>;
+    })()}
 
     {/* Signature pad: width / height / penColor / backgroundColor */}
     {field.type === "signaturepad" && <>
@@ -1622,9 +1634,9 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
 }
 
 function MatrixColumnsEditor({ columns, token, onChange }: {
-  columns: { name: string; title: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
+  columns: { name: string; title: string; cellType?: string; group?: string; presetValues?: string[]; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
   token?: string;
-  onChange: (cols: { name: string; title: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
+  onChange: (cols: { name: string; title: string; cellType?: string; group?: string; presetValues?: string[]; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
 }) {
   const addCol = () => {
     const title = `Column ${columns.length + 1}`;
@@ -1695,6 +1707,22 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             aria-label={`Column ${i + 1} group heading`}
             style={{ flex: 1, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }}
           />
+        </div>
+        <div>
+          <span style={{ fontSize: 11, color: C.textMuted }}>Preset values:</span>
+          <textarea
+            value={(col.presetValues || []).join("\n")}
+            onChange={e => updateCol(i, { presetValues: e.target.value.split("\n").map(line => line.trim()).filter(line => line !== "") })}
+            rows={3}
+            placeholder={"one per line — e.g.\n7.5m-10-1.1kN\n9.0m-14-2.0kN"}
+            aria-label={`Column ${i + 1} preset values`}
+            style={{ width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)", resize: "vertical" }}
+          />
+          <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3, lineHeight: 1.45 }}>
+            {(col.presetValues || []).length > 0
+              ? `The table opens with these ${(col.presetValues || []).length} rows filled in and locked. Rows cannot be added or removed.`
+              : "Leave blank for a normal column the respondent fills in."}
+          </div>
         </div>
         {hasChoices && <>
           <SpChoicesSourceEditor
@@ -2171,7 +2199,7 @@ function PropertyPanel({ field, allFields, onChange, onClose, token }: {
                     )}
                     {isMatrix && (
                       <MatrixColumnsEditor
-                        columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
+                        columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; group?: string; presetValues?: string[]; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
                         token={token}
                         onChange={cols => onChange({ columns: cols, tableConfigColumns: cols })}
                       />
