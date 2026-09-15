@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTabularFields, getDynamicMatrixFields, encodeMatrixRow, decodeMatrixRow, groupColumnHeaders, rowsToHtml } from "./matrixData";
+import { getTabularFields, getDynamicMatrixFields, encodeMatrixRow, decodeMatrixRow, groupColumnHeaders, rowsToHtml, guideToLines } from "./matrixData";
 import { buildSurveyJson, createQuestion, getSpColumnKind, QUESTION_TYPES } from "./FormBuilderEngine";
 
 function fieldOfType(type: string) {
@@ -212,5 +212,35 @@ describe("rowsToHtml banner row", () => {
     expect(html).toContain('rowspan="2"');
     // "No." belongs to the banner row only; it must not repeat below.
     expect(html.match(/No\./g)?.length).toBe(1);
+  });
+});
+
+
+describe("guideToLines", () => {
+  it("has nothing to show for an empty guide", () => {
+    expect(guideToLines("")).toEqual([]);
+    expect(guideToLines("   ")).toEqual([]);
+  });
+
+  it("turns each table row into one line, code then meaning", () => {
+    expect(
+      guideToLines("<table><tr><th>1a</th><td>M6</td></tr><tr><th>2b</th><td>Earth Wire Outlet</td></tr></table>"),
+    ).toEqual(["1a — M6", "2b — Earth Wire Outlet"]);
+  });
+
+  it("keeps headings and list items on their own lines", () => {
+    expect(guideToLines("<b>Appearance</b><ul><li>Chipped off</li><li>Seam</li></ul>")).toEqual([
+      "Appearance",
+      "Chipped off",
+      "Seam",
+    ]);
+  });
+
+  it("decodes entities and drops empty lines", () => {
+    expect(guideToLines("<p>Good &amp; KIV</p><p></p><p>Reject</p>")).toEqual(["Good & KIV", "Reject"]);
+  });
+
+  it("reads plain text with no markup at all", () => {
+    expect(guideToLines("1a = M6")).toEqual(["1a = M6"]);
   });
 });

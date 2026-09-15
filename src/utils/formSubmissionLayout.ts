@@ -24,6 +24,8 @@ export interface FormSubmissionField {
   kind: "field" | "matrix";
   matrixColumns?: { name: string; title: string; cellType?: string; choices?: unknown[]; group?: string }[];
   matrixRows?: Record<string, unknown>[];
+  /** The author’s legend for this matrix, as raw HTML. */
+  matrixGuide?: string;
 }
 
 export interface FormSubmissionSection {
@@ -317,6 +319,7 @@ export function buildFormSubmissionSections(
         kind: MATRIX_TYPES.has(type) && rows.length > 0 ? "matrix" : "field",
         matrixColumns: MATRIX_TYPES.has(type) ? matrixColumns(element) : undefined,
         matrixRows: rows.length > 0 ? rows : undefined,
+        matrixGuide: MATRIX_TYPES.has(type) ? textValue(element.matrixGuide) || undefined : undefined,
       });
     }
   };

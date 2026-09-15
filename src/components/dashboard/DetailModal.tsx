@@ -735,6 +735,14 @@ function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
           </Box>
         </Box>
       </Box>
+      {(field.matrixGuide ?? "").trim() !== "" && (
+        <Box
+          sx={{ mt: 1, fontSize: "0.8rem", color: editorial.muted, "& table": { borderCollapse: "collapse" }, "& th, & td": { border: editorialHairline, px: 1, py: 0.5, textAlign: "left" } }}
+        >
+          <Box sx={{ fontWeight: 700, mb: 0.5 }}>Guide</Box>
+          <Box dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(field.matrixGuide ?? "") }} />
+        </Box>
+      )}
     </Box>
   );
 }

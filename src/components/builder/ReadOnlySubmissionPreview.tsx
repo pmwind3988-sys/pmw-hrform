@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
+import DOMPurify from "dompurify";
 import { editorial } from "../../theme/editorial";
 import { groupColumnHeaders } from "../../utils/matrixData";
 import {
@@ -379,6 +380,15 @@ function MatrixValue({ field, value }: { field: PreviewField; value: unknown }) 
           ))}
         </tbody>
       </table>
+      {(field.matrixGuide ?? "").trim() !== "" && (
+        <div style={{ borderTop: `1px solid ${C.border}`, padding: "8px 10px", fontSize: 12, color: C.textSecond }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Guide</div>
+          <div
+            className="ro-matrix-guide"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(String(field.matrixGuide)) }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -46,6 +46,28 @@ describe("FormPdfDocument", () => {
     expect(tree).toContain("66%");
   });
 
+  it("prints the author's guide under the matrix as lines", () => {
+    const data = sampleFormData();
+    data.surveyJson.pages = [
+      {
+        name: "page1",
+        elements: [
+          {
+            type: "matrixdynamic",
+            name: "inspection",
+            title: "Pole inspection",
+            matrixGuide: "<table><tr><th>1a</th><td>M6</td></tr></table>",
+            columns: [{ name: "no", title: "No." }],
+          },
+        ],
+      },
+    ];
+    data.responseData = { inspection: [{ no: "1" }] };
+    const tree = JSON.stringify(renderToJson(FormPdfDocument(data)));
+    expect(tree).toContain("Guide");
+    expect(tree).toContain("1a — M6");
+  });
+
   it("renders without throwing when there are no layers and no answers", () => {
     const data = sampleFormData();
     data.layerResults = [];

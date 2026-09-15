@@ -21,6 +21,8 @@ export interface SubmissionPreviewField {
   choices?: unknown[];
   rateValues?: unknown[];
   columns?: unknown[];
+  /** The author’s legend for a matrix, as raw HTML. */
+  matrixGuide?: string;
   rateMin?: number;
   rateMax?: number;
   minRateDescription?: string;
@@ -141,6 +143,7 @@ export function collectPreviewSections(
         choices: Array.isArray(raw.choices) ? raw.choices : undefined,
         rateValues: Array.isArray(raw.rateValues) ? raw.rateValues : undefined,
         columns: Array.isArray(raw.columns) ? raw.columns : undefined,
+        matrixGuide: typeof raw.matrixGuide === "string" ? raw.matrixGuide : undefined,
         rateMin: typeof raw.rateMin === "number" ? raw.rateMin : undefined,
         rateMax: typeof raw.rateMax === "number" ? raw.rateMax : undefined,
         minRateDescription: typeof raw.minRateDescription === "string" ? raw.minRateDescription : undefined,

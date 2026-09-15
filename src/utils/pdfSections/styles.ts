@@ -124,6 +124,10 @@ export const S = StyleSheet.create({
 
   // ── Matrix table ──
   matrixSection: { marginBottom: 16 },
+  // The legend, printed under the table it explains.
+  matrixGuideBlock: { marginTop: 2, marginBottom: 6, paddingLeft: 4 },
+  matrixGuideTitle: { fontSize: 6, fontWeight: "heavy", color: C.muted, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2 },
+  matrixGuideLine: { fontSize: 6.5, color: C.muted, marginBottom: 1 },
   matrixTable: { marginBottom: 8, borderWidth: 0.5, borderColor: C.border },
   matrixHeaderRow: { flexDirection: "row", backgroundColor: C.primary },
   // Banner row: one heading over a run of columns, divided from its neighbours

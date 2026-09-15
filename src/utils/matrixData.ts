@@ -213,6 +213,45 @@ export function groupColumnHeaders(columns: readonly { group?: string }[]): Matr
   return grouped ? spans : [];
 }
 
+
+/**
+ * The author's guide, flattened to lines for a renderer that cannot draw HTML.
+ *
+ * The PDF is built with react-pdf, which has no HTML at all, so the legend has
+ * to arrive as text. A table row becomes one line with its cells joined by an
+ * em dash — "1a — M6" — which is how the legend reads aloud anyway; headings
+ * and list items each take their own line. Lossy by design: this is a
+ * reference card, not a layout to reproduce.
+ */
+export function guideToLines(html: string): string[] {
+  if (!html || html.trim() === "") return [];
+  const CELL_BREAK = "";
+  const text = html
+    // A row's cells join with a dash; every other block boundary is a newline.
+    .replace(/<\/(th|td)>\s*<(th|td)[^>]*>/gi, CELL_BREAK)
+    .replace(/<\/(tr|p|div|li|h[1-6]|b|strong|table|ul|ol)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  return text
+    .split("\n")
+    .map((line) =>
+      line
+        .split(CELL_BREAK)
+        .map((cell) => cell.trim())
+        .filter((cell) => cell !== "")
+        .join(" — ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter((line) => line !== "");
+}
+
 // ── Convert row data → HTML table string (for SP rich-text column) ──
 export function rowsToHtml(columns: MatrixColumn[], rows: MatrixRow[]): string {
   const TH = "border:1px solid #c4b5fd;padding:6px 10px;background:#ede9fe;font-size:11px;font-weight:600;color:#5b21b6";

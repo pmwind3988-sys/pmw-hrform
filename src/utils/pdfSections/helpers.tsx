@@ -5,7 +5,7 @@ import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } fro
 import type { DocumentControlHeader } from "../../types";
 import type { PdfLayerResult } from "../FormPdfDocument";
 import { C, S } from "./styles";
-import { groupColumnHeaders } from "../matrixData";
+import { groupColumnHeaders, guideToLines } from "../matrixData";
 
 export function fmtDate(d: string | undefined | null): string {
   if (!d) return "—";
@@ -159,6 +159,9 @@ export function renderMatrixField(field: FormSubmissionField) {
   // react-pdf has no colspan, so a group cell is simply as wide as the columns
   // it covers; an ungrouped column gets a blank cell and keeps its title below.
   const banner = groupColumnHeaders(columns);
+  // The legend travels with the table it explains; react-pdf cannot draw the
+  // author's HTML, so it arrives as lines.
+  const guideLines = guideToLines(field.matrixGuide ?? "");
   return (
     <View style={S.matrixSection} wrap={false}>
       <Text style={S.matrixFieldLabel}>{field.label}</Text>
@@ -192,6 +195,16 @@ export function renderMatrixField(field: FormSubmissionField) {
           </View>
         ))}
       </View>
+      {guideLines.length > 0 && (
+        <View style={S.matrixGuideBlock}>
+          <Text style={S.matrixGuideTitle}>Guide</Text>
+          {guideLines.map((line, index) => (
+            <Text key={`${field.key}-guide-${index}`} style={S.matrixGuideLine}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
