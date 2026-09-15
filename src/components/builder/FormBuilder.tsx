@@ -1651,13 +1651,26 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
     {columns.map((col, i) => {
       const hasChoices = col.cellType === "dropdown" || col.cellType === "checkbox";
       return <div key={i} style={{ padding: 10, background: C.offWhite, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {/*
+          * The two inputs shrink rather than push the row wider: the properties
+          * panel is narrow, and without `minWidth: 0` a flex item refuses to go
+          * below its content width, which carried the Remove button off the
+          * right edge where no amount of scrolling in the panel reached it.
+          */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple, width: 18 }}>{i + 1}</span>
-          <div style={{ flex: 1, display: "flex", gap: 6 }}>
-            <input value={col.title} onChange={e => setColTitle(i, e.target.value)} placeholder="Label" aria-label={`Column ${i + 1} label`} style={{ flex: 1.5, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
-            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} placeholder="schemaName" aria-label={`Column ${i + 1} schema name`} style={{ flex: 1, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
+          <div style={{ flex: 1, display: "flex", gap: 6, minWidth: 0 }}>
+            <input value={col.title} onChange={e => setColTitle(i, e.target.value)} placeholder="Label" aria-label={`Column ${i + 1} label`} style={{ flex: 1.5, minWidth: 0, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
+            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} placeholder="schemaName" aria-label={`Column ${i + 1} schema name`} style={{ flex: 1, minWidth: 0, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
           </div>
-          <button onClick={() => removeCol(i)} style={{ fontSize: 11, color: C.red, background: "none", border: "none", cursor: "pointer" }}><CloseIcon style={{ fontSize: 11 }} /></button>
+          <button
+            onClick={() => removeCol(i)}
+            title={`Remove ${col.title || `column ${i + 1}`}`}
+            aria-label={`Remove column ${i + 1}`}
+            style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 11, color: C.red, background: "none", border: `1px solid ${C.border}`, borderRadius: 5, padding: "3px 7px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}
+          >
+            <CloseIcon style={{ fontSize: 11 }} /> Remove
+          </button>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: "nowrap" }}>Cell type:</span>
