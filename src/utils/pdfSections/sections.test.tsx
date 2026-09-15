@@ -20,6 +20,32 @@ describe("FormPdfDocument", () => {
     expect(renderToJson(FormPdfDocument(sampleFormData()))).toMatchSnapshot();
   });
 
+  it("draws a banner row over the columns an author grouped", () => {
+    const data = sampleFormData();
+    data.surveyJson.pages = [
+      {
+        name: "page1",
+        elements: [
+          {
+            type: "matrixdynamic",
+            name: "inspection",
+            title: "Pole inspection",
+            columns: [
+              { name: "no", title: "No." },
+              { name: "appGood", title: "Good", group: "Appearance Check" },
+              { name: "appKiv", title: "KIV", group: "Appearance Check" },
+            ],
+          },
+        ],
+      },
+    ];
+    data.responseData = { inspection: [{ no: "1", appGood: "2", appKiv: "0" }] };
+    const tree = JSON.stringify(renderToJson(FormPdfDocument(data)));
+    expect(tree).toContain("Appearance Check");
+    // The banner spans two of the three columns.
+    expect(tree).toContain("66%");
+  });
+
   it("renders without throwing when there are no layers and no answers", () => {
     const data = sampleFormData();
     data.layerResults = [];

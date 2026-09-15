@@ -43,6 +43,7 @@ import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
 import { ratingStepLabel } from "../../utils/ratingLabels";
+import { groupColumnHeaders } from "../../utils/matrixData";
 import { loginRequest } from "../../auth/msalConfig";
 import {
   buildFormSubmissionSections,
@@ -644,8 +645,12 @@ function FieldCard({ fieldKey, label, value }: { fieldKey: string; label?: strin
 function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
   const columns = field.matrixColumns?.length
     ? field.matrixColumns
-    : Object.keys(field.matrixRows?.[0] ?? {}).map((key) => ({ name: key, title: formatFieldName(key) }));
+    : Object.keys(field.matrixRows?.[0] ?? {}).map((key) => ({ name: key, title: formatFieldName(key), group: undefined as string | undefined }));
   const rows = field.matrixRows ?? [];
+  // Same two-row header the form itself draws, so a submission read here looks
+  // like the sheet it was filled in on.
+  const banner = groupColumnHeaders(columns);
+  let bannerCursor = 0;
 
   if (rows.length === 0 || columns.length === 0) {
     return <FieldCard fieldKey={field.key} label={field.label} value={field.value} />;
@@ -690,12 +695,31 @@ function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
           }}
         >
           <Box component="thead">
+            {banner.length > 0 && (
+              <Box component="tr">
+                {banner.map((span, index) => {
+                  const first = columns[bannerCursor];
+                  bannerCursor += span.span;
+                  return span.grouped ? (
+                    <Box component="th" key={`group-${index}`} colSpan={span.span} sx={{ textAlign: "center !important" }}>
+                      {span.title}
+                    </Box>
+                  ) : (
+                    <Box component="th" key={`group-${index}`} rowSpan={2}>
+                      {first ? first.title || formatFieldName(first.name) : ""}
+                    </Box>
+                  );
+                })}
+              </Box>
+            )}
             <Box component="tr">
-              {columns.map((column) => (
-                <Box component="th" key={column.name}>
-                  {column.title || formatFieldName(column.name)}
-                </Box>
-              ))}
+              {columns
+                .filter((column) => banner.length === 0 || (column.group ?? "").trim() !== "")
+                .map((column) => (
+                  <Box component="th" key={column.name}>
+                    {column.title || formatFieldName(column.name)}
+                  </Box>
+                ))}
             </Box>
           </Box>
           <Box component="tbody">

@@ -126,6 +126,10 @@ export const S = StyleSheet.create({
   matrixSection: { marginBottom: 16 },
   matrixTable: { marginBottom: 8, borderWidth: 0.5, borderColor: C.border },
   matrixHeaderRow: { flexDirection: "row", backgroundColor: C.primary },
+  // Banner row: one heading over a run of columns, divided from its neighbours
+  // and set a shade apart from the column titles beneath it.
+  matrixGroupRow: { flexDirection: "row", backgroundColor: C.primary, borderBottomWidth: 0.5, borderBottomColor: C.white },
+  matrixGroupText: { fontSize: 6, fontWeight: "heavy", color: C.white, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "center" },
   matrixHeaderCell: { paddingHorizontal: 4, paddingVertical: 3, borderRightWidth: 0.5, borderRightColor: C.white },
   matrixHeaderText: { fontSize: 6, fontWeight: "heavy", color: C.white, textTransform: "uppercase", letterSpacing: 0.3 },
   matrixDataRow: { flexDirection: "row", borderBottomWidth: 0.3, borderBottomColor: C.borderLight },

@@ -22,7 +22,7 @@ export interface FormSubmissionField {
   labelFalse?: string;
   value: unknown;
   kind: "field" | "matrix";
-  matrixColumns?: { name: string; title: string; cellType?: string; choices?: unknown[] }[];
+  matrixColumns?: { name: string; title: string; cellType?: string; choices?: unknown[]; group?: string }[];
   matrixRows?: Record<string, unknown>[];
 }
 
@@ -143,7 +143,7 @@ function getChildElements(element: SurveyElement): SurveyElement[] {
   return children;
 }
 
-function matrixColumns(element: SurveyElement): { name: string; title: string; cellType?: string; choices?: unknown[] }[] {
+function matrixColumns(element: SurveyElement): { name: string; title: string; cellType?: string; choices?: unknown[]; group?: string }[] {
   const columns = element.columns;
   if (!Array.isArray(columns)) return [];
   return columns.filter(isRecord).map((column) => {
@@ -153,6 +153,7 @@ function matrixColumns(element: SurveyElement): { name: string; title: string; c
       title: textValue(column.title) || name,
       cellType: textValue(column.cellType) || textValue(column.type) || undefined,
       choices: Array.isArray(column.choices) ? column.choices : undefined,
+      group: textValue(column.group) || undefined,
     };
   }).filter((column) => column.name);
 }

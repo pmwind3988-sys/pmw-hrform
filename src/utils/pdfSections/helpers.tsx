@@ -5,6 +5,7 @@ import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } fro
 import type { DocumentControlHeader } from "../../types";
 import type { PdfLayerResult } from "../FormPdfDocument";
 import { C, S } from "./styles";
+import { groupColumnHeaders } from "../matrixData";
 
 export function fmtDate(d: string | undefined | null): string {
   if (!d) return "—";
@@ -152,11 +153,28 @@ export function renderMatrixField(field: FormSubmissionField) {
     : Object.keys(rows[0] ?? {}).map((key) => ({ name: key, title: key }));
   if (rows.length === 0 || columns.length === 0) return null;
 
-  const colPct = `${Math.max(10, Math.floor(100 / columns.length))}%`;
+  const pct = Math.max(10, Math.floor(100 / columns.length));
+  const colPct = `${pct}%`;
+  // Banner row above the column titles, when the author grouped anything.
+  // react-pdf has no colspan, so a group cell is simply as wide as the columns
+  // it covers; an ungrouped column gets a blank cell and keeps its title below.
+  const banner = groupColumnHeaders(columns);
   return (
     <View style={S.matrixSection} wrap={false}>
       <Text style={S.matrixFieldLabel}>{field.label}</Text>
       <View style={S.matrixTable}>
+        {banner.length > 0 && (
+          <View style={S.matrixGroupRow}>
+            {banner.map((span, index) => (
+              <View
+                key={`${field.key}-group-${index}`}
+                style={[S.matrixHeaderCell, { width: `${pct * span.span}%` }, index === banner.length - 1 ? { borderRightWidth: 0 } : {}]}
+              >
+                <Text style={S.matrixGroupText}>{span.title}</Text>
+              </View>
+            ))}
+          </View>
+        )}
         <View style={S.matrixHeaderRow}>
           {columns.map((column, index) => (
             <View key={column.name} style={[S.matrixHeaderCell, { width: colPct }, index === columns.length - 1 ? { borderRightWidth: 0 } : {}]}>
