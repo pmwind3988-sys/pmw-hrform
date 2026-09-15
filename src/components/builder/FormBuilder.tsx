@@ -1622,9 +1622,9 @@ function FieldTypeProps({ field, onChange, allFields }: { field: FormBuilderFiel
 }
 
 function MatrixColumnsEditor({ columns, token, onChange }: {
-  columns: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
+  columns: { name: string; title: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
   token?: string;
-  onChange: (cols: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
+  onChange: (cols: { name: string; title: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]) => void;
 }) {
   const addCol = () => {
     const title = `Column ${columns.length + 1}`;
@@ -1672,6 +1672,16 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
           {col.cellType === "dropdown" && <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: C.textMuted }}>
             <input type="checkbox" checked={!!col.multiSelect} onChange={e => updateCol(i, { multiSelect: e.target.checked })} /> Multi-select
           </label>}
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: "nowrap" }}>Group heading:</span>
+          <input
+            value={col.group || ""}
+            onChange={e => updateCol(i, { group: e.target.value || undefined })}
+            placeholder="none — e.g. Appearance Check"
+            aria-label={`Column ${i + 1} group heading`}
+            style={{ flex: 1, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }}
+          />
         </div>
         {hasChoices && <>
           <SpChoicesSourceEditor
@@ -2137,8 +2147,18 @@ function PropertyPanel({ field, allFields, onChange, onClose, token }: {
                       </>
                     )}
                     {isMatrix && (
+                      <PropRow label="Guide (shown under the table)" span>
+                        <Textarea
+                          value={field.matrixGuide ?? ""}
+                          onChange={v => onChange({ matrixGuide: v || undefined })}
+                          rows={5}
+                          placeholder="A defect-code legend, or any reference the person filling this in needs. Basic HTML works."
+                        />
+                      </PropRow>
+                    )}
+                    {isMatrix && (
                       <MatrixColumnsEditor
-                        columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
+                        columns={(field.columns || field.tableConfigColumns || []) as { name: string; title: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[]}
                         token={token}
                         onChange={cols => onChange({ columns: cols, tableConfigColumns: cols })}
                       />

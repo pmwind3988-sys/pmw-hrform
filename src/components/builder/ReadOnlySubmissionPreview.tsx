@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
 import { editorial } from "../../theme/editorial";
+import { groupColumnHeaders } from "../../utils/matrixData";
 import {
   collectPreviewSections,
   formatFieldLabel,
@@ -310,13 +311,14 @@ function matrixRows(value: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function matrixColumns(field: PreviewField, rows: Record<string, unknown>[]): Array<{ name: string; title: string }> {
+function matrixColumns(field: PreviewField, rows: Record<string, unknown>[]): Array<{ name: string; title: string; group?: string }> {
   if (Array.isArray(field.columns) && field.columns.length > 0) {
     return field.columns
       .filter(isRecord)
       .map((column) => ({
         name: String(column.name || column.valueName || column.title || ""),
         title: String(column.title || column.name || column.valueName || "Column"),
+        group: column.group ? String(column.group) : undefined,
       }))
       .filter((column) => column.name);
   }
@@ -329,16 +331,40 @@ function MatrixValue({ field, value }: { field: PreviewField; value: unknown }) 
   const rows = matrixRows(value);
   if (rows.length === 0) return <span style={{ color: C.textMuted }}>No rows</span>;
   const columns = matrixColumns(field, rows);
+  const th: CSSProperties = { padding: "8px 10px", textAlign: "left", color: C.textSecond, fontWeight: 700, borderBottom: `1px solid ${C.border}` };
+  // Same two-row header the live form draws, so a printed submission matches
+  // the sheet it was filled in on.
+  const banner = groupColumnHeaders(columns);
+  let bannerCursor = 0;
   return (
     <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 12 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
         <thead>
+          {banner.length > 0 && (
+            <tr style={{ background: C.softBg }}>
+              {banner.map((span, i) => {
+                const first = columns[bannerCursor];
+                bannerCursor += span.span;
+                return span.grouped ? (
+                  <th key={`g${i}`} colSpan={span.span} style={{ ...th, textAlign: "center" }}>
+                    {span.title}
+                  </th>
+                ) : (
+                  <th key={`g${i}`} rowSpan={2} style={th}>
+                    {first?.title}
+                  </th>
+                );
+              })}
+            </tr>
+          )}
           <tr style={{ background: C.softBg }}>
-            {columns.map((column) => (
-              <th key={column.name} style={{ padding: "8px 10px", textAlign: "left", color: C.textSecond, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>
-                {column.title}
-              </th>
-            ))}
+            {columns
+              .filter((column) => banner.length === 0 || (column.group ?? "").trim() !== "")
+              .map((column) => (
+                <th key={column.name} style={th}>
+                  {column.title}
+                </th>
+              ))}
           </tr>
         </thead>
         <tbody>

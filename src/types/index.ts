@@ -655,11 +655,13 @@ export interface FormBuilderField {
   mustScrollToBottom?: boolean;
   dynamicmatrix?: boolean;
   matrixColumns?: string[];
-  columns?: { name: string; title: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
+  /** Legend printed under a matrix — free HTML the author writes per matrix. */
+  matrixGuide?: string;
+  columns?: { name: string; title: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean } }[];
   rowHeaders?: string[];
   addRowText?: string;
   // Table Input
-  tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean }; required?: boolean }[];
+  tableConfigColumns?: { name: string; title: string; type?: string; cellType?: string; group?: string; choices?: string[]; multiSelect?: boolean; choicesSource?: { list?: string; column?: string }; filteredListSource?: { list?: string; valueColumn?: string; labelColumn?: string; filterColumn?: string; filterValue?: string; choicesLoaded?: boolean }; required?: boolean }[];
   minItems?: number;
   maxItems?: number;
   // Budget Allocator

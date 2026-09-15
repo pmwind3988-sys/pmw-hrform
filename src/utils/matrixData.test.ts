@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTabularFields, getDynamicMatrixFields, encodeMatrixRow, decodeMatrixRow } from "./matrixData";
+import { getTabularFields, getDynamicMatrixFields, encodeMatrixRow, decodeMatrixRow, groupColumnHeaders, rowsToHtml } from "./matrixData";
 import { buildSurveyJson, createQuestion, getSpColumnKind, QUESTION_TYPES } from "./FormBuilderEngine";
 
 function fieldOfType(type: string) {
@@ -152,5 +152,65 @@ describe("matrix rows and SharePoint's own property names", () => {
     const decoded = decodeMatrixRow(encodeMatrixRow(original, columns, resolve), columns, resolve);
     expect(decoded.col1).toBe(original.col1);
     expect(decoded.col2).toBe(original.col2);
+  });
+});
+
+describe("groupColumnHeaders", () => {
+  const cols = (...specs: [string, string?][]) =>
+    specs.map(([title, group]) => ({ name: title.toLowerCase(), title, group }));
+
+  it("returns no banner row when no column is grouped", () => {
+    expect(groupColumnHeaders(cols(["No."], ["Serial No."]))).toEqual([]);
+  });
+
+  it("merges neighbouring columns that share a group", () => {
+    const spans = groupColumnHeaders(
+      cols(["No."], ["Good", "Appearance Check"], ["KIV", "Appearance Check"], ["Reject", "Appearance Check"], ["Defect No."]),
+    );
+    expect(spans).toEqual([
+      { title: "", span: 1, grouped: false },
+      { title: "Appearance Check", span: 3, grouped: true },
+      { title: "", span: 1, grouped: false },
+    ]);
+  });
+
+  it("keeps two runs of the same group name separate", () => {
+    const spans = groupColumnHeaders(
+      cols(["Good", "Check"], ["Defect No."], ["KIV", "Check"]),
+    );
+    expect(spans).toEqual([
+      { title: "Check", span: 1, grouped: true },
+      { title: "", span: 1, grouped: false },
+      { title: "Check", span: 1, grouped: true },
+    ]);
+  });
+
+  it("ignores a blank or whitespace-only group", () => {
+    expect(groupColumnHeaders(cols(["A", "   "], ["B", ""]))).toEqual([]);
+  });
+});
+
+
+describe("rowsToHtml banner row", () => {
+  it("draws one header row when nothing is grouped", () => {
+    const html = rowsToHtml([{ name: "a", title: "A" }], [{ a: "1" }]);
+    expect(html).not.toContain("colspan");
+    expect(html).not.toContain("rowspan");
+  });
+
+  it("spans the group and stretches ungrouped titles over both rows", () => {
+    const html = rowsToHtml(
+      [
+        { name: "no", title: "No." },
+        { name: "good", title: "Good", group: "Appearance Check" },
+        { name: "kiv", title: "KIV", group: "Appearance Check" },
+      ],
+      [],
+    );
+    expect(html).toContain('colspan="2"');
+    expect(html).toContain("Appearance Check");
+    expect(html).toContain('rowspan="2"');
+    // "No." belongs to the banner row only; it must not repeat below.
+    expect(html.match(/No\./g)?.length).toBe(1);
   });
 });

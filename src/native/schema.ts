@@ -65,6 +65,8 @@ export interface NativeColumn {
   name: string;
   title: string;
   cellType: "text" | "number" | "select" | "date" | "boolean";
+  /** Banner this column sits under in a two-row header. Absent when it stands alone. */
+  group?: string;
   choices: NativeChoice[];
 }
 
@@ -171,6 +173,11 @@ export interface NativeElement {
   minRows: number;
   maxRows: number;
   addRowText: string;
+  /**
+   * Reference card printed under the table — the defect-code legend that sits
+   * beside the sheet on paper. Raw HTML, sanitised at render time.
+   */
+  guide: string;
 
 
   /** Formula source, from the custom `_expression` prop or SurveyJS's own. */
@@ -332,7 +339,8 @@ function toColumns(raw: unknown): NativeColumn[] {
     // published form that has one; treating it as text would silently drop the
     // list the author configured.
     const cellType = CELL_TYPES[declared] ?? (choices.length > 0 ? "select" : "text");
-    return [{ name, title: str(o.title, name), cellType, choices }];
+    const group = str(o.group).trim();
+    return [{ name, title: str(o.title, name), cellType, choices, group: group || undefined }];
   });
 }
 
@@ -527,6 +535,7 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
     minRows: num(raw.minRows ?? raw.rowCount, 1),
     maxRows: num(raw.maxRows, 0),
     addRowText: str(raw.addRowText ?? raw.addRowButtonText ?? raw.addButtonText, "Add row"),
+    guide: str(raw.matrixGuide),
 
 
     // `_expression` first: SurveyJS's native `expression` is also used by the

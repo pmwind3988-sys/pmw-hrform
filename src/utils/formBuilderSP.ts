@@ -1950,6 +1950,8 @@ export interface MatrixColumnDef {
   name: string;
   title: string;
   cellType?: string;
+  /** Banner this column sits under in a two-row header. */
+  group?: string;
   choices?: string[];
   multiSelect?: boolean;
 }

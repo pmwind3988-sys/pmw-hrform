@@ -213,6 +213,28 @@ describe("parseForm — rating steps", () => {
   });
 });
 
+describe("parseForm — table banner groups and guide", () => {
+  const el = (raw: Record<string, unknown>) =>
+    q({ pages: [{ name: "p", elements: [{ type: "matrixdynamic", name: "x", ...raw }] }] }, "x");
+
+  it("carries a column's banner group through", () => {
+    const columns = el({ columns: [{ name: "good", title: "Good", group: "Appearance Check" }] }).columns;
+    expect(columns[0].group).toBe("Appearance Check");
+  });
+
+  it("leaves an ungrouped column without a group", () => {
+    expect(el({ columns: ["Name"] }).columns[0].group).toBeUndefined();
+  });
+
+  it("reads the author's guide text", () => {
+    expect(el({ matrixGuide: "<p>1a = M6</p>" }).guide).toBe("<p>1a = M6</p>");
+  });
+
+  it("has no guide when the author wrote none", () => {
+    expect(el({}).guide).toBe("");
+  });
+});
+
 describe("parseForm — table columns", () => {
   const columnsOf = (columns: unknown) =>
     q({ pages: [{ name: "p", elements: [{ type: "matrixdynamic", name: "x", columns }] }] }, "x").columns;

@@ -16,6 +16,12 @@ export interface MatrixColumn {
   name: string;
   title: string;
   cellType?: string;
+  /**
+   * Banner this column sits under, drawn as a second header row above the
+   * column titles — "Appearance Check" over Good / KIV / Reject. Blank means
+   * the column stands alone and spans both header rows.
+   */
+  group?: string;
   choices?: string[];
   multiSelect?: boolean;
   choicesSource?: { list?: string; column?: string };
@@ -173,10 +179,58 @@ export function decodeMatrixRow(
   return decoded;
 }
 
+/** One cell of the banner header row: a group name over `span` columns. */
+export interface MatrixHeaderSpan {
+  title: string;
+  span: number;
+  grouped: boolean;
+}
+
+/**
+ * The banner row above the column titles.
+ *
+ * Neighbouring columns carrying the same `group` merge into one cell; an
+ * ungrouped column gets an empty cell that the renderer stretches down over
+ * both rows. Returns `[]` when nothing is grouped, so a matrix authored the
+ * old way still draws exactly one header row.
+ *
+ * Two separate runs of the same name stay separate — a banner is a span of
+ * adjacent columns, never a gathering of scattered ones.
+ */
+export function groupColumnHeaders(columns: readonly { group?: string }[]): MatrixHeaderSpan[] {
+  const spans: MatrixHeaderSpan[] = [];
+  let grouped = false;
+  for (const column of columns) {
+    const title = (column.group ?? "").trim();
+    const previous = spans[spans.length - 1];
+    if (title && previous && previous.title === title) {
+      previous.span += 1;
+      continue;
+    }
+    if (title) grouped = true;
+    spans.push({ title, span: 1, grouped: title !== "" });
+  }
+  return grouped ? spans : [];
+}
+
 // ── Convert row data → HTML table string (for SP rich-text column) ──
 export function rowsToHtml(columns: MatrixColumn[], rows: MatrixRow[]): string {
+  const TH = "border:1px solid #c4b5fd;padding:6px 10px;background:#ede9fe;font-size:11px;font-weight:600;color:#5b21b6";
+  const bannerSpans = groupColumnHeaders(columns);
+  // An ungrouped column has no banner of its own, so its title moves up into
+  // the banner row and stretches down over both -- the way "No." and "Serial
+  // No." sit beside a spanned "Appearance Check" on the printed sheet.
+  let cursor = 0;
+  const bannerCells = bannerSpans.map((span) => {
+    const first = columns[cursor];
+    cursor += span.span;
+    return span.grouped
+      ? `<th colspan="${span.span}" style="${TH};text-align:center">${span.title}</th>`
+      : `<th rowspan="2" style="${TH};text-align:left">${first?.title ?? ""}</th>`;
+  });
   const headers = columns
-    .map((c) => `<th style="border:1px solid #c4b5fd;padding:6px 10px;background:#ede9fe;font-size:11px;font-weight:600;color:#5b21b6;text-align:left">${c.title}</th>`)
+    .filter((c) => bannerSpans.length === 0 || (c.group ?? "").trim() !== "")
+    .map((c) => `<th style="${TH};text-align:left">${c.title}</th>`)
     .join("");
   const bodyRows = rows
     .map((row) => {
@@ -190,5 +244,8 @@ export function rowsToHtml(columns: MatrixColumn[], rows: MatrixRow[]): string {
       return `<tr>${cells}</tr>`;
     })
     .join("");
-  return `<table style="border-collapse:collapse;width:100%;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif"><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+  const head = bannerCells.length
+    ? `<tr>${bannerCells.join("")}</tr><tr>${headers}</tr>`
+    : `<tr>${headers}</tr>`;
+  return `<table style="border-collapse:collapse;width:100%;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif"><thead>${head}</thead><tbody>${bodyRows}</tbody></table>`;
 }

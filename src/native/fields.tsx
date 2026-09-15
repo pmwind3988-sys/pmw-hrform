@@ -25,6 +25,7 @@ import { formatNumber } from "./expression";
 import SearchableSelect from "./SearchableSelect";
 import { shouldOfferSearchableCombobox } from "./choiceSearch";
 import { useCoarsePointer } from "./useCoarsePointer";
+import { groupColumnHeaders } from "../utils/matrixData";
 import { editorial } from "../theme/editorial";
 
 export interface ControlProps {
@@ -1031,21 +1032,53 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
 
   if (columns.length === 0) return <p className="nf-hint">This table has no columns configured.</p>;
 
+  // A banner row appears only once the author has grouped something, so a
+  // matrix authored before groups existed still draws its single header row.
+  const banner = groupColumnHeaders(columns);
+  let bannerCursor = 0;
+  const bannerCells = banner.map((span, i) => {
+    const first = columns[bannerCursor];
+    bannerCursor += span.span;
+    return span.grouped ? (
+      <th key={`g${i}`} scope="colgroup" colSpan={span.span} className="nf-table-group">
+        {span.title}
+      </th>
+    ) : (
+      // Nothing above it, so its own title stretches down over both rows.
+      <th key={`g${i}`} scope="col" rowSpan={2}>
+        {first?.title}
+      </th>
+    );
+  });
+
   return (
     <div className="nf-table-wrap">
       <div className="nf-table-scroll">
         <table className="nf-table">
           <thead>
-            <tr>
-              <th className="nf-table-index" scope="col">
-                #
-              </th>
-              {columns.map((column) => (
-                <th key={column.name} scope="col">
-                  {column.title}
+            {banner.length > 0 && (
+              <tr>
+                <th className="nf-table-index" scope="col" rowSpan={2}>
+                  #
                 </th>
-              ))}
-              {!disabled && <th scope="col" aria-label="Row actions" />}
+                {bannerCells}
+                {!disabled && <th scope="col" rowSpan={2} aria-label="Row actions" />}
+              </tr>
+            )}
+            <tr>
+              {banner.length === 0 && (
+                <th className="nf-table-index" scope="col">
+                  #
+                </th>
+              )}
+              {columns
+                .filter((column) => banner.length === 0 || (column.group ?? "").trim() !== "")
+                .map((column) => (
+                  <th key={column.name} scope="col">
+                    {column.title}
+                  </th>
+                ))}
+              {!disabled && banner.length === 0 && <th scope="col" aria-label="Row actions" />}
             </tr>
           </thead>
           <tbody>
@@ -1122,6 +1155,12 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
             {Number.isFinite(maxRows) ? ` · max ${maxRows}` : ""}
           </span>
         </div>
+      )}
+      {element.guide.trim() !== "" && (
+        <details className="nf-table-guide">
+          <summary>Guide</summary>
+          <div className="nf-html" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(element.guide) }} />
+        </details>
       )}
     </div>
   );

@@ -1113,6 +1113,43 @@
   text-align: center;
 }
 
+/* Banner header row: one heading over a run of columns. Centred and divided
+   from its neighbours so the span it covers is unmistakable. */
+.nf-table-group {
+  text-align: center;
+  border-left: 1px solid var(--nf-line);
+  border-right: 1px solid var(--nf-line);
+}
+
+/* The reference card an author writes per matrix — collapsed, so a long
+   defect-code legend never pushes the table itself off the screen. */
+.nf-table-guide {
+  border-top: 1px solid var(--nf-line);
+  padding: 8px 10px;
+  font-size: var(--nf-fs-help);
+}
+
+.nf-table-guide > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--nf-ink-soft);
+}
+
+.nf-table-guide > .nf-html {
+  margin-top: 8px;
+}
+
+.nf-table-guide table {
+  border-collapse: collapse;
+}
+
+.nf-table-guide th,
+.nf-table-guide td {
+  border: 1px solid var(--nf-line);
+  padding: 4px 8px;
+  text-align: left;
+}
+
 .nf-table-foot {
   display: flex;
   align-items: center;
