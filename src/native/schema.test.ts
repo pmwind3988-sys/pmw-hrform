@@ -64,6 +64,23 @@ describe("parseForm — structure", () => {
     expect(form.pages[1].elements.map((e) => e.name)).toEqual(["b"]);
   });
 
+  it("lets a break at the very top name the first page instead of adding an empty one", () => {
+    const form = parseForm({
+      pages: [
+        {
+          name: "page1",
+          elements: [
+            { type: "pagebreak", pageTitle: "Personal" },
+            { type: "text", name: "a" },
+          ],
+        },
+      ],
+    });
+    expect(form.pages).toHaveLength(1);
+    expect(form.pages[0].title).toBe("Personal");
+    expect(form.pages[0].elements.map((e) => e.name)).toEqual(["a"]);
+  });
+
   it("gives every element a unique id", () => {
     const form = parseForm({
       pages: [{ name: "p", elements: [{ type: "text", name: "a" }, { type: "text", name: "a" }] }],

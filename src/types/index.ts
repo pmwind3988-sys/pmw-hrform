@@ -803,7 +803,7 @@ export interface SurveyJson {
   fontFamily?: string;
   borderRadius?: string;
   labelPosition?: string;
-  pages: { name: string; elements: Record<string, unknown>[] }[];
+  pages: { name: string; title?: string; description?: string; elements: Record<string, unknown>[] }[];
 }
 
 export interface FormBuilderMeta {

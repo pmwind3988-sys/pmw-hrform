@@ -606,6 +606,15 @@ function splitOnPageBreaks(raw: Raw[]): { title: string; description: string; el
   ];
   for (const el of raw) {
     if (str(el.type) === "pagebreak") {
+      // A break with nothing above it names the page it opens rather than
+      // leaving an empty one in front — the shape the builder gives a form
+      // whose first page had a title.
+      const current = pages[pages.length - 1];
+      if (current.elements.length === 0) {
+        current.title = str(el.pageTitle ?? el.title) || current.title;
+        current.description = str(el.pageDescription ?? el.description) || current.description;
+        continue;
+      }
       pages.push({
         title: str(el.pageTitle ?? el.title),
         description: str(el.pageDescription ?? el.description),

@@ -1148,12 +1148,28 @@ export function buildQuestionTree(json: SurveyJson): FormBuilderField[] {
     return result;
   }
 
+  // The builder edits one list of fields, so a form saved with several pages
+  // is laid out end to end with a Page Break where each new page began. The
+  // break carries that page's title and description, which were otherwise
+  // dropped on load and then gone for good at the next publish.
   const all: FormBuilderField[] = [];
-  for (const page of json.pages ?? []) {
+  const pages = json.pages ?? [];
+  pages.forEach((page, index) => {
+    const pageTitle = typeof page.title === "string" ? page.title.trim() : "";
+    const pageDescription = typeof page.description === "string" ? page.description.trim() : "";
+    if (index > 0 || pageTitle) {
+      all.push({
+        ...createQuestion(QUESTION_TYPES.find((t) => t.type === "pagebreak")!),
+        name: `pageBreak${index + 1}`,
+        title: "",
+        pageTitle: pageTitle || undefined,
+        pageDescription: pageDescription || undefined,
+      });
+    }
     if (Array.isArray(page.elements)) {
       all.push(...walk(page.elements));
     }
-  }
+  });
   return all;
 }
 

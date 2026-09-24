@@ -273,6 +273,35 @@ describe('buildQuestionTree', () => {
     expect(buildQuestionTree(json)).toEqual([]);
   });
 
+  // The builder holds one list of fields, so a form saved with several pages
+  // used to be poured into it with every page title thrown away.
+  it('keeps each extra page as a page break carrying its title', () => {
+    const json = makeSurveyJson([
+      { name: 'page1', elements: [{ type: 'text', name: 'a' }] },
+      { name: 'page2', title: 'Employment', description: 'Current role', elements: [{ type: 'text', name: 'b' }] },
+      { name: 'page3', elements: [{ type: 'text', name: 'c' }] },
+    ] as SurveyJson['pages']);
+    const tree = buildQuestionTree(json);
+    expect(tree.map((f) => f.type)).toEqual(['text', 'pagebreak', 'text', 'pagebreak', 'text']);
+    expect(tree[1]).toMatchObject({ pageTitle: 'Employment', pageDescription: 'Current role' });
+    expect(tree[3].pageTitle).toBeUndefined();
+    expect(new Set(tree.map((f) => f.name)).size).toBe(5);
+  });
+
+  it('opens with a page break when the first page has a title of its own', () => {
+    const json = makeSurveyJson([
+      { name: 'page1', title: 'Personal', elements: [{ type: 'text', name: 'a' }] },
+    ] as SurveyJson['pages']);
+    const tree = buildQuestionTree(json);
+    expect(tree.map((f) => f.type)).toEqual(['pagebreak', 'text']);
+    expect(tree[0].pageTitle).toBe('Personal');
+  });
+
+  it('adds no page break to an untitled single-page form', () => {
+    const json = makeSurveyJson([{ name: 'page1', elements: [{ type: 'text', name: 'a' }] }]);
+    expect(buildQuestionTree(json).map((f) => f.type)).toEqual(['text']);
+  });
+
   it('builds a tree preserving panel hierarchy', () => {
     const json = makeSurveyJson([
       {
@@ -346,7 +375,7 @@ describe('buildQuestionTree', () => {
       { name: 'page2', elements: [{ type: 'number', _id: 'b1' }] },
     ]);
     const tree = buildQuestionTree(json);
-    expect(tree).toHaveLength(2);
+    expect(tree.map((f) => f.type)).toEqual(['text', 'pagebreak', 'number']);
   });
 
   it('rehydrates saved dynamic matrix fields with column editor settings', () => {
