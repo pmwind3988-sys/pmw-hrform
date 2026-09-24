@@ -863,6 +863,26 @@ function wysPlaceholder(field: FormBuilderField): string {
   return "Short answer…";
 }
 
+/**
+ * The heading a row carries on the sheet. A page break names its section in
+ * `pageTitle`, not `title`, so reading `title` alone drew every section an
+ * author had named as "(no label)".
+ */
+function fieldRowTitle(field: FormBuilderField): string {
+  if (field.type === "pagebreak") return field.pageTitle || field.title || "New page";
+  return field.title || "(no label)";
+}
+
+/**
+ * A section's description has nowhere else to appear: a panel draws its
+ * children instead of a control, and a page break draws a bare rule.
+ */
+function sectionDescription(field: FormBuilderField): string {
+  if (field.type === "pagebreak") return field.pageDescription || "";
+  if (wysKind(field.type) === "container") return field.description || "";
+  return "";
+}
+
 /** How many options one field's canvas card previews before it summarises the rest. */
 const WYS_CHOICE_PREVIEW_LIMIT = 6;
 
@@ -930,6 +950,7 @@ function FieldRow({ field, index, selected, onSelect, onRemove, onDuplicate, onM
   const managed = isManagedCompanyChoice(field);
   const isContainer = wysKind(field.type) === "container";
   const children = Array.isArray(field.elements) ? field.elements : [];
+  const sectionNote = sectionDescription(field);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
@@ -980,7 +1001,7 @@ function FieldRow({ field, index, selected, onSelect, onRemove, onDuplicate, onM
       <div className="bx-fieldrow-label">
         <FieldIcon type={field.type} size={17} />
         <span>
-          {field.title || "(no label)"}
+          {fieldRowTitle(field)}
           {field.isRequired ? " *" : ""}
         </span>
         {managed && <span className="bx-tag bx-tag-accent">Managed</span>}
@@ -988,6 +1009,7 @@ function FieldRow({ field, index, selected, onSelect, onRemove, onDuplicate, onM
         {field.readOnly && <span className="bx-tag bx-tag-neutral">Read-only</span>}
         {field.startWithNewLine === false && <span className="bx-tag bx-tag-neutral">Inline</span>}
       </div>
+      {sectionNote && <div className="bx-fieldrow-note">{sectionNote}</div>}
 
       <WysControl field={field}>
         {isContainer && (

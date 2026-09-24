@@ -1134,6 +1134,13 @@ textarea.bx-input {
   flex: none;
   color: var(--bx-a700);
 }
+.bx-fieldrow-note {
+  margin: -4px 0 10px;
+  padding-right: 150px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--bx-n700);
+}
 .bx-rowtools {
   position: absolute;
   top: 12px;
@@ -1508,7 +1515,8 @@ textarea.bx-input {
   .bx-navhome {
     width: 46px;
   }
-  .bx-fieldrow-label {
+  .bx-fieldrow-label,
+  .bx-fieldrow-note {
     padding-right: 118px;
   }
   .bx-rowtools {
