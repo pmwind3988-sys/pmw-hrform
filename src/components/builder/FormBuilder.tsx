@@ -886,10 +886,108 @@ function sectionDescription(field: FormBuilderField): string {
 /** How many options one field's canvas card previews before it summarises the rest. */
 const WYS_CHOICE_PREVIEW_LIMIT = 6;
 
+/** How many body rows a matrix draws on the sheet before summarising the rest. */
+const WYS_MATRIX_ROW_LIMIT = 5;
+
+type SheetMatrixColumn = { name: string; title: string; cellType: string; group: string; presetValues: string[]; multiSelect: boolean };
+
+/**
+ * A matrix's columns, whichever shape they were saved in. The palette seeds a
+ * new Dynamic Matrix with bare header strings, and older forms carry
+ * `tableConfigColumns` with `type` rather than `cellType`.
+ */
+function sheetMatrixColumns(field: FormBuilderField): SheetMatrixColumn[] {
+  const raw: unknown[] = Array.isArray(field.columns) && field.columns.length
+    ? field.columns
+    : Array.isArray(field.tableConfigColumns) ? field.tableConfigColumns : [];
+  return raw.map((col, i) => {
+    if (typeof col === "string") return { name: `col${i + 1}`, title: col, cellType: "text", group: "", presetValues: [], multiSelect: false };
+    const c = (col ?? {}) as Record<string, unknown>;
+    return {
+      name: String(c.name ?? `col${i + 1}`),
+      title: String(c.title || c.name || `Column ${i + 1}`),
+      cellType: String(c.cellType || c.type || "text"),
+      group: typeof c.group === "string" ? c.group.trim() : "",
+      presetValues: Array.isArray(c.presetValues) ? c.presetValues.map(String) : [],
+      multiSelect: !!c.multiSelect,
+    };
+  });
+}
+
+function MatrixCell({ column, preset }: { column: SheetMatrixColumn; preset?: string }) {
+  if (column.presetValues.length > 0) return <span className="bx-wys-matrix-preset">{preset ?? ""}</span>;
+  if (column.cellType === "checkbox" || column.cellType === "boolean") return <span className="bx-wys-mark" />;
+  const hint = column.cellType === "dropdown" ? (column.multiSelect ? "Select…" : "Select")
+    : column.cellType === "date" ? "dd / mm / yyyy"
+      : column.cellType === "number" ? "0"
+        : "";
+  return (
+    <span className="bx-wys-matrix-input">
+      <span>{hint}</span>
+      {column.cellType === "dropdown" && <Icon name="chevdown" size={12} strokeWidth={1.6} />}
+    </span>
+  );
+}
+
+/**
+ * Draws a matrix as the table the respondent will fill in — its banner groups,
+ * column headers and preset rows — instead of a blank placeholder, so an author
+ * can see what they built without opening the preview.
+ */
+function MatrixSheetPreview({ field }: { field: FormBuilderField }) {
+  const columns = sheetMatrixColumns(field);
+  if (columns.length === 0) {
+    return <div className="bx-wys bx-wys-block">No columns yet — add them under Options in the properties panel.</div>;
+  }
+
+  // Consecutive columns sharing a group heading sit under one banner cell.
+  const hasGroups = columns.some(c => c.group);
+  const bands: { label: string; span: number }[] = [];
+  for (const c of columns) {
+    const last = bands[bands.length - 1];
+    if (last && last.label === c.group) last.span += 1;
+    else bands.push({ label: c.group, span: 1 });
+  }
+
+  const presetCount = columns.reduce((most, c) => Math.max(most, c.presetValues.length), 0);
+  const totalRows = presetCount > 0 ? presetCount : Math.max(1, Math.min(field.minRows ?? 1, WYS_MATRIX_ROW_LIMIT));
+  const shownRows = Math.min(totalRows, WYS_MATRIX_ROW_LIMIT);
+  const hiddenRows = totalRows - shownRows;
+
+  return (
+    <div className="bx-wys-matrix">
+      <div className="bx-wys-matrix-scroll">
+        <table>
+          <thead>
+            {hasGroups && (
+              <tr className="bx-wys-matrix-band">
+                {bands.map((b, i) => <th key={i} colSpan={b.span}>{b.label}</th>)}
+              </tr>
+            )}
+            <tr>
+              {columns.map((c, i) => <th key={`${c.name}-${i}`}>{c.title}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: shownRows }, (_, r) => (
+              <tr key={r}>
+                {columns.map((c, i) => <td key={`${c.name}-${i}`}><MatrixCell column={c} preset={c.presetValues[r]} /></td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {hiddenRows > 0 && <div className="bx-wys-choice-more" style={{ paddingLeft: 0 }}>+{hiddenRows} more row{hiddenRows === 1 ? "" : "s"}</div>}
+      {presetCount === 0 && <span className="bx-wys-chip bx-wys-matrix-add">+ {(field.addRowText as string) || "Add row"}</span>}
+    </div>
+  );
+}
+
 function WysControl({ field, children }: { field: FormBuilderField; children?: React.ReactNode }) {
   const kind = wysKind(field.type);
   const placeholder = wysPlaceholder(field);
 
+  if (field.type === "dynamicmatrix" || field.type === "tableinput") return <MatrixSheetPreview field={field} />;
   if (kind === "rule") return <div className="bx-wys-rule" />;
   if (kind === "container") return <>{children}</>;
   if (kind === "block") return <div className="bx-wys bx-wys-block">{placeholder}</div>;
