@@ -961,7 +961,7 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           "children": [
             {
               "children": [
-                "SIGNATURES",
+                "SIGN-OFF",
               ],
               "props": {
                 "style": [
@@ -981,124 +981,132 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
               },
               "type": "TEXT",
             },
-            [
-              {
-                "children": [
-                  {
-                    "children": [
-                      {
-                        "children": [
-                          "Layer ",
-                          1,
-                          " - ",
-                          "Approval",
-                        ],
-                        "props": {
-                          "style": {
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        "Approved By",
+                      ],
+                      "props": {
+                        "style": [
+                          {
                             "color": "#5A6880",
-                            "fontSize": 5.5,
+                            "fontSize": 6.5,
+                            "fontWeight": "bold",
                             "letterSpacing": 0.4,
                             "textTransform": "uppercase",
                           },
-                        },
-                        "type": "TEXT",
+                          {},
+                        ],
                       },
-                      {
-                        "children": [
-                          "manager@example.com",
-                          " - ",
-                          {
-                            "children": [
-                              "APPROVED",
-                            ],
-                            "props": {
-                              "style": {
-                                "color": "#137536",
-                              },
+                      "type": "TEXT",
+                    },
+                    {
+                      "children": [
+                        {
+                          "children": [],
+                          "props": {
+                            "src": "data:image/png;base64,iVBORw0KGgo=",
+                            "style": {
+                              "maxHeight": 32,
+                              "maxWidth": 110,
+                              "objectFit": "contain",
                             },
-                            "type": "TEXT",
                           },
-                        ],
-                        "props": {
-                          "style": {
-                            "color": "#101828",
-                            "fontSize": 8,
-                            "fontWeight": "bold",
-                            "marginTop": 1,
-                          },
+                          "type": "IMAGE",
                         },
-                        "type": "TEXT",
-                      },
-                      {
-                        "children": [
-                          "02/09/2026 10:00 AM",
-                          "",
-                        ],
-                        "props": {
-                          "style": {
-                            "color": "#5A6880",
-                            "fontSize": 5.5,
-                            "marginTop": 1,
-                          },
+                      ],
+                      "props": {
+                        "style": {
+                          "alignItems": "flex-start",
+                          "height": 34,
+                          "justifyContent": "flex-end",
+                          "marginTop": 2,
                         },
-                        "type": "TEXT",
                       },
-                    ],
-                    "props": {
-                      "style": {
-                        "flex": 1,
-                      },
+                      "type": "VIEW",
                     },
-                    "type": "VIEW",
-                  },
-                  {
-                    "children": [
-                      {
-                        "children": [],
-                        "props": {
-                          "src": "data:image/png;base64,iVBORw0KGgo=",
-                          "style": {
-                            "maxHeight": 34,
-                            "maxWidth": 92,
-                            "objectFit": "contain",
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            "manager@example.com",
+                          ],
+                          "props": {
+                            "style": {
+                              "color": "#101828",
+                              "fontSize": 8,
+                              "fontWeight": "bold",
+                            },
                           },
+                          "type": "TEXT",
                         },
-                        "type": "IMAGE",
+                        {
+                          "children": [
+                            "Layer 1",
+                          ],
+                          "props": {
+                            "style": {
+                              "color": "#5A6880",
+                              "fontSize": 7,
+                              "marginTop": 1,
+                            },
+                          },
+                          "type": "TEXT",
+                        },
+                        {
+                          "children": [
+                            "Date: ",
+                            "02/09/2026 10:00 AM",
+                          ],
+                          "props": {
+                            "style": {
+                              "color": "#5A6880",
+                              "fontSize": 6,
+                              "marginTop": 2,
+                            },
+                          },
+                          "type": "TEXT",
+                        },
+                      ],
+                      "props": {
+                        "style": {
+                          "borderTopColor": "#101828",
+                          "borderTopWidth": 0.75,
+                          "paddingTop": 3,
+                        },
                       },
-                    ],
-                    "props": {
-                      "style": {
-                        "alignItems": "flex-end",
-                        "justifyContent": "center",
-                        "marginLeft": "auto",
-                        "minHeight": 34,
-                        "width": 92,
-                      },
+                      "type": "VIEW",
                     },
-                    "type": "VIEW",
+                  ],
+                  "props": {
+                    "style": {
+                      "marginBottom": 14,
+                      "paddingRight": 14,
+                      "width": "33.33%",
+                    },
+                    "wrap": false,
                   },
-                ],
-                "props": {
-                  "style": {
-                    "alignItems": "center",
-                    "backgroundColor": "#FAFBFD",
-                    "borderColor": "#E5E9F0",
-                    "borderWidth": 0.5,
-                    "flexDirection": "row",
-                    "marginBottom": 4,
-                    "marginTop": 3,
-                    "padding": 7,
-                  },
-                  "wrap": false,
+                  "type": "VIEW",
                 },
-                "type": "VIEW",
+              ],
+              "props": {
+                "style": {
+                  "flexDirection": "row",
+                  "flexWrap": "wrap",
+                  "marginTop": 6,
+                },
               },
-            ],
+              "type": "VIEW",
+            },
           ],
           "props": {
             "style": {
               "marginBottom": 18,
             },
+            "wrap": false,
           },
           "type": "VIEW",
         },

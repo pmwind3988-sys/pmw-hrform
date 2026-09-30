@@ -77,14 +77,20 @@ export const S = StyleSheet.create({
   colTime: { width: "20%" },
   colReason: { width: "28%" },
 
-  // ── Signature block ──
-  sigBlock: { flexDirection: "row", alignItems: "center", marginTop: 3, marginBottom: 4, padding: 7, backgroundColor: C.bgAlt, borderWidth: 0.5, borderColor: C.borderLight },
-  sigLine: { flex: 1 },
-  sigLabel: { fontSize: 5.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 },
-  sigName: { fontSize: 8, fontWeight: "bold", color: C.text, marginTop: 1 },
-  sigDetail: { fontSize: 5.5, color: C.muted, marginTop: 1 },
-  sigImageBox: { width: 92, minHeight: 34, marginLeft: "auto", justifyContent: "center", alignItems: "flex-end" },
-  sigImage: { maxWidth: 92, maxHeight: 34, objectFit: "contain" },
+  // ── Sign-off blocks ──
+  // Laid out like the foot of a paper form: caption, space to sign, a rule,
+  // then the name and post under it — the space and rule only when there is
+  // a drawn signature to sit on them. Three to a row.
+  signOffGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 6 },
+  signOffCell: { width: "33.33%", paddingRight: 14, marginBottom: 14 },
+  signOffLabel: { fontSize: 6.5, fontWeight: "bold", color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 },
+  signOffSigArea: { height: 34, justifyContent: "flex-end", alignItems: "flex-start", marginTop: 2 },
+  signOffSigImage: { maxWidth: 110, maxHeight: 32, objectFit: "contain" },
+  signOffRule: { borderTopWidth: 0.75, borderTopColor: C.text, paddingTop: 3 },
+  signOffUnsigned: { marginTop: 3 },
+  signOffName: { fontSize: 8, fontWeight: "bold", color: C.text },
+  signOffPosition: { fontSize: 7, color: C.muted, marginTop: 1 },
+  signOffDetail: { fontSize: 6, color: C.muted, marginTop: 2 },
 
   // ── Field rows ──
   fieldRow: { flexDirection: "row", paddingVertical: 3, paddingHorizontal: 4, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },

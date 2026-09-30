@@ -18,6 +18,7 @@ import {
 import { footerContentForPage } from "../pdfTemplate/footer";
 import { resolveSpan } from "../pdfTemplate/resolve";
 import type { PdfSectionContext } from "./context";
+import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
 import type { TemplateFooter } from "../pdfTemplate/types";
 
 export { C, S };
@@ -142,28 +143,48 @@ export function ApprovalsSection({ ctx }: { ctx: PdfSectionContext }) {
   );
 }
 
+/**
+ * Who signed each decided layer, and in which post — the foot of a paper form.
+ *
+ * Every personally decided layer gets a block, not only those with a drawn
+ * signature: a checkbox approval is signed just as surely, and the record has
+ * to name its signer. A layer closed on paper or rejected by an earlier
+ * layer's cascade records no decision of its own and is left out.
+ */
 export function SignaturesSection({ ctx }: { ctx: PdfSectionContext }) {
   const { layerResults } = ctx.data;
   if (ctx.layoutConfig?.showSignatures === false) return null;
-  if (!layerResults || layerResults.filter((l) => l.signature).length === 0) return null;
+  const signed = (layerResults ?? [])
+    .map((layer) => ({ layer, verdict: signOffVerdictFromStatus(layer.status) }))
+    .filter((entry): entry is { layer: typeof entry.layer; verdict: NonNullable<typeof entry.verdict> } => entry.verdict !== null);
+  if (signed.length === 0) return null;
   return (
-    <View style={S.approvalPageSection}>
-      <Text style={[S.sectionLabel, { borderBottomColor: ctx.primary }]}>SIGNATURES</Text>
-      {layerResults.filter((l) => l.signature).map((layer, i) => {
-        const badge = badgeStyle(layer.status);
-        return (
-          <View key={i} style={S.sigBlock} wrap={false}>
-            <View style={S.sigLine}>
-              <Text style={S.sigLabel}>Layer {layer.layerNumber} - {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
-              <Text style={S.sigName}>{layer.email || ""} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
-              <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}{layer.rejection ? ` - Reason: ${layer.rejection}` : ""}</Text>
+    <View style={S.approvalPageSection} wrap={false}>
+      <Text style={[S.sectionLabel, { borderBottomColor: ctx.primary }]}>SIGN-OFF</Text>
+      <View style={S.signOffGrid}>
+        {signed.map(({ layer, verdict }, i) => {
+          const name = signOffName(layer.signerName || layer.confirmerName, layer.email);
+          const position = signOffPosition(layer.signerPosition, layer.layerTitle || `Layer ${layer.layerNumber}`);
+          return (
+            <View key={i} style={S.signOffCell} wrap={false}>
+              <Text style={[S.signOffLabel, verdict === "rejected" ? { color: C.redText } : {}]}>{signOffLabel(verdict)}</Text>
+              {/* Space to sign and the rule under it only when something was
+                  signed — an empty line reads as a signature missing. */}
+              {layer.signature ? (
+                <View style={S.signOffSigArea}>
+                  <Image style={S.signOffSigImage} src={layer.signature} />
+                </View>
+              ) : null}
+              <View style={layer.signature ? S.signOffRule : S.signOffUnsigned}>
+                <Text style={S.signOffName}>{name || " "}</Text>
+                {position ? <Text style={S.signOffPosition}>{position}</Text> : null}
+                <Text style={S.signOffDetail}>Date: {fmtDate(layer.signedAt)}</Text>
+                {verdict === "rejected" && layer.rejection ? <Text style={S.signOffDetail}>Reason: {layer.rejection}</Text> : null}
+              </View>
             </View>
-            <View style={S.sigImageBox}>
-              <Image style={S.sigImage} src={layer.signature} />
-            </View>
-          </View>
-        );
-      })}
+          );
+        })}
+      </View>
     </View>
   );
 }

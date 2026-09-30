@@ -478,6 +478,13 @@ function mapSubmission(
       const signedAtVal = raw[`L${n}_SignedAt`] ? String(raw[`L${n}_SignedAt`]) : null;
       const rejectionVal = raw[`L${n}_Rejection`] ? String(raw[`L${n}_Rejection`]) : null;
       const signatureVal = raw[`L${n}_Signature`] ? String(raw[`L${n}_Signature`]) : null;
+      const signer = {
+        actedBy: raw[`L${n}_ActedBy`] ? String(raw[`L${n}_ActedBy`]) : null,
+        actedByName: raw[`L${n}_ActedByName`] ? String(raw[`L${n}_ActedByName`]) : null,
+        actedByPosition: raw[`L${n}_ActedByPosition`] ? String(raw[`L${n}_ActedByPosition`]) : null,
+        layerTitle: lc.title?.trim() || null,
+        rawStatus: statusVal,
+      };
       const canonicalStatus = normalizeLayerStatus(statusVal);
       const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
       layerStatusValues[i] = statusVal;
@@ -489,6 +496,7 @@ function mapSubmission(
         signedAt: signedAtVal,
         rejectionReason: rejectionDisplay,
         signature: signatureVal,
+        ...signer,
       });
 
       if (lc.type === "evaluation") {
@@ -510,6 +518,9 @@ function mapSubmission(
           confirmedAt: evalData?.confirmedAt ?? null,
           fields: evalData?.fields ?? {},
           notes: evalData?.notes ?? (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal ?? undefined : undefined),
+          signedAt: signedAtVal,
+          confirmerName: evalData?.confirmerName ?? null,
+          ...signer,
         });
       } else {
         enhancedLayers.push({
@@ -522,6 +533,7 @@ function mapSubmission(
           rejectionReason: rejectionDisplay,
           signature: signatureVal,
           confirmedVia: (lc as ApprovalLayerConfig).confirmationType ?? "signature",
+          ...signer,
         });
       }
     }
@@ -533,6 +545,9 @@ function mapSubmission(
       const signedAtVal = raw[`L${i}_SignedAt`] ? String(raw[`L${i}_SignedAt`]) : null;
       const rejectionVal = raw[`L${i}_Rejection`] ? String(raw[`L${i}_Rejection`]) : null;
       const signatureVal = raw[`L${i}_Signature`] ? String(raw[`L${i}_Signature`]) : null;
+      const actedByVal = raw[`L${i}_ActedBy`] ? String(raw[`L${i}_ActedBy`]) : null;
+      const actedByNameVal = raw[`L${i}_ActedByName`] ? String(raw[`L${i}_ActedByName`]) : null;
+      const actedByPositionVal = raw[`L${i}_ActedByPosition`] ? String(raw[`L${i}_ActedByPosition`]) : null;
       const canonicalStatus = normalizeLayerStatus(statusVal);
       const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
       layerStatusValues[i - 1] = statusVal;
@@ -547,6 +562,10 @@ function mapSubmission(
           signedAt: signedAtVal,
           rejectionReason: rejectionDisplay,
           signature: signatureVal,
+          actedBy: actedByVal,
+          actedByName: actedByNameVal,
+          actedByPosition: actedByPositionVal,
+          rawStatus: statusVal,
         });
       }
     }

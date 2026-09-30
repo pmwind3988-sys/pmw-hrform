@@ -2045,6 +2045,10 @@ function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
       { n: `L${n}_NotifyEmails`, k: 3, ml: true },
       // Which of the allowed addresses completed the layer.
       { n: `L${n}_ActedBy`, k: 2 },
+      // The name and post the decision was signed with, stamped at signing so
+      // a later promotion does not rewrite the record. See src/utils/signOff.ts.
+      { n: `L${n}_ActedByName`, k: 2 },
+      { n: `L${n}_ActedByPosition`, k: 2 },
       { n: `L${n}_SignedAt`, k: 4 },
       { n: `L${n}_Rejection`, k: 3, ml: true },
       { n: `L${n}_Signature`, k: 3, ml: true },

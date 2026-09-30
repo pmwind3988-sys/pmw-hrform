@@ -2,6 +2,7 @@
  * EvaluationSummary.tsx — Read-only display of evaluation layer results.
  * Shows evaluator name, date, and field values.
  */
+import type { ReactNode } from "react";
 import type { EvaluationLayerResult } from "../../types";
 import { ratingStepLabel } from "../../utils/ratingLabels";
 import { editorial } from "../../theme/editorial";
@@ -11,6 +12,8 @@ interface EvaluationSummaryProps {
   layerTitle?: string;
   layerDescription?: string;
   surveyElements?: Record<string, unknown>[];
+  /** Drawn at the foot of the card — the "Evaluated By" sign-off, where there is one. */
+  footer?: ReactNode;
 }
 
 interface EvaluationFieldDefinition {
@@ -178,7 +181,7 @@ const fieldRowStyle: React.CSSProperties = {
   borderBottom: "1px solid #F0EEF8",
 };
 
-export default function EvaluationSummary({ result, layerTitle, layerDescription, surveyElements }: EvaluationSummaryProps) {
+export default function EvaluationSummary({ result, layerTitle, layerDescription, surveyElements, footer }: EvaluationSummaryProps) {
   if (!result || result.status !== "confirmed") {
     return (
       <div style={cardStyle}>
@@ -249,6 +252,8 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
           <div style={{ color: editorial.accentText }}>{result.notes}</div>
         </div>
       )}
+
+      {footer && <div style={{ marginTop: 16 }}>{footer}</div>}
     </div>
   );
 }
