@@ -30,6 +30,7 @@ import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
 import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
 import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
+import { sharePointTokenFrom, testRunTesterMayAct } from "./_utils/testRunReviewer.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
 
 /**
@@ -637,7 +638,12 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       if (!routePrefixAllowsLayerType(firstQueryValue(req.query.prefix), String(foundToken.type || ""), allFields.Created)) {
         return res.status(403).json({ error: "This link does not match the step it points at. Please use the link that was emailed to you." });
       }
-      if (!isLayerActor(viewerEmail, allFields[`L${foundLayerNumber}_Emails`], allFields[`L${foundLayerNumber}_Email`])) {
+      // A test run's steps stay assigned to the real people; its tester may act
+      // too, once proved a builder superuser. See _utils/testRunReviewer.ts.
+      if (
+        !isLayerActor(viewerEmail, allFields[`L${foundLayerNumber}_Emails`], allFields[`L${foundLayerNumber}_Email`])
+        && !(await testRunTesterMayAct(allFields, viewerEmail, sharePointTokenFrom(req.headers as Record<string, string | string[] | undefined>)))
+      ) {
         logWarn("api:evaluate:get", "Refused a signed-in reviewer a step they are not assigned", {
           layerNumber: foundLayerNumber,
           responseItemId,
@@ -995,7 +1001,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (!routePrefixAllowsLayerType(typeof prefix === "string" ? prefix : "", String(layer.type || ""), itemFields.Created)) {
         return res.status(403).json({ error: "This link does not match the step it points at. Please use the link that was emailed to you." });
       }
-      if (!isLayerActor(viewerEmail, itemFields[`L${layerNumber}_Emails`], itemFields[`L${layerNumber}_Email`])) {
+      // Same rule as the read path: the tester of a test run may decide too.
+      if (
+        !isLayerActor(viewerEmail, itemFields[`L${layerNumber}_Emails`], itemFields[`L${layerNumber}_Email`])
+        && !(await testRunTesterMayAct(itemFields, viewerEmail, sharePointTokenFrom(req.headers as Record<string, string | string[] | undefined>)))
+      ) {
         logWarn("api:evaluate", "Refused a signed-in decision on a step the caller is not assigned", {
           layerNumber,
           responseItemId: safeResponseItemId,

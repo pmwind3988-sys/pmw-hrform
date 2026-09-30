@@ -589,7 +589,9 @@ export default function EvaluationPage() {
           + `&responseItemId=${encodeURIComponent(String(respItemId))}`
           + `&layerNumber=${encodeURIComponent(String(displayLayerNumber))}`
           + `&prefix=${routePrefix}`,
-          { headers: await apiIdentityHeaders(instance, accounts[0]) },
+          // The SharePoint token rides along so the tester of a test run can be
+          // proved a builder superuser; see api/_utils/testRunReviewer.ts.
+          { headers: { ...(await apiIdentityHeaders(instance, accounts[0])), "X-SharePoint-Token": token } },
         );
         const json = await res.json();
         if (!res.ok || !json.success) {
@@ -740,6 +742,7 @@ export default function EvaluationPage() {
         headers: {
           "Content-Type": "application/json",
           ...(await apiIdentityHeaders(instance, accounts[0])),
+          "X-SharePoint-Token": token,
         },
         body: JSON.stringify({
           slug: formSlug,
