@@ -365,10 +365,11 @@ export function isPersonEmail(value: string): boolean {
 
 /**
  * A staff number reduced to a comparable key. Typed by hand on every form, so
- * case and stray spaces are not allowed to make one person into two.
+ * case and spaces — anywhere, not just at the ends: the directory holds a
+ * "PC 069" that its owner types as "PC069" — must not make one person into two.
  */
 export function employeeIdKey(value: string): string {
-  return value.trim().toUpperCase();
+  return value.replace(/\s+/g, "").toUpperCase();
 }
 
 /** The directory as "is this person already listed" needs to see it. */

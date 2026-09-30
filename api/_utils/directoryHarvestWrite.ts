@@ -22,12 +22,12 @@ import {
   createListItem,
   getListColumns,
   graphFieldEquals,
+  queryAllListItems,
   queryListItems,
 } from "./graphClient.js";
 import {
   APPROVAL_DIRECTORY_COLUMNS,
   APPROVAL_DIRECTORY_LIST,
-  directoryEmailKey,
   directoryIsUsable,
   directoryTracksConfirmation,
   mapDirectoryColumns,
@@ -38,7 +38,6 @@ import { DEPARTMENT_APPROVER_DEFAULTS } from "./departmentApproverLookup.js";
 import {
   buildDirectoryIndex,
   buildHarvestCandidate,
-  employeeIdKey,
   harvestApproverEmail,
   harvestNote,
   harvestSource,
@@ -115,9 +114,11 @@ async function directoryColumns(token: string): Promise<DirectoryColumnMap | nul
 /**
  * Whether this person already has a row, active or not.
  *
- * Reads only the rows sharing their staff number or their address, then asks
- * the same `isListedInDirectory` the signed-in path and the scan use, so the
- * three cannot disagree about who is new.
+ * Reads the whole directory, as the signed-in path does, then asks the same
+ * `isListedInDirectory` it and the scan use, so the three cannot disagree
+ * about who is new. A `$filter` on the staff number cannot do that: SharePoint
+ * compares the stored text exactly, so "PC069" would never find "PC 069". The
+ * directory is one row per member of staff — a page or two, not a scan.
  */
 async function alreadyListed(
   token: string,
@@ -126,14 +127,8 @@ async function alreadyListed(
 ): Promise<boolean> {
   if (!map.personEmail) return true;
   try {
-    const filters = [graphFieldEquals(map.personEmail, directoryEmailKey(candidate.personEmail))];
-    const id = employeeIdKey(candidate.employeeId);
-    if (id && map.employeeId) filters.push(graphFieldEquals(map.employeeId, candidate.employeeId.trim()));
-
-    const matches = (await Promise.all(filters.map((filter) =>
-      queryListItems(token, APPROVAL_DIRECTORY_LIST, { filter, top: 20, preferNonIndexed: true }))))
-      .flat();
-    const rows = matches.map((match) => toApprovalDirectoryRow(match.fields, map));
+    const items = await queryAllListItems(token, APPROVAL_DIRECTORY_LIST);
+    const rows = items.map((item) => toApprovalDirectoryRow(item.fields, map));
     return isListedInDirectory(buildDirectoryIndex(rows), candidate);
   } catch (error) {
     // A read that failed is not evidence the person is new. Treat them as
