@@ -12,10 +12,12 @@
  */
 import {
   DIRECTORY_SOURCE,
+  buildDirectoryIndex,
   buildHarvestCandidate,
   harvestApproverEmail,
   harvestNote,
   harvestSource,
+  isListedInDirectory,
   type DirectoryHarvestCandidate,
   type DirectoryHarvestConfig,
 } from "./directoryHarvest";
@@ -26,7 +28,6 @@ import {
   type DirectoryRowOrigin,
 } from "./approvalDirectory";
 import {
-  directoryEmailKey,
   directoryTracksConfirmation,
   type ApprovalDirectoryRow,
   type DirectoryColumnMap,
@@ -123,11 +124,6 @@ export interface HarvestResult {
   note: string;
 }
 
-/** Everyone already in the directory, keyed for comparison. */
-export function directoryEmailSet(rows: ApprovalDirectoryRow[]): Set<string> {
-  return new Set(rows.map((row) => directoryEmailKey(row.personEmail)).filter(Boolean));
-}
-
 /**
  * Harvests one submission's person, if this form asks for it and the person is
  * new. Returns null when there is nothing to do or nothing can be done.
@@ -164,7 +160,7 @@ export async function harvestSubmitter(
     return null;
   }
 
-  if (directoryEmailSet(rows).has(directoryEmailKey(candidate.personEmail))) return null;
+  if (isListedInDirectory(buildDirectoryIndex(rows), candidate)) return null;
 
   if (!directoryTracksConfirmation(columns)) {
     // Refuse rather than write a guess the list cannot mark as one, and tell

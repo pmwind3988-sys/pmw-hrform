@@ -41,6 +41,14 @@ export default defineConfig({
      */
     env: {
       VITE_SP_SITE_URL: 'https://sharepoint.invalid/sites/test',
+      /**
+       * Dates are formatted in the runner's local time, and the PDF snapshot
+       * was recorded in Malaysia (UTC+8) — where every user of this app is.
+       * CI runs on UTC, so the same test printed every time eight hours early
+       * and failed on every push. Pinning the zone makes the suite answer the
+       * same on a laptop in KL and a runner in Virginia.
+       */
+      TZ: 'Asia/Kuala_Lumpur',
     },
   },
 })

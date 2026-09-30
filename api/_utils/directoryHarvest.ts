@@ -364,6 +364,58 @@ export function isPersonEmail(value: string): boolean {
 }
 
 /**
+ * A staff number reduced to a comparable key. Typed by hand on every form, so
+ * case and stray spaces are not allowed to make one person into two.
+ */
+export function employeeIdKey(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+/** The directory as "is this person already listed" needs to see it. */
+export interface DirectoryIndex {
+  employeeIds: Set<string>;
+  /** Each listed address, with the staff numbers of the rows carrying it ("" for none). */
+  emails: Map<string, string[]>;
+}
+
+export function buildDirectoryIndex(
+  rows: Array<{ personEmail: string; employeeId: string }>,
+): DirectoryIndex {
+  const index: DirectoryIndex = { employeeIds: new Set(), emails: new Map() };
+  for (const row of rows) {
+    const id = employeeIdKey(row.employeeId || "");
+    if (id) index.employeeIds.add(id);
+    const email = (row.personEmail || "").trim().toLowerCase();
+    if (email) index.emails.set(email, [...(index.emails.get(email) ?? []), id]);
+  }
+  return index;
+}
+
+/**
+ * Whether the person a submission describes already has a row.
+ *
+ * The staff number decides first. Nobody types their address into these
+ * forms, so the address a candidate carries is usually built from whatever
+ * name they wrote this time — and people write a calling name as often as
+ * their full one. An admin who verified a row and corrected its address would
+ * otherwise see the same person harvested again on every submission.
+ *
+ * The address is only a fallback, for a form that does not ask for a staff
+ * number or a row that has none yet. A shared address with two *different*
+ * staff numbers is two people who share a name, not one person.
+ */
+export function isListedInDirectory(
+  index: DirectoryIndex,
+  candidate: Pick<DirectoryHarvestCandidate, "personEmail" | "employeeId">,
+): boolean {
+  const id = employeeIdKey(candidate.employeeId || "");
+  if (id && index.employeeIds.has(id)) return true;
+  const idsAtAddress = index.emails.get(candidate.personEmail.trim().toLowerCase());
+  if (!idsAtAddress) return false;
+  return !id || idsAtAddress.some((rowId) => !rowId || rowId === id);
+}
+
+/**
  * Reads the harvest settings off a parsed `LayerConfig`, or null when this
  * form was never switched on.
  *

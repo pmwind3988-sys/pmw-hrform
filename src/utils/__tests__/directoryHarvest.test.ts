@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   DIRECTORY_SOURCE,
+  buildDirectoryIndex,
   buildHarvestCandidate,
   guessEmailFromName,
   harvestApproverEmail,
@@ -11,6 +12,7 @@ import {
   harvestNote,
   harvestSource,
   hasEvaluationLayer,
+  isListedInDirectory,
   isPersonEmail,
   readHarvestConfig,
   type DirectoryHarvestCandidate,
@@ -503,6 +505,47 @@ describe("harvestNote", () => {
 
   it("stays on one line, so it cannot break the routing notes it joins", () => {
     expect(harvestNote(candidate({ emailWasGuessed: true }), "hod@pmw-group.com")).not.toContain("\n");
+  });
+});
+
+describe("isListedInDirectory", () => {
+  const row = (personEmail: string, employeeId: string) => ({ personEmail, employeeId });
+
+  it("recognises a verified person by staff number, whatever name and address they now carry", () => {
+    // Harvested as a guess from a full name, then corrected by an admin. The
+    // next submission uses a calling name, so its guessed address is new too.
+    const index = buildDirectoryIndex([row("faiz@pmw-group.com", "E-1042")]);
+    expect(isListedInDirectory(index, candidate({
+      personName: "Faiz",
+      personEmail: "faiz.rahman@pmw-group.com",
+      employeeId: "E-1042",
+    }))).toBe(true);
+  });
+
+  it("ignores case and stray spaces in a staff number typed by hand", () => {
+    const index = buildDirectoryIndex([row("faiz@pmw-group.com", "e-1042 ")]);
+    expect(isListedInDirectory(index, candidate({ employeeId: " E-1042" }))).toBe(true);
+  });
+
+  it("keeps two people apart when they share an address but not a staff number", () => {
+    // Two staff with the same name get the same address built from it.
+    const index = buildDirectoryIndex([row("ahmad.faiz@pmw-group.com", "E-1")]);
+    expect(isListedInDirectory(index, candidate({ employeeId: "E-2" }))).toBe(false);
+  });
+
+  it("matches on the address when the directory row has no staff number yet", () => {
+    const index = buildDirectoryIndex([row("Ahmad.Faiz@PMW-Group.com", "")]);
+    expect(isListedInDirectory(index, candidate({ employeeId: "E-1042" }))).toBe(true);
+  });
+
+  it("falls back to the address when the form does not ask for a staff number", () => {
+    const index = buildDirectoryIndex([row("ahmad.faiz@pmw-group.com", "E-1042")]);
+    expect(isListedInDirectory(index, candidate({ employeeId: "" }))).toBe(true);
+  });
+
+  it("answers no for somebody the directory has never heard of", () => {
+    const index = buildDirectoryIndex([row("siti@pmw-group.com", "E-7")]);
+    expect(isListedInDirectory(index, candidate())).toBe(false);
   });
 });
 
