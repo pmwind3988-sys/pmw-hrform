@@ -19,6 +19,7 @@ import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
+import { isSuperuserOnlyForm } from "../../utils/superuserOnlyForms";
 import { csvRow, downloadCsv } from "../../utils/csv";
 import { rowsToHtml, getDynamicMatrixFields } from "../../utils/matrixData";
 import { getSelectedCompany } from "../../utils/companySelection";
@@ -145,17 +146,22 @@ export default function ResponseViewer() {
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) return;
 
-    createSpClient(instance, accounts)
-      .isGroupMember(SP_STATIC.adminGroup)
-      .then((admin) => {
-        setIsAdmin(admin);
+    // A test-only form's responses also need the superuser group, so an HR
+    // Forms Owner outside it cannot reach them by typing the URL.
+    const client = createSpClient(instance, accounts);
+    Promise.all([
+      client.isGroupMember(SP_STATIC.adminGroup),
+      isSuperuserOnlyForm(formTitle) ? client.isGroupMember(SP_STATIC.formBuilderSuperuserGroup) : true,
+    ])
+      .then(([admin, superuserIfNeeded]) => {
+        setIsAdmin(admin && superuserIfNeeded);
         setAdminChecked(true);
       })
       .catch(() => {
         setIsAdmin(false);
         setAdminChecked(true);
       });
-  }, [isAuthenticated, inProgress, instance, accounts]);
+  }, [isAuthenticated, inProgress, instance, accounts, formTitle]);
 
   // Get token
   useEffect(() => {
@@ -476,7 +482,11 @@ export default function ResponseViewer() {
         <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 17, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
-          <div style={{ color: C.textSecond }}>You need HR Form Owner permissions to view this page.</div>
+          <div style={{ color: C.textSecond }}>
+            {isSuperuserOnlyForm(formTitle)
+              ? "This form's responses are limited to Form Builder Superusers."
+              : "You need HR Form Owner permissions to view this page."}
+          </div>
           <div style={{ color: C.textMuted, marginTop: 8, fontSize: 13.5 }}>Please return to the dashboard.</div>
         </div>
       </div>

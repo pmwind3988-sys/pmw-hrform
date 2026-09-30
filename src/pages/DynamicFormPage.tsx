@@ -13,7 +13,9 @@ import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, getScopedListRows, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
-import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
+import { SharePointHttpError, createSpClient, isSharePointAccessDeniedError } from "../utils/sharepointClient";
+import { SP_STATIC } from "../utils/spConfig";
+import { isSuperuserOnlyForm } from "../utils/superuserOnlyForms";
 import { apiIdentityHeaders } from "../utils/apiIdentity";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -780,14 +782,19 @@ export default function DynamicFormPage() {
     // Reads the published form through the public endpoint, which resolves it with
     // the app-only credential. Used for guests, and as a fallback for signed-in
     // users whose own SharePoint permissions cannot reach the version lists.
-    const loadFromPublicApi = async () => {
+    //
+    // A test-only form is served only to a superuser (proven by the SharePoint
+    // token) or to a test run (proven by its ticket); the server checks both.
+    const loadFromPublicApi = async (accessToken?: string | null) => {
       const params = new URLSearchParams({ slug: formId });
       if (pinVersion) params.set("version", pinVersion);
       if (publishKey) params.set("publish", publishKey);
+      if (testTicket) params.set("testTicket", testTicket);
       const res = await fetch(`/api/form-config?${params.toString()}`, {
         headers: {
           "X-Requested-With": "XMLHttpRequest",
           ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
       });
       const contentType = res.headers.get("content-type") || "";
@@ -833,6 +840,15 @@ export default function DynamicFormPage() {
         surveyJson: parsed.surveyJson,
         meta: (parsed.meta || {}) as Record<string, unknown>,
       };
+    };
+
+    const isFormBuilderSuperuser = async (): Promise<boolean> => {
+      const client = createSpClient(instance, instance.getAllAccounts());
+      const [owner, superuser] = await Promise.all([
+        client.isGroupMember(SP_STATIC.adminGroup),
+        client.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
+      ]);
+      return owner && superuser;
     };
 
     const load = async () => {
@@ -892,12 +908,22 @@ export default function DynamicFormPage() {
           try {
             const direct = await loadFromSharePoint(token);
             if (cancelled) return;
+            if (isSuperuserOnlyForm(direct.formConfig.Title) && !(await isFormBuilderSuperuser())) {
+              // Not a superuser: only the server may let them in, and only on a
+              // genuine test run. It answers "not found" otherwise, and the
+              // submission then goes through the server too, which checks again.
+              const viaServer = await loadFromPublicApi(token);
+              if (cancelled) return;
+              spDirectUnavailableRef.current = true;
+              applyLoadedFormData(setFormData, viaServer);
+              return;
+            }
             spDirectUnavailableRef.current = false;
             applyLoadedFormData(setFormData, direct);
           } catch (spError) {
             let fallback: Awaited<ReturnType<typeof loadFromPublicApi>>;
             try {
-              fallback = await loadFromPublicApi();
+              fallback = await loadFromPublicApi(token);
             } catch {
               throw spError;
             }
@@ -936,7 +962,7 @@ export default function DynamicFormPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [formId, pinVersion, publishKey, isAuthenticated, authStateSettled, instance, activeAccountId]);
+  }, [formId, pinVersion, publishKey, testTicket, isAuthenticated, authStateSettled, instance, activeAccountId]);
 
   /*
     Resolve the instance link.
@@ -1970,6 +1996,9 @@ export default function DynamicFormPage() {
             // from the record. Sending it is a claim, not a shortcut.
             ...(instanceToken ? { instanceToken } : {}),
             ...(isTestRun ? { testTicket } : {}),
+            // A test-only form accepts this route only from a superuser, and
+            // the server proves that from their own SharePoint token.
+            ...(isSuperuserOnlyForm(cfg.Title) && tokenRef.current ? { delegatedToken: tokenRef.current } : {}),
           }),
         });
         const resData = await res.json().catch(() => ({})) as { id?: string; referenceNo?: string; error?: string };

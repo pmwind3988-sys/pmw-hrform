@@ -97,6 +97,13 @@ A layer's `assignee` can now resolve to more than one person, and the mail can g
 - Item-specific assignee metadata is stored in the response item's `WorkflowAssignmentData` Note column. `L{n}_Email` remains authoritative for routing and access checks.
 - Reassigning a layer also updates any existing `WorkflowEmailSchedule` recipient for that layer without changing its due date. Completed layers cannot be changed.
 
+### Superuser-only (test) forms
+- Forms named in `SUPERUSER_ONLY_FORM_TITLES` (`src/utils/superuserOnlyForms.ts`, mirrored at `api/_utils/superuserOnlyForms.ts` — a test keeps them identical) exist for testing. Currently: `ZZ TEST RUN`. Matched by title, case- and space-insensitive.
+- **Hidden** for anyone who is not HR Forms Owner + `superuser` (`canUseFormBuilder`): `App.tsx` drops them from `visibleLists`, which removes them from the dashboard, Forms, My Submissions and the submissions fetch in one place. `ResponseViewer` also requires the superuser group for them. Guest members' `guest-my-submissions` skips them.
+- **Refused server-side**: `form-config` answers 404 (and `private, no-store`) unless the caller sends a SharePoint token in `Authorization` that resolves to a superuser (`isFormBuilderSuperuser` in `api/_utils/hrFormsOwner.ts`), or a valid `testTicket` for that form. `submit-form` applies the same rule using `delegatedToken`/`testTicket` in the body. Minting a test ticket for one of these forms also requires a superuser, since a ticket opens the form to whoever holds its link.
+- `DynamicFormPage` sends a non-superuser through `form-config` instead of reading SharePoint directly, so the server decides.
+- **Not covered**: `/eval/...` links (only the people the workflow routed to receive them), and the user's own SharePoint permissions — anyone with read access on the `ZZ TEST RUN` list can still open it in SharePoint itself. Restrict the list's permissions there if that matters.
+
 ### Auth & MSAL
 - Auth state machine in `App.tsx`: `checking → loading → ready/wrong_tenant/error` or `guest/choice`.
 - Auth decision persisted in `localStorage` (`pmw_hr_auth_decision`). Post-login redirect in `sessionStorage` (`pmw_post_login_redirect`).

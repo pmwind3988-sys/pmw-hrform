@@ -1,5 +1,6 @@
 import { queryAllListItems, type GraphListItem } from "./graphClient.js";
 import { logWarn } from "./logger.js";
+import { isSuperuserOnlyForm } from "./superuserOnlyForms.js";
 
 /**
  * "What have I sent you?" for a guest member — their job applications and the
@@ -110,7 +111,9 @@ async function readFormSubmissions(
     new Set(
       forms
         .map((form) => String(form.fields?.Title ?? "").trim())
-        .filter((title) => title.length > 0),
+        // A guest member is never a superuser, so a test-only form's rows are
+        // never theirs to see — even ones filed under their own address.
+        .filter((title) => title.length > 0 && !isSuperuserOnlyForm(title)),
     ),
   );
 

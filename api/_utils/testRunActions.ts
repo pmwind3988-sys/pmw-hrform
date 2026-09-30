@@ -34,6 +34,12 @@ export interface MintTestTicketDeps {
    */
   resolveListTitleForSlug(slug: string): Promise<string | null>;
   ensureColumn(delegatedToken: string, listTitle: string, column: string): Promise<void>;
+  /**
+   * Whether this caller may rehearse this particular form. A ticket opens a
+   * form to whoever holds its link, so a test-only form's ticket must come
+   * from someone who could open that form themselves. Absent means yes.
+   */
+  mayTestForm?(delegatedToken: string, listTitle: string): Promise<boolean>;
 }
 
 export async function handleMintTestTicket(
@@ -59,6 +65,9 @@ export async function handleMintTestTicket(
   const listTitle = await deps.resolveListTitleForSlug(slug);
   if (!listTitle) {
     return { status: 400, payload: { error: "This form could not be found." } };
+  }
+  if (deps.mayTestForm && !(await deps.mayTestForm(delegatedToken, listTitle))) {
+    return { status: 403, payload: { error: "Only a Form Builder Superuser can start a test run of this form." } };
   }
 
   try {

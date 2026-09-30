@@ -23,6 +23,7 @@ import {
 } from "./utils/authRecovery";
 import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta, surveySnapshotKey } from "./utils/spConfig";
+import { withoutSuperuserOnlyForms } from "./utils/superuserOnlyForms";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
 import {
@@ -1013,7 +1014,13 @@ export default function App() {
         setLoadProgress(50);
 
         // Step 4: Filter visible lists
-        const visible = filterVisibleLists(allLists, adminResult, config.allowedTitles);
+        // Test-only forms are left out for anyone but a superuser, here, because
+        // this one list feeds the dashboard, Forms, My Submissions and the
+        // submissions fetch alike.
+        const visible = withoutSuperuserOnlyForms(
+          filterVisibleLists(allLists, adminResult, config.allowedTitles),
+          builderAccessResult,
+        );
         setVisibleLists(visible);
 
         // Step 5: Finalize
