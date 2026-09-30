@@ -527,6 +527,14 @@ describe("isListedInDirectory", () => {
     expect(isListedInDirectory(index, candidate({ employeeId: " E-1042" }))).toBe(true);
   });
 
+  it("ignores spaces inside a staff number, so \"PC 069\" and \"PC069\" are one person", () => {
+    const index = buildDirectoryIndex([row("ahmad.khalid@pmw-group.com", "PC 069")]);
+    expect(isListedInDirectory(index, candidate({
+      personEmail: "khalid.mustafa@pmw-group.com",
+      employeeId: "pc069",
+    }))).toBe(true);
+  });
+
   it("keeps two people apart when they share an address but not a staff number", () => {
     // Two staff with the same name get the same address built from it.
     const index = buildDirectoryIndex([row("ahmad.faiz@pmw-group.com", "E-1")]);
