@@ -372,22 +372,67 @@ export function employeeIdKey(value: string): string {
   return value.replace(/\s+/g, "").toUpperCase();
 }
 
+/**
+ * Words that end a person's own name: what follows is their father's name,
+ * which people give inconsistently ("bin Abdul Rahman", "bin Rahman", or
+ * nothing at all). `a/l` and `a/p` are caught before the slash is stripped.
+ */
+const PATRONYMIC_WORDS = new Set(["bin", "binti", "bt", "bte", "bn", "ibni", "anak"]);
+
+/** Titles that belong to how a name is said, not to whose name it is. */
+const NAME_TITLES = new Set([
+  "mr", "mrs", "ms", "miss", "dr", "prof", "ir", "hj", "hjh", "haji", "hajjah",
+  "encik", "en", "cik", "puan", "pn", "tuan", "datuk", "dato", "datin", "dtk", "tansri",
+]);
+
+/**
+ * A name reduced to the part that identifies the person, for matching somebody
+ * whose staff number cannot decide.
+ *
+ * A Malay or Indian name keeps only the person's own name — everything before
+ * bin/binti or a/l/a/p — because the father's name after it is written in
+ * full, shortened or left off from one form to the next. Any other name, a
+ * Chinese one included, has to match in full: "Siew Yoke" is not enough to
+ * be "Lee Siew Yoke". Titles and a nickname in brackets are dropped, and word
+ * order is not, since it is part of the name.
+ */
+export function personNameKey(name: string): string {
+  const words = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b[asd]\s*\/\s*[lpo]\b/g, " bin ")
+    .replace(/[^a-z]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .filter((word) => !NAME_TITLES.has(word));
+
+  const cut = words.findIndex((word) => PATRONYMIC_WORDS.has(word));
+  const own = cut > 0 ? words.slice(0, cut) : words.filter((word) => !PATRONYMIC_WORDS.has(word));
+  return own.join(" ");
+}
+
 /** The directory as "is this person already listed" needs to see it. */
 export interface DirectoryIndex {
   employeeIds: Set<string>;
   /** Each listed address, with the staff numbers of the rows carrying it ("" for none). */
   emails: Map<string, string[]>;
+  /** Each listed name, as `personNameKey` has it, with the staff numbers of its rows. */
+  names: Map<string, string[]>;
 }
 
 export function buildDirectoryIndex(
-  rows: Array<{ personEmail: string; employeeId: string }>,
+  rows: Array<{ personEmail: string; employeeId: string; personName?: string }>,
 ): DirectoryIndex {
-  const index: DirectoryIndex = { employeeIds: new Set(), emails: new Map() };
+  const index: DirectoryIndex = { employeeIds: new Set(), emails: new Map(), names: new Map() };
   for (const row of rows) {
     const id = employeeIdKey(row.employeeId || "");
     if (id) index.employeeIds.add(id);
     const email = (row.personEmail || "").trim().toLowerCase();
     if (email) index.emails.set(email, [...(index.emails.get(email) ?? []), id]);
+    const name = personNameKey(row.personName || "");
+    if (name) index.names.set(name, [...(index.names.get(name) ?? []), id]);
   }
   return index;
 }
@@ -401,19 +446,24 @@ export function buildDirectoryIndex(
  * their full one. An admin who verified a row and corrected its address would
  * otherwise see the same person harvested again on every submission.
  *
- * The address is only a fallback, for a form that does not ask for a staff
- * number or a row that has none yet. A shared address with two *different*
- * staff numbers is two people who share a name, not one person.
+ * When the staff number cannot decide — the form did not ask for one, or the
+ * row has none yet — the address and then the name (see `personNameKey`)
+ * stand in. Two *different* staff numbers always mean two people, however
+ * alike their address or name.
  */
 export function isListedInDirectory(
   index: DirectoryIndex,
-  candidate: Pick<DirectoryHarvestCandidate, "personEmail" | "employeeId">,
+  candidate: Pick<DirectoryHarvestCandidate, "personEmail" | "employeeId"> & { personName?: string },
 ): boolean {
   const id = employeeIdKey(candidate.employeeId || "");
   if (id && index.employeeIds.has(id)) return true;
-  const idsAtAddress = index.emails.get(candidate.personEmail.trim().toLowerCase());
-  if (!idsAtAddress) return false;
-  return !id || idsAtAddress.some((rowId) => !rowId || rowId === id);
+  // A row sharing the address or name is this person unless both carry
+  // staff numbers, and different ones.
+  const undecided = (rowIds: string[] | undefined) =>
+    !!rowIds && rowIds.some((rowId) => !id || !rowId || rowId === id);
+  if (undecided(index.emails.get(candidate.personEmail.trim().toLowerCase()))) return true;
+  const name = personNameKey(candidate.personName || "");
+  return !!name && undecided(index.names.get(name));
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   hasEvaluationLayer,
   isListedInDirectory,
   isPersonEmail,
+  personNameKey,
   readHarvestConfig,
   type DirectoryHarvestCandidate,
 } from "../directoryHarvest";
@@ -554,6 +555,73 @@ describe("isListedInDirectory", () => {
   it("answers no for somebody the directory has never heard of", () => {
     const index = buildDirectoryIndex([row("siti@pmw-group.com", "E-7")]);
     expect(isListedInDirectory(index, candidate())).toBe(false);
+  });
+});
+
+describe("personNameKey", () => {
+  it("keeps only the person's own name before bin or binti, without honorifics", () => {
+    expect(personNameKey("Hj. Ahmad Faiz Bin Abdul Rahman")).toBe(personNameKey("AHMAD FAIZ BIN RAHMAN"));
+    expect(personNameKey("Nor Asyrani Aimi Binti Noorafendi")).toBe(personNameKey("nor asyrani aimi bt. Ali"));
+  });
+
+  it("keeps only the person's own name before a/l or a/p", () => {
+    expect(personNameKey("Pavithrekumar a/l Selvaraj")).toBe(personNameKey("PAVITHREKUMAR A/L SELVA RAJ"));
+    expect(personNameKey("Ramesh A / P Rajagopal")).toBe(personNameKey("ramesh"));
+  });
+
+  it("needs the whole name when there is no bin, binti, a/l or a/p", () => {
+    expect(personNameKey("LEE SIEW YOKE")).toBe(personNameKey("Lee Siew Yoke"));
+    expect(personNameKey("Siew Yoke")).not.toBe(personNameKey("LEE SIEW YOKE"));
+  });
+
+  it("ignores a nickname in brackets", () => {
+    expect(personNameKey("YONG CHUN HEN (Steven)")).toBe(personNameKey("Yong Chun Hen"));
+  });
+
+  it("gives nothing for a blank name, so blanks never match each other", () => {
+    expect(personNameKey("  ")).toBe("");
+    expect(personNameKey("Dr.")).toBe("");
+  });
+});
+
+describe("isListedInDirectory, by name", () => {
+  const row = (personName: string, employeeId: string) =>
+    ({ personEmail: "someone.else@pmw-group.com", personName, employeeId });
+
+  it("recognises somebody by name when their directory row has no staff number", () => {
+    const index = buildDirectoryIndex([row("Ahmad Faiz bin Rahman", "")]);
+    expect(isListedInDirectory(index, candidate({
+      personName: "Hj. Ahmad Faiz Bin Abdul Rahman",
+      personEmail: "faiz.rahman@pmw-group.com",
+      employeeId: "E-1042",
+    }))).toBe(true);
+  });
+
+  it("recognises somebody by name when the form gave no staff number", () => {
+    const index = buildDirectoryIndex([row("Ahmad Faiz bin Rahman", "E-1042")]);
+    expect(isListedInDirectory(index, candidate({
+      personName: "Ahmad Faiz",
+      personEmail: "faiz.rahman@pmw-group.com",
+      employeeId: "",
+    }))).toBe(true);
+  });
+
+  it("does not match a Chinese name on part of it", () => {
+    const index = buildDirectoryIndex([row("LEE SIEW YOKE", "")]);
+    expect(isListedInDirectory(index, candidate({
+      personName: "Siew Yoke",
+      personEmail: "siew.yoke@pmw-group.com",
+      employeeId: "",
+    }))).toBe(false);
+  });
+
+  it("keeps two people apart when they share a name but not a staff number", () => {
+    const index = buildDirectoryIndex([row("Ahmad Faiz bin Rahman", "E-1")]);
+    expect(isListedInDirectory(index, candidate({
+      personName: "Ahmad Faiz bin Ismail",
+      personEmail: "ahmad.faiz.ismail@pmw-group.com",
+      employeeId: "E-2",
+    }))).toBe(false);
   });
 });
 
