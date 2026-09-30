@@ -43,7 +43,8 @@ import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { hasEvaluationLayer, readHarvestConfig } from "./_utils/directoryHarvest.js";
 import { harvestSubmitter } from "./_utils/directoryHarvestWrite.js";
 import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
-import { resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
+import { isFormBuilderSuperuser, resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
+import { isSuperuserOnlyForm } from "./_utils/superuserOnlyForms.js";
 import { handleMintTestTicket, handleStampTestRun, handleDeleteTestRuns, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
 import { verifyTestTicket, testRunFieldsFor, isTestRow, type TestRunRedirect } from "./_utils/testRun.js";
 import type { TestRunStep, TestRunStepStatus } from "./_utils/testRunTrail.js";
@@ -1580,6 +1581,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           return typeof title === "string" && title.trim() ? title.trim() : null;
         },
         ensureColumn: (token, listTitle, column) => ensureTextFieldViaSPRest(token, listTitle, column, column),
+        mayTestForm: async (token, listTitle) => !isSuperuserOnlyForm(listTitle) || isFormBuilderSuperuser(token),
       });
       return res.status(result.status).json(result.payload);
     } catch (error) {
@@ -1740,6 +1742,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const testTicket = verifyTestTicket((req.body as Record<string, unknown>)?.testTicket, valueToText(formConfig.Slug));
+
+    // A test-only form takes submissions from a Form Builder Superuser, or
+    // from a test run a superuser started — never from anybody else holding
+    // the link. Checked before anything is uploaded or written.
+    if (isSuperuserOnlyForm(formConfig.Title) && !testTicket) {
+      const delegatedToken = String((req.body as Record<string, unknown>)?.delegatedToken ?? "").trim();
+      if (!delegatedToken || !(await isFormBuilderSuperuser(delegatedToken))) {
+        return res.status(404).json({ error: "Form not found" });
+      }
+    }
+
     const testRedirect: TestRunRedirect | undefined = testTicket ? { testEmail: testTicket.testEmail } : undefined;
     const trailDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
 

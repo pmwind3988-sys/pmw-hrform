@@ -6,6 +6,9 @@ import { forEachSurveyElement } from "./_utils/surveyWalk.js";
 import { redactLayerConfigForPublic } from "./_utils/publicLayerConfig.js";
 import { logError } from "./_utils/logger.js";
 import { loadInstanceByToken, publicInstanceView } from "./_utils/formInstance.js";
+import { isSuperuserOnlyForm } from "./_utils/superuserOnlyForms.js";
+import { isFormBuilderSuperuser } from "./_utils/hrFormsOwner.js";
+import { verifyTestTicket } from "./_utils/testRun.js";
 
 // Minimal Vercel request/response types
 interface ApiRequest {
@@ -35,6 +38,12 @@ function slugify(value: string): string {
 
 function normalizePublishKey(value?: string): string {
   return slugify(value || DEFAULT_PUBLISH_KEY) || DEFAULT_PUBLISH_KEY;
+}
+
+function readBearerToken(header: string | string[] | undefined): string {
+  const value = Array.isArray(header) ? header[0] : header;
+  const match = /^Bearer\s+(.+)$/i.exec(String(value || "").trim());
+  return match ? match[1].trim() : "";
 }
 
 function isExpired(value: unknown): boolean {
@@ -269,6 +278,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Form is not published." });
     }
 
+    /*
+      A test-only form is served to a Form Builder Superuser, or to a page
+      carrying a test ticket a superuser signed for this form — nobody else.
+      Anyone else gets the same answer as a form that does not exist, so its
+      existence is not confirmed either. The answer now depends on who asked,
+      so it must never reach the shared edge cache.
+    */
+    if (isSuperuserOnlyForm(formConfig.Title)) {
+      res.setHeader("Cache-Control", "private, no-store");
+      const ticket = verifyTestTicket(req.query.testTicket, String(formConfig.Slug || slug));
+      const bearer = readBearerToken(req.headers.authorization);
+      if (!ticket && !(bearer && await isFormBuilderSuperuser(bearer))) {
+        return res.status(404).json({ error: `Form "${slug}" not found.` });
+      }
+    }
+
     // 2. Get version data from Web Form Versions
     const targetVersion = pinVersion || (formConfig.CurrentVersion as string) || "1.0";
     const targetPublishKey = normalizePublishKey(requestedPublishKey || (formConfig.CurrentPublishKey as string | undefined));
@@ -325,6 +350,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     */
     const instance = instanceToken ? await loadInstanceByToken(token, instanceToken) : null;
     if (instanceToken) res.setHeader("Cache-Control", "no-store");
+    else if (isSuperuserOnlyForm(formConfig.Title)) res.setHeader("Cache-Control", "private, no-store");
     else res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 
     return res.status(200).json({

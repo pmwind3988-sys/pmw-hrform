@@ -17,6 +17,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useMsal } from "@azure/msal-react";
+import type { IPublicClientApplication } from "@azure/msal-browser";
+import { sharePointManageScope } from "../utils/sharePointScope";
 import NativeFormView from "../native/NativeForm";
 import { parseForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
@@ -62,7 +65,22 @@ function readDocumentHeader(meta: Record<string, unknown>): DocumentControlHeade
   };
 }
 
-async function loadPublishedForm(slug: string, version: string, publishKey: string): Promise<LoadedForm> {
+/**
+ * The signed-in account's SharePoint token, silently or not at all. Only a
+ * test-only form needs it — the server serves those to superusers alone — and
+ * a preview page must never bounce a visitor to a Microsoft sign-in for it.
+ */
+async function silentSharePointToken(instance: IPublicClientApplication): Promise<string> {
+  const account = instance.getActiveAccount() ?? instance.getAllAccounts()[0];
+  if (!account) return "";
+  try {
+    return (await instance.acquireTokenSilent({ scopes: [sharePointManageScope()], account })).accessToken;
+  } catch {
+    return "";
+  }
+}
+
+async function loadPublishedForm(slug: string, version: string, publishKey: string, accessToken: string): Promise<LoadedForm> {
   const params = new URLSearchParams({ slug });
   if (version) params.set("version", version);
   if (publishKey) params.set("publish", publishKey);
@@ -71,6 +89,7 @@ async function loadPublishedForm(slug: string, version: string, publishKey: stri
     headers: {
       "X-Requested-With": "XMLHttpRequest",
       ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
   });
 
@@ -109,6 +128,7 @@ export default function NativeFormPreviewPage() {
   const [consent, setConsent] = useState(false);
   const [consentError, setConsentError] = useState("");
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
+  const { instance } = useMsal();
 
   // The two cases that need no network call are resolved during render. Only
   // the third — a real published form — reaches the effect, and it writes state
@@ -141,7 +161,8 @@ export default function NativeFormPreviewPage() {
   useEffect(() => {
     if (immediate) return;
     let cancelled = false;
-    loadPublishedForm(formId, pinVersion, publishKey)
+    silentSharePointToken(instance)
+      .then((token) => loadPublishedForm(formId, pinVersion, publishKey, token))
       .then((data) => {
         if (!cancelled) setFetched({ slug: formId, data });
       })
@@ -151,7 +172,7 @@ export default function NativeFormPreviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [immediate, formId, pinVersion, publishKey]);
+  }, [immediate, formId, pinVersion, publishKey, instance]);
 
   const result = immediate ?? (fetched?.slug === formId ? fetched : null);
   const loaded = result?.data ?? null;

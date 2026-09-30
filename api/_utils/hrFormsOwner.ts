@@ -14,6 +14,7 @@ import { logWarn } from "./logger.js";
  */
 
 const ADMIN_GROUP = "_HR_ Forms Owners";
+const FORM_BUILDER_SUPERUSER_GROUP = "superuser";
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
 interface SharePointUser {
@@ -72,10 +73,14 @@ export async function resolveDelegatedUser(accessToken: string): Promise<Delegat
  * an unreadable group must never open an admin action.
  */
 export async function isHrFormsOwner(accessToken: string, user: DelegatedUser): Promise<boolean> {
+  return isSiteGroupMember(accessToken, user, ADMIN_GROUP);
+}
+
+async function isSiteGroupMember(accessToken: string, user: DelegatedUser, groupName: string): Promise<boolean> {
   try {
     const members = await delegatedSharePointGet<{ value?: SharePointUser[] }>(
       accessToken,
-      `/_api/web/sitegroups/getByName('${encodeURIComponent(ADMIN_GROUP)}')/users?$select=LoginName,Email,UserPrincipalName`,
+      `/_api/web/sitegroups/getByName('${encodeURIComponent(groupName)}')/users?$select=LoginName,Email,UserPrincipalName`,
     );
     return (members.value || []).some((member) => {
       const memberUser = normalizeDelegatedUser(member);
@@ -87,7 +92,8 @@ export async function isHrFormsOwner(accessToken: string, user: DelegatedUser): 
       );
     });
   } catch (error) {
-    logWarn("api:hr-owner", "Failed to verify HR Forms Owner membership", {
+    logWarn("api:hr-owner", "Failed to verify SharePoint group membership", {
+      groupName,
       errorMessage: error instanceof Error ? error.message : String(error),
     });
     return false;
@@ -102,4 +108,19 @@ export async function resolveHrFormsOwner(accessToken: string): Promise<string |
   const user = await resolveDelegatedUser(accessToken);
   if (!user) return null;
   return (await isHrFormsOwner(accessToken, user)) ? user.email : null;
+}
+
+/**
+ * A Form Builder Superuser: an HR Forms Owner who is also in the `superuser`
+ * group — the same pair the browser calls `canUseFormBuilder`. Fails closed,
+ * like the owner check, when either group cannot be read.
+ */
+export async function isFormBuilderSuperuser(accessToken: string): Promise<boolean> {
+  const user = await resolveDelegatedUser(accessToken);
+  if (!user) return false;
+  const [owner, superuser] = await Promise.all([
+    isSiteGroupMember(accessToken, user, ADMIN_GROUP),
+    isSiteGroupMember(accessToken, user, FORM_BUILDER_SUPERUSER_GROUP),
+  ]);
+  return owner && superuser;
 }

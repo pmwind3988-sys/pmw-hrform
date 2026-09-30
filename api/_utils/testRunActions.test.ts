@@ -43,6 +43,15 @@ describe("minting a test ticket", () => {
     expect(result.payload.ticket).toBeUndefined();
   });
 
+  it("refuses a test-only form's ticket to a caller who may not open that form", async () => {
+    const d = { ...deps(), mayTestForm: vi.fn(async () => false) };
+    const result = await handleMintTestTicket(BODY, d);
+    expect(result.status).toBe(403);
+    expect(result.payload.ticket).toBeUndefined();
+    expect(d.mayTestForm).toHaveBeenCalledWith("delegated", "Leave Application");
+    expect(d.ensureColumn).not.toHaveBeenCalled();
+  });
+
   it("refuses a request with no delegated token to identify the caller", async () => {
     const result = await handleMintTestTicket({ ...BODY, delegatedToken: "" }, deps());
     expect(result.status).toBe(401);
