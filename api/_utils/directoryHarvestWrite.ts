@@ -31,14 +31,18 @@ import {
   directoryIsUsable,
   directoryTracksConfirmation,
   mapDirectoryColumns,
+  toApprovalDirectoryRow,
   type DirectoryColumnMap,
 } from "./approvalDirectorySchema.js";
 import { DEPARTMENT_APPROVER_DEFAULTS } from "./departmentApproverLookup.js";
 import {
+  buildDirectoryIndex,
   buildHarvestCandidate,
+  employeeIdKey,
   harvestApproverEmail,
   harvestNote,
   harvestSource,
+  isListedInDirectory,
   type DirectoryHarvestCandidate,
   type DirectoryHarvestConfig,
 } from "./directoryHarvest.js";
@@ -108,20 +112,29 @@ async function directoryColumns(token: string): Promise<DirectoryColumnMap | nul
   }
 }
 
-/** Whether this person already has a row, active or not. */
+/**
+ * Whether this person already has a row, active or not.
+ *
+ * Reads only the rows sharing their staff number or their address, then asks
+ * the same `isListedInDirectory` the signed-in path and the scan use, so the
+ * three cannot disagree about who is new.
+ */
 async function alreadyListed(
   token: string,
   map: DirectoryColumnMap,
-  email: string,
+  candidate: DirectoryHarvestCandidate,
 ): Promise<boolean> {
   if (!map.personEmail) return true;
   try {
-    const matches = await queryListItems(token, APPROVAL_DIRECTORY_LIST, {
-      filter: graphFieldEquals(map.personEmail, directoryEmailKey(email)),
-      top: 1,
-      preferNonIndexed: true,
-    });
-    return matches.length > 0;
+    const filters = [graphFieldEquals(map.personEmail, directoryEmailKey(candidate.personEmail))];
+    const id = employeeIdKey(candidate.employeeId);
+    if (id && map.employeeId) filters.push(graphFieldEquals(map.employeeId, candidate.employeeId.trim()));
+
+    const matches = (await Promise.all(filters.map((filter) =>
+      queryListItems(token, APPROVAL_DIRECTORY_LIST, { filter, top: 20, preferNonIndexed: true }))))
+      .flat();
+    const rows = matches.map((match) => toApprovalDirectoryRow(match.fields, map));
+    return isListedInDirectory(buildDirectoryIndex(rows), candidate);
   } catch (error) {
     // A read that failed is not evidence the person is new. Treat them as
     // listed so a transient Graph error cannot mint duplicate rows.
@@ -191,7 +204,7 @@ export async function harvestSubmitter(params: {
   const map = await directoryColumns(params.token);
   if (!map) return null;
 
-  if (await alreadyListed(params.token, map, candidate.personEmail)) return null;
+  if (await alreadyListed(params.token, map, candidate)) return null;
 
   const who = candidate.personName || candidate.personEmail;
 

@@ -121,6 +121,35 @@ describe("planDirectoryScan", () => {
     expect(plan.alreadyListed).toBe(1);
   });
 
+  it("leaves out a verified person whose name and address have changed since, by staff number", () => {
+    const verified = { ...listed("ahmad.faiz@pmw-group.com"), employeeId: "E-1042" };
+    const plan = planDirectoryScan({
+      forms: [form([
+        // No address on the form, and a calling name rather than the full one.
+        { FullName: "Faiz", EmployeeId: "E-1042", Department: "Safety", SubmittedBy: "GUEST" },
+      ])],
+      existing: [verified],
+      domain: DOMAIN,
+      hodFor: NO_HODS,
+    });
+    expect(plan.proposals).toEqual([]);
+    expect(plan.alreadyListed).toBe(1);
+  });
+
+  it("proposes one row for one staff number, even under two spellings of the name", () => {
+    const plan = planDirectoryScan({
+      forms: [form([
+        { FullName: "Ahmad Faiz bin Rahman", EmployeeId: "E-1042", Department: "Safety", SubmittedBy: "GUEST" },
+        { FullName: "Faiz", EmployeeId: "e-1042", Department: "Safety", SubmittedBy: "GUEST" },
+      ])],
+      existing: [],
+      domain: DOMAIN,
+      hodFor: NO_HODS,
+    });
+    expect(plan.proposals).toHaveLength(1);
+    expect(plan.proposals[0].seenCount).toBe(2);
+  });
+
   it("proposes one row for somebody who submitted many times, and counts the sightings", () => {
     const plan = planDirectoryScan({
       forms: [form([

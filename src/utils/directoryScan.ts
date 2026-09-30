@@ -12,9 +12,12 @@
  * guesses is not a feature.
  */
 import {
+  buildDirectoryIndex,
   buildHarvestCandidate,
+  employeeIdKey,
   harvestApproverEmail,
   hasEvaluationLayer,
+  isListedInDirectory,
   readHarvestConfig,
   type DirectoryHarvestCandidate,
   type DirectoryHarvestConfig,
@@ -120,11 +123,11 @@ export function planDirectoryScan(params: {
   /** The HOD for a department, or "" when there is none. */
   hodFor: (department: string) => string;
 }): DirectoryScanPlan {
-  const listed = new Set(
-    params.existing.map((row) => directoryEmailKey(row.personEmail)).filter(Boolean),
-  );
+  const listed = buildDirectoryIndex(params.existing);
 
-  const byEmail = new Map<string, ScanProposal>();
+  // One proposal per person: keyed on the staff number where the form asks
+  // for one, since the name — and so any address built from it — varies.
+  const byPerson = new Map<string, ScanProposal>();
   let submissionsRead = 0;
   let unkeyable = 0;
   let alreadyListed = 0;
@@ -143,14 +146,15 @@ export function planDirectoryScan(params: {
         continue;
       }
 
-      const key = directoryEmailKey(candidate.personEmail);
-      if (listed.has(key)) {
+      if (isListedInDirectory(listed, candidate)) {
         alreadyListed++;
         continue;
       }
 
-      const seenCount = (byEmail.get(key)?.seenCount ?? 0) + 1;
-      byEmail.set(key, {
+      const id = employeeIdKey(candidate.employeeId);
+      const key = id ? `id:${id}` : `email:${directoryEmailKey(candidate.personEmail)}`;
+      const seenCount = (byPerson.get(key)?.seenCount ?? 0) + 1;
+      byPerson.set(key, {
         candidate,
         approverEmail: harvestApproverEmail(candidate, params.hodFor(candidate.department)),
         formTitle: form.formTitle,
@@ -159,7 +163,7 @@ export function planDirectoryScan(params: {
     }
   }
 
-  const proposals = [...byEmail.values()].sort((a, b) =>
+  const proposals = [...byPerson.values()].sort((a, b) =>
     (a.candidate.personName || a.candidate.personEmail)
       .localeCompare(b.candidate.personName || b.candidate.personEmail));
 
