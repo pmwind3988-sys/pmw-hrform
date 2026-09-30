@@ -2,7 +2,7 @@
  * EvaluationPage.tsx — Layer evaluation/approval interface.
  * Route: /eval/:token (public) or /eval/:formSlug/:responseId/:layerNumber (365)
  */
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
@@ -29,6 +29,8 @@ import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionP
 import Logo from "../components/Logo";
 import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import HighlightOffIcon from "@mui/icons-material/HighlightOff";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { parseLayerConfig } from "../utils/workflowReviewLink";
@@ -157,12 +159,11 @@ type PublicPreviousLayerSummary = {
 // ── Styling ──
 const COLORS = {
   purple: editorial.pmwBlue, purpleLight: editorial.pmwBlueDark, purplePale: editorial.skySoft,
-  bg: "linear-gradient(180deg, #EEF6FC 0%, #F7FAFD 48%, #F7F8FA 100%)", cardBg: editorial.white, border: editorial.border,
+  bg: editorial.paper, cardBg: editorial.white, border: editorial.border,
   textPrimary: editorial.ink, textSecond: editorial.muted, textMuted: editorial.softMuted,
   green: editorial.success, greenPale: editorial.successSoft,
   red: editorial.error, redPale: editorial.errorSoft,
   shadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(26, 31, 43, 0.06)",
-  shadowHover: "0 0 0 1px rgba(0, 120, 212, 0.18), 0 2px 4px -1px rgba(0, 120, 212, 0.12), 0 10px 24px rgba(26, 31, 43, 0.08)",
 };
 
 const sectionCard: React.CSSProperties = {
@@ -176,14 +177,14 @@ const sectionCard: React.CSSProperties = {
 const btnPrimary: React.CSSProperties = {
   padding: "12px 32px",
   minHeight: 44,
-  borderRadius: 12,
+  borderRadius: 8,
   border: "none",
   background: COLORS.purple,
-  color: "#fff",
+  color: editorial.white,
   fontSize: 14,
   fontWeight: 600,
   cursor: "pointer",
-  fontFamily: "'Segoe UI', system-ui, sans-serif",
+  fontFamily: "inherit",
 };
 
 const btnOutline: React.CSSProperties = {
@@ -827,11 +828,63 @@ export default function EvaluationPage() {
       return enriched;
     });
   }, []);
+
+  // ── Display-only helpers: tab title, reject dialog focus handling ──
+  const rejectButtonRef = useRef<HTMLButtonElement | null>(null);
+  const rejectDialogRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!formTitle) return;
+    document.title = `${formTitle} — ${currentLayer?.type === "evaluation" ? "Evaluation" : "Approval"}`;
+  }, [formTitle, currentLayer]);
+
+  // Hand focus back to the Reject button when the dialog closes.
+  useEffect(() => {
+    if (!rejectDialogOpen) return;
+    const opener = rejectButtonRef.current;
+    return () => { opener?.focus(); };
+  }, [rejectDialogOpen]);
+
+  // Escape closes the dialog (never mid-submit); Tab stays inside it.
+  useEffect(() => {
+    if (!rejectDialogOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (actionState === "submitting") return;
+        event.preventDefault();
+        setRejectDialogOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = rejectDialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>("button:not([disabled]), textarea:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])"),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [rejectDialogOpen, actionState]);
+
   // ── Render ──
   if (authState === "checking" || loading) {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: COLORS.textMuted, fontSize: 14 }}>Loading...</div>
+        <div role="status" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, color: COLORS.textSecond, fontSize: 14 }}>
+          <Spinner />
+          <span>Loading the request…</span>
+        </div>
       </div>
     );
   }
@@ -839,8 +892,8 @@ export default function EvaluationPage() {
   if (authState === "unauthorized") {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
+        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "clamp(28px, 6vw, 56px) clamp(20px, 5vw, 44px)", maxWidth: 420, width: "100%", boxSizing: "border-box", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon aria-hidden="true" style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>You need to sign in with your Microsoft 365 account to access this evaluation.</p>
           <button onClick={() => instance.loginRedirect({ ...loginRequest })} style={btnPrimary}>Sign in with Microsoft 365</button>
@@ -849,11 +902,14 @@ export default function EvaluationPage() {
     );
   }
 
-  if (error) {
+  // Only a failure to LOAD takes the whole page. A failed decision keeps the
+  // page (and the reviewer's answers) and shows an alert by the buttons; a
+  // retry must not fall through to this screen while the old error lingers.
+  if (error && actionState === "idle") {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "48px 44px", maxWidth: 460, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon style={{ fontSize: 40 }} /></div>
+        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "clamp(28px, 6vw, 56px) clamp(20px, 5vw, 44px)", maxWidth: 460, width: "100%", boxSizing: "border-box", textAlign: "center", border: `1px solid ${COLORS.border}` }}>
+          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon aria-hidden="true" style={{ fontSize: 40 }} /></div>
           {/* The people who land here are approvers following a link from an
               email, not staff who can read a status code. Say what happened and
               what to do next; the raw reason stays last, for whoever they ask. */}
@@ -883,7 +939,7 @@ export default function EvaluationPage() {
               </p>
             </>
           )}
-          <p style={{ color: COLORS.textSecond, fontSize: 12, opacity: 0.8, margin: 0, paddingTop: 14, borderTop: `1px solid ${COLORS.border}` }}>
+          <p style={{ color: COLORS.textSecond, fontSize: 12, margin: 0, paddingTop: 14, borderTop: `1px solid ${COLORS.border}` }}>
             Reason: {error}
           </p>
         </div>
@@ -892,14 +948,38 @@ export default function EvaluationPage() {
   }
 
   if (actionState === "success") {
+    const doneStep = currentLayer?.layerNumber || displayLayerNumber;
+    const isRejected = submitAction === "reject";
+    const nextStep = layerSequence.find((entry) => entry.layerNumber > doneStep);
+    const doneRef = valueToText(responseData?.[REFERENCE_NO_FIELD]);
+    const nextLine = isRejected
+      ? "The submitter will be told it was rejected. The workflow stops here."
+      : nextStep
+        ? `It now moves to the next step: ${nextStep.title || `Step ${nextStep.layerNumber}`}.`
+        : totalLayers > doneStep
+          ? `It now moves to step ${doneStep + 1} of ${totalLayers}.`
+          : "This was the final step — the submitter will be notified.";
+    const doneHeading = isRejected ? "Rejected" : submitAction === "confirm" ? "Evaluation submitted" : "Approved";
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.green, marginBottom: 8 }}>Submitted Successfully</div>
-          <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>
-            Your response has been recorded. You may close this page.
+        <div role="status" aria-live="polite" style={{ background: COLORS.cardBg, borderRadius: 12, padding: "clamp(28px, 6vw, 56px) clamp(20px, 5vw, 44px)", width: "100%", maxWidth: 440, boxSizing: "border-box", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
+          <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+            {isRejected
+              ? <HighlightOffIcon aria-hidden="true" style={{ fontSize: 56, color: editorial.errorFill }} />
+              : <CheckCircleOutlinedIcon aria-hidden="true" style={{ fontSize: 56, color: editorial.successFill }} />}
+          </div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: isRejected ? COLORS.red : COLORS.green, margin: "0 0 8px" }}>{doneHeading}</h1>
+          {(formTitle || doneRef) && (
+            <p style={{ color: COLORS.textPrimary, fontSize: 14, margin: "0 0 16px", fontVariantNumeric: "tabular-nums" }}>
+              {formTitle}
+              {formTitle && doneRef ? " · " : ""}
+              {doneRef && <>Ref <strong>{doneRef}</strong></>}
+            </p>
+          )}
+          <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, margin: "0 0 8px" }}>
+            <strong style={{ color: COLORS.textPrimary }}>What happens next.</strong> {nextLine}
           </p>
+          <p style={{ color: COLORS.textSecond, fontSize: 13, margin: 0 }}>You can close this page.</p>
         </div>
       </div>
     );
@@ -915,13 +995,37 @@ export default function EvaluationPage() {
   // Who is signing, printed under the signature so the record says it and not
   // only the audit trail. A public link has no signed-in account to name.
   const signedInApprover = isPublic ? "" : approverDisplayName(accounts[0]?.name, userEmail);
-  const approverRoleLabel = currentLayer?.title || `Layer ${effectiveLayerNumber}`;
+  const stepLabel = totalLayers > 0 ? `Step ${effectiveLayerNumber} of ${totalLayers}` : `Step ${effectiveLayerNumber}`;
+  const approverRoleLabel = currentLayer?.title || `Step ${effectiveLayerNumber}`;
+  // A short description doubles as the label above the name; a long one is
+  // subtitle material and would read as a sentence there.
+  const layerDescription = currentLayer?.description?.trim() || "";
+  const descriptionIsLabel = layerDescription !== "" && layerDescription.length <= 30;
+  const showHeaderDescription = layerDescription !== "" && !(descriptionIsLabel && !!signedInApprover);
+  const normalizedPill = normalizeLayerStatus(currentLayerLabel);
+  const pillLower = currentLayerLabel.toLowerCase();
+  const pillTone: "bad" | "good" | "neutral" =
+    normalizedPill === "rejected" || normalizedPill === "cancelled" ? "bad"
+      : normalizedPill === "approved" || normalizedPill === "confirmed" || pillLower.includes("complet") ? "good"
+        : "neutral";
+  const actedSignedAt = valueToText(responseData?.[`L${effectiveLayerNumber}_SignedAt`]);
+  const actedBy = valueToText(responseData?.[`L${effectiveLayerNumber}_ActedBy`]) || valueToText(responseData?.[`L${effectiveLayerNumber}_Email`]);
+  const submitRef = valueToText(responseData?.[REFERENCE_NO_FIELD]) || "this request";
+  const submitErrorAlert = actionState === "error" ? (
+    <div role="alert" style={{ background: COLORS.redPale, color: COLORS.red, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Your decision may not have been saved</div>
+      <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+        Check your connection and try again. If this keeps happening, contact HR and quote reference {submitRef}.
+      </div>
+      {error && <div style={{ fontSize: 12, marginTop: 6 }}>Details: {error}</div>}
+    </div>
+  ) : null;
   // The directory name wins over Azure's display name, so the page prints what
   // the record will be stamped with. Position falls back to the layer title.
   const signerName = viewerSignOff?.name || signedInApprover;
   const signerPosition = signOffPosition(viewerSignOff?.position, approverRoleLabel);
   const pendingVerdict = signOffVerdictForLayer(currentLayer?.type);
-  const customSignOffLabel = currentLayer?.description;
+  const customSignOffLabel = descriptionIsLabel ? layerDescription : undefined;
   // Once decided, the sign-off already on the record — for a link opened later.
   const recordedVerdict = signOffVerdictFromStatus(currentLayerStatus);
   const recordedSignerName = responseData
@@ -944,13 +1048,15 @@ export default function EvaluationPage() {
         @media (prefers-reduced-motion: reduce) {
           .eval-overlay, .eval-overlay-card { animation: none !important; }
         }
-        .eval-currency-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #5F646D; font-size: 13px; font-weight: 700; pointer-events: none; z-index: 1; font-variant-numeric: tabular-nums; }
-        .eval-survey-wrap .sd-root-modern, .eval-survey-wrap .sd-container-modern { background: transparent !important; max-width: 100% !important; }
-        .eval-survey-wrap .sd-row { display: flex !important; flex-wrap: wrap !important; }
-        .eval-survey-wrap .sd-question { box-shadow: none !important; }
+        .eval-jump-bar { display: none; }
         @media (max-width: 640px) {
           .eval-meta-grid { grid-template-columns: 1fr !important; }
           .eval-header { grid-template-columns: 1fr !important; }
+          .eval-page { padding-bottom: 88px !important; }
+          .eval-actions { flex-direction: column; }
+          .eval-actions > button { width: 100%; }
+          .eval-jump-bar { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: ${COLORS.cardBg}; border-top: 1px solid ${COLORS.border}; box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06); }
+          .eval-jump-bar button { width: 100%; }
         }
       `}</style>
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
@@ -972,8 +1078,8 @@ export default function EvaluationPage() {
               {formTitle || currentLayer?.title || (isEvaluation ? "Evaluation" : "Approval")}
             </h1>
             <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 8 }}>
-              {currentLayer?.title ? `${currentLayer.title} / ` : ""}Layer {effectiveLayerNumber}
-              {currentLayer?.description && <div style={{ marginTop: 4 }}>{currentLayer.description}</div>}
+              {currentLayer?.title ? `${currentLayer.title} / ` : ""}{stepLabel}
+              {showHeaderDescription && <div style={{ marginTop: 4 }}>{layerDescription}</div>}
             </div>
           </div>
           <span style={{
@@ -981,27 +1087,41 @@ export default function EvaluationPage() {
             fontSize: 12,
             fontWeight: 700,
             padding: "7px 12px",
-            borderRadius: 999,
-            color: isLayerAlreadyComplete ? COLORS.green : COLORS.purple,
-            background: isLayerAlreadyComplete ? COLORS.greenPale : COLORS.purplePale,
+            borderRadius: 5,
+            color: pillTone === "bad" ? COLORS.red : pillTone === "good" ? COLORS.green : editorial.navy,
+            background: pillTone === "bad" ? COLORS.redPale : pillTone === "good" ? COLORS.greenPale : editorial.skySoft,
             fontVariantNumeric: "tabular-nums",
           }}>
             {currentLayerLabel}
           </span>
         </div>
 
+        {isLayerAlreadyComplete && (
+          <div style={{ ...sectionCard, display: "flex", gap: 12, alignItems: "flex-start", background: COLORS.greenPale, boxShadow: "none" }}>
+            <LockIcon aria-hidden="true" style={{ fontSize: 22, color: COLORS.green, marginTop: 1 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>This step is already complete</div>
+              <div style={{ fontSize: 13, color: COLORS.textPrimary, marginTop: 4, lineHeight: 1.6, fontVariantNumeric: "tabular-nums" }}>
+                Status: <strong>{currentLayerLabel}</strong>
+                {actedSignedAt ? <> · {formatDateTime(actedSignedAt)}</> : null}
+                {actedBy ? <> · by {recordedSignerName || actedBy}</> : null}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Previous Layer Results */}
         {previousResults.length > 0 && (
           <div style={sectionCard}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: 0, marginBottom: 12 }}>
-              Previous Layers
-            </div>
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: 0, margin: "0 0 12px" }}>
+              Previous steps
+            </h2>
             {previousResults.map((pr, i) => {
               const evalData = pr.evaluationData as EvaluationDataEntry | undefined;
               const previousLayerNumber = Number(pr.layerNumber);
               const publicSummary = publicPreviousLayerSummaries.find((summary) => Number(summary.layerNumber) === previousLayerNumber);
               const previousSurveyElements = publicSummary?.surveyElements || surveyElementsForLayer(layerSequence, previousLayerNumber);
-              const previousTitle = publicSummary?.title || valueToText(pr.title) || `Layer ${previousLayerNumber}`;
+              const previousTitle = publicSummary?.title || valueToText(pr.title) || `Step ${previousLayerNumber}`;
               const previousVerdict = signOffVerdictFromStatus(pr.status);
               const previousSignerName = signOffName(
                 pr.actedByName || evalData?.confirmerName,
@@ -1033,7 +1153,7 @@ export default function EvaluationPage() {
                       fields: evalData.fields || {},
                       notes: evalData.notes,
                     }}
-                    layerTitle={publicSummary?.title || `Layer ${previousLayerNumber}`}
+                    layerTitle={publicSummary?.title || `Step ${previousLayerNumber}`}
                     layerDescription={publicSummary?.description}
                     surveyElements={previousSurveyElements}
                     footer={previousSignOff}
@@ -1043,7 +1163,12 @@ export default function EvaluationPage() {
               return (
                 <div key={i} style={{ background: COLORS.purplePale, borderRadius: 12, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
                   {previousTitle}: <strong>{String(pr.status || "Completed")}</strong>
-                  {previousSignOff ?? (pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null)}
+                  {previousSignOff ?? (
+                    <>
+                      {pr.email ? <span style={{ color: COLORS.textSecond, marginLeft: 8 }}>by {String(pr.email)}</span> : null}
+                      {pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null}
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1055,22 +1180,24 @@ export default function EvaluationPage() {
           <div style={sectionCard}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 14 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 4 }}>
+                <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, margin: "0 0 4px" }}>
                   Submission Details
-                </div>
+                </h2>
                 <div style={{ fontSize: 12, color: COLORS.textSecond }}>
-                  Review the submitted data before completing this layer.
+                  Check the details below, then record your decision at the bottom.
                 </div>
               </div>
             </div>
             <div className="eval-meta-grid" style={{ fontSize: 13, color: COLORS.textSecond, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
+              {!!valueToText(responseData.SubmittedBy) && (
+                <div>Submitted by: <strong style={{ color: COLORS.textPrimary }}>{valueToText(responseData.SubmittedBy)}</strong></div>
+              )}
               {!!responseData[REFERENCE_NO_FIELD] && (
                 <div>Reference no.: <strong style={{ color: COLORS.textPrimary }}>{String(responseData[REFERENCE_NO_FIELD])}</strong></div>
               )}
               <div>Form ID: {String(responseData.FormID || responseData.formId || "—")}</div>
               {selectedCompany && <div>Company: {selectedCompany}</div>}
               <div>Submitted: {formatDateTime(responseData.SubmittedAt)}</div>
-              <div>Version: {String(responseData.FormVersion || responseData.formVersion || "—")}</div>
             </div>
 
             <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
@@ -1091,14 +1218,14 @@ export default function EvaluationPage() {
                 </div>
                 {Object.entries(matrixTables).map(([fieldName, entry]) => (
                   <div key={fieldName} style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
                       {entry.columns[0]?.title || fieldName}
                     </div>
                     <div
                       style={{ overflow: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 12 }}
                       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
                     />
-                    <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 4 }}>
                       {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
                     </div>
                   </div>
@@ -1109,34 +1236,30 @@ export default function EvaluationPage() {
         )}
 
         {/* Current Layer Action */}
-        <div style={sectionCard}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 16 }}>
+        <div id="eval-decision" style={sectionCard}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, margin: "0 0 16px" }}>
             {isEvaluation ? "Your Evaluation" : "Your Decision"}
-          </div>
+          </h2>
 
           {isLayerAlreadyComplete ? (
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: 14, borderRadius: 12, background: COLORS.greenPale, color: COLORS.textPrimary }}>
-              <LockIcon style={{ fontSize: 20, color: COLORS.green, marginTop: 1 }} />
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>This layer is already completed</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 2 }}>
-                  The submission cannot be approved, rejected, or evaluated again from this link.
-                </div>
+            <>
+              {submitErrorAlert}
+              <div style={{ fontSize: 13, color: COLORS.textSecond }}>
+                This link can no longer be used to record a decision.
               </div>
-            </div>
-          ) : null}
-          {isLayerAlreadyComplete && recordedVerdict && recordedSignerName && responseData && (
-            <div style={{ marginTop: 20 }}>
-              <SignOffBlock
-                verdict={recordedVerdict}
-                label={signOffLabel(recordedVerdict, customSignOffLabel)}
-                name={recordedSignerName}
-                position={signOffPosition(responseData[`L${effectiveLayerNumber}_ActedByPosition`], approverRoleLabel)}
-                date={formatDateTime(responseData[`L${effectiveLayerNumber}_SignedAt`])}
-              />
-            </div>
-          )}
-          {!isLayerAlreadyComplete && (
+              {recordedVerdict && recordedSignerName && responseData && (
+                <div style={{ marginTop: 20 }}>
+                  <SignOffBlock
+                    verdict={recordedVerdict}
+                    label={signOffLabel(recordedVerdict, customSignOffLabel)}
+                    name={recordedSignerName}
+                    position={signOffPosition(responseData[`L${effectiveLayerNumber}_ActedByPosition`], approverRoleLabel)}
+                    date={formatDateTime(responseData[`L${effectiveLayerNumber}_SignedAt`])}
+                  />
+                </div>
+              )}
+            </>
+          ) : (
             <>
               {isEvaluation && (
                 <div style={{ marginBottom: 16 }}>
@@ -1146,7 +1269,7 @@ export default function EvaluationPage() {
                     </div>
                   ) : (
                     <div style={{ fontSize: 13, color: COLORS.red, background: COLORS.redPale, borderRadius: 12, padding: 12 }}>
-                      This evaluation layer has no configured fields. Ask a form builder superuser to update the layer configuration.
+                      This review step has no questions set up yet. Please let HR know — nothing has been submitted.
                     </div>
                   )}
                 </div>
@@ -1187,8 +1310,10 @@ export default function EvaluationPage() {
                 </div>
               )}
 
+              {submitErrorAlert}
+
               {/* Action buttons */}
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div className="eval-actions" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 {isEvaluation ? (
                   <button
                     className="eval-action-button"
@@ -1196,7 +1321,7 @@ export default function EvaluationPage() {
                     style={{ ...btnPrimary, opacity: actionState === "submitting" || !evalForm || !evalValid ? 0.6 : 1 }}
                     disabled={actionState === "submitting" || !evalForm || !evalValid}
                   >
-                    {actionState === "submitting" ? "Submitting..." : !evalValid ? "Fill required fields" : "Submit Evaluation"}
+                    {actionState === "submitting" ? "Submitting..." : !evalForm ? "Unavailable" : !evalValid ? "Fill required fields" : "Submit Evaluation"}
                   </button>
                 ) : (
                   <>
@@ -1208,16 +1333,38 @@ export default function EvaluationPage() {
                     >
                       {actionState === "submitting" ? "Submitting..." : isSignatureRequired && !signatureData ? "Signature required" : "Approve"}
                     </button>
-                    <button className="eval-action-button" onClick={() => setRejectDialogOpen(true)} style={btnOutline} disabled={actionState === "submitting"}>
+                    <button ref={rejectButtonRef} className="eval-action-button" onClick={() => setRejectDialogOpen(true)} style={btnOutline} disabled={actionState === "submitting"}>
                       Reject
                     </button>
                   </>
                 )}
               </div>
+              {isEvaluation && !!evalForm && !evalValid && actionState !== "submitting" && (
+                <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 10 }}>
+                  {Math.max(0, evalRuntime.required - evalRuntime.answered)} required answer(s) left
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
+
+      {/* Phones: the decision is far below the details, so offer a way down. */}
+      {!isLayerAlreadyComplete && actionState !== "submitting" && !rejectDialogOpen && (
+        <div className="eval-jump-bar">
+          <button
+            type="button"
+            className="eval-action-button"
+            style={btnPrimary}
+            onClick={() => {
+              const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+              document.getElementById("eval-decision")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+            }}
+          >
+            Go to your decision ↓
+          </button>
+        </div>
+      )}
 
       {/* Reject dialog — a rejection ends the submission, so it is confirmed on
           purpose: the backdrop ignores clicks and only Cancel closes it. */}
@@ -1236,6 +1383,7 @@ export default function EvaluationPage() {
           }}
         >
           <div
+            ref={rejectDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="eval-reject-title"
@@ -1254,10 +1402,11 @@ export default function EvaluationPage() {
             <div style={{ fontSize: 13, color: COLORS.textSecond, marginBottom: 16 }}>
               The submitter is told it was rejected and the workflow stops here.
             </div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
+            <label htmlFor="eval-reject-reason" style={{ display: "block", fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
               Rejection Reason <span style={{ fontWeight: 400, color: COLORS.textMuted }}>(optional)</span>
-            </div>
+            </label>
             <textarea
+              id="eval-reject-reason"
               autoFocus
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
@@ -1267,12 +1416,12 @@ export default function EvaluationPage() {
                 width: "100%",
                 minHeight: 96,
                 padding: 10,
-                borderRadius: 12,
-                border: `1px solid ${COLORS.border}`,
-                fontSize: 13,
+                borderRadius: 8,
+                border: `1px solid ${COLORS.textSecond}`,
+                fontSize: 16,
                 fontFamily: "inherit",
                 resize: "vertical",
-                outline: "none",
+                boxSizing: "border-box",
                 marginBottom: 20,
               }}
             />

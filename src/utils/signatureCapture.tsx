@@ -10,7 +10,8 @@
  * the same dialog, and an approver signing off on a layer uses `SignatureCapture`
  * below it.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import CloseIcon from "@mui/icons-material/Close";
 import { editorial } from "../theme/editorial";
 
 // -- Theme (inline, no MUI) --------------------------------------------
@@ -45,6 +46,18 @@ function getPointerCoordinates(
     y: (e.clientY - rect.top) * scaleY,
   };
 }
+const PEN_COLORS = [
+  { value: editorial.black, name: "Black" },
+  { value: editorial.navyDeep, name: "Navy" },
+  { value: editorial.pmwBlue, name: "Blue" },
+  { value: editorial.error, name: "Red" },
+  { value: editorial.success, name: "Green" },
+  { value: editorial.accentText, name: "Amber" },
+] as const;
+
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 // ── Signature Modal ────────────────────────────────────────────────────
 
 export function SignatureModal({
@@ -68,6 +81,46 @@ export function SignatureModal({
   const isDrawing = useRef(false);
   const [penColor, setPenColor] = useState(initialColor);
   const [hasContent, setHasContent] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const reduceMotion =
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Move focus into the dialog, and hand it back to whatever opened it.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus();
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onCancel();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const items = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE));
+    if (items.length === 0) {
+      e.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === dialog)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   useEffect(() => {
     const scrollY = window.scrollY;
@@ -191,23 +244,28 @@ export function SignatureModal({
     setHasContent(false);
   };
 
-  const colors = [editorial.black, editorial.navyDeep, editorial.pmwBlue, editorial.error, editorial.success, editorial.accentText, editorial.pmwBlue];
-
   return (
     <div
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      onKeyDown={handleKeyDown}
+      onClick={(e) => { if (e.target === e.currentTarget && !hasContent) onCancel(); }}
       style={{
         position: "fixed", inset: 0, zIndex: 5000,
         background: "rgba(17,24,39,0.55)", backdropFilter: "blur(3px)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "20px", animation: "fadeUp 0.2s ease",
+        padding: "20px", animation: reduceMotion ? "none" : "fadeUp 0.2s ease",
         overscrollBehavior: "contain",
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: C.white, borderRadius: 16, padding: "24px",
+          outline: "none",
+          background: C.white, borderRadius: 12, padding: "24px",
           maxWidth: Math.max(width + 80, 440), width: "100%",
           boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
           border: `1px solid ${C.border}`,
@@ -217,23 +275,25 @@ export function SignatureModal({
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>
+            <div id={titleId} style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>
               {existingDataUrl ? "Edit Signature" : "Draw your signature"}
             </div>
-            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
               Use mouse or touch to sign below
             </div>
           </div>
           <button
+            type="button"
             onClick={onCancel}
+            aria-label="Close signature pad"
             style={{
               background: C.offWhite, border: `1px solid ${C.border}`,
-              borderRadius: 8, width: 32, height: 32, cursor: "pointer",
+              borderRadius: 8, width: 44, height: 44, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 16, color: C.textSecond,
+              color: C.textSecond, padding: 0,
             }}
           >
-            ✕
+            <CloseIcon aria-hidden="true" fontSize="small" />
           </button>
         </div>
 
@@ -271,45 +331,68 @@ export function SignatureModal({
         {/* Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: C.textSecond }}>Pen:</span>
-            {colors.map((c) => (
+            <span style={{ fontSize: 12, color: C.textSecond }}>Pen:</span>
+            {PEN_COLORS.map(({ value: c, name }) => (
               <button
+                type="button"
                 key={c}
                 onClick={() => updatePenColor(c)}
+                aria-label={`${name} pen`}
+                aria-pressed={penColor === c}
                 style={{
-                  width: 22, height: 22, borderRadius: "50%",
-                  background: c, border: penColor === c ? `3px solid ${C.purple}` : "2px solid transparent",
-                  cursor: "pointer", padding: 0,
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: c, border: `2px solid ${C.white}`,
+                  boxShadow: penColor === c ? `0 0 0 3px ${C.purple}` : "none",
+                  margin: 3, cursor: "pointer", padding: 0,
                 }}
               />
             ))}
           </div>
 
-          <div style={{ flex: 1 }} />
+          {/* The three buttons wrap as one group, so Save never strands alone. */}
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap", justifyContent: "flex-end" }}>
 
           <button
+            type="button"
             onClick={handleClear}
             style={{
-              height: 34, padding: "0 14px", borderRadius: 8,
+              minHeight: 44, padding: "0 14px", borderRadius: 8,
               border: `1px solid ${C.border}`, background: C.offWhite,
               color: C.textSecond, fontSize: 12, fontWeight: 600,
-              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer", fontFamily: "inherit",
             }}
           >
             Clear
           </button>
 
           <button
-            onClick={handleSave}
+            type="button"
+            onClick={onCancel}
             style={{
-              height: 34, padding: "0 18px", borderRadius: 8,
-              border: "none", background: `linear-gradient(135deg,${C.purple},${C.purpleDark})`,
-              color: C.white, fontSize: 12, fontWeight: 600,
-              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              minHeight: 44, padding: "0 14px", borderRadius: 8,
+              border: `1px solid ${C.border}`, background: C.white,
+              color: C.textSecond, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
             }}
           >
-            {hasContent || existingDataUrl ? "Save Signature" : "Cancel"}
+            Cancel
           </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!hasContent}
+            style={{
+              minHeight: 44, padding: "0 18px", borderRadius: 8,
+              border: "none", background: `linear-gradient(135deg,${C.purple},${C.purpleDark})`,
+              color: C.white, fontSize: 12, fontWeight: 600,
+              cursor: hasContent ? "pointer" : "not-allowed",
+              opacity: hasContent ? 1 : 0.5, fontFamily: "inherit",
+            }}
+          >
+            Save signature
+          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -333,10 +416,10 @@ export function SignatureCapture({
           <img src={value} alt="Captured signature" style={{ display: "block", width: "100%", maxHeight: 150, objectFit: "contain" }} />
           {!disabled && (
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-              <button type="button" onClick={() => setModalOpen(true)} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.purpleMid}`, background: C.white, color: C.purple, cursor: "pointer", fontWeight: 600 }}>
+              <button type="button" onClick={() => setModalOpen(true)} style={{ minHeight: 44, padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.purpleMid}`, background: C.white, color: C.purple, cursor: "pointer", fontWeight: 600 }}>
                 Edit signature
               </button>
-              <button type="button" onClick={() => onChange(null)} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.red}`, background: C.white, color: C.red, cursor: "pointer", fontWeight: 600 }}>
+              <button type="button" onClick={() => onChange(null)} style={{ minHeight: 44, padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.red}`, background: C.white, color: C.red, cursor: "pointer", fontWeight: 600 }}>
                 Clear
               </button>
             </div>
@@ -353,7 +436,7 @@ export function SignatureCapture({
             fontSize: 13, fontWeight: 700,
           }}
         >
-          Click to sign
+          Tap or click to sign
         </button>
       )}
       {modalOpen && (
