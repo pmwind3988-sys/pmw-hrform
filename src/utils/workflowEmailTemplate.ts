@@ -48,8 +48,33 @@ export interface WorkflowEmailTemplateParams {
 const BRAND_NAME = "PMW HR Form";
 const COMPANY_NAME = "PMW Group";
 
+// Colours mirror src/theme/editorial.ts (email cannot import tokens, so literal hex).
+const NAVY = "#0F3D91";
+const NAVY_DARK = "#0B2F70";
+const CANVAS = "#F6F8FB";
+const INK = "#101828";
+const MUTED = "#5A6880";
+const BORDER = "#E5E9F0";
+
 const FONT_STACK =
-  "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,'Helvetica Neue',Arial,sans-serif";
+  "Inter,'Segoe UI',Arial,Helvetica,sans-serif";
+
+/** Plain wording: the app calls approval stages "steps", not "layers". */
+function plainStepText(text: string): string {
+  return text
+    .replace(/\bLayer (\d+)\b/g, "Step $1")
+    .replace(/\bworkflow layer\b/gi, (m) => m.replace(/layer/i, (l) => (l[0] === "L" ? "Step" : "step")));
+}
+
+function plainDetail(detail: WorkflowEmailDetail): WorkflowEmailDetail {
+  const value = String(detail.value ?? "");
+  if (detail.label === "Workflow stage") {
+    return { label: "Step", value: value.replace(/^Layer (\d+)/, "Step $1") };
+  }
+  if (detail.label === "Layer") return { label: "Step name", value };
+  if (detail.label === "Submission ID") return { label: "Submission", value };
+  return detail;
+}
 
 export function escapeEmailHtml(value: string): string {
   return value
@@ -86,26 +111,33 @@ export function buildWorkflowEmailSubject(params: {
   return parts.join("");
 }
 
-function detailRows(details: WorkflowEmailDetail[]): string {
-  const visible = details.filter((detail) => String(detail.value ?? "").trim());
+function detailRows(rawDetails: WorkflowEmailDetail[]): string {
+  const hasReference = rawDetails.some(
+    (detail) => /^reference/i.test(detail.label) && String(detail.value ?? "").trim(),
+  );
+  // With a reference number, the internal submission id is noise to an approver.
+  const visible = rawDetails
+    .filter((detail) => !(hasReference && detail.label === "Submission ID"))
+    .map(plainDetail)
+    .filter((detail) => String(detail.value ?? "").trim());
   return visible
     .map((detail, index) => {
       const last = index === visible.length - 1;
       const pad = last ? "0" : "0 0 10px 0";
       return `<tr>
-                                              <td style="padding:${pad};font-size:14px;line-height:20px;color:#64748B;width:38%;vertical-align:top"><strong>${escapeEmailHtml(detail.label)}</strong></td>
-                                              <td style="padding:${pad};font-size:14px;line-height:20px;color:#0F172A;font-weight:500;vertical-align:top">${escapeEmailHtml(String(detail.value))}</td>
+                                              <td style="padding:${pad};font-size:14px;line-height:20px;color:${MUTED};width:38%;vertical-align:top"><strong>${escapeEmailHtml(detail.label)}</strong></td>
+                                              <td style="padding:${pad};font-size:14px;line-height:20px;color:${INK};font-weight:500;vertical-align:top">${escapeEmailHtml(String(detail.value))}</td>
                                             </tr>`;
     })
     .join("\n");
 }
 
 function actionButton(url: string, label: string): string {
-  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:#2563EB;color:#FFFFFF;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:6px;border:1px solid #1D4ED8">${escapeEmailHtml(label)}</a>`;
+  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:${NAVY};color:#FFFFFF;font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 32px;border-radius:8px;border:1px solid ${NAVY_DARK}">${escapeEmailHtml(label)}</a>`;
 }
 
 function secondaryButton(url: string, label: string): string {
-  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:#FFFFFF;color:#2563EB;font-size:15px;font-weight:600;text-decoration:none;padding:14px 26px;border-radius:6px;border:1px solid #BFDBFE">${escapeEmailHtml(label)}</a>`;
+  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:#FFFFFF;color:${NAVY};font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 26px;border-radius:8px;border:1px solid ${BORDER}">${escapeEmailHtml(label)}</a>`;
 }
 
 export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string {
@@ -131,9 +163,9 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
   // Only the action link gets a copy-paste fallback: it is the one a reviewer
   // must reach even when their client strips the button.
   const fallbackHtml = params.actionUrl
-    ? `<p style="margin:0;font-size:13px;color:#64748B;text-align:center;line-height:1.5">
+    ? `<p style="margin:0;font-size:13px;color:${MUTED};text-align:center;line-height:1.5">
                                 Having trouble with the button? Copy and paste this link into your browser:<br>
-                                <a href="${escapeEmailHtml(params.actionUrl)}" style="color:#2563EB;word-break:break-all">${escapeEmailHtml(params.actionUrl)}</a>
+                                <a href="${escapeEmailHtml(params.actionUrl)}" style="color:${NAVY};word-break:break-all">${escapeEmailHtml(params.actionUrl)}</a>
                             </p>`
     : "";
   const statusHtml = params.status
@@ -142,12 +174,12 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                             </table>`
     : "";
   const calloutHtml = params.callout
-    ? `<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;margin-bottom:24px">
-                                <tr><td style="padding:14px 16px;font-size:13px;line-height:20px;color:#92400E">${escapeEmailHtml(params.callout)}</td></tr>
+    ? `<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;margin-bottom:24px">
+                                <tr><td style="padding:14px 16px;font-size:13px;line-height:20px;color:#92400E">${escapeEmailHtml(plainStepText(params.callout))}</td></tr>
                             </table>`
     : "";
   const noteHtml = params.note
-    ? `<p style="margin:20px 0 0;font-size:12px;line-height:18px;color:#94A3B8;text-align:center">${escapeEmailHtml(params.note)}</p>`
+    ? `<p style="margin:20px 0 0;font-size:12px;line-height:18px;color:${MUTED};text-align:center">${escapeEmailHtml(plainStepText(params.note))}</p>`
     : "";
   const greetingHtml = params.greetingName?.trim()
     ? `Hello <strong>${escapeEmailHtml(params.greetingName.trim())}</strong>,<br><br>`
@@ -158,27 +190,27 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapeEmailHtml(params.heading)}</title>
+    <title>${escapeEmailHtml(plainStepText(params.heading))}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#F4F6F9;font-family:${FONT_STACK};-webkit-font-smoothing:antialiased;color:#333333">
+<body style="margin:0;padding:0;background-color:${CANVAS};font-family:${FONT_STACK};-webkit-font-smoothing:antialiased;color:${INK}">
 
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeEmailHtml(params.preheader)}</div>
 
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#F4F6F9;padding:40px 10px">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:${CANVAS};padding:40px 10px">
         <tr>
             <td align="center">
 
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#FFFFFF;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid #E1E6EB">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid ${BORDER}">
 
                     <tr>
-                        <td style="background-color:#0F172A;padding:24px 32px;border-bottom:3px solid #2563EB">
+                        <td style="background-color:${NAVY};padding:24px 32px;border-bottom:3px solid ${NAVY_DARK}">
                             <table border="0" cellpadding="0" cellspacing="0" width="100%">
                                 <tr>
                                     <td>
                                         <span style="color:#FFFFFF;font-size:20px;font-weight:700;letter-spacing:-0.5px">${BRAND_NAME}</span>
                                     </td>
                                     <td align="right">
-                                        <span style="color:#94A3B8;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600">${escapeEmailHtml(params.eyebrow)}</span>
+                                        <span style="color:#DCE6F7;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600">${escapeEmailHtml(params.eyebrow)}</span>
                                     </td>
                                 </tr>
                             </table>
@@ -190,13 +222,13 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
 
                             ${statusHtml}
 
-                            <h1 style="margin:0 0 16px 0;font-size:22px;line-height:28px;font-weight:600;color:#0F172A">${escapeEmailHtml(params.heading)}</h1>
+                            <h1 style="margin:0 0 16px 0;font-size:22px;line-height:28px;font-weight:600;color:${INK}">${escapeEmailHtml(plainStepText(params.heading))}</h1>
 
-                            <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#475569">
-                                ${greetingHtml}${escapeEmailHtml(params.intro)}
+                            <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:${MUTED}">
+                                ${greetingHtml}${escapeEmailHtml(plainStepText(params.intro))}
                             </p>
 
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#F8FAFC;border-radius:6px;border:1px solid #E2E8F0;margin-bottom:32px">
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#FFFFFF;border-radius:8px;border:1px solid ${BORDER};margin-bottom:32px">
                                 <tr>
                                     <td style="padding:20px">
                                         <table border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -218,11 +250,11 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                     </tr>
 
                     <tr>
-                        <td style="background-color:#F8FAFC;padding:24px 32px;border-top:1px solid #E2E8F0;text-align:center">
-                            <p style="margin:0 0 8px 0;font-size:12px;color:#94A3B8">
+                        <td style="background-color:${CANVAS};padding:24px 32px;border-top:1px solid ${BORDER};text-align:center">
+                            <p style="margin:0 0 8px 0;font-size:12px;color:${MUTED}">
                                 This is an automated notification. Please do not reply directly to this email. For full details, attachments, comments, and audit history, open the request in ${BRAND_NAME}.
                             </p>
-                            <p style="margin:0;font-size:12px;color:#94A3B8">
+                            <p style="margin:0;font-size:12px;color:${MUTED}">
                                 &copy; ${new Date().getFullYear()} ${COMPANY_NAME}. All rights reserved.
                             </p>
                         </td>

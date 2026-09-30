@@ -131,15 +131,15 @@ function RatingDisplay({ field, value }: { field: EvaluationFieldDefinition; val
   const chosen = ratingStepLabel(field.rateValues, rating);
 
   return (
-    <div style={{ display: "grid", gap: 6, minWidth: 150 }}>
+    <div style={{ display: "grid", gap: 6, minWidth: 0, maxWidth: "100%" }}>
       <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
         {chosen && <span style={{ marginRight: 6, fontWeight: 700 }}>{chosen}</span>}
         {rating} / {max}
       </div>
       <div style={{ height: 7, borderRadius: 999, background: editorial.border, overflow: "hidden" }}>
-        <div style={{ width: `${percent}%`, height: "100%", background: "linear-gradient(90deg, #F7C948, #6264A7)" }} />
+        <div style={{ width: `${percent}%`, height: "100%", background: editorial.pmwBlue }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11, color: editorial.muted }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: editorial.muted }}>
         <span>{field.minRateDescription || min}</span>
         <span>{field.maxRateDescription || max}</span>
       </div>
@@ -156,7 +156,7 @@ const cardStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11.5,
+  fontSize: 12,
   fontWeight: 600,
   color: editorial.muted,
   textTransform: "uppercase",
@@ -175,7 +175,8 @@ const fieldRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   padding: "8px 0",
-  borderBottom: "1px solid #F0EEF8",
+  borderBottom: `1px solid ${editorial.border}`,
+  gap: 12,
 };
 
 export default function EvaluationSummary({ result, layerTitle, layerDescription, surveyElements }: EvaluationSummaryProps) {
@@ -200,15 +201,15 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
           {layerTitle || `Evaluation Layer ${result.layerNumber}`}
         </div>
         {layerDescription && (
-          <div style={{ fontSize: 11.5, color: editorial.muted, marginTop: 2 }}>{layerDescription}</div>
+          <div style={{ fontSize: 12, color: editorial.muted, marginTop: 2 }}>{layerDescription}</div>
         )}
       </div>
 
       {/* Evaluator info */}
-      <div style={{ display: "flex", gap: 24, marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #E5E3F0" }}>
-        <div>
+      <div style={{ display: "flex", flexWrap: "wrap", columnGap: 24, rowGap: 12, marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${editorial.border}` }}>
+        <div style={{ minWidth: 0, maxWidth: "100%" }}>
           <div style={labelStyle}>Evaluator</div>
-          <div style={valueStyle}>{result.email || "Unknown"}</div>
+          <div style={{ ...valueStyle, overflowWrap: "anywhere" }}>{result.email || "Unknown"}</div>
         </div>
         <div>
           <div style={labelStyle}>Date</div>
@@ -232,8 +233,8 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
             const field: EvaluationFieldDefinition = fieldDefinitions.get(key) ?? { name: key, title: formatFieldName(key), type: "text" };
             return (
               <div key={key} style={fieldRowStyle}>
-                <div style={{ fontSize: 12.5, color: editorial.muted, flex: 1 }}>{field.title}</div>
-                <div style={{ fontSize: 13.5, color: editorial.navyDeep, fontWeight: 500, flex: 1, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 12.5, color: editorial.muted, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{field.title}</div>
+                <div style={{ fontSize: 13.5, color: editorial.navyDeep, fontWeight: 500, flex: 1, minWidth: 0, overflowWrap: "anywhere", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                   {field.type === "rating" ? <RatingDisplay field={field} value={value} /> : formatValue(value, field)}
                 </div>
               </div>

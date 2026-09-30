@@ -286,7 +286,7 @@ function MediaValue({ source, accessToken }: { source: string; accessToken?: str
   if (isImageLike(source) || isImageLike(src)) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: "#fff", padding: 10, overflow: "hidden" }}>
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: editorial.white, padding: 10, overflow: "hidden" }}>
           <img
             src={src}
             alt={filenameFromUrl(source)}
@@ -410,15 +410,19 @@ function RatingValue({ field, value }: { field: PreviewField; value: unknown }) 
         {selectedLabel && <span style={{ color: C.textSecond, fontSize: 12.5, fontWeight: 700 }}>{selectedLabel}</span>}
       </div>
       <div style={{ position: "relative", height: 8, borderRadius: 999, background: editorial.border, overflow: "hidden" }}>
-        <div style={{ width: `${percent}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #F7C948, #0078D4)" }} />
+        <div style={{ width: `${percent}%`, height: "100%", borderRadius: 999, background: editorial.pmwBlue }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", color: C.textMuted, fontSize: 11.5, gap: 12, textWrap: "pretty" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", color: C.textMuted, fontSize: 12, gap: 12, textWrap: "pretty" }}>
         <span>{field.minRateDescription || String(min)}</span>
         <span>{field.maxRateDescription || String(max)}</span>
       </div>
     </div>
   );
 }
+
+// Inline styles cannot carry a media query, so the phone layout lives here: below
+// 560px the label sits above its answer instead of squeezing it into ~100px.
+const ROW_STACK_CSS = "@media (max-width: 560px) { .rosp-row { grid-template-columns: minmax(0, 1fr) !important; gap: 4px !important; } }";
 
 const fieldRowStyle: CSSProperties = {
   display: "grid",
@@ -467,7 +471,8 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
   }
 
   return (
-    <div style={{ display: "grid", gap: compact ? 14 : 18 }}>
+    <div style={{ display: "grid", gap: compact ? 14 : 18, minWidth: 0 }}>
+      <style>{ROW_STACK_CSS}</style>
       {displaySections.map((section, sectionIndex) => (
         <section
           key={`${section.title}-${sectionIndex}`}
@@ -485,11 +490,11 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
           )}
           <div>
             {section.fields.map((field) => (
-              <div key={field.name} style={fieldRowStyle}>
+              <div key={field.name} className="rosp-row" style={fieldRowStyle}>
                 <div style={{ color: C.textSecond, fontSize: 12.5, fontWeight: 700, lineHeight: 1.45 }}>
                   {field.title}
                 </div>
-                <div style={{ fontSize: 13.5, lineHeight: 1.5, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, lineHeight: 1.5, minWidth: 0, overflowWrap: "anywhere" }}>
                   <FieldValue field={field} value={data?.[field.name]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} />
                 </div>
               </div>
