@@ -63,6 +63,7 @@ import { getDepartmentApproverLookupConfig } from "../../utils/departmentApprove
 import {
   DirectoryGapError,
   isDeferredAssignee,
+  stripFieldReference,
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
@@ -636,6 +637,20 @@ async function resolveLayerAssigneeEmail(
       context: resolutionContextFromItem(submittedData, layer.layerNumber, previousStep),
     },
   );
+}
+
+/** Where a layer's people come from, for assignee types that explain nothing themselves. */
+function describeAssigneeSource(layer: LayerConfigItem): string {
+  const assignee = layer.assignee as { type: string; value?: string };
+  const value = (assignee.value ?? "").trim();
+  switch (assignee.type) {
+    case "user": return `A fixed person set on the workflow page (${value || "none"}). The routing page is not used for this layer.`;
+    case "users": return "A fixed list of people set on the workflow page. The routing page is not used for this layer.";
+    case "distribution-list": return `The members of ${value || "a distribution list"}. The routing page is not used for this layer.`;
+    case "field-reference": return `Whatever was answered in the form's "${stripFieldReference(value)}" question. The routing page is not used for this layer.`;
+    case "department-approver": return "The Department Approver Directory entry for the submitted department.";
+    default: return `Layer assignee type "${assignee.type}".`;
+  }
 }
 
 function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {
@@ -2169,7 +2184,7 @@ export default function ApprovalDashboard() {
           else {
             routed = result.emails;
             routedPrimary = result.email;
-            how = result.explanation;
+            how = result.explanation || describeAssigneeSource(layer);
           }
           // A fallback is not the routing page's answer: the approval line could
           // not be followed, so whoever is saved may have come from the same
