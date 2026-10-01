@@ -180,7 +180,12 @@ export function findDirectoryProblems(rows: ApprovalDirectoryRow[]): DirectoryPr
   for (const row of rows) {
     const key = directoryEmailKey(row.personEmail);
 
-    if (!key || !EMAIL_RE.test(row.personEmail.trim())) {
+    // A person with no company email is a legitimate row: it is found by staff
+    // number or name, and routing runs as usual (only no mail goes to them). Only
+    // an address that is present but malformed is a fault.
+    const hasNoEmail = !key;
+
+    if (!hasNoEmail && !EMAIL_RE.test(row.personEmail.trim())) {
       problems.push({
         kind: "invalid-email",
         personEmail: row.personEmail,
@@ -190,7 +195,7 @@ export function findDirectoryProblems(rows: ApprovalDirectoryRow[]): DirectoryPr
       continue;
     }
 
-    if (seenKeys.has(key)) {
+    if (!hasNoEmail && seenKeys.has(key)) {
       problems.push({
         kind: "duplicate-person",
         personEmail: row.personEmail,
@@ -199,7 +204,7 @@ export function findDirectoryProblems(rows: ApprovalDirectoryRow[]): DirectoryPr
       });
       continue;
     }
-    seenKeys.add(key);
+    if (!hasNoEmail) seenKeys.add(key);
 
     if (!row.isActive) continue;
 
@@ -208,13 +213,13 @@ export function findDirectoryProblems(rows: ApprovalDirectoryRow[]): DirectoryPr
       problems.push({
         kind: "no-approver",
         personEmail: row.personEmail,
-        message: `${row.personName || row.personEmail} has no approver. Correct for the top of the line; otherwise their submissions will park.`,
+        message: `${row.personName || row.personEmail || "A row with no name or email"} has no approver. Correct for the top of the line; otherwise their submissions will park.`,
         blocking: false,
       });
       continue;
     }
 
-    if (directoryEmailKey(approver) === key) {
+    if (!hasNoEmail && directoryEmailKey(approver) === key) {
       problems.push({
         kind: "self-approver",
         personEmail: row.personEmail,
@@ -244,6 +249,8 @@ export function findDirectoryProblems(rows: ApprovalDirectoryRow[]): DirectoryPr
       continue;
     }
 
+    // The chain is walked by address, so a row without one has nothing to start from.
+    if (hasNoEmail) continue;
     const trace = traceApprovalChain(rows, row.personEmail);
     if (trace.stoppedBecause === "loop" || trace.stoppedBecause === "hop-limit") {
       problems.push({

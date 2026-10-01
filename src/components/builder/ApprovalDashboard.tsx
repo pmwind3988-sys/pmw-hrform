@@ -706,10 +706,17 @@ async function findApproverOfFormSubject(
 
   const directory = await loadApprovalDirectory(token);
   if (!directory.usable) return { problem: "The Approval Directory could not be read." };
-  const rows = directory.rows.filter((row) => row.isActive && row.confirmed);
-  const person = findDirectoryPerson(rows, { email, employeeId, name });
+  const routable = directory.rows.filter((row) => row.isActive && row.confirmed);
+  const person = findDirectoryPerson(routable, { email, employeeId, name });
   if (!person) {
-    return { problem: "The employee on the form is not in the Approval Directory (checked staff number, email and name), so the routing page has no approver for them." };
+    const looked = [employeeId && `staff number "${employeeId}"`, email && `email "${email}"`, name && `name "${name}"`].filter(Boolean).join(", ");
+    // Say WHY a listed person is not used, instead of calling them unlisted.
+    const skipped = findDirectoryPerson(directory.rows, { email, employeeId, name });
+    if (skipped) {
+      const reason = !skipped.isActive ? "is switched off" : "has not been confirmed yet";
+      return { problem: `${skipped.personName || skipped.personEmail || "The employee"} is in the Approval Directory but ${reason}, so routing skips the row. Confirm it on the routing page. Looked up by ${looked}.` };
+    }
+    return { problem: `The employee on the form is not in the Approval Directory (looked up by ${looked}), so the routing page has no approver for them.` };
   }
   const approver = person.approverEmail.trim().toLowerCase();
   if (!EMAIL_RE.test(approver)) {
