@@ -62,6 +62,7 @@ import { resolveLayerActivatedAt } from "../../utils/layerActivation";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import {
   DirectoryGapError,
+  isDeferredAssignee,
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
@@ -74,7 +75,10 @@ import {
   setScheduledWorkflowEmail,
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
-import { setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { getWorkflowAssignment, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { classifyLayerRouting } from "../../utils/routingCheck";
+import type { LayerRoutingVerdict } from "../../utils/routingCheck";
+import RoutingCheckPanel from "./RoutingCheckPanel";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import WorkflowAssignmentEditor from "./WorkflowAssignmentEditor";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
@@ -728,6 +732,11 @@ export default function ApprovalDashboard() {
   const [manualEmailRecipient, setManualEmailRecipient] = useState("");
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [routingVerdicts, setRoutingVerdicts] = useState<LayerRoutingVerdict[] | null>(null);
+  const [routingChecking, setRoutingChecking] = useState(false);
+  const [routingFixingLayer, setRoutingFixingLayer] = useState(0);
+  // Results belong to one submission; opening another starts from "not checked".
+  useEffect(() => { setRoutingVerdicts(null); }, [selectedItem?.Title, selectedItem?.Id]);
   const [selectedActiveLayers, setSelectedActiveLayers] = useState<LayerConfigItem[]>([]);
   const [pdfRegeneratingItemKey, setPdfRegeneratingItemKey] = useState("");
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
@@ -2113,6 +2122,204 @@ export default function ApprovalDashboard() {
     }
   };
 
+  const currentLayerOf = (rawItem: Record<string, unknown>, item: PendingItem): number =>
+    Number(rawItem.CurrentLayer || rawItem.CurrentApprovalLayer || item.CurrentLayer || item.CurrentApprovalLayer || 0) || 1;
+
+  /** Compares one layer's saved actors with what routing picks now. Reads only; writes nothing. */
+  const inspectLayerRouting = async (
+    rawItem: Record<string, unknown>,
+    layer: LayerConfigItem,
+    currentLayerNumber: number,
+  ): Promise<{ verdict: LayerRoutingVerdict; routedPrimary: string }> => {
+    const layerNumber = layer.layerNumber;
+    const status = valueToText(rawItem[`L${layerNumber}_Status`]);
+    const saved = parseValidEmailList(rawItem[`L${layerNumber}_Emails`] || valueToText(rawItem[`L${layerNumber}_Email`]));
+    const manualOverride = getWorkflowAssignment(rawItem.WorkflowAssignmentData, layerNumber)?.source === "manual-override";
+    let holdReason: string | undefined;
+    if (isNeedsRoutingStatus(status)) {
+      holdReason = "Waiting for someone to name the person (needs routing). Use Reconfigure this submission to set it.";
+    } else if (isManualPaperWorkflowStatus(status)) {
+      holdReason = "On paper handling. Use Reconfigure this submission to change it.";
+    }
+    const waitingReason = isDeferredAssignee(layer.assignee as ResolvableLayer["assignee"]) && layerNumber > currentLayerNumber
+      ? "Depends on who acts on the earlier step, so it cannot be checked yet."
+      : undefined;
+
+    let routed: string[] = [];
+    let routedPrimary = "";
+    let routingProblem: string | undefined;
+    if (!manualOverride && !holdReason && !waitingReason) {
+      try {
+        const result = await resolveLayerAssigneeEmail(token ?? "", layer, rawItem, currentFormSlug());
+        if (result.error) routingProblem = result.error;
+        else if (result.parked) routingProblem = result.parked.reason;
+        else {
+          routed = result.emails;
+          routedPrimary = result.email;
+        }
+      } catch (error) {
+        routingProblem = error instanceof Error ? error.message : "Routing could not be worked out.";
+      }
+      if (routed.length && shouldUseManualPaperForSender(layer, routedPrimary)) {
+        routed = [];
+        routingProblem = "Routing points to the paper mailbox, which needs paper handling. Use Reconfigure this submission.";
+      }
+    }
+
+    const { kind, note } = classifyLayerRouting({ saved, routed, routingProblem, manualOverride, holdReason, waitingReason });
+    return {
+      verdict: {
+        layer: layerNumber,
+        title: layer.title || `Layer ${layerNumber}`,
+        type: layer.type === "evaluation" ? "evaluation" : "approval",
+        kind,
+        saved,
+        routed,
+        ...(note ? { note } : {}),
+      },
+      routedPrimary,
+    };
+  };
+
+  const handleCheckRouting = async () => {
+    if (!token || !selectedItem || !isSuperuser) return;
+    setRoutingChecking(true);
+    setError("");
+    setEmailNotice("");
+    try {
+      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`;
+      const rawItem = await spGet(token, itemUrl) as Record<string, unknown>;
+      if (isTerminalWorkflowStatus(rawItem.FormStatus || rawItem.Status)) {
+        setRoutingVerdicts([]);
+        return;
+      }
+      const currentLayerNumber = currentLayerOf(rawItem, selectedItem);
+      const verdicts: LayerRoutingVerdict[] = [];
+      for (const layer of [...selectedActiveLayers].sort((a, b) => a.layerNumber - b.layerNumber)) {
+        if (layer.layerNumber < currentLayerNumber || isTerminalWorkflowStatus(rawItem[`L${layer.layerNumber}_Status`])) continue;
+        verdicts.push((await inspectLayerRouting(rawItem, layer, currentLayerNumber)).verdict);
+      }
+      setRoutingVerdicts(verdicts);
+    } catch (checkError) {
+      setError(checkError instanceof Error ? checkError.message : "Could not check the routing.");
+    } finally {
+      setRoutingChecking(false);
+    }
+  };
+
+  /**
+   * Corrects who may act on one layer to what routing picks. A correction only:
+   * the layer's status is untouched, nothing is sent, and a scheduled email keeps
+   * its due date — only its recipient changes.
+   */
+  const handleFixRouting = async (layerNumber: number) => {
+    if (!token || !selectedItem || !isSuperuser) return;
+    setRoutingFixingLayer(layerNumber);
+    setError("");
+    setEmailNotice("");
+    try {
+      const itemKey = getPendingItemKey(selectedItem);
+      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`;
+      // Re-read and re-resolve rather than trusting what the page showed: the
+      // layer may have moved on, or been reassigned, since the check ran.
+      const rawItem = await spGet(token, itemUrl) as Record<string, unknown>;
+      const currentLayerNumber = currentLayerOf(rawItem, selectedItem);
+      const targetLayer = selectedActiveLayers.find((layer) => layer.layerNumber === layerNumber);
+      if (!targetLayer) throw new Error(`Layer ${layerNumber} is not available in this submission's workflow.`);
+      if (
+        layerNumber < currentLayerNumber
+        || isTerminalWorkflowStatus(rawItem[`L${layerNumber}_Status`])
+        || isTerminalWorkflowStatus(rawItem.FormStatus || rawItem.Status)
+      ) {
+        throw new Error(`Layer ${layerNumber} is already complete and cannot be corrected.`);
+      }
+
+      const { verdict, routedPrimary } = await inspectLayerRouting(rawItem, targetLayer, currentLayerNumber);
+      if (verdict.kind === "match") {
+        setRoutingVerdicts((previous) => previous?.map((entry) => entry.layer === layerNumber ? verdict : entry) ?? previous);
+        setEmailNotice(`Layer ${layerNumber} already matches routing. Nothing was changed.`);
+        return;
+      }
+      if (verdict.kind !== "mismatch") {
+        throw new Error(verdict.note || `Layer ${layerNumber} cannot be corrected automatically.`);
+      }
+
+      const updatedAt = new Date().toISOString();
+      const updatedBy = accounts[0]?.username || accounts[0]?.name || "SYSTEM";
+      const patchBody: Record<string, unknown> = {};
+      // Replaces the whole actor set, so a former co-assignee loses access too.
+      const recipients = writeLayerRecipientFields(patchBody, targetLayer, verdict.routed, routedPrimary);
+      const assignmentData = setWorkflowAssignmentOverride(rawItem.WorkflowAssignmentData, {
+        layer: layerNumber,
+        email: routedPrimary,
+        reason: "Corrected to match routing",
+        updatedAt,
+        updatedBy,
+        source: "resolved",
+        previous: {
+          email: valueToText(rawItem[`L${layerNumber}_Email`]) || routedPrimary,
+          source: "resolved",
+          updatedBy: "SYSTEM",
+          updatedAt: selectedItem.SubmittedAt || updatedAt,
+        },
+      });
+      patchBody.WorkflowAssignmentData = JSON.stringify(assignmentData);
+      // Only an email still waiting to go out is redirected, and only its
+      // recipient: dueAt stays exactly as it was.
+      const schedule = getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, layerNumber);
+      if (schedule?.status === "scheduled") {
+        patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
+          rawItem.WorkflowEmailSchedule,
+          layerNumber,
+          recipients[0] || routedPrimary,
+          updatedAt,
+        ));
+      }
+
+      await ensureWorkflowColumns(
+        token,
+        selectedItem.Title,
+        Math.max(layerNumber, ...selectedActiveLayers.map((layer) => layer.layerNumber)),
+      );
+      await spPatch(token, itemUrl, patchBody);
+
+      const serializedAssignments = JSON.stringify(assignmentData);
+      const serializedSchedule = typeof patchBody.WorkflowEmailSchedule === "string"
+        ? patchBody.WorkflowEmailSchedule
+        : selectedItem.WorkflowEmailSchedule;
+      const applyToItem = (current: PendingItem): PendingItem => ({
+        ...current,
+        WorkflowAssignmentData: serializedAssignments,
+        WorkflowEmailSchedule: serializedSchedule,
+      });
+      setCompletedLayers((previous) => ({
+        ...previous,
+        [layerNumber]: { ...(previous[layerNumber] || { status: "" }), email: routedPrimary },
+      }));
+      setPendingItems((previous) => previous.map((current) => getPendingItemKey(current) === itemKey ? applyToItem(current) : current));
+      setSelectedItem((current) => current && getPendingItemKey(current) === itemKey ? applyToItem(current) : current);
+      if (layerNumber === currentLayerNumber) {
+        setManualEmailRecipient(recipients[0] || routedPrimary);
+        setSelectedLayerAccess((previous) => previous ? {
+          ...previous,
+          assignedEmail: verdict.routed.length > 1 ? verdict.routed.join(", ") : routedPrimary.toLowerCase(),
+          allowed: previous.override || isLayerActor(normalizeEmailAddress(accounts[0]?.username), verdict.routed, routedPrimary),
+        } : previous);
+      }
+      setRoutingVerdicts((previous) => previous?.map((entry) =>
+        entry.layer === layerNumber ? { ...entry, kind: "match", saved: verdict.routed } : entry,
+      ) ?? previous);
+      setEmailNotice(
+        `Layer ${layerNumber} now routes to ${verdict.routed.join(", ")}.`
+        + (schedule?.status === "scheduled" ? ` The scheduled email still goes out on ${formatDateTime(schedule.dueAt)}.` : " No email was sent."),
+      );
+    } catch (fixError) {
+      setError(fixError instanceof Error ? fixError.message : "Could not correct the routing.");
+    } finally {
+      setRoutingFixingLayer(0);
+    }
+  };
+
   const handleSaveWorkflowAssignment = async (input: WorkflowAssignmentSaveInput) => {
     if (!token || !selectedItem || !isSuperuser) return;
     const email = input.email.trim();
@@ -3300,6 +3507,15 @@ export default function ApprovalDashboard() {
                       rawAssignments={selectedItem.WorkflowAssignmentData}
                       saving={assignmentSaving}
                       onSave={handleSaveWorkflowAssignment}
+                    />
+                  )}
+                  {isSuperuser && selectedActiveLayers.length > 0 && (
+                    <RoutingCheckPanel
+                      verdicts={routingVerdicts}
+                      checking={routingChecking}
+                      fixingLayer={routingFixingLayer}
+                      onCheck={() => void handleCheckRouting()}
+                      onFix={(layerNumber) => void handleFixRouting(layerNumber)}
                     />
                   )}
                   {(isAdmin || isSuperuser) && selectedActiveLayers.length > 0 && currentLayerConfig && (
