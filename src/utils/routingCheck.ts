@@ -27,6 +27,8 @@ export interface LayerRoutingVerdict {
   routed: string[];
   /** Plain-language reason for every kind except `match` and `mismatch`. */
   note?: string;
+  /** How routing reached `routed`, in plain words, when it can say. */
+  how?: string;
 }
 
 export interface RoutingFacts {

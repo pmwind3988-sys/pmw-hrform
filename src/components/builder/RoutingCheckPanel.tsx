@@ -83,6 +83,7 @@ export default function RoutingCheckPanel({ verdicts, checking, fixingLayer, onC
               <>
                 <div style={{ color: C.textSecond }}>Saved {noun}: {names(verdict.saved)}</div>
                 <div style={{ color: C.textSecond }}>Routing says: {names(verdict.routed)}</div>
+                {verdict.how ? <div style={{ color: C.textSecond }}>How: {verdict.how}</div> : null}
                 <div style={{ color: C.textSecond }}>
                   Fixing changes who can act. It keeps any scheduled email date and does not send anything.
                 </div>
@@ -96,7 +97,10 @@ export default function RoutingCheckPanel({ verdicts, checking, fixingLayer, onC
                 </button>
               </>
             ) : verdict.kind === "match" ? (
-              <div style={{ color: C.textSecond }}>{names(verdict.saved)}</div>
+              <div style={{ color: C.textSecond }}>
+                {names(verdict.saved)}
+                {verdict.how ? <div>How: {verdict.how}</div> : null}
+              </div>
             ) : (
               <div style={{ color: C.textSecond }}>
                 {verdict.note}

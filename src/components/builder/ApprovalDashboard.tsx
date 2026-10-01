@@ -2148,6 +2148,7 @@ export default function ApprovalDashboard() {
     let routed: string[] = [];
     let routedPrimary = "";
     let routingProblem: string | undefined;
+    let how: string | undefined;
     if (!manualOverride && !holdReason && !waitingReason) {
       // Submission applies a layer's submitter routing rules over its normal
       // assignee, so the check has to as well: a matching rule names the evaluator
@@ -2158,6 +2159,7 @@ export default function ApprovalDashboard() {
       } else if (submitterRule?.email) {
         routed = parseValidEmailList(submitterRule.email);
         routedPrimary = routed[0] ?? "";
+        how = "A submitter routing rule set on the workflow page names this evaluator.";
         if (!routed.length) routingProblem = `The submitter routing rule names "${submitterRule.email}", which is not a valid email address.`;
       } else {
         try {
@@ -2167,6 +2169,14 @@ export default function ApprovalDashboard() {
           else {
             routed = result.emails;
             routedPrimary = result.email;
+            how = result.explanation;
+          }
+          // A fallback is not the routing page's answer: the approval line could
+          // not be followed, so whoever is saved may have come from the same
+          // fallback. Say why instead of calling that a match.
+          if (routed.length && result.explanation?.startsWith("Fell back")) {
+            routingProblem = `${result.explanation} Fix the Approval Directory on the Routing page, then check again.`;
+            routed = [];
           }
         } catch (error) {
           routingProblem = error instanceof Error ? error.message : "Routing could not be worked out.";
@@ -2188,6 +2198,7 @@ export default function ApprovalDashboard() {
         saved,
         routed,
         ...(note ? { note } : {}),
+        ...(how ? { how } : {}),
       },
       routedPrimary,
     };
