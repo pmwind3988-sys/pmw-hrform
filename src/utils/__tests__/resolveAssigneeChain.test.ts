@@ -170,6 +170,24 @@ describe("chain routing", () => {
     expect(result.error).toBeUndefined();
   });
 
+  it("routes to the approver the row names even when that approver has no row", async () => {
+    // The top of a line is often not listed. The row still says who approves.
+    const org = { ...ORG, "mei@pmw.com": { name: "Mei", department: "Key", position: "CFO", approverEmail: "chair@pmw.com" } };
+    const result = await resolveLayerAssignee(chain(), {}, directory(org), {
+      context: { submitterEmail: "mei@pmw.com" },
+    });
+    expect(result.email).toBe("chair@pmw.com");
+    expect(result.parked).toBeUndefined();
+  });
+
+  it("still needs a listed person to keep walking past an unlisted hop", async () => {
+    const org = { ...ORG, "mei@pmw.com": { name: "Mei", department: "Key", position: "CFO", approverEmail: "chair@pmw.com" } };
+    const result = await resolveLayerAssignee(chain({ hops: 2 }), {}, directory(org), {
+      context: { submitterEmail: "mei@pmw.com" },
+    });
+    expect(result.parked?.reason).toContain("not in the approval directory");
+  });
+
   it("parks a public submission that carries no identity to route from", async () => {
     const result = await resolveLayerAssignee(chain(), {}, directory(), {
       context: { submitterEmail: "GUEST" },

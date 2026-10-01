@@ -307,14 +307,22 @@ async function walkChain(
     seen.add(next.toLowerCase());
     trail.push(next);
 
-    const nextPerson = await lookupPerson(next);
+    const reachedRequestedHop = step + 1 >= ceiling;
+    const listed = await lookupPerson(next);
+    // The row says who approves this person, and that is the answer. The
+    // approver need not be listed themselves — the top of a line often is not —
+    // so on the requested hop an unlisted address still routes. An intermediate
+    // hop has to be listed, because the walk needs its approver to continue.
+    const nextPerson = listed
+      ?? (reachedRequestedHop
+        ? { email: next, name: "", department: "", position: "", approverEmail: "" }
+        : null);
     if (!nextPerson) {
       return { ok: false, reason: `${next} is not in the approval directory`, trail };
     }
     current = next;
     resolved = nextPerson;
 
-    const reachedRequestedHop = step + 1 >= ceiling;
     // Only keep walking past the requested hop to step over the submitter
     // themselves — the "approved by their own submission" case.
     const landedOnSubmitter = options.skipSelf && submitter && next.toLowerCase() === submitter;
