@@ -466,6 +466,68 @@ export function isListedInDirectory(
   return !!name && undecided(index.names.get(name));
 }
 
+/** The questions that identify the person a form is about. */
+export interface SubjectFieldMapping {
+  nameField?: string;
+  employeeIdField?: string;
+  emailField?: string;
+}
+
+/**
+ * A stored column key turned back into words ("employeeName" -> "employee Name"),
+ * so label matching can read it when the form's own question titles are gone.
+ */
+export function spelledFieldKey(key: string): string {
+  return key
+    .replace(/_x[0-9a-f]{4}_/gi, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ");
+}
+
+/**
+ * The questions holding the employee a submission is about: the form's own
+ * harvest settings when an admin made them, otherwise a guess from the labels.
+ * `options` are the form's questions; pass the submitted keys as well when the
+ * published form is not to hand.
+ */
+export function subjectFieldMapping(
+  layerConfig: unknown,
+  options: HarvestFieldOption[],
+): SubjectFieldMapping {
+  return readHarvestConfig(layerConfig) ?? harvestFieldGuesses(options);
+}
+
+/** Questions to guess from when only the submitted data is known. */
+export function optionsFromSubmittedData(data: Record<string, unknown>): HarvestFieldOption[] {
+  return Object.keys(data)
+    .filter((key) => !/^L\d+_/.test(key))
+    .map((key) => ({ name: key, title: spelledFieldKey(key) }));
+}
+
+/**
+ * The directory row for the employee a submission is about, found from its own
+ * answers: staff number first, then address, then a name that only one row has.
+ *
+ * Used when the submitter has no address routing can look up — a public link,
+ * or a person whose row carries a name and no email — so the reporting line is
+ * still followed instead of the layer being parked. `rows` should already be
+ * limited to the ones routing may act on.
+ */
+export function findSubjectRow<T extends { personEmail: string; personName: string; employeeId: string }>(
+  rows: T[],
+  data: Record<string, unknown>,
+  mapping: SubjectFieldMapping,
+): T | undefined {
+  const submittedEmail = harvestFieldValue(data, mapping.emailField);
+  const email = isPersonEmail(submittedEmail) ? submittedEmail.trim().toLowerCase() : "";
+  const employeeId = employeeIdKey(harvestFieldValue(data, mapping.employeeIdField));
+  const name = personNameKey(harvestFieldValue(data, mapping.nameField));
+  const byName = name ? rows.filter((row) => personNameKey(row.personName) === name) : [];
+  return (employeeId ? rows.find((row) => employeeIdKey(row.employeeId) === employeeId) : undefined)
+    ?? (email ? rows.find((row) => row.personEmail.trim().toLowerCase() === email) : undefined)
+    ?? (byName.length === 1 ? byName[0] : undefined);
+}
+
 /**
  * Reads the harvest settings off a parsed `LayerConfig`, or null when this
  * form was never switched on.

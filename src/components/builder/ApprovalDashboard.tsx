@@ -69,7 +69,8 @@ import {
 import { forEachSurveyElement } from "../../utils/surveyWalk";
 import { createApprovalDirectoryReader, loadApprovalDirectory } from "../../utils/approvalDirectory";
 import {
-  harvestFieldGuesses,
+  optionsFromSubmittedData,
+  subjectFieldMapping,
   harvestFieldValue,
   isPersonEmail,
   readHarvestConfig,
@@ -636,8 +637,9 @@ async function resolveLayerAssigneeEmail(
   submittedData: Record<string, unknown>,
   formSlug: string,
   previousStep?: PreviousStep,
+  layerConfig?: unknown,
 ): Promise<{ email: string; emails: string[]; error?: string; parked?: { reason: string }; explanation?: string }> {
-  const directory = createApprovalDirectoryReader(token);
+  const directory = createApprovalDirectoryReader(token, { layerConfig });
   return resolveSharedLayerAssignee(
     layer as ResolvableLayer,
     submittedData,
@@ -646,6 +648,7 @@ async function resolveLayerAssigneeEmail(
         resolveDepartmentApproverEmail(token, target as unknown as LayerConfigItem, data),
       expandDistributionList: (target) => expandLayerDistributionList(formSlug, target.layerNumber),
       lookupPerson: directory.lookupPerson,
+      lookupSubject: directory.lookupSubject,
       lookupRoleHolder: directory.lookupRoleHolder,
     },
     {
@@ -682,17 +685,11 @@ async function findApproverOfFormSubject(
     const name = typeof element.name === "string" ? element.name : "";
     if (name) options.push({ name, title: typeof element.title === "string" ? element.title : name });
   });
-  const spelled = (key: string) => key
-    .replace(/_x[0-9a-f]{4}_/gi, " ")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/_/g, " ");
-  for (const key of Object.keys(rawItem)) {
-    if (!/^L\d+_/.test(key) && !options.some((option) => option.name === key)) {
-      options.push({ name: key, title: spelled(key) });
-    }
+  for (const option of optionsFromSubmittedData(rawItem)) {
+    if (!options.some((existing) => existing.name === option.name)) options.push({ name: option.name, title: option.title ?? option.name });
   }
   const harvest = readHarvestConfig(layerConfig);
-  const mapping = harvest ?? { enabled: true as const, ...harvestFieldGuesses(options) };
+  const mapping = subjectFieldMapping(layerConfig, options);
   const submittedEmail = harvestFieldValue(rawItem, mapping.emailField);
   const email = isPersonEmail(submittedEmail) ? submittedEmail.trim().toLowerCase() : "";
   const employeeId = harvestFieldValue(rawItem, mapping.employeeIdField).trim();
@@ -1970,6 +1967,7 @@ export default function ApprovalDashboard() {
           submittedData,
           currentFormSlug(),
           previousStepFor(bLayers, layer.layerNumber),
+          configSource,
         );
         if (result.error) assigneeErrors.push(result.error);
         if (result.email) resolvedEmails[layer.layerNumber] = result.email;
@@ -2074,6 +2072,7 @@ export default function ApprovalDashboard() {
           rawItem,
           currentFormSlug(),
           previousStepFor(activeLayers, currentLayerNumber),
+          configSource,
         );
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
@@ -2707,6 +2706,7 @@ export default function ApprovalDashboard() {
           rawItem,
           currentFormSlug(),
           previousStepFor(activeLayers, currentLayerNumber),
+          configSource,
         );
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
@@ -3458,7 +3458,19 @@ export default function ApprovalDashboard() {
 
                   const submitterBlock = (
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, color: C.textPrimary, overflowWrap: "anywhere" }}>{item.SubmittedBy}</div>
+                      {isPersonEmail(item.SubmittedBy || "") ? (
+                        <div style={{ fontSize: 13.5, color: C.textPrimary, overflowWrap: "anywhere" }}>{item.SubmittedBy}</div>
+                      ) : (
+                        <div
+                          title="This person has no email set, so they are not emailed about the outcome. Approvals still follow the routing page."
+                          style={{
+                            display: "inline-block", fontSize: 11.5, fontWeight: 700, padding: "2px 9px", borderRadius: 12,
+                            background: C.purplePale, color: C.purple,
+                          }}
+                        >
+                          No email set
+                        </div>
+                      )}
                       <div style={{ fontSize: 12, color: C.textSecond, marginTop: 2 }}>{formatDateTime(item.SubmittedAt)}</div>
                     </div>
                   );
@@ -3679,7 +3691,7 @@ export default function ApprovalDashboard() {
                 <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ fontWeight: 600, color: C.textPrimary }}>{selectedItem.Title}</div>
                   <div style={{ fontSize: 13.5, color: C.textSecond, marginTop: 4 }}>
-                    Submitted by {selectedItem.SubmittedBy} • {formatDateTime(selectedItem.SubmittedAt)}
+                    Submitted by {isPersonEmail(selectedItem.SubmittedBy || "") ? selectedItem.SubmittedBy : "someone with no email set (no outcome email is sent)"} • {formatDateTime(selectedItem.SubmittedAt)}
                   </div>
                   <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
                     Form Version: {selectedItem.FormVersion || "Legacy"}

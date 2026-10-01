@@ -420,8 +420,9 @@ async function resolveLayerAssignee(
   token: string | null,
   slug: string,
   context: ResolutionContext,
+  layerConfig?: unknown,
 ): Promise<ResolvedLayerActors> {
-  const directory = token ? createApprovalDirectoryReader(token) : null;
+  const directory = token ? createApprovalDirectoryReader(token, { layerConfig }) : null;
   const resolved = await resolveSharedLayerAssignee(
     layer as ResolvableLayer,
     submittedData,
@@ -436,7 +437,7 @@ async function resolveLayerAssignee(
       // A guest has no SharePoint token to read the directory with, so chain
       // layers park rather than resolving. That is the correct outcome: a
       // public respondent has no identity to route from either.
-      ...(directory ? { lookupPerson: directory.lookupPerson, lookupRoleHolder: directory.lookupRoleHolder } : {}),
+      ...(directory ? { lookupPerson: directory.lookupPerson, lookupSubject: directory.lookupSubject, lookupRoleHolder: directory.lookupRoleHolder } : {}),
     },
     { blockedSuffix: "before this form can be submitted.", context },
   );
@@ -1431,7 +1432,7 @@ export default function DynamicFormPage() {
               activeLayers.push({ email: "", name: "", emails: [] });
               continue;
             }
-            activeLayers.push(await resolveLayerAssignee(layer, raw, token, configSlug, { submitterEmail }));
+            activeLayers.push(await resolveLayerAssignee(layer, raw, token, configSlug, { submitterEmail }, layerConfigParsed));
           }
         }
       } else {

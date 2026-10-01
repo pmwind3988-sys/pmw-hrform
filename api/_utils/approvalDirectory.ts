@@ -21,6 +21,11 @@ import {
   type DirectoryColumnMap,
 } from "./approvalDirectorySchema.js";
 import { logWarn } from "./logger.js";
+import {
+  findSubjectRow,
+  optionsFromSubmittedData,
+  subjectFieldMapping,
+} from "./directoryHarvest.js";
 
 /**
  * One request per distinct address, cached for the life of the invocation.
@@ -43,8 +48,16 @@ function isRoutableRow(row: ApprovalDirectoryRow): boolean {
   return row.isActive && row.confirmed;
 }
 
-export function createApprovalDirectoryReader(token: string) {
+/** Most rows read when looking for the employee on a form; a directory is a few hundred. */
+const SUBJECT_SCAN_LIMIT = 999;
+
+export function createApprovalDirectoryReader(
+  token: string,
+  /** The form's `LayerConfig`, so the employee's questions can be told apart. */
+  options: { layerConfig?: unknown } = {},
+) {
   const people = new Map<string, ApprovalDirectoryRow | null>();
+  let routableRows: Promise<ApprovalDirectoryRow[]> | null = null;
   let columnsPromise: Promise<DirectoryColumnMap | null> | null = null;
 
   /**
@@ -138,18 +151,48 @@ export function createApprovalDirectoryReader(token: string) {
     }
   }
 
+  /** Every row routing may act on, read once per invocation. */
+  function allRoutableRows(): Promise<ApprovalDirectoryRow[]> {
+    routableRows ??= columns().then(async (map) => {
+      if (!map) return [];
+      try {
+        const items = await queryListItems(token, APPROVAL_DIRECTORY_LIST, { top: SUBJECT_SCAN_LIMIT });
+        return items.map((item) => toApprovalDirectoryRow(item.fields, map)).filter(isRoutableRow);
+      } catch (error) {
+        logWarn("api:approval-directory", "Directory scan failed", {
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+        return [];
+      }
+    });
+    return routableRows;
+  }
+
+  /**
+   * The employee a submission is about, found from its answers. Answers null
+   * rather than throwing, like every lookup here.
+   */
+  async function lookupSubject(data: Record<string, unknown>): Promise<ApprovalDirectoryRow | null> {
+    const mapping = subjectFieldMapping(options.layerConfig, optionsFromSubmittedData(data));
+    return findSubjectRow(await allRoutableRows(), data, mapping) ?? null;
+  }
+
+  const toPerson = (row: ApprovalDirectoryRow) => ({
+    email: row.personEmail,
+    name: row.personName,
+    department: row.department,
+    position: row.position,
+    approverEmail: row.approverEmail,
+  });
+
   return {
     lookupPerson: async (email: string) => {
       const row = await lookupPerson(email);
-      return row
-        ? {
-          email: row.personEmail,
-          name: row.personName,
-          department: row.department,
-          position: row.position,
-          approverEmail: row.approverEmail,
-        }
-        : null;
+      return row ? toPerson(row) : null;
+    },
+    lookupSubject: async (data: Record<string, unknown>) => {
+      const row = await lookupSubject(data);
+      return row ? toPerson(row) : null;
     },
     lookupRoleHolder,
   };

@@ -1231,8 +1231,9 @@ async function resolveLayerAssignee(
   layer: ApiLayerConfigItem,
   formBody: Record<string, unknown>,
   context: ResolutionContext,
+  layerConfig: ApiLayerConfig | null,
 ): Promise<ResolvedLayerActors & { parkedReason?: string }> {
-  const directory = createApprovalDirectoryReader(token);
+  const directory = createApprovalDirectoryReader(token, { layerConfig });
   const resolved = await resolveSharedLayerAssignee(
     layer as ResolvableLayer,
     formBody,
@@ -1246,6 +1247,7 @@ async function resolveLayerAssignee(
         ),
       expandDistributionList: (_target, address) => expandDistributionList(token, address),
       lookupPerson: directory.lookupPerson,
+      lookupSubject: directory.lookupSubject,
       lookupRoleHolder: directory.lookupRoleHolder,
     },
     {
@@ -1445,7 +1447,7 @@ async function applyLayerConfigWorkflow(
 
     const resolved = matchedRule?.action === "assign-evaluator"
       ? toResolvedActors(valueToText(matchedRule.evaluatorEmail), "")
-      : await resolveLayerAssignee(token, layer, formBody, context);
+      : await resolveLayerAssignee(token, layer, formBody, context, layerConfig);
 
     if ("parkedReason" in resolved && resolved.parkedReason) {
       parkedReasons.push(`Layer ${layerNumber}: ${resolved.parkedReason}`);

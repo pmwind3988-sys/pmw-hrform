@@ -17,6 +17,7 @@ import {
   personNameKey,
   readHarvestConfig,
   type DirectoryHarvestCandidate,
+  findSubjectRow,
 } from "../directoryHarvest";
 
 const DOMAIN = "pmw-group.com";
@@ -644,5 +645,27 @@ describe("the src/ and api/ copies", () => {
     // header means the two have drifted.
     expect(differing.length).toBe(1);
     expect(client[differing[0]]).toContain("api/_utils/directoryHarvest.ts");
+  });
+});
+
+describe("findSubjectRow", () => {
+  const rows = [
+    { personEmail: "", personName: "Hassan bin Ali", employeeId: "PC 069" },
+    { personEmail: "siti@pmw.com", personName: "Siti", employeeId: "" },
+  ];
+  const mapping = { nameField: "name", employeeIdField: "staffNo", emailField: "email" };
+
+  it("finds a person with no email by staff number, ignoring spaces and case", () => {
+    expect(findSubjectRow(rows, { staffNo: "pc069" }, mapping)?.personName).toBe("Hassan bin Ali");
+  });
+
+  it("falls back to the address, then to a name only one row has", () => {
+    expect(findSubjectRow(rows, { email: "Siti@pmw.com" }, mapping)?.personName).toBe("Siti");
+    expect(findSubjectRow(rows, { name: "Hassan" }, mapping)?.personEmail).toBe("");
+  });
+
+  it("refuses a name two rows share", () => {
+    const twins = [...rows, { personEmail: "", personName: "Hassan binti Omar", employeeId: "" }];
+    expect(findSubjectRow(twins, { name: "Hassan" }, mapping)).toBeUndefined();
   });
 });
