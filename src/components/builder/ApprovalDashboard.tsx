@@ -2149,16 +2149,28 @@ export default function ApprovalDashboard() {
     let routedPrimary = "";
     let routingProblem: string | undefined;
     if (!manualOverride && !holdReason && !waitingReason) {
-      try {
-        const result = await resolveLayerAssigneeEmail(token ?? "", layer, rawItem, currentFormSlug());
-        if (result.error) routingProblem = result.error;
-        else if (result.parked) routingProblem = result.parked.reason;
-        else {
-          routed = result.emails;
-          routedPrimary = result.email;
+      // Submission applies a layer's submitter routing rules over its normal
+      // assignee, so the check has to as well: a matching rule names the evaluator
+      // outright, or sends the step to paper handling.
+      const submitterRule = resolveEvaluationSubmitterRouting(layer, rawItem);
+      if (submitterRule?.manualPaper) {
+        routingProblem = "A submitter routing rule sends this step to paper handling. Use Reconfigure this submission to change it.";
+      } else if (submitterRule?.email) {
+        routed = parseValidEmailList(submitterRule.email);
+        routedPrimary = routed[0] ?? "";
+        if (!routed.length) routingProblem = `The submitter routing rule names "${submitterRule.email}", which is not a valid email address.`;
+      } else {
+        try {
+          const result = await resolveLayerAssigneeEmail(token ?? "", layer, rawItem, currentFormSlug());
+          if (result.error) routingProblem = result.error;
+          else if (result.parked) routingProblem = result.parked.reason;
+          else {
+            routed = result.emails;
+            routedPrimary = result.email;
+          }
+        } catch (error) {
+          routingProblem = error instanceof Error ? error.message : "Routing could not be worked out.";
         }
-      } catch (error) {
-        routingProblem = error instanceof Error ? error.message : "Routing could not be worked out.";
       }
       if (routed.length && shouldUseManualPaperForSender(layer, routedPrimary)) {
         routed = [];
