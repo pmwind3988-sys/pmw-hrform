@@ -20,7 +20,6 @@ import ConfirmDialog from "../common/ConfirmDialog";
 import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import { SP_STATIC } from "../../utils/spConfig";
 import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
-import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
 import {
@@ -3114,26 +3113,13 @@ export default function ApprovalDashboard() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Auth banner — topmost */}
-        <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 12, padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", background: `linear-gradient(135deg,${C.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-            {((accounts[0]?.username?.[0] || "?").toUpperCase())}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.green }}>Signed in</div>
-            <div style={{ fontSize: 11.5, color: C.textSecond }}>{accounts[0]?.username || "—"}</div>
-          </div>
-          <button onClick={() => { clearStoredAuthDecision(); instance.logoutRedirect({ postLogoutRedirectUri: window.location.href }); }}
-            style={{ fontSize: 11.5, color: C.textSecond, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>
-            Sign out
-          </button>
-        </div>
-
-        <header style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
-          <p style={{ color: C.textSecond, marginTop: 4 }}>Review submissions, approvals, and evaluation layers</p>
+    // One screen: the shell's bars and padding take roughly 220px, the rest is ours.
+    // The two panes below scroll inside themselves, so the page does not.
+    <div style={{ height: "calc(100dvh - 220px)", minHeight: 560 }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}>
+        <header style={{ marginBottom: 10, display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
+          <p style={{ color: C.textSecond, margin: 0, fontSize: 13 }}>Review submissions, approvals, and evaluation layers</p>
         </header>
 
         {error && (
@@ -3148,7 +3134,7 @@ export default function ApprovalDashboard() {
         )}
 
         {/* Lifecycle tabs — what needs doing, not which layer type the item sits on */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
           {LIFECYCLE_STAGES.map((stage) => {
             const count = categoryItems.filter((item) => getItemLifecycleStage(item) === stage).length;
             return (
@@ -3156,8 +3142,8 @@ export default function ApprovalDashboard() {
                 key={stage}
                 onClick={() => setStageFilter(stage)}
                 style={{
-                  padding: "6px 16px", borderRadius: 12, border: "none", cursor: "pointer",
-                  fontSize: 13.5, fontWeight: 600,
+                  padding: "5px 14px", borderRadius: 12, border: "none", cursor: "pointer",
+                  fontSize: 13, fontWeight: 600,
                   background: stageFilter === stage ? C.purple : "#fff",
                   color: stageFilter === stage ? "#fff" : C.textSecond,
                   boxShadow: stageFilter === stage ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
@@ -3167,23 +3153,22 @@ export default function ApprovalDashboard() {
               </button>
             );
           })}
-        </div>
-
-        {/* Workflow type — a filter, not a structural split */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
-          <label style={{ fontSize: 12.5, fontWeight: 600, color: C.textSecond }}>Workflow type</label>
-          <select
-            value={workflowTypeFilter}
-            onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
-            style={{
-              padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-              fontSize: 13.5, color: C.textPrimary, outline: "none", background: "#fff",
-            }}
-          >
-            <option value="all">All</option>
-            <option value="approval">Approval</option>
-            <option value="evaluation">Evaluation</option>
-          </select>
+          {/* Workflow type — a filter, not a structural split */}
+          <label style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, fontWeight: 600, color: C.textSecond }}>
+            Workflow type
+            <select
+              value={workflowTypeFilter}
+              onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
+              style={{
+                padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                fontSize: 13, color: C.textPrimary, outline: "none", background: "#fff",
+              }}
+            >
+              <option value="all">All</option>
+              <option value="approval">Approval</option>
+              <option value="evaluation">Evaluation</option>
+            </select>
+          </label>
         </div>
 
         <SubmissionFilterPanel
@@ -3309,10 +3294,10 @@ export default function ApprovalDashboard() {
         />
 
         {/* Items + Detail Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, flex: 1, minHeight: 0 }}>
           {/* Items List */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               {showGroupIndex ? (
                 <>
                   <span style={{ fontWeight: 600, color: C.purple }}>
@@ -3341,7 +3326,7 @@ export default function ApprovalDashboard() {
                 </>
               )}
             </div>
-            <div style={{ maxHeight: 600, overflow: "auto" }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
               {showGroupIndex ? (
                 /*
                   The index. A group with no instance behind it is the historical
@@ -3605,7 +3590,7 @@ export default function ApprovalDashboard() {
           </div>
 
           {/* Detail Panel */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "auto", minHeight: 0 }}>
             {!selectedItem ? (
               <div style={{ padding: 48, textAlign: "center", color: C.textMuted }}>Select an item to review</div>
             ) : (
