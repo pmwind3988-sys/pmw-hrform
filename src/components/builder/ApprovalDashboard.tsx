@@ -67,6 +67,7 @@ import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
+import { forEachSurveyElement } from "../../utils/surveyWalk";
 import { createApprovalDirectoryReader, loadApprovalDirectory } from "../../utils/approvalDirectory";
 import {
   employeeIdKey,
@@ -661,16 +662,35 @@ async function findApproverOfFormSubject(
   token: string,
   rawItem: Record<string, unknown>,
   layerConfig: unknown,
+  surveyJson: unknown,
 ): Promise<{ email: string; explanation: string } | { problem: string }> {
-  const keys = Object.keys(rawItem).filter((key) => !/^L\d+_/.test(key));
-  const mapping = readHarvestConfig(layerConfig)
-    ?? { enabled: true as const, ...harvestFieldGuesses(keys.map((key) => ({ name: key, title: key.replace(/_x[0-9a-f]{4}_/gi, " ") }))) };
+  // The form's own question titles say what each answer is far better than the
+  // stored column names do, which often run words together ("employeeName").
+  const options: { name: string; title: string }[] = [];
+  forEachSurveyElement(surveyJson, (element) => {
+    const name = typeof element.name === "string" ? element.name : "";
+    if (name) options.push({ name, title: typeof element.title === "string" ? element.title : name });
+  });
+  const spelled = (key: string) => key
+    .replace(/_x[0-9a-f]{4}_/gi, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ");
+  for (const key of Object.keys(rawItem)) {
+    if (!/^L\d+_/.test(key) && !options.some((option) => option.name === key)) {
+      options.push({ name: key, title: spelled(key) });
+    }
+  }
+  const harvest = readHarvestConfig(layerConfig);
+  const mapping = harvest ?? { enabled: true as const, ...harvestFieldGuesses(options) };
   const submittedEmail = harvestFieldValue(rawItem, mapping.emailField);
   const email = isPersonEmail(submittedEmail) ? submittedEmail.trim().toLowerCase() : "";
   const employeeId = employeeIdKey(harvestFieldValue(rawItem, mapping.employeeIdField));
   const name = personNameKey(harvestFieldValue(rawItem, mapping.nameField));
   if (!email && !employeeId && !name) {
-    return { problem: "The form has no usable submitter address and no employee email, staff number or name to look up on the routing page." };
+    return {
+      problem: "The form has no usable submitter address, and no employee email, staff number or name could be found to look up on the routing page."
+        + ` Fields tried (${harvest ? "form settings" : "guessed from labels"}): name = ${mapping.nameField || "none"}, staff number = ${mapping.employeeIdField || "none"}, email = ${mapping.emailField || "none"}.`,
+    };
   }
 
   const directory = await loadApprovalDirectory(token);
@@ -2241,7 +2261,7 @@ export default function ApprovalDashboard() {
           if (followsRoutingPage && !submitterUsable) {
             const configSource = itemLayerConfigsRef.current[getPendingItemKey(selectedItem as PendingItem)]
               || formLayerConfigsRef.current[selectedItem?.Title ?? ""];
-            const subject = await findApproverOfFormSubject(token ?? "", rawItem, configSource);
+            const subject = await findApproverOfFormSubject(token ?? "", rawItem, configSource, surveyJson);
             if ("problem" in subject) {
               routingProblem = subject.problem;
             } else {
