@@ -1981,6 +1981,11 @@ const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
   { n: 'PublishKey', k: SP_FIELD_KIND.text },
   { n: 'FormID', k: SP_FIELD_KIND.text },
   { n: 'SubmittedBy', k: SP_FIELD_KIND.text },
+  // Who in the Approval Directory a public-link submission came from. Written
+  // after the fact by api/submit-form.ts, never by the form itself.
+  { n: 'LinkedUserEmail', k: SP_FIELD_KIND.text },
+  { n: 'LinkedEmployeeId', k: SP_FIELD_KIND.text },
+  { n: 'LinkedMatch', k: SP_FIELD_KIND.text },
   { n: 'Status', k: SP_FIELD_KIND.text },
   { n: 'CurrentApprovalLayer', k: SP_FIELD_KIND.number },
   { n: 'RawJSON', k: SP_FIELD_KIND.note, ml: true },

@@ -95,7 +95,7 @@ async function lookupDepartmentHod(token: string, department: string): Promise<s
 }
 
 /** The list's real columns, or null when it cannot answer anything. */
-async function directoryColumns(token: string): Promise<DirectoryColumnMap | null> {
+export async function directoryColumns(token: string): Promise<DirectoryColumnMap | null> {
   try {
     const available = await getListColumns(token, APPROVAL_DIRECTORY_LIST);
     const map = mapDirectoryColumns(available.map((column) => ({

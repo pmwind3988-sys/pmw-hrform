@@ -10,6 +10,9 @@ import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
 import { useGuestSession } from "./auth/useGuestSession";
 import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
+import { loadApprovalDirectory } from "./utils/approvalDirectory";
+import { employeeIdKey } from "./utils/directoryHarvest";
+import { isLinkedToPerson } from "./utils/linkedSubmission";
 import {
   AUTH_RECOVERY_REQUIRED_EVENT,
   acquireAccessTokenSilentOrRedirect,
@@ -639,6 +642,8 @@ function mapSubmission(
     submitterName,
     createdByName,
     createdByEmail,
+    linkedUserEmail: coerceFieldDisplayText(raw.LinkedUserEmail).trim() || undefined,
+    linkedEmployeeId: coerceFieldDisplayText(raw.LinkedEmployeeId).trim() || undefined,
     submittedAt,
     modifiedAt,
     formStatus,
@@ -1359,11 +1364,33 @@ export default function App() {
 
         const visibleTitles = new Set(lists.map((l) => l.title));
         finalSubmissions = submissionsByList.flat().filter((item) => visibleTitles.has(item.listTitle));
+
+        // Public-link submissions the server tied to a person in the Approval
+        // Directory. Their own staff number is read only when something is
+        // linked, and a directory this person cannot read just means matching
+        // by email alone.
+        const myEmployeeIds = new Set<string>();
+        if (email && finalSubmissions.some((item) => item.linkedEmployeeId)) {
+          try {
+            const directory = await loadApprovalDirectory(await spClient.acquireToken());
+            for (const row of directory.rows) {
+              if (row.isActive && row.personEmail.trim().toLowerCase() === email.toLowerCase() && row.employeeId) {
+                myEmployeeIds.add(employeeIdKey(row.employeeId));
+              }
+            }
+          } catch {
+            // Falls back to the linked email.
+          }
+        }
+        finalSubmissions = finalSubmissions.map((item) =>
+          isLinkedToPerson(item, email, myEmployeeIds) ? { ...item, linkedToMe: true } : item);
+
         if (!forAdmin && email) {
           const lowerEmail = email.toLowerCase();
           finalSubmissions = finalSubmissions.filter((item) => {
             // User's own submissions
             if (item.submittedByEmail.toLowerCase() === lowerEmail) return true;
+            if (item.linkedToMe) return true;
             if (item.createdByEmail?.toLowerCase() === lowerEmail) return true;
             // Submissions where user is a layer assignee
             const assignees = assigneeVisibilityMap[item.listTitle];

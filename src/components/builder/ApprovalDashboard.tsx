@@ -13,6 +13,7 @@ import "../../native/native-form.css";
 import { buildSubmissionGroups, instanceState, type FormInstance } from "../../utils/formInstances";
 import { listFormInstances } from "../../utils/formInstancesSP";
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
+import PublicSubmissionLinkRow from "./PublicSubmissionLinkRow";
 import { SignatureCapture } from "../../utils/signatureCapture";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
@@ -3696,6 +3697,14 @@ export default function ApprovalDashboard() {
                   <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
                     Form Version: {selectedItem.FormVersion || "Legacy"}
                   </div>
+                  {token && (
+                    <PublicSubmissionLinkRow
+                      token={token}
+                      listTitle={selectedItem.Title}
+                      itemId={selectedItem.Id}
+                      submittedBy={selectedItem.SubmittedBy || ""}
+                    />
+                  )}
                   {selectedCompany && (
                     <div style={{ fontSize: 12.5, color: C.purple, marginTop: 2, fontWeight: 600 }}>
                       Company: {selectedCompany}

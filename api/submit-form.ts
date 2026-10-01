@@ -42,6 +42,13 @@ import {
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { hasEvaluationLayer, readHarvestConfig } from "./_utils/directoryHarvest.js";
 import { harvestSubmitter } from "./_utils/directoryHarvestWrite.js";
+import { LINK_COLUMNS, isPublicSubmitter } from "./_utils/publicSubmissionLink.js";
+import {
+  isRegisteredForm,
+  linkNewPublicSubmission,
+  relinkPublicSubmissions,
+  setSubmissionLink,
+} from "./_utils/publicSubmissionLinkWrite.js";
 import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/sharepointRest.js";
 import { isFormBuilderSuperuser, resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { isSuperuserOnlyForm } from "./_utils/superuserOnlyForms.js";
@@ -1690,6 +1697,56 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
   }
 
+  // Public submissions are filed under "GUEST". These two actions let an HR
+  // Forms Owner tie them back to people in the Approval Directory: a one-off
+  // re-scan of everything already submitted, and a correction on one row. Both
+  // take the admin's SharePoint token (the app-only principal cannot add the
+  // link columns to a form's list) and refuse any list that is not a
+  // registered form.
+  if (
+    req.method === "POST"
+    && ["relink-public-submissions", "set-submission-link"].includes(String((req.body as Record<string, unknown>)?.action))
+  ) {
+    const body = req.body as Record<string, unknown>;
+    const delegatedToken = String(body.delegatedToken ?? "").trim();
+    if (!delegatedToken) return res.status(401).json({ error: "Sign in to link public submissions." });
+    const owner = await resolveHrFormsOwner(delegatedToken);
+    if (!owner) return res.status(403).json({ error: "Only an HR Forms Owner can link public submissions." });
+
+    try {
+      const appToken = await getGraphToken();
+      const targetList = String(body.listTitle ?? "").trim();
+      if (targetList && !(await isRegisteredForm(appToken, targetList))) {
+        return res.status(400).json({ error: "That is not a registered form." });
+      }
+
+      if (body.action === "relink-public-submissions") {
+        const summary = await relinkPublicSubmissions({
+          appToken,
+          spToken: delegatedToken,
+          onlyListTitle: targetList || undefined,
+        });
+        return res.status(200).json({ ok: true, ...summary });
+      }
+
+      const itemId = String(body.itemId ?? "").trim();
+      if (!targetList || !/^\d+$/.test(itemId)) {
+        return res.status(400).json({ error: "A form and a submission are required." });
+      }
+      const result = await setSubmissionLink({
+        appToken,
+        spToken: delegatedToken,
+        listTitle: targetList,
+        itemId,
+        person: String(body.person ?? ""),
+      });
+      return res.status(result.ok ? 200 : 400).json(result);
+    } catch (error) {
+      logError("api:submit-form", "Failed to link public submissions", error);
+      return res.status(500).json({ error: "Could not link public submissions." });
+    }
+  }
+
   const {
     listTitle,
     formVersion,
@@ -2298,6 +2355,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           }
         }
       }
+    }
+
+    // Tie a public submission to the person it came from, now that it is
+    // safely stored. After the fact and best-effort: routing, mail and access
+    // have already been decided from "GUEST" and are untouched. Skipped on a
+    // list without the link columns (a form not republished since they were
+    // added) rather than reading the directory for nothing.
+    if (
+      !testTicket
+      && isPublicSubmitter(submissionBody.SubmittedBy)
+      && resolveColumnKey(LINK_COLUMNS.email)
+    ) {
+      await linkNewPublicSubmission({
+        token,
+        listTitle,
+        itemId: parentId,
+        data: submissionBody,
+        layerConfig: parsedLayerConfig,
+      });
     }
 
     return res.status(200).json({ success: true, id: parentId, childItemIds, referenceNo });

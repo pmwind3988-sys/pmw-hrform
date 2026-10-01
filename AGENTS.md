@@ -98,6 +98,13 @@ A layer's `assignee` can now resolve to more than one person, and the mail can g
 - Item-specific assignee metadata is stored in the response item's `WorkflowAssignmentData` Note column. `L{n}_Email` remains authoritative for routing and access checks.
 - Reassigning a layer also updates any existing `WorkflowEmailSchedule` recipient for that layer without changing its due date. Completed layers cannot be changed.
 
+### Public-link submissions linked to people in `/admin/routing`
+
+- A public submission still records `SubmittedBy = "GUEST"` and is routed exactly as before. **After** the row is saved, `api/submit-form.ts` best-effort names the Approval Directory person it came from and patches `LinkedUserEmail`, `LinkedEmployeeId`, `LinkedMatch` onto the row. Routing, mail and who may act never read these.
+- Matching is `api/_utils/publicSubmissionLink.ts` (pure, tested): a staff number in the directory, trusted on its own (name is ignored); else a listed email; else a name only one row *with an email* has. A person with **no email** links only when staff number AND name (partial is fine, `namesAlike`) both match. Ambiguity links nobody.
+- **Signed-in side**: `App.tsx` marks `Submission.linkedToMe` using the linked email, or the viewer's own staff number from the directory (`src/utils/linkedSubmission.ts`); My Submissions and the non-admin filter count it. A form's list needs the three columns — new publishes get them from `BASE_RESPONSE_COLUMNS`; older lists skip linking until republished or until the re-scan adds them.
+- **Admin**: "Link public submissions" on `/admin/routing` runs `relink-public-submissions` (an action on `submit-form` — the 12-function cap) over earlier submissions that have no decision yet, adding the columns with the admin's delegated token. `PublicSubmissionLinkRow` in the submissions detail panel shows the link and can change or remove it (`set-submission-link`); a removed link is stored as `LinkedMatch = "none"` so a re-scan leaves it alone.
+
 ### Superuser-only (test) forms
 - Forms named in `SUPERUSER_ONLY_FORM_TITLES` (`src/utils/superuserOnlyForms.ts`, mirrored at `api/_utils/superuserOnlyForms.ts` â€” a test keeps them identical) exist for testing. Currently: `ZZ TEST RUN`. Matched by title, case- and space-insensitive.
 - **Hidden** for anyone who is not HR Forms Owner + `superuser` (`canUseFormBuilder`): `App.tsx` drops them from `visibleLists`, which removes them from the dashboard, Forms, My Submissions and the submissions fetch in one place. `ResponseViewer` also requires the superuser group for them. Guest members' `guest-my-submissions` skips them.

@@ -98,7 +98,7 @@ export default function MySubmissionsPage() {
     return sortedSubmissions.filter((item) => {
       const submitted = (item.submittedByEmail ?? "").trim().toLowerCase();
       const created = (item.createdByEmail ?? "").trim().toLowerCase();
-      return submitted === mine || created === mine;
+      return submitted === mine || created === mine || !!item.linkedToMe;
     });
   }, [sortedSubmissions, userEmail]);
 

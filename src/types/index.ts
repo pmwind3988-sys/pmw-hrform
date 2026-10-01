@@ -44,6 +44,14 @@ export interface Submission {
   submitterName?: string;
   createdByName?: string;
   createdByEmail?: string;
+  /**
+   * Who a public-link submission was tied to in the Approval Directory after it
+   * was saved. `submittedByEmail` stays "GUEST"; these are separate on purpose.
+   */
+  linkedUserEmail?: string;
+  linkedEmployeeId?: string;
+  /** Set client-side when the signed-in person is the one this was linked to. */
+  linkedToMe?: boolean;
   submittedAt: string | null;
   modifiedAt?: string | null;
   formStatus: string | null;

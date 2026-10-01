@@ -100,6 +100,7 @@ import DirectoryPersonDialog from "../components/routing/DirectoryPersonDialog";
 import { orgKey } from "../utils/orgDirectory";
 import { loadCompanies, loadDepartments } from "../utils/orgDirectorySP";
 import DirectoryImportDialog, { type DirectoryImportProgress } from "../components/routing/DirectoryImportDialog";
+import PublicLinkRescanDialog from "../components/routing/PublicLinkRescanDialog";
 import DirectoryScanDialog, { type DirectoryScanProgress } from "../components/routing/DirectoryScanDialog";
 
 type RoutingTab = "people" | "trace" | "health";
@@ -202,6 +203,7 @@ export default function AdminRoutingPage() {
   const [emailEdit, setEmailEdit] = useState<{ id: number; value: string } | null>(null);
   const [emailSavingId, setEmailSavingId] = useState<number | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [linkRescanOpen, setLinkRescanOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanLabel, setScanLabel] = useState("");
   const [scanPlan, setScanPlan] = useState<DirectoryScanPlan | null>(null);
@@ -611,6 +613,13 @@ export default function AdminRoutingPage() {
                 Who approves whom. Forms set to a reporting line read their answer from here.
               </Typography>
             </Box>
+            <Button
+              onClick={() => setLinkRescanOpen(true)}
+              disabled={!token}
+              sx={{ textTransform: "none" }}
+            >
+              Link public submissions
+            </Button>
             <Button
               startIcon={<RefreshIcon />}
               onClick={() => token && void load(token)}
@@ -1108,6 +1117,8 @@ export default function AdminRoutingPage() {
         onClose={() => setEditorOpen(false)}
         onSave={(input, id, confirm) => void handleSave(input, id, confirm)}
       />
+
+      <PublicLinkRescanDialog open={linkRescanOpen} token={token} onClose={() => setLinkRescanOpen(false)} />
 
       <DirectoryImportDialog
         open={importOpen}
