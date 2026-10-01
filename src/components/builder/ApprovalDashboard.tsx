@@ -110,6 +110,7 @@ import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { editorial } from "../../theme/editorial";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -124,6 +125,19 @@ const CONFIGURED_MANUAL_PAPER_EMAIL = (
   import.meta.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS || ""
 ).trim().toLowerCase();
 const SUBMISSIONS_PER_PAGE = 12;
+/** Desktop list columns: submission | submitted by | version & layer | status | actions. */
+const TABLE_MIN_WIDTH = 720;
+type ListSort = "newest" | "oldest" | "az" | "za";
+const LIST_SORT_LABELS: Record<ListSort, string> = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  az: "A–Z (form name)",
+  za: "Z–A (form name)",
+};
+function submittedTime(item: Pick<PendingItem, "SubmittedAt">): number {
+  return item.SubmittedAt ? new Date(item.SubmittedAt).getTime() || 0 : 0;
+}
+const LIST_COLUMNS = "minmax(0,2fr) minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr) 96px";
 
 // SharePoint answers a list query with ONE page and a link to the next, so a
 // query that reads only the response is capped at whatever `$top` asked for.
@@ -798,6 +812,9 @@ export default function ApprovalDashboard() {
   const [answersLoading, setAnswersLoading] = useState(false);
   const [workflowTypeFilter, setWorkflowTypeFilter] = useState<"all" | "approval" | "evaluation">("all");
   const [listPage, setListPage] = useState(1);
+  const [listSort, setListSort] = useState<ListSort>("newest");
+  /** Wide enough for the list to read as a table beside the detail panel. */
+  const isWide = useMediaQuery("(min-width:1100px)");
   /** Each form's grouping field, from Master Form. "" or absent means no grouping. */
   const [groupByFieldByForm, setGroupByFieldByForm] = useState<Record<string, string>>({});
   const [formInstances, setFormInstances] = useState<FormInstance[]>([]);
@@ -1053,19 +1070,29 @@ export default function ApprovalDashboard() {
 
   const filteredItems = useMemo(() => {
     const byStage = categoryItems.filter(i => getItemLifecycleStage(i) === stageFilter);
-    if (!activeGroupByField || selectedGroup === null) return byStage;
-    return byStage.filter((item) => {
-      const raw = itemAnswers.get(getPendingItemKey(item))?.[activeGroupByField];
-      return (raw === null || raw === undefined ? "" : String(raw).trim()) === selectedGroup;
+    const grouped = !activeGroupByField || selectedGroup === null
+      ? byStage
+      : byStage.filter((item) => {
+          const raw = itemAnswers.get(getPendingItemKey(item))?.[activeGroupByField];
+          return (raw === null || raw === undefined ? "" : String(raw).trim()) === selectedGroup;
+        });
+    // Name sorts break ties newest-first so equal names stay in a useful order.
+    return [...grouped].sort((a, b) => {
+      if (listSort === "oldest") return submittedTime(a) - submittedTime(b);
+      if (listSort === "az" || listSort === "za") {
+        const byName = (a.Title || "").localeCompare(b.Title || "", undefined, { sensitivity: "base", numeric: true });
+        if (byName !== 0) return listSort === "az" ? byName : -byName;
+      }
+      return submittedTime(b) - submittedTime(a);
     });
-  }, [categoryItems, stageFilter, activeGroupByField, selectedGroup, itemAnswers]);
+  }, [categoryItems, stageFilter, activeGroupByField, selectedGroup, itemAnswers, listSort]);
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
 
   useEffect(() => {
     setListPage(1);
-  }, [workflowTypeFilter, stageFilter, filters]);
+  }, [workflowTypeFilter, stageFilter, filters, listSort]);
 
   useEffect(() => {
     if (listPage > totalListPages) setListPage(totalListPages);
@@ -3131,9 +3158,9 @@ export default function ApprovalDashboard() {
           </button>
         </div>
 
-        <header style={{ marginBottom: 16 }}>
+        <header style={{ marginBottom: 16, background: "rgba(255,255,255,0.94)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 16px" }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
-          <p style={{ color: C.textSecond, marginTop: 4 }}>Review submissions, approvals, and evaluation layers</p>
+          <p style={{ color: C.textSecond, margin: "4px 0 0" }}>Review submissions, approvals, and evaluation layers</p>
         </header>
 
         {error && (
@@ -3170,9 +3197,10 @@ export default function ApprovalDashboard() {
         </div>
 
         {/* Workflow type — a filter, not a structural split */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
-          <label style={{ fontSize: 12.5, fontWeight: 600, color: C.textSecond }}>Workflow type</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", width: "fit-content", maxWidth: "100%", background: "rgba(255,255,255,0.94)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "6px 8px 6px 14px" }}>
+          <label htmlFor="workflow-type-filter" style={{ fontSize: 12.5, fontWeight: 600, color: C.textSecond }}>Workflow type</label>
           <select
+            id="workflow-type-filter"
             value={workflowTypeFilter}
             onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
             style={{
@@ -3309,7 +3337,7 @@ export default function ApprovalDashboard() {
         />
 
         {/* Items + Detail Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isWide ? "minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: isWide ? 24 : 16 }}>
           {/* Items List */}
           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -3335,13 +3363,40 @@ export default function ApprovalDashboard() {
                     {selectedGroup ? `${selectedGroup} — ` : selectedGroup === "" ? "Not in an event — " : ""}
                     {lifecycleLabel(stageFilter)} ({filteredItems.length})
                   </span>
-                  <span style={{ fontSize: 11.5, color: C.textSecond }}>
-                    Newest first
-                  </span>
+                  <select
+                    aria-label="Sort submissions"
+                    value={listSort}
+                    onChange={(e) => setListSort(e.target.value as ListSort)}
+                    style={{
+                      padding: "4px 8px", borderRadius: 8, border: `1px solid ${C.border}`,
+                      fontSize: 12.5, color: C.textPrimary, background: "#fff", outline: "none",
+                    }}
+                  >
+                    {(Object.keys(LIST_SORT_LABELS) as ListSort[]).map((key) => (
+                      <option key={key} value={key}>{LIST_SORT_LABELS[key]}</option>
+                    ))}
+                  </select>
                 </>
               )}
             </div>
             <div style={{ maxHeight: 600, overflow: "auto" }}>
+            {!showGroupIndex && filteredItems.length > 0 && (
+              <div
+                role="presentation"
+                style={{
+                  display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: 12,
+                  width: "100%", minWidth: TABLE_MIN_WIDTH, position: "sticky", top: 0, zIndex: 1,
+                  padding: "8px 16px", borderBottom: `1px solid ${C.border}`, background: C.cardBg,
+                  fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.textSecond,
+                }}
+              >
+                <span>Submission</span>
+                <span>Submitted by</span>
+                <span>Version · Layer</span>
+                <span>Status</span>
+                <span style={{ textAlign: "right" }}>Actions</span>
+              </div>
+            )}
               {showGroupIndex ? (
                 /*
                   The index. A group with no instance behind it is the historical
@@ -3398,82 +3453,100 @@ export default function ApprovalDashboard() {
                   const emailSchedule = getScheduledWorkflowEmail(item.WorkflowEmailSchedule, currentLayerNumber);
                   const hasPendingEmailSchedule = emailSchedule?.status === "scheduled";
                   const isEvaluationItem = itemCurrentTypes[itemKey] === "evaluation";
-                  return (
-                  <div
-                    key={getPendingItemKey(item)}
-                    onClick={() => loadItemDetails(item)}
-                    style={{
-                      padding: 16,
-                      borderBottom: `1px solid ${C.border}`,
-                      cursor: "pointer",
-                      background: selectedItem?.Id === item.Id && selectedItem.Title === item.Title ? C.purplePale : "transparent",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                          {item.Title}
-                          {isTestRow(item as unknown as Record<string, unknown>) && (
-                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
-                          )}
-                        </div>
-                        {getItemTrainingTitle(item) && (
-                          <div style={{
-                            display: "inline-block", marginBottom: 4,
-                            fontSize: 11.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
-                            background: C.purplePale, color: C.purple,
-                          }}>
-                            {getItemTrainingTitle(item)}
-                          </div>
-                        )}
-                        <div style={{ fontSize: 13.5, color: C.textSecond }}>
-                          By {item.SubmittedBy} • {formatDateTime(item.SubmittedAt)}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                          <span>v{item.FormVersion || "Legacy"}</span>
-                          <span
-                            title="Profile (developer-reference metadata)"
-                            style={{
-                            fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
-                            background: editorial.skySoft, color: C.textMuted,
-                          }}>
-                            {getItemProfileLabel(item)}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>
-                          {formatLayerProgress(item)}
-                        </div>
-                        {isEvaluationItem && (isAdmin || isSuperuser) && (
-                          <div
-                            title={hasPendingEmailSchedule
-                              ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "not_sent"
-                              ? emailSchedule
-                                ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
-                                : "No evaluator email delivery has been recorded."
-                              : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
-                            style={{
-                              display: "inline-flex", alignItems: "center", marginTop: 6,
-                              fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
-                              background: hasPendingEmailSchedule ? C.amberPale
-                                : emailStatus.status === "sent" ? C.greenPale
-                                : emailStatus.status === "failed" ? C.redPale
-                                  : emailSchedule ? C.amberPale : editorial.skySoft,
-                              color: hasPendingEmailSchedule ? editorial.accentText
-                                : emailStatus.status === "sent" ? editorial.success
-                                : emailStatus.status === "failed" ? editorial.error
-                                  : emailSchedule ? editorial.accentText : C.textSecond,
-                            }}
-                          >
-                            {hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "sent" ? `Sent for evaluation${emailStatus.lastAttemptAt ? ` ${formatDateTime(emailStatus.lastAttemptAt)}` : ""}`
-                              : emailStatus.status === "failed" ? "Workflow email failed"
-                                : emailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
-                                  : "Evaluation send date not set"}
-                          </div>
+                  const isSelected = selectedItem?.Id === item.Id && selectedItem.Title === item.Title;
+                  const trainingTitle = getItemTrainingTitle(item);
+                  const itemStatus = getItemStatus(item);
+
+                  const titleBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: C.textPrimary, display: "flex", alignItems: "center", gap: 6, overflowWrap: "anywhere" }}>
+                        {item.Title}
+                        {isTestRow(item as unknown as Record<string, unknown>) && (
+                          <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
                         )}
                       </div>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {trainingTitle && (
+                        <div style={{
+                          display: "inline-block", marginTop: 4, maxWidth: "100%",
+                          fontSize: 11.5, fontWeight: 700, padding: "2px 9px", borderRadius: 12,
+                          background: C.purplePale, color: C.purple, overflowWrap: "anywhere",
+                        }}>
+                          {trainingTitle}
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  const submitterBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, color: C.textPrimary, overflowWrap: "anywhere" }}>{item.SubmittedBy}</div>
+                      <div style={{ fontSize: 12, color: C.textSecond, marginTop: 2 }}>{formatDateTime(item.SubmittedAt)}</div>
+                    </div>
+                  );
+
+                  const versionBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span>v{item.FormVersion || "Legacy"}</span>
+                        <span
+                          title="Profile (developer-reference metadata)"
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
+                            background: editorial.skySoft, color: C.textMuted, overflowWrap: "anywhere",
+                          }}>
+                          {getItemProfileLabel(item)}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 3 }}>
+                        {formatLayerProgress(item)}
+                      </div>
+                    </div>
+                  );
+
+                  const scheduleChip = isEvaluationItem && (isAdmin || isSuperuser) && (
+                    <div
+                      title={hasPendingEmailSchedule
+                        ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                        : emailStatus.status === "not_sent"
+                        ? emailSchedule
+                          ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                          : "No evaluator email delivery has been recorded."
+                        : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
+                      style={{
+                        display: "inline-flex", alignItems: "center", marginTop: 6, maxWidth: "100%",
+                        fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 12,
+                        background: hasPendingEmailSchedule ? C.amberPale
+                          : emailStatus.status === "sent" ? C.greenPale
+                          : emailStatus.status === "failed" ? C.redPale
+                            : emailSchedule ? C.amberPale : editorial.skySoft,
+                        color: hasPendingEmailSchedule ? editorial.accentText
+                          : emailStatus.status === "sent" ? editorial.success
+                          : emailStatus.status === "failed" ? editorial.error
+                            : emailSchedule ? editorial.accentText : C.textSecond,
+                      }}
+                    >
+                      {hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                        : emailStatus.status === "sent" ? `Sent for evaluation${emailStatus.lastAttemptAt ? ` ${formatDateTime(emailStatus.lastAttemptAt)}` : ""}`
+                        : emailStatus.status === "failed" ? "Workflow email failed"
+                          : emailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                            : "Evaluation send date not set"}
+                    </div>
+                  );
+
+                  const statusBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                        <span
+                          style={{
+                            fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
+                            background: itemStatus === "approved" ? C.greenPale
+                              : itemStatus === "rejected" ? C.redPale : C.amberPale,
+                            color: itemStatus === "approved" ? editorial.success
+                              : itemStatus === "rejected" ? editorial.error : editorial.accentText,
+                          }}
+                        >
+                          {getItemDisplayStatus(item)}
+                        </span>
                         {item.PdfUrl && (
                           <a
                             href={absoluteSharePointUrl(item.PdfUrl, SP_SITE_URL)}
@@ -3488,84 +3561,98 @@ export default function ApprovalDashboard() {
                             PDF
                           </a>
                         )}
-                        <span
-                          style={{
-                            fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
-                            background: getItemStatus(item) === "approved" ? C.greenPale
-                              : getItemStatus(item) === "rejected" ? C.redPale : C.amberPale,
-                            color: getItemStatus(item) === "approved" ? editorial.success
-                              : getItemStatus(item) === "rejected" ? editorial.error : editorial.accentText,
-                          }}
-                        >
-                          {getItemDisplayStatus(item)}
-                        </span>
                         {needsBranchPick(item) && (
                           <span
                             style={{
-                              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 12,
                               background: C.amberPale, color: editorial.accentText,
                             }}
                           >
                             Branch not selected
                           </span>
                         )}
+                      </div>
+                      {scheduleChip}
+                    </div>
+                  );
+
+                  const actionsBlock = (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                      {(isAdmin || isSuperuser) && (
                         <button
-                          title="Delete submission permanently"
-                          aria-label={`Delete ${item.Title} submission ${item.Id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(item);
+                          title="Send workflow email now"
+                          aria-label={`Send workflow email now for ${item.Title} submission ${item.Id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleForceResend(item);
                           }}
-                          disabled={deleteLoading}
+                          disabled={resendingItemKey === itemKey}
                           style={{
-                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.redPale}`,
-                            background: "#fff", color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.55 : 1,
+                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
+                            background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            cursor: resendingItemKey === itemKey ? "not-allowed" : "pointer",
+                            opacity: resendingItemKey === itemKey ? 0.55 : 1,
                           }}
                         >
-                          <DeleteIcon style={{ fontSize: 15 }} />
+                          <ReplayIcon style={{ fontSize: 15 }} />
                         </button>
-                        {(isAdmin || isSuperuser) && (
-                          <button
-                            title={item.PdfUrl ? "Rebuild and replace PDF" : "Generate PDF"}
-                            aria-label={`${item.PdfUrl ? "Rebuild" : "Generate"} PDF for ${item.Title} submission ${item.Id}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleRegeneratePdf(item);
-                            }}
-                            disabled={pdfRegeneratingItemKey === itemKey}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              cursor: pdfRegeneratingItemKey === itemKey ? "not-allowed" : "pointer",
-                              opacity: pdfRegeneratingItemKey === itemKey ? 0.55 : 1,
-                            }}
-                          >
-                            <DescriptionIcon style={{ fontSize: 15 }} />
-                          </button>
-                        )}
-                        {(isAdmin || isSuperuser) && (
-                          <button
-                            title="Send workflow email now"
-                            aria-label={`Send workflow email now for ${item.Title} submission ${item.Id}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleForceResend(item);
-                            }}
-                            disabled={resendingItemKey === itemKey}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              cursor: resendingItemKey === itemKey ? "not-allowed" : "pointer",
-                              opacity: resendingItemKey === itemKey ? 0.55 : 1,
-                            }}
-                          >
-                            <ReplayIcon style={{ fontSize: 15 }} />
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      {(isAdmin || isSuperuser) && (
+                        <button
+                          title={item.PdfUrl ? "Rebuild and replace PDF" : "Generate PDF"}
+                          aria-label={`${item.PdfUrl ? "Rebuild" : "Generate"} PDF for ${item.Title} submission ${item.Id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleRegeneratePdf(item);
+                          }}
+                          disabled={pdfRegeneratingItemKey === itemKey}
+                          style={{
+                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
+                            background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            cursor: pdfRegeneratingItemKey === itemKey ? "not-allowed" : "pointer",
+                            opacity: pdfRegeneratingItemKey === itemKey ? 0.55 : 1,
+                          }}
+                        >
+                          <DescriptionIcon style={{ fontSize: 15 }} />
+                        </button>
+                      )}
+                      <button
+                        title="Delete submission permanently"
+                        aria-label={`Delete ${item.Title} submission ${item.Id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(item);
+                        }}
+                        disabled={deleteLoading}
+                        style={{
+                          width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.redPale}`,
+                          background: "#fff", color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.55 : 1,
+                        }}
+                      >
+                        <DeleteIcon style={{ fontSize: 15 }} />
+                      </button>
                     </div>
-                  </div>
+                  );
+
+                  return (
+                    <div
+                      key={itemKey}
+                      onClick={() => loadItemDetails(item)}
+                      style={{
+                        padding: "12px 16px", width: "100%", minWidth: TABLE_MIN_WIDTH,
+                        borderBottom: `1px solid ${C.border}`,
+                        cursor: "pointer",
+                        background: isSelected ? C.purplePale : "transparent",
+                        display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: 12, alignItems: "start",
+                      }}
+                    >
+                      {titleBlock}
+                      {submitterBlock}
+                      {versionBlock}
+                      {statusBlock}
+                      {actionsBlock}
+                    </div>
                   );
                 })
               )}
