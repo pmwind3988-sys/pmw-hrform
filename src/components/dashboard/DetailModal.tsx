@@ -18,7 +18,6 @@ import {
 } from "@mui/material";
 import {
   AccessTime as AccessTimeIcon,
-  CalendarToday as CalendarIcon,
   Cancel as CancelIcon,
   CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
@@ -29,7 +28,6 @@ import {
   InsertDriveFile as FileIcon,
   Lock as LockIcon,
   OpenInNew as OpenInNewIcon,
-  Person as PersonIcon,
   PictureAsPdf as PdfIcon,
   VerifiedUser as ApprovalIcon,
 } from "@mui/icons-material";
@@ -766,38 +764,125 @@ function displayedFieldValue(field: FormSubmissionField): unknown {
   return field.rateMax ? `${label} (${field.value} of ${field.rateMax})` : `${label} (${field.value})`;
 }
 
+/**
+ * Whether a value reads on one line beside its label. Long text, lists of
+ * several links and HTML tables stack under the label across the full width.
+ */
+function isInlineValue(fieldKey: string, value: unknown): boolean {
+  if (isHtmlValue(fieldKey, value)) return false;
+  const normalized = normalizeMaybeJson(value);
+  const links = collectLinks(normalized);
+  if (links.length > 0) return links.length === 1 && !Array.isArray(normalized);
+  const text = summarizeNestedValue(normalized);
+  return text.length <= 60 && !text.includes("\n");
+}
+
+function DetailRow({
+  fieldKey,
+  label,
+  value,
+  children,
+}: {
+  fieldKey: string;
+  label: string;
+  value?: unknown;
+  children?: ReactNode;
+}) {
+  const inline = children !== undefined || isInlineValue(fieldKey, value);
+  const normalized = normalizeMaybeJson(value);
+  // An inline list or record reads as one comma-separated line; FriendlyValue
+  // would draw it as a bulleted block.
+  const inlineText = inline && children === undefined && (Array.isArray(normalized) || (isRecord(normalized) && collectLinks(normalized).length === 0));
+
+  return (
+    <Box
+      sx={{
+        display: inline ? "flex" : "block",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        gap: 2,
+        py: 1,
+        borderBottom: editorialHairline,
+        breakInside: "avoid",
+        minWidth: 0,
+        ...(inline ? {} : { columnSpan: "all" }),
+      }}
+    >
+      <Typography variant="body2" sx={{ color: editorial.muted, flex: inline ? "1 1 auto" : undefined, mb: inline ? 0 : 0.5 }}>
+        {label}
+      </Typography>
+      <Box
+        sx={{
+          color: editorial.ink,
+          minWidth: 0,
+          maxWidth: inline ? "60%" : undefined,
+          textAlign: inline ? "right" : "left",
+          overflowWrap: "anywhere",
+          whiteSpace: inline ? undefined : "pre-wrap",
+          "& .MuiTypography-body2": { fontWeight: 600 },
+        }}
+      >
+        {typeof children === "string" || typeof children === "number" ? (
+          <Typography variant="body2">{children}</Typography>
+        ) : children ?? (inlineText ? <Typography variant="body2">{summarizeNestedValue(normalized)}</Typography> : <FriendlyValue fieldKey={fieldKey} value={value} />)}
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * A white panel of label/value rows, two columns wide on a desktop screen. A
+ * lone row keeps one column, or its value would sit halfway across the panel.
+ */
+function DetailPanel({ title, single = false, children }: { title?: string; single?: boolean; children: ReactNode }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        border: editorialHairline,
+        borderRadius: "12px",
+        backgroundColor: editorial.white,
+        px: { xs: 2, sm: 2.5 },
+        pt: title ? 1.5 : 0.5,
+        pb: 0.5,
+      }}
+    >
+      {title && (
+        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, textWrap: "balance" }}>
+          {title}
+        </Typography>
+      )}
+      <Box sx={{ columnCount: { xs: 1, md: single ? 1 : 2 }, columnGap: 5 }}>{children}</Box>
+    </Paper>
+  );
+}
+
+/** A table or rich block inside a DetailPanel, spanning both columns. */
+function DetailBlock({ children }: { children: ReactNode }) {
+  return <Box sx={{ columnSpan: "all", py: 1.5, borderBottom: editorialHairline }}>{children}</Box>;
+}
+
 function DataPreviewSections({ sections }: { sections: FormSubmissionSection[] }) {
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={1.5}>
       {sections.map((section) => (
-        <Box key={section.id}>
-          {/* An untitled section is the rest of the one above it, resumed after
-              a nested panel, so it carries no second heading of its own. */}
-          {section.title && (
-            <Typography
-              variant="body1"
-              sx={{
-                color: editorial.ink,
-                fontWeight: 700,
-                mb: 1.25,
-                textWrap: "balance",
-              }}
-            >
-              {section.title}
-            </Typography>
+        // An untitled section is the rest of the one above it, resumed after a
+        // nested panel, so it carries no second heading of its own.
+        <DetailPanel key={section.id} title={section.title || undefined} single={section.fields.length === 1}>
+          {section.fields.map((field) =>
+            field.kind === "matrix" ? (
+              <DetailBlock key={field.key}>
+                <MatrixFieldCard field={field} />
+              </DetailBlock>
+            ) : isHtmlValue(field.key, field.value) ? (
+              <DetailBlock key={field.key}>
+                <FieldCard fieldKey={field.key} label={field.label} value={field.value} />
+              </DetailBlock>
+            ) : (
+              <DetailRow key={field.key} fieldKey={field.key} label={field.label ?? formatFieldName(field.key)} value={displayedFieldValue(field)} />
+            ),
           )}
-          <Grid container spacing={2}>
-            {section.fields.map((field) => (
-              <Grid size={{ xs: 12, sm: isHtmlValue(field.key, field.value) || field.kind === "matrix" ? 12 : 6 }} key={field.key}>
-                {field.kind === "matrix" ? (
-                  <MatrixFieldCard field={field} />
-                ) : (
-                  <FieldCard fieldKey={field.key} label={field.label} value={displayedFieldValue(field)} />
-                )}
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
+        </DetailPanel>
       ))}
     </Stack>
   );
@@ -805,13 +890,11 @@ function DataPreviewSections({ sections }: { sections: FormSubmissionSection[] }
 
 function SupportingDetailsGrid({ details }: { details: SupportingDetail[] }) {
   return (
-    <Grid container spacing={2}>
+    <DetailPanel single={details.length === 1}>
       {details.map((detail) => (
-        <Grid size={{ xs: 12, sm: 6 }} key={detail.key}>
-          <FieldCard fieldKey={detail.key} label={detail.label} value={detail.value} />
-        </Grid>
+        <DetailRow key={detail.key} fieldKey={detail.key} label={detail.label} value={detail.value} />
       ))}
-    </Grid>
+    </DetailPanel>
   );
 }
 
@@ -879,7 +962,7 @@ function SignatureCard({ signature }: { signature: SignatureField }) {
         border: editorialHairline,
         borderRadius: "12px",
         backgroundColor: editorial.white,
-        p: 2,
+        p: 1.5,
       }}
     >
       <FieldLabel>{signature.label}</FieldLabel>
@@ -893,7 +976,7 @@ function SignatureCard({ signature }: { signature: SignatureField }) {
           }}
           sx={{
             display: "block",
-            maxHeight: 140,
+            maxHeight: 96,
             maxWidth: "100%",
             borderRadius: "12px",
             border: "1px solid rgba(0, 0, 0, 0.1)",
@@ -935,12 +1018,12 @@ function FieldLabel({ children }: { children: ReactNode }) {
 
 function SectionTitle({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle?: string }) {
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mb: 2 }}>
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
       <Box
         sx={{
-          width: 34,
-          height: 34,
-          borderRadius: "12px",
+          width: 26,
+          height: 26,
+          borderRadius: "8px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -948,118 +1031,20 @@ function SectionTitle({ icon, title, subtitle }: { icon: ReactNode; title: strin
           backgroundColor: editorial.blueWash,
           border: `1px solid ${editorial.pmwBlueSoft}`,
           flexShrink: 0,
+          "& svg": { fontSize: 16 },
         }}
       >
         {icon}
       </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, textWrap: "balance" }}>
-          {title}
-        </Typography>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: editorial.ink, lineHeight: 1.3, minWidth: 0 }}>
+        {title}
         {subtitle && (
-          <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
+          <Typography component="span" variant="caption" sx={{ color: editorial.muted, fontWeight: 700, ml: 1 }}>
             {subtitle}
           </Typography>
         )}
-      </Box>
+      </Typography>
     </Box>
-  );
-}
-
-function InfoTile({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        border: editorialHairline,
-        borderRadius: "12px",
-        p: 1.75,
-        backgroundColor: editorial.white,
-        display: "grid",
-        gridTemplateColumns: "34px minmax(0, 1fr)",
-        gap: 1.25,
-        alignItems: "center",
-        minHeight: 74,
-      }}
-    >
-      <Box
-        sx={{
-          width: 34,
-          height: 34,
-          borderRadius: "12px",
-          backgroundColor: editorial.paperSoft,
-          color: editorial.pmwBlueDark,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {icon}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, display: "block" }}>
-          {label}
-        </Typography>
-        <Typography
-          component="div"
-          variant="body2"
-          sx={{
-            color: editorial.ink,
-            fontWeight: 700,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {value}
-        </Typography>
-      </Box>
-    </Paper>
-  );
-}
-
-function DocumentLinkCard({ title, link, icon }: { title: string; link: LinkValue | null; icon: ReactNode }) {
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        border: editorialHairline,
-        borderRadius: "12px",
-        p: 1.75,
-        backgroundColor: editorial.white,
-        display: "grid",
-        gridTemplateColumns: "40px minmax(0, 1fr)",
-        gap: 1.25,
-        alignItems: "center",
-      }}
-    >
-      <Box
-        sx={{
-          width: 40,
-          height: 40,
-          borderRadius: "12px",
-          backgroundColor: link ? editorial.blueWash : editorial.paperSoft,
-          color: link ? editorial.pmwBlueDark : editorial.muted,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {icon}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700 }}>
-          {title}
-        </Typography>
-        {link ? (
-          <ValueLink link={link} />
-        ) : (
-          <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
-            Not generated yet
-          </Typography>
-        )}
-      </Box>
-    </Paper>
   );
 }
 
@@ -1076,8 +1061,8 @@ function LayerProgression({
 
   return (
     <Box>
-      <SectionTitle icon={<ApprovalIcon sx={{ fontSize: 18 }} />} title="Approval details" subtitle={`${totalLayers} workflow layer${totalLayers === 1 ? "" : "s"}`} />
-      <Stack spacing={1.25}>
+      <SectionTitle icon={<ApprovalIcon />} title="Approval details" subtitle={`${totalLayers} workflow layer${totalLayers === 1 ? "" : "s"}`} />
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 1 }}>
         {Array.from({ length: totalLayers }, (_, i) => {
           const layerNum = i + 1;
           const enhanced = enhancedLayers?.[i];
@@ -1129,7 +1114,8 @@ function LayerProgression({
                 border: `1px solid ${borderColor}66`,
                 backgroundColor: bgColor,
                 borderRadius: "12px",
-                p: 1.75,
+                px: 1.5,
+                py: 1,
                 display: "grid",
                 gridTemplateColumns: "32px minmax(0, 1fr) auto",
                 gap: 1.5,
@@ -1182,7 +1168,7 @@ function LayerProgression({
             </Paper>
           );
         })}
-      </Stack>
+      </Box>
     </Box>
   );
 }
@@ -1259,14 +1245,14 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
         border: `1px solid ${borderColor}55`,
         backgroundColor: bgColor,
         borderRadius: "12px",
-        p: 2,
+        p: 1.5,
         transition: "box-shadow 0.2s ease",
         "&:hover": {
           boxShadow: "0 8px 20px rgba(16, 16, 16, 0.06)",
         },
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
         <Box
           sx={{
             width: 36,
@@ -1477,7 +1463,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
         sx={{
           backgroundColor: editorial.white,
           color: editorial.ink,
-          py: { xs: 2, sm: 2.5 },
+          py: { xs: 1.5, sm: 2 },
           px: { xs: 2, sm: 3 },
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) auto",
@@ -1487,7 +1473,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
         }}
       >
         <Box sx={{ minWidth: 0 }}>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 0.75 }}>
             <StatusBadge status={item?.formStatus ?? null} />
             <Chip
               label={isAdmin ? "Admin view" : "User view"}
@@ -1516,7 +1502,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
               />
             )}
           </Stack>
-          <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: 0, textWrap: "balance" }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: 0, textWrap: "balance" }}>
             {displayTitle}
           </Typography>
           <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.5, fontWeight: 700 }}>
@@ -1544,39 +1530,43 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
 
       <DialogContent sx={{ p: 0, backgroundColor: editorial.blueSoft }}>
         {item && (
-          <Stack spacing={3} sx={{ p: { xs: 2, sm: 3 } }}>
+          <Stack spacing={2} sx={{ p: { xs: 2, sm: 2.5 } }}>
             <Box>
-              <SectionTitle icon={<DocumentIcon sx={{ fontSize: 18 }} />} title="Submission overview" />
-              <Grid container spacing={1.5}>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon={<DocumentIcon sx={{ fontSize: 18 }} />} label="Form ID" value={formReference} />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon={<CalendarIcon sx={{ fontSize: 18 }} />} label="Submitted" value={submittedAt} />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile
-                    icon={<PersonIcon sx={{ fontSize: 18 }} />}
-                    label={isAdmin ? "Submitter" : "Account"}
-                    value={submitterDisplay}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon={<FileIcon sx={{ fontSize: 18 }} />} label={isAdmin ? "SharePoint item" : "Reference"} value={isAdmin ? item.id : (item.referenceNo || item.submissionId)} />
-                </Grid>
-                {/* Admins see the SharePoint item ID in the tile above, so the
-                    issued reference gets its own tile rather than replacing it. */}
+              <SectionTitle icon={<DocumentIcon />} title="Submission overview" />
+              <DetailPanel>
+                <DetailRow fieldKey="formReference" label="Form ID">{formReference}</DetailRow>
+                <DetailRow fieldKey="submittedAt" label="Submitted">{submittedAt}</DetailRow>
+                <DetailRow fieldKey="submitter" label={isAdmin ? "Submitter" : "Account"}>{submitterDisplay}</DetailRow>
+                <DetailRow fieldKey="itemReference" label={isAdmin ? "SharePoint item" : "Reference"}>
+                  {isAdmin ? item.id : (item.referenceNo || item.submissionId)}
+                </DetailRow>
+                {/* Admins see the SharePoint item ID in the row above, so the
+                    issued reference gets its own row rather than replacing it. */}
                 {isAdmin && item.referenceNo && (
-                  <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <InfoTile icon={<FileIcon sx={{ fontSize: 18 }} />} label="Reference no." value={item.referenceNo} />
-                  </Grid>
+                  <DetailRow fieldKey="referenceNo" label="Reference no.">{item.referenceNo}</DetailRow>
                 )}
-                {selectedCompany && (
-                  <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <InfoTile icon={<ApprovalIcon sx={{ fontSize: 18 }} />} label="Company" value={selectedCompany} />
-                  </Grid>
+                {selectedCompany && <DetailRow fieldKey="company" label="Company">{selectedCompany}</DetailRow>}
+                <DetailRow fieldKey="generatedPdf" label="Submission PDF">
+                  {generatedPdf ? (
+                    <ValueLink link={generatedPdf} />
+                  ) : (
+                    <Typography variant="body2" sx={{ color: editorial.muted }}>
+                      Not generated yet
+                    </Typography>
+                  )}
+                </DetailRow>
+                {documentGroups.flatMap((group) =>
+                  group.links.map((link, index) => (
+                    <DetailRow
+                      key={`${group.key}-${link.url}-${index}`}
+                      fieldKey={group.key}
+                      label={group.links.length > 1 ? `${group.title} ${index + 1}` : group.title}
+                    >
+                      <ValueLink link={link} />
+                    </DetailRow>
+                  )),
                 )}
-              </Grid>
+              </DetailPanel>
               {branchDecisionPending && (
                 <Alert
                   severity="info"
@@ -1605,42 +1595,26 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
               )}
             </Box>
 
-            <Box>
-              <SectionTitle icon={<PdfIcon sx={{ fontSize: 18 }} />} title="PDF details" />
-              <Grid container spacing={1.5}>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <DocumentLinkCard title="Generated submission PDF" link={generatedPdf} icon={<PdfIcon sx={{ fontSize: 20 }} />} />
-                </Grid>
-                {documentGroups.flatMap((group) =>
-                  group.links.map((link, index) => (
-                    <Grid size={{ xs: 12, md: 6 }} key={`${group.key}-${link.url}-${index}`}>
-                      <DocumentLinkCard title={group.links.length > 1 ? `${group.title} ${index + 1}` : group.title} link={link} icon={<FileIcon sx={{ fontSize: 20 }} />} />
-                    </Grid>
-                  )),
-                )}
-              </Grid>
-            </Box>
-
             {formSections.length > 0 && (
               <Box>
-                <SectionTitle icon={<FileIcon sx={{ fontSize: 18 }} />} title="Data preview" subtitle="Grouped by the published form layout" />
+                <SectionTitle icon={<FileIcon />} title="Data preview" subtitle="Grouped by the published form layout" />
                 <DataPreviewSections sections={formSections} />
               </Box>
             )}
 
             {supportingDetails.length > 0 && (
               <Box>
-                <SectionTitle icon={<InfoIcon sx={{ fontSize: 18 }} />} title="Submission details" subtitle="Compliance and record fields" />
+                <SectionTitle icon={<InfoIcon />} title="Submission details" subtitle="Compliance and record fields" />
                 <SupportingDetailsGrid details={supportingDetails} />
               </Box>
             )}
 
             {signatureFields.length > 0 && (
               <Box>
-                <SectionTitle icon={<SignatureIcon sx={{ fontSize: 18 }} />} title="Signatures" />
+                <SectionTitle icon={<SignatureIcon />} title="Signatures" />
                 <Grid container spacing={2}>
                   {signatureFields.map((signature) => (
-                    <Grid size={{ xs: 12, sm: 6 }} key={signature.key}>
+                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={signature.key}>
                       <SignatureCard signature={signature} />
                     </Grid>
                   ))}
@@ -1657,7 +1631,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                 />
 
                 {item.enhancedLayers && item.enhancedLayers.length > 0 && (
-                  <Stack spacing={2} sx={{ mt: 2 }}>
+                  <Grid container spacing={1.5} sx={{ mt: 1.5 }}>
                     {item.enhancedLayers.map((layer, i) => {
                       if (!layer) return null;
                       if (layer.type === "evaluation") {
@@ -1666,17 +1640,18 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                           layer.layerNumber,
                         );
                         return (
-                          <EvaluationSummary
-                            key={i}
-                            result={layer}
-                            layerTitle={layer.layerTitle || `Layer ${layer.layerNumber}`}
-                            footer={evaluationSignOff}
-                          />
+                          <Grid size={12} key={i}>
+                            <EvaluationSummary
+                              result={layer}
+                              layerTitle={layer.layerTitle || `Layer ${layer.layerNumber}`}
+                              footer={evaluationSignOff}
+                            />
+                          </Grid>
                         );
                       }
                       return (
+                        <Grid size={{ xs: 12, md: 6 }} key={i}>
                         <ApprovalCard
-                          key={i}
                           layer={{
                             status: layer.status,
                             outcome: layer.outcome,
@@ -1693,17 +1668,23 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                           }}
                           index={layer.layerNumber - 1}
                         />
+                        </Grid>
                       );
                     })}
-                  </Stack>
+                  </Grid>
                 )}
 
                 {(!item.enhancedLayers || item.enhancedLayers.length === 0) && item.layers && item.layers.length > 0 && (
-                  <Stack spacing={2} sx={{ mt: 2 }}>
+                  <Grid container spacing={1.5} sx={{ mt: 1.5 }}>
                     {item.layers.map(
-                      (layer, i) => layer && <ApprovalCard key={i} layer={layer} index={i} />,
+                      (layer, i) =>
+                        layer && (
+                          <Grid size={{ xs: 12, md: 6 }} key={i}>
+                            <ApprovalCard layer={layer} index={i} />
+                          </Grid>
+                        ),
                     )}
-                  </Stack>
+                  </Grid>
                 )}
               </Box>
             )}
