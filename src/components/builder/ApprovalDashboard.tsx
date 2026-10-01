@@ -67,7 +67,15 @@ import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
-import { createApprovalDirectoryReader } from "../../utils/approvalDirectory";
+import { createApprovalDirectoryReader, loadApprovalDirectory } from "../../utils/approvalDirectory";
+import {
+  employeeIdKey,
+  harvestFieldGuesses,
+  harvestFieldValue,
+  isPersonEmail,
+  personNameKey,
+  readHarvestConfig,
+} from "../../utils/directoryHarvest";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import {
@@ -637,6 +645,52 @@ async function resolveLayerAssigneeEmail(
       context: resolutionContextFromItem(submittedData, layer.layerNumber, previousStep),
     },
   );
+}
+
+/**
+ * Who a submission is about, found from its own answers, and who approves them
+ * according to the routing page.
+ *
+ * For a submission with no usable submitter address — a public link — the
+ * employee on the form is the only person there is to route from. The form's
+ * directory-harvest mapping says which questions hold them; without one the
+ * questions are guessed from their labels. The staff number decides first, then
+ * the address, then the name, the same order the harvester matches in.
+ */
+async function findApproverOfFormSubject(
+  token: string,
+  rawItem: Record<string, unknown>,
+  layerConfig: unknown,
+): Promise<{ email: string; explanation: string } | { problem: string }> {
+  const keys = Object.keys(rawItem).filter((key) => !/^L\d+_/.test(key));
+  const mapping = readHarvestConfig(layerConfig)
+    ?? { enabled: true as const, ...harvestFieldGuesses(keys.map((key) => ({ name: key, title: key.replace(/_x[0-9a-f]{4}_/gi, " ") }))) };
+  const submittedEmail = harvestFieldValue(rawItem, mapping.emailField);
+  const email = isPersonEmail(submittedEmail) ? submittedEmail.trim().toLowerCase() : "";
+  const employeeId = employeeIdKey(harvestFieldValue(rawItem, mapping.employeeIdField));
+  const name = personNameKey(harvestFieldValue(rawItem, mapping.nameField));
+  if (!email && !employeeId && !name) {
+    return { problem: "The form has no usable submitter address and no employee email, staff number or name to look up on the routing page." };
+  }
+
+  const directory = await loadApprovalDirectory(token);
+  if (!directory.usable) return { problem: "The Approval Directory could not be read." };
+  const rows = directory.rows.filter((row) => row.isActive && row.confirmed);
+  const byName = name ? rows.filter((row) => personNameKey(row.personName) === name) : [];
+  const person = (employeeId ? rows.find((row) => employeeIdKey(row.employeeId) === employeeId) : undefined)
+    ?? (email ? rows.find((row) => row.personEmail.trim().toLowerCase() === email) : undefined)
+    ?? (byName.length === 1 ? byName[0] : undefined);
+  if (!person) {
+    return { problem: "The employee on the form is not in the Approval Directory (checked staff number, email and name), so the routing page has no approver for them." };
+  }
+  const approver = person.approverEmail.trim().toLowerCase();
+  if (!EMAIL_RE.test(approver)) {
+    return { problem: `${person.personName || person.personEmail} has no approver on the routing page.` };
+  }
+  return {
+    email: approver,
+    explanation: `Routing page (Approval Directory): ${person.personName || person.personEmail}${person.employeeId ? ` (${person.employeeId})` : ""}, taken from the form's answers, is approved by ${approver}.`,
+  };
 }
 
 /** Where a layer's people come from, for assignee types that explain nothing themselves. */
@@ -2183,6 +2237,19 @@ export default function ApprovalDashboard() {
           // truth, so the check follows "who approves this person" from the
           // submitter instead, exactly as a routing-page layer would.
           const followsRoutingPage = layer.assignee.type === "department-approver";
+          const submitterUsable = isPersonEmail(valueToText(rawItem.SubmittedBy));
+          if (followsRoutingPage && !submitterUsable) {
+            const configSource = itemLayerConfigsRef.current[getPendingItemKey(selectedItem as PendingItem)]
+              || formLayerConfigsRef.current[selectedItem?.Title ?? ""];
+            const subject = await findApproverOfFormSubject(token ?? "", rawItem, configSource);
+            if ("problem" in subject) {
+              routingProblem = subject.problem;
+            } else {
+              routed = [subject.email];
+              routedPrimary = subject.email;
+              how = subject.explanation;
+            }
+          } else {
           const layerToResolve = followsRoutingPage
             ? {
               ...layer,
@@ -2206,6 +2273,7 @@ export default function ApprovalDashboard() {
           if (routed.length && result.explanation?.startsWith("Fell back")) {
             routingProblem = `${result.explanation} Fix the Approval Directory on the Routing page, then check again.`;
             routed = [];
+          }
           }
         } catch (error) {
           routingProblem = error instanceof Error ? error.message : "Routing could not be worked out.";
