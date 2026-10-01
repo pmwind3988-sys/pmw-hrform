@@ -2178,7 +2178,21 @@ export default function ApprovalDashboard() {
         if (!routed.length) routingProblem = `The submitter routing rule names "${submitterRule.email}", which is not a valid email address.`;
       } else {
         try {
-          const result = await resolveLayerAssigneeEmail(token ?? "", layer, rawItem, currentFormSlug());
+          // A "Department Approver" layer reads the old Department Approver
+          // Directory list. The routing page (Approval Directory) is the source of
+          // truth, so the check follows "who approves this person" from the
+          // submitter instead, exactly as a routing-page layer would.
+          const followsRoutingPage = layer.assignee.type === "department-approver";
+          const layerToResolve = followsRoutingPage
+            ? {
+              ...layer,
+              assignee: { type: "chain", startFrom: "submitter", value: "", hops: 1, fallback: { mode: "park" } },
+            } as unknown as LayerConfigItem
+            : layer;
+          const result = await resolveLayerAssigneeEmail(token ?? "", layerToResolve, rawItem, currentFormSlug());
+          if (followsRoutingPage && result.explanation) {
+            result.explanation = `Routing page (Approval Directory): ${result.explanation}`;
+          }
           if (result.error) routingProblem = result.error;
           else if (result.parked) routingProblem = result.parked.reason;
           else {
