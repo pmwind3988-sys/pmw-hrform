@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyLayerRouting } from "./routingCheck";
+import { classifyLayerRouting, findDirectoryPerson } from "./routingCheck";
 
 const base = { saved: ["ali@x.com"], routed: ["ali@x.com"], manualOverride: false };
 
@@ -35,5 +35,37 @@ describe("classifyLayerRouting", () => {
 
   it("waits on layers that depend on an earlier actor", () => {
     expect(classifyLayerRouting({ ...base, routed: [], waitingReason: "later" }).kind).toBe("waiting");
+  });
+});
+
+describe("findDirectoryPerson", () => {
+  const rows = [
+    { personEmail: "a@x.com", personName: "Ali", employeeId: "SG010" },
+    { personEmail: "b@x.com", personName: "Siti", employeeId: "PC 069" },
+  ];
+  const who = (employeeId: string) => ({ email: "", employeeId, name: "" });
+
+  it("treats a spaced staff number and an unspaced one as the same", () => {
+    expect(findDirectoryPerson(rows, who("SG 010"))?.personEmail).toBe("a@x.com");
+    expect(findDirectoryPerson(rows, who("PC069"))?.personEmail).toBe("b@x.com");
+  });
+
+  it("ignores letter case and surrounding spaces", () => {
+    expect(findDirectoryPerson(rows, who(" sg010 "))?.personEmail).toBe("a@x.com");
+  });
+
+  it("lets the staff number decide over a name that points elsewhere", () => {
+    expect(findDirectoryPerson(rows, { email: "", employeeId: "SG 010", name: "Siti" })?.personEmail).toBe("a@x.com");
+  });
+
+  it("falls back to the address, then to a name only one row carries", () => {
+    expect(findDirectoryPerson(rows, { email: "B@x.com", employeeId: "", name: "" })?.personEmail).toBe("b@x.com");
+    expect(findDirectoryPerson(rows, { email: "", employeeId: "", name: "Ali" })?.personEmail).toBe("a@x.com");
+  });
+
+  it("refuses an ambiguous name and an unknown number", () => {
+    const twins = [...rows, { personEmail: "c@x.com", personName: "Ali", employeeId: "XY1" }];
+    expect(findDirectoryPerson(twins, { email: "", employeeId: "", name: "Ali" })).toBeUndefined();
+    expect(findDirectoryPerson(rows, who("ZZ 999"))).toBeUndefined();
   });
 });

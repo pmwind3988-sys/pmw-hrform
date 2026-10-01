@@ -5,6 +5,7 @@
  * returned and the rules stay testable without a network.
  */
 import { emailListsMatch } from "./layerRecipients.js";
+import { employeeIdKey, personNameKey } from "./directoryHarvest.js";
 
 export type RoutingVerdictKind =
   /** Saved people are exactly who routing picks today. */
@@ -56,4 +57,30 @@ export function classifyLayerRouting(facts: RoutingFacts): { kind: RoutingVerdic
     return { kind: "unresolved", note: facts.routingProblem || "Routing has no answer for this layer." };
   }
   return { kind: emailListsMatch(facts.saved, facts.routed) ? "match" : "mismatch" };
+}
+
+export interface DirectoryPersonRow {
+  personEmail: string;
+  personName: string;
+  employeeId: string;
+}
+
+/**
+ * The directory row a form's employee is, deciding by staff number first, then
+ * address, then name (only when exactly one row carries it).
+ *
+ * Staff numbers are typed by hand, so "SG 010", "sg010" and "SG010" are one
+ * number; `employeeIdKey` removes the spaces and the case.
+ */
+export function findDirectoryPerson<Row extends DirectoryPersonRow>(
+  rows: readonly Row[],
+  who: { email: string; employeeId: string; name: string },
+): Row | undefined {
+  const id = employeeIdKey(who.employeeId);
+  const email = who.email.trim().toLowerCase();
+  const name = personNameKey(who.name);
+  const byName = name ? rows.filter((row) => personNameKey(row.personName) === name) : [];
+  return (id ? rows.find((row) => employeeIdKey(row.employeeId) === id) : undefined)
+    ?? (email ? rows.find((row) => row.personEmail.trim().toLowerCase() === email) : undefined)
+    ?? (byName.length === 1 ? byName[0] : undefined);
 }

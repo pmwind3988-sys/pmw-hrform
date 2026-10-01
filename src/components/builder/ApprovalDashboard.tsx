@@ -70,11 +70,9 @@ import {
 import { forEachSurveyElement } from "../../utils/surveyWalk";
 import { createApprovalDirectoryReader, loadApprovalDirectory } from "../../utils/approvalDirectory";
 import {
-  employeeIdKey,
   harvestFieldGuesses,
   harvestFieldValue,
   isPersonEmail,
-  personNameKey,
   readHarvestConfig,
 } from "../../utils/directoryHarvest";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
@@ -86,7 +84,7 @@ import {
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
 import { getWorkflowAssignment, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
-import { classifyLayerRouting } from "../../utils/routingCheck";
+import { classifyLayerRouting, findDirectoryPerson } from "../../utils/routingCheck";
 import type { LayerRoutingVerdict } from "../../utils/routingCheck";
 import RoutingCheckPanel from "./RoutingCheckPanel";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
@@ -684,8 +682,8 @@ async function findApproverOfFormSubject(
   const mapping = harvest ?? { enabled: true as const, ...harvestFieldGuesses(options) };
   const submittedEmail = harvestFieldValue(rawItem, mapping.emailField);
   const email = isPersonEmail(submittedEmail) ? submittedEmail.trim().toLowerCase() : "";
-  const employeeId = employeeIdKey(harvestFieldValue(rawItem, mapping.employeeIdField));
-  const name = personNameKey(harvestFieldValue(rawItem, mapping.nameField));
+  const employeeId = harvestFieldValue(rawItem, mapping.employeeIdField).trim();
+  const name = harvestFieldValue(rawItem, mapping.nameField).trim();
   if (!email && !employeeId && !name) {
     return {
       problem: "The form has no usable submitter address, and no employee email, staff number or name could be found to look up on the routing page."
@@ -696,10 +694,7 @@ async function findApproverOfFormSubject(
   const directory = await loadApprovalDirectory(token);
   if (!directory.usable) return { problem: "The Approval Directory could not be read." };
   const rows = directory.rows.filter((row) => row.isActive && row.confirmed);
-  const byName = name ? rows.filter((row) => personNameKey(row.personName) === name) : [];
-  const person = (employeeId ? rows.find((row) => employeeIdKey(row.employeeId) === employeeId) : undefined)
-    ?? (email ? rows.find((row) => row.personEmail.trim().toLowerCase() === email) : undefined)
-    ?? (byName.length === 1 ? byName[0] : undefined);
+  const person = findDirectoryPerson(rows, { email, employeeId, name });
   if (!person) {
     return { problem: "The employee on the form is not in the Approval Directory (checked staff number, email and name), so the routing page has no approver for them." };
   }
