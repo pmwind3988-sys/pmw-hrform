@@ -58,7 +58,8 @@ export interface PdfPreviewDialogProps {
 function canShowPdfInline(): boolean {
   if (typeof navigator === "undefined") return true;
   if (navigator.pdfViewerEnabled === false) return false;
-  return !/Electron/i.test(navigator.userAgent);
+  // The Claude desktop app identifies itself as "Claude/x.y.z" (no "Electron").
+  return !/Electron|\bClaude\//i.test(navigator.userAgent);
 }
 
 /** A download name that always ends in .pdf, so it opens on double-click. */
