@@ -84,6 +84,9 @@ export interface PdfLayerResult {
 // makes React warn on every generated document. A key lives outside props, so
 // renderToJson does not see it and equivalence with the templated path holds.
 function BuiltInBody({ ctx }: { ctx: PdfSectionContext }) {
+  // Signatures and evaluation details pair up through this flag; a fallback
+  // render after a failed template pass must start from a clean slate.
+  ctx.state.evaluationDrawn = false;
   return (
     [
       ["header", HeaderSection({ ctx })],
@@ -122,7 +125,7 @@ export default function FormPdfDocument(data: PdfFormData) {
   const { body, footer } = renderBody(template, ctx);
   return (
     <Document>
-      <Page size="A4" style={[S.page, ctx.comfortable ? { fontSize: 9.3, lineHeight: 1.35 } : {}]}>
+      <Page size="A4" style={[S.page, ctx.comfortable ? { fontSize: 9.3 } : {}]}>
         {[...body, FooterChrome({ ctx, footer })]}
       </Page>
     </Document>

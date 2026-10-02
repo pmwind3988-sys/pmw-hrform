@@ -49,6 +49,24 @@ export interface PdfPreviewDialogProps {
  * Without that, every preview would hold its whole PDF in memory until a reload
  * — and these are generated documents with signature images in them.
  */
+/**
+ * Some embedded browsers (the Claude desktop app's pane, for one) have no PDF
+ * viewer. Pointing an iframe at a PDF there does not show it: it silently
+ * saves the file under its blob id, with no .pdf on the end. Better to say so
+ * and let the Download button do the saving, under the right name.
+ */
+function canShowPdfInline(): boolean {
+  if (typeof navigator === "undefined") return true;
+  if (navigator.pdfViewerEnabled === false) return false;
+  return !/Electron/i.test(navigator.userAgent);
+}
+
+/** A download name that always ends in .pdf, so it opens on double-click. */
+function pdfFileName(name: string | undefined): string {
+  const base = (name || "Document").trim() || "Document";
+  return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+}
+
 export default function PdfPreviewDialog({
   open,
   url,
@@ -200,7 +218,29 @@ export default function PdfPreviewDialog({
           </Box>
         )}
 
-        {!loading && !error && objectUrl && (
+        {!loading && !error && objectUrl && !canShowPdfInline() && (
+          <Box
+            sx={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 1,
+              px: 4,
+              textAlign: "center",
+            }}
+          >
+            <Typography sx={{ ...siType.cardTitle, color: editorial.ink }}>
+              This browser can&apos;t show PDFs here
+            </Typography>
+            <Typography sx={{ ...siType.body, color: editorial.muted, maxWidth: 420 }}>
+              The document is ready. Use Download to save it, or Open in new tab.
+            </Typography>
+          </Box>
+        )}
+
+        {!loading && !error && objectUrl && canShowPdfInline() && (
           <Box
             component="iframe"
             src={objectUrl}
@@ -232,7 +272,7 @@ export default function PdfPreviewDialog({
           variant="contained"
           component="a"
           href={objectUrl || url}
-          download={filename || true}
+          download={pdfFileName(filename)}
           startIcon={<DownloadOutlined />}
           disabled={loading}
           sx={actionSx}

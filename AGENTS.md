@@ -7,7 +7,7 @@
 - **Sub-instructions** (keep updated if paths change):
   `src/utils/AGENTS.md`, `src/components/builder/AGENTS.md`, `src/pages/AGENTS.md`,
   `api/AGENTS.md`, `src/components/auth/AGENTS.md`, `src/components/dashboard/AGENTS.md`,
-  `src/native/AGENTS.md`
+  `src/native/AGENTS.md`, `src/components/reviewer/AGENTS.md`
 - **Only context**: `src/contexts/DashboardContext.tsx` — provided by `App.tsx` around every shelled route, consumed by `DashboardPage`, `FormsPage`, `MySubmissionsPage`, `ProfilePage` and `AppearancePage`; everything else uses local `useState`.
 
 ## Commands

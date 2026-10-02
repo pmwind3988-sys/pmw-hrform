@@ -11,13 +11,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
               "children": [
                 {
                   "children": [
-                    "LOGO",
+                    "Leave Application",
                   ],
                   "props": {
                     "style": {
-                      "color": "#0F3D91",
-                      "fontSize": 14,
+                      "color": "#0c0e14",
+                      "flexShrink": 1,
+                      "fontSize": 12.75,
                       "fontWeight": "bold",
+                      "lineHeight": 1.5,
+                      "textAlign": "left",
                     },
                   },
                   "type": "TEXT",
@@ -25,10 +28,11 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
               ],
               "props": {
                 "style": {
-                  "flexShrink": 0,
-                  "height": 42,
-                  "marginRight": 18,
-                  "width": 90,
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexGrow": 1,
+                  "flexShrink": 1,
+                  "maxWidth": 235,
                 },
               },
               "type": "VIEW",
@@ -37,24 +41,160 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
               "children": [
                 {
                   "children": [
-                    "Leave Application",
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            "PMW HR FORM",
+                          ],
+                          "props": {
+                            "style": [
+                              {
+                                "fontSize": 4.6,
+                                "fontWeight": "bold",
+                                "height": 7,
+                                "letterSpacing": 0.9,
+                                "lineHeight": 1.5,
+                                "textAlign": "center",
+                              },
+                              {
+                                "color": "#1f8a5b",
+                              },
+                            ],
+                          },
+                          "type": "TEXT",
+                        },
+                        {
+                          "children": [
+                            "APPROVED",
+                          ],
+                          "props": {
+                            "style": [
+                              {
+                                "fontSize": 10.5,
+                                "fontWeight": "bold",
+                                "height": 16,
+                                "letterSpacing": 0.7,
+                                "lineHeight": 1.5,
+                                "textAlign": "center",
+                              },
+                              {
+                                "color": "#1f8a5b",
+                              },
+                            ],
+                          },
+                          "type": "TEXT",
+                        },
+                        {
+                          "children": [
+                            "02/09/2026",
+                          ],
+                          "props": {
+                            "style": [
+                              {
+                                "fontSize": 4.6,
+                                "fontWeight": "bold",
+                                "height": 7,
+                                "letterSpacing": 0.9,
+                                "lineHeight": 1.5,
+                                "textAlign": "center",
+                              },
+                              {
+                                "color": "#1f8a5b",
+                              },
+                            ],
+                          },
+                          "type": "TEXT",
+                        },
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "alignItems": "center",
+                            "borderRadius": 3,
+                            "borderWidth": 0.6,
+                            "flexGrow": 1,
+                            "justifyContent": "center",
+                          },
+                          {
+                            "borderColor": "#1f8a5b",
+                          },
+                        ],
+                      },
+                      "type": "VIEW",
+                    },
                   ],
                   "props": {
                     "style": [
                       {
-                        "color": "#0F3D91",
-                        "fontSize": 15,
-                        "fontWeight": "heavy",
-                        "lineHeight": 1.12,
-                        "marginBottom": 3,
-                        "textAlign": "right",
+                        "borderRadius": 5,
+                        "borderWidth": 1.4,
+                        "height": 44,
+                        "padding": 2,
+                        "width": 86,
                       },
                       {
-                        "color": "#0F3D91",
+                        "borderColor": "#1f8a5b",
                       },
                     ],
                   },
-                  "type": "TEXT",
+                  "type": "VIEW",
+                },
+              ],
+              "props": {
+                "style": {
+                  "height": 44,
+                  "left": 252,
+                  "opacity": 0.85,
+                  "position": "absolute",
+                  "top": 0,
+                  "transform": "rotate(-7deg)",
+                  "width": 86,
+                },
+              },
+              "type": "VIEW",
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        "APPROVED",
+                      ],
+                      "props": {
+                        "style": [
+                          {
+                            "fontSize": 7,
+                            "fontWeight": "bold",
+                            "letterSpacing": 1,
+                            "lineHeight": 1.5,
+                          },
+                          {
+                            "color": "#1f8a5b",
+                          },
+                        ],
+                      },
+                      "type": "TEXT",
+                    },
+                  ],
+                  "props": {
+                    "style": [
+                      {
+                        "alignSelf": "flex-end",
+                        "borderRadius": 1.5,
+                        "borderWidth": 1.1,
+                        "marginBottom": 3,
+                        "paddingHorizontal": 6,
+                        "paddingVertical": 1.5,
+                      },
+                      {
+                        "backgroundColor": "#FFFFFF",
+                        "borderColor": "#1f8a5b",
+                      },
+                    ],
+                  },
+                  "type": "VIEW",
                 },
                 {
                   "children": [
@@ -65,9 +205,9 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                   ],
                   "props": {
                     "style": {
-                      "color": "#5A6880",
-                      "fontSize": 6.5,
-                      "lineHeight": 1.2,
+                      "color": "#6b7484",
+                      "fontSize": 6.4,
+                      "lineHeight": 1.5,
                       "textAlign": "right",
                     },
                   },
@@ -78,7 +218,7 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                 "style": {
                   "alignItems": "flex-end",
                   "flexGrow": 1,
-                  "flexShrink": 1,
+                  "flexShrink": 0,
                 },
               },
               "type": "VIEW",
@@ -88,14 +228,15 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
             "style": [
               {
                 "alignItems": "flex-start",
-                "borderBottomColor": "#0F3D91",
-                "borderBottomWidth": 2.5,
+                "borderBottomColor": "#2b2870",
+                "borderBottomWidth": 1.5,
                 "flexDirection": "row",
-                "marginBottom": 14,
-                "paddingBottom": 12,
+                "marginBottom": 7,
+                "minHeight": 48,
+                "paddingBottom": 7,
               },
               {
-                "borderBottomColor": "#0F3D91",
+                "borderBottomColor": "#2b2870",
               },
             ],
           },
@@ -106,42 +247,19 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
             {
               "children": [
                 {
-                  "children": [
-                    "Document No.",
-                  ],
+                  "children": [],
                   "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 5.5,
-                      "letterSpacing": 0.5,
-                      "textTransform": "uppercase",
-                    },
+                    "label": "Document No.",
+                    "value": "HR-F-001",
                   },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "HR-F-001",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 7.5,
-                      "fontWeight": "bold",
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
+                  "type": "LabelledCell",
                 },
               ],
               "props": {
                 "style": {
-                  "borderBottomColor": "#E5E9F0",
-                  "borderBottomWidth": 0.5,
-                  "borderRightColor": "#E5E9F0",
-                  "borderRightWidth": 0.5,
-                  "paddingHorizontal": 7,
-                  "paddingVertical": 3.5,
+                  "flexBasis": 0,
+                  "flexGrow": 1,
+                  "paddingRight": 8,
                 },
               },
               "type": "VIEW",
@@ -149,42 +267,19 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
             {
               "children": [
                 {
-                  "children": [
-                    "Issue No.",
-                  ],
+                  "children": [],
                   "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 5.5,
-                      "letterSpacing": 0.5,
-                      "textTransform": "uppercase",
-                    },
+                    "label": "Issue No.",
+                    "value": "2",
                   },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "2",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 7.5,
-                      "fontWeight": "bold",
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
+                  "type": "LabelledCell",
                 },
               ],
               "props": {
                 "style": {
-                  "borderBottomColor": "#E5E9F0",
-                  "borderBottomWidth": 0.5,
-                  "borderRightColor": "#E5E9F0",
-                  "borderRightWidth": 0.5,
-                  "paddingHorizontal": 7,
-                  "paddingVertical": 3.5,
+                  "flexBasis": 0,
+                  "flexGrow": 1,
+                  "paddingRight": 8,
                 },
               },
               "type": "VIEW",
@@ -192,42 +287,19 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
             {
               "children": [
                 {
-                  "children": [
-                    "Effective Date",
-                  ],
+                  "children": [],
                   "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 5.5,
-                      "letterSpacing": 0.5,
-                      "textTransform": "uppercase",
-                    },
+                    "label": "Effective",
+                    "value": "01/01/2026",
                   },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "01/01/2026",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 7.5,
-                      "fontWeight": "bold",
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
+                  "type": "LabelledCell",
                 },
               ],
               "props": {
                 "style": {
-                  "borderBottomColor": "#E5E9F0",
-                  "borderBottomWidth": 0.5,
-                  "borderRightColor": "#E5E9F0",
-                  "borderRightWidth": 0.5,
-                  "paddingHorizontal": 7,
-                  "paddingVertical": 3.5,
+                  "flexBasis": 0,
+                  "flexGrow": 1,
+                  "paddingRight": 8,
                 },
               },
               "type": "VIEW",
@@ -235,85 +307,19 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
             {
               "children": [
                 {
-                  "children": [
-                    "Revision No.",
-                  ],
+                  "children": [],
                   "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 5.5,
-                      "letterSpacing": 0.5,
-                      "textTransform": "uppercase",
-                    },
+                    "label": "Revision No. / Date",
+                    "value": "1 · 01/06/2026",
                   },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "1",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 7.5,
-                      "fontWeight": "bold",
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
+                  "type": "LabelledCell",
                 },
               ],
               "props": {
                 "style": {
-                  "borderBottomColor": "#E5E9F0",
-                  "borderBottomWidth": 0.5,
-                  "borderRightColor": "#E5E9F0",
-                  "borderRightWidth": 0.5,
-                  "paddingHorizontal": 7,
-                  "paddingVertical": 3.5,
-                },
-              },
-              "type": "VIEW",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    "Revision Date",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 5.5,
-                      "letterSpacing": 0.5,
-                      "textTransform": "uppercase",
-                    },
-                  },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "01/06/2026",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 7.5,
-                      "fontWeight": "bold",
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
-                },
-              ],
-              "props": {
-                "style": {
-                  "borderBottomColor": "#E5E9F0",
-                  "borderBottomWidth": 0.5,
-                  "borderRightColor": "#E5E9F0",
-                  "borderRightWidth": 0.5,
-                  "paddingHorizontal": 7,
-                  "paddingVertical": 3.5,
+                  "flexBasis": 0,
+                  "flexGrow": 1,
+                  "paddingRight": 8,
                 },
               },
               "type": "VIEW",
@@ -321,11 +327,12 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           ],
           "props": {
             "style": {
-              "borderColor": "#E5E9F0",
-              "borderWidth": 0.5,
+              "backgroundColor": "#f7f9fb",
+              "borderRadius": 3,
               "flexDirection": "row",
-              "flexWrap": "wrap",
-              "marginBottom": 10,
+              "marginBottom": 7,
+              "paddingHorizontal": 7,
+              "paddingVertical": 4,
             },
           },
           "type": "VIEW",
@@ -334,76 +341,20 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           "children": [
             {
               "children": [
-                "APPROVED",
-              ],
-              "props": {
-                "style": {
-                  "color": "#137536",
-                },
-              },
-              "type": "TEXT",
-            },
-          ],
-          "props": {
-            "style": [
-              {
-                "alignSelf": "flex-start",
-                "borderRadius": 12,
-                "borderWidth": 1,
-                "fontSize": 8,
-                "fontWeight": "heavy",
-                "letterSpacing": 0.8,
-                "marginBottom": 10,
-                "paddingHorizontal": 10,
-                "paddingVertical": 3,
-                "textTransform": "uppercase",
-              },
-              {
-                "backgroundColor": "#DCFCE7",
-                "borderColor": "#22C55E",
-              },
-            ],
-          },
-          "type": "VIEW",
-        },
-        {
-          "children": [
-            {
-              "children": [
                 {
-                  "children": [
-                    "Reference No.",
-                  ],
+                  "children": [],
                   "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 6,
-                      "letterSpacing": 0.6,
-                      "textTransform": "uppercase",
-                    },
+                    "label": "Reference No.",
+                    "value": "LV-010926-0007",
                   },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "LV-010926-0007",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 8,
-                      "lineHeight": 1.25,
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
+                  "type": "LabelledCell",
                 },
               ],
               "props": {
                 "style": {
                   "marginBottom": 4,
                   "paddingRight": 8,
-                  "width": "50%",
+                  "width": "25%",
                 },
               },
               "type": "VIEW",
@@ -411,39 +362,19 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
             {
               "children": [
                 {
-                  "children": [
-                    "Submitted By",
-                  ],
+                  "children": [],
                   "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 6,
-                      "letterSpacing": 0.6,
-                      "textTransform": "uppercase",
-                    },
+                    "label": "Submitted By",
+                    "value": "aisyah@example.com",
                   },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "aisyah@example.com",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 8,
-                      "lineHeight": 1.25,
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
+                  "type": "LabelledCell",
                 },
               ],
               "props": {
                 "style": {
                   "marginBottom": 4,
                   "paddingRight": 8,
-                  "width": "50%",
+                  "width": "25%",
                 },
               },
               "type": "VIEW",
@@ -451,131 +382,30 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
             {
               "children": [
                 {
-                  "children": [
-                    "Date Submitted",
-                  ],
+                  "children": [],
                   "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 6,
-                      "letterSpacing": 0.6,
-                      "textTransform": "uppercase",
-                    },
+                    "label": "Date Submitted",
+                    "value": "01/09/2026 04:30 PM",
                   },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "01/09/2026 04:30 PM",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 8,
-                      "lineHeight": 1.25,
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
+                  "type": "LabelledCell",
                 },
               ],
               "props": {
                 "style": {
                   "marginBottom": 4,
                   "paddingRight": 8,
-                  "width": "50%",
+                  "width": "25%",
                 },
               },
               "type": "VIEW",
             },
-            {
-              "children": [
-                {
-                  "children": [
-                    "Form",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 6,
-                      "letterSpacing": 0.6,
-                      "textTransform": "uppercase",
-                    },
-                  },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "Leave Application",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 8,
-                      "lineHeight": 1.25,
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
-                },
-              ],
-              "props": {
-                "style": {
-                  "marginBottom": 4,
-                  "paddingRight": 8,
-                  "width": "50%",
-                },
-              },
-              "type": "VIEW",
-            },
-            {
-              "children": [
-                {
-                  "children": [
-                    "Version",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#5A6880",
-                      "fontSize": 6,
-                      "letterSpacing": 0.6,
-                      "textTransform": "uppercase",
-                    },
-                  },
-                  "type": "TEXT",
-                },
-                {
-                  "children": [
-                    "v",
-                    "3",
-                  ],
-                  "props": {
-                    "style": {
-                      "color": "#101828",
-                      "fontSize": 8,
-                      "lineHeight": 1.25,
-                      "marginTop": 1,
-                    },
-                  },
-                  "type": "TEXT",
-                },
-              ],
-              "props": {
-                "style": {
-                  "marginBottom": 4,
-                  "paddingRight": 8,
-                  "width": "50%",
-                },
-              },
-              "type": "VIEW",
-            },
-            "",
           ],
           "props": {
             "style": {
               "flexDirection": "row",
               "flexWrap": "wrap",
-              "marginBottom": 10,
+              "marginBottom": 4,
+              "paddingHorizontal": 7,
             },
           },
           "type": "VIEW",
@@ -584,23 +414,22 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           "children": [
             {
               "children": [
-                "FORM DATA",
+                "Form data",
               ],
               "props": {
-                "style": [
-                  {
-                    "borderBottomColor": "#0F3D91",
-                    "borderBottomWidth": 1.5,
-                    "color": "#101828",
-                    "fontSize": 7.5,
-                    "fontWeight": "heavy",
-                    "marginBottom": 5,
-                    "paddingBottom": 2,
-                  },
-                  {
-                    "borderBottomColor": "#0F3D91",
-                  },
-                ],
+                "minPresenceAhead": 40,
+                "style": {
+                  "borderBottomColor": "#e5e9ee",
+                  "borderBottomWidth": 0.6,
+                  "color": "#0c0e14",
+                  "fontSize": 6.4,
+                  "fontWeight": "bold",
+                  "letterSpacing": 0.9,
+                  "lineHeight": 1.5,
+                  "marginBottom": 4,
+                  "paddingBottom": 2,
+                  "textTransform": "uppercase",
+                },
               },
               "type": "TEXT",
             },
@@ -612,12 +441,17 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                       "Main Page",
                     ],
                     "props": {
+                      "minPresenceAhead": 36,
                       "style": {
-                        "color": "#0F3D91",
-                        "fontSize": 7.5,
+                        "color": "#2b2870",
+                        "fontSize": 6.4,
                         "fontWeight": "bold",
-                        "marginBottom": 3,
-                        "marginTop": 6,
+                        "letterSpacing": 0.9,
+                        "lineHeight": 1.5,
+                        "marginBottom": 2.5,
+                        "marginTop": 3,
+                        "textDecoration": "underline",
+                        "textTransform": "uppercase",
                       },
                     },
                     "type": "TEXT",
@@ -626,97 +460,82 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                     {
                       "children": [
                         {
-                          "children": [
-                            "Employee Name",
-                          ],
+                          "children": [],
                           "props": {
-                            "style": {
-                              "color": "#5A6880",
-                              "fontSize": 7,
-                              "lineHeight": 1.3,
-                              "paddingRight": 6,
-                              "width": "34%",
+                            "item": {
+                              "field": {
+                                "choices": undefined,
+                                "inputType": undefined,
+                                "key": "employeeName",
+                                "kind": "field",
+                                "label": "Employee Name",
+                                "labelFalse": undefined,
+                                "labelTrue": undefined,
+                                "matrixColumns": undefined,
+                                "matrixGuide": undefined,
+                                "matrixRows": undefined,
+                                "max": undefined,
+                                "maxRateDescription": undefined,
+                                "min": undefined,
+                                "minRateDescription": undefined,
+                                "prefix": undefined,
+                                "rateMax": undefined,
+                                "rateMin": undefined,
+                                "rateValues": undefined,
+                                "rows": undefined,
+                                "suffix": undefined,
+                                "type": "text",
+                                "value": "Aisyah binti Rahman",
+                              },
+                              "images": [],
+                              "span": 1,
+                              "text": "Aisyah binti Rahman",
                             },
                           },
-                          "type": "TEXT",
+                          "type": "GridCell",
                         },
                         {
-                          "children": [
-                            "Aisyah binti Rahman",
-                          ],
+                          "children": [],
                           "props": {
-                            "style": {
-                              "color": "#101828",
-                              "fontSize": 7,
-                              "lineHeight": 1.3,
-                              "width": "66%",
+                            "item": {
+                              "field": {
+                                "choices": undefined,
+                                "inputType": undefined,
+                                "key": "reason",
+                                "kind": "field",
+                                "label": "Reason",
+                                "labelFalse": undefined,
+                                "labelTrue": undefined,
+                                "matrixColumns": undefined,
+                                "matrixGuide": undefined,
+                                "matrixRows": undefined,
+                                "max": undefined,
+                                "maxRateDescription": undefined,
+                                "min": undefined,
+                                "minRateDescription": undefined,
+                                "prefix": undefined,
+                                "rateMax": undefined,
+                                "rateMin": undefined,
+                                "rateValues": undefined,
+                                "rows": undefined,
+                                "suffix": undefined,
+                                "type": "text",
+                                "value": "Medical",
+                              },
+                              "images": [],
+                              "span": 1,
+                              "text": "Medical",
                             },
                           },
-                          "type": "TEXT",
+                          "type": "GridCell",
                         },
                       ],
                       "props": {
-                        "style": [
-                          {
-                            "alignItems": "flex-start",
-                            "borderBottomColor": "#E5E9F0",
-                            "borderBottomWidth": 0.3,
-                            "flexDirection": "row",
-                            "paddingHorizontal": 4,
-                            "paddingVertical": 3,
-                          },
-                          {},
-                        ],
-                        "wrap": false,
-                      },
-                      "type": "VIEW",
-                    },
-                    {
-                      "children": [
-                        {
-                          "children": [
-                            "Reason",
-                          ],
-                          "props": {
-                            "style": {
-                              "color": "#5A6880",
-                              "fontSize": 7,
-                              "lineHeight": 1.3,
-                              "paddingRight": 6,
-                              "width": "34%",
-                            },
-                          },
-                          "type": "TEXT",
+                        "style": {
+                          "alignItems": "flex-start",
+                          "flexDirection": "row",
+                          "marginBottom": 4,
                         },
-                        {
-                          "children": [
-                            "Medical",
-                          ],
-                          "props": {
-                            "style": {
-                              "color": "#101828",
-                              "fontSize": 7,
-                              "lineHeight": 1.3,
-                              "width": "66%",
-                            },
-                          },
-                          "type": "TEXT",
-                        },
-                      ],
-                      "props": {
-                        "style": [
-                          {
-                            "alignItems": "flex-start",
-                            "borderBottomColor": "#E5E9F0",
-                            "borderBottomWidth": 0.3,
-                            "flexDirection": "row",
-                            "paddingHorizontal": 4,
-                            "paddingVertical": 3,
-                          },
-                          {
-                            "backgroundColor": "#FAFBFD",
-                          },
-                        ],
                         "wrap": false,
                       },
                       "type": "VIEW",
@@ -725,7 +544,7 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                 ],
                 "props": {
                   "style": {
-                    "marginBottom": 8,
+                    "marginBottom": 3,
                   },
                 },
                 "type": "VIEW",
@@ -734,7 +553,7 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           ],
           "props": {
             "style": {
-              "marginBottom": 24,
+              "marginBottom": 7,
             },
           },
           "type": "VIEW",
@@ -743,23 +562,20 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           "children": [
             {
               "children": [
-                "APPROVAL / EVALUATION CHAIN",
+                "Approval / evaluation chain",
               ],
               "props": {
-                "style": [
-                  {
-                    "borderBottomColor": "#0F3D91",
-                    "borderBottomWidth": 1.5,
-                    "color": "#101828",
-                    "fontSize": 7.5,
-                    "fontWeight": "heavy",
-                    "marginBottom": 5,
-                    "paddingBottom": 2,
-                  },
-                  {
-                    "borderBottomColor": "#0F3D91",
-                  },
-                ],
+                "minPresenceAhead": 40,
+                "style": {
+                  "color": "#2b2870",
+                  "fontSize": 6.4,
+                  "fontWeight": "bold",
+                  "letterSpacing": 0.9,
+                  "lineHeight": 1.5,
+                  "marginBottom": 3,
+                  "textDecoration": "underline",
+                  "textTransform": "uppercase",
+                },
               },
               "type": "TEXT",
             },
@@ -775,15 +591,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                         "style": [
                           {
                             "color": "#FFFFFF",
-                            "fontSize": 6,
-                            "fontWeight": "heavy",
-                            "letterSpacing": 0.4,
-                            "paddingHorizontal": 3,
+                            "fontSize": 5.8,
+                            "fontWeight": "bold",
+                            "letterSpacing": 0.6,
+                            "lineHeight": 1.5,
+                            "paddingHorizontal": 5,
                             "paddingVertical": 2.5,
                             "textTransform": "uppercase",
                           },
                           {
-                            "width": "6%",
+                            "width": "5%",
                           },
                         ],
                       },
@@ -797,15 +614,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                         "style": [
                           {
                             "color": "#FFFFFF",
-                            "fontSize": 6,
-                            "fontWeight": "heavy",
-                            "letterSpacing": 0.4,
-                            "paddingHorizontal": 3,
+                            "fontSize": 5.8,
+                            "fontWeight": "bold",
+                            "letterSpacing": 0.6,
+                            "lineHeight": 1.5,
+                            "paddingHorizontal": 5,
                             "paddingVertical": 2.5,
                             "textTransform": "uppercase",
                           },
                           {
-                            "width": "12%",
+                            "width": "11%",
                           },
                         ],
                       },
@@ -819,15 +637,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                         "style": [
                           {
                             "color": "#FFFFFF",
-                            "fontSize": 6,
-                            "fontWeight": "heavy",
-                            "letterSpacing": 0.4,
-                            "paddingHorizontal": 3,
+                            "fontSize": 5.8,
+                            "fontWeight": "bold",
+                            "letterSpacing": 0.6,
+                            "lineHeight": 1.5,
+                            "paddingHorizontal": 5,
                             "paddingVertical": 2.5,
                             "textTransform": "uppercase",
                           },
                           {
-                            "width": "13%",
+                            "width": "14%",
                           },
                         ],
                       },
@@ -841,15 +660,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                         "style": [
                           {
                             "color": "#FFFFFF",
-                            "fontSize": 6,
-                            "fontWeight": "heavy",
-                            "letterSpacing": 0.4,
-                            "paddingHorizontal": 3,
+                            "fontSize": 5.8,
+                            "fontWeight": "bold",
+                            "letterSpacing": 0.6,
+                            "lineHeight": 1.5,
+                            "paddingHorizontal": 5,
                             "paddingVertical": 2.5,
                             "textTransform": "uppercase",
                           },
                           {
-                            "width": "21%",
+                            "width": "36%",
                           },
                         ],
                       },
@@ -863,10 +683,11 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                         "style": [
                           {
                             "color": "#FFFFFF",
-                            "fontSize": 6,
-                            "fontWeight": "heavy",
-                            "letterSpacing": 0.4,
-                            "paddingHorizontal": 3,
+                            "fontSize": 5.8,
+                            "fontWeight": "bold",
+                            "letterSpacing": 0.6,
+                            "lineHeight": 1.5,
+                            "paddingHorizontal": 5,
                             "paddingVertical": 2.5,
                             "textTransform": "uppercase",
                           },
@@ -885,15 +706,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                         "style": [
                           {
                             "color": "#FFFFFF",
-                            "fontSize": 6,
-                            "fontWeight": "heavy",
-                            "letterSpacing": 0.4,
-                            "paddingHorizontal": 3,
+                            "fontSize": 5.8,
+                            "fontWeight": "bold",
+                            "letterSpacing": 0.6,
+                            "lineHeight": 1.5,
+                            "paddingHorizontal": 5,
                             "paddingVertical": 2.5,
                             "textTransform": "uppercase",
                           },
                           {
-                            "width": "28%",
+                            "width": "14%",
                           },
                         ],
                       },
@@ -904,16 +726,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
                     "style": [
                       {
                         "alignItems": "flex-start",
-                        "borderBottomColor": "#E5E9F0",
-                        "borderBottomWidth": 0.5,
+                        "borderTopColor": "#e5e9ee",
+                        "borderTopWidth": 0.5,
                         "flexDirection": "row",
-                        "paddingVertical": 3.5,
                       },
                       {
-                        "backgroundColor": "#0F3D91",
+                        "backgroundColor": "#2b2870",
+                        "borderTopWidth": 0,
                       },
                       {
-                        "backgroundColor": "#0F3D91",
+                        "backgroundColor": "#2b2870",
                       },
                     ],
                     "wrap": false,
@@ -940,19 +762,16 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
               ],
               "props": {
                 "style": {
-                  "borderColor": "#E5E9F0",
+                  "borderColor": "#d8dde4",
                   "borderWidth": 0.5,
-                  "marginTop": 2,
                 },
-                "wrap": false,
               },
               "type": "VIEW",
             },
           ],
           "props": {
-            "break": true,
             "style": {
-              "marginBottom": 18,
+              "marginBottom": 7,
             },
           },
           "type": "VIEW",
@@ -961,143 +780,49 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           "children": [
             {
               "children": [
-                "SIGNATURES",
-              ],
-              "props": {
-                "style": [
-                  {
-                    "borderBottomColor": "#0F3D91",
-                    "borderBottomWidth": 1.5,
-                    "color": "#101828",
-                    "fontSize": 7.5,
-                    "fontWeight": "heavy",
-                    "marginBottom": 5,
-                    "paddingBottom": 2,
-                  },
-                  {
-                    "borderBottomColor": "#0F3D91",
-                  },
-                ],
-              },
-              "type": "TEXT",
-            },
-            [
-              {
-                "children": [
-                  {
-                    "children": [
-                      {
-                        "children": [
-                          "Layer ",
-                          1,
-                          " - ",
-                          "Approval",
-                        ],
-                        "props": {
-                          "style": {
-                            "color": "#5A6880",
-                            "fontSize": 5.5,
-                            "letterSpacing": 0.4,
-                            "textTransform": "uppercase",
-                          },
-                        },
-                        "type": "TEXT",
-                      },
-                      {
-                        "children": [
-                          "manager@example.com",
-                          " - ",
-                          {
-                            "children": [
-                              "APPROVED",
-                            ],
-                            "props": {
-                              "style": {
-                                "color": "#137536",
-                              },
-                            },
-                            "type": "TEXT",
-                          },
-                        ],
-                        "props": {
-                          "style": {
-                            "color": "#101828",
-                            "fontSize": 8,
-                            "fontWeight": "bold",
-                            "marginTop": 1,
-                          },
-                        },
-                        "type": "TEXT",
-                      },
-                      {
-                        "children": [
-                          "02/09/2026 10:00 AM",
-                          "",
-                        ],
-                        "props": {
-                          "style": {
-                            "color": "#5A6880",
-                            "fontSize": 5.5,
-                            "marginTop": 1,
-                          },
-                        },
-                        "type": "TEXT",
-                      },
-                    ],
-                    "props": {
-                      "style": {
-                        "flex": 1,
-                      },
+                {
+                  "children": [
+                    "Signatures",
+                  ],
+                  "props": {
+                    "minPresenceAhead": 40,
+                    "style": {
+                      "color": "#2b2870",
+                      "fontSize": 6.4,
+                      "fontWeight": "bold",
+                      "letterSpacing": 0.9,
+                      "lineHeight": 1.5,
+                      "marginBottom": 3,
+                      "textDecoration": "underline",
+                      "textTransform": "uppercase",
                     },
-                    "type": "VIEW",
                   },
-                  {
-                    "children": [
-                      {
-                        "children": [],
-                        "props": {
-                          "src": "data:image/png;base64,iVBORw0KGgo=",
-                          "style": {
-                            "maxHeight": 34,
-                            "maxWidth": 92,
-                            "objectFit": "contain",
-                          },
-                        },
-                        "type": "IMAGE",
-                      },
-                    ],
-                    "props": {
-                      "style": {
-                        "alignItems": "flex-end",
-                        "justifyContent": "center",
-                        "marginLeft": "auto",
-                        "minHeight": 34,
-                        "width": 92,
-                      },
-                    },
-                    "type": "VIEW",
-                  },
-                ],
-                "props": {
-                  "style": {
-                    "alignItems": "center",
-                    "backgroundColor": "#FAFBFD",
-                    "borderColor": "#E5E9F0",
-                    "borderWidth": 0.5,
-                    "flexDirection": "row",
-                    "marginBottom": 4,
-                    "marginTop": 3,
-                    "padding": 7,
-                  },
-                  "wrap": false,
+                  "type": "TEXT",
                 },
-                "type": "VIEW",
-              },
-            ],
+                [
+                  {
+                    "children": [],
+                    "props": {
+                      "layer": {
+                        "email": "manager@example.com",
+                        "layerNumber": 1,
+                        "signature": "data:image/png;base64,iVBORw0KGgo=",
+                        "signedAt": "2026-09-02T02:00:00.000Z",
+                        "status": "Approved",
+                        "type": "approval",
+                      },
+                    },
+                    "type": "SignatureCard",
+                  },
+                ],
+              ],
+              "props": {},
+              "type": "Unknown",
+            },
           ],
           "props": {
             "style": {
-              "marginBottom": 18,
+              "marginBottom": 7,
             },
           },
           "type": "VIEW",
@@ -1106,41 +831,26 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           "children": [
             {
               "children": [
-                "ISO 9001:2015",
+                "ISO 9001:2015 · Generated 01/09/2026 08:00 AM",
               ],
               "props": {
                 "style": {
-                  "color": "#5A6880",
-                  "fontSize": 5.5,
-                  "textAlign": "center",
+                  "flexGrow": 1,
+                  "flexShrink": 1,
+                  "textAlign": "left",
                 },
               },
-              "type": "TEXT",
-            },
-          ],
-          "props": {
-            "style": {
-              "borderTopColor": "#E5E9F0",
-              "borderTopWidth": 0.5,
-              "marginTop": 10,
-              "paddingTop": 6,
-            },
-          },
-          "type": "VIEW",
-        },
-        {
-          "children": [
-            {
-              "children": [
-                "Generated 01/09/2026 08:00 AM",
-              ],
-              "props": {},
               "type": "TEXT",
             },
             {
               "children": [],
               "props": {
                 "render": [Function],
+                "style": {
+                  "flexShrink": 0,
+                  "textAlign": "right",
+                  "width": 80,
+                },
               },
               "type": "TEXT",
             },
@@ -1148,17 +858,17 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
           "props": {
             "fixed": true,
             "style": {
-              "borderTopColor": "#E5E9F0",
-              "borderTopWidth": 0.5,
-              "bottom": 22,
-              "color": "#5A6880",
+              "borderTopColor": "#e5e9ee",
+              "borderTopWidth": 0.6,
+              "bottom": 14,
+              "color": "#6b7484",
               "flexDirection": "row",
               "fontSize": 6,
               "justifyContent": "space-between",
-              "left": 32,
+              "left": 30,
               "paddingTop": 5,
               "position": "absolute",
-              "right": 32,
+              "right": 30,
             },
           },
           "type": "VIEW",
@@ -1168,13 +878,12 @@ exports[`FormPdfDocument > renders the same element tree after the section extra
         "size": "A4",
         "style": [
           {
-            "color": "#101828",
+            "color": "#0c0e14",
             "fontFamily": "Helvetica",
-            "fontSize": 8.5,
-            "lineHeight": 1.25,
-            "paddingBottom": 54,
-            "paddingHorizontal": 32,
-            "paddingTop": 32,
+            "fontSize": 7.3,
+            "paddingBottom": 40,
+            "paddingHorizontal": 30,
+            "paddingTop": 24,
           },
           {},
         ],

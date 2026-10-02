@@ -1,4 +1,3 @@
-import { editorial } from "../theme/editorial";
 /**
  * The one look every PMW HR Form notification wears.
  *
@@ -26,7 +25,7 @@ export interface WorkflowEmailStatusPill {
 export interface WorkflowEmailTemplateParams {
   /** Hidden preview line mail clients show next to the subject. */
   preheader: string;
-  /** Small uppercase label in the top-right of the dark header bar. */
+  /** Small uppercase label above the heading in the white card. */
   eyebrow: string;
   heading: string;
   /** Greeted by name when we know one — otherwise the intro stands alone. */
@@ -48,13 +47,16 @@ export interface WorkflowEmailTemplateParams {
 const BRAND_NAME = "PMW HR Form";
 const COMPANY_NAME = "PMW Group";
 
-// Colours mirror src/theme/editorial.ts (email cannot import tokens, so literal hex).
-const NAVY = "#0F3D91";
-const NAVY_DARK = "#0B2F70";
-const CANVAS = "#F6F8FB";
-const INK = "#101828";
-const MUTED = "#5A6880";
+// Colour palette from the approved design prototype
+const BACKGROUND = "#EFF2F5";
+const CARD_BG = "#FFFFFF";
 const BORDER = "#E5E9F0";
+const INK = "#0C0E14";
+const MUTED = "#6B7484";
+const BUTTON = "#2B2870";
+const STATUS_COMPLETED = "#1F8A5B";
+const STATUS_REJECTED = "#C0362C";
+const LOGO_URL = "https://pmw-hrform.vercel.app/logo.png";
 
 const FONT_STACK =
   "Inter,'Segoe UI',Arial,Helvetica,sans-serif";
@@ -133,11 +135,40 @@ function detailRows(rawDetails: WorkflowEmailDetail[]): string {
 }
 
 function actionButton(url: string, label: string): string {
-  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:${NAVY};color:#FFFFFF;font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 32px;border-radius:8px;border:1px solid ${NAVY_DARK}">${escapeEmailHtml(label)}</a>`;
+  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:${BUTTON};color:#FFFFFF;font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 32px;border-radius:10px;border:none">${escapeEmailHtml(label)}</a>`;
 }
 
 function secondaryButton(url: string, label: string): string {
-  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:#FFFFFF;color:${NAVY};font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 26px;border-radius:8px;border:1px solid ${BORDER}">${escapeEmailHtml(label)}</a>`;
+  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:#FFFFFF;color:${BUTTON};font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 26px;border-radius:10px;border:1px solid ${BORDER}">${escapeEmailHtml(label)}</a>`;
+}
+
+function statusIndicator(status: WorkflowEmailStatusPill): string {
+  // Determine if this is a completed or rejected status
+  const isCompleted = status.label.toLowerCase() === "completed";
+  const isRejected = status.label.toLowerCase() === "rejected";
+
+  if (isCompleted) {
+    return `<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:24px;margin-top:8px">
+                                <tr>
+                                    <td align="center">
+                                        <table align="center" border="0" cellpadding="0" cellspacing="0" style="width:76px;height:76px;margin:0 auto;background-color:${STATUS_COMPLETED};border-radius:999px">
+                                            <tr><td align="center" valign="middle" style="font-size:44px;color:#FFFFFF;line-height:1">✓</td></tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>`;
+  } else if (isRejected) {
+    return `<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:24px;margin-top:8px">
+                                <tr>
+                                    <td align="center">
+                                        <table align="center" border="0" cellpadding="0" cellspacing="0" style="width:76px;height:76px;margin:0 auto;background-color:${STATUS_REJECTED};border-radius:999px">
+                                            <tr><td align="center" valign="middle" style="font-size:44px;color:#FFFFFF;line-height:1">✕</td></tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>`;
+  }
+  return "";
 }
 
 export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string {
@@ -165,18 +196,13 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
   const fallbackHtml = params.actionUrl
     ? `<p style="margin:0;font-size:13px;color:${MUTED};text-align:center;line-height:1.5">
                                 Having trouble with the button? Copy and paste this link into your browser:<br>
-                                <a href="${escapeEmailHtml(params.actionUrl)}" style="color:${NAVY};word-break:break-all">${escapeEmailHtml(params.actionUrl)}</a>
+                                <a href="${escapeEmailHtml(params.actionUrl)}" style="color:${BUTTON};word-break:break-all">${escapeEmailHtml(params.actionUrl)}</a>
                             </p>`
     : "";
-  const statusHtml = params.status
-    ? `<table border="0" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background-color:${params.status.background};border:1px solid ${params.status.border};border-radius:999px">
-                                <tr><td style="padding:6px 14px;font-size:11px;line-height:14px;font-weight:700;color:${params.status.color};text-transform:uppercase;letter-spacing:0.06em">${escapeEmailHtml(params.status.label)}</td></tr>
-                            </table>`
-    : "";
+  const statusCircleHtml = params.status ? statusIndicator(params.status) : "";
+  const eyebrowHtml = `<p style="margin:0 0 8px 0;font-size:12px;line-height:14px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.06em;text-align:center">${escapeEmailHtml(params.eyebrow)}</p>`;
   const calloutHtml = params.callout
-    ? `<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;margin-bottom:24px">
-                                <tr><td style="padding:14px 16px;font-size:13px;line-height:20px;color:#92400E">${escapeEmailHtml(plainStepText(params.callout))}</td></tr>
-                            </table>`
+    ? `<p style="margin:0 0 24px 0;font-size:13px;line-height:20px;color:${MUTED}">${escapeEmailHtml(plainStepText(params.callout))}</p>`
     : "";
   const noteHtml = params.note
     ? `<p style="margin:20px 0 0;font-size:12px;line-height:18px;color:${MUTED};text-align:center">${escapeEmailHtml(plainStepText(params.note))}</p>`
@@ -192,39 +218,34 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeEmailHtml(plainStepText(params.heading))}</title>
 </head>
-<body style="margin:0;padding:0;background-color:${CANVAS};font-family:${FONT_STACK};-webkit-font-smoothing:antialiased;color:${INK}">
+<body style="margin:0;padding:0;background-color:${BACKGROUND};font-family:${FONT_STACK};-webkit-font-smoothing:antialiased;color:${INK}">
 
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeEmailHtml(params.preheader)}</div>
 
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:${CANVAS};padding:40px 10px">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:${BACKGROUND};padding:40px 10px">
         <tr>
             <td align="center">
 
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid ${BORDER}">
-
-                    <tr>
-                        <td style="background-color:${NAVY};padding:24px 32px;border-bottom:3px solid ${NAVY_DARK}">
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                                <tr>
-                                    <td>
-                                        <span style="color:#FFFFFF;font-size:20px;font-weight:700;letter-spacing:-0.5px">${BRAND_NAME}</span>
-                                    </td>
-                                    <td align="right">
-                                        <span style="color:#DCE6F7;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600">${escapeEmailHtml(params.eyebrow)}</span>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:${CARD_BG};border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid ${BORDER}">
 
                     <tr>
                         <td style="padding:32px">
 
-                            ${statusHtml}
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td align="center">
+                                        <img src="${LOGO_URL}" alt="PMW" style="height:32px;width:auto;display:block;margin-bottom:24px">
+                                    </td>
+                                </tr>
+                            </table>
 
-                            <h1 style="margin:0 0 16px 0;font-size:22px;line-height:28px;font-weight:600;color:${INK}">${escapeEmailHtml(plainStepText(params.heading))}</h1>
+                            ${statusCircleHtml}
 
-                            <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:${MUTED}">
+                            ${eyebrowHtml}
+
+                            <h1 style="margin:0 0 16px 0;font-size:26px;line-height:32px;font-weight:700;color:${INK};text-align:center">${escapeEmailHtml(plainStepText(params.heading))}</h1>
+
+                            <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:${MUTED};text-align:center">
                                 ${greetingHtml}${escapeEmailHtml(plainStepText(params.intro))}
                             </p>
 
@@ -250,7 +271,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                     </tr>
 
                     <tr>
-                        <td style="background-color:${CANVAS};padding:24px 32px;border-top:1px solid ${BORDER};text-align:center">
+                        <td style="background-color:${BACKGROUND};padding:24px 32px;border-top:1px solid ${BORDER};text-align:center">
                             <p style="margin:0 0 8px 0;font-size:12px;color:${MUTED}">
                                 This is an automated notification. Please do not reply directly to this email. For full details, attachments, comments, and audit history, open the request in ${BRAND_NAME}.
                             </p>
@@ -272,10 +293,10 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
 
 /** The status pills the workflow notices use, so the colours stay consistent. */
 export const WORKFLOW_EMAIL_STATUS = {
-  actionRequired: { label: "Action required", color: editorial.pmwBlueDark, background: editorial.blueSoft, border: editorial.sky },
-  pending: { label: "Pending review", color: editorial.accentText, background: editorial.accentSoft, border: editorial.accentSoft },
-  manual: { label: "Manual paper workflow", color: editorial.accentText, background: editorial.accentSoft, border: editorial.accentSoft },
-  awaitingRouting: { label: "Awaiting routing", color: editorial.accentText, background: editorial.accentSoft, border: editorial.accentSoft },
-  completed: { label: "Completed", color: editorial.success, background: editorial.successSoft, border: editorial.successSoft },
-  rejected: { label: "Rejected", color: editorial.error, background: editorial.errorSoft, border: editorial.errorSoft },
+  actionRequired: { label: "Action required", color: "#1E40AF", background: "#EFF6FF", border: "#BFDBFE" },
+  pending: { label: "Pending review", color: "#92400E", background: "#FFFBEB", border: "#FDE68A" },
+  manual: { label: "Manual paper workflow", color: "#92400E", background: "#FFFBEB", border: "#FDE68A" },
+  awaitingRouting: { label: "Awaiting routing", color: "#92400E", background: "#FFFBEB", border: "#FDE68A" },
+  completed: { label: "Completed", color: "#065F46", background: "#ECFDF5", border: "#A7F3D0" },
+  rejected: { label: "Rejected", color: "#991B1B", background: "#FEF2F2", border: "#FECACA" },
 } as const;

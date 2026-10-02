@@ -66,6 +66,8 @@ export function SignatureModal({
   penColor: initialColor,
   backgroundColor,
   existingDataUrl,
+  title,
+  saveLabel = "Save signature",
   onSave,
   onCancel,
 }: {
@@ -74,6 +76,10 @@ export function SignatureModal({
   penColor: string;
   backgroundColor: string;
   existingDataUrl?: string | null;
+  /** Overrides the dialog heading. */
+  title?: string;
+  /** Overrides the confirm button text. */
+  saveLabel?: string;
   onSave: (dataUrl: string) => void;
   onCancel: () => void;
 }) {
@@ -276,7 +282,7 @@ export function SignatureModal({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div id={titleId} style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>
-              {existingDataUrl ? "Edit Signature" : "Draw your signature"}
+              {title ?? (existingDataUrl ? "Edit Signature" : "Draw your signature")}
             </div>
             <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
               Use mouse or touch to sign below
@@ -390,7 +396,7 @@ export function SignatureModal({
               opacity: hasContent ? 1 : 0.5, fontFamily: "inherit",
             }}
           >
-            Save signature
+            {saveLabel}
           </button>
           </div>
         </div>

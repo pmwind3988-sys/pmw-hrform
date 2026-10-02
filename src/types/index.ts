@@ -1070,6 +1070,8 @@ export interface PdfConfig {
   showEvaluationDetails?: boolean;
   showSignatures?: boolean;
   showStatusBadge?: boolean;
+  /** Rubber-stamp "chop" in the page-1 header band. Default true. */
+  showStamp?: boolean;
   includeEmptyEvaluationFields?: boolean;
   density?: "compact" | "comfortable";
   primaryColor?: string;

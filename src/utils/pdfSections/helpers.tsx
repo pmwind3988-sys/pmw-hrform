@@ -13,6 +13,12 @@ export function fmtDate(d: string | undefined | null): string {
   return formatted === d ? "N/A" : formatted;
 }
 
+export function fmtDay(d: string | undefined | null): string {
+  if (!d) return "";
+  const formatted = formatPdfDateTimeValue(d, false);
+  return formatted === d || formatted === "—" ? "" : formatted;
+}
+
 export function fmtVal(v: unknown, field: Partial<FormSubmissionField> = {}): string {
   return formatPdfFieldValue(v, field);
 }
@@ -111,20 +117,49 @@ export function docControlCells(
   const pairs: { label: string; value: string }[] = [
     { label: "Document No.", value: (header.documentNumber ?? "").trim() },
     { label: "Issue No.", value: (header.issueNumber ?? "").trim() },
-    { label: "Effective Date", value: formatPdfDateTimeValue((header.effectiveDate ?? "").trim(), false) },
+    { label: "Effective", value: formatPdfDateTimeValue((header.effectiveDate ?? "").trim(), false) },
     { label: "Revision No.", value: (header.revisionNumber ?? "").trim() || formVersion },
     { label: "Revision Date", value: formatPdfDateTimeValue((header.revisionDate ?? "").trim(), false) },
-  ];
-  return pairs.filter((pair) => pair.value && pair.value !== "—");
+  ].map((pair) => (pair.value === "—" ? { ...pair, value: "" } : pair));
+  // Revision number and date share one cell, as on the printed control strip.
+  const revision = pairs.filter((pair) => pair.label.startsWith("Revision") && pair.value);
+  const rest = pairs.filter((pair) => !pair.label.startsWith("Revision") && pair.value);
+  if (revision.length === 2) rest.push({ label: "Revision No. / Date", value: `${revision[0].value} · ${revision[1].value}` });
+  else rest.push(...revision);
+  return rest;
 }
 
-export function badgeStyle(status?: string) {
+export function badgeStyle(status?: string, layers?: PdfLayerResult[]) {
   const s = (status || "").toLowerCase();
   if (s.includes("reject")) return { bg: C.redBg, text: C.redText, border: C.redBorder, label: "REJECTED" };
   if (s.includes("approved") || s.includes("completed")) return { bg: C.greenBg, text: C.greenText, border: C.greenBorder, label: "APPROVED" };
-  if (s.includes("confirm")) return { bg: C.greenBg, text: C.greenText, border: C.greenBorder, label: "CONFIRMED" };
+  if (s.includes("confirm")) {
+    // A confirmed record with no approval layer is an evaluation, and the
+    // chop says so; one that carries approvals reads as confirmed.
+    const evaluationOnly = (layers ?? []).length > 0 && (layers ?? []).every((l) => l.type === "evaluation");
+    return { bg: C.greenBg, text: C.greenText, border: C.greenBorder, label: evaluationOnly ? "EVALUATED" : "CONFIRMED" };
+  }
   if (s.includes("submit")) return { bg: C.blueBg, text: C.blueText, border: C.blueBorder, label: "SUBMITTED" };
   return { bg: C.grayBg, text: C.grayText, border: C.borderLight, label: (status || "SUBMITTED").toUpperCase() };
+}
+
+export interface StampInfo {
+  label: string;
+  color: string;
+  date: string;
+}
+
+/** The decision the chop records, or null when the record carries none. The
+ *  word is the status badge's word, so the two can never contradict. */
+export function stampInfo(formStatus: string | undefined, layers: PdfLayerResult[] | undefined): StampInfo | null {
+  const s = (formStatus || "").trim().toLowerCase();
+  if (!s || s.startsWith("manual ")) return null;
+  const decided = (layers ?? []).filter((l) => l.signedAt);
+  const latest = decided.reduce<PdfLayerResult | null>((best, l) => (!best || new Date(l.signedAt as string) > new Date(best.signedAt as string) ? l : best), null);
+  const date = fmtDay(latest?.signedAt);
+  if (!s.includes("reject") && !s.includes("approved") && !s.includes("completed") && !s.includes("confirm")) return null;
+  const badge = badgeStyle(formStatus, layers);
+  return { label: badge.label, color: badge.text, date };
 }
 
 // ── Layer row component ───────────────────────────────────────────────────
@@ -138,7 +173,7 @@ export function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) 
     <View style={S.layerRow} wrap={false}>
       <Text style={[S.layerCell, S.colNum]}>{layer.layerNumber}</Text>
       <Text style={[S.layerCell, S.colType]}>{layer.type === "evaluation" ? "Eval" : "Approval"}</Text>
-      <Text style={[S.layerCell, S.colStatus, { color: badge.text }]}>{badge.label}</Text>
+      <Text style={[S.layerCell, S.colStatus, S.layerStatusText, { color: badge.text }]}>{badge.label}</Text>
       <Text style={[S.layerCell, S.colEmail]}>{isManualPaper ? "" : layer.email || ""}</Text>
       <Text style={[S.layerCell, S.colTime]}>{isManualPaper ? "" : fmtDate(layer.signedAt)}</Text>
       <Text style={[S.layerCell, S.colReason]}>{remarks}</Text>
@@ -215,21 +250,12 @@ export function shouldRenderMeasure(field: FormSubmissionField): boolean {
   return typeof field.min === "number" && typeof field.max === "number" && field.max > field.min;
 }
 
-export function renderMeasureValue(field: FormSubmissionField) {
+/** A rating or ranged number as plain words ("3 of 5"), not a drawn bar. */
+export function measureText(field: FormSubmissionField): string | null {
   const measure = getPdfMeasureContext(field, field.value);
   if (!measure) return null;
-  return (
-    <View style={S.measureBox}>
-      <Text style={S.measureValue}>{measure.valueLabel}</Text>
-      <View style={S.measureTrack}>
-        <View style={[S.measureFill, { width: `${measure.percent}%` }]} />
-      </View>
-      <View style={S.measureScale}>
-        <Text style={S.measureScaleText}>{measure.minLabel}</Text>
-        <Text style={S.measureScaleText}>{measure.maxLabel}</Text>
-      </View>
-    </View>
-  );
+  if (field.type === "rating") return measure.valueLabel;
+  return `${measure.valueLabel} of ${measure.maxLabel}`;
 }
 
 export function textValue(value: unknown): string {
@@ -420,11 +446,9 @@ export function evaluationFieldsForLayer(layer: PdfLayerResult, includeEmpty: bo
 export function renderImageSources(sources: string[]) {
   if (sources.length === 0) return null;
   return (
-    <View style={S.imageGrid}>
+    <View style={S.thumbRow}>
       {sources.map((src, index) => (
-        <View key={`${src}-${index}`} style={S.imageTile} wrap={false}>
-          <Image style={S.imagePreview} src={src} />
-        </View>
+        <Image key={`${src}-${index}`} style={S.thumb} src={src} />
       ))}
     </View>
   );

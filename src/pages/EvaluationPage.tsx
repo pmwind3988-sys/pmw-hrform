@@ -23,21 +23,25 @@ import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../ut
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { readTemplate } from "../utils/pdfTemplate/safeTemplate";
 import { rowsToHtml } from "../utils/matrixData";
-import { SignatureCapture } from "../utils/signatureCapture";
 import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
-import Logo from "../components/Logo";
+import ReviewerStyles from "../components/reviewer/ReviewerStyles";
+import ReviewerHeader from "../components/reviewer/ReviewerHeader";
+import StepCards from "../components/reviewer/StepCards";
+import type { ReviewerStep } from "../components/reviewer/StepCards";
+import CollapsiblePanel from "../components/reviewer/CollapsiblePanel";
+import DecisionCard from "../components/reviewer/DecisionCard";
+import SignatureField from "../components/reviewer/SignatureField";
+import SignOffBlock from "../components/reviewer/SignOffBlock";
+import { DeadEndCard, LoadingScreen, SignInRequiredCard, SubmittingOverlay, SuccessCard } from "../components/reviewer/StatusScreens";
+import { btnDanger, btnDangerOutline, btnDisabled, btnGhost, btnPrimary, eyebrowStyle, R } from "../components/reviewer/reviewerTheme";
 import LockIcon from "@mui/icons-material/Lock";
-import WarningIcon from "@mui/icons-material/Warning";
-import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
-import HighlightOffIcon from "@mui/icons-material/HighlightOff";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { parseLayerConfig } from "../utils/workflowReviewLink";
 import { getActiveLayers } from "../components/builder/approvalDashboardLayerProgress";
 import { apiIdentityHeaders } from "../utils/apiIdentity";
 import { approverDisplayName } from "../utils/approverIdentity";
-import { editorial } from "../theme/editorial";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -146,85 +150,6 @@ type PublicPreviousLayerSummary = {
   title?: string;
   description?: string;
   surveyElements?: Record<string, unknown>[];
-};
-
-// ── Styling ──
-const COLORS = {
-  purple: editorial.pmwBlue, purpleLight: editorial.pmwBlueDark, purplePale: editorial.skySoft,
-  bg: editorial.paper, cardBg: editorial.white, border: editorial.border,
-  textPrimary: editorial.ink, textSecond: editorial.muted, textMuted: editorial.softMuted,
-  green: editorial.success, greenPale: editorial.successSoft,
-  red: editorial.error, redPale: editorial.errorSoft,
-  shadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(26, 31, 43, 0.06)",
-};
-
-const sectionCard: React.CSSProperties = {
-  background: COLORS.cardBg,
-  borderRadius: 12,
-  padding: 24,
-  marginBottom: 20,
-  boxShadow: COLORS.shadow,
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "12px 32px",
-  minHeight: 44,
-  borderRadius: 8,
-  border: "none",
-  background: COLORS.purple,
-  color: editorial.white,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
-
-const btnOutline: React.CSSProperties = {
-  ...btnPrimary,
-  background: "transparent",
-  border: `1px solid ${COLORS.red}`,
-  color: COLORS.red,
-};
-
-const Spinner = ({ size = 42 }: { size?: number }) => (
-  <div
-    style={{
-      width: size, height: size,
-      border: `2.5px solid ${COLORS.purplePale}`,
-      borderTop: `2.5px solid ${COLORS.purple}`,
-      borderRadius: "50%",
-      animation: "evalSpin .85s linear infinite",
-      flexShrink: 0,
-    }}
-  />
-);
-
-/**
- * The whole page is blocked while a decision is in flight, exactly as the form
- * blocks itself while a submission is sending. A reviewer who only saw a
- * greyed-out button could scroll away, press again, or close the tab while the
- * server is still writing the outcome, generating the record PDF and mailing
- * whoever is next — none of which survives a half-sent decision.
- */
-const SubmittingOverlay = ({ action }: { action: SubmitAction }) => {
-  const label = action === "reject"
-    ? "Recording your rejection"
-    : action === "confirm"
-      ? "Submitting your evaluation"
-      : "Recording your approval";
-  return (
-    <div className="eval-overlay" role="alertdialog" aria-modal="true" aria-busy="true" aria-live="assertive" aria-label={label}>
-      <div className="eval-overlay-card">
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Spinner /></div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>{label}</div>
-        <div style={{ fontSize: 13, lineHeight: 1.7, color: COLORS.textSecond }}>
-          This can take a moment while the record is written and the next step is notified.
-          <br />
-          <strong style={{ color: COLORS.textPrimary }}>Please do not close or refresh this page.</strong>
-        </div>
-      </div>
-    </div>
-  );
 };
 
 function valueToText(value: unknown): string {
@@ -408,8 +333,8 @@ export default function EvaluationPage() {
   /** Which decision is in flight — the blocking overlay names it. */
   const [submitAction, setSubmitAction] = useState<SubmitAction>("approve");
   const [rejectionReason, setRejectionReason] = useState("");
-  /** The reject dialog is opened by the Reject button and closed only by Cancel. */
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  /** The inline reject panel replaces the decision form; Back returns to it. */
+  const [rejecting, setRejecting] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [checkboxApproved, setCheckboxApproved] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
@@ -804,76 +729,31 @@ export default function EvaluationPage() {
     });
   }, []);
 
-  // ── Display-only helpers: tab title, reject dialog focus handling ──
+  // ── Display-only helpers: tab title, focus handling ──
   const rejectButtonRef = useRef<HTMLButtonElement | null>(null);
-  const rejectDialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!formTitle) return;
     document.title = `${formTitle} — ${currentLayer?.type === "evaluation" ? "Evaluation" : "Approval"}`;
   }, [formTitle, currentLayer]);
 
-  // Hand focus back to the Reject button when the dialog closes.
+  // Hand focus back to the Reject button when the reject panel closes.
   useEffect(() => {
-    if (!rejectDialogOpen) return;
-    const opener = rejectButtonRef.current;
-    return () => { opener?.focus(); };
-  }, [rejectDialogOpen]);
-
-  // Escape closes the dialog (never mid-submit); Tab stays inside it.
-  useEffect(() => {
-    if (!rejectDialogOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        if (actionState === "submitting") return;
-        event.preventDefault();
-        setRejectDialogOpen(false);
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const dialog = rejectDialogRef.current;
-      if (!dialog) return;
-      const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>("button:not([disabled]), textarea:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])"),
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || !dialog.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [rejectDialogOpen, actionState]);
+    if (!rejecting) return;
+    return () => { rejectButtonRef.current?.focus(); };
+  }, [rejecting]);
 
   // ── Render ──
   if (authState === "checking" || loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div role="status" aria-live="polite" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, color: COLORS.textSecond, fontSize: 14 }}>
-          <Spinner />
-          <span>Loading the request…</span>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (authState === "unauthorized") {
     return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "clamp(28px, 6vw, 56px) clamp(20px, 5vw, 44px)", maxWidth: 420, width: "100%", boxSizing: "border-box", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon aria-hidden="true" style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>Sign in required</div>
-          <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>You need to sign in with your Microsoft 365 account to access this evaluation.</p>
-          <button onClick={() => instance.loginRedirect({ ...loginRequest })} style={btnPrimary}>Sign in with Microsoft 365</button>
-        </div>
-      </div>
+      <SignInRequiredCard
+        kind={routePrefix === "approval" ? "approval" : "evaluation"}
+        onSignIn={() => { void instance.loginRedirect({ ...loginRequest }); }}
+      />
     );
   }
 
@@ -881,44 +761,40 @@ export default function EvaluationPage() {
   // page (and the reviewer's answers) and shows an alert by the buttons; a
   // retry must not fall through to this screen while the old error lingers.
   if (error && actionState === "idle") {
+    // The people who land here are approvers following a link from an email,
+    // not staff who can read a status code. Say what happened and what to do
+    // next; the raw reason stays last, for whoever they ask.
     return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 12, padding: "clamp(28px, 6vw, 56px) clamp(20px, 5vw, 44px)", maxWidth: 460, width: "100%", boxSizing: "border-box", textAlign: "center", border: `1px solid ${COLORS.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon aria-hidden="true" style={{ fontSize: 40 }} /></div>
-          {/* The people who land here are approvers following a link from an
-              email, not staff who can read a status code. Say what happened and
-              what to do next; the raw reason stays last, for whoever they ask. */}
-          <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.red, marginBottom: 10 }}>
-            {notYourRequest ? "This request is not yours to approve" : "This approval link could not be opened"}
-          </div>
-          {notYourRequest ? (
-            <>
-              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
-                You are signed in as <strong>{userEmail || "this account"}</strong>, and this request is
-                waiting on a different approver. Nothing is wrong with the link.
-              </p>
-              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>
-                If you were expecting to approve this, you may be signed in with the wrong account —
-                sign out and back in with the address the request was sent to, or ask HR to reassign it.
-              </p>
-            </>
-          ) : (
-            <>
-              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
-                The link may have expired, been used already, or been cut short by your email app.
-                Nothing has been approved or rejected, and nothing you do here can go wrong.
-              </p>
-              <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>
-                Please ask the HR team to send you a fresh approval link. Forwarding them this page
-                helps them find the request.
-              </p>
-            </>
-          )}
-          <p style={{ color: COLORS.textSecond, fontSize: 12, margin: 0, paddingTop: 14, borderTop: `1px solid ${COLORS.border}` }}>
-            Reason: {error}
-          </p>
-        </div>
-      </div>
+      <DeadEndCard
+        tone={notYourRequest ? "amber" : "red"}
+        eyebrow={notYourRequest ? "Wrong account" : "Link problem"}
+        title={notYourRequest ? "This request is not yours to approve" : "This approval link could not be opened"}
+        footer={<>Reason: {error}</>}
+      >
+        {notYourRequest ? (
+          <>
+            <p style={{ margin: 0 }}>
+              You are signed in as <strong>{userEmail || "this account"}</strong>, and this request is
+              waiting on a different approver. Nothing is wrong with the link.
+            </p>
+            <p style={{ margin: 0 }}>
+              If you were expecting to approve this, you may be signed in with the wrong account —
+              sign out and back in with the address the request was sent to, or ask HR to reassign it.
+            </p>
+          </>
+        ) : (
+          <>
+            <p style={{ margin: 0 }}>
+              The link may have expired, been used already, or been cut short by your email app.
+              Nothing has been approved or rejected, and nothing you do here can go wrong.
+            </p>
+            <p style={{ margin: 0 }}>
+              Please ask the HR team to send you a fresh approval link. Forwarding them this page
+              helps them find the request.
+            </p>
+          </>
+        )}
+      </DeadEndCard>
     );
   }
 
@@ -926,7 +802,6 @@ export default function EvaluationPage() {
     const doneStep = currentLayer?.layerNumber || displayLayerNumber;
     const isRejected = submitAction === "reject";
     const nextStep = layerSequence.find((entry) => entry.layerNumber > doneStep);
-    const doneRef = valueToText(responseData?.[REFERENCE_NO_FIELD]);
     const nextLine = isRejected
       ? "The submitter will be told it was rejected. The workflow stops here."
       : nextStep
@@ -934,29 +809,14 @@ export default function EvaluationPage() {
         : totalLayers > doneStep
           ? `It now moves to step ${doneStep + 1} of ${totalLayers}.`
           : "This was the final step — the submitter will be notified.";
-    const doneHeading = isRejected ? "Rejected" : submitAction === "confirm" ? "Evaluation submitted" : "Approved";
     return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div role="status" aria-live="polite" style={{ background: COLORS.cardBg, borderRadius: 12, padding: "clamp(28px, 6vw, 56px) clamp(20px, 5vw, 44px)", width: "100%", maxWidth: 440, boxSizing: "border-box", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
-          <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
-            {isRejected
-              ? <HighlightOffIcon aria-hidden="true" style={{ fontSize: 56, color: editorial.errorFill }} />
-              : <CheckCircleOutlinedIcon aria-hidden="true" style={{ fontSize: 56, color: editorial.successFill }} />}
-          </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: isRejected ? COLORS.red : COLORS.green, margin: "0 0 8px" }}>{doneHeading}</h1>
-          {(formTitle || doneRef) && (
-            <p style={{ color: COLORS.textPrimary, fontSize: 14, margin: "0 0 16px", fontVariantNumeric: "tabular-nums" }}>
-              {formTitle}
-              {formTitle && doneRef ? " · " : ""}
-              {doneRef && <>Ref <strong>{doneRef}</strong></>}
-            </p>
-          )}
-          <p style={{ color: COLORS.textSecond, fontSize: 14, lineHeight: 1.6, margin: "0 0 8px" }}>
-            <strong style={{ color: COLORS.textPrimary }}>What happens next.</strong> {nextLine}
-          </p>
-          <p style={{ color: COLORS.textSecond, fontSize: 13, margin: 0 }}>You can close this page.</p>
-        </div>
-      </div>
+      <SuccessCard
+        rejected={isRejected}
+        heading={isRejected ? "Rejected" : submitAction === "confirm" ? "Evaluation submitted" : "Approved"}
+        formTitle={formTitle}
+        reference={valueToText(responseData?.[REFERENCE_NO_FIELD])}
+        nextLine={nextLine}
+      />
     );
   }
 
@@ -967,7 +827,7 @@ export default function EvaluationPage() {
   const isLayerAlreadyComplete = isTerminalLayerStatus(currentLayerStatus) || isTerminalFormStatus(formStatus);
   const currentLayerLabel = currentLayerStatus || (isLayerAlreadyComplete ? "Completed" : "Pending");
   const effectiveLayerNumber = currentLayer?.layerNumber || displayLayerNumber;
-  // Who is signing, printed under the signature so the record says it and not
+  // Who is signing, printed above the buttons so the record says it and not
   // only the audit trail. A public link has no signed-in account to name.
   const signedInApprover = isPublic ? "" : approverDisplayName(accounts[0]?.name, userEmail);
   const stepLabel = totalLayers > 0 ? `Step ${effectiveLayerNumber} of ${totalLayers}` : `Step ${effectiveLayerNumber}`;
@@ -980,15 +840,55 @@ export default function EvaluationPage() {
   const showHeaderDescription = layerDescription !== "" && !(descriptionIsLabel && !!signedInApprover);
   const normalizedPill = normalizeLayerStatus(currentLayerLabel);
   const pillLower = currentLayerLabel.toLowerCase();
-  const pillTone: "bad" | "good" | "neutral" =
-    normalizedPill === "rejected" || normalizedPill === "cancelled" ? "bad"
-      : normalizedPill === "approved" || normalizedPill === "confirmed" || pillLower.includes("complet") ? "good"
-        : "neutral";
+  const isRejectedLayer = normalizedPill === "rejected" || normalizedPill === "cancelled";
+  const isGoodLayer = normalizedPill === "approved" || normalizedPill === "confirmed" || pillLower.includes("complet");
   const actedSignedAt = valueToText(responseData?.[`L${effectiveLayerNumber}_SignedAt`]);
   const actedBy = valueToText(responseData?.[`L${effectiveLayerNumber}_ActedBy`]) || valueToText(responseData?.[`L${effectiveLayerNumber}_Email`]);
-  const submitRef = valueToText(responseData?.[REFERENCE_NO_FIELD]) || "this request";
+  const savedRejection = valueToText(responseData?.[`L${effectiveLayerNumber}_Rejection`]);
+  const savedSignatureText = valueToText(responseData?.[`L${effectiveLayerNumber}_Signature`]);
+  const savedSignature = savedSignatureText.startsWith("data:image/") ? savedSignatureText : "";
+  const referenceText = valueToText(responseData?.[REFERENCE_NO_FIELD]);
+  const submitRef = referenceText || "this request";
+  const submittedBy = valueToText(responseData?.SubmittedBy);
+  const submittedAtText = valueToText(responseData?.SubmittedAt) ? formatDateTime(responseData?.SubmittedAt) : "";
+  const isSubmitting = actionState === "submitting";
+  const approveBlocked = isSubmitting || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData);
+  const confirmBlocked = isSubmitting || !evalForm || !evalValid;
+
+  const steps: ReviewerStep[] = Array.from({ length: Math.max(totalLayers, effectiveLayerNumber) }, (_, index) => {
+    const n = index + 1;
+    const title = layerSequence.find((entry) => entry.layerNumber === n)?.title
+      || publicPreviousLayerSummaries.find((summary) => Number(summary.layerNumber) === n)?.title
+      || (n === effectiveLayerNumber ? currentLayer?.title : "")
+      || `Step ${n}`;
+    if (n < effectiveLayerNumber) {
+      const previous = previousResults.find((entry) => Number(entry.layerNumber) === n);
+      const previousStatus = valueToText(previous?.status);
+      return {
+        number: n,
+        title,
+        state: normalizeLayerStatus(previousStatus) === "rejected" ? "rejected" : "done",
+        caption: previousStatus || "Completed",
+      };
+    }
+    if (n === effectiveLayerNumber) {
+      if (isLayerAlreadyComplete) {
+        return { number: n, title, state: isRejectedLayer ? "rejected" : "done", isYou: true, caption: currentLayerLabel };
+      }
+      return { number: n, title, state: "current", isYou: true, caption: "Waiting for your decision" };
+    }
+    return { number: n, title, state: "upcoming", caption: "Not reached yet" };
+  });
+
+  const metaRows: [string, string][] = [];
+  if (submittedBy) metaRows.push(["Submitted by", submittedBy]);
+  if (referenceText) metaRows.push(["Reference no.", referenceText]);
+  metaRows.push(["Form ID", String(responseData?.FormID || responseData?.formId || "—")]);
+  if (selectedCompany) metaRows.push(["Company", selectedCompany]);
+  metaRows.push(["Submitted", formatDateTime(responseData?.SubmittedAt)]);
+
   const submitErrorAlert = actionState === "error" ? (
-    <div role="alert" style={{ background: COLORS.redPale, color: COLORS.red, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+    <div role="alert" style={{ background: R.redSoft, color: R.red, borderRadius: 4, padding: "14px 16px", marginBottom: 16 }}>
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Your decision may not have been saved</div>
       <div style={{ fontSize: 13, lineHeight: 1.6 }}>
         Check your connection and try again. If this keeps happening, contact HR and quote reference {submitRef}.
@@ -997,77 +897,40 @@ export default function EvaluationPage() {
     </div>
   ) : null;
 
-  return (
-    <div className="eval-page" style={{ minHeight: "100vh", background: COLORS.bg, padding: "clamp(16px, 3vw, 32px) 16px" }}>
-      <style>{`
-        .eval-page { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-        .eval-page h1, .eval-page h2, .eval-page h3 { text-wrap: balance; }
-        .eval-page p, .eval-page li, .eval-page span { text-wrap: pretty; }
-        .eval-action-button { transition-property: transform, box-shadow, background-color, color; transition-duration: 150ms; transition-timing-function: cubic-bezier(0.2, 0, 0, 1); }
-        .eval-action-button:active:not(:disabled) { transform: scale(0.96); }
-        @keyframes evalSpin { to { transform: rotate(360deg); } }
-        @keyframes evalOverlayFade { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes evalOverlayRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-        .eval-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(16, 25, 35, 0.55); backdrop-filter: blur(4px); animation: evalOverlayFade .2s ease; }
-        .eval-overlay-card { background: ${COLORS.cardBg}; border: 1px solid ${COLORS.border}; border-radius: 12px; box-shadow: 0 24px 48px rgba(16, 24, 40, 0.28); padding: 34px 30px; max-width: 360px; width: 100%; text-align: center; animation: evalOverlayRise .25s ease; }
-        @media (prefers-reduced-motion: reduce) {
-          .eval-overlay, .eval-overlay-card { animation: none !important; }
-        }
-        .eval-jump-bar { display: none; }
-        @media (max-width: 640px) {
-          .eval-meta-grid { grid-template-columns: 1fr !important; }
-          .eval-header { grid-template-columns: 1fr !important; }
-          .eval-page { padding-bottom: 88px !important; }
-          .eval-actions { flex-direction: column; }
-          .eval-actions > button { width: 100%; }
-          .eval-jump-bar { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: ${COLORS.cardBg}; border-top: 1px solid ${COLORS.border}; box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06); }
-          .eval-jump-bar button { width: 100%; }
-        }
-      `}</style>
-      <div style={{ maxWidth: 880, margin: "0 auto" }}>
+  const completeTone = isRejectedLayer
+    ? { bg: R.redSoft, fg: R.red }
+    : { bg: R.greenSoft, fg: R.green };
 
-        {/* Header */}
-        <div className="eval-header" style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 18, alignItems: "center", background: COLORS.cardBg, borderRadius: 12, padding: "18px 20px", marginBottom: 20, boxShadow: COLORS.shadow }}>
-          <div style={{ width: 64, height: 64, borderRadius: 12, background: COLORS.purplePale, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {logoUrl ? (
-              <img src={logoUrl} alt="Company logo" style={{ maxWidth: 54, maxHeight: 54, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", outlineOffset: -1 }} />
-            ) : (
-              <Logo size={54} alt="PMW Logo" />
-            )}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.purple, textTransform: "uppercase", letterSpacing: 0, marginBottom: 4 }}>
-              {isEvaluation ? "Evaluation Review" : "Approval Review"}
-            </div>
-            <h1 style={{ fontSize: "clamp(22px, 3vw, 32px)", lineHeight: 1.15, fontWeight: 700, color: COLORS.textPrimary, margin: 0 }}>
-              {formTitle || currentLayer?.title || (isEvaluation ? "Evaluation" : "Approval")}
-            </h1>
-            <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 8 }}>
-              {currentLayer?.title ? `${currentLayer.title} / ` : ""}{stepLabel}
-              {showHeaderDescription && <div style={{ marginTop: 4 }}>{layerDescription}</div>}
-            </div>
-          </div>
-          <span style={{
-            justifySelf: "start",
-            fontSize: 12,
-            fontWeight: 700,
-            padding: "7px 12px",
-            borderRadius: 5,
-            color: pillTone === "bad" ? COLORS.red : pillTone === "good" ? COLORS.green : editorial.navy,
-            background: pillTone === "bad" ? COLORS.redPale : pillTone === "good" ? COLORS.greenPale : editorial.skySoft,
-            fontVariantNumeric: "tabular-nums",
-          }}>
-            {currentLayerLabel}
-          </span>
-        </div>
+  return (
+    <div className="rv-page" style={{ minHeight: "100vh", background: R.paper }}>
+      <ReviewerStyles />
+      <ReviewerHeader logoUrl={logoUrl} reference={referenceText} />
+      <main className="rv-main" style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px 64px", display: "flex", flexDirection: "column", gap: 28 }}>
+
+        {/* Intro */}
+        <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={eyebrowStyle}>{isEvaluation ? "Evaluation" : "Approval"} · {stepLabel}</div>
+          <h1 style={{ margin: 0, fontWeight: 700, fontSize: "clamp(26px, 4vw, 34px)", lineHeight: 1.15, letterSpacing: "-0.02em", color: R.ink }}>
+            {formTitle || currentLayer?.title || (isEvaluation ? "Evaluation" : "Approval")}
+          </h1>
+          {(submittedBy || submittedAtText) && (
+            <p style={{ margin: 0, color: R.muted }}>
+              {submittedBy ? <>From <strong style={{ color: R.ink, fontWeight: 600 }}>{submittedBy}</strong>{submittedAtText ? ", " : ""}</> : null}
+              {submittedAtText ? `submitted ${submittedAtText}` : null}
+            </p>
+          )}
+          {showHeaderDescription && <p style={{ margin: 0, color: R.muted }}>{layerDescription}</p>}
+        </section>
+
+        <StepCards steps={steps} />
 
         {isLayerAlreadyComplete && (
-          <div style={{ ...sectionCard, display: "flex", gap: 12, alignItems: "flex-start", background: COLORS.greenPale, boxShadow: "none" }}>
-            <LockIcon aria-hidden="true" style={{ fontSize: 22, color: COLORS.green, marginTop: 1 }} />
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: completeTone.bg, borderRadius: 10, padding: "16px 20px" }}>
+            <LockIcon aria-hidden="true" style={{ fontSize: 22, color: completeTone.fg, marginTop: 1 }} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>This step is already complete</div>
-              <div style={{ fontSize: 13, color: COLORS.textPrimary, marginTop: 4, lineHeight: 1.6, fontVariantNumeric: "tabular-nums" }}>
-                Status: <strong>{currentLayerLabel}</strong>
+              <div style={{ fontSize: 15, fontWeight: 700, color: R.ink }}>This step is already complete</div>
+              <div style={{ fontSize: 13, color: R.ink, marginTop: 4, lineHeight: 1.6, fontVariantNumeric: "tabular-nums" }}>
+                Status: <strong style={{ color: isGoodLayer || isRejectedLayer ? completeTone.fg : R.ink }}>{currentLayerLabel}</strong>
                 {actedSignedAt ? <> · {formatDateTime(actedSignedAt)}</> : null}
                 {actedBy ? <> · by {actedBy}</> : null}
               </div>
@@ -1077,10 +940,8 @@ export default function EvaluationPage() {
 
         {/* Previous Layer Results */}
         {previousResults.length > 0 && (
-          <div style={sectionCard}>
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: 0, margin: "0 0 12px" }}>
-              Previous steps
-            </h2>
+          <section>
+            <h2 style={{ ...eyebrowStyle, margin: "0 0 12px" }}>Previous steps</h2>
             {previousResults.map((pr, i) => {
               const evalData = pr.evaluationData as EvaluationDataEntry | undefined;
               const previousLayerNumber = Number(pr.layerNumber);
@@ -1106,42 +967,37 @@ export default function EvaluationPage() {
                 );
               }
               return (
-                <div key={i} style={{ background: COLORS.purplePale, borderRadius: 12, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
+                <div key={i} style={{ background: R.navyTint, borderRadius: 6, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: R.ink }}>
                   Step {previousLayerNumber}: <strong>{String(pr.status || "Completed")}</strong>
-                  {pr.email ? <span style={{ color: COLORS.textSecond, marginLeft: 8 }}>by {String(pr.email)}</span> : null}
-                  {pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null}
+                  {pr.email ? <span style={{ color: R.muted, marginLeft: 8 }}>by {String(pr.email)}</span> : null}
+                  {pr.signedAt ? <span style={{ color: R.label, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null}
                 </div>
               );
             })}
-          </div>
+          </section>
         )}
 
         {/* Submission Data Preview */}
         {responseData && (
-          <div style={sectionCard}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 14 }}>
-              <div>
-                <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, margin: "0 0 4px" }}>
-                  Submission Details
-                </h2>
-                <div style={{ fontSize: 12, color: COLORS.textSecond }}>
-                  Check the details below, then record your decision at the bottom.
-                </div>
-              </div>
-            </div>
-            <div className="eval-meta-grid" style={{ fontSize: 13, color: COLORS.textSecond, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
-              {!!valueToText(responseData.SubmittedBy) && (
-                <div>Submitted by: <strong style={{ color: COLORS.textPrimary }}>{valueToText(responseData.SubmittedBy)}</strong></div>
-              )}
-              {!!responseData[REFERENCE_NO_FIELD] && (
-                <div>Reference no.: <strong style={{ color: COLORS.textPrimary }}>{String(responseData[REFERENCE_NO_FIELD])}</strong></div>
-              )}
-              <div>Form ID: {String(responseData.FormID || responseData.formId || "—")}</div>
-              {selectedCompany && <div>Company: {selectedCompany}</div>}
-              <div>Submitted: {formatDateTime(responseData.SubmittedAt)}</div>
-            </div>
-
-            <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
+          <CollapsiblePanel title="Submission details">
+            <p style={{ margin: "0 0 12px", fontSize: 13, color: R.muted }}>
+              Check the details below, then record your decision at the bottom.
+            </p>
+            <CollapsiblePanel variant="group" title="Request">
+              <dl style={{ margin: 0, display: "flex", flexDirection: "column", fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
+                {metaRows.map(([label, value], i) => (
+                  <div
+                    key={label}
+                    className="rv-meta-row"
+                    style={{ display: "grid", gridTemplateColumns: "minmax(110px, 180px) minmax(0, 1fr)", gap: 16, padding: "10px 0", borderTop: i === 0 ? "none" : `1px solid ${R.line}` }}
+                  >
+                    <dt style={{ color: R.label }}>{label}</dt>
+                    <dd style={{ margin: 0, color: R.ink, overflowWrap: "anywhere" }}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </CollapsiblePanel>
+            <CollapsiblePanel variant="group" title="Submitted answers">
               <ReadOnlySubmissionPreview
                 surveyJson={surveyJson}
                 data={getSubmissionPreviewData(responseData)}
@@ -1149,56 +1005,100 @@ export default function EvaluationPage() {
                 mediaSrcByField={mediaSrcByField}
                 fallbackData={getSubmissionPreviewData(responseData)}
               />
-            </div>
+            </CollapsiblePanel>
 
             {/* Matrix Tables — from child lists */}
             {!surveyJson && Object.keys(matrixTables).length > 0 && (
-              <div style={{ marginTop: 16, borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.purple, marginBottom: 12 }}>
-                  Matrix Tables
-                </div>
+              <CollapsiblePanel variant="group" title="Matrix tables">
                 {Object.entries(matrixTables).map(([fieldName, entry]) => (
                   <div key={fieldName} style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: R.label, marginBottom: 4 }}>
                       {entry.columns[0]?.title || fieldName}
                     </div>
                     <div
-                      style={{ overflow: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 12 }}
+                      style={{ overflow: "auto", border: `1px solid ${R.line}`, borderRadius: 6 }}
                       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
                     />
-                    <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: R.label, marginTop: 4 }}>
                       {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
                     </div>
                   </div>
                 ))}
-              </div>
+              </CollapsiblePanel>
             )}
-          </div>
+          </CollapsiblePanel>
         )}
 
         {/* Current Layer Action */}
-        <div id="eval-decision" style={sectionCard}>
-          <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, margin: "0 0 16px" }}>
-            {isEvaluation ? "Your Evaluation" : "Your Decision"}
-          </h2>
-
+        <DecisionCard id="eval-decision" title={isEvaluation ? "Your evaluation" : "Your decision"}>
           {isLayerAlreadyComplete ? (
             <>
               {submitErrorAlert}
-              <div style={{ fontSize: 13, color: COLORS.textSecond }}>
+              <p style={{ margin: "0 0 16px", fontSize: 14, color: R.muted }}>
                 This link can no longer be used to record a decision.
-              </div>
+              </p>
+              {savedRejection && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: R.body, marginBottom: 4 }}>Rejection reason</div>
+                  <div style={{ fontSize: 14.5, color: R.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{savedRejection}</div>
+                </div>
+              )}
+              {actedBy && (
+                <SignOffBlock
+                  label={approverActionLabel}
+                  name={actedBy}
+                  role={approverRoleLabel}
+                  signature={savedSignature || null}
+                />
+              )}
             </>
+          ) : rejecting ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {submitErrorAlert}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: R.ink }}>Reject this request?</h3>
+                <p style={{ margin: 0, color: R.muted }}>The submitter is told it was rejected and the workflow stops here.</p>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label htmlFor="eval-reject-reason" style={{ fontSize: 13.5, fontWeight: 600, color: R.body }}>
+                  Reason <span style={{ fontWeight: 400, color: R.label }}>(optional)</span>
+                </label>
+                <textarea
+                  id="eval-reject-reason"
+                  autoFocus
+                  rows={3}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Tell the submitter why"
+                  disabled={isSubmitting}
+                  style={{ fontFamily: "inherit", fontSize: 16, padding: "10px 12px", border: `1px solid ${R.inputBorder}`, borderRadius: 4, resize: "vertical", color: R.ink, boxSizing: "border-box", width: "100%" }}
+                />
+              </div>
+              <div className="rv-reject-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                <button type="button" className="rv-btn" onClick={() => setRejecting(false)} style={btnGhost} disabled={isSubmitting}>
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="rv-btn"
+                  onClick={() => { setRejecting(false); void handleSubmit("reject"); }}
+                  style={{ ...btnDanger, opacity: isSubmitting ? 0.6 : 1 }}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Submitting..." : "Reject request"}
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               {isEvaluation && (
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 20 }}>
                   {evalForm ? (
                     <div className="eval-survey-wrap approval-survey-preview">
                       <NativeFormView runtime={evalRuntime} />
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, color: COLORS.red, background: COLORS.redPale, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 13, color: R.red, background: R.redSoft, borderRadius: 4, padding: 12 }}>
                       This review step has no questions set up yet. Please let HR know — nothing has been submitted.
                     </div>
                   )}
@@ -1206,87 +1106,89 @@ export default function EvaluationPage() {
               )}
 
               {isSignatureRequired && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
-                    Signature
-                  </div>
-                  <SignatureCapture value={signatureData} onChange={setSignatureData} disabled={actionState === "submitting"} />
+                <div style={{ marginBottom: 20 }}>
+                  <SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />
                 </div>
               )}
 
               {isCheckboxMode && (
-                <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, cursor: "pointer", minHeight: 40 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, cursor: "pointer", minHeight: 40 }}>
                   <input
                     type="checkbox"
                     checked={checkboxApproved}
                     onChange={(e) => setCheckboxApproved(e.target.checked)}
-                    style={{ width: 18, height: 18, accentColor: COLORS.purple }}
+                    style={{ width: 18, height: 18, accentColor: R.navy }}
                   />
-                  <span style={{ fontSize: 14, color: COLORS.textPrimary }}>I approve this submission</span>
+                  <span style={{ fontSize: 15, color: R.ink }}>I approve this submission</span>
                 </label>
               )}
 
-              {/* Who is signing: what they are doing, their name, their role. */}
+              {/* Who is signing: what they are doing, their name, their role.
+                  The signature line appears only once there is a signature. */}
               {signedInApprover && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
-                    {approverActionLabel}
-                  </div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>
-                    {signedInApprover}
-                  </div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 2 }}>
-                    {approverRoleLabel}
-                  </div>
-                </div>
+                <SignOffBlock
+                  label={approverActionLabel}
+                  name={signedInApprover}
+                  role={approverRoleLabel}
+                  signature={isSignatureRequired ? signatureData : null}
+                />
               )}
 
               {submitErrorAlert}
 
               {/* Action buttons */}
-              <div className="eval-actions" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div className="rv-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 {isEvaluation ? (
                   <button
-                    className="eval-action-button"
+                    type="button"
+                    className="rv-btn"
                     onClick={() => handleSubmit("confirm")}
-                    style={{ ...btnPrimary, opacity: actionState === "submitting" || !evalForm || !evalValid ? 0.6 : 1 }}
-                    disabled={actionState === "submitting" || !evalForm || !evalValid}
+                    style={{ ...(confirmBlocked ? btnDisabled : btnPrimary), marginLeft: "auto" }}
+                    disabled={confirmBlocked}
                   >
-                    {actionState === "submitting" ? "Submitting..." : !evalForm ? "Unavailable" : !evalValid ? "Fill required fields" : "Submit Evaluation"}
+                    {isSubmitting ? "Submitting..." : !evalForm ? "Unavailable" : !evalValid ? "Fill required fields" : "Submit evaluation"}
                   </button>
                 ) : (
                   <>
                     <button
-                      className="eval-action-button"
-                      onClick={() => handleSubmit("approve")}
-                      style={{ ...btnPrimary, opacity: actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData) ? 0.6 : 1 }}
-                      disabled={actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData)}
+                      type="button"
+                      ref={rejectButtonRef}
+                      className="rv-btn"
+                      onClick={() => setRejecting(true)}
+                      style={btnDangerOutline}
+                      disabled={isSubmitting}
                     >
-                      {actionState === "submitting" ? "Submitting..." : isSignatureRequired && !signatureData ? "Signature required" : "Approve"}
-                    </button>
-                    <button ref={rejectButtonRef} className="eval-action-button" onClick={() => setRejectDialogOpen(true)} style={btnOutline} disabled={actionState === "submitting"}>
                       Reject
+                    </button>
+                    <button
+                      type="button"
+                      className="rv-btn"
+                      onClick={() => handleSubmit("approve")}
+                      style={approveBlocked ? btnDisabled : btnPrimary}
+                      disabled={approveBlocked}
+                    >
+                      {isSubmitting ? "Submitting..." : isSignatureRequired && !signatureData ? "Sign to approve" : "Approve request"}
                     </button>
                   </>
                 )}
               </div>
-              {isEvaluation && !!evalForm && !evalValid && actionState !== "submitting" && (
-                <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 10 }}>
+              {isEvaluation && !!evalForm && !evalValid && !isSubmitting && (
+                <div style={{ fontSize: 13, color: R.muted, marginTop: 10, textAlign: "right" }}>
                   {Math.max(0, evalRuntime.required - evalRuntime.answered)} required answer(s) left
                 </div>
               )}
             </>
           )}
-        </div>
-      </div>
+        </DecisionCard>
+      </main>
 
       {/* Phones: the decision is far below the details, so offer a way down. */}
-      {!isLayerAlreadyComplete && actionState !== "submitting" && !rejectDialogOpen && (
-        <div className="eval-jump-bar">
+      {!isLayerAlreadyComplete && !isSubmitting && !rejecting && (
+        <div className="rv-jump">
           <button
             type="button"
-            className="eval-action-button"
-            style={btnPrimary}
+            className="rv-btn"
+            style={{ ...btnPrimary, width: "100%" }}
             onClick={() => {
               const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
               document.getElementById("eval-decision")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
@@ -1297,88 +1199,7 @@ export default function EvaluationPage() {
         </div>
       )}
 
-      {/* Reject dialog — a rejection ends the submission, so it is confirmed on
-          purpose: the backdrop ignores clicks and only Cancel closes it. */}
-      {rejectDialogOpen && (
-        <div
-          role="presentation"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(16, 24, 40, 0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 1000,
-          }}
-        >
-          <div
-            ref={rejectDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="eval-reject-title"
-            style={{
-              background: COLORS.cardBg,
-              borderRadius: 12,
-              padding: 24,
-              width: "100%",
-              maxWidth: 460,
-              boxShadow: "0 24px 48px rgba(16, 24, 40, 0.28)",
-            }}
-          >
-            <div id="eval-reject-title" style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 6 }}>
-              Reject this submission?
-            </div>
-            <div style={{ fontSize: 13, color: COLORS.textSecond, marginBottom: 16 }}>
-              The submitter is told it was rejected and the workflow stops here.
-            </div>
-            <label htmlFor="eval-reject-reason" style={{ display: "block", fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
-              Rejection Reason <span style={{ fontWeight: 400, color: COLORS.textMuted }}>(optional)</span>
-            </label>
-            <textarea
-              id="eval-reject-reason"
-              autoFocus
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Enter reason if rejecting..."
-              disabled={actionState === "submitting"}
-              style={{
-                width: "100%",
-                minHeight: 96,
-                padding: 10,
-                borderRadius: 8,
-                border: `1px solid ${COLORS.textSecond}`,
-                fontSize: 16,
-                fontFamily: "inherit",
-                resize: "vertical",
-                boxSizing: "border-box",
-                marginBottom: 20,
-              }}
-            />
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
-              <button
-                className="eval-action-button"
-                onClick={() => setRejectDialogOpen(false)}
-                style={{ ...btnPrimary, background: "transparent", border: `1px solid ${COLORS.border}`, color: COLORS.textSecond }}
-                disabled={actionState === "submitting"}
-              >
-                Cancel
-              </button>
-              <button
-                className="eval-action-button"
-                onClick={() => { setRejectDialogOpen(false); void handleSubmit("reject"); }}
-                style={{ ...btnPrimary, background: COLORS.red, opacity: actionState === "submitting" ? 0.6 : 1 }}
-                disabled={actionState === "submitting"}
-              >
-                {actionState === "submitting" ? "Submitting..." : "Confirm Rejection"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {actionState === "submitting" && <SubmittingOverlay action={submitAction} />}
+      {isSubmitting && <SubmittingOverlay action={submitAction} />}
     </div>
   );
 }

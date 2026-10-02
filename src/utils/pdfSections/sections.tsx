@@ -1,15 +1,17 @@
 /** sections.tsx — The nine PDF block sections plus the footer page chrome. */
+import type { ReactElement } from "react";
 import { View, Text, Image } from "@react-pdf/renderer";
 import { C, S } from "./styles";
 import {
   fmtDate,
+  stampInfo,
   fmtVal,
   badgeStyle,
   docControlCells,
   LayerRow,
   renderMatrixField,
   shouldRenderMeasure,
-  renderMeasureValue,
+  measureText,
   collectImageSources,
   renderImageSources,
   evaluationFieldsForLayer,
@@ -17,22 +19,55 @@ import {
 } from "./helpers";
 import { footerContentForPage } from "../pdfTemplate/footer";
 import { resolveSpan } from "../pdfTemplate/resolve";
+import type { FormSubmissionField } from "../formSubmissionLayout";
 import type { PdfSectionContext } from "./context";
+import type { PdfLayerResult } from "../FormPdfDocument";
 import type { TemplateFooter } from "../pdfTemplate/types";
 
 export { C, S };
 
+// A label above its value: the one cell shape the whole document is built from.
+function LabelledCell({ label, value }: { label: string; value: string }): ReactElement {
+  return (
+    <>
+      <Text style={S.cellLabel}>{label}</Text>
+      <Text style={S.cellValue}>{value}</Text>
+    </>
+  );
+}
+
 export function HeaderSection({ ctx }: { ctx: PdfSectionContext }) {
-  const { meta } = ctx.data;
+  const { meta, layerResults } = ctx.data;
+  const showBadge = ctx.layoutConfig?.showStatusBadge !== false;
+  const badge = badgeStyle(meta.formStatus, layerResults);
+  const stamp = ctx.layoutConfig?.showStamp === false ? null : stampInfo(meta.formStatus, layerResults);
   return (
     <View style={[S.header, { borderBottomColor: ctx.primary }]}>
-      <View style={S.logoBox}>
-        {ctx.effectiveLogoUrl
-          ? <Image style={S.logo} src={ctx.effectiveLogoUrl} />
-          : <Text style={{ fontSize: 14, fontWeight: "bold", color: ctx.primary }}>LOGO</Text>}
+      <View style={S.headerLeft}>
+        {ctx.effectiveLogoUrl ? (
+          <View style={S.logoBox}>
+            <Image style={S.logo} src={ctx.effectiveLogoUrl} />
+          </View>
+        ) : null}
+        <Text style={S.docTitle}>{ctx.title}</Text>
       </View>
+      {stamp ? (
+        <View style={S.stamp}>
+          <View style={[S.stampOuter, { borderColor: stamp.color }]}>
+            <View style={[S.stampInner, { borderColor: stamp.color }]}>
+              <Text style={[S.stampTop, { color: stamp.color }]}>PMW HR FORM</Text>
+              <Text style={[S.stampWord, { color: stamp.color }]}>{stamp.label}</Text>
+              <Text style={[S.stampDate, { color: stamp.color }]}>{stamp.date || " "}</Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
       <View style={S.headerRight}>
-        <Text style={[S.docTitle, { color: ctx.primary }]}>{ctx.title}</Text>
+        {showBadge && (
+          <View style={[S.badge, { backgroundColor: C.white, borderColor: badge.text }]}>
+            <Text style={[S.badgeText, { color: badge.text }]}>{badge.label}</Text>
+          </View>
+        )}
         <Text style={S.docRef}>Document Ref: {meta.formTitle} / v{meta.formVersion}</Text>
       </View>
     </View>
@@ -47,49 +82,113 @@ export function DocumentControlSection({ ctx }: { ctx: PdfSectionContext }) {
     <View style={S.docControl}>
       {cells.map((cell) => (
         <View key={cell.label} style={S.docControlCell}>
-          <Text style={S.docControlLabel}>{cell.label}</Text>
-          <Text style={S.docControlValue}>{cell.value}</Text>
+          <LabelledCell label={cell.label} value={cell.value} />
         </View>
       ))}
     </View>
   );
 }
 
-export function StatusBadgeSection({ ctx }: { ctx: PdfSectionContext }) {
-  if (ctx.layoutConfig?.showStatusBadge === false) return null;
-  const badge = badgeStyle(ctx.data.meta.formStatus);
-  return (
-    <View style={[S.badge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
-      <Text style={{ color: badge.text }}>{badge.label}</Text>
-    </View>
-  );
+// The status badge is drawn in the header's right-hand column; this block is
+// kept so existing templates that list it keep resolving.
+export function StatusBadgeSection(_props: { ctx: PdfSectionContext }) {
+  return null;
 }
 
 export function SubmissionMetaSection({ ctx }: { ctx: PdfSectionContext }) {
   const { meta } = ctx.data;
+  // A reference leads: on a printed copy it is what gets read back by phone.
+  const cells: { label: string; value: string }[] = [
+    ...(ctx.referenceNo ? [{ label: "Reference No.", value: ctx.referenceNo }] : []),
+    { label: "Submitted By", value: meta.submittedBy || "—" },
+    { label: "Date Submitted", value: fmtDate(meta.submittedAt) },
+    ...(ctx.selectedCompany ? [{ label: "Company", value: ctx.selectedCompany }] : []),
+  ];
   return (
     <View style={S.infoGrid}>
-      {/* First cell: on a printed copy the reference is what someone reads
-          back over the phone, so it leads rather than trails the grid. */}
-      {ctx.referenceNo && (
-        <View style={S.infoCell}><Text style={S.infoLabel}>Reference No.</Text><Text style={S.infoValue}>{ctx.referenceNo}</Text></View>
-      )}
-      <View style={S.infoCell}><Text style={S.infoLabel}>Submitted By</Text><Text style={S.infoValue}>{meta.submittedBy || "—"}</Text></View>
-      <View style={S.infoCell}><Text style={S.infoLabel}>Date Submitted</Text><Text style={S.infoValue}>{fmtDate(meta.submittedAt)}</Text></View>
-      <View style={S.infoCell}><Text style={S.infoLabel}>Form</Text><Text style={S.infoValue}>{meta.formTitle}</Text></View>
-      <View style={S.infoCell}><Text style={S.infoLabel}>Version</Text><Text style={S.infoValue}>v{meta.formVersion}</Text></View>
-      {ctx.selectedCompany && (
-        <View style={S.infoCell}><Text style={S.infoLabel}>Company</Text><Text style={S.infoValue}>{ctx.selectedCompany}</Text></View>
-      )}
+      {cells.map((cell) => (
+        <View key={cell.label} style={S.infoCell}>
+          <LabelledCell label={cell.label} value={cell.value} />
+        </View>
+      ))}
     </View>
   );
 }
 
+// ── Form data ─────────────────────────────────────────────────────────────
+
+type GridItem = { field: FormSubmissionField; span: 1 | 2 | 3; text: string; images: string[] };
+
+function gridItem(field: FormSubmissionField): GridItem {
+  const images = collectImageSources(field.value);
+  const measure = shouldRenderMeasure(field) ? measureText(field) : null;
+  const text = images.length > 0 ? "" : measure ?? (fmtVal(field.value, field) || "—");
+  let span: 1 | 2 | 3 = 1;
+  if (images.length > 2) span = 2;
+  else if (text.includes("\n") || text.length > 84) span = 3;
+  else if (text.length > 34) span = 2;
+  return { field, span, text, images };
+}
+
+function GridCell({ item }: { item: GridItem }): ReactElement {
+  return (
+    <View style={[S.gridCell, { width: `${item.span * 33.333}%` }]} wrap={false}>
+      <Text style={S.cellLabel}>{item.field.label}</Text>
+      {item.images.length > 0 ? renderImageSources(item.images) : <Text style={S.cellValue}>{item.text}</Text>}
+    </View>
+  );
+}
+
+/** Fills rows three units wide in document order; a cell that does not fit
+ *  starts the next row rather than jumping ahead of the one before it. */
+function packRows(items: GridItem[]): GridItem[][] {
+  const rows: GridItem[][] = [];
+  let current: GridItem[] = [];
+  let used = 0;
+  for (const item of items) {
+    if (used + item.span > 3) {
+      rows.push(current);
+      current = [];
+      used = 0;
+    }
+    current.push(item);
+    used += item.span;
+  }
+  if (current.length > 0) rows.push(current);
+  return rows;
+}
+
+function sectionBody(fields: FormSubmissionField[]): ReactElement[] {
+  const out: ReactElement[] = [];
+  let pending: GridItem[] = [];
+  const flush = () => {
+    packRows(pending).forEach((row, i) => {
+      out.push(
+        <View key={`row-${out.length}-${i}`} style={S.gridRow} wrap={false}>
+          {row.map((item) => <GridCell key={item.field.key} item={item} />)}
+        </View>,
+      );
+    });
+    pending = [];
+  };
+  for (const field of fields) {
+    if (field.kind === "matrix") {
+      flush();
+      const matrix = renderMatrixField(field);
+      if (matrix) out.push(<View key={field.key}>{matrix}</View>);
+      continue;
+    }
+    pending.push(gridItem(field));
+  }
+  flush();
+  return out;
+}
+
 export function AnswersSection({ ctx }: { ctx: PdfSectionContext }) {
-  const { formSections, primary } = ctx;
+  const { formSections } = ctx;
   return (
     <View style={S.pageSection}>
-      <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>FORM DATA</Text>
+      <Text style={S.dataLabel} minPresenceAhead={40}>Form data</Text>
       {formSections.length === 0 ? (
         <Text style={S.noData}>No form fields available.</Text>
       ) : (
@@ -97,20 +196,8 @@ export function AnswersSection({ ctx }: { ctx: PdfSectionContext }) {
           <View key={section.id} style={S.formSection}>
             {/* A section carrying no title is the rest of the one above it,
                 resumed after a nested panel — it prints no second heading. */}
-            {section.title ? <Text style={S.subSectionLabel}>{section.title}</Text> : null}
-            {section.fields.map((field, fieldIndex) => {
-              if (field.kind === "matrix") {
-                return <View key={field.key} wrap={false}>{renderMatrixField(field)}</View>;
-              }
-              const imageSources = collectImageSources(field.value);
-              const measureValue = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
-              return (
-                <View key={field.key} style={[S.fieldRow, fieldIndex % 2 === 1 ? S.fieldRowAlt : {}]} wrap={false}>
-                  <Text style={S.fieldLabel}>{field.label}</Text>
-                  {imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.fieldValue}>{fmtVal(field.value, field)}</Text>}
-                </View>
-              );
-            })}
+            {section.title ? <Text style={S.subSectionLabel} minPresenceAhead={36}>{section.title}</Text> : null}
+            {sectionBody(section.fields)}
           </View>
         ))
       )}
@@ -118,14 +205,16 @@ export function AnswersSection({ ctx }: { ctx: PdfSectionContext }) {
   );
 }
 
+// ── Chain ─────────────────────────────────────────────────────────────────
+
 export function ApprovalsSection({ ctx }: { ctx: PdfSectionContext }) {
   const { layerResults } = ctx.data;
   if (ctx.layoutConfig?.showApproverChain === false) return null;
   if (!layerResults || layerResults.length === 0) return null;
   return (
-    <View break style={S.approvalPageSection}>
-      <Text style={[S.sectionLabel, { borderBottomColor: ctx.primary }]}>APPROVAL / EVALUATION CHAIN</Text>
-      <View style={S.tableBlock} wrap={false}>
+    <View style={S.pageSection}>
+      <Text style={S.sectionLabel} minPresenceAhead={40}>Approval / evaluation chain</Text>
+      <View style={S.tableBlock}>
         <View style={[S.layerRow, S.layerHeader, { backgroundColor: ctx.primary }]} wrap={false}>
           <Text style={[S.layerHeaderText, S.colNum]}>#</Text>
           <Text style={[S.layerHeaderText, S.colType]}>Type</Text>
@@ -142,80 +231,153 @@ export function ApprovalsSection({ ctx }: { ctx: PdfSectionContext }) {
   );
 }
 
-export function SignaturesSection({ ctx }: { ctx: PdfSectionContext }) {
-  const { layerResults } = ctx.data;
-  if (ctx.layoutConfig?.showSignatures === false) return null;
-  if (!layerResults || layerResults.filter((l) => l.signature).length === 0) return null;
+function isManual(layer: PdfLayerResult): boolean {
+  return layer.status.trim().toLowerCase().startsWith("manual ");
+}
+
+function signatureLabel(layer: PdfLayerResult): string {
+  if (layer.type === "evaluation") return "Evaluated by";
+  return layer.status.toLowerCase().includes("reject") ? "Rejected by" : "Approved by";
+}
+
+function SignatureCard({ layer }: { layer: PdfLayerResult }): ReactElement {
+  const name = layer.confirmerName || layer.email || "";
+  const email = layer.confirmerName ? layer.confirmerEmail || layer.email : "";
+  const when = layer.signedAt ? fmtDate(layer.signedAt) : "";
   return (
-    <View style={S.approvalPageSection}>
-      <Text style={[S.sectionLabel, { borderBottomColor: ctx.primary }]}>SIGNATURES</Text>
-      {layerResults.filter((l) => l.signature).map((layer, i) => {
-        const badge = badgeStyle(layer.status);
-        return (
-          <View key={i} style={S.sigBlock} wrap={false}>
-            <View style={S.sigLine}>
-              <Text style={S.sigLabel}>Layer {layer.layerNumber} - {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
-              <Text style={S.sigName}>{layer.email || ""} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
-              <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}{layer.rejection ? ` - Reason: ${layer.rejection}` : ""}</Text>
+    <View style={S.sigCard} wrap={false}>
+      <View style={S.sigText}>
+        <Text style={S.sigLabel}>{signatureLabel(layer)} {"·"} Layer {layer.layerNumber}</Text>
+        <Text style={S.sigName}>{name}</Text>
+        {email ? <Text style={S.sigDetail}>{email}</Text> : null}
+        {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
+        {when ? <Text style={S.sigDetail}>{when}</Text> : null}
+      </View>
+      {layer.signature ? (
+        <View style={S.sigPad}>
+          <Image style={S.sigImage} src={layer.signature} />
+          <View style={S.sigLine} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function signedLayers(ctx: PdfSectionContext): PdfLayerResult[] {
+  if (ctx.layoutConfig?.showSignatures === false) return [];
+  // A decided approval is listed with or without a signature image; an
+  // evaluation is listed once it carries a signature (its name already heads
+  // its details block).
+  return (ctx.data.layerResults ?? []).filter((l) => {
+    if (isManual(l)) return false;
+    if (l.type === "evaluation") return Boolean(l.signature);
+    return Boolean(l.signature) || Boolean(l.signedAt && l.email);
+  });
+}
+
+function EvaluationBlocks({ ctx }: { ctx: PdfSectionContext }): ReactElement[] {
+  const { layerResults } = ctx.data;
+  const includeEmpty = ctx.layoutConfig?.includeEmptyEvaluationFields === true;
+  const out: ReactElement[] = [];
+  (layerResults ?? []).filter((l) => l.type === "evaluation").forEach((layer, i) => {
+    const fields = evaluationFieldsForLayer(layer, includeEmpty);
+    if (fields.length === 0) return;
+    out.push(
+      <View key={i} style={S.evalBlock} wrap={false}>
+        <Text style={S.evalTitle}>Layer {layer.layerNumber} {"·"} {layer.confirmerName || layer.confirmerEmail || layer.email || "Evaluator"}</Text>
+        {fields.map((field, fi) => {
+          if (includeEmpty) {
+            return (
+              <View key={fi} style={S.paperEvalRow} wrap={false}>
+                <Text style={S.paperEvalLabel}>{field.label}</Text>
+                {renderPaperFieldValue(field)}
+              </View>
+            );
+          }
+          const item = gridItem(field);
+          return (
+            <View key={fi} style={S.evalRow} wrap={false}>
+              <Text style={S.evalLabel}>{field.label}</Text>
+              <View style={{ width: "38%" }}>
+                {item.images.length > 0 ? renderImageSources(item.images) : <Text style={{ fontSize: 7, fontWeight: "bold", lineHeight: 1.5 }}>{item.text}</Text>}
+              </View>
             </View>
-            <View style={S.sigImageBox}>
-              <Image style={S.sigImage} src={layer.signature} />
-            </View>
-          </View>
-        );
-      })}
+          );
+        })}
+        <View style={S.evalEnd} />
+      </View>,
+    );
+  });
+  return out;
+}
+
+function hasEvaluationDetails(ctx: PdfSectionContext): boolean {
+  if (ctx.layoutConfig?.showEvaluationDetails === false) return false;
+  const includeEmpty = ctx.layoutConfig?.includeEmptyEvaluationFields === true;
+  return (ctx.data.layerResults ?? []).some((l) => l.type === "evaluation" && evaluationFieldsForLayer(l, includeEmpty).length > 0);
+}
+
+function EvaluationColumn({ ctx }: { ctx: PdfSectionContext }): ReactElement {
+  return (
+    <>
+      <Text style={S.sectionLabel} minPresenceAhead={40}>Evaluation details</Text>
+      {EvaluationBlocks({ ctx })}
+    </>
+  );
+}
+
+function SignatureColumn({ layers }: { layers: PdfLayerResult[] }): ReactElement {
+  return (
+    <>
+      <Text style={S.sectionLabel} minPresenceAhead={40}>Signatures</Text>
+      {layers.map((layer, i) => <SignatureCard key={i} layer={layer} />)}
+    </>
+  );
+}
+
+// Signatures and evaluation details sit side by side when both exist. They are
+// two blocks, so the one that is drawn first carries the other and marks it
+// done on the context; the second then has nothing left to draw.
+export function SignaturesSection({ ctx }: { ctx: PdfSectionContext }) {
+  const layers = signedLayers(ctx);
+  if (layers.length === 0) return null;
+  const paired = !ctx.state.evaluationDrawn && hasEvaluationDetails(ctx) && ctx.layoutConfig?.includeEmptyEvaluationFields !== true;
+  if (!paired) {
+    return <View style={S.pageSection}>{SignatureColumn({ layers })}</View>;
+  }
+  ctx.state.evaluationDrawn = true;
+  return (
+    <View style={S.bottomRow}>
+      <View style={S.bottomLeft}>{SignatureColumn({ layers })}</View>
+      <View style={S.bottomRight}>{EvaluationColumn({ ctx })}</View>
     </View>
   );
 }
 
 export function EvaluationDetailsSection({ ctx }: { ctx: PdfSectionContext }) {
-  const { layerResults } = ctx.data;
-  const includeEmptyEvaluationFields = ctx.layoutConfig?.includeEmptyEvaluationFields === true;
-  if (ctx.layoutConfig?.showEvaluationDetails === false) return null;
-  if (!layerResults || layerResults.filter((l) => l.type === "evaluation" && ((l.evaluationFields && Object.keys(l.evaluationFields).length > 0) || (includeEmptyEvaluationFields && l.evaluationSurveyElements?.length))).length === 0) return null;
-  return (
-    <View style={S.approvalPageSection}>
-      <Text style={[S.sectionLabel, { borderBottomColor: ctx.primary }]}>EVALUATION DETAILS</Text>
-      {layerResults.filter((l) => l.type === "evaluation").map((layer, i) => {
-        const fields = evaluationFieldsForLayer(layer, includeEmptyEvaluationFields);
-        if (fields.length === 0) return null;
-        return (
-          <View key={i} style={{ marginBottom: includeEmptyEvaluationFields ? 12 : 6 }} wrap={false}>
-            <Text style={[S.subSectionLabel, { color: ctx.secondary }]}>Layer {layer.layerNumber} - {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
-            {fields.map((field, fi) => {
-              const imageSources = collectImageSources(field.value);
-              const measureValue = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
-              return (
-                <View key={fi} style={includeEmptyEvaluationFields ? S.paperEvalRow : S.evalSubRow} wrap={false}>
-                  <Text style={includeEmptyEvaluationFields ? S.paperEvalLabel : S.evalSubLabel}>{field.label}</Text>
-                  {includeEmptyEvaluationFields
-                    ? renderPaperFieldValue(field)
-                    : imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.evalSubValue}>{fmtVal(field.value, field)}</Text>}
-                </View>
-              );
-            })}
-          </View>
-        );
-      })}
-    </View>
-  );
+  if (ctx.state.evaluationDrawn || !hasEvaluationDetails(ctx)) return null;
+  ctx.state.evaluationDrawn = true;
+  return <View style={S.pageSection}>{EvaluationColumn({ ctx })}</View>;
 }
 
-export function IsoStandardsSection({ ctx }: { ctx: PdfSectionContext }) {
-  const { isoStandards } = ctx.data;
-  if (!isoStandards) return null;
-  return (
-    <View style={{ marginTop: 10, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: C.borderLight }}>
-      <Text style={{ fontSize: 5.5, color: C.muted, textAlign: "center" }}>{isoStandards}</Text>
-    </View>
-  );
+// The ISO line now lives in the footer, with the generated-on stamp.
+export function IsoStandardsSection(_props: { ctx: PdfSectionContext }) {
+  return null;
 }
+
+// ── Footer ────────────────────────────────────────────────────────────────
 
 // Hoisted so it is the same function reference on every render — an inline
 // arrow here would be a fresh closure each call, which is invisible in the PDF
 // output but makes two otherwise-identical element trees compare unequal.
 function renderPageNumber({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) {
   return `Page ${pageNumber} of ${totalPages}`;
+}
+
+function defaultFooterText(ctx: PdfSectionContext): string {
+  const iso = ctx.data.isoStandards?.trim();
+  const stamp = ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`;
+  return iso ? `${iso} · ${stamp}` : stamp;
 }
 
 // Memoised per (footer, ctx) pair so repeated renders of the same document
@@ -234,8 +396,10 @@ function getFooterContentRender(footer: TemplateFooter, ctx: PdfSectionContext) 
   if (!render) {
     render = ({ pageNumber, totalPages }) => {
       const content = footerContentForPage(footer, pageNumber);
-      if (!content) return ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`;
-      return content.flatMap((p) => p.spans).map((span) => resolveSpan(span, ctx, { pageNumber, totalPages })).join("");
+      if (!content) return defaultFooterText(ctx);
+      const text = content.flatMap((p) => p.spans).map((span) => resolveSpan(span, ctx, { pageNumber, totalPages })).join("");
+      // A template footer that resolves to nothing must not blank the page.
+      return text.trim() ? text : defaultFooterText(ctx);
     };
     byCtx.set(ctx, render);
   }
@@ -246,11 +410,11 @@ export function FooterChrome({ ctx, footer }: { ctx: PdfSectionContext; footer?:
   return (
     <View style={S.footer} fixed>
       {footer ? (
-        <Text render={getFooterContentRender(footer, ctx)} />
+        <Text style={S.footerLeft} render={getFooterContentRender(footer, ctx)} />
       ) : (
-        <Text>{ctx.layoutConfig?.footerText?.trim() || `Generated ${fmtDate(new Date().toISOString())}`}</Text>
+        <Text style={S.footerLeft}>{defaultFooterText(ctx)}</Text>
       )}
-      <Text render={renderPageNumber} />
+      <Text style={S.footerRight} render={renderPageNumber} />
     </View>
   );
 }
