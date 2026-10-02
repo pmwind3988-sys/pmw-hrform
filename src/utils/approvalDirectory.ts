@@ -32,7 +32,13 @@ import {
   type DirectoryColumnMap,
   type ApprovalDirectoryRow,
 } from "./approvalDirectorySchema";
-import { DIRECTORY_SOURCE, type DirectorySource } from "./directoryHarvest";
+import {
+  DIRECTORY_SOURCE,
+  findSubjectRow,
+  optionsFromSubmittedData,
+  subjectFieldMapping,
+  type DirectorySource,
+} from "./directoryHarvest";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
 
@@ -466,8 +472,13 @@ async function queryDirectory(
  * a chain re-reads the same rows, since each hop's target is the next hop's
  * subject. The column map is resolved once and shared by both lookups.
  */
-export function createApprovalDirectoryReader(token: string) {
+export function createApprovalDirectoryReader(
+  token: string,
+  /** The form's `LayerConfig`, so the employee's questions can be told apart. */
+  options: { layerConfig?: unknown } = {},
+) {
   const people = new Map<string, ApprovalDirectoryRow | null>();
+  let routableRows: Promise<ApprovalDirectoryRow[]> | null = null;
   let columnsPromise: Promise<DirectoryColumnMap | null> | null = null;
 
   /** null when the list is absent or too incomplete to answer anything. */
@@ -529,18 +540,37 @@ export function createApprovalDirectoryReader(token: string) {
     }
   }
 
+  /** Every row routing may act on, read once per reader. */
+  function allRoutableRows(): Promise<ApprovalDirectoryRow[]> {
+    routableRows ??= columns().then(async (map) => {
+      if (!map) return [];
+      try {
+        return (await queryDirectory(token, map, "", 5000)).filter(isRoutableRow);
+      } catch {
+        return [];
+      }
+    });
+    return routableRows;
+  }
+
+  const toPerson = (row: ApprovalDirectoryRow) => ({
+    email: row.personEmail,
+    name: row.personName,
+    department: row.department,
+    position: row.position,
+    approverEmail: row.approverEmail,
+  });
+
   return {
     lookupPerson: async (email: string) => {
       const row = await lookupPerson(email);
-      return row
-        ? {
-          email: row.personEmail,
-          name: row.personName,
-          department: row.department,
-          position: row.position,
-          approverEmail: row.approverEmail,
-        }
-        : null;
+      return row ? toPerson(row) : null;
+    },
+    /** The employee a submission is about, found from its answers; null when unknown. */
+    lookupSubject: async (data: Record<string, unknown>) => {
+      const mapping = subjectFieldMapping(options.layerConfig, optionsFromSubmittedData(data));
+      const row = findSubjectRow(await allRoutableRows(), data, mapping);
+      return row ? toPerson(row) : null;
     },
     lookupRoleHolder,
   };

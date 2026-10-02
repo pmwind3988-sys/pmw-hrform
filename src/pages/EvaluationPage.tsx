@@ -42,6 +42,13 @@ import { parseLayerConfig } from "../utils/workflowReviewLink";
 import { getActiveLayers } from "../components/builder/approvalDashboardLayerProgress";
 import { apiIdentityHeaders } from "../utils/apiIdentity";
 import { approverDisplayName } from "../utils/approverIdentity";
+import {
+  signOffLabel,
+  signOffName,
+  signOffPosition,
+  signOffVerdictForLayer,
+  signOffVerdictFromStatus,
+} from "../utils/signOff";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -267,6 +274,11 @@ function surveyElementsForLayer(layerSequence: LayerConfigItem[], layerNumber: u
   return layer?.type === "evaluation" ? (layer as EvaluationLayerConfig).surveyElements || [] : [];
 }
 
+/** Today, as the sign-off prints a date that has not been recorded yet. */
+function todayLabel(): string {
+  return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 // ── Component ──
 export default function EvaluationPage() {
   const { token: routeToken, formSlug, responseId, layerNumber } = useParams<{
@@ -299,6 +311,8 @@ export default function EvaluationPage() {
   const [mediaSrcByField, setMediaSrcByField] = useState<Record<string, string | string[]>>({});
   const [logoUrl, setLogoUrl] = useState("");
   const [publicPreviousLayerSummaries, setPublicPreviousLayerSummaries] = useState<PublicPreviousLayerSummary[]>([]);
+  /** The signed-in reviewer's directory name and post, read by the server. */
+  const [viewerSignOff, setViewerSignOff] = useState<{ name: string; position: string } | null>(null);
 
   /**
    * The evaluation questions this layer asks, as a native document.
@@ -444,6 +458,9 @@ export default function EvaluationPage() {
                 layerNumber: n,
                 status: json.data.fields[`L${n}_Status`] || null,
                 email: json.data.fields[`L${n}_Email`] || null,
+                actedBy: json.data.fields[`L${n}_ActedBy`] || null,
+                actedByName: json.data.fields[`L${n}_ActedByName`] || null,
+                actedByPosition: json.data.fields[`L${n}_ActedByPosition`] || null,
                 signedAt: json.data.fields[`L${n}_SignedAt`] || null,
                 evaluationData: visibleEvaluationData[String(n)],
               });
@@ -496,7 +513,9 @@ export default function EvaluationPage() {
           + `&responseItemId=${encodeURIComponent(String(respItemId))}`
           + `&layerNumber=${encodeURIComponent(String(displayLayerNumber))}`
           + `&prefix=${routePrefix}`,
-          { headers: await apiIdentityHeaders(instance, accounts[0]) },
+          // The SharePoint token rides along so the tester of a test run can be
+          // proved a builder superuser; see api/_utils/testRunReviewer.ts.
+          { headers: { ...(await apiIdentityHeaders(instance, accounts[0])), "X-SharePoint-Token": token } },
         );
         const json = await res.json();
         if (!res.ok || !json.success) {
@@ -527,13 +546,20 @@ export default function EvaluationPage() {
               layerNumber: entry.layerNumber,
               status: fields[`L${entry.layerNumber}_Status`] ?? null,
               email: fields[`L${entry.layerNumber}_Email`] ?? null,
+              actedBy: fields[`L${entry.layerNumber}_ActedBy`] ?? null,
+              actedByName: fields[`L${entry.layerNumber}_ActedByName`] ?? null,
+              actedByPosition: fields[`L${entry.layerNumber}_ActedByPosition`] ?? null,
               signedAt: fields[`L${entry.layerNumber}_SignedAt`] ?? null,
+              title: entry.title || "",
             })),
         );
         setCurrentLayerStatus(valueToText(json.data.layerStatus || fields[`L${displayLayerNumber}_Status`]));
         setFormStatus(valueToText(json.data.formStatus || fields.FormStatus || fields.Status));
         setMediaSrcByField(isRecord(json.data.mediaSrcByField) ? json.data.mediaSrcByField as Record<string, string | string[]> : {});
         applyMatrixTables(json.data.matrixTables);
+        setViewerSignOff(isRecord(json.data.viewerSignOff)
+          ? { name: valueToText(json.data.viewerSignOff.name), position: valueToText(json.data.viewerSignOff.position) }
+          : null);
         const data = { responseFields: fields };
 
         // The form's own definition — what to draw, and the logo to draw it
@@ -640,6 +666,7 @@ export default function EvaluationPage() {
         headers: {
           "Content-Type": "application/json",
           ...(await apiIdentityHeaders(instance, accounts[0])),
+          "X-SharePoint-Token": token,
         },
         body: JSON.stringify({
           slug: formSlug,
@@ -836,7 +863,6 @@ export default function EvaluationPage() {
   // subtitle material and would read as a sentence there.
   const layerDescription = currentLayer?.description?.trim() || "";
   const descriptionIsLabel = layerDescription !== "" && layerDescription.length <= 30;
-  const approverActionLabel = descriptionIsLabel ? layerDescription : (isEvaluation ? "Evaluated by" : "Approved by");
   const showHeaderDescription = layerDescription !== "" && !(descriptionIsLabel && !!signedInApprover);
   const normalizedPill = normalizeLayerStatus(currentLayerLabel);
   const pillLower = currentLayerLabel.toLowerCase();
@@ -896,6 +922,17 @@ export default function EvaluationPage() {
       {error && <div style={{ fontSize: 12, marginTop: 6 }}>Details: {error}</div>}
     </div>
   ) : null;
+  // The directory name wins over Azure's display name, so the page prints what
+  // the record will be stamped with. Position falls back to the layer title.
+  const signerName = viewerSignOff?.name || signedInApprover;
+  const signerPosition = signOffPosition(viewerSignOff?.position, approverRoleLabel);
+  const pendingVerdict = signOffVerdictForLayer(currentLayer?.type);
+  const customSignOffLabel = descriptionIsLabel ? layerDescription : undefined;
+  // Once decided, the sign-off already on the record — for a link opened later.
+  const recordedVerdict = signOffVerdictFromStatus(currentLayerStatus);
+  const recordedSignerName = responseData
+    ? signOffName(responseData[`L${effectiveLayerNumber}_ActedByName`], responseData[`L${effectiveLayerNumber}_ActedBy`])
+    : "";
 
   const completeTone = isRejectedLayer
     ? { bg: R.redSoft, fg: R.red }
@@ -932,7 +969,7 @@ export default function EvaluationPage() {
               <div style={{ fontSize: 13, color: R.ink, marginTop: 4, lineHeight: 1.6, fontVariantNumeric: "tabular-nums" }}>
                 Status: <strong style={{ color: isGoodLayer || isRejectedLayer ? completeTone.fg : R.ink }}>{currentLayerLabel}</strong>
                 {actedSignedAt ? <> · {formatDateTime(actedSignedAt)}</> : null}
-                {actedBy ? <> · by {actedBy}</> : null}
+                {actedBy ? <> · by {recordedSignerName || actedBy}</> : null}
               </div>
             </div>
           </div>
@@ -947,6 +984,25 @@ export default function EvaluationPage() {
               const previousLayerNumber = Number(pr.layerNumber);
               const publicSummary = publicPreviousLayerSummaries.find((summary) => Number(summary.layerNumber) === previousLayerNumber);
               const previousSurveyElements = publicSummary?.surveyElements || surveyElementsForLayer(layerSequence, previousLayerNumber);
+              const previousTitle = publicSummary?.title || valueToText(pr.title) || `Step ${previousLayerNumber}`;
+              const previousVerdict = signOffVerdictFromStatus(pr.status);
+              const previousSignerName = signOffName(
+                pr.actedByName || evalData?.confirmerName,
+                pr.actedBy || evalData?.confirmerEmail || pr.email,
+              );
+              const previousSignOff = previousVerdict && previousSignerName ? (
+                <div style={{ marginTop: 12 }}>
+                  <SignOffBlock
+                    compact
+                    align="start"
+                    verdict={previousVerdict}
+                    label={signOffLabel(previousVerdict)}
+                    name={previousSignerName}
+                    position={signOffPosition(pr.actedByPosition, previousTitle)}
+                    date={formatDateTime(pr.signedAt)}
+                  />
+                </div>
+              ) : null;
               if (evalData?.status === "confirmed") {
                 return (
                   <EvaluationSummary
@@ -963,14 +1019,19 @@ export default function EvaluationPage() {
                     layerTitle={publicSummary?.title || `Step ${previousLayerNumber}`}
                     layerDescription={publicSummary?.description}
                     surveyElements={previousSurveyElements}
+                    footer={previousSignOff}
                   />
                 );
               }
               return (
                 <div key={i} style={{ background: R.navyTint, borderRadius: 6, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: R.ink }}>
-                  Step {previousLayerNumber}: <strong>{String(pr.status || "Completed")}</strong>
-                  {pr.email ? <span style={{ color: R.muted, marginLeft: 8 }}>by {String(pr.email)}</span> : null}
-                  {pr.signedAt ? <span style={{ color: R.label, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null}
+                  {previousTitle}: <strong>{String(pr.status || "Completed")}</strong>
+                  {previousSignOff ?? (
+                    <>
+                      {pr.email ? <span style={{ color: R.muted, marginLeft: 8 }}>by {String(pr.email)}</span> : null}
+                      {pr.signedAt ? <span style={{ color: R.label, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null}
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1043,11 +1104,13 @@ export default function EvaluationPage() {
                   <div style={{ fontSize: 14.5, color: R.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{savedRejection}</div>
                 </div>
               )}
-              {actedBy && (
+              {recordedVerdict && recordedSignerName && responseData && (
                 <SignOffBlock
-                  label={approverActionLabel}
-                  name={actedBy}
-                  role={approverRoleLabel}
+                  verdict={recordedVerdict}
+                  label={signOffLabel(recordedVerdict, customSignOffLabel)}
+                  name={recordedSignerName}
+                  position={signOffPosition(responseData[`L${effectiveLayerNumber}_ActedByPosition`], approverRoleLabel)}
+                  date={formatDateTime(responseData[`L${effectiveLayerNumber}_SignedAt`])}
                   signature={savedSignature || null}
                 />
               )}
@@ -1074,6 +1137,15 @@ export default function EvaluationPage() {
                   style={{ fontFamily: "inherit", fontSize: 16, padding: "10px 12px", border: `1px solid ${R.inputBorder}`, borderRadius: 4, resize: "vertical", color: R.ink, boxSizing: "border-box", width: "100%" }}
                 />
               </div>
+              {signerName && (
+                <SignOffBlock
+                  verdict="rejected"
+                  label={signOffLabel("rejected")}
+                  name={signerName}
+                  position={signerPosition}
+                  date={todayLabel()}
+                />
+              )}
               <div className="rv-reject-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
                 <button type="button" className="rv-btn" onClick={() => setRejecting(false)} style={btnGhost} disabled={isSubmitting}>
                   Back
@@ -1123,13 +1195,16 @@ export default function EvaluationPage() {
                 </label>
               )}
 
-              {/* Who is signing: what they are doing, their name, their role.
-                  The signature line appears only once there is a signature. */}
-              {signedInApprover && (
+              {/* Who is signing: what they are doing, their name and post as the
+                  routing directory has them. The signature line appears only
+                  once there is a signature. */}
+              {signerName && (
                 <SignOffBlock
-                  label={approverActionLabel}
-                  name={signedInApprover}
-                  role={approverRoleLabel}
+                  verdict={pendingVerdict}
+                  label={signOffLabel(pendingVerdict, customSignOffLabel)}
+                  name={signerName}
+                  position={signerPosition}
+                  date={todayLabel()}
                   signature={isSignatureRequired ? signatureData : null}
                 />
               )}

@@ -170,6 +170,24 @@ describe("chain routing", () => {
     expect(result.error).toBeUndefined();
   });
 
+  it("routes to the approver the row names even when that approver has no row", async () => {
+    // The top of a line is often not listed. The row still says who approves.
+    const org = { ...ORG, "mei@pmw.com": { name: "Mei", department: "Key", position: "CFO", approverEmail: "chair@pmw.com" } };
+    const result = await resolveLayerAssignee(chain(), {}, directory(org), {
+      context: { submitterEmail: "mei@pmw.com" },
+    });
+    expect(result.email).toBe("chair@pmw.com");
+    expect(result.parked).toBeUndefined();
+  });
+
+  it("still needs a listed person to keep walking past an unlisted hop", async () => {
+    const org = { ...ORG, "mei@pmw.com": { name: "Mei", department: "Key", position: "CFO", approverEmail: "chair@pmw.com" } };
+    const result = await resolveLayerAssignee(chain({ hops: 2 }), {}, directory(org), {
+      context: { submitterEmail: "mei@pmw.com" },
+    });
+    expect(result.parked?.reason).toContain("not in the approval directory");
+  });
+
   it("parks a public submission that carries no identity to route from", async () => {
     const result = await resolveLayerAssignee(chain(), {}, directory(), {
       context: { submitterEmail: "GUEST" },
@@ -268,5 +286,64 @@ describe("isDeferredAssignee", () => {
     expect(isDeferredAssignee({ type: "chain", value: "", startFrom: "previous-actor" })).toBe(true);
     expect(isDeferredAssignee({ type: "chain", value: "", startFrom: "submitter" })).toBe(false);
     expect(isDeferredAssignee({ type: "user", value: "a@b.com" })).toBe(false);
+  });
+});
+
+describe("a submitter with no email of their own", () => {
+  const noEmailRow = { email: "", name: "Hassan", department: "Engineering", position: "Fitter", approverEmail: "siti@pmw.com" };
+
+  function withSubject(found: typeof noEmailRow | null): AssigneeResolverPorts {
+    return { ...directory(), lookupSubject: async () => found };
+  }
+
+  it("routes a public submission to the approver set on their row", async () => {
+    const result = await resolveLayerAssignee(chain(), {}, withSubject(noEmailRow), {
+      context: { submitterEmail: "GUEST" },
+    });
+    expect(result.parked).toBeUndefined();
+    expect(result.email).toBe("siti@pmw.com");
+    expect(result.explanation).toContain("no email set");
+  });
+
+  it("routes a signed-in submitter whose row has a name but no email", async () => {
+    const result = await resolveLayerAssignee(chain(), {}, withSubject(noEmailRow), {
+      context: { submitterEmail: "hassan@pmw.com" },
+    });
+    expect(result.email).toBe("siti@pmw.com");
+  });
+
+  it("walks further up the line from them", async () => {
+    const result = await resolveLayerAssignee(chain({ hops: 2 }), {}, withSubject(noEmailRow), {
+      context: { submitterEmail: "GUEST" },
+    });
+    expect(result.email).toBe("raj@pmw.com");
+  });
+
+  it("does not look for them when the submitter is already listed", async () => {
+    let asked = false;
+    const ports: AssigneeResolverPorts = {
+      ...directory(),
+      lookupSubject: async () => {
+        asked = true;
+        return noEmailRow;
+      },
+    };
+    const result = await resolveLayerAssignee(chain(), {}, ports, { context: { submitterEmail: "ali@pmw.com" } });
+    expect(asked).toBe(false);
+    expect(result.email).toBe("siti@pmw.com");
+  });
+
+  it("still parks when the form names nobody the directory knows", async () => {
+    const result = await resolveLayerAssignee(chain(), {}, withSubject(null), {
+      context: { submitterEmail: "GUEST" },
+    });
+    expect(result.parked).toBeDefined();
+  });
+
+  it("parks, rather than routing nowhere, when their row has no approver", async () => {
+    const result = await resolveLayerAssignee(chain(), {}, withSubject({ ...noEmailRow, approverEmail: "" }), {
+      context: { submitterEmail: "GUEST" },
+    });
+    expect(result.parked?.reason).toContain("nobody above them");
   });
 });

@@ -31,6 +31,8 @@ export interface WorkflowAssignmentOverrideInput {
   updatedBy: string;
   updatedAt: string;
   previous?: WorkflowAssignmentSnapshot;
+  /** "resolved" records a correction to what routing picks; omitted means a hand reassignment. */
+  source?: WorkflowAssignmentSnapshot["source"];
 }
 
 const EMPTY_ASSIGNMENT_DATA: WorkflowAssignmentData = {
@@ -141,7 +143,7 @@ export function setWorkflowAssignmentOverride(
     ...(optionalText(input.workflowRole) ? { workflowRole: optionalText(input.workflowRole) } : {}),
     ...(optionalText(input.notes) ? { notes: optionalText(input.notes) } : {}),
     ...(optionalText(input.reason) ? { reason: optionalText(input.reason) } : {}),
-    source: "manual-override",
+    source: input.source ?? "manual-override",
     updatedBy: input.updatedBy.trim(),
     updatedAt: input.updatedAt,
     history,

@@ -10,6 +10,9 @@ import theme from "./theme";
 import { loginRequest } from "./auth/msalConfig";
 import { useGuestSession } from "./auth/useGuestSession";
 import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
+import { loadApprovalDirectory } from "./utils/approvalDirectory";
+import { employeeIdKey } from "./utils/directoryHarvest";
+import { isLinkedToPerson } from "./utils/linkedSubmission";
 import {
   AUTH_RECOVERY_REQUIRED_EVENT,
   acquireAccessTokenSilentOrRedirect,
@@ -478,6 +481,13 @@ function mapSubmission(
       const signedAtVal = raw[`L${n}_SignedAt`] ? String(raw[`L${n}_SignedAt`]) : null;
       const rejectionVal = raw[`L${n}_Rejection`] ? String(raw[`L${n}_Rejection`]) : null;
       const signatureVal = raw[`L${n}_Signature`] ? String(raw[`L${n}_Signature`]) : null;
+      const signer = {
+        actedBy: raw[`L${n}_ActedBy`] ? String(raw[`L${n}_ActedBy`]) : null,
+        actedByName: raw[`L${n}_ActedByName`] ? String(raw[`L${n}_ActedByName`]) : null,
+        actedByPosition: raw[`L${n}_ActedByPosition`] ? String(raw[`L${n}_ActedByPosition`]) : null,
+        layerTitle: lc.title?.trim() || null,
+        rawStatus: statusVal,
+      };
       const canonicalStatus = normalizeLayerStatus(statusVal);
       const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
       layerStatusValues[i] = statusVal;
@@ -489,6 +499,7 @@ function mapSubmission(
         signedAt: signedAtVal,
         rejectionReason: rejectionDisplay,
         signature: signatureVal,
+        ...signer,
       });
 
       if (lc.type === "evaluation") {
@@ -510,6 +521,9 @@ function mapSubmission(
           confirmedAt: evalData?.confirmedAt ?? null,
           fields: evalData?.fields ?? {},
           notes: evalData?.notes ?? (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal ?? undefined : undefined),
+          signedAt: signedAtVal,
+          confirmerName: evalData?.confirmerName ?? null,
+          ...signer,
         });
       } else {
         enhancedLayers.push({
@@ -522,6 +536,7 @@ function mapSubmission(
           rejectionReason: rejectionDisplay,
           signature: signatureVal,
           confirmedVia: (lc as ApprovalLayerConfig).confirmationType ?? "signature",
+          ...signer,
         });
       }
     }
@@ -533,6 +548,9 @@ function mapSubmission(
       const signedAtVal = raw[`L${i}_SignedAt`] ? String(raw[`L${i}_SignedAt`]) : null;
       const rejectionVal = raw[`L${i}_Rejection`] ? String(raw[`L${i}_Rejection`]) : null;
       const signatureVal = raw[`L${i}_Signature`] ? String(raw[`L${i}_Signature`]) : null;
+      const actedByVal = raw[`L${i}_ActedBy`] ? String(raw[`L${i}_ActedBy`]) : null;
+      const actedByNameVal = raw[`L${i}_ActedByName`] ? String(raw[`L${i}_ActedByName`]) : null;
+      const actedByPositionVal = raw[`L${i}_ActedByPosition`] ? String(raw[`L${i}_ActedByPosition`]) : null;
       const canonicalStatus = normalizeLayerStatus(statusVal);
       const rejectionDisplay = rejectionVal || (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal : null);
       layerStatusValues[i - 1] = statusVal;
@@ -547,6 +565,10 @@ function mapSubmission(
           signedAt: signedAtVal,
           rejectionReason: rejectionDisplay,
           signature: signatureVal,
+          actedBy: actedByVal,
+          actedByName: actedByNameVal,
+          actedByPosition: actedByPositionVal,
+          rawStatus: statusVal,
         });
       }
     }
@@ -620,6 +642,8 @@ function mapSubmission(
     submitterName,
     createdByName,
     createdByEmail,
+    linkedUserEmail: coerceFieldDisplayText(raw.LinkedUserEmail).trim() || undefined,
+    linkedEmployeeId: coerceFieldDisplayText(raw.LinkedEmployeeId).trim() || undefined,
     submittedAt,
     modifiedAt,
     formStatus,
@@ -1340,11 +1364,33 @@ export default function App() {
 
         const visibleTitles = new Set(lists.map((l) => l.title));
         finalSubmissions = submissionsByList.flat().filter((item) => visibleTitles.has(item.listTitle));
+
+        // Public-link submissions the server tied to a person in the Approval
+        // Directory. Their own staff number is read only when something is
+        // linked, and a directory this person cannot read just means matching
+        // by email alone.
+        const myEmployeeIds = new Set<string>();
+        if (email && finalSubmissions.some((item) => item.linkedEmployeeId)) {
+          try {
+            const directory = await loadApprovalDirectory(await spClient.acquireToken());
+            for (const row of directory.rows) {
+              if (row.isActive && row.personEmail.trim().toLowerCase() === email.toLowerCase() && row.employeeId) {
+                myEmployeeIds.add(employeeIdKey(row.employeeId));
+              }
+            }
+          } catch {
+            // Falls back to the linked email.
+          }
+        }
+        finalSubmissions = finalSubmissions.map((item) =>
+          isLinkedToPerson(item, email, myEmployeeIds) ? { ...item, linkedToMe: true } : item);
+
         if (!forAdmin && email) {
           const lowerEmail = email.toLowerCase();
           finalSubmissions = finalSubmissions.filter((item) => {
             // User's own submissions
             if (item.submittedByEmail.toLowerCase() === lowerEmail) return true;
+            if (item.linkedToMe) return true;
             if (item.createdByEmail?.toLowerCase() === lowerEmail) return true;
             // Submissions where user is a layer assignee
             const assignees = assigneeVisibilityMap[item.listTitle];

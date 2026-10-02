@@ -13,6 +13,7 @@ import "../../native/native-form.css";
 import { buildSubmissionGroups, instanceState, type FormInstance } from "../../utils/formInstances";
 import { listFormInstances } from "../../utils/formInstancesSP";
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
+import PublicSubmissionLinkRow from "./PublicSubmissionLinkRow";
 import { SignatureCapture } from "../../utils/signatureCapture";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
@@ -20,7 +21,6 @@ import ConfirmDialog from "../common/ConfirmDialog";
 import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import { SP_STATIC } from "../../utils/spConfig";
 import { SP_FORM_STATUS, SP_LAYER_STATUS } from "../../utils/statusConstants";
-import { clearStoredAuthDecision } from "../../utils/authDecision";
 import { enrichSurveyJsonChoices } from "../../utils/surveyChoiceEnrichment";
 import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
 import {
@@ -62,10 +62,20 @@ import { resolveLayerActivatedAt } from "../../utils/layerActivation";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import {
   DirectoryGapError,
+  isDeferredAssignee,
+  stripFieldReference,
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
-import { createApprovalDirectoryReader } from "../../utils/approvalDirectory";
+import { forEachSurveyElement } from "../../utils/surveyWalk";
+import { createApprovalDirectoryReader, loadApprovalDirectory } from "../../utils/approvalDirectory";
+import {
+  optionsFromSubmittedData,
+  subjectFieldMapping,
+  harvestFieldValue,
+  isPersonEmail,
+  readHarvestConfig,
+} from "../../utils/directoryHarvest";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import {
@@ -74,7 +84,10 @@ import {
   setScheduledWorkflowEmail,
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
-import { setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { getWorkflowAssignment, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { classifyLayerRouting, findDirectoryPerson } from "../../utils/routingCheck";
+import type { LayerRoutingVerdict } from "../../utils/routingCheck";
+import RoutingCheckPanel from "./RoutingCheckPanel";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import WorkflowAssignmentEditor from "./WorkflowAssignmentEditor";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
@@ -96,6 +109,7 @@ import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { editorial } from "../../theme/editorial";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -110,6 +124,19 @@ const CONFIGURED_MANUAL_PAPER_EMAIL = (
   import.meta.env.VITE_HR_FORM_MANUAL_PAPER_ADDRESS || ""
 ).trim().toLowerCase();
 const SUBMISSIONS_PER_PAGE = 12;
+/** Desktop list columns: submission | submitted by | version & layer | status | actions. */
+const TABLE_MIN_WIDTH = 720;
+type ListSort = "newest" | "oldest" | "az" | "za";
+const LIST_SORT_LABELS: Record<ListSort, string> = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  az: "A–Z (form name)",
+  za: "Z–A (form name)",
+};
+function submittedTime(item: Pick<PendingItem, "SubmittedAt">): number {
+  return item.SubmittedAt ? new Date(item.SubmittedAt).getTime() || 0 : 0;
+}
+const LIST_COLUMNS = "minmax(0,2fr) minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr) 96px";
 
 // SharePoint answers a list query with ONE page and a link to the next, so a
 // query that reads only the response is capped at whatever `$top` asked for.
@@ -611,8 +638,9 @@ async function resolveLayerAssigneeEmail(
   submittedData: Record<string, unknown>,
   formSlug: string,
   previousStep?: PreviousStep,
+  layerConfig?: unknown,
 ): Promise<{ email: string; emails: string[]; error?: string; parked?: { reason: string }; explanation?: string }> {
-  const directory = createApprovalDirectoryReader(token);
+  const directory = createApprovalDirectoryReader(token, { layerConfig });
   return resolveSharedLayerAssignee(
     layer as ResolvableLayer,
     submittedData,
@@ -621,6 +649,7 @@ async function resolveLayerAssigneeEmail(
         resolveDepartmentApproverEmail(token, target as unknown as LayerConfigItem, data),
       expandDistributionList: (target) => expandLayerDistributionList(formSlug, target.layerNumber),
       lookupPerson: directory.lookupPerson,
+      lookupSubject: directory.lookupSubject,
       lookupRoleHolder: directory.lookupRoleHolder,
     },
     {
@@ -632,6 +661,76 @@ async function resolveLayerAssigneeEmail(
       context: resolutionContextFromItem(submittedData, layer.layerNumber, previousStep),
     },
   );
+}
+
+/**
+ * Who a submission is about, found from its own answers, and who approves them
+ * according to the routing page.
+ *
+ * For a submission with no usable submitter address — a public link — the
+ * employee on the form is the only person there is to route from. The form's
+ * directory-harvest mapping says which questions hold them; without one the
+ * questions are guessed from their labels. The staff number decides first, then
+ * the address, then the name, the same order the harvester matches in.
+ */
+async function findApproverOfFormSubject(
+  token: string,
+  rawItem: Record<string, unknown>,
+  layerConfig: unknown,
+  surveyJson: unknown,
+): Promise<{ email: string; explanation: string } | { problem: string }> {
+  // The form's own question titles say what each answer is far better than the
+  // stored column names do, which often run words together ("employeeName").
+  const options: { name: string; title: string }[] = [];
+  forEachSurveyElement(surveyJson, (element) => {
+    const name = typeof element.name === "string" ? element.name : "";
+    if (name) options.push({ name, title: typeof element.title === "string" ? element.title : name });
+  });
+  for (const option of optionsFromSubmittedData(rawItem)) {
+    if (!options.some((existing) => existing.name === option.name)) options.push({ name: option.name, title: option.title ?? option.name });
+  }
+  const harvest = readHarvestConfig(layerConfig);
+  const mapping = subjectFieldMapping(layerConfig, options);
+  const submittedEmail = harvestFieldValue(rawItem, mapping.emailField);
+  const email = isPersonEmail(submittedEmail) ? submittedEmail.trim().toLowerCase() : "";
+  const employeeId = harvestFieldValue(rawItem, mapping.employeeIdField).trim();
+  const name = harvestFieldValue(rawItem, mapping.nameField).trim();
+  if (!email && !employeeId && !name) {
+    return {
+      problem: "The form has no usable submitter address, and no employee email, staff number or name could be found to look up on the routing page."
+        + ` Fields tried (${harvest ? "form settings" : "guessed from labels"}): name = ${mapping.nameField || "none"}, staff number = ${mapping.employeeIdField || "none"}, email = ${mapping.emailField || "none"}.`,
+    };
+  }
+
+  const directory = await loadApprovalDirectory(token);
+  if (!directory.usable) return { problem: "The Approval Directory could not be read." };
+  const rows = directory.rows.filter((row) => row.isActive && row.confirmed);
+  const person = findDirectoryPerson(rows, { email, employeeId, name });
+  if (!person) {
+    return { problem: "The employee on the form is not in the Approval Directory (checked staff number, email and name), so the routing page has no approver for them." };
+  }
+  const approver = person.approverEmail.trim().toLowerCase();
+  if (!EMAIL_RE.test(approver)) {
+    return { problem: `${person.personName || person.personEmail} has no approver on the routing page.` };
+  }
+  return {
+    email: approver,
+    explanation: `Routing page (Approval Directory): ${person.personName || person.personEmail}${person.employeeId ? ` (${person.employeeId})` : ""}, taken from the form's answers, is approved by ${approver}.`,
+  };
+}
+
+/** Where a layer's people come from, for assignee types that explain nothing themselves. */
+function describeAssigneeSource(layer: LayerConfigItem): string {
+  const assignee = layer.assignee as { type: string; value?: string };
+  const value = (assignee.value ?? "").trim();
+  switch (assignee.type) {
+    case "user": return `A fixed person set on the workflow page (${value || "none"}). The routing page is not used for this layer.`;
+    case "users": return "A fixed list of people set on the workflow page. The routing page is not used for this layer.";
+    case "distribution-list": return `The members of ${value || "a distribution list"}. The routing page is not used for this layer.`;
+    case "field-reference": return `Whatever was answered in the form's "${stripFieldReference(value)}" question. The routing page is not used for this layer.`;
+    case "department-approver": return "The Department Approver Directory entry for the submitted department.";
+    default: return `Layer assignee type "${assignee.type}".`;
+  }
 }
 
 function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {
@@ -705,6 +804,9 @@ export default function ApprovalDashboard() {
   const [answersLoading, setAnswersLoading] = useState(false);
   const [workflowTypeFilter, setWorkflowTypeFilter] = useState<"all" | "approval" | "evaluation">("all");
   const [listPage, setListPage] = useState(1);
+  const [listSort, setListSort] = useState<ListSort>("newest");
+  /** Wide enough for the list to read as a table beside the detail panel. */
+  const isWide = useMediaQuery("(min-width:1100px)");
   /** Each form's grouping field, from Master Form. "" or absent means no grouping. */
   const [groupByFieldByForm, setGroupByFieldByForm] = useState<Record<string, string>>({});
   const [formInstances, setFormInstances] = useState<FormInstance[]>([]);
@@ -728,6 +830,11 @@ export default function ApprovalDashboard() {
   const [manualEmailRecipient, setManualEmailRecipient] = useState("");
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [routingVerdicts, setRoutingVerdicts] = useState<LayerRoutingVerdict[] | null>(null);
+  const [routingChecking, setRoutingChecking] = useState(false);
+  const [routingFixingLayer, setRoutingFixingLayer] = useState(0);
+  // Results belong to one submission; opening another starts from "not checked".
+  useEffect(() => { setRoutingVerdicts(null); }, [selectedItem?.Title, selectedItem?.Id]);
   const [selectedActiveLayers, setSelectedActiveLayers] = useState<LayerConfigItem[]>([]);
   const [pdfRegeneratingItemKey, setPdfRegeneratingItemKey] = useState("");
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
@@ -955,19 +1062,29 @@ export default function ApprovalDashboard() {
 
   const filteredItems = useMemo(() => {
     const byStage = categoryItems.filter(i => getItemLifecycleStage(i) === stageFilter);
-    if (!activeGroupByField || selectedGroup === null) return byStage;
-    return byStage.filter((item) => {
-      const raw = itemAnswers.get(getPendingItemKey(item))?.[activeGroupByField];
-      return (raw === null || raw === undefined ? "" : String(raw).trim()) === selectedGroup;
+    const grouped = !activeGroupByField || selectedGroup === null
+      ? byStage
+      : byStage.filter((item) => {
+          const raw = itemAnswers.get(getPendingItemKey(item))?.[activeGroupByField];
+          return (raw === null || raw === undefined ? "" : String(raw).trim()) === selectedGroup;
+        });
+    // Name sorts break ties newest-first so equal names stay in a useful order.
+    return [...grouped].sort((a, b) => {
+      if (listSort === "oldest") return submittedTime(a) - submittedTime(b);
+      if (listSort === "az" || listSort === "za") {
+        const byName = (a.Title || "").localeCompare(b.Title || "", undefined, { sensitivity: "base", numeric: true });
+        if (byName !== 0) return listSort === "az" ? byName : -byName;
+      }
+      return submittedTime(b) - submittedTime(a);
     });
-  }, [categoryItems, stageFilter, activeGroupByField, selectedGroup, itemAnswers]);
+  }, [categoryItems, stageFilter, activeGroupByField, selectedGroup, itemAnswers, listSort]);
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
 
   useEffect(() => {
     setListPage(1);
-  }, [workflowTypeFilter, stageFilter, filters]);
+  }, [workflowTypeFilter, stageFilter, filters, listSort]);
 
   useEffect(() => {
     if (listPage > totalListPages) setListPage(totalListPages);
@@ -1851,6 +1968,7 @@ export default function ApprovalDashboard() {
           submittedData,
           currentFormSlug(),
           previousStepFor(bLayers, layer.layerNumber),
+          configSource,
         );
         if (result.error) assigneeErrors.push(result.error);
         if (result.email) resolvedEmails[layer.layerNumber] = result.email;
@@ -1955,6 +2073,7 @@ export default function ApprovalDashboard() {
           rawItem,
           currentFormSlug(),
           previousStepFor(activeLayers, currentLayerNumber),
+          configSource,
         );
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
@@ -2110,6 +2229,255 @@ export default function ApprovalDashboard() {
       setError(error instanceof Error ? error.message : "Could not resend the workflow email.");
     } finally {
       setResendingItemKey("");
+    }
+  };
+
+  const currentLayerOf = (rawItem: Record<string, unknown>, item: PendingItem): number =>
+    Number(rawItem.CurrentLayer || rawItem.CurrentApprovalLayer || item.CurrentLayer || item.CurrentApprovalLayer || 0) || 1;
+
+  /** Compares one layer's saved actors with what routing picks now. Reads only; writes nothing. */
+  const inspectLayerRouting = async (
+    rawItem: Record<string, unknown>,
+    layer: LayerConfigItem,
+    currentLayerNumber: number,
+  ): Promise<{ verdict: LayerRoutingVerdict; routedPrimary: string }> => {
+    const layerNumber = layer.layerNumber;
+    const status = valueToText(rawItem[`L${layerNumber}_Status`]);
+    const saved = parseValidEmailList(rawItem[`L${layerNumber}_Emails`] || valueToText(rawItem[`L${layerNumber}_Email`]));
+    const manualOverride = getWorkflowAssignment(rawItem.WorkflowAssignmentData, layerNumber)?.source === "manual-override";
+    let holdReason: string | undefined;
+    if (isNeedsRoutingStatus(status)) {
+      holdReason = "Waiting for someone to name the person (needs routing). Use Reconfigure this submission to set it.";
+    } else if (isManualPaperWorkflowStatus(status)) {
+      holdReason = "On paper handling. Use Reconfigure this submission to change it.";
+    }
+    const waitingReason = isDeferredAssignee(layer.assignee as ResolvableLayer["assignee"]) && layerNumber > currentLayerNumber
+      ? "Depends on who acts on the earlier step, so it cannot be checked yet."
+      : undefined;
+
+    let routed: string[] = [];
+    let routedPrimary = "";
+    let routingProblem: string | undefined;
+    let how: string | undefined;
+    if (!manualOverride && !holdReason && !waitingReason) {
+      // Submission applies a layer's submitter routing rules over its normal
+      // assignee, so the check has to as well: a matching rule names the evaluator
+      // outright, or sends the step to paper handling.
+      const submitterRule = resolveEvaluationSubmitterRouting(layer, rawItem);
+      if (submitterRule?.manualPaper) {
+        routingProblem = "A submitter routing rule sends this step to paper handling. Use Reconfigure this submission to change it.";
+      } else if (submitterRule?.email) {
+        routed = parseValidEmailList(submitterRule.email);
+        routedPrimary = routed[0] ?? "";
+        how = "A submitter routing rule set on the workflow page names this evaluator.";
+        if (!routed.length) routingProblem = `The submitter routing rule names "${submitterRule.email}", which is not a valid email address.`;
+      } else {
+        try {
+          // A "Department Approver" layer reads the old Department Approver
+          // Directory list. The routing page (Approval Directory) is the source of
+          // truth, so the check follows "who approves this person" from the
+          // submitter instead, exactly as a routing-page layer would.
+          const followsRoutingPage = layer.assignee.type === "department-approver";
+          const submitterUsable = isPersonEmail(valueToText(rawItem.SubmittedBy));
+          if (followsRoutingPage && !submitterUsable) {
+            const configSource = itemLayerConfigsRef.current[getPendingItemKey(selectedItem as PendingItem)]
+              || formLayerConfigsRef.current[selectedItem?.Title ?? ""];
+            const subject = await findApproverOfFormSubject(token ?? "", rawItem, configSource, surveyJson);
+            if ("problem" in subject) {
+              routingProblem = subject.problem;
+            } else {
+              routed = [subject.email];
+              routedPrimary = subject.email;
+              how = subject.explanation;
+            }
+          } else {
+          const layerToResolve = followsRoutingPage
+            ? {
+              ...layer,
+              assignee: { type: "chain", startFrom: "submitter", value: "", hops: 1, fallback: { mode: "park" } },
+            } as unknown as LayerConfigItem
+            : layer;
+          const result = await resolveLayerAssigneeEmail(token ?? "", layerToResolve, rawItem, currentFormSlug());
+          if (followsRoutingPage && result.explanation) {
+            result.explanation = `Routing page (Approval Directory): ${result.explanation}`;
+          }
+          if (result.error) routingProblem = result.error;
+          else if (result.parked) routingProblem = result.parked.reason;
+          else {
+            routed = result.emails;
+            routedPrimary = result.email;
+            how = result.explanation || describeAssigneeSource(layer);
+          }
+          // A fallback is not the routing page's answer: the approval line could
+          // not be followed, so whoever is saved may have come from the same
+          // fallback. Say why instead of calling that a match.
+          if (routed.length && result.explanation?.startsWith("Fell back")) {
+            routingProblem = `${result.explanation} Fix the Approval Directory on the Routing page, then check again.`;
+            routed = [];
+          }
+          }
+        } catch (error) {
+          routingProblem = error instanceof Error ? error.message : "Routing could not be worked out.";
+        }
+      }
+      if (routed.length && shouldUseManualPaperForSender(layer, routedPrimary)) {
+        routed = [];
+        routingProblem = "Routing points to the paper mailbox, which needs paper handling. Use Reconfigure this submission.";
+      }
+    }
+
+    const { kind, note } = classifyLayerRouting({ saved, routed, routingProblem, manualOverride, holdReason, waitingReason });
+    return {
+      verdict: {
+        layer: layerNumber,
+        title: layer.title || `Layer ${layerNumber}`,
+        type: layer.type === "evaluation" ? "evaluation" : "approval",
+        kind,
+        saved,
+        routed,
+        ...(note ? { note } : {}),
+        ...(how ? { how } : {}),
+      },
+      routedPrimary,
+    };
+  };
+
+  const handleCheckRouting = async () => {
+    if (!token || !selectedItem || !isSuperuser) return;
+    setRoutingChecking(true);
+    setError("");
+    setEmailNotice("");
+    try {
+      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`;
+      const rawItem = await spGet(token, itemUrl) as Record<string, unknown>;
+      if (isTerminalWorkflowStatus(rawItem.FormStatus || rawItem.Status)) {
+        setRoutingVerdicts([]);
+        return;
+      }
+      const currentLayerNumber = currentLayerOf(rawItem, selectedItem);
+      const verdicts: LayerRoutingVerdict[] = [];
+      for (const layer of [...selectedActiveLayers].sort((a, b) => a.layerNumber - b.layerNumber)) {
+        if (layer.layerNumber < currentLayerNumber || isTerminalWorkflowStatus(rawItem[`L${layer.layerNumber}_Status`])) continue;
+        verdicts.push((await inspectLayerRouting(rawItem, layer, currentLayerNumber)).verdict);
+      }
+      setRoutingVerdicts(verdicts);
+    } catch (checkError) {
+      setError(checkError instanceof Error ? checkError.message : "Could not check the routing.");
+    } finally {
+      setRoutingChecking(false);
+    }
+  };
+
+  /**
+   * Corrects who may act on one layer to what routing picks. A correction only:
+   * the layer's status is untouched, nothing is sent, and a scheduled email keeps
+   * its due date — only its recipient changes.
+   */
+  const handleFixRouting = async (layerNumber: number) => {
+    if (!token || !selectedItem || !isSuperuser) return;
+    setRoutingFixingLayer(layerNumber);
+    setError("");
+    setEmailNotice("");
+    try {
+      const itemKey = getPendingItemKey(selectedItem);
+      const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`;
+      // Re-read and re-resolve rather than trusting what the page showed: the
+      // layer may have moved on, or been reassigned, since the check ran.
+      const rawItem = await spGet(token, itemUrl) as Record<string, unknown>;
+      const currentLayerNumber = currentLayerOf(rawItem, selectedItem);
+      const targetLayer = selectedActiveLayers.find((layer) => layer.layerNumber === layerNumber);
+      if (!targetLayer) throw new Error(`Layer ${layerNumber} is not available in this submission's workflow.`);
+      if (
+        layerNumber < currentLayerNumber
+        || isTerminalWorkflowStatus(rawItem[`L${layerNumber}_Status`])
+        || isTerminalWorkflowStatus(rawItem.FormStatus || rawItem.Status)
+      ) {
+        throw new Error(`Layer ${layerNumber} is already complete and cannot be corrected.`);
+      }
+
+      const { verdict, routedPrimary } = await inspectLayerRouting(rawItem, targetLayer, currentLayerNumber);
+      if (verdict.kind === "match") {
+        setRoutingVerdicts((previous) => previous?.map((entry) => entry.layer === layerNumber ? verdict : entry) ?? previous);
+        setEmailNotice(`Layer ${layerNumber} already matches routing. Nothing was changed.`);
+        return;
+      }
+      if (verdict.kind !== "mismatch") {
+        throw new Error(verdict.note || `Layer ${layerNumber} cannot be corrected automatically.`);
+      }
+
+      const updatedAt = new Date().toISOString();
+      const updatedBy = accounts[0]?.username || accounts[0]?.name || "SYSTEM";
+      const patchBody: Record<string, unknown> = {};
+      // Replaces the whole actor set, so a former co-assignee loses access too.
+      const recipients = writeLayerRecipientFields(patchBody, targetLayer, verdict.routed, routedPrimary);
+      const assignmentData = setWorkflowAssignmentOverride(rawItem.WorkflowAssignmentData, {
+        layer: layerNumber,
+        email: routedPrimary,
+        reason: "Corrected to match routing",
+        updatedAt,
+        updatedBy,
+        source: "resolved",
+        previous: {
+          email: valueToText(rawItem[`L${layerNumber}_Email`]) || routedPrimary,
+          source: "resolved",
+          updatedBy: "SYSTEM",
+          updatedAt: selectedItem.SubmittedAt || updatedAt,
+        },
+      });
+      patchBody.WorkflowAssignmentData = JSON.stringify(assignmentData);
+      // Only an email still waiting to go out is redirected, and only its
+      // recipient: dueAt stays exactly as it was.
+      const schedule = getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, layerNumber);
+      if (schedule?.status === "scheduled") {
+        patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
+          rawItem.WorkflowEmailSchedule,
+          layerNumber,
+          recipients[0] || routedPrimary,
+          updatedAt,
+        ));
+      }
+
+      await ensureWorkflowColumns(
+        token,
+        selectedItem.Title,
+        Math.max(layerNumber, ...selectedActiveLayers.map((layer) => layer.layerNumber)),
+      );
+      await spPatch(token, itemUrl, patchBody);
+
+      const serializedAssignments = JSON.stringify(assignmentData);
+      const serializedSchedule = typeof patchBody.WorkflowEmailSchedule === "string"
+        ? patchBody.WorkflowEmailSchedule
+        : selectedItem.WorkflowEmailSchedule;
+      const applyToItem = (current: PendingItem): PendingItem => ({
+        ...current,
+        WorkflowAssignmentData: serializedAssignments,
+        WorkflowEmailSchedule: serializedSchedule,
+      });
+      setCompletedLayers((previous) => ({
+        ...previous,
+        [layerNumber]: { ...(previous[layerNumber] || { status: "" }), email: routedPrimary },
+      }));
+      setPendingItems((previous) => previous.map((current) => getPendingItemKey(current) === itemKey ? applyToItem(current) : current));
+      setSelectedItem((current) => current && getPendingItemKey(current) === itemKey ? applyToItem(current) : current);
+      if (layerNumber === currentLayerNumber) {
+        setManualEmailRecipient(recipients[0] || routedPrimary);
+        setSelectedLayerAccess((previous) => previous ? {
+          ...previous,
+          assignedEmail: verdict.routed.length > 1 ? verdict.routed.join(", ") : routedPrimary.toLowerCase(),
+          allowed: previous.override || isLayerActor(normalizeEmailAddress(accounts[0]?.username), verdict.routed, routedPrimary),
+        } : previous);
+      }
+      setRoutingVerdicts((previous) => previous?.map((entry) =>
+        entry.layer === layerNumber ? { ...entry, kind: "match", saved: verdict.routed } : entry,
+      ) ?? previous);
+      setEmailNotice(
+        `Layer ${layerNumber} now routes to ${verdict.routed.join(", ")}.`
+        + (schedule?.status === "scheduled" ? ` The scheduled email still goes out on ${formatDateTime(schedule.dueAt)}.` : " No email was sent."),
+      );
+    } catch (fixError) {
+      setError(fixError instanceof Error ? fixError.message : "Could not correct the routing.");
+    } finally {
+      setRoutingFixingLayer(0);
     }
   };
 
@@ -2339,6 +2707,7 @@ export default function ApprovalDashboard() {
           rawItem,
           currentFormSlug(),
           previousStepFor(activeLayers, currentLayerNumber),
+          configSource,
         );
         if (resolved.error) throw new Error(resolved.error);
         recipient = resolved.email;
@@ -2767,26 +3136,13 @@ export default function ApprovalDashboard() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Auth banner — topmost */}
-        <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 12, padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", background: `linear-gradient(135deg,${C.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-            {((accounts[0]?.username?.[0] || "?").toUpperCase())}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.green }}>Signed in</div>
-            <div style={{ fontSize: 11.5, color: C.textSecond }}>{accounts[0]?.username || "—"}</div>
-          </div>
-          <button onClick={() => { clearStoredAuthDecision(); instance.logoutRedirect({ postLogoutRedirectUri: window.location.href }); }}
-            style={{ fontSize: 11.5, color: C.textSecond, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>
-            Sign out
-          </button>
-        </div>
-
-        <header style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
-          <p style={{ color: C.textSecond, marginTop: 4 }}>Review submissions, approvals, and evaluation layers</p>
+    // One screen: the shell's bars and padding take roughly 220px, the rest is ours.
+    // The two panes below scroll inside themselves, so the page does not.
+    <div style={isWide ? { height: "calc(100dvh - 220px)", minHeight: 560 } : undefined}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", height: isWide ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
+        <header style={{ marginBottom: 10, display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", background: "rgba(255,255,255,0.94)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "8px 14px" }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
+          <p style={{ color: C.textSecond, margin: 0, fontSize: 13 }}>Review submissions, approvals, and evaluation layers</p>
         </header>
 
         {error && (
@@ -2801,7 +3157,7 @@ export default function ApprovalDashboard() {
         )}
 
         {/* Lifecycle tabs — what needs doing, not which layer type the item sits on */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
           {LIFECYCLE_STAGES.map((stage) => {
             const count = categoryItems.filter((item) => getItemLifecycleStage(item) === stage).length;
             return (
@@ -2809,8 +3165,8 @@ export default function ApprovalDashboard() {
                 key={stage}
                 onClick={() => setStageFilter(stage)}
                 style={{
-                  padding: "6px 16px", borderRadius: 12, border: "none", cursor: "pointer",
-                  fontSize: 13.5, fontWeight: 600,
+                  padding: "5px 14px", borderRadius: 12, border: "none", cursor: "pointer",
+                  fontSize: 13, fontWeight: 600,
                   background: stageFilter === stage ? C.purple : "#fff",
                   color: stageFilter === stage ? "#fff" : C.textSecond,
                   boxShadow: stageFilter === stage ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
@@ -2820,23 +3176,22 @@ export default function ApprovalDashboard() {
               </button>
             );
           })}
-        </div>
-
-        {/* Workflow type — a filter, not a structural split */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
-          <label style={{ fontSize: 12.5, fontWeight: 600, color: C.textSecond }}>Workflow type</label>
-          <select
-            value={workflowTypeFilter}
-            onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
-            style={{
-              padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-              fontSize: 13.5, color: C.textPrimary, outline: "none", background: "#fff",
-            }}
-          >
-            <option value="all">All</option>
-            <option value="approval">Approval</option>
-            <option value="evaluation">Evaluation</option>
-          </select>
+          {/* Workflow type — a filter, not a structural split */}
+          <label style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, fontWeight: 600, color: C.textSecond, background: "rgba(255,255,255,0.94)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "3px 6px 3px 12px" }}>
+            Workflow type
+            <select
+              value={workflowTypeFilter}
+              onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
+              style={{
+                padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                fontSize: 13, color: C.textPrimary, outline: "none", background: "#fff",
+              }}
+            >
+              <option value="all">All</option>
+              <option value="approval">Approval</option>
+              <option value="evaluation">Evaluation</option>
+            </select>
+          </label>
         </div>
 
         <SubmissionFilterPanel
@@ -2962,10 +3317,10 @@ export default function ApprovalDashboard() {
         />
 
         {/* Items + Detail Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isWide ? "minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
           {/* Items List */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               {showGroupIndex ? (
                 <>
                   <span style={{ fontWeight: 600, color: C.purple }}>
@@ -2988,13 +3343,40 @@ export default function ApprovalDashboard() {
                     {selectedGroup ? `${selectedGroup} — ` : selectedGroup === "" ? "Not in an event — " : ""}
                     {lifecycleLabel(stageFilter)} ({filteredItems.length})
                   </span>
-                  <span style={{ fontSize: 11.5, color: C.textSecond }}>
-                    Newest first
-                  </span>
+                  <select
+                    aria-label="Sort submissions"
+                    value={listSort}
+                    onChange={(e) => setListSort(e.target.value as ListSort)}
+                    style={{
+                      padding: "4px 8px", borderRadius: 8, border: `1px solid ${C.border}`,
+                      fontSize: 12.5, color: C.textPrimary, background: "#fff", outline: "none",
+                    }}
+                  >
+                    {(Object.keys(LIST_SORT_LABELS) as ListSort[]).map((key) => (
+                      <option key={key} value={key}>{LIST_SORT_LABELS[key]}</option>
+                    ))}
+                  </select>
                 </>
               )}
             </div>
-            <div style={{ maxHeight: 600, overflow: "auto" }}>
+            <div style={isWide ? { flex: 1, minHeight: 0, overflow: "auto" } : { maxHeight: 600, overflow: "auto" }}>
+            {!showGroupIndex && filteredItems.length > 0 && (
+              <div
+                role="presentation"
+                style={{
+                  display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: 12,
+                  width: "100%", minWidth: TABLE_MIN_WIDTH, position: "sticky", top: 0, zIndex: 1,
+                  padding: "8px 16px", borderBottom: `1px solid ${C.border}`, background: C.cardBg,
+                  fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.textSecond,
+                }}
+              >
+                <span>Submission</span>
+                <span>Submitted by</span>
+                <span>Version · Layer</span>
+                <span>Status</span>
+                <span style={{ textAlign: "right" }}>Actions</span>
+              </div>
+            )}
               {showGroupIndex ? (
                 /*
                   The index. A group with no instance behind it is the historical
@@ -3051,82 +3433,112 @@ export default function ApprovalDashboard() {
                   const emailSchedule = getScheduledWorkflowEmail(item.WorkflowEmailSchedule, currentLayerNumber);
                   const hasPendingEmailSchedule = emailSchedule?.status === "scheduled";
                   const isEvaluationItem = itemCurrentTypes[itemKey] === "evaluation";
-                  return (
-                  <div
-                    key={getPendingItemKey(item)}
-                    onClick={() => loadItemDetails(item)}
-                    style={{
-                      padding: 16,
-                      borderBottom: `1px solid ${C.border}`,
-                      cursor: "pointer",
-                      background: selectedItem?.Id === item.Id && selectedItem.Title === item.Title ? C.purplePale : "transparent",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                          {item.Title}
-                          {isTestRow(item as unknown as Record<string, unknown>) && (
-                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
-                          )}
-                        </div>
-                        {getItemTrainingTitle(item) && (
-                          <div style={{
-                            display: "inline-block", marginBottom: 4,
-                            fontSize: 11.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999,
-                            background: C.purplePale, color: C.purple,
-                          }}>
-                            {getItemTrainingTitle(item)}
-                          </div>
-                        )}
-                        <div style={{ fontSize: 13.5, color: C.textSecond }}>
-                          By {item.SubmittedBy} • {formatDateTime(item.SubmittedAt)}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                          <span>v{item.FormVersion || "Legacy"}</span>
-                          <span
-                            title="Profile (developer-reference metadata)"
-                            style={{
-                            fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
-                            background: editorial.skySoft, color: C.textMuted,
-                          }}>
-                            {getItemProfileLabel(item)}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>
-                          {formatLayerProgress(item)}
-                        </div>
-                        {isEvaluationItem && (isAdmin || isSuperuser) && (
-                          <div
-                            title={hasPendingEmailSchedule
-                              ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "not_sent"
-                              ? emailSchedule
-                                ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
-                                : "No evaluator email delivery has been recorded."
-                              : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
-                            style={{
-                              display: "inline-flex", alignItems: "center", marginTop: 6,
-                              fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
-                              background: hasPendingEmailSchedule ? C.amberPale
-                                : emailStatus.status === "sent" ? C.greenPale
-                                : emailStatus.status === "failed" ? C.redPale
-                                  : emailSchedule ? C.amberPale : editorial.skySoft,
-                              color: hasPendingEmailSchedule ? editorial.accentText
-                                : emailStatus.status === "sent" ? editorial.success
-                                : emailStatus.status === "failed" ? editorial.error
-                                  : emailSchedule ? editorial.accentText : C.textSecond,
-                            }}
-                          >
-                            {hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "sent" ? `Sent for evaluation${emailStatus.lastAttemptAt ? ` ${formatDateTime(emailStatus.lastAttemptAt)}` : ""}`
-                              : emailStatus.status === "failed" ? "Workflow email failed"
-                                : emailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
-                                  : "Evaluation send date not set"}
-                          </div>
+                  const isSelected = selectedItem?.Id === item.Id && selectedItem.Title === item.Title;
+                  const trainingTitle = getItemTrainingTitle(item);
+                  const itemStatus = getItemStatus(item);
+
+                  const titleBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: C.textPrimary, display: "flex", alignItems: "center", gap: 6, overflowWrap: "anywhere" }}>
+                        {item.Title}
+                        {isTestRow(item as unknown as Record<string, unknown>) && (
+                          <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
                         )}
                       </div>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {trainingTitle && (
+                        <div style={{
+                          display: "inline-block", marginTop: 4, maxWidth: "100%",
+                          fontSize: 11.5, fontWeight: 700, padding: "2px 9px", borderRadius: 12,
+                          background: C.purplePale, color: C.purple, overflowWrap: "anywhere",
+                        }}>
+                          {trainingTitle}
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  const submitterBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      {isPersonEmail(item.SubmittedBy || "") ? (
+                        <div style={{ fontSize: 13.5, color: C.textPrimary, overflowWrap: "anywhere" }}>{item.SubmittedBy}</div>
+                      ) : (
+                        <div
+                          title="This person has no email set, so they are not emailed about the outcome. Approvals still follow the routing page."
+                          style={{
+                            display: "inline-block", fontSize: 11.5, fontWeight: 700, padding: "2px 9px", borderRadius: 12,
+                            background: C.purplePale, color: C.purple,
+                          }}
+                        >
+                          No email set
+                        </div>
+                      )}
+                      <div style={{ fontSize: 12, color: C.textSecond, marginTop: 2 }}>{formatDateTime(item.SubmittedAt)}</div>
+                    </div>
+                  );
+
+                  const versionBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span>v{item.FormVersion || "Legacy"}</span>
+                        <span
+                          title="Profile (developer-reference metadata)"
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
+                            background: editorial.skySoft, color: C.textMuted, overflowWrap: "anywhere",
+                          }}>
+                          {getItemProfileLabel(item)}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 3 }}>
+                        {formatLayerProgress(item)}
+                      </div>
+                    </div>
+                  );
+
+                  const scheduleChip = isEvaluationItem && (isAdmin || isSuperuser) && (
+                    <div
+                      title={hasPendingEmailSchedule
+                        ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                        : emailStatus.status === "not_sent"
+                        ? emailSchedule
+                          ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                          : "No evaluator email delivery has been recorded."
+                        : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
+                      style={{
+                        display: "inline-flex", alignItems: "center", marginTop: 6, maxWidth: "100%",
+                        fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 12,
+                        background: hasPendingEmailSchedule ? C.amberPale
+                          : emailStatus.status === "sent" ? C.greenPale
+                          : emailStatus.status === "failed" ? C.redPale
+                            : emailSchedule ? C.amberPale : editorial.skySoft,
+                        color: hasPendingEmailSchedule ? editorial.accentText
+                          : emailStatus.status === "sent" ? editorial.success
+                          : emailStatus.status === "failed" ? editorial.error
+                            : emailSchedule ? editorial.accentText : C.textSecond,
+                      }}
+                    >
+                      {hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                        : emailStatus.status === "sent" ? `Sent for evaluation${emailStatus.lastAttemptAt ? ` ${formatDateTime(emailStatus.lastAttemptAt)}` : ""}`
+                        : emailStatus.status === "failed" ? "Workflow email failed"
+                          : emailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                            : "Evaluation send date not set"}
+                    </div>
+                  );
+
+                  const statusBlock = (
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                        <span
+                          style={{
+                            fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
+                            background: itemStatus === "approved" ? C.greenPale
+                              : itemStatus === "rejected" ? C.redPale : C.amberPale,
+                            color: itemStatus === "approved" ? editorial.success
+                              : itemStatus === "rejected" ? editorial.error : editorial.accentText,
+                          }}
+                        >
+                          {getItemDisplayStatus(item)}
+                        </span>
                         {item.PdfUrl && (
                           <a
                             href={absoluteSharePointUrl(item.PdfUrl, SP_SITE_URL)}
@@ -3141,84 +3553,98 @@ export default function ApprovalDashboard() {
                             PDF
                           </a>
                         )}
-                        <span
-                          style={{
-                            fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
-                            background: getItemStatus(item) === "approved" ? C.greenPale
-                              : getItemStatus(item) === "rejected" ? C.redPale : C.amberPale,
-                            color: getItemStatus(item) === "approved" ? editorial.success
-                              : getItemStatus(item) === "rejected" ? editorial.error : editorial.accentText,
-                          }}
-                        >
-                          {getItemDisplayStatus(item)}
-                        </span>
                         {needsBranchPick(item) && (
                           <span
                             style={{
-                              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 12,
                               background: C.amberPale, color: editorial.accentText,
                             }}
                           >
                             Branch not selected
                           </span>
                         )}
+                      </div>
+                      {scheduleChip}
+                    </div>
+                  );
+
+                  const actionsBlock = (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                      {(isAdmin || isSuperuser) && (
                         <button
-                          title="Delete submission permanently"
-                          aria-label={`Delete ${item.Title} submission ${item.Id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(item);
+                          title="Send workflow email now"
+                          aria-label={`Send workflow email now for ${item.Title} submission ${item.Id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleForceResend(item);
                           }}
-                          disabled={deleteLoading}
+                          disabled={resendingItemKey === itemKey}
                           style={{
-                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.redPale}`,
-                            background: "#fff", color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.55 : 1,
+                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
+                            background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            cursor: resendingItemKey === itemKey ? "not-allowed" : "pointer",
+                            opacity: resendingItemKey === itemKey ? 0.55 : 1,
                           }}
                         >
-                          <DeleteIcon style={{ fontSize: 15 }} />
+                          <ReplayIcon style={{ fontSize: 15 }} />
                         </button>
-                        {(isAdmin || isSuperuser) && (
-                          <button
-                            title={item.PdfUrl ? "Rebuild and replace PDF" : "Generate PDF"}
-                            aria-label={`${item.PdfUrl ? "Rebuild" : "Generate"} PDF for ${item.Title} submission ${item.Id}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleRegeneratePdf(item);
-                            }}
-                            disabled={pdfRegeneratingItemKey === itemKey}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              cursor: pdfRegeneratingItemKey === itemKey ? "not-allowed" : "pointer",
-                              opacity: pdfRegeneratingItemKey === itemKey ? 0.55 : 1,
-                            }}
-                          >
-                            <DescriptionIcon style={{ fontSize: 15 }} />
-                          </button>
-                        )}
-                        {(isAdmin || isSuperuser) && (
-                          <button
-                            title="Send workflow email now"
-                            aria-label={`Send workflow email now for ${item.Title} submission ${item.Id}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleForceResend(item);
-                            }}
-                            disabled={resendingItemKey === itemKey}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              cursor: resendingItemKey === itemKey ? "not-allowed" : "pointer",
-                              opacity: resendingItemKey === itemKey ? 0.55 : 1,
-                            }}
-                          >
-                            <ReplayIcon style={{ fontSize: 15 }} />
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      {(isAdmin || isSuperuser) && (
+                        <button
+                          title={item.PdfUrl ? "Rebuild and replace PDF" : "Generate PDF"}
+                          aria-label={`${item.PdfUrl ? "Rebuild" : "Generate"} PDF for ${item.Title} submission ${item.Id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleRegeneratePdf(item);
+                          }}
+                          disabled={pdfRegeneratingItemKey === itemKey}
+                          style={{
+                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
+                            background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            cursor: pdfRegeneratingItemKey === itemKey ? "not-allowed" : "pointer",
+                            opacity: pdfRegeneratingItemKey === itemKey ? 0.55 : 1,
+                          }}
+                        >
+                          <DescriptionIcon style={{ fontSize: 15 }} />
+                        </button>
+                      )}
+                      <button
+                        title="Delete submission permanently"
+                        aria-label={`Delete ${item.Title} submission ${item.Id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(item);
+                        }}
+                        disabled={deleteLoading}
+                        style={{
+                          width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.redPale}`,
+                          background: "#fff", color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.55 : 1,
+                        }}
+                      >
+                        <DeleteIcon style={{ fontSize: 15 }} />
+                      </button>
                     </div>
-                  </div>
+                  );
+
+                  return (
+                    <div
+                      key={itemKey}
+                      onClick={() => loadItemDetails(item)}
+                      style={{
+                        padding: "12px 16px", width: "100%", minWidth: TABLE_MIN_WIDTH,
+                        borderBottom: `1px solid ${C.border}`,
+                        cursor: "pointer",
+                        background: isSelected ? C.purplePale : "transparent",
+                        display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: 12, alignItems: "start",
+                      }}
+                    >
+                      {titleBlock}
+                      {submitterBlock}
+                      {versionBlock}
+                      {statusBlock}
+                      {actionsBlock}
+                    </div>
                   );
                 })
               )}
@@ -3258,7 +3684,7 @@ export default function ApprovalDashboard() {
           </div>
 
           {/* Detail Panel */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "auto", minHeight: 0 }}>
             {!selectedItem ? (
               <div style={{ padding: 48, textAlign: "center", color: C.textMuted }}>Select an item to review</div>
             ) : (
@@ -3266,11 +3692,19 @@ export default function ApprovalDashboard() {
                 <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ fontWeight: 600, color: C.textPrimary }}>{selectedItem.Title}</div>
                   <div style={{ fontSize: 13.5, color: C.textSecond, marginTop: 4 }}>
-                    Submitted by {selectedItem.SubmittedBy} • {formatDateTime(selectedItem.SubmittedAt)}
+                    Submitted by {isPersonEmail(selectedItem.SubmittedBy || "") ? selectedItem.SubmittedBy : "someone with no email set (no outcome email is sent)"} • {formatDateTime(selectedItem.SubmittedAt)}
                   </div>
                   <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
                     Form Version: {selectedItem.FormVersion || "Legacy"}
                   </div>
+                  {token && (
+                    <PublicSubmissionLinkRow
+                      token={token}
+                      listTitle={selectedItem.Title}
+                      itemId={selectedItem.Id}
+                      submittedBy={selectedItem.SubmittedBy || ""}
+                    />
+                  )}
                   {selectedCompany && (
                     <div style={{ fontSize: 12.5, color: C.purple, marginTop: 2, fontWeight: 600 }}>
                       Company: {selectedCompany}
@@ -3300,6 +3734,15 @@ export default function ApprovalDashboard() {
                       rawAssignments={selectedItem.WorkflowAssignmentData}
                       saving={assignmentSaving}
                       onSave={handleSaveWorkflowAssignment}
+                    />
+                  )}
+                  {isSuperuser && selectedActiveLayers.length > 0 && (
+                    <RoutingCheckPanel
+                      verdicts={routingVerdicts}
+                      checking={routingChecking}
+                      fixingLayer={routingFixingLayer}
+                      onCheck={() => void handleCheckRouting()}
+                      onFix={(layerNumber) => void handleFixRouting(layerNumber)}
                     />
                   )}
                   {(isAdmin || isSuperuser) && selectedActiveLayers.length > 0 && currentLayerConfig && (

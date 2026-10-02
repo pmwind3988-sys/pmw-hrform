@@ -22,6 +22,7 @@ import { resolveSpan } from "../pdfTemplate/resolve";
 import type { FormSubmissionField } from "../formSubmissionLayout";
 import type { PdfSectionContext } from "./context";
 import type { PdfLayerResult } from "../FormPdfDocument";
+import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
 import type { TemplateFooter } from "../pdfTemplate/types";
 
 export { C, S };
@@ -235,21 +236,22 @@ function isManual(layer: PdfLayerResult): boolean {
   return layer.status.trim().toLowerCase().startsWith("manual ");
 }
 
-function signatureLabel(layer: PdfLayerResult): string {
-  if (layer.type === "evaluation") return "Evaluated by";
-  return layer.status.toLowerCase().includes("reject") ? "Rejected by" : "Approved by";
-}
-
+// Name and post come from the sign-off helpers (`utils/signOff.ts`): the
+// directory name and position stamped at signing, else the address and the
+// layer's own title.
 function SignatureCard({ layer }: { layer: PdfLayerResult }): ReactElement {
-  const name = layer.confirmerName || layer.email || "";
-  const email = layer.confirmerName ? layer.confirmerEmail || layer.email : "";
+  const verdict = signOffVerdictFromStatus(layer.status);
+  const name = signOffName(layer.signerName || layer.confirmerName, layer.email || layer.confirmerEmail);
+  const position = signOffPosition(layer.signerPosition, layer.layerTitle || `Layer ${layer.layerNumber}`);
   const when = layer.signedAt ? fmtDate(layer.signedAt) : "";
   return (
     <View style={S.sigCard} wrap={false}>
       <View style={S.sigText}>
-        <Text style={S.sigLabel}>{signatureLabel(layer)} {"·"} Layer {layer.layerNumber}</Text>
-        <Text style={S.sigName}>{name}</Text>
-        {email ? <Text style={S.sigDetail}>{email}</Text> : null}
+        <Text style={[S.sigLabel, verdict === "rejected" ? { color: C.redText } : {}]}>
+          {signOffLabel(verdict ?? "approved")} - Layer {layer.layerNumber}
+        </Text>
+        <Text style={S.sigName}>{name || " "}</Text>
+        {position ? <Text style={S.sigDetail}>{position}</Text> : null}
         {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
         {when ? <Text style={S.sigDetail}>{when}</Text> : null}
       </View>
@@ -265,14 +267,11 @@ function SignatureCard({ layer }: { layer: PdfLayerResult }): ReactElement {
 
 function signedLayers(ctx: PdfSectionContext): PdfLayerResult[] {
   if (ctx.layoutConfig?.showSignatures === false) return [];
-  // A decided approval is listed with or without a signature image; an
-  // evaluation is listed once it carries a signature (its name already heads
-  // its details block).
-  return (ctx.data.layerResults ?? []).filter((l) => {
-    if (isManual(l)) return false;
-    if (l.type === "evaluation") return Boolean(l.signature);
-    return Boolean(l.signature) || Boolean(l.signedAt && l.email);
-  });
+  // Every personally decided layer is listed, with or without a drawn
+  // signature: a checkbox approval or an evaluation is signed just as surely,
+  // and the record has to name its signer. Paper-closed and cascade-rejected
+  // layers record no decision of their own and are left out.
+  return (ctx.data.layerResults ?? []).filter((l) => !isManual(l) && signOffVerdictFromStatus(l.status) !== null);
 }
 
 function EvaluationBlocks({ ctx }: { ctx: PdfSectionContext }): ReactElement[] {
@@ -284,7 +283,7 @@ function EvaluationBlocks({ ctx }: { ctx: PdfSectionContext }): ReactElement[] {
     if (fields.length === 0) return;
     out.push(
       <View key={i} style={S.evalBlock} wrap={false}>
-        <Text style={S.evalTitle}>Layer {layer.layerNumber} {"·"} {layer.confirmerName || layer.confirmerEmail || layer.email || "Evaluator"}</Text>
+        <Text style={S.evalTitle}>Layer {layer.layerNumber} {"·"} {ctx.layoutConfig?.showSignatures === false ? signOffName(layer.signerName || layer.confirmerName, layer.confirmerEmail || layer.email) || "Evaluator" : "Evaluation"}</Text>
         {fields.map((field, fi) => {
           if (includeEmpty) {
             return (

@@ -351,6 +351,7 @@ const NON_ANSWER_KEYS = new Set([
   "CurrentLayer", "CurrentApprovalLayer", "SelectedBranch", "PublishKey", "PdfUrl",
   "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
+  "LinkedUserEmail", "LinkedEmployeeId", "LinkedMatch",
 ]);
 
 function isNonAnswerKey(key: string): boolean {

@@ -44,6 +44,14 @@ export interface Submission {
   submitterName?: string;
   createdByName?: string;
   createdByEmail?: string;
+  /**
+   * Who a public-link submission was tied to in the Approval Directory after it
+   * was saved. `submittedByEmail` stays "GUEST"; these are separate on purpose.
+   */
+  linkedUserEmail?: string;
+  linkedEmployeeId?: string;
+  /** Set client-side when the signed-in person is the one this was linked to. */
+  linkedToMe?: boolean;
   submittedAt: string | null;
   modifiedAt?: string | null;
   formStatus: string | null;
@@ -79,6 +87,14 @@ export interface ApprovalLayer {
   signedAt: string | null;
   rejectionReason: string | null;
   signature: string | null;
+  /** Who signed, and in which post — stamped at signing. See utils/signOff.ts. */
+  actedBy?: string | null;
+  actedByName?: string | null;
+  actedByPosition?: string | null;
+  /** The layer's configured title, shown as the post when none was stamped. */
+  layerTitle?: string | null;
+  /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
+  rawStatus?: string | null;
 }
 
 // ── Enhanced Layer System Types (Phase 0+) ──────────────────────────────────
@@ -374,6 +390,14 @@ export interface ApprovalLayerResult {
   rejectionReason: string | null;
   signature: string | null;
   confirmedVia: ConfirmationType;
+  /** Who signed, and in which post — stamped at signing. See utils/signOff.ts. */
+  actedBy?: string | null;
+  actedByName?: string | null;
+  actedByPosition?: string | null;
+  /** The layer's configured title, shown as the post when none was stamped. */
+  layerTitle?: string | null;
+  /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
+  rawStatus?: string | null;
 }
 
 export interface EvaluationLayerResult {
@@ -384,6 +408,18 @@ export interface EvaluationLayerResult {
   confirmedAt: string | null;
   fields: Record<string, unknown>;
   notes?: string;
+  /** `L{n}_SignedAt`, for rows whose EvaluationData carries no `confirmedAt`. */
+  signedAt?: string | null;
+  /** The name EvaluationData recorded, for rows predating `L{n}_ActedByName`. */
+  confirmerName?: string | null;
+  /** Who signed, and in which post — stamped at signing. See utils/signOff.ts. */
+  actedBy?: string | null;
+  actedByName?: string | null;
+  actedByPosition?: string | null;
+  /** The layer's configured title, shown as the post when none was stamped. */
+  layerTitle?: string | null;
+  /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
+  rawStatus?: string | null;
 }
 
 export interface ListMetaEntry {

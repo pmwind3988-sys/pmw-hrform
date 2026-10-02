@@ -3,7 +3,11 @@
  *
  * Mints a signed test ticket via `/api/submit-form` (`mint-test-ticket`
  * action) and opens the form's one route with that ticket in the query
- * string. Every email the run generates is redirected server-side to the
+ * string ("Fill in myself"), or with `simulate=1` as well ("Simulate
+ * submission"), which has the form fill itself with sample answers and submit,
+ * leaving the tester only the approval or evaluation to do.
+ *
+ * Every email the run generates is redirected server-side to the
  * address entered here; nothing about the redirect decision comes from the
  * browser once the ticket is minted — the server reads it out of the signed
  * ticket, never out of the URL.
@@ -36,7 +40,8 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
   const { instance, accounts } = useMsal();
   const defaultEmail = accounts[0]?.username || "";
   const [email, setEmail] = useState(defaultEmail);
-  const [busy, setBusy] = useState(false);
+  /** Which button started the run in flight, so only that one says "Starting…". */
+  const [busy, setBusy] = useState<"" | "fill" | "simulate">("");
   const [error, setError] = useState("");
   const [blockedUrl, setBlockedUrl] = useState("");
 
@@ -44,7 +49,7 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
 
   const slug = form.Slug || "";
 
-  const startTestRun = async () => {
+  const startTestRun = async (simulate: boolean) => {
     setError("");
     setBlockedUrl("");
     if (!slug) {
@@ -55,7 +60,7 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
       setError("Enter a valid email address to receive the test run.");
       return;
     }
-    setBusy(true);
+    setBusy(simulate ? "simulate" : "fill");
     try {
       const account = accounts[0];
       const delegatedToken = await acquireAccessTokenSilentOrRedirect(instance, {
@@ -80,13 +85,13 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
       const data = await res.json().catch(() => ({})) as { ticket?: string; error?: string };
       if (!res.ok || !data.ticket) {
         setError(data.error || `Could not start a test run (${res.status}).`);
-        setBusy(false);
+        setBusy("");
         return;
       }
-      const url = testRunFormUrl({ slug, ticket: data.ticket });
+      const url = testRunFormUrl({ slug, ticket: data.ticket, simulate });
       const withDisplayEmail = `${url}&testEmail=${encodeURIComponent(email.trim().toLowerCase())}`;
       const popup = window.open(withDisplayEmail, "_blank", "noopener");
-      setBusy(false);
+      setBusy("");
       if (!popup) {
         // The run is already minted and the columns are already provisioned —
         // only the popup failed. Closing the dialog here would strand the
@@ -98,7 +103,7 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start a test run.");
-      setBusy(false);
+      setBusy("");
     }
   };
 
@@ -117,6 +122,11 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
           address below — no real approver is contacted — and the run will not appear in normal
           submission listings.
         </div>
+        <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+          <strong style={{ color: C.textPrimary }}>Simulate submission</strong> fills every question with sample
+          answers and submits for you, so you only do the approval or evaluation.{" "}
+          <strong style={{ color: C.textPrimary }}>Fill in myself</strong> opens the form pre-filled for you to check first.
+        </div>
         <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 5 }}>
           Send all test emails to
         </label>
@@ -125,7 +135,7 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
           value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="you@company.com"
-          disabled={busy}
+          disabled={busy !== ""}
           style={{
             width: "100%",
             boxSizing: "border-box",
@@ -153,17 +163,24 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             onClick={onClose}
-            disabled={busy}
+            disabled={busy !== ""}
             style={{ height: 32, padding: "0 14px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}
           >
             Cancel
           </button>
           <button
-            onClick={startTestRun}
-            disabled={busy}
+            onClick={() => startTestRun(false)}
+            disabled={busy !== ""}
+            style={{ height: 32, padding: "0 14px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.textPrimary, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy && busy !== "fill" ? 0.6 : 1 }}
+          >
+            {busy === "fill" ? "Starting…" : "Fill in myself"}
+          </button>
+          <button
+            onClick={() => startTestRun(true)}
+            disabled={busy !== ""}
             style={{ height: 32, padding: "0 14px", border: "none", borderRadius: 7, background: C.purple, color: C.white, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
           >
-            {busy ? "Starting…" : "Start test run"}
+            {busy === "simulate" ? "Starting…" : "Simulate submission"}
           </button>
         </div>
       </div>

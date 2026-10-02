@@ -30,6 +30,7 @@ import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
 import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
 import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
+import { sharePointTokenFrom, testRunTesterMayAct } from "./_utils/testRunReviewer.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
 
 /**
@@ -146,6 +147,44 @@ function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: Record<
   } catch {
     return { surveyJson: null, meta: {}, layerConfig: null };
   }
+}
+
+/**
+ * The signer's name and post, from their `Approval Directory` row.
+ *
+ * The directory is what routing already trusts about a person, so the position
+ * printed under a signature is the same one that decided the request reached
+ * them. Absent — no row, an unconfirmed row, no directory at all — the name
+ * falls back to the one Azure gave the signed-in caller and the position is
+ * left out, for the page to print the layer title in its place.
+ */
+async function readSignerIdentity(
+  graphToken: string,
+  email: string,
+  fallbackName?: unknown,
+): Promise<{ name: string; position: string }> {
+  const row = email
+    ? await createApprovalDirectoryReader(graphToken).lookupPerson(email).catch(() => null)
+    : null;
+  const fallback = typeof fallbackName === "string" ? fallbackName.trim() : "";
+  return {
+    name: row?.name?.trim() || fallback,
+    position: row?.position?.trim() || "",
+  };
+}
+
+/** The `L{n}_ActedByName` / `L{n}_ActedByPosition` patch for one signer. */
+async function signerStampFor(
+  graphToken: string,
+  layerNumber: number,
+  email: string,
+  fallbackName?: unknown,
+): Promise<Record<string, string>> {
+  const signer = await readSignerIdentity(graphToken, email, fallbackName);
+  const stamp: Record<string, string> = {};
+  if (signer.name) stamp[`L${layerNumber}_ActedByName`] = signer.name.slice(0, 255);
+  if (signer.position) stamp[`L${layerNumber}_ActedByPosition`] = signer.position.slice(0, 255);
+  return stamp;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -599,7 +638,12 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       if (!routePrefixAllowsLayerType(firstQueryValue(req.query.prefix), String(foundToken.type || ""), allFields.Created)) {
         return res.status(403).json({ error: "This link does not match the step it points at. Please use the link that was emailed to you." });
       }
-      if (!isLayerActor(viewerEmail, allFields[`L${foundLayerNumber}_Emails`], allFields[`L${foundLayerNumber}_Email`])) {
+      // A test run's steps stay assigned to the real people; its tester may act
+      // too, once proved a builder superuser. See _utils/testRunReviewer.ts.
+      if (
+        !isLayerActor(viewerEmail, allFields[`L${foundLayerNumber}_Emails`], allFields[`L${foundLayerNumber}_Email`])
+        && !(await testRunTesterMayAct(allFields, viewerEmail, sharePointTokenFrom(req.headers as Record<string, string | string[] | undefined>)))
+      ) {
         logWarn("api:evaluate:get", "Refused a signed-in reviewer a step they are not assigned", {
           layerNumber: foundLayerNumber,
           responseItemId,
@@ -703,12 +747,19 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           visibleFields[`L${n}_Email`] = allFields[`L${n}_Email`];
           visibleFields[`L${n}_Emails`] = allFields[`L${n}_Emails`];
           visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
+          visibleFields[`L${n}_ActedByName`] = allFields[`L${n}_ActedByName`];
+          visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         } else if (n === foundLayerNumber) {
-          // Current layer — include status
+          // Current layer — include status, and once it is decided, who signed
+          // it: a link opened after the fact shows the sign-off it already has.
           visibleFields[`L${n}_Status`] = allFields[`L${n}_Status`];
           visibleFields[`L${n}_Email`] = allFields[`L${n}_Email`];
           visibleFields[`L${n}_Emails`] = allFields[`L${n}_Emails`];
+          visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
+          visibleFields[`L${n}_ActedByName`] = allFields[`L${n}_ActedByName`];
+          visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
+          visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         }
         // Future layers (n > foundLayerNumber) — HIDDEN
       }
@@ -752,6 +803,11 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         })
       : {};
 
+    // Who is about to sign, so the page can print their post under the line
+    // before they press anything. Signed-in only: a public link has no account
+    // to name.
+    const viewerSignOff = signedInMode ? await readSignerIdentity(graphToken, viewerEmail) : null;
+
     return res.status(200).json({
       success: true,
       data: {
@@ -775,6 +831,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         logoUrl: typeof versionMeta.logoUrl === "string" ? versionMeta.logoUrl : "",
         mediaSrcByField,
         matrixTables,
+        viewerSignOff,
         fields: visibleFields,
       },
     });
@@ -944,7 +1001,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (!routePrefixAllowsLayerType(typeof prefix === "string" ? prefix : "", String(layer.type || ""), itemFields.Created)) {
         return res.status(403).json({ error: "This link does not match the step it points at. Please use the link that was emailed to you." });
       }
-      if (!isLayerActor(viewerEmail, itemFields[`L${layerNumber}_Emails`], itemFields[`L${layerNumber}_Email`])) {
+      // Same rule as the read path: the tester of a test run may decide too.
+      if (
+        !isLayerActor(viewerEmail, itemFields[`L${layerNumber}_Emails`], itemFields[`L${layerNumber}_Email`])
+        && !(await testRunTesterMayAct(itemFields, viewerEmail, sharePointTokenFrom(req.headers as Record<string, string | string[] | undefined>)))
+      ) {
         logWarn("api:evaluate", "Refused a signed-in decision on a step the caller is not assigned", {
           layerNumber,
           responseItemId: safeResponseItemId,
@@ -1019,29 +1080,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let actedByEmail = "";
     const now = new Date().toISOString();
 
+    // Record who acted — so a later layer can route from them, and so the
+    // record can say who signed, a rejection included.
+    //
+    // A signed-in caller has already been proved to be who they say, so the
+    // decision is recorded against them. A public token identifies a layer,
+    // not a person, so there it is only knowable when the layer had exactly
+    // one possible actor: with several sharing a layer we cannot tell which
+    // of them clicked, and guessing would put a name against a decision they
+    // may not have made — leave it blank instead.
+    if (signedInMode) {
+      actedByEmail = viewerEmail;
+    } else {
+      const layerActors = parseValidEmailList(
+        itemFields[`L${layerNumber}_Emails`] || itemFields[`L${layerNumber}_Email`],
+      );
+      if (layerActors.length === 1 && !itemFields[`L${layerNumber}_ActedBy`]) {
+        actedByEmail = layerActors[0];
+      }
+    }
+
     if (action === "approve" || action === "confirm") {
       updates[`L${layerNumber}_Status`] = action === "approve" ? "Approved" : "Confirmed";
       updates[`L${layerNumber}_SignedAt`] = now;
       if (signature) updates[`L${layerNumber}_Signature`] = signature;
-
-      // Record who acted, so a later layer can route from them.
-      //
-      // A signed-in caller has already been proved to be who they say, so the
-      // decision is recorded against them. A public token identifies a layer,
-      // not a person, so there it is only knowable when the layer had exactly
-      // one possible actor: with several sharing a layer we cannot tell which
-      // of them clicked, and guessing would put a name against a decision they
-      // may not have made — leave it blank instead.
-      if (signedInMode) {
-        actedByEmail = viewerEmail;
-      } else {
-        const layerActors = parseValidEmailList(
-          itemFields[`L${layerNumber}_Emails`] || itemFields[`L${layerNumber}_Email`],
-        );
-        if (layerActors.length === 1 && !itemFields[`L${layerNumber}_ActedBy`]) {
-          actedByEmail = layerActors[0];
-        }
-      }
 
       // For evaluation layers: also write to EvaluationData JSON
       if (layer.type === "evaluation" && fields) {
@@ -1147,6 +1209,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       });
+
+      // The name and post the decision is signed with, stamped now rather than
+      // looked up whenever the record is read: a promotion next year must not
+      // rewrite who signed this. Patched on its own again, because these two
+      // columns are newer still than `L{n}_ActedBy` — a form published before
+      // them keeps working and simply prints the layer title as the position.
+      const signerStamp = await signerStampFor(graphToken, layerNumber, actedByEmail, signedInMode ? confirmerName : undefined);
+      if (Object.keys(signerStamp).length > 0) {
+        await updateListItemFields(graphToken, responseListName, responseItem.id, signerStamp).catch((error) => {
+          logWarn("api:evaluate", "Could not record the signer's name and position", {
+            formTitle,
+            layerNumber,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
     }
 
     if (testRun) {

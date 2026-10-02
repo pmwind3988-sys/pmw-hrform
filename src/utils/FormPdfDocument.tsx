@@ -67,6 +67,11 @@ export interface PdfLayerResult {
   /** For evaluation layers: confirmer name/email */
   confirmerEmail?: string;
   confirmerName?: string;
+  /** Name and post stamped at signing (`L{n}_ActedByName` / `L{n}_ActedByPosition`). */
+  signerName?: string;
+  signerPosition?: string;
+  /** The layer's configured title, printed as the post when none was stamped. */
+  layerTitle?: string;
 }
 
 // ── Main Document ─────────────────────────────────────────────────────────

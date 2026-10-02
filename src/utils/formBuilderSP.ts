@@ -1981,6 +1981,11 @@ const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
   { n: 'PublishKey', k: SP_FIELD_KIND.text },
   { n: 'FormID', k: SP_FIELD_KIND.text },
   { n: 'SubmittedBy', k: SP_FIELD_KIND.text },
+  // Who in the Approval Directory a public-link submission came from. Written
+  // after the fact by api/submit-form.ts, never by the form itself.
+  { n: 'LinkedUserEmail', k: SP_FIELD_KIND.text },
+  { n: 'LinkedEmployeeId', k: SP_FIELD_KIND.text },
+  { n: 'LinkedMatch', k: SP_FIELD_KIND.text },
   { n: 'Status', k: SP_FIELD_KIND.text },
   { n: 'CurrentApprovalLayer', k: SP_FIELD_KIND.number },
   { n: 'RawJSON', k: SP_FIELD_KIND.note, ml: true },
@@ -2045,6 +2050,10 @@ function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
       { n: `L${n}_NotifyEmails`, k: 3, ml: true },
       // Which of the allowed addresses completed the layer.
       { n: `L${n}_ActedBy`, k: 2 },
+      // The name and post the decision was signed with, stamped at signing so
+      // a later promotion does not rewrite the record. See src/utils/signOff.ts.
+      { n: `L${n}_ActedByName`, k: 2 },
+      { n: `L${n}_ActedByPosition`, k: 2 },
       { n: `L${n}_SignedAt`, k: 4 },
       { n: `L${n}_Rejection`, k: 3, ml: true },
       { n: `L${n}_Signature`, k: 3, ml: true },

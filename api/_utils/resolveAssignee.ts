@@ -121,6 +121,13 @@ export interface AssigneeResolverPorts {
    * Absent on callers that predate the directory; a chain layer then parks.
    */
   lookupPerson?(email: string): Promise<DirectoryPerson | null>;
+  /**
+   * The employee a submission is about, found from its own answers (staff
+   * number, address, name), or null. Only asked when the submitter has no
+   * address the directory knows — a public link, or a person whose row has a
+   * name and no email — so the reporting line can still be followed.
+   */
+  lookupSubject?(submittedData: Record<string, unknown>): Promise<DirectoryPerson | null>;
   /** Whoever holds `role` in `department`, or null when nobody does. */
   lookupRoleHolder?(department: string, role: string): Promise<{ email: string; name: string } | null>;
 }
@@ -265,7 +272,7 @@ async function walkChain(
   startEmail: string,
   hops: number,
   ports: AssigneeResolverPorts,
-  options: { skipSelf?: boolean; submitterEmail?: string },
+  options: { skipSelf?: boolean; submitterEmail?: string; first?: DirectoryPerson },
 ): Promise<
   /*
     `reason` is declared on both branches, the successful one as absent, so it
@@ -293,7 +300,9 @@ async function walkChain(
 
   const ceiling = Math.min(Math.max(hops, 1), MAX_CHAIN_HOPS);
   for (let step = 0; step < MAX_CHAIN_HOPS; step++) {
-    const person = await lookupPerson(current);
+    // The first hop may already be in hand: a person with no email cannot be
+    // looked up by address, so the caller found their row another way.
+    const person = step === 0 && options.first ? options.first : await lookupPerson(current);
     if (!person) {
       return { ok: false, reason: `${current} is not in the approval directory`, trail };
     }
@@ -307,14 +316,22 @@ async function walkChain(
     seen.add(next.toLowerCase());
     trail.push(next);
 
-    const nextPerson = await lookupPerson(next);
+    const reachedRequestedHop = step + 1 >= ceiling;
+    const listed = await lookupPerson(next);
+    // The row says who approves this person, and that is the answer. The
+    // approver need not be listed themselves — the top of a line often is not —
+    // so on the requested hop an unlisted address still routes. An intermediate
+    // hop has to be listed, because the walk needs its approver to continue.
+    const nextPerson = listed
+      ?? (reachedRequestedHop
+        ? { email: next, name: "", department: "", position: "", approverEmail: "" }
+        : null);
     if (!nextPerson) {
       return { ok: false, reason: `${next} is not in the approval directory`, trail };
     }
     current = next;
     resolved = nextPerson;
 
-    const reachedRequestedHop = step + 1 >= ceiling;
     // Only keep walking past the requested hop to step over the submitter
     // themselves — the "approved by their own submission" case.
     const landedOnSubmitter = options.skipSelf && submitter && next.toLowerCase() === submitter;
@@ -372,7 +389,32 @@ async function resolveChain(
 ): Promise<ResolvedLayerActors> {
   const label = layerLabel(layer);
   const assignee = layer.assignee;
-  const start = chainStart(assignee, submittedData, context);
+  let start = chainStart(assignee, submittedData, context);
+
+  // The submitter may have no address routing can use, and yet be on the form:
+  // a public link records "GUEST", and a person with no company mailbox has a
+  // directory row with a name and no email. Their approver is still set on that
+  // row, so find the row from the form's answers and follow it. Nobody is mailed
+  // on their behalf — there is no address — but the approver is a real person
+  // with one, which is all the workflow needs.
+  let first: DirectoryPerson | undefined;
+  const fromSubmitter = assignee.startFrom !== "previous-actor" && assignee.startFrom !== "field";
+  if (fromSubmitter && ports.lookupSubject) {
+    const listed = start.email && ports.lookupPerson ? await ports.lookupPerson(start.email) : null;
+    if (!listed) {
+      const subject = await ports.lookupSubject(submittedData);
+      if (subject) {
+        first = subject;
+        const who = subject.name || subject.email;
+        start = {
+          email: subject.email || who,
+          description: subject.email
+            ? `the employee on the form (${who})`
+            : `the employee on the form (${who}, no email set)`,
+        };
+      }
+    }
+  }
 
   if (!start.email) {
     return applyChainFallback(assignee, submittedData, ports, label, `${start.description} has no usable email address`);
@@ -381,6 +423,7 @@ async function resolveChain(
   const walked = await walkChain(start.email, assignee.hops ?? 1, ports, {
     skipSelf: assignee.skipSelf,
     submitterEmail: context.submitterEmail,
+    first,
   });
 
   if (!walked.ok) {
@@ -423,7 +466,8 @@ async function resolveRoleHolderDepartment(
   }
 
   const submitter = usableIdentity(context.submitterEmail);
-  const person = submitter && ports.lookupPerson ? await ports.lookupPerson(submitter) : null;
+  const person = (submitter && ports.lookupPerson ? await ports.lookupPerson(submitter) : null)
+    ?? (ports.lookupSubject ? await ports.lookupSubject(submittedData) : null);
   return { department: person?.department ?? "", source: "the submitter's own department" };
 }
 
