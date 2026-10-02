@@ -50,7 +50,7 @@ export default function SignOffBlock({
           <div style={{ height: 1, background: R.ink }} />
         </div>
       ) : null}
-      <div style={{ fontSize: compact ? 14 : 15, fontWeight: 700, color: R.ink, overflowWrap: "anywhere" }}>{name || "—"}</div>
+      <div style={{ fontSize: compact ? 14 : 15, fontWeight: 700, color: R.ink, overflowWrap: "anywhere" }}>{name || "â€”"}</div>
       {position ? <div style={{ fontSize: 13, color: R.muted }}>{position}</div> : null}
       {date ? (
         <div style={{ fontSize: 12, color: R.label, fontVariantNumeric: "tabular-nums" }}>Date: {date}</div>
