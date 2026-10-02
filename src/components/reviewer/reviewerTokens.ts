@@ -19,6 +19,14 @@ export const R = {
   navyTint: "#e4e3f2",
   /** Dimmed text on navy. */
   navyWash: "#c9c7e6",
+  /** Eyebrow on a finished (tinted) step card. */
+  navyMid: "#3c3890",
+  /** Finished step card: navy at 10%. */
+  navyDone: "rgba(43,40,112,0.10)",
+  /** Scrim behind the submitting overlay and the signing window. */
+  scrim: "rgba(15,14,43,.62)",
+  amber: "#b87708",
+  amberSoft: "#fdf0d8",
   paper: "#f7f9fb",
   card: "#ffffff",
   line: "#e5e9ee",
@@ -31,6 +39,8 @@ export const R = {
   body: "#212633",
   /** Secondary text. */
   muted: "#4c5566",
+  /** Body copy on cards (a touch darker than `muted`). */
+  copy: "#343b4b",
   /** Eyebrows, captions, reference numbers. */
   label: "#6b7484",
   link: "#00658e",

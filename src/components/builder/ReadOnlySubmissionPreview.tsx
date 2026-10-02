@@ -4,6 +4,8 @@ import { fetchWithAuthRecovery } from "../../utils/authRecovery";
 import DOMPurify from "dompurify";
 import { editorial } from "../../theme/editorial";
 import { groupColumnHeaders } from "../../utils/matrixData";
+import CollapsiblePanel from "../reviewer/CollapsiblePanel";
+import { R } from "../reviewer/reviewerTokens";
 import {
   collectPreviewSections,
   formatFieldLabel,
@@ -33,6 +35,12 @@ interface ReadOnlySubmissionPreviewProps {
   mediaSrcByField?: Record<string, string | string[]>;
   fallbackData?: Record<string, unknown>;
   compact?: boolean;
+  /**
+   * `reviewer` is the approver / evaluator page's look: collapsible groups of
+   * label / value rows, ratings as plain text, pictures as thumbnails. Opt-in:
+   * every other screen keeps the default boxed cards.
+   */
+  variant?: "default" | "reviewer";
 }
 
 function normalizeMaybeJson(value: unknown): unknown {
@@ -72,10 +80,18 @@ function isDateLikeValue(value: unknown): value is string {
   return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z?)?$/i.test(value.trim());
 }
 
-function formatDateTimeValue(value: string, field: PreviewField): string {
+const REVIEWER_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatDateTimeValue(value: string, field: PreviewField, reviewer = false): string {
   const trimmed = value.trim();
   const date = new Date(trimmed);
   if (Number.isNaN(date.getTime())) return value;
+  if (reviewer) {
+    // "22 Jun 2026" / "22 Jun 2026, 18:00" — the reviewer page's date style.
+    const day = `${date.getDate()} ${REVIEWER_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+    if (field.type === "date" || field.inputType === "date" || !trimmed.includes("T")) return day;
+    return `${day}, ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
   if (field.type === "date" || field.inputType === "date" || !trimmed.includes("T")) {
     return date.toLocaleDateString("en-GB", {
       day: "2-digit",
@@ -114,12 +130,12 @@ function formatCurrencyValue(value: unknown, field: PreviewField): string {
   return `${symbol} ${formatted}`;
 }
 
-function formatScalarValue(value: unknown, field: PreviewField): string {
+function formatScalarValue(value: unknown, field: PreviewField, reviewer = false): string {
   if (value === null || value === undefined || value === "") return "No response";
   const normalized = normalizeMaybeJson(value);
   if (typeof normalized === "boolean") return normalized ? "Yes" : "No";
   if (Array.isArray(normalized)) {
-    return normalized.map((entry) => formatScalarValue(entry, field)).join(", ");
+    return normalized.map((entry) => formatScalarValue(entry, field, reviewer)).join(", ");
   }
   const choiceOptions = field.type === "rating" && field.rateValues?.length ? field.rateValues : field.choices;
   if (choiceOptions?.length) {
@@ -128,7 +144,7 @@ function formatScalarValue(value: unknown, field: PreviewField): string {
   }
   if (fieldLooksCurrencyLike(field, normalized)) return formatCurrencyValue(normalized, field);
   if (isDateLikeValue(normalized) && (field.type === "date" || field.type === "datetime" || field.inputType === "date" || field.inputType === "datetime-local")) {
-    return formatDateTimeValue(normalized, field);
+    return formatDateTimeValue(normalized, field, reviewer);
   }
   if (typeof normalized === "object") return JSON.stringify(normalized);
   return String(normalized);
@@ -275,7 +291,7 @@ function mediaSourcesForField(field: PreviewField, value: unknown, mediaSrcByFie
   return sources.some(isImageLike) ? sources : [];
 }
 
-function MediaValue({ source, accessToken }: { source: string; accessToken?: string | null }) {
+function MediaValue({ source, accessToken, thumb = false }: { source: string; accessToken?: string | null; thumb?: boolean }) {
   const { src, loading } = useAuthenticatedMediaSource(source, accessToken);
 
   // A signature or photo held behind SharePoint's login is fetched with the
@@ -283,6 +299,21 @@ function MediaValue({ source, accessToken }: { source: string; accessToken?: str
   // file extension. Asking that URL whether it looks like an image said no, so
   // every protected image collapsed into a bare download link the moment it
   // finished loading. The stored path is what decides.
+  if (thumb && (isImageLike(source) || isImageLike(src))) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ display: "inline-block", border: `1px solid ${R.line}`, borderRadius: 4, background: R.card, padding: 4, lineHeight: 0 }}>
+          <img
+            src={src}
+            alt={filenameFromUrl(source)}
+            style={{ display: "block", height: "auto", width: "auto", maxHeight: 64, maxWidth: 200, objectFit: "contain" }}
+          />
+        </span>
+        {loading && <span style={{ color: R.label, fontSize: 12.5 }}>Loading secure image...</span>}
+      </div>
+    );
+  }
+
   if (isImageLike(source) || isImageLike(src)) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
@@ -433,13 +464,26 @@ const fieldRowStyle: CSSProperties = {
   alignItems: "start",
 };
 
-function FieldValue({ field, value, accessToken, mediaSrcByField }: { field: PreviewField; value: unknown; accessToken?: string | null; mediaSrcByField?: Record<string, string | string[]> }) {
+/**
+ * A rating as the reviewer page prints it: "3 of 4 (middle dot) Agree" — the value out
+ * of the top of the scale, then the author's word for that step when there is one.
+ */
+function ratingText(field: PreviewField, value: unknown): string {
+  const rating = numberFromValue(value);
+  if (rating === null) return "No rating";
+  const max = field.rateMax ?? (field.rateValues?.length ? field.rateValues.length : 5);
+  const label = field.rateValues?.map((choice) => choiceLabel(choice, rating)).find(Boolean);
+  const base = `${rating} of ${max}`;
+  return label && label !== String(rating) ? `${base} \u00b7 ${label}` : base;
+}
+
+function FieldValue({ field, value, accessToken, mediaSrcByField, variant = "default" }: { field: PreviewField; value: unknown; accessToken?: string | null; mediaSrcByField?: Record<string, string | string[]>; variant?: "default" | "reviewer" }) {
   const mediaSources = mediaSourcesForField(field, value, mediaSrcByField);
   if (mediaSources.length > 0) {
     return (
-      <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "grid", gap: variant === "reviewer" ? 6 : 10 }}>
         {mediaSources.map((source, index) => (
-          <MediaValue key={`${source}-${index}`} source={source} accessToken={accessToken} />
+          <MediaValue key={`${source}-${index}`} source={source} accessToken={accessToken} thumb={variant === "reviewer"} />
         ))}
       </div>
     );
@@ -448,9 +492,9 @@ function FieldValue({ field, value, accessToken, mediaSrcByField }: { field: Pre
     return <MatrixValue field={field} value={value} />;
   }
   if (field.type === "rating") {
-    return <RatingValue field={field} value={value} />;
+    return variant === "reviewer" ? <span style={{ fontVariantNumeric: "tabular-nums" }}>{ratingText(field, value)}</span> : <RatingValue field={field} value={value} />;
   }
-  return <div style={{ color: C.textPrimary, overflowWrap: "anywhere", whiteSpace: field.inputType === "textarea" ? "pre-wrap" : "normal" }}>{formatScalarValue(value, field)}</div>;
+  return <div style={{ color: C.textPrimary, overflowWrap: "anywhere", whiteSpace: field.inputType === "textarea" ? "pre-wrap" : "normal" }}>{formatScalarValue(value, field, variant === "reviewer")}</div>;
 }
 
 function fallbackSections(fallbackData: Record<string, unknown> | undefined): PreviewSection[] {
@@ -462,12 +506,58 @@ function fallbackSections(fallbackData: Record<string, unknown> | undefined): Pr
   }];
 }
 
-export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToken, mediaSrcByField, fallbackData, compact = false }: ReadOnlySubmissionPreviewProps) {
+const REVIEWER_ROW_CSS = "@media (max-width: 560px) { .rosp-rv-row { grid-template-columns: minmax(0, 1fr) !important; gap: 2px !important; padding: 11px 0 !important; } .rosp-rv-row > dt { font-size: 13px; } }";
+
+/** Collapsible groups of label / value rows — the reviewer page's answers. */
+function ReviewerGroups({ sections, data, accessToken, mediaSrcByField }: { sections: PreviewSection[]; data: Record<string, unknown> | null; accessToken?: string | null; mediaSrcByField?: Record<string, string | string[]> }) {
+  return (
+    <>
+      <style>{REVIEWER_ROW_CSS}</style>
+      {sections.map((section, sectionIndex) => {
+        // A run that resumes after a nested panel has no title of its own.
+        const title = section.title || "Other answers";
+        return (
+          <CollapsiblePanel key={`${title}-${sectionIndex}`} variant="group" title={title} meta={`\u00b7 ${section.fields.length}`}>
+            <dl style={{ margin: "0 0 8px", display: "flex", flexDirection: "column" }}>
+              {section.fields.map((field) => {
+                const stacked = ["dynamicmatrix", "matrixdynamic", "tableinput"].includes(field.type);
+                return (
+                  <div
+                    key={field.name}
+                    className="rosp-rv-row"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: stacked ? "minmax(0, 1fr)" : "240px minmax(0, 1fr)",
+                      gap: stacked ? 8 : 16,
+                      padding: "9px 0",
+                      borderTop: `1px solid ${R.disabledBg}`,
+                    }}
+                  >
+                    <dt style={{ color: R.label }}>{field.title}</dt>
+                    <dd style={{ margin: 0, minWidth: 0, overflowWrap: "anywhere", whiteSpace: field.inputType === "textarea" ? "pre-wrap" : undefined }}>
+                      <FieldValue field={field} value={data?.[field.name]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} variant="reviewer" />
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </CollapsiblePanel>
+        );
+      })}
+    </>
+  );
+}
+
+export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToken, mediaSrcByField, fallbackData, compact = false, variant = "default" }: ReadOnlySubmissionPreviewProps) {
   const sections = collectPreviewSections(surveyJson, data);
   const displaySections = sections.length > 0 ? sections : fallbackSections(fallbackData ?? data ?? undefined);
 
   if (displaySections.length === 0) {
-    return <div style={{ color: C.textMuted, fontSize: 13.5 }}>No submitted field data is available.</div>;
+    return <div style={{ color: variant === "reviewer" ? R.label : C.textMuted, fontSize: 13.5, padding: "10px 0" }}>No submitted field data is available.</div>;
+  }
+
+  if (variant === "reviewer") {
+    return <ReviewerGroups sections={displaySections} data={data} accessToken={accessToken} mediaSrcByField={mediaSrcByField} />;
   }
 
   return (

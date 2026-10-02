@@ -136,8 +136,20 @@ function FieldBlock({ element, runtime, depth, scope }: BlockProps) {
     else runtime.setValue(element.name, next);
   };
 
+  // Which fields the reviewer variant lays out as a row (label left, answer
+  // right). Every other look ignores both attributes.
+  const rowLayout = element.kind === "boolean" || element.kind === "rating";
+  const hintRepeatsLabel =
+    !!element.description && element.description.trim().toLowerCase() === element.title.trim().toLowerCase();
+
   return (
-    <div className="nf-field" data-name={element.name} id={`field-${element.name}`}>
+    <div
+      className="nf-field"
+      data-name={element.name}
+      data-kind={element.kind}
+      data-row={rowLayout || undefined}
+      id={`field-${element.name}`}
+    >
       <label
         className={`nf-label${element.hideTitle ? " nf-label-hidden" : ""}`}
         id={`${controlId}-label`}
@@ -150,7 +162,11 @@ function FieldBlock({ element, runtime, depth, scope }: BlockProps) {
           </span>
         )}
       </label>
-      {element.description && <p className="nf-hint">{element.description}</p>}
+      {element.description && (
+        <p className="nf-hint" data-dup={hintRepeatsLabel || undefined}>
+          {element.description}
+        </p>
+      )}
       <Control
         element={shown}
         value={value}
@@ -345,6 +361,14 @@ export interface NativeFormProps {
   submitting?: boolean;
   onSubmit?: () => void;
   dark?: boolean;
+  /**
+   * `reviewer` is the approver / evaluator page's quiet row look: no progress
+   * rail, no cards, one row per statement. Opt-in, so the public form, the
+   * builder preview and the response viewer keep the default look.
+   */
+  variant?: "default" | "reviewer";
+  /** Reviewer variant only: the line above the first question. */
+  legend?: string;
 }
 
 export default function NativeFormView({
@@ -354,6 +378,8 @@ export default function NativeFormView({
   submitting = false,
   onSubmit,
   dark = false,
+  variant = "default",
+  legend,
 }: NativeFormProps) {
   const { form, page, pageIndex, pageCount, isLastPage, isFirstPage } = runtime;
 
@@ -549,9 +575,10 @@ export default function NativeFormView({
   );
 
   return (
-    <div className="nf" data-theme={dark ? "dark" : "light"}>
-      <div className="nf-shell" data-rail="on">
+    <div className="nf" data-theme={dark ? "dark" : "light"} data-variant={variant === "reviewer" ? "reviewer" : undefined}>
+      <div className="nf-shell" data-rail={variant === "reviewer" ? "off" : "on"}>
         <main className="nf-main">
+          {variant === "reviewer" && legend && <div className="nf-rv-legend">{legend}</div>}
           {pageCount > 1 && (
             <div className="nf-steps" role="tablist" aria-label="Form pages">
               {form.pages.map((p, i) => (
@@ -635,7 +662,7 @@ export default function NativeFormView({
             </div>
           )}
         </main>
-        {rail}
+        {variant === "reviewer" ? null : rail}
       </div>
     </div>
   );

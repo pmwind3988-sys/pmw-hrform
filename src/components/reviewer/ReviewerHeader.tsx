@@ -1,7 +1,9 @@
-import Logo from "../Logo";
+import logo128 from "../../assets/logo-128.png";
 import { R } from "./reviewerTheme";
 
-/** Top bar: logo + "HR Form" on the left, the reference number on the right. */
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+/** Top bar: logo + "HR Form" on the left, the reference on the right. */
 export default function ReviewerHeader({ logoUrl, reference }: { logoUrl?: string; reference?: string }) {
   return (
     <header
@@ -18,15 +20,17 @@ export default function ReviewerHeader({ logoUrl, reference }: { logoUrl?: strin
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
         {logoUrl ? (
-          <img src={logoUrl} alt="Company logo" style={{ height: 28, width: "auto", maxWidth: 120, objectFit: "contain" }} />
+          <img className="rv-logo" src={logoUrl} alt="Company logo" style={{ height: 28, width: "auto", maxWidth: 120, objectFit: "contain" }} />
         ) : (
-          <Logo size={28} alt="PMW logo" />
+          // The mark is wider than it is tall: fix the height and let the
+          // width follow, rather than boxing it into a square.
+          <img className="rv-logo" src={logo128} alt="PMW logo" style={{ height: 28, width: "auto" }} />
         )}
         <span style={{ fontWeight: 600, color: R.navy, fontSize: 15 }}>HR Form</span>
       </div>
       {reference ? (
-        <span style={{ fontSize: 13, color: R.label, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
-          Ref {reference}
+        <span className="rv-ref" style={{ fontFamily: MONO, fontSize: 12.5, color: R.label, textAlign: "right" }}>
+          {reference}
         </span>
       ) : null}
     </header>

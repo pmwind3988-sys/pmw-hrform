@@ -19,7 +19,7 @@ export const eyebrowStyle: CSSProperties = {
 };
 
 export const btnBase: CSSProperties = {
-  minHeight: 46,
+  height: 46,
   padding: "0 24px",
   borderRadius: 4,
   fontSize: 15,
@@ -30,6 +30,7 @@ export const btnBase: CSSProperties = {
 
 export const btnPrimary: CSSProperties = {
   ...btnBase,
+  padding: "0 28px",
   border: "none",
   background: R.navy,
   color: R.card,
@@ -37,6 +38,7 @@ export const btnPrimary: CSSProperties = {
 
 export const btnDisabled: CSSProperties = {
   ...btnBase,
+  padding: "0 28px",
   border: "none",
   background: R.disabledBg,
   color: R.label,
@@ -44,6 +46,7 @@ export const btnDisabled: CSSProperties = {
 
 export const btnDangerOutline: CSSProperties = {
   ...btnBase,
+  padding: "0 20px",
   border: `1px solid ${R.inputBorder}`,
   background: R.card,
   color: R.red,
@@ -58,6 +61,7 @@ export const btnDanger: CSSProperties = {
 
 export const btnGhost: CSSProperties = {
   ...btnBase,
+  padding: "0 20px",
   border: `1px solid ${R.inputBorder}`,
   background: R.card,
   color: R.body,
@@ -77,21 +81,31 @@ export const REVIEWER_CSS = `
 @keyframes rvSpin { to { transform: rotate(360deg); } }
 @keyframes rvFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rvRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-.rv-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(16, 25, 35, 0.55); backdrop-filter: blur(4px); animation: rvFade .2s ease; }
-.rv-overlay-card { background: ${R.card}; border: 1px solid ${R.line}; border-radius: 12px; box-shadow: 0 24px 48px rgba(16, 24, 40, 0.28); padding: 34px 30px; max-width: 360px; width: 100%; text-align: center; animation: rvRise .25s ease; }
+.rv-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; background: ${R.scrim}; animation: rvFade .2s ease; }
+.rv-overlay-card { background: ${R.card}; border-radius: 10px; box-shadow: 0 18px 48px rgba(15, 14, 43, 0.22); padding: 32px 28px; max-width: 380px; width: 100%; text-align: center; animation: rvRise .25s ease; }
 @media (prefers-reduced-motion: reduce) {
   .rv-overlay, .rv-overlay-card { animation: none !important; }
   .rv-btn { transition: none; }
 }
 .rv-jump { display: none; }
+.rv-reason { font-size: 15px; }
 @media (max-width: 640px) {
-  .rv-main { padding-bottom: 96px !important; }
+  .rv-main { padding: 28px 20px 120px !important; gap: 28px !important; }
+  .rv-eyebrow { font-size: 11.5px !important; }
+  .rv-title { font-size: 27px !important; line-height: 1.2 !important; }
+  .rv-lead { font-size: 14.5px !important; }
   .rv-meta-row { grid-template-columns: minmax(0, 1fr) !important; gap: 2px !important; }
   .rv-actions { flex-direction: column-reverse; align-items: stretch !important; }
   .rv-actions > button { width: 100%; }
+  .rv-eval-actions { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+  .rv-eval-actions > button { width: 100%; }
+  .rv-eval-actions > span { text-align: center; }
   .rv-reject-actions { flex-direction: column-reverse; }
   .rv-reject-actions > button { width: 100%; }
-  .rv-header { padding-left: 16px !important; padding-right: 16px !important; }
+  .rv-reason { font-size: 16px; }
+  .rv-header { padding: 12px 20px !important; }
+  .rv-ref { font-size: 11.5px !important; }
+  .rv-logo { height: 24px !important; }
   .rv-jump { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: ${R.card}; border-top: 1px solid ${R.line}; box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06); }
   .rv-jump button { width: 100%; }
 }

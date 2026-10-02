@@ -1796,3 +1796,357 @@
   color: var(--nf-ink-soft);
   font-size: var(--nf-fs-control);
 }
+
+/* ---------------------------------------------------------------------------
+   Reviewer variant — `<NativeFormView variant="reviewer">`.
+
+   The approver / evaluator page draws its questions as quiet rows, matching the
+   approved prototype: no cards, no progress rail, a statement on the left and
+   its answer on the right under a hairline. Everything is scoped to
+   `[data-variant="reviewer"]`, so no other screen that draws a form changes.
+   Colours and sizes are the prototype's (`components/reviewer/reviewerTokens`).
+--------------------------------------------------------------------------- */
+
+.nf[data-variant="reviewer"] {
+  --nf-ink: #0c0e14;
+  --nf-ink-soft: #4c5566;
+  --nf-ink-faint: #6b7484;
+  --nf-panel: #ffffff;
+  --nf-sunken: #f7f9fb;
+  --nf-line: #e5e9ee;
+  --nf-line-strong: #d8dde4;
+  --nf-brand: #2b2870;
+  --nf-brand-deep: #2b2870;
+  --nf-brand-wash: #e4e3f2;
+  --nf-brand-ink: #2b2870;
+  --nf-accent: #2b2870;
+  --nf-danger: #c0362c;
+  --nf-radius: 6px;
+  --nf-radius-sm: 4px;
+  --nf-control-h: 44px;
+  --nf-shadow: none;
+  --nf-ring: 0 0 0 3px rgba(0, 125, 176, 0.35);
+  --nf-fs-label: 13.5px;
+  --nf-fs-control: 15px;
+  --nf-fs-help: 13px;
+  --nf-fs-body: 15px;
+  font-family: inherit;
+  line-height: 1.55;
+}
+
+.nf[data-variant="reviewer"] .nf-shell {
+  display: block;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nf[data-variant="reviewer"] .nf-main {
+  gap: 0;
+}
+
+.nf[data-variant="reviewer"] .nf-rv-legend {
+  margin-bottom: 4px;
+  font-size: 13.5px;
+  color: var(--nf-ink-faint);
+}
+
+/* Cards flatten: the rows sit on the page itself. */
+.nf[data-variant="reviewer"] .nf-section {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.nf[data-variant="reviewer"] .nf-section[data-tone="nested"] {
+  border-radius: 0;
+}
+
+.nf[data-variant="reviewer"] .nf-section-body,
+.nf[data-variant="reviewer"] .nf-section[data-tone="nested"] .nf-section-body {
+  padding: 0;
+}
+
+.nf[data-variant="reviewer"] .nf-section-head,
+.nf[data-variant="reviewer"] .nf-section[data-tone="nested"] .nf-section-head {
+  padding: 0;
+  margin: 0 0 4px;
+  border: none;
+  background: none;
+}
+
+.nf[data-variant="reviewer"] .nf-section-index {
+  display: none;
+}
+
+.nf[data-variant="reviewer"] .nf-section-title {
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--nf-ink-faint);
+}
+
+.nf[data-variant="reviewer"] .nf-section-desc {
+  font-size: 13px;
+}
+
+.nf[data-variant="reviewer"] .nf-section-chev {
+  color: var(--nf-ink-faint);
+}
+
+/* One field per row, whatever `startWithNewLine` said. */
+.nf[data-variant="reviewer"] .nf-row {
+  display: block;
+}
+
+.nf[data-variant="reviewer"] .nf-row + .nf-row {
+  margin-top: 0;
+}
+
+/* A statement: label left, answer right, hairline above, 12px of air. */
+.nf[data-variant="reviewer"] .nf-field[data-row] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 24px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--nf-line);
+}
+
+.nf[data-variant="reviewer"] .nf-field[data-row] > .nf-label {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: var(--nf-ink);
+}
+
+.nf[data-variant="reviewer"] .nf-field[data-row] > .nf-hint {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 2px 0 0;
+}
+
+.nf[data-variant="reviewer"] .nf-field[data-row] > :not(.nf-label):not(.nf-hint):not(.nf-error) {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.nf[data-variant="reviewer"] .nf-field[data-row] > .nf-error {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+/* A hint that only repeats the label says nothing the row has not already said. */
+.nf[data-variant="reviewer"] .nf-hint[data-dup] {
+  display: none;
+}
+
+/* Anything else (comments, dropdowns, text, signature): label above, control below. */
+.nf[data-variant="reviewer"] .nf-field:not([data-row]) {
+  padding-top: 16px;
+}
+
+.nf[data-variant="reviewer"] .nf-field:not([data-row]) > .nf-label {
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #212633;
+}
+
+.nf[data-variant="reviewer"] .nf-field:not([data-row]) > .nf-hint {
+  margin: -2px 0 6px;
+  font-size: 13px;
+  color: var(--nf-ink-faint);
+}
+
+/* The required marker stays, smaller and quieter. */
+.nf[data-variant="reviewer"] .nf-req {
+  margin-left: 3px;
+  font-size: 12px;
+}
+
+/* Controls: 4px radius, the prototype's hairline, 15px type. */
+.nf[data-variant="reviewer"] .nf-input,
+.nf[data-variant="reviewer"] .nf-textarea,
+.nf[data-variant="reviewer"] .nf-select {
+  padding: 10px 12px;
+  border-color: var(--nf-line-strong);
+  border-radius: 4px;
+  color: var(--nf-ink);
+}
+
+.nf[data-variant="reviewer"] .nf-textarea {
+  min-height: 92px;
+}
+
+.nf[data-variant="reviewer"] .nf-input:focus,
+.nf[data-variant="reviewer"] .nf-textarea:focus,
+.nf[data-variant="reviewer"] .nf-select:focus {
+  border-color: var(--nf-line-strong);
+  box-shadow: var(--nf-ring);
+}
+
+/* Answer buttons: the same 72 x 44 block for Yes/No, ratings and chips. */
+.nf[data-variant="reviewer"] .nf-bool {
+  display: flex;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.nf[data-variant="reviewer"] .nf-bool button,
+.nf[data-variant="reviewer"] .nf-rating button,
+.nf[data-variant="reviewer"] .nf-chip {
+  min-width: 72px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: 4px;
+  background: #ffffff;
+  color: #343b4b;
+  font-size: 15px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.nf[data-variant="reviewer"] .nf-bool button:hover:not(:disabled):not([aria-pressed="true"]),
+.nf[data-variant="reviewer"] .nf-rating button:hover:not(:disabled):not([aria-pressed="true"]),
+.nf[data-variant="reviewer"] .nf-chip:hover:not(:disabled):not([data-selected="true"]) {
+  background: var(--nf-sunken);
+}
+
+.nf[data-variant="reviewer"] .nf-bool button[aria-pressed="true"],
+.nf[data-variant="reviewer"] .nf-rating button[aria-pressed="true"],
+.nf[data-variant="reviewer"] .nf-chip[aria-pressed="true"],
+.nf[data-variant="reviewer"] .nf-chip[data-selected="true"] {
+  border-color: #2b2870;
+  background: #2b2870;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.nf[data-variant="reviewer"] .nf-rating {
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.nf[data-variant="reviewer"] .nf-rating button {
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.nf[data-variant="reviewer"] .nf-rating[data-labelled] button {
+  flex: 0 0 auto;
+  max-width: none;
+  min-height: 44px;
+  padding: 4px 16px;
+}
+
+.nf[data-variant="reviewer"] .nf-rating-value,
+.nf[data-variant="reviewer"] .nf-rating[data-labelled] .nf-rating-value {
+  font-size: 15px;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.nf[data-variant="reviewer"] .nf-rating-text {
+  font-size: 15px;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.nf[data-variant="reviewer"] .nf-scale-ends {
+  font-size: 13px;
+}
+
+.nf[data-variant="reviewer"] .nf-option {
+  border-radius: 4px;
+  font-size: 15px;
+}
+
+.nf[data-variant="reviewer"] .nf-option[data-selected="true"] {
+  border-color: #2b2870;
+  background: #e4e3f2;
+}
+
+/* Signature: the prototype's dashed "Tap to sign" box, then a quiet ink box. */
+.nf[data-variant="reviewer"] .nf-sign {
+  border: none;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+}
+
+.nf[data-variant="reviewer"] .nf-sign-plate {
+  min-height: 120px;
+  border: 1px dashed #b9c0cb;
+  border-radius: 4px;
+  background: var(--nf-sunken);
+}
+
+.nf[data-variant="reviewer"] .nf-sign[data-signed="true"] .nf-sign-plate {
+  border: 1px solid var(--nf-line-strong);
+  background: #ffffff;
+}
+
+.nf[data-variant="reviewer"] .nf-sign[data-invalid="true"] .nf-sign-plate {
+  border-color: var(--nf-danger);
+}
+
+.nf[data-variant="reviewer"] .nf-sign-cue {
+  color: #343b4b;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.nf[data-variant="reviewer"] .nf-sign-bar {
+  padding: 6px 0 0;
+  border: none;
+  background: none;
+  color: var(--nf-ink-faint);
+}
+
+/* Phone: the statement takes the line, its answers sit under it. */
+@container nf (max-width: 520px) {
+  .nf[data-variant="reviewer"] .nf-field[data-row] {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .nf[data-variant="reviewer"] .nf-field[data-row] > :not(.nf-label):not(.nf-hint):not(.nf-error) {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: stretch;
+  }
+
+  .nf[data-variant="reviewer"] .nf-field[data-row] > .nf-hint {
+    grid-row: 3;
+  }
+
+  .nf[data-variant="reviewer"] .nf-field[data-row] > .nf-error {
+    grid-row: 4;
+  }
+
+  .nf[data-variant="reviewer"] .nf-bool button {
+    flex: 1 1 0;
+  }
+
+  .nf[data-variant="reviewer"] .nf-rating {
+    justify-content: stretch;
+  }
+
+  .nf[data-variant="reviewer"] .nf-rating button {
+    flex: 1 1 72px;
+  }
+}

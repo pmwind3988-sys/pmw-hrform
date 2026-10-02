@@ -46,6 +46,11 @@ interface SectionRun {
   titled: boolean;
 }
 
+/** How many answers a set of preview sections holds ("19 answers"). */
+export function countPreviewAnswers(sections: SubmissionPreviewSection[]): number {
+  return sections.reduce((total, section) => total + section.fields.length, 0);
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

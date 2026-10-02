@@ -37,6 +37,13 @@ runs anywhere in the app.
 | Preview route | `../pages/NativeFormPreviewPage.tsx` | Route `/native/:formId`, public. Read-only. |
 | Builder preview | `../components/builder/FormBuilder.tsx` | `NativePreviewBody`, used by `LivePreviewModal`. |
 
+## Reviewer variant
+`NativeFormView variant="reviewer"` (used only by `EvaluationPage`) draws the same runtime as quiet rows:
+no progress rail, no cards, Yes/No and rating as 72x44 buttons right-aligned on the label's row, other
+controls label-above. It is CSS only (`.nf[data-variant="reviewer"]` at the end of `native-form.css`) plus
+`data-kind` / `data-row` on `.nf-field` and `data-dup` on a hint that repeats its label. Do not restyle the
+default look through these hooks.
+
 ## Commands
 ```bash
 npx vitest run src/native      # 50 tests across schema.test.ts + expression.test.ts

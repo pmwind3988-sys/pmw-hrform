@@ -14,15 +14,23 @@ export interface ReviewerStep {
 function palette(state: ReviewerStepState) {
   switch (state) {
     case "current":
-      return { bg: R.navy, border: R.navy, eyebrow: R.navyWash, title: R.card, caption: R.navyTint };
+      return { bg: R.navy, border: "transparent", eyebrow: R.navyWash, title: R.card, caption: R.navyTint };
     case "done":
-      return { bg: R.navyTint, border: R.navyTint, eyebrow: R.navy, title: R.navy, caption: R.navy };
+      return { bg: R.navyDone, border: "transparent", eyebrow: R.navyMid, title: R.navy, caption: R.muted };
     case "rejected":
-      return { bg: R.redSoft, border: R.redSoft, eyebrow: R.red, title: R.red, caption: R.red };
+      return { bg: R.redSoft, border: "transparent", eyebrow: R.red, title: R.ink, caption: R.muted };
     default:
       return { bg: R.disabledBg, border: R.line, eyebrow: R.label, title: R.label, caption: R.label };
   }
 }
+
+/** "Step 1 · You" while it is yours to act on; "Done" / "Rejected" once it is not. */
+const STATE_SUFFIX: Record<ReviewerStepState, (isYou?: boolean) => string> = {
+  current: (isYou) => (isYou ? " \u00b7 You" : ""),
+  done: () => " \u00b7 Done",
+  rejected: () => " \u00b7 Rejected",
+  upcoming: () => "",
+};
 
 /** One filled box per layer, replacing the thin progress bars. */
 export default function StepCards({ steps }: { steps: ReviewerStep[] }) {
@@ -35,7 +43,7 @@ export default function StepCards({ steps }: { steps: ReviewerStep[] }) {
         margin: 0,
         padding: 0,
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+        gridTemplateColumns: "minmax(0, 1fr)",
         gap: 10,
       }}
     >
@@ -57,7 +65,7 @@ export default function StepCards({ steps }: { steps: ReviewerStep[] }) {
             }}
           >
             <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: c.eyebrow }}>
-              Step {step.number}{step.isYou ? " · You" : ""}
+              Step {step.number}{STATE_SUFFIX[step.state](step.isYou)}
             </div>
             <div style={{ fontSize: 14.5, fontWeight: 600, color: c.title, overflowWrap: "anywhere" }}>{step.title}</div>
             <div style={{ fontSize: 13, color: c.caption }}>{step.caption}</div>
