@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, Chip, Skeleton, Typography } from "@mui/material";
 import type { CareerPortalCard } from "../../types";
-import { editorial } from "../../theme/editorial";
+import { editorial, si } from "../../theme/editorial";
 
 /**
  * The three stops of a card's gradient, all in the navy family.
@@ -124,6 +124,9 @@ export default function CareerPortalCarousel({
 }: CareerPortalCarouselProps) {
   const activeCards = cards.length > 0 ? cards : DEFAULT_PORTAL_CARDS;
   const [activeIndex, setActiveIndex] = useState(0);
+  // Held while the pointer or keyboard focus is inside, so a slide never moves
+  // out from under someone reading or about to press it.
+  const [paused, setPaused] = useState(false);
   const swipeRef = useRef({ startX: 0, startY: 0, deltaX: 0, deltaY: 0, swiped: false });
   const boundedActiveIndex = Math.min(activeIndex, activeCards.length - 1);
 
@@ -132,13 +135,13 @@ export default function CareerPortalCarousel({
   }, [activeCards.length]);
 
   useEffect(() => {
-    if (activeCards.length <= 1) return undefined;
+    if (activeCards.length <= 1 || paused) return undefined;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
     const intervalId = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % activeCards.length);
     }, 4400);
     return () => window.clearInterval(intervalId);
-  }, [activeCards.length]);
+  }, [activeCards.length, paused]);
 
   const showAdjacentCard = (direction: number) => {
     setActiveIndex((current) => (current + direction + activeCards.length) % activeCards.length);
@@ -148,20 +151,24 @@ export default function CareerPortalCarousel({
     return (
       <Box
         sx={{
-          minHeight: { xs: 250, md: 280 },
-          borderRadius: "12px",
+          minHeight: { xs: 220, md: 240 },
+          borderRadius: `${si.radiusSheet}px`,
           overflow: "hidden",
-          border: "1px solid rgba(17, 24, 39, 0.08)",
-          boxShadow: "0 12px 26px rgba(17, 24, 39, 0.08)",
         }}
       >
-        <Skeleton variant="rounded" width="100%" height="100%" sx={{ minHeight: { xs: 250, md: 280 }, borderRadius: "12px" }} />
+        <Skeleton variant="rounded" width="100%" height="100%" sx={{ minHeight: { xs: 220, md: 240 }, borderRadius: `${si.radiusSheet}px` }} />
       </Box>
     );
   }
 
   return (
     <Box
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused(false);
+      }}
       onTouchStart={(event) => {
         if (activeCards.length <= 1) return;
         const touch = event.touches[0];
@@ -186,12 +193,13 @@ export default function CareerPortalCarousel({
       }}
       sx={{
         position: "relative",
-        minHeight: { xs: 250, md: 280 },
-        borderRadius: "12px",
+        // One rounded sheet. This used to be a tinted, bordered frame with a
+        // second rounded card inset inside it -- a box in a box.
+        minHeight: { xs: 220, md: 240 },
+        borderRadius: `${si.radiusSheet}px`,
         overflow: "hidden",
-        border: `1px solid ${editorial.pmwBlueSoft}`,
-        background: `linear-gradient(135deg, ${editorial.blueSoft} 0%, ${editorial.purpleWash} 56%, ${editorial.white} 100%)`,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75), 0 12px 26px rgba(0, 90, 158, 0.08)",
+        backgroundColor: editorial.ink,
+        boxShadow: si.shadow,
         touchAction: "pan-y",
         ...reduceMotionSx,
       }}
@@ -219,7 +227,6 @@ export default function CareerPortalCarousel({
               sx={{
                 flex: `0 0 ${100 / activeCards.length}%`,
                 minWidth: 0,
-                p: { xs: 1.5, sm: 1.75 },
                 boxSizing: "border-box",
               }}
             >
@@ -243,19 +250,12 @@ export default function CareerPortalCarousel({
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "flex-end",
-                  borderRadius: "12px",
                   overflow: "hidden",
                   backgroundColor: editorial.ink,
-                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)",
                   cursor: canOpen ? "pointer" : "default",
                   outline: "none",
-                  transition: "transform 0.18s ease, box-shadow 0.18s ease",
-                  "&:hover": canOpen ? {
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 18px 36px rgba(0, 90, 158, 0.22)",
-                  } : undefined,
                   "&:focus-visible": {
-                    boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.35), 0 18px 36px rgba(17, 24, 39, 0.22)",
+                    boxShadow: `inset 0 0 0 3px ${editorial.white}`,
                   },
                   ...reduceMotionSx,
                 }}
@@ -291,15 +291,14 @@ export default function CareerPortalCarousel({
                     background: "linear-gradient(180deg, rgba(17,24,39,0.05) 0%, rgba(17,24,39,0.62) 58%, rgba(17,24,39,0.86) 100%)",
                   }}
                 />
-                <Box sx={{ position: "relative", p: { xs: 2, sm: 2.5 }, pb: { xs: 4.75, sm: 5 } }}>
+                <Box sx={{ position: "relative", p: { xs: 2.5, sm: 3.5 }, pb: { xs: 5, sm: 5.5 } }}>
                   <Chip
-                    label={canOpen ? "Tap to open" : "Portal highlight"}
+                    label={canOpen ? "Open" : "Highlight"}
                     size="small"
                     sx={{
                       mb: 1,
                       width: "fit-content",
-                      /* 5px: a tag, not a container. See SI badges. */
-                      borderRadius: "5px",
+                      borderRadius: `${si.radiusPill}px`,
                       backgroundColor: "rgba(255,255,255,0.88)",
                       color: editorial.pmwBlueDark,
                       fontWeight: 700,

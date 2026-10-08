@@ -56,8 +56,8 @@ export default function FormList({
   onEditForm,
 }: FormListProps) {
   return (
-    <Card pad="none" clip>
-      {forms.map((form, index) => {
+    <Card pad="none" clip sx={{ p: 0.75 }}>
+      {forms.map((form) => {
         const meta = listMetaMap[form.title];
         const openable = Boolean(form.slug);
 
@@ -68,12 +68,14 @@ export default function FormList({
               display: "flex",
               alignItems: "center",
               gap: 1.5,
-              px: { xs: 1.5, sm: 2 },
-              py: 1.25,
-              minHeight: si.rowHeightTwoLine,
-              // Separators between rows only — a line above the first row would
-              // double the card's own border.
-              borderTop: index === 0 ? "none" : `1px solid ${editorial.border}`,
+              px: { xs: 1.25, sm: 1.5 },
+              py: 1,
+              minHeight: si.rowHeightTwoLine + 8,
+              // No separators: rows are told apart by space, and the one under
+              // the pointer lifts into a soft tinted shape.
+              borderRadius: `${si.radius}px`,
+              transition: "background-color 0.15s ease",
+              "&:hover": { backgroundColor: editorial.blueSoft },
             }}
           >
             {/* `meta.icon` is a Material icon NAME from `ICON_POOL`
@@ -84,10 +86,10 @@ export default function FormList({
             <Box
               aria-hidden
               sx={{
-                width: 34,
-                height: 34,
+                width: 40,
+                height: 40,
                 flexShrink: 0,
-                borderRadius: `${si.radiusSm}px`,
+                borderRadius: "50%",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -132,19 +134,24 @@ export default function FormList({
               </Tooltip>
             )}
 
+            {/* Tonal rather than filled: five identical navy slabs down one
+                list made every row shout equally, so none of them did. */}
             <Button
-              variant="contained"
+              variant="text"
               disabled={!openable}
               onClick={() => onOpenForm(form)}
-              endIcon={<OpenInNewOutlined />}
-              aria-label={`Open ${form.title}`}
+              endIcon={<OpenInNewOutlined sx={{ fontSize: "16px !important" }} />}
+              aria-label={`Open ${form.title} in a new tab`}
               sx={{
                 flexShrink: 0,
-                borderRadius: `${si.radius}px`,
-                minHeight: 36,
+                borderRadius: `${si.radiusPill}px`,
+                minHeight: 38,
                 px: 2,
                 textTransform: "none",
                 fontWeight: 700,
+                color: editorial.navyDeep,
+                backgroundColor: editorial.sky,
+                "&:hover": { backgroundColor: editorial.pmwBlueSoft, filter: "brightness(0.96)" },
               }}
             >
               Open

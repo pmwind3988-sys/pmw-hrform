@@ -58,7 +58,7 @@ const inp = {
   width: "100%",
   height: 40,
   border: `1px solid ${C.border}`,
-  borderRadius: 8,
+  borderRadius: 12,
   padding: "0 10px",
   fontSize: 12.5,
   fontFamily: "var(--pmw-font-main)",
@@ -82,7 +82,7 @@ const warningNoteStyle: React.CSSProperties = {
   marginTop: 6,
   padding: "7px 9px",
   border: `1px solid ${C.amber}`,
-  borderRadius: 7,
+  borderRadius: 12,
   background: C.amberPale,
   fontSize: 11,
   lineHeight: 1.5,
@@ -93,7 +93,7 @@ const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
   flex: 1,
   minHeight: 40,
   border: `1px solid ${active ? C.purple : C.border}`,
-  borderRadius: 8,
+  borderRadius: "999px",
   background: active ? C.purplePale : C.white,
   color: active ? C.purple : C.textMuted,
   fontSize: 11,
@@ -112,7 +112,7 @@ const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
 const SECTION_CARD: React.CSSProperties = {
   background: C.white,
   border: `1px solid ${C.border}`,
-  borderRadius: 12,
+  borderRadius: 20,
   padding: "10px 11px",
   boxShadow: "0 1px 2px rgba(26,31,43,0.04)",
 };
@@ -137,7 +137,7 @@ function WorkflowMetric({ label, value }: { label: string; value: string }) {
     <div style={{
       background: C.white,
       border: `1px solid ${C.border}`,
-      borderRadius: 8,
+      borderRadius: 12,
       padding: "7px 8px",
       minWidth: 0,
     }}>
@@ -419,7 +419,7 @@ function DepartmentLookupSettings({
       flexDirection: "column",
       gap: 10,
       background: C.offWhite,
-      borderRadius: 8,
+      borderRadius: 20,
       padding: "10px 10px 11px",
       boxShadow: "inset 0 0 0 1px rgba(26,31,43,0.06)",
     }}>
@@ -658,7 +658,7 @@ function EmailChipInput({
         <div style={{
           marginTop: 4,
           border: `1px solid ${C.border}`,
-          borderRadius: 9,
+          borderRadius: 20,
           overflow: "hidden",
           background: C.white,
         }}>
@@ -782,7 +782,7 @@ function DistributionListPicker({
             zIndex: 200,
             background: C.white,
             border: `1px solid ${C.border}`,
-            borderRadius: 9,
+            borderRadius: 20,
             boxShadow: C.shadowMd,
             overflow: "hidden",
           }}>
@@ -920,7 +920,7 @@ function ValidationPanel({ errors, warnings }: { errors: string[]; warnings: str
       gap: 9,
       alignItems: "flex-start",
       background: bg,
-      borderRadius: 12,
+      borderRadius: 20,
       padding: "9px 10px",
       marginBottom: 12,
       boxShadow: "0 1px 2px rgba(26,31,43,0.05)",
@@ -1203,7 +1203,7 @@ export default function LayerConfigPanel({
               zIndex: 200,
               background: C.white,
               border: `1px solid ${C.border}`,
-              borderRadius: 9,
+              borderRadius: 20,
               boxShadow: C.shadowMd,
               overflow: "hidden",
             }}>
@@ -1294,7 +1294,7 @@ export default function LayerConfigPanel({
       <div style={{ display: "flex", alignItems: "stretch", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
         <div style={{
           minWidth: 58,
-          borderRadius: 8,
+          borderRadius: 12,
           background: C.white,
           border: `1px solid ${C.border}`,
           padding: "6px 7px",
@@ -1308,7 +1308,7 @@ export default function LayerConfigPanel({
         {rowLayers.map((layer, idx) => (
           <div key={`${label}-${idx}`} style={{
             minWidth: 82,
-            borderRadius: 8,
+            borderRadius: 12,
             background: layer.type === "approval" ? C.purplePale : C.greenPale,
             border: `1px solid ${layer.type === "approval" ? C.purpleMid : editorial.successFill}`,
             padding: "6px 7px",
@@ -1324,7 +1324,7 @@ export default function LayerConfigPanel({
         ))}
         <div style={{
           minWidth: 62,
-          borderRadius: 8,
+          borderRadius: 12,
           background: C.white,
           border: `1px solid ${C.border}`,
           padding: "6px 7px",
@@ -1352,7 +1352,7 @@ export default function LayerConfigPanel({
       });
     };
     return (
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 9, background: C.lightGray }}>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 9, background: C.lightGray }}>
         <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 5 }}>
           Evaluator Email Timing
         </label>
@@ -1403,7 +1403,7 @@ export default function LayerConfigPanel({
       });
     };
     return (
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 9, background: C.white }}>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 9, background: C.white }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
             Submitter Routing
@@ -1421,7 +1421,7 @@ export default function LayerConfigPanel({
                 },
               ],
             })}
-            style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 7, background: C.purplePale, color: C.purple, fontSize: 11, fontWeight: 700, padding: "5px 8px", cursor: "pointer" }}
+            style={{ border: `1px solid ${C.purpleMid}`, borderRadius: "999px", background: C.purplePale, color: C.purple, fontSize: 11, fontWeight: 700, padding: "5px 8px", cursor: "pointer" }}
           >
             + Rule
           </button>
@@ -1430,7 +1430,7 @@ export default function LayerConfigPanel({
           Match by submitted email, employee ID, user ID, full name, or a combination. The first matching rule wins.
         </div>
         {rules.map((rule, ruleIndex) => (
-          <div key={rule.id || ruleIndex} style={{ border: `1px solid ${C.borderLight}`, borderRadius: 8, padding: 8, marginTop: 7, background: C.offWhite }}>
+          <div key={rule.id || ruleIndex} style={{ border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: 8, marginTop: 7, background: C.offWhite }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
               <input
                 value={rule.label}
@@ -1441,7 +1441,7 @@ export default function LayerConfigPanel({
               <button
                 type="button"
                 onClick={() => onPatch({ submitterRoutingRules: rules.filter((_, index) => index !== ruleIndex) })}
-                style={{ width: 28, border: "none", borderRadius: 7, background: C.redPale, color: C.red, cursor: "pointer" }}
+                style={{ width: 28, border: "none", borderRadius: "50%", background: C.redPale, color: C.red, cursor: "pointer" }}
               >
                 ×
               </button>
@@ -1627,7 +1627,7 @@ export default function LayerConfigPanel({
 
         {layer.authMode === "365" && (
           <>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 9px", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, padding: "8px 9px", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={layer.manualPaperWhenSenderEmail !== false}
@@ -1698,7 +1698,7 @@ export default function LayerConfigPanel({
                   width: "100%",
                   height: 30,
                   border: `1px dashed ${C.purpleMid}`,
-                  borderRadius: 7,
+                  borderRadius: "999px",
                   background: "none",
                   color: C.purple,
                   fontSize: 11.5,
@@ -1870,7 +1870,7 @@ export default function LayerConfigPanel({
 
         {layer.authMode === "365" && (
           <>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 9px", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, padding: "8px 9px", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={layer.manualPaperWhenSenderEmail !== false}
@@ -1941,7 +1941,7 @@ export default function LayerConfigPanel({
                   width: "100%",
                   height: 30,
                   border: `1px dashed ${C.purpleMid}`,
-                  borderRadius: 7,
+                  borderRadius: "999px",
                   background: "none",
                   color: C.purple,
                   fontSize: 11.5,
@@ -2072,7 +2072,7 @@ export default function LayerConfigPanel({
               style={{
                 background: C.offWhite,
                 border: `1px solid ${C.border}`,
-                borderRadius: 8,
+                borderRadius: 12,
                 padding: "8px 10px",
                 marginBottom: 6,
               }}
@@ -2096,7 +2096,7 @@ export default function LayerConfigPanel({
                     border: "none",
                     background: C.redPale,
                     color: C.red,
-                    borderRadius: 5,
+                    borderRadius: "50%",
                     cursor: "pointer",
                     fontSize: 11,
                     flexShrink: 0,
@@ -2144,7 +2144,7 @@ export default function LayerConfigPanel({
               width: "100%",
               height: 26,
               border: `1px dashed ${C.border}`,
-              borderRadius: 7,
+              borderRadius: "999px",
               background: "none",
               color: C.purple,
               fontSize: 11,
@@ -2165,7 +2165,7 @@ export default function LayerConfigPanel({
       <div style={{
         background: C.offWhite,
         border: `1px solid ${C.border}`,
-        borderRadius: 11,
+        borderRadius: 20,
         padding: "11px 12px",
         marginBottom: 12,
         boxShadow: "0 8px 20px rgba(16,16,16,0.05)",
@@ -2201,7 +2201,7 @@ export default function LayerConfigPanel({
           style={{
             background: C.amberPale,
             border: "1px solid #FDE68A",
-            borderRadius: 8,
+            borderRadius: 12,
             padding: "9px 11px",
             fontSize: 11.5,
             color: C.amber,
@@ -2236,7 +2236,7 @@ export default function LayerConfigPanel({
           width: "100%",
           height: 32,
           border: `1px dashed ${branchEnabled ? C.border : C.purpleMid}`,
-          borderRadius: 8,
+          borderRadius: "999px",
           background: branchEnabled ? C.offWhite : "none",
           color: branchEnabled ? C.textMuted : C.purple,
           fontSize: 11.5,
@@ -2264,7 +2264,7 @@ export default function LayerConfigPanel({
             {branchEnabled ? "On" : "Off"}
           </span>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, padding: "9px 10px", cursor: "pointer" }}>
           <input type="checkbox" checked={branchEnabled}
             onChange={e => {
               setBranchEnabled(e.target.checked);
@@ -2289,19 +2289,19 @@ export default function LayerConfigPanel({
               Branch layers override the main sequence. Each branch can still reference the same HOD or manager email field.
             </div>
             {branches.length === 0 && (
-              <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 8, padding: "9px 11px", fontSize: 11.5, color: C.amber, marginBottom: 10 }}>
+              <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 12, padding: "9px 11px", fontSize: 11.5, color: C.amber, marginBottom: 10 }}>
                 No branches defined — add a branch to get started.
               </div>
             )}
             {branches.map((branch, bi) => (
-              <div key={bi} style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 12, background: C.white, marginBottom: 10, overflow: "hidden" }}>
+              <div key={bi} style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 20, background: C.white, marginBottom: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 11px", background: C.purplePale, borderBottom: `1px solid ${C.purpleMid}` }}>
-                  <span style={{ width: 24, height: 24, borderRadius: 8, background: `linear-gradient(135deg,${C.purple},#3B0764)`, color: C.white, fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{bi + 1}</span>
+                  <span style={{ width: 24, height: 24, borderRadius: "999px", background: `linear-gradient(135deg,${C.purple},#3B0764)`, color: C.white, fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{bi + 1}</span>
                   <div style={{ flex: 1, display: "flex", gap: 6 }}>
                     <input value={branch.name} onChange={e => updateBranchField(bi, "name", e.target.value)} placeholder="Branch name (key)" style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }} />
                     <input value={branch.label} onChange={e => updateBranchField(bi, "label", e.target.value)} placeholder="Display label" style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }} />
                   </div>
-                  <button onClick={() => removeBranch(bi)} style={{ width: 22, height: 22, border: "none", borderRadius: 5, background: C.redPale, color: C.red, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CloseIcon style={{ fontSize: 10 }} /></button>
+                  <button onClick={() => removeBranch(bi)} style={{ width: 22, height: 22, border: "none", borderRadius: "50%", background: C.redPale, color: C.red, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CloseIcon style={{ fontSize: 10 }} /></button>
                 </div>
                 <div style={{ padding: "9px 11px" }}>
                   {branch.layers.length === 0 && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8 }}>No layers in this branch.</div>}
@@ -2320,14 +2320,14 @@ export default function LayerConfigPanel({
                     </LayerCard>
                   ))}
                   <button onClick={() => addBranchLayer(bi)}
-                    style={{ width: "100%", height: 28, border: `1px dashed ${C.purpleMid}`, borderRadius: 7, background: "none", color: C.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
+                    style={{ width: "100%", height: 28, border: `1px dashed ${C.purpleMid}`, borderRadius: "999px", background: "none", color: C.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
                     + Add Layer to Branch
                   </button>
                 </div>
               </div>
             ))}
             <button onClick={addBranch}
-              style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: 8, background: "none", color: C.purple, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "var(--pmw-font-main)", marginBottom: 14 }}>
+              style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: "999px", background: "none", color: C.purple, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "var(--pmw-font-main)", marginBottom: 14 }}>
               + Add Branch
             </button>
           </>

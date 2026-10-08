@@ -4,7 +4,7 @@ import { editorial, si } from "../../theme/editorial";
 export interface CardProps extends BoxProps {
   /**
    * Padding preset. `none` is for a card whose children own their own padding —
-   * a table with a header band, a list of rows with their own separators.
+   * a table with a header band, a list of rows that pad themselves.
    */
   pad?: "tight" | "loose" | "none";
   /**
@@ -23,8 +23,8 @@ export interface CardProps extends BoxProps {
  * an importance the system does not grant, and half the cards it was applied to
  * were not even clickable.
  *
- * The recipe was being retyped at roughly fifty call sites — white fill, 12px
- * radius, a hairline, `si.shadow` — and it had already drifted: some cards used
+ * The recipe was being retyped at roughly fifty call sites — white fill, a soft
+ * radius, `si.shadow` — and it had already drifted: some cards used
  * `rgba(255,255,255,0.92)` and let the page background bleed through, some had
  * a border and some did not, and `editorialShadowHover` deepened a dozen of
  * them on hover. One component means one answer, and a change to the card is a
@@ -41,7 +41,9 @@ export default function Card({ pad = "loose", clip = false, sx, ...rest }: CardP
       sx={{
         backgroundColor: editorial.panel,
         borderRadius: `${si.radius}px`,
-        border: `1px solid ${editorial.border}`,
+        // No outline. A white sheet on the canvas with one soft shadow is
+        // already a surface; a drawn edge on top is what made every screen
+        // read as boxes inside boxes.
         boxShadow: si.shadow,
         p: padding,
         ...(clip ? { overflow: "hidden" } : null),

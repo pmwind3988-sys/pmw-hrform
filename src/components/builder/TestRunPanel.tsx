@@ -362,7 +362,7 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
       <style>{"@keyframes bx-spin { to { transform: rotate(360deg); } }"}</style>
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: C.white, borderRadius: 12, width: 640, maxWidth: "100%", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
+        style={{ background: C.white, borderRadius: 28, width: 640, maxWidth: "100%", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px 12px" }}>
           <div>
@@ -373,13 +373,13 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
             <button
               onClick={() => setPendingDelete({ kind: "all" })}
               disabled={busyAll || rows.length === 0}
-              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.red, fontSize: 12.5, fontWeight: 600, cursor: busyAll || rows.length === 0 ? "default" : "pointer", opacity: busyAll || rows.length === 0 ? 0.5 : 1 }}
+              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: "999px", background: C.white, color: C.red, fontSize: 12.5, fontWeight: 600, cursor: busyAll || rows.length === 0 ? "default" : "pointer", opacity: busyAll || rows.length === 0 ? 0.5 : 1 }}
             >
               {busyAll ? "Clearing…" : "Clear all test runs"}
             </button>
             <button
               onClick={onClose}
-              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}
+              style={{ height: 30, padding: "0 12px", border: `1px solid ${C.border}`, borderRadius: "999px", background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}
             >
               Close
             </button>
@@ -387,13 +387,13 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
         </div>
 
         {error && (
-          <div style={{ margin: "0 22px 10px", fontSize: 12.5, color: C.red, background: C.redPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
+          <div style={{ margin: "0 22px 10px", fontSize: 12.5, color: C.red, background: C.redPale, borderRadius: 12, padding: "8px 10px", lineHeight: 1.5 }}>
             {error}
           </div>
         )}
 
         {!loading && rowsTruncated && (
-          <div style={{ margin: "0 22px 10px", fontSize: 12.5, color: C.amber, background: C.amberPale, borderRadius: 7, padding: "8px 10px", lineHeight: 1.5 }}>
+          <div style={{ margin: "0 22px 10px", fontSize: 12.5, color: C.amber, background: C.amberPale, borderRadius: 12, padding: "8px 10px", lineHeight: 1.5 }}>
             Showing the first {rows.length} test runs — this form has more than the panel could list. "Clear all test runs" still deletes every one of them.
           </div>
         )}
@@ -422,7 +422,7 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
             const pdfStep = trail.pdf;
 
             return (
-              <div key={row.id} style={{ border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 10, overflow: "hidden" }}>
+              <div key={row.id} style={{ border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10, overflow: "hidden" }}>
                 <div
                   onClick={() => setExpandedId(expanded ? null : row.id)}
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", cursor: "pointer" }}
@@ -439,7 +439,7 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
                   <button
                     onClick={(e) => { e.stopPropagation(); setPendingDelete({ kind: "one", id: row.id }); }}
                     disabled={busyRowId === row.id}
-                    style={{ height: 26, padding: "0 10px", border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, color: C.red, fontSize: 11.5, fontWeight: 600, cursor: busyRowId === row.id ? "default" : "pointer", opacity: busyRowId === row.id ? 0.5 : 1 }}
+                    style={{ height: 26, padding: "0 10px", border: `1px solid ${C.border}`, borderRadius: "999px", background: C.white, color: C.red, fontSize: 11.5, fontWeight: 600, cursor: busyRowId === row.id ? "default" : "pointer", opacity: busyRowId === row.id ? 0.5 : 1 }}
                   >
                     {busyRowId === row.id ? "Deleting…" : "Delete"}
                   </button>
@@ -463,7 +463,7 @@ export default function TestRunPanel({ open, onClose, form, siteUrl }: TestRunPa
                         disabled={!runFinished || pdfBusyId === row.id}
                         title={runFinished ? "Render this run's submission PDF" : "Finish the workflow before rendering the PDF"}
                         style={{
-                          height: 28, padding: "0 12px", border: "none", borderRadius: 8,
+                          height: 28, padding: "0 12px", border: "none", borderRadius: "999px",
                           background: runFinished ? C.purple : C.border, color: C.white, fontSize: 11.5, fontWeight: 600,
                           cursor: !runFinished || pdfBusyId === row.id ? "default" : "pointer",
                           opacity: pdfBusyId === row.id ? 0.7 : 1,

@@ -36,8 +36,8 @@ body {
   --fb-shadow: var(--fb-shadow-border);
   /* Aligned to the shell's 6/10/14 scale so the tool panels reached from the
      Tools menu share the workspace's geometry rather than their own. */
-  --fb-radius-card: 12px;
-  --fb-radius-control: 8px;
+  --fb-radius-card: 20px;
+  --fb-radius-control: 12px;
   --fb-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -79,7 +79,7 @@ body {
 .fb-pill {
   font-size: 11.5px;
   font-weight: 700;
-  border-radius: 12px;
+  border-radius: 999px;
   padding: 3px 8px;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -93,7 +93,7 @@ body {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: var(--fb-radius-control);
+  border-radius: 50%;
   background: transparent;
   cursor: pointer;
   display: flex;
@@ -259,7 +259,7 @@ body {
 .fb-apply-btn {
   min-height: 34px;
   border: none;
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
@@ -330,7 +330,7 @@ body {
   width: 100%;
   height: 36px;
   border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   padding-left: 28px;
   padding-right: 10px;
   font-size: 12.5px;
@@ -356,7 +356,7 @@ body {
 .fb-palette-group-btn {
   min-height: 28px;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: 999px;
   border: none;
   font-size: 11.5px;
   font-weight: 600;
@@ -386,7 +386,7 @@ body {
   gap: 9px;
   min-height: 42px;
   padding: 8px 10px;
-  border-radius: var(--fb-radius-card);
+  border-radius: 999px;
   border: 0;
   background: #ffffff;
   box-shadow: var(--fb-shadow-border);
@@ -408,7 +408,7 @@ body {
   flex-shrink: 0;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: var(--fb-radius-control);
   background: var(--fb-blue-wash);
   color: var(--fb-blue);
   display: inline-flex;
@@ -587,7 +587,7 @@ body {
   color: var(--fb-muted);
   text-align: center;
   border: 1px dashed #b9c3d0;
-  border-radius: 12px;
+  border-radius: var(--fb-radius-card);
   padding: 32px;
   background: rgba(255, 255, 255, 0.72);
 }
@@ -663,7 +663,7 @@ body {
   width: 100%;
   min-height: 34px;
   border: 1px dashed var(--fb-border);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   background: none;
   color: var(--fb-blue);
   font-size: 11.5px;
@@ -814,7 +814,7 @@ body {
 }
 .fb-preview-modal {
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 28px;
   width: 100%;
   max-width: 760px;
   box-shadow: 0 18px 42px rgba(26,31,43,0.16);
@@ -834,7 +834,7 @@ body {
   color: #ffffff;
   width: 36px;
   height: 36px;
-  border-radius: var(--fb-radius-control);
+  border-radius: 50%;
   cursor: pointer;
   font-size: 15px;
   display: flex;
@@ -951,7 +951,7 @@ body {
   gap: 4px;
   min-height: 36px;
   border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   background: #ffffff;
   color: var(--fb-muted);
   font-size: 12.5px;
@@ -977,7 +977,7 @@ body {
   gap: 6px;
   min-height: 36px;
   border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   background: #ffffff;
   color: var(--fb-muted);
   font-size: 12.5px;
@@ -1009,7 +1009,7 @@ body {
   gap: 6px;
   min-height: 36px;
   border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   background: #ffffff;
   color: var(--fb-muted);
   font-size: 12.5px;
@@ -1041,7 +1041,7 @@ body {
   gap: 6px;
   min-height: 36px;
   border: none;
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   color: #ffffff;
   font-size: 12.5px;
   font-weight: 600;
@@ -1218,7 +1218,7 @@ body {
   min-height: 36px;
   background: #ffffff;
   border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   padding: 0 12px;
   font-size: 11.5px;
   font-weight: 600;
@@ -1268,7 +1268,7 @@ body {
 .fb-count {
   background: var(--fb-blue);
   color: white;
-  border-radius: 12px;
+  border-radius: 999px;
   padding: 1px 5px;
   font-size: 11.5px;
 }
@@ -1286,7 +1286,7 @@ body {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: var(--fb-radius-control);
+  border-radius: 50%;
   background: transparent;
   cursor: pointer;
   display: flex;
@@ -1353,7 +1353,7 @@ body {
 .fb-textarea,
 .fb-palette-search-input {
   border-color: var(--fb-border);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   color: var(--fb-ink);
   background: var(--fb-panel);
 }
@@ -1379,7 +1379,7 @@ body {
 .fb-publish-btn {
   background: var(--fb-blue) !important;
   border: 1px solid var(--fb-blue);
-  border-radius: var(--fb-radius-control);
+  border-radius: 999px;
   box-shadow: 0 6px 14px rgba(0,120,212,0.22);
 }
 
@@ -1449,7 +1449,7 @@ body {
 }
 
 .fb-preview-modal {
-  border-radius: 12px;
+  border-radius: 28px;
   border-color: var(--fb-border);
   box-shadow: 0 18px 42px rgba(26,31,43,0.16);
 }

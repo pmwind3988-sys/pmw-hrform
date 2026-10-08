@@ -191,7 +191,7 @@ const inp = {
   width: "100%",
   height: 34,
   border: `1px solid ${C.border}`,
-  borderRadius: 8,
+  borderRadius: 12,
   padding: "0 11px",
   fontSize: 13.5,
   fontFamily: "var(--pmw-font-main)",
@@ -1759,7 +1759,7 @@ export default function AdminFormBuilder() {
     return (
       <div style={{ minHeight: "100vh", background: C.offWhite, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <style>{G}</style>
-        <div style={{ maxWidth: 460, background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: "32px 28px" }}>
+        <div style={{ maxWidth: 460, background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: "32px 28px" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.red, marginBottom: 8 }}>Site not available</div>
           <p style={{ fontSize: 13.5, lineHeight: 1.65, color: C.textSecond, margin: "0 0 18px" }}>{siteError}</p>
           <button type="button" className="bx-btn" onClick={() => navigate("/admin/builder")}>
@@ -2302,7 +2302,7 @@ export default function AdminFormBuilder() {
                 <TextField id="set-iso" label="ISO standards" value={meta.isoStandards} onChange={v => setM("isoStandards", v)} placeholder="ISO 9001 · ISO 14001" />
                 <div className="bx-field">
                   <label>Companies</label>
-                  <div style={{ border: `1px solid ${C.border}`, background: C.offWhite, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ border: `1px solid ${C.border}`, background: C.offWhite, borderRadius: 12, padding: "10px 12px" }}>
                     {!orgCompaniesLoaded ? (
                       <div style={{ fontSize: 13.5, color: C.textMuted }}>Loading the official company list…</div>
                     ) : orgCompaniesError ? (
@@ -2758,7 +2758,7 @@ export default function AdminFormBuilder() {
         >
           <div style={{
             background: C.white,
-            borderRadius: 12,
+            borderRadius: 28,
             padding: "20px 22px",
             maxWidth: 440,
             width: "100%",
@@ -2776,7 +2776,7 @@ export default function AdminFormBuilder() {
               <button
                 onClick={() => { if (!docHeaderSaving) setDocHeaderProfile(null); }}
                 title="Close"
-                style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, width: 32, height: 32, cursor: docHeaderSaving ? "not-allowed" : "pointer", color: C.textSecond, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                style={{ background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: "50%", width: 32, height: 32, cursor: docHeaderSaving ? "not-allowed" : "pointer", color: C.textSecond, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
               >
                 <CloseIcon style={{ fontSize: 18 }} />
               </button>
@@ -2792,14 +2792,14 @@ export default function AdminFormBuilder() {
               <button
                 onClick={() => { if (!docHeaderSaving) setDocHeaderProfile(null); }}
                 disabled={docHeaderSaving}
-                style={{ minHeight: 38, borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 13.5, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
+                style={{ minHeight: 38, borderRadius: "999px", border: `1px solid ${C.border}`, background: C.white, color: C.textSecond, fontSize: 13.5, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveProfileDocHeader}
                 disabled={docHeaderSaving}
-                style={{ minHeight: 38, borderRadius: 8, border: "none", background: docHeaderSaving ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`, color: docHeaderSaving ? C.textMuted : C.white, fontSize: 13.5, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
+                style={{ minHeight: 38, borderRadius: "999px", border: "none", background: docHeaderSaving ? C.border : `linear-gradient(135deg,${C.purple},${C.purpleLight})`, color: docHeaderSaving ? C.textMuted : C.white, fontSize: 13.5, fontWeight: 700, cursor: docHeaderSaving ? "not-allowed" : "pointer" }}
               >
                 {docHeaderSaving ? "Saving…" : "Save header"}
               </button>
@@ -2821,7 +2821,7 @@ export default function AdminFormBuilder() {
         }}>
           <div style={{
             background: C.white,
-            borderRadius: 8,
+            borderRadius: 28,
             padding: "24px 28px",
             maxWidth: 400,
             width: "90%",
@@ -2844,7 +2844,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 20px",
-                  borderRadius: 8,
+                  borderRadius: "999px",
                   border: `1px solid ${C.border}`,
                   background: C.white,
                   color: C.textSecond,
@@ -2862,7 +2862,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 20px",
-                  borderRadius: 8,
+                  borderRadius: "999px",
                   border: "none",
                   background: `linear-gradient(135deg,${C.red},#B91C1C)`,
                   color: C.white,
@@ -2897,7 +2897,7 @@ export default function AdminFormBuilder() {
         }}>
           <div style={{
             background: C.white,
-            borderRadius: 8,
+            borderRadius: 28,
             padding: "24px 28px",
             maxWidth: 420,
             width: "90%",
@@ -2918,7 +2918,7 @@ export default function AdminFormBuilder() {
               marginBottom: 16,
               textAlign: "left",
               background: editorial.errorSoft,
-              borderRadius: 8,
+              borderRadius: 12,
               padding: "10px 14px",
               border: "1px solid #FECACA",
             }}>
@@ -2945,7 +2945,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 20px",
-                  borderRadius: 8,
+                  borderRadius: "999px",
                   border: `1px solid ${C.border}`,
                   background: C.white,
                   color: C.textSecond,
@@ -2963,7 +2963,7 @@ export default function AdminFormBuilder() {
                 style={{
                   height: 36,
                   padding: "0 24px",
-                  borderRadius: 8,
+                  borderRadius: "999px",
                   border: "none",
                   background: `linear-gradient(135deg,#DC2626,#991B1B)`,
                   color: C.white,

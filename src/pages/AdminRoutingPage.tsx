@@ -759,7 +759,12 @@ export default function AdminRoutingPage() {
 
               {tab === "people" && (
                 <Box sx={{ p: 2 }}>
-                  <Stack direction={{ xs: "column", md: "row" }} sx={{ gap: 1.5, mb: 2 }}>
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    // Wraps: beside the navigation panel this row has ~950px, and
+                    // seven controls overlapped instead of starting a second line.
+                    sx={{ gap: 1.5, mb: 2, flexWrap: { md: "wrap" }, alignItems: { md: "center" }, "& > *": { flexShrink: 0 } }}
+                  >
                     <TextField
                       size="small"
                       placeholder="Search name, email, department..."

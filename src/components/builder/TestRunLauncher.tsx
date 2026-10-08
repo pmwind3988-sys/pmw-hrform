@@ -114,7 +114,7 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ background: C.white, borderRadius: 12, width: 420, maxWidth: "100%", padding: 22, boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
+        style={{ background: C.white, borderRadius: 28, width: 420, maxWidth: "100%", padding: 22, boxShadow: "0 20px 48px rgba(0,0,0,0.25)" }}
       >
         <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Test workflow</div>
         <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
@@ -141,19 +141,19 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
             boxSizing: "border-box",
             height: 34,
             padding: "0 10px",
-            borderRadius: 7,
+            borderRadius: 12,
             border: `1px solid ${C.border}`,
             fontSize: 13.5,
             marginBottom: 12,
           }}
         />
         {error && (
-          <div style={{ fontSize: 12.5, color: C.red, background: C.redPale, borderRadius: 7, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12.5, color: C.red, background: C.redPale, borderRadius: 12, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
             {error}
           </div>
         )}
         {blockedUrl && (
-          <div style={{ fontSize: 12.5, color: C.textSecond, background: editorial.accentSoft, border: "1px solid #FDE68A", borderRadius: 7, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12.5, color: C.textSecond, background: editorial.accentSoft, border: "1px solid #FDE68A", borderRadius: 12, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
             The test run started, but your browser blocked the popup. Open it yourself:{" "}
             <a href={blockedUrl} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600, wordBreak: "break-all" }}>
               {blockedUrl}
@@ -164,21 +164,21 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
           <button
             onClick={onClose}
             disabled={busy !== ""}
-            style={{ height: 32, padding: "0 14px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}
+            style={{ height: 32, padding: "0 14px", border: `1px solid ${C.border}`, borderRadius: "999px", background: C.white, color: C.textSecond, fontSize: 12.5, cursor: "pointer" }}
           >
             Cancel
           </button>
           <button
             onClick={() => startTestRun(false)}
             disabled={busy !== ""}
-            style={{ height: 32, padding: "0 14px", border: `1px solid ${C.border}`, borderRadius: 7, background: C.white, color: C.textPrimary, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy && busy !== "fill" ? 0.6 : 1 }}
+            style={{ height: 32, padding: "0 14px", border: `1px solid ${C.border}`, borderRadius: "999px", background: C.white, color: C.textPrimary, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy && busy !== "fill" ? 0.6 : 1 }}
           >
             {busy === "fill" ? "Starting…" : "Fill in myself"}
           </button>
           <button
             onClick={() => startTestRun(true)}
             disabled={busy !== ""}
-            style={{ height: 32, padding: "0 14px", border: "none", borderRadius: 7, background: C.purple, color: C.white, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+            style={{ height: 32, padding: "0 14px", border: "none", borderRadius: "999px", background: C.purple, color: C.white, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
           >
             {busy === "simulate" ? "Starting…" : "Simulate submission"}
           </button>

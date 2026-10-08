@@ -53,7 +53,7 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
       }}>
         <div style={{
           background: C.purpleDark,
-          borderRadius: 12,
+          borderRadius: 28,
           width: "100%",
           maxWidth: 580,
           border: "1px solid rgba(167,139,250,.3)",
@@ -106,7 +106,7 @@ export default function ProvisionOverlay({ logs, success, error, onDone }: Provi
                 onClick={onDone}
                 style={{
                   padding: "8px 22px",
-                  borderRadius: 8,
+                  borderRadius: "999px",
                   background: success ? C.green : C.purple,
                   color: C.white,
                   border: "none",

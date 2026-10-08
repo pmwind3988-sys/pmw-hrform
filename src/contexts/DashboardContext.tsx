@@ -4,6 +4,8 @@ import type { SubmissionFilterState } from "../utils/submissionFilters";
 
 export interface DashboardContextValue {
   userEmail: string;
+  /** Display name from the signed-in Microsoft account; "" when it has none. */
+  userName: string;
   isAdmin: boolean;
   canUseFormBuilder: boolean;
   submissions: Submission[];

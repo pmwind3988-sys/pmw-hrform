@@ -1634,6 +1634,7 @@ export default function App() {
 
   const dashboardValue = {
     userEmail,
+    userName: activeAccount?.name || "",
     isAdmin,
     canUseFormBuilder,
     submissions,

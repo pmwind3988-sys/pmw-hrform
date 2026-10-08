@@ -14,13 +14,12 @@ import {
   DeleteOutlined as DeleteIcon,
   LayersOutlined as LayersIcon,
   NumbersOutlined as NumbersIcon,
-  VisibilityOutlined as ViewIcon,
 } from "@mui/icons-material";
 import type { KeyboardEvent, MouseEvent } from "react";
 import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
-import { editorial, editorialShadow, editorialShadowHover, si } from "../../theme/editorial";
+import { editorial, si } from "../../theme/editorial";
 import { SUBMISSION_GRID_COLUMNS, SUBMISSION_GRID_GAP } from "./submissionGrid";
 import {
   formatDashboardDate,
@@ -61,6 +60,12 @@ export default function SubmissionRow({
   };
 
   const displayTitle = getSubmissionDisplayTitle(item);
+  // What a card is named on a phone. `title` on these lists usually holds the
+  // submitter's name, so on someone's OWN submissions the card read as their
+  // name every time. The card leads with the form; the who moves to the
+  // "Submitted by" line admins already get. The desktop table keeps
+  // `displayTitle`, because it has a column of its own for the form.
+  const rowTitle = item.listTitle || displayTitle;
   const submitterDisplay = getSubmittedByDisplayName(item);
   const formReference = getFormReference(item);
   const submittedAt = formatDashboardDate(item.submittedAt);
@@ -89,10 +94,10 @@ export default function SubmissionRow({
     }
   };
   const identityChipSx = {
-    borderRadius: "12px",
+    borderRadius: `${si.radiusPill}px`,
     backgroundColor: editorial.blueWash,
     color: editorial.pmwBlueDark,
-    border: `1px solid ${editorial.pmwBlueSoft}`,
+    border: "none",
     fontWeight: 700,
     fontSize: "0.72rem",
     height: 24,
@@ -101,10 +106,10 @@ export default function SubmissionRow({
     },
   } as const;
   const layerChipSx = {
-    borderRadius: "12px",
-    backgroundColor: editorial.purpleWash,
-    color: editorial.pmwPurpleDark,
-    border: `1px solid ${editorial.pmwPurpleSoft}`,
+    borderRadius: `${si.radiusPill}px`,
+    backgroundColor: editorial.skySoft,
+    color: editorial.navyDeep,
+    border: "none",
     fontWeight: 700,
     fontSize: "0.72rem",
     height: 24,
@@ -122,22 +127,18 @@ export default function SubmissionRow({
         onClick={handleOpen}
         onKeyDown={handleKeyDown}
         sx={{
-          backgroundColor: "rgba(255, 255, 255, 0.94)",
-          borderRadius: "12px",
-          boxShadow: editorialShadow,
+          backgroundColor: editorial.panel,
+          borderRadius: `${si.radius}px`,
+          boxShadow: si.shadow,
           p: 2,
-          mb: 2,
+          mb: 1.5,
           cursor: "pointer",
-          transition: "box-shadow 0.2s ease, transform 0.2s ease",
+          transition: "background-color 0.15s ease",
           "&:hover": {
-            boxShadow: editorialShadowHover,
-            transform: "translateY(-1px)",
-          },
-          "&:active": {
-            transform: "scale(0.995)",
+            backgroundColor: editorial.blueSoft,
           },
           "&:focus-visible": {
-            outline: `3px solid ${editorial.pmwBlueSoft}`,
+            outline: `2px solid ${editorial.navy}`,
             outlineOffset: 2,
           },
         }}
@@ -145,7 +146,7 @@ export default function SubmissionRow({
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
           <Box sx={{ flex: 1 }}>
             <Typography variant="body1" sx={{ fontWeight: 700, color: editorial.ink, mb: 0.5 }}>
-              {displayTitle}
+              {rowTitle}
             </Typography>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
               <Chip icon={<NumbersIcon />} label={`Ref ${item.referenceNo || item.submissionId}`} size="small" sx={identityChipSx} />
@@ -166,16 +167,15 @@ export default function SubmissionRow({
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: "12px",
-                      border: `1px solid rgba(198, 40, 40, 0.2)`,
-                      backgroundColor: "rgba(198, 40, 40, 0.08)",
-                      color: editorial.error,
-                      transition: "background-color 0.18s ease, transform 0.18s ease",
+                      borderRadius: "50%",
+                      // Quiet until reached for: grey at rest, red only under
+                      // the pointer. A red slab on every card was the easiest
+                      // thing on it to hit by mistake.
+                      color: editorial.softMuted,
+                      transition: "background-color 0.18s ease, color 0.18s ease",
                       "&:hover": {
-                        backgroundColor: "rgba(198, 40, 40, 0.14)",
-                      },
-                      "&:active": {
-                        transform: "scale(0.96)",
+                        backgroundColor: editorial.errorSoft,
+                        color: editorial.error,
                       },
                     }}
                   >
@@ -184,26 +184,11 @@ export default function SubmissionRow({
                 </span>
               </Tooltip>
             )}
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: "12px",
-                border: `1px solid ${editorial.pmwBlueSoft}`,
-                backgroundColor: editorial.blueWash,
-                color: editorial.pmwBlueDark,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <ViewIcon sx={{ fontSize: 18 }} />
-            </Box>
+            <ChevronRightIcon aria-hidden sx={{ color: editorial.softMuted, fontSize: 22, alignSelf: "center" }} />
           </Stack>
         </Box>
-        <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
-          <ListBadge title={item.listTitle} color={meta.color} pale={meta.pale} />
+        {/* No form badge here: the card is already titled with the form. */}
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center", mb: 1.5 }}>
           <StatusBadge status={item.formStatus} />
           {layerLabel && (
             <Chip icon={<LayersIcon />} label={layerLabel} size="small" sx={layerChipSx} />
@@ -240,17 +225,19 @@ export default function SubmissionRow({
         // Solid, and no shadow of its own: the rows sit inside one card now, so
         // a row that lifted on hover was a card floating out of a card.
         backgroundColor: editorial.panel,
-        borderRadius: 0,
-        borderBottom: `1px solid ${editorial.border}`,
+        // Rounded and unruled: rows are told apart by space, and the one under
+        // the pointer becomes a soft tinted shape rather than a striped band.
+        borderRadius: `${si.radiusSm}px`,
+        mx: 0.75,
         alignItems: "center",
         cursor: "pointer",
         transition: "background-color 0.15s ease",
         outline: "none",
         "&:hover": {
-          backgroundColor: editorial.appSurface,
+          backgroundColor: editorial.blueSoft,
         },
         "&:focus-visible": {
-          backgroundColor: editorial.appSurface,
+          backgroundColor: editorial.blueSoft,
           boxShadow: `inset 0 0 0 2px ${editorial.navy}`,
         },
         "@media (prefers-reduced-motion: reduce)": { transition: "none" },
@@ -336,14 +323,12 @@ export default function SubmissionRow({
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: "12px",
-                  color: editorial.error,
-                  transition: "background-color 0.18s ease, transform 0.18s ease",
+                  borderRadius: "50%",
+                  color: editorial.softMuted,
+                  transition: "background-color 0.18s ease, color 0.18s ease",
                   "&:hover": {
-                    backgroundColor: "rgba(198, 40, 40, 0.1)",
-                  },
-                  "&:active": {
-                    transform: "scale(0.96)",
+                    backgroundColor: editorial.errorSoft,
+                    color: editorial.error,
                   },
                 }}
               >

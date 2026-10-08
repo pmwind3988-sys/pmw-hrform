@@ -35,7 +35,7 @@ import {
   RestartAlt as ClearFiltersIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
-import { editorial } from "../../theme/editorial";
+import { editorial, si } from "../../theme/editorial";
 import {
   EMPTY_SUBMISSION_FILTERS,
   applyFormTypeChange,
@@ -100,11 +100,14 @@ export default function Toolbar({
   const hasFilters = detailedFilterCount > 0;
   const fieldByKey = new Map(fieldCatalog.map((field) => [field.key, field]));
 
+  // Search and the dropdowns are pills on a soft fill with no outline: they
+  // are controls you press, and in this system everything pressed is round.
   const searchFieldSx = {
     minWidth: 0,
+    "& .MuiOutlinedInput-notchedOutline": { border: "none" },
     "& .MuiOutlinedInput-root": {
-      borderRadius: "12px",
-      backgroundColor: editorial.paperSoft,
+      borderRadius: `${si.radiusPill}px`,
+      backgroundColor: editorial.skySoft,
       transition: "background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
       "&:hover": {
         backgroundColor: editorial.blueSoft,
@@ -116,8 +119,9 @@ export default function Toolbar({
     },
   } as const;
   const selectSx = {
-    borderRadius: "12px",
-    backgroundColor: editorial.paperSoft,
+    borderRadius: `${si.radiusPill}px`,
+    backgroundColor: editorial.skySoft,
+    "& .MuiOutlinedInput-notchedOutline": { borderColor: "transparent" },
     "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
       borderColor: editorial.pmwBlue,
     },

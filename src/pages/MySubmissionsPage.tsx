@@ -231,14 +231,14 @@ export default function MySubmissionsPage() {
             // desktop rows drop their own shadow to avoid. Switched off rather
             // than swapped for a different component.
             borderRadius: { xs: 0, md: `${si.radius}px` },
-            border: { xs: "none", md: `1px solid ${editorial.border}` },
+            border: "none",
             boxShadow: { xs: "none", md: si.shadow },
             backgroundColor: { xs: "transparent", md: editorial.panel },
             overflow: { md: "hidden" },
           }}
         >
           <ListHeader isAdmin={isAdmin} />
-          <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, pb: { md: 0.75 } }}>
             {ownSubmissions.map((item) => (
               <SubmissionRow
                 key={`${item.listTitle}-${item.id}`}

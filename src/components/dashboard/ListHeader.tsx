@@ -19,12 +19,13 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
         display: "grid",
         gridTemplateColumns: isAdmin ? SUBMISSION_GRID_COLUMNS.admin : SUBMISSION_GRID_COLUMNS.member,
         gap: SUBMISSION_GRID_GAP,
-        px: 2.5,
-        py: 1.25,
-        // The canvas, so the header strip reads as a label band over the rows
-        // rather than as one more white row among them.
-        backgroundColor: editorial.appSurface,
-        borderBottom: `1px solid ${editorial.border}`,
+        // 2.5 + the rows' own 0.75 inset, so each label sits over its column.
+        px: 3.25,
+        pt: 1.75,
+        pb: 0.75,
+        // Labels only, no band: the rows below are unruled, and a filled strip
+        // over them would be the one box left in the list.
+        backgroundColor: "transparent",
         alignItems: "center",
       }}
     >

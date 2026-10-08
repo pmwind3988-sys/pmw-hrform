@@ -92,7 +92,7 @@ const inp: React.CSSProperties = {
   width: "100%",
   height: 30,
   border: `1px solid ${C.border}`,
-  borderRadius: 7,
+  borderRadius: 12,
   padding: "0 9px",
   fontSize: 12.5,
   fontFamily: "var(--pmw-font-main)",
@@ -122,7 +122,7 @@ const toggleBtn = (active: boolean): React.CSSProperties => ({
   flex: 1,
   height: 26,
   border: `1px solid ${active ? C.purple : C.border}`,
-  borderRadius: 8,
+  borderRadius: "999px",
   background: active ? C.purplePale : C.white,
   color: active ? C.purple : C.textMuted,
   fontSize: 11,
@@ -167,14 +167,14 @@ function ChoicesEditor({ choices, onChange }: { choices: (string | { value: stri
             <input value={val} onChange={e => updateChoice(i, e.target.value)}
               placeholder={`Option ${i + 1}`} style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }} />
             <button onClick={() => removeChoice(i)}
-              style={{ width: 22, height: 22, border: "none", background: C.redPale, color: C.red, borderRadius: 5, cursor: "pointer", fontSize: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              style={{ width: 22, height: 22, border: "none", background: C.redPale, color: C.red, borderRadius: "50%", cursor: "pointer", fontSize: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <CloseIcon sx={{ fontSize: 14 }} />
             </button>
           </div>
         );
       })}
       <button onClick={addChoice}
-        style={{ width: "100%", height: 26, border: `1px dashed ${C.border}`, borderRadius: 8, background: "none", color: C.purple, fontSize: 11.5, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+        style={{ width: "100%", height: 26, border: `1px dashed ${C.border}`, borderRadius: "999px", background: "none", color: C.purple, fontSize: 11.5, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
         <AddIcon sx={{ fontSize: 14 }} /> Add choice
       </button>
     </div>
@@ -203,7 +203,7 @@ function EvalElementPropertyPanel({
         {(["general", "validation", "options"] as const).filter(t => t !== "options" || hasChoices).map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{
-              padding: "4px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+              padding: "4px 10px", borderRadius: "999px", border: "none", cursor: "pointer",
               fontSize: 11, fontWeight: 600,
               background: tab === t ? C.purple : C.offWhite,
               color: tab === t ? "#fff" : C.textMuted,
@@ -409,7 +409,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
             Evaluation Fields ({elements.length})
           </div>
           {elements.length > 0 && !elements.some(el => el.isRequired) && (
-            <div style={{ fontSize: 11, color: C.red, background: C.redPale, borderRadius: 8, padding: "6px 8px", marginBottom: 8, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 11, color: C.red, background: C.redPale, borderRadius: 12, padding: "6px 8px", marginBottom: 8, lineHeight: 1.4 }}>
               <WarningIcon style={{ fontSize: 12, verticalAlign: 'middle', marginRight: 4 }} /> At least one field must be marked as <strong>Required</strong> before this evaluation layer can be used.
             </div>
           )}
@@ -417,7 +417,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
             <div key={i} style={{
               background: C.offWhite,
               border: `1px solid ${expandedIdx === i ? C.purple : C.border}`,
-              borderRadius: 8,
+              borderRadius: 12,
               marginBottom: 6,
               overflow: "hidden",
             }}>
@@ -440,11 +440,11 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
                     {el.name as string} · {getTypeLabel(el.type as string)}
                   </div>
                 </div>
-                <span style={{ fontSize: 11, color: C.textMuted, background: `${C.purple}15`, padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>
+                <span style={{ fontSize: 11, color: C.textMuted, background: `${C.purple}15`, padding: "1px 6px", borderRadius: "999px", flexShrink: 0 }}>
                   {el.type as string}
                 </span>
                 <button onClick={e => { e.stopPropagation(); removeElement(i); }}
-                  style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textMuted, borderRadius: 5, cursor: "pointer", fontSize: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textMuted, borderRadius: "50%", cursor: "pointer", fontSize: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <DeleteIcon sx={{ fontSize: 14 }} />
                 </button>
                 <span style={{ color: C.textMuted, display: "flex", alignItems: "center" }}>
@@ -466,7 +466,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
       {/* ── Add field button / type grid ── */}
       {!showGrid ? (
         <button onClick={() => setShowGrid(true)}
-          style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: 7, background: "none", color: C.purple, fontSize: 11.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+          style={{ width: "100%", height: 30, border: `1px dashed ${C.purpleMid}`, borderRadius: "999px", background: "none", color: C.purple, fontSize: 11.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
           <AddIcon sx={{ fontSize: 14 }} /> Add evaluation field
         </button>
       ) : (
@@ -491,7 +491,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginBottom: 8, maxHeight: 240, overflowY: "auto" }}>
             {filteredTypes.map(td => (
               <button key={td.type} onClick={() => addElement(td)}
-                style={{ padding: "6px 4px", border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, cursor: "pointer", fontSize: 11, fontFamily: "var(--pmw-font-main)", color: C.textSecond, textAlign: "center" as const, transition: "all .1s", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}
+                style={{ padding: "6px 4px", border: `1px solid ${C.border}`, borderRadius: "999px", background: C.white, cursor: "pointer", fontSize: 11, fontFamily: "var(--pmw-font-main)", color: C.textSecond, textAlign: "center" as const, transition: "all .1s", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = C.purpleMid; e.currentTarget.style.background = C.purplePale; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.white; }}>
                 <span style={{ fontSize: 16, display: "flex", alignItems: "center", color: C.purple }}>{getTypeIcon(td.type)}</span>
@@ -505,7 +505,7 @@ export default function EvalElementPicker({ elements, onChange }: EvalElementPic
 
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button onClick={() => { setShowGrid(false); setSearchQuery(""); }}
-              style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ padding: "5px 12px", borderRadius: "999px", border: `1px solid ${C.border}`, background: C.white, color: C.textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
               Cancel
             </button>
             <span style={{ fontSize: 11, color: C.textMuted }}>{filteredTypes.length} type{filteredTypes.length !== 1 ? "s" : ""}</span>

@@ -71,8 +71,16 @@ Four places, each for a stated reason. Everywhere else a literal hex is a bug.
 
 ## Shape, type and motion
 
-12px on containers you act inside; 8px on nested controls; 5px on badges,
-because a tag is not a box. ONE card elevation everywhere -- hierarchy comes
+**Shape says what a thing is.** Anything you press, and every badge or tag, is
+a pill (`si.radiusPill`). Containers are soft: 20px cards and inputs-in-cards
+(`si.radius`), 12px nested controls (`si.radiusSm`), 28px dialogs and the
+navigation panel (`si.radiusSheet`). Icon buttons and avatars are circles. A
+pill is never a container, so a row of tags never reads as a row of boxes.
+
+**Surfaces, not boxes.** Cards carry no outline -- a white sheet on the canvas
+with one soft shadow is already a surface. Lists inside a card are unruled:
+rows are told apart by space, and the one under the pointer becomes a soft
+tinted shape. Nested cards are always wrong. ONE card elevation everywhere -- hierarchy comes
 from size and position, never from a heavier shadow, which is why
 `editorialShadowHover` is no longer heavier than `editorialShadow`. Focus is a
 2px navy ring at 2px offset on every interactive element, with no exception for
@@ -85,17 +93,32 @@ because ~2000 call sites set fontSize inline and inline `sx` outranks the theme.
 
 `.rise` is the entrance, 0.4s. `.si-navy` is the brand surface -- a 160deg navy
 gradient under two slow-drifting amber and pale-blue highlights, shared by the
-sidebar, the phone bottom bar and the builder's mode rail so those three cannot
-drift into three different navies. All of it collapses under
+phone bottom bar and the builder's mode rail so those two cannot drift into two
+different navies. All of it collapses under
 `prefers-reduced-motion`.
 
 ## Navigation
 
-Two levels, defined once in `src/config/navigation.ts`: five sidebar categories
-(Dashboard, My Work, Internal Portal, Admin, Profile), each opening a strip of
-tabs. `AppShell` draws it -- a sticky 224px navy column at >=1024px, a fixed
-navy bottom bar below that, switched in CSS so there is no flash of the wrong
-layout on first paint.
+Two levels, defined once in `src/config/navigation.ts`: five categories
+(Dashboard, Forms, Internal Portal, Admin, Profile), each holding a set of
+pages. `AppShell` draws two layouts from that one map, switched in CSS at
+`si.shellBreakpoint` (1024px) so there is no flash of the wrong layout:
+
+- **Wide:** a floating panel (`si.railWidth`, 248px), pale blue-grey, 28px
+  corners, sticky with a 12px margin. Brand at the top, then the one primary
+  action -- a navy **Start a form** pill with an amber plus -- then the
+  categories. The current category is a raised WHITE pill with its icon in a
+  navy circle, and its pages nest beneath it with an amber dot on the current
+  one. The account sits at the foot. No top bar: the page h1 is visually hidden
+  because pages open with headings of their own.
+- **Narrow:** a white top bar (logo, page title, avatar) over a row of page
+  pills, and the navy bottom bar with a pill behind the active icon and 11px
+  labels.
+
+Gmail-adjacent by intent, not by copy: the panel floats rather than sitting
+flat on the page, the selection is a raised white chip on a tinted panel rather
+than a tinted wash on white, the primary action is navy-and-amber rather than a
+pale square, pages nest under their section, and there is no top search bar.
 
 Two things about it are load-bearing:
 
@@ -116,10 +139,12 @@ resolves by auth state.
 
 **The form builder is full bleed**, and is the only signed-in screen outside the
 shell. It is a three-pane authoring surface, and inside the shell the pane that
-surrendered the sidebar's 224px was the form sheet — the thing being authored.
+surrendered the navigation's width was the form sheet — the thing being authored.
 It can afford to leave because it brings its own header, mode rail and home
 button; no other screen does. Its rail carries the same `.si-navy` gradient as
-the sidebar, so leaving the shell does not mean leaving the design.
+the phone bottom bar, so leaving the shell does not mean leaving the design. It
+has not yet moved to the rounded shapes; `builderTheme.ts` and
+`BuilderShell.css` still use the older radii.
 
 ## Builder world
 

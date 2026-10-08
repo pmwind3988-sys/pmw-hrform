@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
+import { ArrowForwardRounded, HourglassTopRounded, TaskAltRounded } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import { useDashboard } from "../contexts/DashboardContext";
-import StatsRow from "../components/dashboard/StatsRow";
+import StatsRow, { type StatusBucketKey } from "../components/dashboard/StatsRow";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import { acquireCareerPortalToken, fetchCareersPortalData } from "../utils/careersService";
 import type { CareerPortalCard } from "../types";
-import { editorial, onCanvasMuted, siType } from "../theme/editorial";
+import { editorial, onCanvas, onCanvasMuted, si, siType } from "../theme/editorial";
 import { bucketSubmissions } from "../utils/submissionStatusBuckets";
-import Card from "../components/common/Card";
 
 /**
  * The careers carousel, fetched on its own.
@@ -61,79 +61,164 @@ function DashboardCareerCarousel() {
   };
 
   return (
-    <Box component="section" sx={{ mb: 3 }}>
+    <Box component="section">
       <CareerPortalCarousel cards={cards} loading={loading} onCardTarget={handleCardTarget} />
     </Box>
   );
 }
 
 /**
+ * The name to greet someone by: their given names, without the patronymic.
+ *
+ * "Muhammad Ashraf Bin Azahari" is greeted as "Muhammad Ashraf". Taking only
+ * the first word would greet half the company as "Muhammad", and the full name
+ * reads like a form field rather than a hello.
+ */
+function greetingName(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  const cut = words.findIndex((word) => /^(bin|binti|bt|a\/l|a\/p|s\/o|d\/o)$/i.test(word));
+  const given = cut > 0 ? words.slice(0, cut) : words.slice(0, 2);
+  return given.join(" ");
+}
+
+function greeting(now: Date): string {
+  const hour = now.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+/**
  * The Dashboard section: an overview, and nothing else.
  *
- * This page used to be the whole application. It carried a hero heading, the
- * stat tiles, the form cards, a filter toolbar, and every submission the
- * account could see — one scroll, five jobs. Forms and submissions are now
- * their own sections under Forms, which is what makes each of them
- * addressable and what leaves this page room to answer one question: what
- * needs looking at.
+ * ORDER, AND WHY IT CHANGED. This page used to open on the careers carousel, so
+ * the first screen of an HR tool was an advert for the careers page one tab
+ * away, and the one useful sentence ("N submissions still moving") told you
+ * where to click instead of being something you could click. Now:
  *
- * The hero is gone with them. A 48px "PMW Group HR Portal" title plus a
- * paragraph explaining what the portal is for is orientation an employee needs
- * exactly once, and it cost the first screenful of every visit thereafter. The
- * shell's own header says which section you are in; the stat tiles say how
- * things stand.
- *
- * ORDER: carousel, then what needs attention, then the tiles. The carousel is
- * the only block here anyone authors deliberately -- an admin picks its cards
- * and points them somewhere -- so it leads.
+ *   1. A greeting and one sentence saying how things stand, on the canvas.
+ *   2. That status as a button, which opens the list it describes.
+ *   3. Three rings showing the split, each opening its own slice.
+ *   4. The careers highlights, last: authored content, but not the job here.
  */
 export default function DashboardPage() {
-  const { submissions, missingConfigs, visibleLists, isAdmin } = useDashboard();
+  const navigate = useNavigate();
+  const { submissions, missingConfigs, visibleLists, isAdmin, canUseFormBuilder, userName, filters, setFilters } =
+    useDashboard();
 
-  // Shared with the tiles below rather than recomputed: "Pending" and
+  // Shared with the rings below rather than recomputed: "Pending" and
   // "In Progress" are not values this column holds (it holds Submitted /
   // In Review / Completed / Rejected / Cancelled, plus legacy spellings), so a
   // hand-written filter here read zero on every real row.
   const { total, pending } = bucketSubmissions(submissions);
 
+  // An admin's counts cover everyone's submissions, so their list is the
+  // all-submissions workspace when they can open it; everyone else's is their own.
+  const listPath = isAdmin && canUseFormBuilder ? "/admin/submissions" : "/submissions";
+
+  const openBucket = (bucket: StatusBucketKey) => {
+    if (listPath === "/submissions") {
+      // The shared filter model's stages are finer than the three buckets.
+      // Approved and Sent back map onto one stage each; "In progress" spans
+      // four, so it opens the whole list rather than a misleading quarter.
+      const stage = bucket === "approved" ? "completed" : bucket === "rejected" ? "rejected" : "all";
+      setFilters({ ...filters, stage });
+    }
+    navigate(listPath);
+  };
+
+  const name = greetingName(userName);
+  const formsCount = visibleLists.length;
+
   return (
-    <Box sx={{ maxWidth: 1440, mx: "auto" }}>
-      {missingConfigs.length > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <ConfigWarningBanner missingLists={missingConfigs} />
+    <Box sx={{ maxWidth: 1120, mx: "auto", display: "grid", gap: 3 }}>
+      {missingConfigs.length > 0 && <ConfigWarningBanner missingLists={missingConfigs} />}
+
+      <Box component="header">
+        <Typography
+          component="h2"
+          sx={{ ...siType.display, fontSize: { xs: "1.6rem", sm: "2rem" }, lineHeight: 1.15, ...onCanvas }}
+        >
+          {greeting(new Date())}
+          {name ? `, ${name}` : ""}
+        </Typography>
+        <Typography sx={{ ...siType.body, fontSize: "0.95rem", mt: 0.75, ...onCanvasMuted }}>
+          {total === 0
+            ? "Nothing submitted yet. Forms you send will show up here as they move through approval."
+            : pending === 0
+              ? `All ${total} submission${total === 1 ? "" : "s"} in view have finished their approval chain.`
+              : `${pending} of ${total} submission${total === 1 ? "" : "s"} are still moving through approval.`}
+        </Typography>
+      </Box>
+
+      {total > 0 && (
+        <Box
+          component="button"
+          type="button"
+          onClick={() => navigate(listPath)}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.75,
+            width: "100%",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            p: 1,
+            pr: 2,
+            borderRadius: `${si.radiusPill}px`,
+            backgroundColor: pending > 0 ? editorial.accentSoft : editorial.successSoft,
+            color: editorial.ink,
+            transition: "filter 0.15s ease",
+            "&:hover": { filter: "brightness(0.97)" },
+            "&:hover .go": { transform: "translateX(3px)" },
+          }}
+        >
+          <Box
+            aria-hidden
+            sx={{
+              width: 44,
+              height: 44,
+              flexShrink: 0,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: editorial.panel,
+              color: pending > 0 ? editorial.accentText : editorial.success,
+            }}
+          >
+            {pending > 0 ? <HourglassTopRounded /> : <TaskAltRounded />}
+          </Box>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography sx={{ ...siType.cardTitle }}>
+              {pending > 0 ? "See where each one has stopped" : "Everything has been decided"}
+            </Typography>
+            <Typography sx={{ ...siType.subtext, color: pending > 0 ? editorial.accentText : editorial.success }}>
+              {listPath === "/admin/submissions" ? "All submissions" : "My submissions"}
+            </Typography>
+          </Box>
+          <ArrowForwardRounded className="go" sx={{ transition: "transform 0.15s ease" }} />
         </Box>
       )}
 
-      <DashboardCareerCarousel />
+      <StatsRow submissions={submissions} onOpen={total > 0 ? openBucket : undefined} />
 
-      <Card component="section" pad="tight" sx={{ mb: 3 }}>
-        <Typography sx={{ ...siType.micro, color: editorial.muted }}>
-          Needs your attention
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+        <Typography sx={{ ...siType.subtext, ...onCanvasMuted }}>
+          {formsCount} form{formsCount === 1 ? "" : "s"} available to you
         </Typography>
-        <Typography sx={{ ...siType.sectionTitle, mt: 0.5, color: editorial.ink }}>
-          {total === 0
-            ? "No submissions in view yet"
-            : pending === 0
-              ? "Nothing is waiting on you"
-              : `${pending} submission${pending === 1 ? "" : "s"} still moving`}
-        </Typography>
-        <Typography sx={{ ...siType.subtext, mt: 0.5, color: editorial.muted }}>
-          {total === 0
-            ? "Forms you submit will appear here as they enter their approval chain."
-            : pending === 0
-              ? `All ${total} submission${total === 1 ? "" : "s"} in view have finished their approval chain.`
-              : "Open Forms → My Submissions to see where each one has stopped."}
-        </Typography>
-      </Card>
-
-      <Box sx={{ mb: 3 }}>
-        <StatsRow submissions={submissions} />
+        <Button
+          variant="text"
+          onClick={() => navigate("/forms")}
+          endIcon={<ArrowForwardRounded />}
+          sx={{ backgroundColor: editorial.panel, color: editorial.navy, boxShadow: si.shadow, "&:hover": { backgroundColor: editorial.blueSoft } }}
+        >
+          Browse forms
+        </Button>
       </Box>
 
-      <Typography sx={{ ...siType.subtext, ...onCanvasMuted }}>
-        {visibleLists.length} form{visibleLists.length === 1 ? "" : "s"} available to you
-        {isAdmin ? " · administrator access" : ""}.
-      </Typography>
+      <DashboardCareerCarousel />
     </Box>
   );
 }

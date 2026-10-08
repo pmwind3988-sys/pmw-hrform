@@ -59,9 +59,9 @@
 
   /* SI's geometry: 12px on anything that is a container you act inside, 8px on
      elements nested within one. The sheet and dialog read as paper. */
-  --bx-r-sm: 8px;
-  --bx-r-md: 12px;
-  --bx-r-lg: 12px;
+  --bx-r-sm: 12px;
+  --bx-r-md: 20px;
+  --bx-r-lg: 28px;
   --bx-r-pill: 999px;
 
   /* SI applies one card elevation uniformly, so sm and md are deliberately the
@@ -266,7 +266,7 @@
   padding: 4px 10px;
   background: var(--bx-white);
   border: 1px solid var(--bx-n300);
-  border-radius: 8px;
+  border-radius: var(--bx-r-sm);
   color: var(--bx-text);
   font: inherit;
   font-size: 13.5px;
@@ -480,7 +480,7 @@
   padding: 0 14px;
   background: transparent;
   border: 1px solid rgba(242, 244, 247, 0.38);
-  border-radius: var(--bx-r-sm);
+  border-radius: var(--bx-r-pill);
   color: var(--bx-a100);
   font-weight: 600;
   font-size: 13.5px;
@@ -770,7 +770,7 @@ textarea.bx-input {
   font-weight: 600;
   letter-spacing: -0.002em;
   border: 1px solid transparent;
-  border-radius: var(--bx-r-sm);
+  border-radius: var(--bx-r-pill);
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
@@ -820,7 +820,7 @@ textarea.bx-input {
   place-items: center;
   background: var(--bx-white);
   border: 1px solid var(--bx-line-field);
-  border-radius: var(--bx-r-sm);
+  border-radius: 50%;
   color: var(--bx-n700);
   cursor: pointer;
   transition: border-color 0.14s ease, color 0.14s ease, background-color 0.14s ease;
@@ -866,7 +866,7 @@ textarea.bx-input {
 .bx-seg {
   display: flex;
   border: 1px solid var(--bx-line-field);
-  border-radius: var(--bx-r-sm);
+  border-radius: var(--bx-r-pill);
   background: var(--bx-white);
   overflow: hidden;
 }
@@ -1010,7 +1010,7 @@ textarea.bx-input {
   padding: 9px 10px;
   background: var(--bx-white);
   border: 1px solid var(--bx-divider);
-  border-radius: var(--bx-r-sm);
+  border-radius: var(--bx-r-pill);
   color: var(--bx-text);
   text-align: left;
   cursor: grab;
@@ -1281,7 +1281,7 @@ textarea.bx-input {
   min-height: 28px;
   padding: 3px 8px;
   border: 1px solid var(--bx-line-field);
-  border-radius: 6px;
+  border-radius: var(--bx-r-sm);
   color: var(--bx-n700);
 }
 .bx-wys-matrix-preset {

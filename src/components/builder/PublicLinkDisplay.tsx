@@ -38,7 +38,7 @@ const modeButton = (active: boolean, available = true): CSSProperties => ({
   flex: 1,
   height: 24,
   border: `1px solid ${active ? C.purple : C.border}`,
-  borderRadius: 8,
+  borderRadius: "999px",
   background: active ? C.purplePale : C.white,
   color: active ? C.purple : available ? C.textMuted : C.border,
   fontSize: 11,
@@ -51,7 +51,7 @@ const modeButton = (active: boolean, available = true): CSSProperties => ({
 const inputBox: CSSProperties = {
   height: 26,
   border: `1px solid ${C.border}`,
-  borderRadius: 8,
+  borderRadius: 12,
   padding: "0 7px",
   fontSize: 11.5,
   color: C.textPrimary,
@@ -148,7 +148,7 @@ export default function PublicLinkDisplay({
       style={{
         background: C.offWhite,
         border: `1px solid ${C.border}`,
-        borderRadius: 8,
+        borderRadius: 20,
         padding: "9px 11px",
       }}
     >
@@ -172,7 +172,7 @@ export default function PublicLinkDisplay({
             flex: 1,
             background: C.white,
             border: `1px solid ${C.border}`,
-            borderRadius: 8,
+            borderRadius: 12,
             padding: "5px 9px",
             fontSize: 11.5,
             color: C.textSecond,
@@ -190,7 +190,7 @@ export default function PublicLinkDisplay({
             height: 28,
             padding: "0 10px",
             border: `1px solid ${copied ? C.green : C.border}`,
-            borderRadius: 8,
+            borderRadius: "999px",
             background: copied ? C.greenPale : C.white,
             color: copied ? C.green : C.purple,
             fontSize: 11,
@@ -330,7 +330,7 @@ export default function PublicLinkDisplay({
           color: confirmRegen ? C.red : C.amber,
           background: confirmRegen ? C.redPale : C.amberPale,
           border: `1px solid ${confirmRegen ? C.red : C.amber}`,
-          borderRadius: 8,
+          borderRadius: "999px",
           padding: "4px 9px",
           cursor: "pointer",
           fontFamily: "var(--pmw-font-main)",

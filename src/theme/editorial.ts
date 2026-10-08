@@ -151,21 +151,30 @@ export const editorialInkline = `1px solid ${editorial.borderStrong}`;
 
    Shape, elevation and rhythm. Three rules the SI system keeps, and the reason
    each token is a single value rather than a scale:
-     1. One radius. 12px on anything that is a container you act inside (card,
-        button, input, dialog, menu); 5px on badges, because a tag is not a
-        container and reading like one makes every row look boxed-in.
+     1. Shape says what a thing is. Anything you press, and every badge or
+        tag, is a pill. Containers are soft (20px cards, 28px dialogs and the
+        navigation panel). Icon buttons and avatars are circles. A pill is
+        never a container, so a row of tags never reads as a row of boxes.
      2. One elevation. Every card sits at the same depth, uniformly. Hierarchy
         comes from size and position on the page, never from a heavier shadow.
      3. Focus is always visible. A 2px ring offset 2px on every interactive
         element, no exceptions for "quiet" controls.
 --------------------------------------------------------------------------- */
 export const si = {
-  /** Containers you act inside: cards, buttons, inputs, dialogs, menus. */
-  radius: 12,
+  /** Containers: cards, inputs, menus. Buttons are pills (`radiusPill`). */
+  radius: 20,
   /** Inner elements — menu items, small controls nested in a 12px container. */
-  radiusSm: 8,
-  /** Badges and chips. Deliberately tighter than `radius`: a tag, not a box. */
-  radiusBadge: 5,
+  radiusSm: 12,
+  /**
+   * Anything you press or that names a state: buttons, chips, badges, tabs,
+   * search fields. The rounded system's one rule — a pill is a thing you can
+   * act on or a label about something, never a container.
+   */
+  radiusPill: 999,
+  /** Dialogs and the floating navigation panel: the largest, softest surfaces. */
+  radiusSheet: 28,
+  /** Badges and chips: a pill, so a tag never reads as a little box. */
+  radiusBadge: 999,
   /** The one card elevation, used everywhere at the same strength. */
   shadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.05)",
   /** Lifted surfaces only: dialogs, popovers, the notification panel. */
@@ -181,13 +190,14 @@ export const si = {
   /**
    * The navigation chrome. Read by the shell; nothing else should need them.
    *
-   * There is no `sidebarWidth` or `shellBreakpoint` any more: the shell used to
-   * swap a 224px sidebar for a bottom bar at 1024px, and now shows the one bar
-   * at every width. Both tokens went with the sidebar rather than lingering as
-   * numbers nothing reads.
+   * Below `shellBreakpoint` the shell is a top bar plus a bottom bar; at and
+   * above it, a floating navigation panel `railWidth` wide replaces both.
    */
-  bottomBarHeight: 60,
-  topBarHeight: 52,
+  bottomBarHeight: 64,
+  topBarHeight: 56,
+  /** The floating navigation panel on a wide screen, and where it appears. */
+  railWidth: 248,
+  shellBreakpoint: 1024,
   /**
    * The stacking level for a shared dialog.
    *

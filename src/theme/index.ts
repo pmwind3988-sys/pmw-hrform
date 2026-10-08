@@ -255,11 +255,13 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: si.radius,
+          // Every button is a pill: anything you press is round, containers
+          // are not. See `si.radiusPill`.
+          borderRadius: si.radiusPill,
           textTransform: "none",
           fontWeight: 600,
           // SI's medium button: 10px vertical / 16px horizontal.
-          padding: "10px 16px",
+          padding: "10px 20px",
           fontSize: "0.845rem",
           transition: "background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease",
           boxShadow: "none",
@@ -304,7 +306,7 @@ const theme = createTheme({
           },
         },
         sizeSmall: {
-          padding: "7px 12px",
+          padding: "7px 14px",
           fontSize: "0.78rem",
         },
         sizeLarge: {
@@ -320,12 +322,10 @@ const theme = createTheme({
           // One elevation, applied uniformly. In SI no card is deeper than
           // another: hierarchy comes from size and position, so hover shifts
           // the border tint only and the page never shuffles depth on mouseover.
+          // A surface, not a box: no outline, one soft shadow. Separation
+          // comes from the white sheet on the canvas, never from a drawn edge.
           boxShadow: si.shadow,
-          border: editorialHairline,
-          transition: "border-color 0.2s ease",
-          "&:hover": {
-            borderColor: "rgba(0, 120, 212, 0.36)",
-          },
+          border: "none",
         },
       },
     },
@@ -349,11 +349,9 @@ const theme = createTheme({
         },
         elevation1: {
           boxShadow: si.shadow,
-          border: editorialHairline,
         },
         elevation2: {
           boxShadow: si.shadow,
-          border: editorialHairline,
         },
         // Lifted surfaces only — dialogs, popovers, panels that float over the
         // page and need to read as detached rather than merely present.
@@ -366,7 +364,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           "& .MuiOutlinedInput-root": {
-            borderRadius: si.radius,
+            borderRadius: si.radiusSm,
             transition: "background-color 0.2s ease, box-shadow 0.2s ease",
             // SI fills inputs with the canvas grey so a field reads as a slot
             // you type into rather than as another white card on white.
@@ -379,7 +377,7 @@ const theme = createTheme({
             },
             "&.Mui-focused": {
               backgroundColor: editorial.white,
-              boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.16)",
+              boxShadow: "0 0 0 3px rgba(15, 61, 145, 0.14)",
             },
           },
         },
@@ -388,7 +386,7 @@ const theme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          borderRadius: si.radius,
+          borderRadius: si.radiusSm,
           backgroundColor: canvasFill,
           "&.Mui-focused": {
             backgroundColor: editorial.white,
@@ -407,28 +405,26 @@ const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          // A badge is a tag, not a container: 5px, tighter than everything
-          // else in the system, so a row carrying two of them doesn't read as
-          // a row of little boxes.
+          // A badge is a tag, not a container: a pill, so a row carrying two
+          // of them never reads as a row of little boxes.
           borderRadius: si.radiusBadge,
-          fontWeight: 700,
+          fontWeight: 600,
           fontSize: "0.75rem",
-          height: 24,
-          border: editorialHairline,
+          height: 26,
+          border: "none",
           letterSpacing: "0",
         },
         label: {
-          paddingLeft: 8,
-          paddingRight: 8,
+          paddingLeft: 10,
+          paddingRight: 10,
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: si.radius,
+          borderRadius: si.radiusSheet,
           boxShadow: si.shadowRaised,
-          border: editorialHairline,
         },
       },
     },
@@ -443,8 +439,8 @@ const theme = createTheme({
         paper: {
           borderRadius: si.radius,
           boxShadow: si.shadowRaised,
-          border: editorialHairline,
           marginTop: 8,
+          padding: "4px 0",
         },
       },
     },
@@ -473,7 +469,7 @@ const theme = createTheme({
     MuiTooltip: {
       styleOverrides: {
         tooltip: {
-          borderRadius: si.radiusSm,
+          borderRadius: si.radiusPill,
           backgroundColor: editorial.ink,
           fontSize: "0.75rem",
           fontWeight: 500,
@@ -484,7 +480,7 @@ const theme = createTheme({
     MuiTab: {
       styleOverrides: {
         root: {
-          borderRadius: si.radius,
+          borderRadius: si.radiusPill,
           textTransform: "none",
           fontWeight: 600,
           fontSize: "0.845rem",
@@ -572,7 +568,7 @@ const theme = createTheme({
             alignItems: "center",
             backgroundColor: editorial.white,
             border: `1px solid ${editorial.pmwBlueSoft}`,
-            borderRadius: si.radius,
+            borderRadius: si.radiusSm,
             boxShadow: si.shadowRaised,
             color: editorial.ink,
             fontWeight: 600,
@@ -624,12 +620,12 @@ const theme = createTheme({
     MuiLinearProgress: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
-          backgroundColor: "rgba(16, 16, 16, 0.1)",
+          borderRadius: si.radiusPill,
+          backgroundColor: editorial.sky,
           height: 6,
         },
         bar: {
-          borderRadius: 6,
+          borderRadius: si.radiusPill,
         },
       },
     },
@@ -644,7 +640,8 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           transition: "background-color 0.2s ease, color 0.2s ease",
-          borderRadius: si.radiusSm,
+          // Circles: an icon on its own is pressed, so it gets the round shape.
+          borderRadius: "50%",
           // SI's mobile floor for anything tappable, applied everywhere so a
           // toolbar icon is the same target on a phone as on a desktop.
           minWidth: si.touchTarget,

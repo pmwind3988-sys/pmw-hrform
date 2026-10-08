@@ -1,185 +1,169 @@
-import { Box, Grid, Typography } from "@mui/material";
-import {
-  CancelOutlined as CancelIcon,
-  CheckCircleOutlined as CheckCircleIcon,
-  DescriptionOutlined as DescriptionIcon,
-  AccessTimeOutlined as AccessTimeIcon,
-} from "@mui/icons-material";
+import { Box, Typography } from "@mui/material";
 import type { Submission } from "../../types";
 import { editorial, si, siType } from "../../theme/editorial";
 import { bucketSubmissions } from "../../utils/submissionStatusBuckets";
-import Card from "../common/Card";
+
+export type StatusBucketKey = "pending" | "approved" | "rejected";
 
 interface StatsRowProps {
   submissions: Submission[];
+  /** Opens the list behind a ring. Omit it and the rings are read-only. */
+  onOpen?: (bucket: StatusBucketKey) => void;
 }
 
+const RING_SIZE = 64;
+const STROKE = 7;
+const RADIUS = (RING_SIZE - STROKE) / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
 /**
- * The four KPI tiles.
+ * Where submissions stand, as three rings you can press.
  *
- * Redrawn to SI's StatCard: a flat white card at the one card elevation, a
- * micro uppercase label, the number in tabular figures, and a thin progress
- * bar. Three things it deliberately no longer does:
+ * This replaced four boxed tiles that each said their number three times — a
+ * coloured cap, a tinted icon tile and a progress bar — next to a helper line
+ * repeating the number in words ("157 / 157 visible submissions"), plus a
+ * "Total" tile whose bar was always full. The total is now the sentence above
+ * the rings, and each ring shows one thing: its share of that total.
  *
- *   - It does not lift on hover. Every card in this system sits at the same
- *     depth and hierarchy comes from size and position, so a tile that rises
- *     when the pointer crosses it claims an importance it does not have —
- *     especially as these are not clickable.
- *   - It does not tint its own background. `rgba(255,255,255,0.94)` was a
- *     translucent white that let the old page gradient bleed through; the
- *     canvas is flat now, so the card is simply white with a hairline.
- *   - It does not compute its own status buckets. That rule is shared with the
- *     Dashboard section's summary line — see `submissionStatusBuckets`.
+ * A ring is the right shape here because the share IS the content: an amber
+ * ring nearly closed beside an almost empty green one is the whole story of a
+ * backlog, readable before any number is.
  *
- * The `accent` on each tile is the bright FILL (a 3px cap and a progress bar,
- * no text on it); `color` is the readable variant, because it tints a 24px icon
- * that has to be legible.
+ * Each ring is a pill-shaped button. Pressing one opens the matching list, so
+ * the summary leads somewhere instead of being a dead end.
+ *
+ * Counting is shared with the dashboard's summary line through
+ * `bucketSubmissions`, so the sentence and the rings cannot disagree.
  */
-export default function StatsRow({ submissions }: StatsRowProps) {
+export default function StatsRow({ submissions, onOpen }: StatsRowProps) {
   const { total, approved, pending, rejected } = bucketSubmissions(submissions);
+  const share = (value: number) => (total > 0 ? value / total : 0);
 
-  const percent = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
-  const submissionLabel = (value: number, label: string) =>
-    `${value} ${label} submission${value === 1 ? "" : "s"}`;
-
-  const stats = [
-    {
-      label: "Total",
-      value: total,
-      helper: total === 1 ? "1 visible submission" : `${total} visible submissions`,
-      progress: total > 0 ? 100 : 0,
-      icon: <DescriptionIcon sx={{ fontSize: 24 }} />,
-      bg: editorial.blueWash,
-      color: editorial.navyDeep,
-      accent: editorial.navy,
-    },
-    {
-      label: "Approved",
-      value: approved,
-      helper: submissionLabel(approved, "approved"),
-      progress: percent(approved),
-      icon: <CheckCircleIcon sx={{ fontSize: 24 }} />,
-      bg: editorial.successSoft,
-      color: editorial.success,
-      accent: editorial.successFill,
-    },
-    {
-      label: "Pending",
-      value: pending,
-      helper: submissionLabel(pending, "pending"),
-      progress: percent(pending),
-      icon: <AccessTimeIcon sx={{ fontSize: 24 }} />,
-      bg: editorial.accentSoft,
-      color: editorial.accentText,
-      accent: editorial.accent,
-    },
-    {
-      label: "Rejected",
-      value: rejected,
-      helper: submissionLabel(rejected, "rejected"),
-      progress: percent(rejected),
-      icon: <CancelIcon sx={{ fontSize: 24 }} />,
-      bg: editorial.errorSoft,
-      color: editorial.error,
-      accent: editorial.errorFill,
-    },
+  const rings: Array<{ key: StatusBucketKey; label: string; hint: string; value: number; fill: string }> = [
+    { key: "pending", label: "In progress", hint: "Still in an approval chain", value: pending, fill: editorial.accent },
+    { key: "approved", label: "Approved", hint: "Finished and signed off", value: approved, fill: editorial.successFill },
+    { key: "rejected", label: "Sent back", hint: "Rejected along the way", value: rejected, fill: editorial.errorFill },
   ];
 
   return (
-    <Grid container spacing={2}>
-      {stats.map((stat) => (
-        <Grid size={{ xs: 6, md: 3 }} key={stat.label}>
-          <Card
-            pad="none"
-            clip
-            sx={{
-              minHeight: 138,
-              p: { xs: 1.5, sm: `${si.padTight}px` },
-              display: "grid",
-              gridTemplateRows: "auto 1fr auto",
-              gap: 1.5,
-              position: "relative",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                inset: "0 0 auto 0",
-                height: 3,
-                backgroundColor: stat.accent,
-              },
-            }}
-          >
+    <Box
+      component="ul"
+      sx={{
+        listStyle: "none",
+        m: 0,
+        p: 0,
+        display: "grid",
+        gap: 1.5,
+        gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" },
+      }}
+    >
+      {rings.map((ring) => {
+        const portion = share(ring.value);
+        const percent = Math.round(portion * 100);
+        const interactive = Boolean(onOpen);
+        return (
+          <Box component="li" key={ring.key} sx={{ minWidth: 0 }}>
             <Box
-              sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}
-            >
-              <Typography sx={{ ...siType.micro, color: editorial.muted, display: "block" }}>
-                {stat.label}
-              </Typography>
-              <Box
-                sx={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: `${si.radiusSm}px`,
-                  backgroundColor: stat.bg,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: stat.color,
-                  flexShrink: 0,
-                }}
-              >
-                {stat.icon}
-              </Box>
-            </Box>
-            <Box sx={{ alignSelf: "end" }}>
-              <Typography
-                sx={{
-                  fontWeight: 700,
-                  color: editorial.ink,
-                  lineHeight: 1,
-                  letterSpacing: "-0.02em",
-                  fontSize: { xs: "1.75rem", sm: "2rem" },
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {stat.value}
-              </Typography>
-              <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 0.25 }}>
-                {stat.helper}
-              </Typography>
-            </Box>
-            <Box
+              component={interactive ? "button" : "div"}
+              type={interactive ? "button" : undefined}
+              onClick={interactive ? () => onOpen?.(ring.key) : undefined}
+              aria-label={interactive ? `${ring.label}: ${ring.value} of ${total}. Open the list.` : undefined}
               sx={{
-                height: 5,
-                borderRadius: 999,
-                backgroundColor: editorial.skySoft,
-                overflow: "hidden",
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 1.75,
+                border: "none",
+                textAlign: "left",
+                p: 1,
+                pr: 2.5,
+                borderRadius: `${si.radiusPill}px`,
+                backgroundColor: editorial.panel,
+                boxShadow: si.shadow,
+                cursor: interactive ? "pointer" : "default",
+                transition: "background-color 0.15s ease, transform 0.15s ease",
+                ...(interactive
+                  ? {
+                      "&:hover": { backgroundColor: editorial.blueSoft },
+                      "&:hover .ring": { transform: "scale(1.06)" },
+                      "&:active": { transform: "scale(0.985)" },
+                    }
+                  : null),
+                "@media (prefers-reduced-motion: reduce)": { transition: "none" },
               }}
             >
-              {/**
-                * Scaled, not resized. Animating `width` runs layout on every
-                * frame; `transform` runs on the compositor. Same pattern as
-                * `ScrollProgress` in DynamicFormPage.
-                *
-                * The fill carries NO radius of its own -- a horizontal scale
-                * would squash its rounded caps into ellipses. The rounded ends
-                * come from the track clipping it (`borderRadius` + `overflow:
-                * hidden` above), which is undistortable.
-                */}
               <Box
+                className="ring"
                 sx={{
-                  height: "100%",
-                  width: "100%",
-                  transformOrigin: "left center",
-                  transform: `scaleX(${stat.progress / 100})`,
-                  backgroundColor: stat.accent,
-                  transition: "transform 0.28s ease",
+                  position: "relative",
+                  width: RING_SIZE,
+                  height: RING_SIZE,
+                  flexShrink: 0,
+                  transition: "transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1)",
                   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
                 }}
-              />
+              >
+                <svg
+                  width={RING_SIZE}
+                  height={RING_SIZE}
+                  viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+                  aria-hidden
+                  style={{ transform: "rotate(-90deg)", display: "block" }}
+                >
+                  <circle
+                    cx={RING_SIZE / 2}
+                    cy={RING_SIZE / 2}
+                    r={RADIUS}
+                    fill="none"
+                    stroke={editorial.skySoft}
+                    strokeWidth={STROKE}
+                  />
+                  {/* Drawn as a dash so the sweep can animate on the compositor-
+                      friendly `stroke-dashoffset` rather than redrawing a path.
+                      A zero share draws nothing, not a dot. */}
+                  {portion > 0 && (
+                    <circle
+                      cx={RING_SIZE / 2}
+                      cy={RING_SIZE / 2}
+                      r={RADIUS}
+                      fill="none"
+                      stroke={ring.fill}
+                      strokeWidth={STROKE}
+                      strokeLinecap="round"
+                      strokeDasharray={CIRCUMFERENCE}
+                      strokeDashoffset={CIRCUMFERENCE * (1 - portion)}
+                      style={{ transition: "stroke-dashoffset 0.6s cubic-bezier(0.2, 0.7, 0.2, 1)" }}
+                    />
+                  )}
+                </svg>
+                <Typography
+                  component="span"
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    ...siType.data,
+                    fontWeight: 700,
+                    color: ring.value === 0 ? editorial.softMuted : editorial.ink,
+                  }}
+                >
+                  {ring.value}
+                </Typography>
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ ...siType.cardTitle, color: editorial.ink }} noWrap>
+                  {ring.label}
+                </Typography>
+                <Typography sx={{ ...siType.subtext, color: editorial.muted }} noWrap>
+                  {total > 0 ? `${percent}% · ${ring.hint}` : ring.hint}
+                </Typography>
+              </Box>
             </Box>
-          </Card>
-        </Grid>
-      ))}
-    </Grid>
+          </Box>
+        );
+      })}
+    </Box>
   );
 }

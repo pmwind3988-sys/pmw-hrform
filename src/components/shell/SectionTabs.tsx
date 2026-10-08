@@ -21,9 +21,10 @@ interface SectionTabsProps {
  * 40-odd pixels on exactly one category, which reads as the layout shifting
  * rather than as a menu being long.
  *
- * The active tab is marked with a 2px navy underline rather than a filled pill:
- * the strip sits directly on the white bar above the canvas, and five filled
- * pills in a row compete with the page's own cards for attention.
+ * Shown only on narrow screens; on a wide one the floating panel lists the
+ * same pages under their section. Each tab is a pill: outlined when idle, a
+ * soft navy fill when it is the page you are on. Pills rather than an
+ * underline because everything you can press in this system is round.
  *
  * Hiding the scrollbar removed the only sign that the strip scrolls at all, so
  * a tab past the edge simply did not exist as far as the reader was concerned.
@@ -79,7 +80,7 @@ export default function SectionTabs({ tabs, activePath }: SectionTabsProps) {
     display: "flex",
     alignItems: "center",
     justifyContent: side === "left" ? "flex-start" : "flex-end",
-    width: 40,
+    width: 32,
     border: "none",
     cursor: "pointer",
     color: editorial.navy,
@@ -91,7 +92,7 @@ export default function SectionTabs({ tabs, activePath }: SectionTabsProps) {
   });
 
   return (
-    <Box sx={{ position: "relative", borderTop: `1px solid ${editorial.border}`, backgroundColor: editorial.panel }}>
+    <Box sx={{ position: "relative", backgroundColor: editorial.panel }}>
       {overflow.left && (
         <Box
           component="button"
@@ -122,9 +123,11 @@ export default function SectionTabs({ tabs, activePath }: SectionTabsProps) {
       ref={stripRef}
       sx={{
         display: "flex",
-        alignItems: "stretch",
-        gap: 0.5,
-        px: { xs: 1.5, lg: 3 },
+        alignItems: "center",
+        gap: 0.75,
+        px: 1.5,
+        pb: 1.25,
+        pt: 0.25,
         overflowX: "auto",
         // Momentum scrolling inside the strip on touch devices.
         WebkitOverflowScrolling: "touch",
@@ -153,28 +156,30 @@ export default function SectionTabs({ tabs, activePath }: SectionTabsProps) {
               background: "none",
               cursor: "pointer",
               px: 1.5,
-              // 44px tall, which is the touch floor and also the height the
-              // underline needs to sit clear of the text.
-              minHeight: si.touchTarget,
-              ...siType.cardTitle,
-              fontWeight: isActive ? 700 : 500,
-              color: isActive ? editorial.navy : editorial.muted,
+              // 36px pill inside a 44px row: the strip's padding makes up the
+              // touch floor without the pill itself looking like a slab.
+              minHeight: 36,
+              borderRadius: `${si.radiusPill}px`,
+              ...siType.subtext,
+              // One weight for both states, so the label never changes width
+              // as it becomes active; colour and fill carry the state.
+              fontWeight: 600,
+              color: isActive ? editorial.navyDeep : editorial.muted,
               whiteSpace: "nowrap",
-              // Drawn as a border rather than a pseudo-element so it occupies
-              // layout space on every tab, active or not: an underline that
-              // appears only when active would shift the labels by 2px.
-              borderBottom: `2px solid ${isActive ? editorial.navy : "transparent"}`,
+              backgroundColor: isActive ? editorial.sky : "transparent",
+              boxShadow: isActive ? "none" : `inset 0 0 0 1px ${editorial.border}`,
+              transition: "background-color 0.15s ease, color 0.15s ease",
               "&:hover": {
                 color: editorial.navy,
-                backgroundColor: isActive ? "transparent" : editorial.skySoft,
+                backgroundColor: isActive ? editorial.sky : editorial.skySoft,
               },
               "&:focus-visible": {
                 outline: `2px solid ${editorial.navy}`,
-                outlineOffset: "-2px",
+                outlineOffset: "2px",
               },
             }}
           >
-            <Icon sx={{ fontSize: 17 }} />
+            <Icon sx={{ fontSize: 16 }} />
             {tab.label}
           </Box>
         );

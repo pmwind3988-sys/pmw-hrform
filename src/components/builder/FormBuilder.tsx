@@ -120,7 +120,7 @@ function FieldRefPicker({
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter..."
           style={{
             width: 80, padding: "2px 6px", fontSize: 11, border: `1px solid ${C.border}`,
-            borderRadius: 4, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+            borderRadius: 12, outline: "none", fontFamily: "inherit", boxSizing: "border-box",
           }} />
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 3, maxHeight: 80, overflowY: "auto" }}>
@@ -129,7 +129,7 @@ function FieldRefPicker({
             title={`${f.title || f.name}`}
             style={{
               padding: "1px 5px", fontSize: 11, fontFamily: "monospace",
-              border: `1px solid ${C.border}`, borderRadius: 3,
+              border: `1px solid ${C.border}`, borderRadius: "999px",
               background: C.offWhite, color: C.purple, cursor: "pointer",
               lineHeight: 1.6, whiteSpace: "nowrap",
             }}
@@ -533,7 +533,7 @@ function RulesSection({ rules, ruleType: _ruleType, title, icon, color, allField
   };
 
   return (
-    <div style={{ marginBottom: 16, padding: 12, background: `${color}08`, borderRadius: 8, border: `1px solid ${color}20` }}>
+    <div style={{ marginBottom: 16, padding: 12, background: `${color}08`, borderRadius: 20, border: `1px solid ${color}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 14, display: "inline-flex", alignItems: "center", color }}>{icon}</span>
         <span style={{ fontSize: 12.5, fontWeight: 700, color, flex: 1 }}>{title}</span>
@@ -567,7 +567,7 @@ function ValueMappingSection({ valueRule, allFields, onChange }: {
   const [enabled, setEnabled] = useState(!!valueRule?.sourceField);
   
   return (
-    <div style={{ marginBottom: 16, padding: 12, background: `${C.purple}08`, borderRadius: 8, border: `1px solid ${C.purple}20` }}>
+    <div style={{ marginBottom: 16, padding: 12, background: `${C.purple}08`, borderRadius: 20, border: `1px solid ${C.purple}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <RefreshIcon style={{ fontSize: 14 }} />
         <span style={{ fontSize: 12.5, fontWeight: 700, color: C.purple, flex: 1 }}>Value Mapping</span>
@@ -620,7 +620,7 @@ function CrossFieldValidationSection({ validations, fieldName, allFields, onChan
   };
 
   return (
-    <div style={{ marginBottom: 16, padding: 12, background: `${C.red}08`, borderRadius: 8, border: `1px solid ${C.red}20` }}>
+    <div style={{ marginBottom: 16, padding: 12, background: `${C.red}08`, borderRadius: 20, border: `1px solid ${C.red}20` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 14 }}>⚖️</span>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: C.red, flex: 1 }}>Cross-field Validation</span>
@@ -630,7 +630,7 @@ function CrossFieldValidationSection({ validations, fieldName, allFields, onChan
         <div style={{ fontSize: 11, color: C.textMuted }}>Add fields before this one to create validations.</div>
       )}
       {validations.map((v, idx) => (
-        <div key={v.id} style={{ marginBottom: 12, padding: 10, background: C.white, borderRadius: 8 }}>
+        <div key={v.id} style={{ marginBottom: 12, padding: 10, background: C.white, borderRadius: 12 }}>
           <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8 }}>
             <strong>{fieldName}</strong> must be:
           </div>
@@ -1777,12 +1777,12 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0 }}>Matrix Columns</span>
       <div style={{ flex: 1 }} />
-      <button onClick={addCol} style={{ fontSize: 11.5, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: 8, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>＋ Add column</button>
+      <button onClick={addCol} style={{ fontSize: 11.5, color: C.purple, background: "none", border: `1px dashed ${C.purple}`, borderRadius: "999px", padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>＋ Add column</button>
     </div>
-    {columns.length === 0 && <div style={{ fontSize: 11.5, color: C.textMuted, padding: 8, background: C.offWhite, borderRadius: 8 }}>No columns defined. Add at least one.</div>}
+    {columns.length === 0 && <div style={{ fontSize: 11.5, color: C.textMuted, padding: 8, background: C.offWhite, borderRadius: 12 }}>No columns defined. Add at least one.</div>}
     {columns.map((col, i) => {
       const hasChoices = col.cellType === "dropdown" || col.cellType === "checkbox";
-      return <div key={i} style={{ padding: 10, background: C.offWhite, borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+      return <div key={i} style={{ padding: 10, background: C.offWhite, borderRadius: 12, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
         {/*
           * The two inputs shrink rather than push the row wider: the properties
           * panel is narrow, and without `minWidth: 0` a flex item refuses to go
@@ -1792,14 +1792,14 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple, width: 18 }}>{i + 1}</span>
           <div style={{ flex: 1, display: "flex", gap: 6, minWidth: 0 }}>
-            <input value={col.title} onChange={e => setColTitle(i, e.target.value)} placeholder="Label" aria-label={`Column ${i + 1} label`} style={{ flex: 1.5, minWidth: 0, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
-            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} placeholder="schemaName" aria-label={`Column ${i + 1} schema name`} style={{ flex: 1, minWidth: 0, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }} />
+            <input value={col.title} onChange={e => setColTitle(i, e.target.value)} placeholder="Label" aria-label={`Column ${i + 1} label`} style={{ flex: 1.5, minWidth: 0, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontFamily: "var(--pmw-font-main)" }} />
+            <input value={col.name} onChange={e => updateCol(i, { name: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} placeholder="schemaName" aria-label={`Column ${i + 1} schema name`} style={{ flex: 1, minWidth: 0, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontFamily: "var(--pmw-font-main)" }} />
           </div>
           <button
             onClick={() => removeCol(i)}
             title={`Remove ${col.title || `column ${i + 1}`}`}
             aria-label={`Remove column ${i + 1}`}
-            style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 11, color: C.red, background: "none", border: `1px solid ${C.border}`, borderRadius: 5, padding: "3px 7px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}
+            style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 11, color: C.red, background: "none", border: `1px solid ${C.border}`, borderRadius: "999px", padding: "3px 7px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}
           >
             <CloseIcon style={{ fontSize: 11 }} /> Remove
           </button>
@@ -1825,7 +1825,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             onChange={e => updateCol(i, { group: e.target.value || undefined })}
             placeholder="none — e.g. Appearance Check"
             aria-label={`Column ${i + 1} group heading`}
-            style={{ flex: 1, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)" }}
+            style={{ flex: 1, fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontFamily: "var(--pmw-font-main)" }}
           />
         </div>
         <div>
@@ -1836,7 +1836,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             rows={3}
             placeholder={"one per line — e.g.\n7.5m-10-1.1kN\n9.0m-14-2.0kN"}
             aria-label={`Column ${i + 1} preset values`}
-            style={{ width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 5, fontFamily: "var(--pmw-font-main)", resize: "vertical" }}
+            style={{ width: "100%", marginTop: 4, boxSizing: "border-box", fontSize: 11.5, padding: "4px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontFamily: "var(--pmw-font-main)", resize: "vertical" }}
           />
           <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3, lineHeight: 1.45 }}>
             {(col.presetValues || []).length > 0
@@ -1856,7 +1856,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             onChange={src => updateCol(i, { filteredListSource: src || undefined, choices: src?.list ? [] : (col.choices || []) })}
           />
           {!col.choicesSource?.list && !col.filteredListSource?.list && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-            {(col.choices || []).map((ch, ci) => <span key={ci} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>
+            {(col.choices || []).map((ch, ci) => <span key={ci} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: "999px" }}>
               {ch}
               <button onClick={() => updateCol(i, { choices: (col.choices || []).filter((_, idx) => idx !== ci) })} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", padding: 0 }}><CloseIcon style={{ fontSize: 9 }} /></button>
             </span>)}
@@ -1914,16 +1914,16 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
     </div>
     <div style={{ display: "flex", gap: 8 }}>
       <button onClick={() => { setMode("manual"); onChange(undefined); }}
-        style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${mode === "manual" ? C.purple : C.border}`, background: mode === "manual" ? C.purplePale : C.white, color: mode === "manual" ? C.purple : C.textMuted, fontSize: 12.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
+        style={{ flex: 1, padding: "6px 0", borderRadius: "999px", border: `1px solid ${mode === "manual" ? C.purple : C.border}`, background: mode === "manual" ? C.purplePale : C.white, color: mode === "manual" ? C.purple : C.textMuted, fontSize: 12.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
         Manual
       </button>
       <button onClick={() => setMode("sp")}
-        style={{ flex: 1, padding: "6px 0", borderRadius: 8, border: `1px solid ${mode === "sp" ? C.purple : C.border}`, background: mode === "sp" ? C.purplePale : C.white, color: mode === "sp" ? C.purple : C.textMuted, fontSize: 12.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
+        style={{ flex: 1, padding: "6px 0", borderRadius: "999px", border: `1px solid ${mode === "sp" ? C.purple : C.border}`, background: mode === "sp" ? C.purplePale : C.white, color: mode === "sp" ? C.purple : C.textMuted, fontSize: 12.5, cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>
         SharePoint List
       </button>
     </div>
     {mode === "sp" && <>
-      {!token && <div style={{ fontSize: 11.5, color: C.amber, padding: 8, background: C.amberPale, borderRadius: 8 }}>Sign in to load SharePoint lists.</div>}
+      {!token && <div style={{ fontSize: 11.5, color: C.amber, padding: 8, background: C.amberPale, borderRadius: 12 }}>Sign in to load SharePoint lists.</div>}
       {!!token && <>
         <PropRow label="List">
           <Select value={source?.list || ""} onChange={v => onChange({ list: v || undefined, column: undefined })} options={[
@@ -1937,8 +1937,8 @@ function SpChoicesSourceEditor({ source, token, onChange }: {
             ...columns.map(c => ({ value: c.title, label: `${c.title} (${c.typeKind === 15 ? "Multi" : "Single"})` }))
           ]} />
         </PropRow>}
-        {selectedCol && selectedCol.choices.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: 8, background: C.offWhite, borderRadius: 8 }}>
-          {selectedCol.choices.map(ch => <span key={ch} style={{ fontSize: 11, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: 12 }}>{ch}</span>)}
+        {selectedCol && selectedCol.choices.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: 8, background: C.offWhite, borderRadius: 12 }}>
+          {selectedCol.choices.map(ch => <span key={ch} style={{ fontSize: 11, padding: "2px 8px", background: C.purplePale, color: C.purple, borderRadius: "999px" }}>{ch}</span>)}
         </div>}
         {error && <div style={{ fontSize: 11.5, color: C.red }}>{error}</div>}
       </>}
@@ -2025,14 +2025,14 @@ function SpFilteredListSourceEditor({ source, token, onChange }: {
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: C.textMuted, whiteSpace: "nowrap" }}>Where</span>
           <select value={source?.filterColumn || ""} onChange={e => onChange({ ...source, filterColumn: (e.target as HTMLSelectElement).value || undefined })}
-            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11.5, fontFamily: "var(--pmw-font-main)", padding: "0 4px" }}>
+            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5, fontFamily: "var(--pmw-font-main)", padding: "0 4px" }}>
             <option value="">Select column</option>
             {columns.map(c => <option key={c.title} value={c.title}>{c.title}</option>)}
           </select>
           <span style={{ fontSize: 11, color: C.textMuted }}>=</span>
           <input value={source?.filterValue || ""} onChange={e => onChange({ ...source, filterValue: e.target.value })}
             placeholder="value"
-            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 11.5, fontFamily: "var(--pmw-font-main)", padding: "0 6px" }} />
+            style={{ flex: 1, height: 26, border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5, fontFamily: "var(--pmw-font-main)", padding: "0 6px" }} />
         </div>
       </>}
       {error && <div style={{ fontSize: 11.5, color: C.red }}>{error}</div>}
@@ -2362,7 +2362,7 @@ function JsonPreview({ json, onClose }: { json: SurveyJson; onClose: () => void 
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{charCount} chars</span>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 11, color: copied ? editorial.successFill : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 8, minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>{copied ? "Copied!" : "Copy JSON"}</button>
+        <button onClick={e => { e.stopPropagation(); copy(); }} style={{ fontSize: 11, color: copied ? editorial.successFill : "rgba(255,255,255,0.68)", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "999px", minHeight: 28, padding: "3px 10px", cursor: "pointer", fontFamily: "var(--pmw-font-main)" }}>{copied ? "Copied!" : "Copy JSON"}</button>
         <ExpandLessIcon style={{ fontSize: 16, color: "rgba(255,255,255,0.68)" }} />
       </div>
     </div>
@@ -2478,14 +2478,14 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
-    <div style={{ background: C.white, borderRadius: 12, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
+    <div style={{ background: C.white, borderRadius: 28, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
       <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>Live Form Preview</div>
           <div style={{ fontSize: 14, color: C.white, fontFamily: "var(--pmw-font-main)" }}>How users will see this form</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white, width: 30, height: 30, borderRadius: "50%", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}><CloseIcon style={{ fontSize: 16 }} /></button>
         </div>
       </div>
       {showHeaderBanner && <div style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -3030,7 +3030,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {showCommandPalette && (
         <div onClick={() => setShowCommandPalette(false)} onKeyDown={(e) => { if (e.key === "Escape") setShowCommandPalette(false); }}
           style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "120px" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 480, maxWidth: "90vw", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 480, maxWidth: "90vw", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke={C.textMuted} strokeWidth="1.5"/><path d="M10.5 10.5L14 14" stroke={C.textMuted} strokeWidth="1.5" strokeLinecap="round"/></svg>
               <input autoFocus value={commandPaletteSearch} onChange={(e) => setCommandPaletteSearch(e.target.value)} placeholder="Search field types..." style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "var(--pmw-font-main)", color: C.textPrimary }} />
@@ -3064,27 +3064,27 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* Data Sources Manager Modal */}
       {showDataSources && (
         <div onClick={() => setShowDataSources(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><PowerIcon style={{ fontSize: 16, marginRight: 6 }} /> Data Sources</div>
               <button onClick={() => setShowDataSources(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 16, maxHeight: 400, overflowY: "auto" }}>
               <div style={{ marginBottom: 16 }}>
-                <button onClick={() => setDataSources([...dataSources, { name: `ds${dataSources.length + 1}`, url: "", labelKey: "label", valueKey: "value" }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 8, cursor: "pointer" }}>+ Add Data Source</button>
+                <button onClick={() => setDataSources([...dataSources, { name: `ds${dataSources.length + 1}`, url: "", labelKey: "label", valueKey: "value" }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: "999px", cursor: "pointer" }}>+ Add Data Source</button>
               </div>
               {dataSources.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13.5 }}>No data sources. Add one to connect dropdowns to REST APIs.</div>
               ) : dataSources.map((ds, idx) => (
-                <div key={idx} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
+                <div key={idx} style={{ padding: 12, background: C.offWhite, borderRadius: 12, marginBottom: 8 }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                    <input value={ds.name} onChange={(e) => { const n = [...dataSources]; n[idx].name = e.target.value; setDataSources(n); }} placeholder="Source name (e.g. departments)" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                    <input value={ds.name} onChange={(e) => { const n = [...dataSources]; n[idx].name = e.target.value; setDataSources(n); }} placeholder="Source name (e.g. departments)" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5 }} />
                     <button onClick={() => setDataSources(dataSources.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12.5 }}>Delete</button>
                   </div>
-                  <input value={ds.url} onChange={(e) => { const n = [...dataSources]; n[idx].url = e.target.value; setDataSources(n); }} placeholder="REST API URL..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
+                  <input value={ds.url} onChange={(e) => { const n = [...dataSources]; n[idx].url = e.target.value; setDataSources(n); }} placeholder="REST API URL..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5, marginBottom: 8 }} />
                   <div style={{ display: "flex", gap: 8 }}>
-                    <input value={ds.labelKey} onChange={(e) => { const n = [...dataSources]; n[idx].labelKey = e.target.value; setDataSources(n); }} placeholder="label key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
-                    <input value={ds.valueKey} onChange={(e) => { const n = [...dataSources]; n[idx].valueKey = e.target.value; setDataSources(n); }} placeholder="value key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                    <input value={ds.labelKey} onChange={(e) => { const n = [...dataSources]; n[idx].labelKey = e.target.value; setDataSources(n); }} placeholder="label key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5 }} />
+                    <input value={ds.valueKey} onChange={(e) => { const n = [...dataSources]; n[idx].valueKey = e.target.value; setDataSources(n); }} placeholder="value key" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5 }} />
                   </div>
                 </div>
               ))}
@@ -3095,14 +3095,14 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* Export Wizard Modal */}
       {showExportWizard && (
         <div onClick={() => setShowExportWizard(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 520, boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><FileUploadIcon style={{ fontSize: 16, marginRight: 6 }} /> Export Form</div>
               <button onClick={() => setShowExportWizard(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 20 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(surveyJson, null, 2)); alert("JSON copied to clipboard!"); }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
+                <button onClick={() => { navigator.clipboard.writeText(JSON.stringify(surveyJson, null, 2)); alert("JSON copied to clipboard!"); }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 16, marginRight: 6 }} /> SurveyJS JSON</div>
                   <div style={{ fontSize: 11.5, color: C.textMuted }}>Copy full SurveyJS JSON to clipboard</div>
                 </button>
@@ -3111,7 +3111,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const blob = new Blob([`Field Name,Field Title,Type,Required\n${csv}`], { type: "text/csv" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `${surveyJson.title || "form"}_fields.csv`; a.click();
-                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
+                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><TableChartIcon style={{ fontSize: 14, marginRight: 4 }} /> Excel CSV</div>
                   <div style={{ fontSize: 11.5, color: C.textMuted }}>Export field names and types as CSV</div>
                 </button>
@@ -3120,7 +3120,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const blob = new Blob([html], { type: "text/html" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `${surveyJson.title || "form"}.html`; a.click();
-                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
+                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Blank HTML Form</div>
                   <div style={{ fontSize: 11.5, color: C.textMuted }}>Export printable blank form as HTML</div>
                 </button>
@@ -3129,7 +3129,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   const printContent = `<html><head><title>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</title><style>body{font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;padding:40px;}h1{color:#0078D4;border-bottom:2px solid #0078D4;padding-bottom:10px;}label{display:block;margin:16px 0 4px;font-weight:600;}input,select,textarea{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ccc;}.field-list{margin-top:30px;}</style></head><body><h1>${DOMPurify.sanitize(String(surveyJson.title ?? "Form"))}</h1>${fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map(f => `<div class="field-list"><label>${DOMPurify.sanitize(String(f.title))}${f.isRequired ? " *" : ""}</label>${f.description ? `<small style="color:#666">${DOMPurify.sanitize(String(f.description))}</small><br/>` : ""}<div style="height:24px;border-bottom:1px solid #ccc;"></div></div>`).join("\n")}</body></html>`;
                   const printWindow = window.open("", "_blank");
                   if (printWindow) { printWindow.document.write(printContent); printWindow.document.close(); printWindow.print(); }
-                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
+                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: C.textPrimary }}>🖨️ PDF Blank Form</div>
                   <div style={{ fontSize: 11.5, color: C.textMuted }}>Open printable form for PDF export</div>
                 </button>
@@ -3144,7 +3144,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                   void _formTitle; void _jsonStr; void _csvStr; void _emailTemplatesStr; void _webhookStr; void _manifest;
                   // Note: Real ZIP requires a library like JSZip - this is a placeholder
                   alert("ZIP export would include: form.json, fields.csv, email-templates.json, webhooks.json, README.md\n\n(Requires JSZip library for full implementation)");
-                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", textAlign: "left" }}>
+                }} style={{ padding: 14, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, cursor: "pointer", textAlign: "left" }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: C.textPrimary }}>📦 Full ZIP Export</div>
                   <div style={{ fontSize: 11.5, color: C.textMuted }}>Download all form assets as ZIP</div>
                 </button>
@@ -3156,7 +3156,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* i18n Translations Modal */}
       {showI18n && (
         <div onClick={() => setShowI18n(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 600, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 600, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><TranslateIcon style={{ fontSize: 16, marginRight: 6 }} /> Translations</div>
               <button onClick={() => setShowI18n(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
@@ -3168,7 +3168,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 { code: "zh" as const, label: "🇨🇳 Chinese" },
                 { code: "ta" as const, label: "🇮🇳 Tamil" }
               ]).map(loc => (
-                <button key={loc.code} onClick={() => setActiveLocale(loc.code)} style={{ padding: "6px 12px", background: activeLocale === loc.code ? C.purplePale : C.offWhite, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: activeLocale === loc.code ? C.purple : C.textMuted }}>
+                <button key={loc.code} onClick={() => setActiveLocale(loc.code)} style={{ padding: "6px 12px", background: activeLocale === loc.code ? C.purplePale : C.offWhite, border: "none", borderRadius: "999px", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: activeLocale === loc.code ? C.purple : C.textMuted }}>
                   {loc.label}
                 </button>
               ))}
@@ -3180,21 +3180,21 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               {fields.filter(f => f.type !== "html" && f.type !== "panel" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map((f) => {
                 const fieldTranslations = translations[f.name]?.[activeLocale] || {};
                 return (
-                  <div key={f._id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
+                  <div key={f._id} style={{ padding: 12, background: C.offWhite, borderRadius: 12, marginBottom: 8 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8, color: C.textPrimary }}>{f.title} <span style={{ color: C.textMuted, fontWeight: 400 }}>({f.name})</span></div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Label</div>
-                        <input value={fieldTranslations.label || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], label: e.target.value } } }))} placeholder={`Translate "${f.title}"`} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} />
+                        <input value={fieldTranslations.label || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], label: e.target.value } } }))} placeholder={`Translate "${f.title}"`} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} />
                       </div>
                       <div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Placeholder</div>
-                        <input value={fieldTranslations.placeholder || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], placeholder: e.target.value } } }))} placeholder={f.placeholder || "(no placeholder)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} />
+                        <input value={fieldTranslations.placeholder || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], placeholder: e.target.value } } }))} placeholder={f.placeholder || "(no placeholder)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} />
                       </div>
                     </div>
                     <div style={{ marginTop: 8 }}>
                       <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Help Text / Description</div>
-                      <input value={fieldTranslations.description || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], description: e.target.value } } }))} placeholder={f.description || "(no description)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} />
+                      <input value={fieldTranslations.description || ""} onChange={(e) => setTranslations((prev: Record<string, Record<string, Record<string, string>>>) => ({ ...prev, [f.name]: { ...prev[f.name], [activeLocale]: { ...prev[f.name]?.[activeLocale], description: e.target.value } } }))} placeholder={f.description || "(no description)"} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} />
                     </div>
                   </div>
                 );
@@ -3206,7 +3206,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* Theme Editor Modal */}
       {showThemeEditor && (
         <div onClick={() => setShowThemeEditor(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 480, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 480, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><PaletteIcon style={{ fontSize: 16, marginRight: 6 }} /> Theme Editor</div>
               <button onClick={() => setShowThemeEditor(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
@@ -3215,18 +3215,18 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Colors</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || editorial.pmwBlue)} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Background</label><input type="color" value={String(surveySettings.backgroundColor || editorial.white)} onChange={(e) => setSurveySettings({ ...surveySettings, backgroundColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || editorial.ink)} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Error Color</label><input type="color" value={String(surveySettings.errorColor || editorial.error)} onChange={(e) => setSurveySettings({ ...surveySettings, errorColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 8 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Primary Color</label><input type="color" value={String(surveySettings.primaryColor || editorial.pmwBlue)} onChange={(e) => setSurveySettings({ ...surveySettings, primaryColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 12 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Background</label><input type="color" value={String(surveySettings.backgroundColor || editorial.white)} onChange={(e) => setSurveySettings({ ...surveySettings, backgroundColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 12 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Text Color</label><input type="color" value={String(surveySettings.textColor || editorial.ink)} onChange={(e) => setSurveySettings({ ...surveySettings, textColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 12 }} /></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Error Color</label><input type="color" value={String(surveySettings.errorColor || editorial.error)} onChange={(e) => setSurveySettings({ ...surveySettings, errorColor: e.target.value })} style={{ width: "100%", height: 36, border: `1px solid ${C.border}`, borderRadius: 12 }} /></div>
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, textTransform: "uppercase" }}>Typography</div>
-                <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Font Family</label><select value={String(surveySettings.fontFamily || APP_FONT_NAME)} onChange={() => setSurveySettings({ ...surveySettings, fontFamily: APP_FONT_NAME })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 8 }}><option>{APP_FONT_NAME}</option></select></div>
+                <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Font Family</label><select value={String(surveySettings.fontFamily || APP_FONT_NAME)} onChange={() => setSurveySettings({ ...surveySettings, fontFamily: APP_FONT_NAME })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12 }}><option>{APP_FONT_NAME}</option></select></div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Label Position</label><select value={String(surveySettings.labelPosition || "top")} onChange={(e) => setSurveySettings({ ...surveySettings, labelPosition: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 8 }}><option value="top">Top</option><option value="left">Left</option><option value="floating">Floating</option></select></div>
-                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Border Radius</label><select value={String(surveySettings.borderRadius || "8px")} onChange={(e) => setSurveySettings({ ...surveySettings, borderRadius: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 8 }}><option>0px</option><option>4px</option><option>8px</option><option>12px</option></select></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Label Position</label><select value={String(surveySettings.labelPosition || "top")} onChange={(e) => setSurveySettings({ ...surveySettings, labelPosition: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12 }}><option value="top">Top</option><option value="left">Left</option><option value="floating">Floating</option></select></div>
+                  <div><label style={{ fontSize: 11, color: C.textSecond, display: "block", marginBottom: 4 }}>Border Radius</label><select value={String(surveySettings.borderRadius || "8px")} onChange={(e) => setSurveySettings({ ...surveySettings, borderRadius: e.target.value })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12 }}><option>0px</option><option>4px</option><option>8px</option><option>12px</option></select></div>
                 </div>
               </div>
               <div>
@@ -3241,7 +3241,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* Field Templates Modal */}
       {showFieldTemplates && (
         <div onClick={() => setShowFieldTemplates(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 16, marginRight: 6 }} /> Field Templates</div>
               <button onClick={() => setShowFieldTemplates(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
@@ -3249,7 +3249,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
             <div style={{ padding: 16, maxHeight: 400, overflowY: "auto" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[ { name: "Full Address", icon: <HomeIcon style={{ fontSize: 20 }} />, fields: [{ type: "text", name: "address1", title: "Address Line 1" }, { type: "text", name: "city", title: "City" }, { type: "text", name: "postcode", title: "Postcode" }] }, { name: "Personal Info", icon: <PersonIcon style={{ fontSize: 20 }} />, fields: [{ type: "text", name: "fullName", title: "Full Name" }, { type: "email", name: "email", title: "Email" }] }, { name: "Bank Details", icon: <AccountBalanceIcon style={{ fontSize: 20 }} />, fields: [{ type: "text", name: "bankName", title: "Bank Name" }, { type: "text", name: "accountNumber", title: "Account Number" }] }].map((tpl, idx) => (
-                  <div key={idx} onClick={() => { tpl.fields.forEach(f => { const q = createQuestion({ type: f.type, label: f.title, icon: "", group: "Basic", description: f.title, spColumnKind: 2, defaultProps: {} }); q.name = f.name; pushHistory([...fields, q]); }); setShowFieldTemplates(false); }} style={{ padding: 14, background: C.offWhite, borderRadius: 8, cursor: "pointer" }}>
+                  <div key={idx} onClick={() => { tpl.fields.forEach(f => { const q = createQuestion({ type: f.type, label: f.title, icon: "", group: "Basic", description: f.title, spColumnKind: 2, defaultProps: {} }); q.name = f.name; pushHistory([...fields, q]); }); setShowFieldTemplates(false); }} style={{ padding: 14, background: C.offWhite, borderRadius: 12, cursor: "pointer" }}>
                     <span style={{ marginRight: 10, display: "inline-flex", verticalAlign: "middle" }}>{tpl.icon}</span><span style={{ fontWeight: 600 }}>{tpl.name}</span>
                   </div>
                 ))}
@@ -3261,14 +3261,14 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* Field Comments Modal */}
       {showFieldComments && (
         <div onClick={() => setShowFieldComments(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><ChatIcon style={{ fontSize: 16, marginRight: 6 }} /> Field Comments</div>
               <button onClick={() => setShowFieldComments(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 16 }}>
               {fields.map((f) => (
-                <div key={f._id} style={{ padding: 10, marginBottom: 8, background: C.offWhite, borderRadius: 8 }}>
+                <div key={f._id} style={{ padding: 10, marginBottom: 8, background: C.offWhite, borderRadius: 12 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>{f.title}</div>
                   <input value={String(f.comment || "")} onChange={(e) => { const u = fields.map(fi => fi._id === f._id ? { ...fi, comment: e.target.value } : fi); pushHistory(u); }} placeholder="Comment..." style={{ width: "100%", padding: 6, fontSize: 11.5 }} />
                 </div>
@@ -3280,7 +3280,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* ── PART 5: INTEGRATION PANEL MODAL ─────────────────────────────────── */}
       {showIntegrationPanel && (
         <div onClick={() => setShowIntegrationPanel(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 640, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 640, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><LinkIcon style={{ fontSize: 16, marginRight: 6 }} /> Integration Settings</div>
               <button onClick={() => setShowIntegrationPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
@@ -3303,24 +3303,24 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                       {activeIntegrationTab === "webhooks" && (
                         <div>
                           <div style={{ marginBottom: 12 }}>
-                            <button onClick={() => setWebhooks([...webhooks, { id: `wh_${Date.now()}`, name: `Webhook ${webhooks.length + 1}`, url: "", method: "POST", events: ["onSubmission"], enabled: true }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 8, cursor: "pointer" }}>+ Add Webhook</button>
+                            <button onClick={() => setWebhooks([...webhooks, { id: `wh_${Date.now()}`, name: `Webhook ${webhooks.length + 1}`, url: "", method: "POST", events: ["onSubmission"], enabled: true }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: "999px", cursor: "pointer" }}>+ Add Webhook</button>
                           </div>
                           {webhooks.length === 0 ? (
                             <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13.5 }}>No webhooks configured. Add one to trigger external services on form events.</div>
                           ) : webhooks.map((wh, idx) => (
-                            <div key={wh.id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
+                            <div key={wh.id} style={{ padding: 12, background: C.offWhite, borderRadius: 12, marginBottom: 8 }}>
                               <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                                 <input type="checkbox" checked={wh.enabled} onChange={(e) => { const u = [...webhooks]; u[idx].enabled = e.target.checked; setWebhooks(u); }} />
-                                <input value={wh.name} onChange={(e) => { const u = [...webhooks]; u[idx].name = e.target.value; setWebhooks(u); }} placeholder="Webhook name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                                <input value={wh.name} onChange={(e) => { const u = [...webhooks]; u[idx].name = e.target.value; setWebhooks(u); }} placeholder="Webhook name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5 }} />
                                 <button onClick={() => setWebhooks(webhooks.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12.5 }}>Delete</button>
                               </div>
-                              <input value={wh.url} onChange={(e) => { const u = [...webhooks]; u[idx].url = e.target.value; setWebhooks(u); }} placeholder="https://..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
+                              <input value={wh.url} onChange={(e) => { const u = [...webhooks]; u[idx].url = e.target.value; setWebhooks(u); }} placeholder="https://..." style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5, marginBottom: 8 }} />
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                                 <label style={{ fontSize: 11.5, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onSubmission")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onSubmission"] : u[idx].events.filter(e => e !== "onSubmission"); setWebhooks(u); }} /> On Submit</label>
                                 <label style={{ fontSize: 11.5, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onApprovalDecision")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onApprovalDecision"] : u[idx].events.filter(e => e !== "onApprovalDecision"); setWebhooks(u); }} /> On Approval</label>
                                 <label style={{ fontSize: 11.5, display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" checked={wh.events.includes("onFormPublished")} onChange={(e) => { const u = [...webhooks]; u[idx].events = e.target.checked ? [...u[idx].events, "onFormPublished"] : u[idx].events.filter(e => e !== "onFormPublished"); setWebhooks(u); }} /> On Publish</label>
                               </div>
-                              <textarea value={wh.payloadTemplate || ""} onChange={(e) => { const u = [...webhooks]; u[idx].payloadTemplate = e.target.value; setWebhooks(u); }} placeholder='{"formId": "{formId}", "data": {fieldName}}' style={{ width: "100%", marginTop: 8, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5, fontFamily: "monospace", minHeight: 60 }} />
+                              <textarea value={wh.payloadTemplate || ""} onChange={(e) => { const u = [...webhooks]; u[idx].payloadTemplate = e.target.value; setWebhooks(u); }} placeholder='{"formId": "{formId}", "data": {fieldName}}' style={{ width: "100%", marginTop: 8, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5, fontFamily: "monospace", minHeight: 60 }} />
                             </div>
                           ))}
                         </div>
@@ -3329,19 +3329,19 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                       {activeIntegrationTab === "email" && (
                         <div>
                           <div style={{ marginBottom: 12 }}>
-                            <button onClick={() => setEmailTemplates([...emailTemplates, { id: `et_${Date.now()}`, name: `Template ${emailTemplates.length + 1}`, event: "submissionConfirm", to: "{email}", subject: "Form Submitted", body: "Your submission has been received.", enabled: true }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 8, cursor: "pointer" }}>+ Add Email Template</button>
+                            <button onClick={() => setEmailTemplates([...emailTemplates, { id: `et_${Date.now()}`, name: `Template ${emailTemplates.length + 1}`, event: "submissionConfirm", to: "{email}", subject: "Form Submitted", body: "Your submission has been received.", enabled: true }])} style={{ fontSize: 12.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: "999px", cursor: "pointer" }}>+ Add Email Template</button>
                           </div>
                           {emailTemplates.length === 0 ? (
                             <div style={{ textAlign: "center", padding: 32, color: C.textMuted, fontSize: 13.5 }}>No email templates. Configure notifications for submissions and approvals.</div>
                           ) : emailTemplates.map((et, idx) => (
-                            <div key={et.id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
+                            <div key={et.id} style={{ padding: 12, background: C.offWhite, borderRadius: 12, marginBottom: 8 }}>
                               <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
                                 <input type="checkbox" checked={et.enabled} onChange={(e) => { const u = [...emailTemplates]; u[idx].enabled = e.target.checked; setEmailTemplates(u); }} />
-                                <input value={et.name} onChange={(e) => { const u = [...emailTemplates]; u[idx].name = e.target.value; setEmailTemplates(u); }} placeholder="Template name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }} />
+                                <input value={et.name} onChange={(e) => { const u = [...emailTemplates]; u[idx].name = e.target.value; setEmailTemplates(u); }} placeholder="Template name" style={{ flex: 1, padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5 }} />
                                 <button onClick={() => setEmailTemplates(emailTemplates.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12.5 }}>Delete</button>
                               </div>
                               <div style={{ marginBottom: 8 }}>
-                                <select value={et.event} onChange={(e) => { const u = [...emailTemplates]; u[idx].event = e.target.value; setEmailTemplates(u); }} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5 }}>
+                                <select value={et.event} onChange={(e) => { const u = [...emailTemplates]; u[idx].event = e.target.value; setEmailTemplates(u); }} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5 }}>
                                   <option value="submissionConfirm">Submission Confirmation</option>
                                   <option value="newSubmissionAlert">New Submission Alert</option>
                                   <option value="approvalRequest">Approval Request</option>
@@ -3349,9 +3349,9 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                                   <option value="rejectionNotice">Rejection Notice</option>
                                 </select>
                               </div>
-                              <input value={et.to} onChange={(e) => { const u = [...emailTemplates]; u[idx].to = e.target.value; setEmailTemplates(u); }} placeholder="To: {email} or admin@example.com" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
-                              <input value={et.subject} onChange={(e) => { const u = [...emailTemplates]; u[idx].subject = e.target.value; setEmailTemplates(u); }} placeholder="Subject" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, marginBottom: 8 }} />
-                              <textarea value={et.body} onChange={(e) => { const u = [...emailTemplates]; u[idx].body = e.target.value; setEmailTemplates(u); }} placeholder="Email body (use {fieldName} for dynamic values)" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, minHeight: 80 }} />
+                              <input value={et.to} onChange={(e) => { const u = [...emailTemplates]; u[idx].to = e.target.value; setEmailTemplates(u); }} placeholder="To: {email} or admin@example.com" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5, marginBottom: 8 }} />
+                              <input value={et.subject} onChange={(e) => { const u = [...emailTemplates]; u[idx].subject = e.target.value; setEmailTemplates(u); }} placeholder="Subject" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5, marginBottom: 8 }} />
+                              <textarea value={et.body} onChange={(e) => { const u = [...emailTemplates]; u[idx].body = e.target.value; setEmailTemplates(u); }} placeholder="Email body (use {fieldName} for dynamic values)" style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5, minHeight: 80 }} />
                             </div>
                           ))}
                         </div>
@@ -3359,11 +3359,11 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                       {/* Power Automate Tab */}
                       {activeIntegrationTab === "powerautomate" && (
                         <div>
-                          <div style={{ padding: 16, background: C.offWhite, borderRadius: 8, marginBottom: 16 }}>
+                          <div style={{ padding: 16, background: C.offWhite, borderRadius: 12, marginBottom: 16 }}>
                             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}><BoltIcon style={{ fontSize: 14, marginRight: 4, verticalAlign: 'middle' }} /> Power Automate HTTP Trigger</div>
                             <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 12 }}>Generate a URL to trigger a Power Automate flow when forms are submitted.</div>
-                            <input value={powerAutomateUrl} onChange={(e) => setPowerAutomateUrl(e.target.value)} placeholder="Paste your Power Automate HTTP trigger URL here" style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 12.5, fontFamily: "monospace", marginBottom: 12 }} />
-                            <button onClick={() => { const url = powerAutomateUrl; if (url) { navigator.clipboard.writeText(url); alert("URL copied!"); } else { alert("Enter a Power Automate trigger URL first."); } }} style={{ fontSize: 11.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: 4, cursor: "pointer" }}>Copy URL</button>
+                            <input value={powerAutomateUrl} onChange={(e) => setPowerAutomateUrl(e.target.value)} placeholder="Paste your Power Automate HTTP trigger URL here" style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 12.5, fontFamily: "monospace", marginBottom: 12 }} />
+                            <button onClick={() => { const url = powerAutomateUrl; if (url) { navigator.clipboard.writeText(url); alert("URL copied!"); } else { alert("Enter a Power Automate trigger URL first."); } }} style={{ fontSize: 11.5, padding: "6px 12px", background: C.purple, color: C.white, border: "none", borderRadius: "999px", cursor: "pointer" }}>Copy URL</button>
                           </div>
                           <div style={{ fontSize: 11.5, color: C.textSecond }}>
                             <strong>Setup Instructions:</strong>
@@ -3385,7 +3385,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* ── PART 5: PROVISIONING PREVIEW MODAL ──────────────────────────────── */}
       {showProvisioningPreview && (
         <div onClick={() => setShowProvisioningPreview(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 700, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 700, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><DescriptionIcon style={{ fontSize: 16, marginRight: 6 }} /> SharePoint Column Provisioning</div>
               <button onClick={() => setShowProvisioningPreview(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
@@ -3412,13 +3412,13 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                         <td style={{ padding: "8px 12px" }}><strong>{f.name}</strong></td>
                         <td style={{ padding: "8px 12px" }}>{f.type}</td>
                         <td style={{ padding: "8px 12px" }}>{spTypeName} (kind {spKind})</td>
-                        <td style={{ padding: "8px 12px" }}><span style={{ background: `${statusColor}20`, color: statusColor, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600 }}>{status.toUpperCase()}</span></td>
+                        <td style={{ padding: "8px 12px" }}><span style={{ background: `${statusColor}20`, color: statusColor, padding: "2px 8px", borderRadius: "999px", fontSize: 11, fontWeight: 600 }}>{status.toUpperCase()}</span></td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-              <div style={{ marginTop: 16, padding: 12, background: C.amberPale, borderRadius: 8, fontSize: 11.5 }}>
+              <div style={{ marginTop: 16, padding: 12, background: C.amberPale, borderRadius: 12, fontSize: 11.5 }}>
                 <strong>Note:</strong> New columns will be created in the SharePoint list. Changed columns may require data migration. Obsolete columns will be archived (not deleted).
               </div>
             </div>
@@ -3428,31 +3428,31 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* ── PART 5: SUBMISSION SETTINGS MODAL ──────────────────────────────── */}
       {showSubmissionSettings && (
         <div onClick={() => setShowSubmissionSettings(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 520, maxHeight: "80vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><TableChartIcon style={{ fontSize: 16, marginRight: 6 }} /> Submission Settings</div>
               <button onClick={() => setShowSubmissionSettings(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
             </div>
             <div style={{ padding: 16 }}>
               {/* Scoring */}
-              <div style={{ marginBottom: 20, padding: 12, background: C.offWhite, borderRadius: 8 }}>
+              <div style={{ marginBottom: 20, padding: 12, background: C.offWhite, borderRadius: 12 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <input type="checkbox" checked={scoreConfig.enabled} onChange={(e) => setScoreConfig({ ...scoreConfig, enabled: e.target.checked })} />
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>Enable Calculated Score</span>
                 </label>
                 {scoreConfig.enabled && (
                   <>
-                    <input value={scoreConfig.expression} onChange={(e) => setScoreConfig({ ...scoreConfig, expression: e.target.value })} placeholder='Expression: "{q1} * 0.3 + {q2} * 0.7"' style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5, marginBottom: 8 }} />
+                    <input value={scoreConfig.expression} onChange={(e) => setScoreConfig({ ...scoreConfig, expression: e.target.value })} placeholder='Expression: "{q1} * 0.3 + {q2} * 0.7"' style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5, marginBottom: 8 }} />
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Green ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.green} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, green: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
-                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Amber ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.amber} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, amber: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
-                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Red</label><input type="number" value={scoreConfig.thresholds.red} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, red: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
+                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Green ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.green} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, green: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} /></div>
+                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Amber ({"\u003e="})</label><input type="number" value={scoreConfig.thresholds.amber} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, amber: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} /></div>
+                      <div><label style={{ fontSize: 11, color: C.textMuted }}>Red</label><input type="number" value={scoreConfig.thresholds.red} onChange={(e) => setScoreConfig({ ...scoreConfig, thresholds: { ...scoreConfig.thresholds, red: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} /></div>
                     </div>
                   </>
                 )}
               </div>
               {/* Duplicate Detection */}
-              <div style={{ marginBottom: 20, padding: 12, background: C.offWhite, borderRadius: 8 }}>
+              <div style={{ marginBottom: 20, padding: 12, background: C.offWhite, borderRadius: 12 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <input type="checkbox" checked={duplicateDetection.enabled} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, enabled: e.target.checked })} />
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>Duplicate Detection</span>
@@ -3467,7 +3467,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                         ))}
                       </div>
                     </div>
-                    <select value={duplicateDetection.action} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, action: e.target.value as "block" | "warn" | "overwrite" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }}>
+                    <select value={duplicateDetection.action} onChange={(e) => setDuplicateDetection({ ...duplicateDetection, action: e.target.value as "block" | "warn" | "overwrite" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }}>
                       <option value="warn">Warn but allow</option>
                       <option value="block">Block submission</option>
                       <option value="overwrite">Overwrite previous</option>
@@ -3476,7 +3476,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 )}
               </div>
               {/* Quota */}
-              <div style={{ padding: 12, background: C.offWhite, borderRadius: 8 }}>
+              <div style={{ padding: 12, background: C.offWhite, borderRadius: 12 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <input type="checkbox" checked={quotaConfig.enabled} onChange={(e) => setQuotaConfig({ ...quotaConfig, enabled: e.target.checked })} />
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>Submission Quota</span>
@@ -3484,10 +3484,10 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
                 {quotaConfig.enabled && (
                   <>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <div><div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Max Total</div><input type="number" value={quotaConfig.maxSubmissions} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxSubmissions: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
-                      <div><div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Max Per User (0=unlimited)</div><input type="number" value={quotaConfig.maxPerUser || 0} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxPerUser: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }} /></div>
+                      <div><div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Max Total</div><input type="number" value={quotaConfig.maxSubmissions} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxSubmissions: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} /></div>
+                      <div><div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Max Per User (0=unlimited)</div><input type="number" value={quotaConfig.maxPerUser || 0} onChange={(e) => setQuotaConfig({ ...quotaConfig, maxPerUser: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }} /></div>
                     </div>
-                    <select value={quotaConfig.actionWhenReached} onChange={(e) => setQuotaConfig({ ...quotaConfig, actionWhenReached: e.target.value as "disable" | "message" | "redirect" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11.5 }}>
+                    <select value={quotaConfig.actionWhenReached} onChange={(e) => setQuotaConfig({ ...quotaConfig, actionWhenReached: e.target.value as "disable" | "message" | "redirect" })} style={{ width: "100%", padding: "6px 8px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11.5 }}>
                       <option value="message">Show message</option>
                       <option value="disable">Disable form</option>
                       <option value="redirect">Redirect to URL</option>
@@ -3502,7 +3502,7 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
       {/* ── PART 5: FIELD PERMISSIONS MODAL ──────────────────────────────────── */}
       {showFieldPermissions && (
         <div onClick={() => setShowFieldPermissions(false)} style={{ position: "fixed", inset: 0, zIndex: 3100, background: "rgba(30,27,75,0.5)", backdropFilter: "blur(2px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 12, width: 560, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.white, borderRadius: 28, width: 560, maxHeight: "85vh", boxShadow: "0 12px 40px rgba(91,33,182,0.25)", border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}><LockIcon style={{ fontSize: 16, marginRight: 6 }} /> Field Permissions & Data Masking</div>
               <button onClick={() => setShowFieldPermissions(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: C.textMuted }}><CloseIcon style={{ fontSize: 16 }} /></button>
@@ -3512,16 +3512,16 @@ export default function FormBuilder({ initialJson, onChange, height = "calc(100v
               {fields.filter(f => f.type !== "panel" && f.type !== "html" && f.type !== "pagebreak" && f.type !== "spacer" && f.type !== "divider").map((f) => {
                 const perm = fieldPermissions.find(p => p.fieldName === f.name) || { fieldName: f.name, viewRoles: ["All"], editRoles: ["All"], isSensitive: false, readOnlyAfterSubmit: false };
                 return (
-                  <div key={f._id} style={{ padding: 12, background: C.offWhite, borderRadius: 8, marginBottom: 8 }}>
+                  <div key={f._id} style={{ padding: 12, background: C.offWhite, borderRadius: 12, marginBottom: 8 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>{f.title} <span style={{ color: C.textMuted, fontWeight: 400 }}>({f.name})</span></div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                       <div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>View Roles (comma-separated)</div>
-                        <input value={perm.viewRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, viewRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin, Manager" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} />
+                        <input value={perm.viewRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, viewRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin, Manager" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11 }} />
                       </div>
                       <div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>Edit Roles (comma-separated)</div>
-                        <input value={perm.editRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, editRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }} />
+                        <input value={perm.editRoles.join(", ")} onChange={(e) => { const newPerms = [...fieldPermissions.filter(p => p.fieldName !== f.name), { ...perm, editRoles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }]; setFieldPermissions(newPerms); }} placeholder="All, HR Admin" style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 11 }} />
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 12 }}>

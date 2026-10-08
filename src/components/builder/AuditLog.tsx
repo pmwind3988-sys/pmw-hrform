@@ -40,7 +40,7 @@ export default function AuditLog({ logs }: AuditLogProps) {
         const hasDiff = before || after;
 
         return (
-          <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+          <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
             <div
               onClick={() => hasDiff && setExp(isE ? null : i)}
               style={{
@@ -52,7 +52,7 @@ export default function AuditLog({ logs }: AuditLogProps) {
                 background: isE ? C.offWhite : C.white,
               }}
             >
-              <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, background: cfg.bg, borderRadius: 12, padding: "2px 7px", flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, background: cfg.bg, borderRadius: "999px", padding: "2px 7px", flexShrink: 0 }}>
                 {l.EventType}
               </span>
               <span style={{ fontSize: 11.5, color: C.textPrimary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

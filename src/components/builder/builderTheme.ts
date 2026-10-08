@@ -5,8 +5,8 @@
  *   five-column workspace and shows two panes at most, with the form itself —
  *   not a stack of summary cards — in the middle.
  * OWN-WORLD: the grammar of official form systems. One family — Inter, the face
- *   SI and the rest of this app share — at four weights; SI's geometry (8px
- *   inner, 12px containers) and its single card elevation; legible field
+ *   SI and the rest of this app share — at four weights; SI's geometry (12px
+ *   inner, 20px containers, pills for anything pressed) and its single card elevation; legible field
  *   borders that state where a control begins; a cool slate desk; SI navy
  *   reserved for state and action. A navy rail carries the four modes.
  *
@@ -54,9 +54,9 @@ export const B = {
   /** Interactive-control edges. Separators may be faint; these may not. */
   lineField: "#7C8698",
 
-  radiusSm: "8px",
-  radiusMd: "12px",
-  radiusLg: "12px",
+  radiusSm: "12px",
+  radiusMd: "20px",
+  radiusLg: "28px",
   radiusPill: "999px",
 
   danger: "#C1291F",
