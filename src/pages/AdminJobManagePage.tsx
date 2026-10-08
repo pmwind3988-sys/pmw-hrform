@@ -63,7 +63,6 @@ import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import {
   CareerEmptyState,
-  CareerErrorState,
   CareerMetricPill,
   careerActionButtonSx,
   careerContentSx,
@@ -73,6 +72,7 @@ import {
   careerToolbarSx,
   getCareerErrorMessage,
 } from "../components/careers/careerUi";
+import { FailurePanel } from "../components/common/StatusPanel";
 import { editorial } from "../theme/editorial";
 import type { JobListing, CustomFieldDefinition } from "../types";
 
@@ -684,6 +684,7 @@ export default function AdminJobManagePage() {
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editJob, setEditJob] = useState<EditableJob | null>(null);
   const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" | "warning" } | null>(null);
@@ -721,6 +722,7 @@ export default function AdminJobManagePage() {
       const jobData = await fetchAdminJobs({ accessToken });
       setJobs(jobData);
     } catch (err) {
+      setErrorCause(err);
       setError(getCareerErrorMessage(err, "Failed to load opportunities."));
     } finally {
       setLoading(false);
@@ -1095,7 +1097,7 @@ export default function AdminJobManagePage() {
         )}
 
         {/* Stats */}
-        {!loading && (
+        {!loading && !error && (
         <Box
           sx={{
             display: "grid",
@@ -1126,7 +1128,7 @@ export default function AdminJobManagePage() {
         )}
 
         {/* Error */}
-        {!loading && error && <CareerErrorState message={error} onRetry={load} />}
+        {!loading && error && <FailurePanel what="openings" error={errorCause} onRetry={load} />}
 
         {/* Empty */}
         {!loading && !error && jobs.length === 0 && (

@@ -55,6 +55,7 @@ import GuestLanding from "./components/auth/GuestLanding";
 import WrongTenantScreen from "./components/auth/WrongTenantScreen";
 import RestrictedAccessScreen from "./components/auth/RestrictedAccessScreen";
 import LoadingScreen, { type LoadingStep } from "./components/auth/LoadingScreen";
+import PageSkeleton from "./components/common/PageSkeleton";
 import ErrorScreen from "./components/auth/ErrorScreen";
 import AdminGuard from "./components/auth/AdminGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -101,30 +102,47 @@ const AUTH_LOAD_STEP_ORDER = [
 ] as const;
 type AuthLoadStep = (typeof AUTH_LOAD_STEP_ORDER)[number];
 type AuthErrorMode = "generic" | "reauth";
-const AUTH_LOAD_STEP_TEXT: Record<AuthLoadStep, Pick<LoadingStep, "label" | "description">> = {
+/**
+ * What the boot loader says at each step, in the reader's words.
+ *
+ * The loader shows ONE of these at a time as its headline, so each label reads
+ * as plain speech ("Checking your access"), not as a system task ("Load portal
+ * permissions"). `failure` is what it says instead if that step breaks: what
+ * went wrong and who can help, rather than the step's own description.
+ */
+const AUTH_LOAD_STEP_TEXT: Record<
+  AuthLoadStep,
+  Pick<LoadingStep, "label" | "description"> & { failure: string }
+> = {
   session: {
-    label: "Confirm Microsoft 365 session",
-    description: "Checking the signed-in account and token state.",
+    label: "Signing you in",
+    description: "Checking your Microsoft 365 sign-in.",
+    failure: "Your Microsoft 365 sign-in couldn't be confirmed. Reload the page to sign in again.",
   },
   site: {
-    label: "Check SharePoint access",
-    description: "Confirming this account can reach the PMW HR Docs site.",
+    label: "Connecting to HR",
+    description: "Reaching the HR SharePoint site.",
+    failure: "The HR SharePoint site didn't answer. Try again in a minute, or ask IT Support if it keeps happening.",
   },
   permissions: {
-    label: "Load portal permissions",
-    description: "Reading HR Forms Owner and Form Builder Superuser access.",
+    label: "Checking your access",
+    description: "Seeing which tools your account can open.",
+    failure: "Your access couldn't be checked. Reload the page; if it keeps happening, ask IT Support.",
   },
   lists: {
-    label: "Discover form lists",
-    description: "Finding the form libraries this account can use.",
+    label: "Finding your forms",
+    description: "Looking up the forms you can fill in.",
+    failure: "Your forms couldn't be found. Reload the page to try again.",
   },
   finalizing: {
-    label: "Finish portal setup",
-    description: "Preparing the dashboard view.",
+    label: "Almost there",
+    description: "Setting up your dashboard.",
+    failure: "The dashboard couldn't be set up. Reload the page to try again.",
   },
   reauth: {
-    label: "Refresh Microsoft sign-in",
-    description: "Starting one fresh sign-in attempt after the timeout.",
+    label: "Refreshing your sign-in",
+    description: "Your sign-in timed out, so we're trying once more.",
+    failure: "Signing in again didn't work. Reload the page, or switch account.",
   },
 };
 
@@ -284,8 +302,10 @@ function buildAuthLoadingSteps(activeStep: AuthLoadStep, errorStep: AuthLoadStep
       status = "active";
     }
 
+    const text = AUTH_LOAD_STEP_TEXT[step];
     return {
-      ...AUTH_LOAD_STEP_TEXT[step],
+      label: text.label,
+      description: status === "error" ? text.failure : text.description,
       status,
     };
   });
@@ -684,7 +704,6 @@ export default function App() {
   // Dashboard data
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [submissionsStatus, setSubmissionsStatus] = useState<SubmissionsLoadStatus>("idle");
-  const [submissionsProgress, setSubmissionsProgress] = useState(0);
   const [submissionsLoadStatus, setSubmissionsLoadStatus] = useState("Loading submissions...");
   const [visibleLists, setVisibleLists] = useState<DiscoveredList[]>([]);
   const [loadedConfig, setLoadedConfig] = useState<LoadedConfig | null>(null);
@@ -1308,7 +1327,6 @@ export default function App() {
     void (async () => {
       const totalLists = lists.length;
       setSubmissionsStatus("loading");
-      setSubmissionsProgress(0);
       setSubmissionsLoadStatus(
         totalLists > 0
           ? `Fetching submissions from ${totalLists} list${totalLists !== 1 ? "s" : ""}...`
@@ -1356,8 +1374,7 @@ export default function App() {
               return [] as Submission[];
             } finally {
               completedLists += 1;
-              setSubmissionsProgress(Math.round((completedLists / Math.max(totalLists, 1)) * 100));
-              setSubmissionsLoadStatus(`Fetched ${completedLists}/${totalLists} list${totalLists !== 1 ? "s" : ""}...`);
+              setSubmissionsLoadStatus(`Loading submissions from ${completedLists} of ${totalLists} form${totalLists !== 1 ? "s" : ""}…`);
             }
           },
         );
@@ -1689,18 +1706,14 @@ export default function App() {
   );
 
   // Until the submissions land, a page that reads them would render an empty
-  // state - "no submissions" is a claim, not a wait - so it holds on the
-  // loading screen. Shared by Dashboard, Forms and My Submissions.
+  // state - "no submissions" is a claim, not a wait - so it holds on a
+  // placeholder. Inside the shell, so the navigation stays put: this used to
+  // swap the whole screen for the boot loader, which read as the app
+  // restarting. Shared by Dashboard, Forms and My Submissions.
   const withSubmissions = (node: React.ReactNode) =>
-    submissionsStatus === "ready" ? (
-      inShell(node)
-    ) : (
-      <LoadingScreen
-        userEmail={userEmail || undefined}
-        progress={submissionsProgress}
-        status={submissionsLoadStatus}
-      />
-    );
+    submissionsStatus === "ready"
+      ? inShell(node)
+      : inShell(<PageSkeleton label={submissionsLoadStatus || "Loading your submissions"} />);
 
   // Mounted under both /eval/* and /approval/*. EvaluationPage resolves the layer
   // type from the data, so one component serves both; the prefix only tells the
@@ -1729,7 +1742,7 @@ export default function App() {
             element={
               isAuthenticated && !memberModeActive ? (
                 inShell(
-                  <LazyRoute load={loadPrivacyNoticePage} fallback={<LoadingScreen status="Loading page..." />} />,
+                  <LazyRoute load={loadPrivacyNoticePage} fallback={<PageSkeleton label="Loading page" />} />,
                 )
               ) : (
                 <ErrorBoundary>
@@ -1764,7 +1777,7 @@ export default function App() {
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading submissions..." />} />
+                    <LazyRoute load={loadApprovalDashboard} fallback={<PageSkeleton label="Loading submissions" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1790,7 +1803,7 @@ export default function App() {
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadAdminOrgPage} fallback={<LoadingScreen status="Loading companies and departments..." />} />
+                    <LazyRoute load={loadAdminOrgPage} fallback={<PageSkeleton label="Loading companies and departments" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1802,7 +1815,7 @@ export default function App() {
               <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadAdminRoutingPage} fallback={<LoadingScreen status="Loading approval routing..." />} />
+                    <LazyRoute load={loadAdminRoutingPage} fallback={<PageSkeleton label="Loading approval routing" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1814,7 +1827,7 @@ export default function App() {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadResponseViewer} fallback={<LoadingScreen status="Loading responses..." />} />
+                    <LazyRoute load={loadResponseViewer} fallback={<PageSkeleton label="Loading responses" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1865,7 +1878,7 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 {withSubmissions(
-                  <LazyRoute load={loadDashboardPage} fallback={<LoadingScreen status="Loading dashboard..." />} />,
+                  <LazyRoute load={loadDashboardPage} fallback={<PageSkeleton label="Loading dashboard" />} />,
                 )}
               </AdminGuard>
             }
@@ -1873,33 +1886,33 @@ export default function App() {
           <Route
             path="/user/dashboard"
             element={withSubmissions(
-              <LazyRoute load={loadDashboardPage} fallback={<LoadingScreen status="Loading dashboard..." />} />,
+              <LazyRoute load={loadDashboardPage} fallback={<PageSkeleton label="Loading dashboard" />} />,
             )}
           />
           {/* Forms. Both read `submissions`, so both wait for the fetch. */}
           <Route
             path="/forms"
             element={withSubmissions(
-              <LazyRoute load={loadFormsPage} fallback={<LoadingScreen status="Loading forms..." />} />,
+              <LazyRoute load={loadFormsPage} fallback={<PageSkeleton label="Loading forms" />} />,
             )}
           />
           <Route
             path="/submissions"
             element={withSubmissions(
-              <LazyRoute load={loadMySubmissionsPage} fallback={<LoadingScreen status="Loading submissions..." />} />,
+              <LazyRoute load={loadMySubmissionsPage} fallback={<PageSkeleton label="Loading submissions" />} />,
             )}
           />
           {/* Profile. Neither page reads `submissions`, so neither waits. */}
           <Route
             path="/profile"
             element={inShell(
-              <LazyRoute load={loadProfilePage} fallback={<LoadingScreen status="Loading profile..." />} />,
+              <LazyRoute load={loadProfilePage} fallback={<PageSkeleton label="Loading profile" />} />,
             )}
           />
           <Route
             path="/profile/appearance"
             element={inShell(
-              <LazyRoute load={loadAppearancePage} fallback={<LoadingScreen status="Loading appearance..." />} />,
+              <LazyRoute load={loadAppearancePage} fallback={<PageSkeleton label="Loading appearance" />} />,
             )}
           />
           <Route
@@ -1908,7 +1921,7 @@ export default function App() {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadAdminJobsPage} fallback={<LoadingScreen status="Loading applications..." />} />
+                    <LazyRoute load={loadAdminJobsPage} fallback={<PageSkeleton label="Loading applications" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1920,7 +1933,7 @@ export default function App() {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadAdminJobManagePage} fallback={<LoadingScreen status="Loading opportunities..." />} />
+                    <LazyRoute load={loadAdminJobManagePage} fallback={<PageSkeleton label="Loading opportunities" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1932,7 +1945,7 @@ export default function App() {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadAdminCareerPortalCardsPage} fallback={<LoadingScreen status="Loading cards..." />} />
+                    <LazyRoute load={loadAdminCareerPortalCardsPage} fallback={<PageSkeleton label="Loading cards" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1946,7 +1959,7 @@ export default function App() {
             element={
               <ErrorBoundary>
                 {inShell(
-                  <LazyRoute load={loadLearningMaterialsPage} fallback={<LoadingScreen status="Loading learning materials..." />} />
+                  <LazyRoute load={loadLearningMaterialsPage} fallback={<PageSkeleton label="Loading learning materials" />} />
                 )}
               </ErrorBoundary>
             }
@@ -1957,7 +1970,7 @@ export default function App() {
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   {inShell(
-                    <LazyRoute load={loadAdminLearningPage} fallback={<LoadingScreen status="Loading library manager..." />} />
+                    <LazyRoute load={loadAdminLearningPage} fallback={<PageSkeleton label="Loading library manager" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
@@ -1971,7 +1984,7 @@ export default function App() {
                   {inShell(
                     <LazyRoute
                       load={loadAdminGuestMembersPage}
-                      fallback={<LoadingScreen status="Loading guest members..." />}
+                      fallback={<PageSkeleton label="Loading guest members" />}
                     />
                   )}
                 </ErrorBoundary>
@@ -2026,7 +2039,7 @@ export default function App() {
             element={
               isAuthenticated && !memberModeActive ? (
                 inShell(
-                  <LazyRoute load={loadCareersPage} fallback={<LoadingScreen status="Loading career portal..." />} />,
+                  <LazyRoute load={loadCareersPage} fallback={<PageSkeleton label="Loading career portal" />} />,
                 )
               ) : (
                 <ErrorBoundary>

@@ -49,13 +49,13 @@ import { ensureCareerPortalCardList } from "../utils/formBuilderSP";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import {
   CareerEmptyState,
-  CareerErrorState,
   careerActionButtonSx,
   careerPageSx,
   careerSearchFieldSx,
   careerToolbarSx,
   getCareerErrorMessage,
 } from "../components/careers/careerUi";
+import { FailurePanel } from "../components/common/StatusPanel";
 import { editorial } from "../theme/editorial";
 import type { CareerPortalCard, JobListing } from "../types";
 
@@ -532,6 +532,7 @@ export default function AdminCareerPortalCardsPage() {
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [searchText, setSearchText] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCard, setEditCard] = useState<CareerPortalCard | null>(null);
@@ -563,6 +564,7 @@ export default function AdminCareerPortalCardsPage() {
       setCards(cardData);
       setJobs(jobData);
     } catch (err) {
+      setErrorCause(err);
       setError(getCareerErrorMessage(err, "Failed to load cards."));
     } finally {
       setLoading(false);
@@ -695,7 +697,7 @@ export default function AdminCareerPortalCardsPage() {
       />
 
       <Box sx={{ maxWidth: 1320, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
-        {!loading && (
+        {!loading && !error && (
         <Paper
           sx={{
             ...careerToolbarSx,
@@ -726,7 +728,7 @@ export default function AdminCareerPortalCardsPage() {
         )}
 
         {!loading && error && (
-          <CareerErrorState message={error} onRetry={() => void load()} />
+          <FailurePanel what="portal cards" error={errorCause} onRetry={() => void load()} />
         )}
 
         {loading ? (

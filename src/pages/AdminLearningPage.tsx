@@ -43,6 +43,7 @@ import {
 import LearningHeader from "../components/learning/LearningHeader";
 import SetLockPasswordDialog from "../components/learning/SetLockPasswordDialog";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import { FailurePanel } from "../components/common/StatusPanel";
 import {
   LearningEmptyState,
   kindStyle,
@@ -102,6 +103,7 @@ export default function AdminLearningPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [selectedPath, setSelectedPath] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -159,7 +161,7 @@ export default function AdminLearningPage() {
         setLibraryReady(data.libraryReady);
         setViewsReady(data.viewsReady);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "The library could not be loaded.");
+        if (!cancelled) { setErrorCause(err); setError(err instanceof Error ? err.message : "The library could not be loaded."); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -418,11 +420,7 @@ export default function AdminLearningPage() {
 
       <Container maxWidth="xl" disableGutters>
         <Box sx={learningContentSx}>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2, borderRadius: "12px", fontWeight: 700 }}>
-              {error}
-            </Alert>
-          )}
+          {error && <FailurePanel what="the learning library" error={errorCause} onRetry={reload} />}
 
           {/*
             A library can be fully usable and still have no tracking list — the
@@ -469,7 +467,7 @@ export default function AdminLearningPage() {
                 </Button>
               }
             />
-          ) : (
+          ) : error ? null : (
             <Box
               sx={{
                 display: "grid",

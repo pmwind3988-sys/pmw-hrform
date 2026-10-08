@@ -1030,7 +1030,7 @@ export default function JobApplyPage() {
                   )}
                 </>
               ) : jobLoadError ? (
-                <CareerErrorState message={jobLoadError} />
+                <CareerErrorState what="this opportunity" message={jobLoadError} />
               ) : (
                 <Typography variant="body2" sx={{ color: editorial.muted }}>
                   Opportunity not found.

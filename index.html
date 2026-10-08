@@ -13,7 +13,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0078D4" />
+    <meta name="theme-color" content="#0F3D91" />
+    <meta name="description" content="PMW Group's HR portal: fill in HR forms, follow approvals, browse internal openings and learning materials." />
     <meta property="og:image" content="/logo.png" />
     <meta property="og:image:type" content="image/png" />
     <!--
@@ -25,9 +26,28 @@
     -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://accounts.google.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' data: blob: https://accounts.google.com https://*.sharepoint.com https://*.microsoftonline.com https://*.microsoft.com https://graph.microsoft.com wss://*.sharepoint.com; img-src 'self' data: blob: https:; media-src 'self' blob: data: https://*.sharepoint.com https://*.sharepointonline.com; frame-src 'self' blob: https://accounts.google.com https://*.sharepoint.com https://*.officeapps.live.com https://*.office.com https://login.microsoftonline.com;" />
     <title>PMW HR Group Portal</title>
+    <!--
+      The boot splash. It sits INSIDE #root, so it shows the instant the HTML
+      arrives and React replaces it on first render — no blank white page while
+      the app's code downloads. Plain CSS only: nothing here may depend on the
+      bundle it is waiting for. Mirrors the in-app LoadingScreen's logo-in-ring.
+    -->
+    <style>
+      .boot { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: #F6F8FB; font-family: Inter, "Segoe UI", Arial, sans-serif; color: #5A6880; font-size: 14px; }
+      .boot-ring { position: relative; width: 112px; height: 112px; border-radius: 50%; border: 5px solid #D7E1F3; border-top-color: #0F3D91; box-sizing: border-box; animation: boot-turn 1.1s linear infinite; }
+      .boot-mark { position: absolute; inset: 9px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 12px rgba(15,23,42,.05); display: flex; align-items: center; justify-content: center; animation: boot-turn 1.1s linear infinite reverse; }
+      .boot-mark img { width: 52px; height: auto; outline: none; }
+      @keyframes boot-turn { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot-ring, .boot-mark { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" role="status" aria-live="polite">
+        <div class="boot-ring"><div class="boot-mark"><img src="/favicon-192.png" alt="" /></div></div>
+        <div>Opening the HR portal…</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

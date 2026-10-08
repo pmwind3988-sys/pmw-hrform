@@ -44,6 +44,8 @@ import {
 import { useMsal } from "@azure/msal-react";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { loginRequest } from "../auth/msalConfig";
+import StatusPanel, { FailurePanel } from "../components/common/StatusPanel";
+import { statusFromError } from "../utils/friendlyError";
 
 const panelSx = {
   backgroundColor: editorial.white,
@@ -72,6 +74,10 @@ export default function AdminGuestMembersPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // A failed approve/disable is not a failed load: the list is still good, so
+  // it stays on screen and the failure is said above it. Only a failed LOAD
+  // replaces the list.
+  const [actionError, setActionError] = useState("");
   const [busyEmail, setBusyEmail] = useState("");
   const [logOpen, setLogOpen] = useState(false);
 
@@ -129,13 +135,13 @@ export default function AdminGuestMembersPage() {
 
   async function withMember(email: string, work: (token: string) => Promise<void>) {
     setBusyEmail(email);
-    setError("");
+    setActionError("");
     try {
       const token = await getToken();
       await work(token);
       await load(search, page);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "That change could not be saved.");
+      setActionError(caught instanceof Error ? caught.message : "That change could not be saved.");
     } finally {
       setBusyEmail("");
     }
@@ -169,10 +175,21 @@ export default function AdminGuestMembersPage() {
           you approve it here.
         </Typography>
 
-        {error ? (
-          <Alert severity="error" sx={{ borderRadius: "12px", mb: 2 }}>
-            {error}
+        {actionError && !error ? (
+          <Alert severity="warning" onClose={() => setActionError("")} sx={{ mb: 2 }}>
+            That change wasn&apos;t saved. Try again; if it keeps failing, reload the page.
+            {statusFromError(actionError) ? ` (Reference: HTTP ${statusFromError(actionError)})` : ""}
           </Alert>
+        ) : null}
+
+        {error ? (
+          <Box sx={{ mb: 2 }}>
+            <FailurePanel
+              what="guest members"
+              error={error}
+              onRetry={() => void load(search, page)}
+            />
+          </Box>
         ) : null}
 
         {snapshot && !snapshot.provisioned ? (
@@ -212,9 +229,11 @@ export default function AdminGuestMembersPage() {
             fullWidth
             sx={{ maxWidth: 420, "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
           />
-          <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, whiteSpace: "nowrap" }}>
-            {total === 0 ? "No members" : `Showing ${members.length} of ${total}`}
-          </Typography>
+          {error ? null : (
+            <Typography sx={{ fontSize: "0.845rem", color: editorial.muted, whiteSpace: "nowrap" }}>
+              {total === 0 ? "No members" : `Showing ${members.length} of ${total}`}
+            </Typography>
+          )}
           <Button
             onClick={() => setLogOpen(true)}
             sx={{ ml: { sm: "auto" }, fontWeight: 700, textTransform: "none" }}
@@ -223,6 +242,13 @@ export default function AdminGuestMembersPage() {
           </Button>
         </Stack>
 
+        {error ? null : snapshot && snapshot.provisioned && members.length === 0 && !search ? (
+          <StatusPanel
+            tone="empty"
+            title="No guest members yet"
+            body="People appear here after they sign in with Google."
+          />
+        ) : (
         <Box sx={{ ...panelSx, px: 0, py: 0, overflowX: "auto" }}>
           {loading && !snapshot ? (
             <Stack sx={{ alignItems: "center", py: 6 }}>
@@ -268,6 +294,7 @@ export default function AdminGuestMembersPage() {
             </Table>
           )}
         </Box>
+        )}
 
         {total > 50 ? (
           <Stack direction="row" sx={{ gap: 1, mt: 2, justifyContent: "center" }}>
@@ -396,12 +423,8 @@ function AccessLogDialog({
         <Divider sx={{ mb: 2 }} />
 
         {error ? (
-          <Alert severity="error" sx={{ borderRadius: "12px", mb: 2 }}>
-            {error}
-          </Alert>
-        ) : null}
-
-        {entries === null ? (
+          <FailurePanel what="the access log" error={error} />
+        ) : entries === null ? (
           <Stack sx={{ alignItems: "center", py: 4 }}>
             <CircularProgress size={24} />
           </Stack>

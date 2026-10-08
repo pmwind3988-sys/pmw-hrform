@@ -48,6 +48,7 @@ import {
   unlockLearningTopic,
 } from "../utils/learningService";
 import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
+import { FailurePanel } from "../components/common/StatusPanel";
 import { useGuestSession } from "../auth/useGuestSession";
 import { mergeViewCounts, useLearningViewCounts } from "../hooks/useLearningViewCounts";
 import { editorial, editorialHairline } from "../theme/editorial";
@@ -89,6 +90,7 @@ export default function LearningMaterialsPage() {
   const [libraryReady, setLibraryReady] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
@@ -140,6 +142,7 @@ export default function LearningMaterialsPage() {
         if (isLearningSignInRequiredError(err)) {
           setNeedsSignIn(true);
         } else {
+          setErrorCause(err);
           setError(err instanceof Error ? err.message : "Learning materials could not be loaded.");
         }
       } finally {
@@ -330,6 +333,7 @@ export default function LearningMaterialsPage() {
                   "& .MuiChip-icon": { color: editorial.pmwPurpleDark },
                 }}
               />
+              {!error && (<>
               <Chip
                 size="small"
                 label={`${materials.length} material${materials.length === 1 ? "" : "s"}`}
@@ -353,7 +357,7 @@ export default function LearningMaterialsPage() {
                   fontVariantNumeric: "tabular-nums",
                   "& .MuiChip-icon": { color: editorial.softMuted },
                 }}
-              />
+              /></>)}
             </Stack>
 
             <Typography
@@ -478,17 +482,7 @@ export default function LearningMaterialsPage() {
           )}
 
           {error && (
-            <Alert
-              severity="error"
-              sx={{ mb: 2, borderRadius: "12px", fontWeight: 700 }}
-              action={
-                <Button size="small" onClick={() => setReloadKey((key) => key + 1)} sx={learningButtonSx}>
-                  Retry
-                </Button>
-              }
-            >
-              {error}
-            </Alert>
+            <FailurePanel what="learning materials" error={errorCause} onRetry={() => setReloadKey((key) => key + 1)} />
           )}
 
           {loading ? (
@@ -609,7 +603,7 @@ export default function LearningMaterialsPage() {
                   </Box>
                 </Box>
               ) : (
-                childTopics.length === 0 && (
+                !error && childTopics.length === 0 && (
                   <LearningEmptyState
                     icon={<LibraryBooksOutlined />}
                     title={searching ? "No materials match that search" : "Nothing here yet"}

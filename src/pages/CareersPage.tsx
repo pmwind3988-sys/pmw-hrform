@@ -54,10 +54,10 @@ import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGa
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import CareerHero from "../components/careers/CareerHero";
+import { FailurePanel } from "../components/common/StatusPanel";
 import JobCard from "../components/careers/JobCard";
 import {
   CareerEmptyState,
-  CareerErrorState,
   CareerMetricPill,
   careerActionButtonSx,
   careerIconButtonSx,
@@ -379,6 +379,7 @@ export default function CareersPage() {
   const [portalCards, setPortalCards] = useState<CareerPortalCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [restrictedMessage, setRestrictedMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [searchText, setSearchText] = useState("");
@@ -450,7 +451,7 @@ export default function CareersPage() {
         if (isCareerPortalPrivateError(err)) {
           setRestrictedMessage(err instanceof Error ? err.message : "");
         } else {
-          setError(getCareerErrorMessage(err, "Failed to load opportunities."));
+          setErrorCause(err); setError(getCareerErrorMessage(err, "Failed to load opportunities."));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -907,7 +908,7 @@ export default function CareersPage() {
 
         {/* Error */}
         {!loading && error && (
-          <CareerErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />
+          <FailurePanel what="openings" error={errorCause} onRetry={() => setReloadKey((key) => key + 1)} />
         )}
 
         {/* Empty */}

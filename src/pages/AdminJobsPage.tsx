@@ -53,7 +53,6 @@ import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import {
   CareerEmptyState,
-  CareerErrorState,
   CareerMetricPill,
   careerActionButtonSx,
   careerContentSx,
@@ -63,6 +62,7 @@ import {
   careerToolbarSx,
   getCareerErrorMessage,
 } from "../components/careers/careerUi";
+import { FailurePanel } from "../components/common/StatusPanel";
 import { editorial } from "../theme/editorial";
 import type { JobAdminApplication } from "../types";
 
@@ -275,6 +275,7 @@ export default function AdminJobsPage() {
   const [applications, setApplications] = useState<JobAdminApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [selectedApp, setSelectedApp] = useState<JobAdminApplication | null>(null);
   const [snackbar, setSnackbar] = useState<{ message: string; severity: "success" | "error" } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -315,6 +316,7 @@ export default function AdminJobsPage() {
       });
       setApplications(data);
     } catch (err) {
+      setErrorCause(err);
       setError(getCareerErrorMessage(err, "Failed to load applications."));
     } finally {
       setLoading(false);
@@ -702,7 +704,7 @@ export default function AdminJobsPage() {
         )}
 
         {/* Stats Row */}
-        {!loading && (
+        {!loading && !error && (
         <Box
           sx={{
             display: "grid",
@@ -736,7 +738,7 @@ export default function AdminJobsPage() {
 
         {/* Error */}
         {!loading && error && (
-          <CareerErrorState message={error} onRetry={load} />
+          <FailurePanel what="applications" error={errorCause} onRetry={load} />
         )}
 
         {/* Empty */}

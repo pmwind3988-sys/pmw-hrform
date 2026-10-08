@@ -30,6 +30,7 @@ import {
   normalizeImageOpacity,
   type DashboardBackgroundSetting,
 } from "../../utils/dashboardBackgrounds";
+import { describeFailure } from "../../utils/friendlyError";
 
 interface Props {
   open: boolean;
@@ -46,6 +47,23 @@ function resolveInitialId(setting: DashboardBackgroundSetting): string {
   return DASHBOARD_BACKGROUNDS.some((background) => background.id === setting.backgroundId)
     ? setting.backgroundId
     : DEFAULT_DASHBOARD_BACKGROUND_SETTING.backgroundId;
+}
+
+/**
+ * A failed background load, in plain words. The page keeps the plain background
+ * in that case, so the sentence says so instead of printing the server's status.
+ */
+export function BackgroundErrorNote({ error }: { error: string }) {
+  const copy = describeFailure("your saved background", { error });
+  return (
+    <Box role="status" sx={{ borderRadius: "12px", px: 2, py: 1.5, backgroundColor: editorial.appSurface, border: `1px solid ${editorial.border}` }}>
+      <Typography sx={{ fontWeight: 700, color: editorial.ink, fontSize: "0.9rem" }}>{copy.title}</Typography>
+      <Typography sx={{ color: editorial.muted, fontSize: "0.845rem", mt: 0.25 }}>The plain background is showing instead.</Typography>
+      {copy.code && (
+        <Typography sx={{ color: editorial.softMuted, fontSize: "0.75rem", mt: 0.5, fontVariantNumeric: "tabular-nums" }}>Reference: {copy.code}</Typography>
+      )}
+    </Box>
+  );
 }
 
 export default function BackgroundPicker({
@@ -118,11 +136,15 @@ export default function BackgroundPicker({
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
-        {(error || validationError) && (
+        {validationError ? (
           <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>
-            {validationError || error}
+            {validationError}
           </Alert>
-        )}
+        ) : error ? (
+          <Box sx={{ mb: 2 }}>
+            <BackgroundErrorNote error={error} />
+          </Box>
+        ) : null}
 
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 260px" }, gap: 2.5 }}>
           <Box>

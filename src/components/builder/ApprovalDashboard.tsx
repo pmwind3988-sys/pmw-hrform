@@ -95,7 +95,6 @@ import { readTemplate } from "../../utils/pdfTemplate/safeTemplate";
 import type { WorkflowAssignmentSaveInput } from "./WorkflowAssignmentEditor";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission, FormBuilderField } from "../../types";
-import BlockIcon from "@mui/icons-material/Block";
 import LockIcon from "@mui/icons-material/Lock";
 import DescriptionIcon from "@mui/icons-material/Description";
 import CloseIcon from "@mui/icons-material/Close";
@@ -111,6 +110,8 @@ import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { editorial } from "../../theme/editorial";
+import PageSkeleton from "../common/PageSkeleton";
+import StatusPanel from "../common/StatusPanel";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONFIGURED_SENDER_EMAIL = (
@@ -1122,7 +1123,13 @@ export default function ApprovalDashboard() {
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
     acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] })
       .then(setToken)
-      .catch(() => setError("Failed to acquire token"));
+      .catch(() => {
+        // Stop loading as well as recording the error: the list below only
+        // ever finished loading once it had a token, so a failed sign-in
+        // used to leave "Loading..." on screen forever.
+        setError("Your SharePoint sign-in couldn't be refreshed. Reload the page to sign in again.");
+        setLoading(false);
+      });
   }, [adminChecked, isAdmin, isSuperuser, isAuthenticated, inProgress, instance, accounts]);
 
   // Load all items (pending, approved, rejected)
@@ -3103,23 +3110,21 @@ export default function ApprovalDashboard() {
         : "Evaluation submitted"
     : "";
 
+  // Placeholder rows inside the shell, which say so if the read is slow. This
+  // page reads every form's submissions in one pass, so on a large tenant a
+  // long wait is normal -- but a bare grey "Loading approvals..." in an empty
+  // box gave no sign of that, or of anything having gone wrong.
   if (loading || !adminChecked) {
-    return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: C.textMuted }}>Loading approvals...</div>
-      </div>
-    );
+    return <PageSkeleton label="Loading all submissions" rows={8} />;
   }
 
   if (adminChecked && (!isAdmin || !isSuperuser)) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 17, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
-          <div style={{ color: C.textSecond }}>You need HR Forms Owner and Form Builder Superuser permissions to view this page.</div>
-        </div>
-      </div>
+      <StatusPanel
+        tone="no-access"
+        title="This page is for HR Forms administrators"
+        body="All submissions needs both HR Forms Owner and Form Builder superuser access. Ask an HR Forms administrator if you need it."
+      />
     );
   }
 

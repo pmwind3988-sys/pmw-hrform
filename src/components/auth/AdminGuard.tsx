@@ -1,24 +1,11 @@
 /**
  * AdminGuard.tsx — Route guard for admin-only pages
  *
- * Wraps admin routes and redirects non-admin users with a
- * clear error notification, preventing accidental access.
+ * Wraps admin routes. A non-admin gets a calm "not for you" page with a button
+ * back to their dashboard. Nothing redirects them on a timer.
  */
-import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Box,
-  Typography,
-  Button,
-  Snackbar,
-  Alert,
-  ThemeProvider,
-  CssBaseline,
-} from "@mui/material";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
-import theme from "../../theme";
-import { editorial } from "../../theme/editorial";
+import StatusPanel from "../common/StatusPanel";
 
 interface AdminGuardProps {
   isAdmin: boolean;
@@ -26,152 +13,22 @@ interface AdminGuardProps {
   children: React.ReactNode;
 }
 
-export default function AdminGuard({ isAdmin, restrictedTo = "HR Form Owners", children }: AdminGuardProps) {
+export default function AdminGuard({ isAdmin, restrictedTo, children }: AdminGuardProps) {
   const navigate = useNavigate();
-  const [showDenied, setShowDenied] = useState(false);
-  const [showRedirect, setShowRedirect] = useState(false);
-  const redirectedRef = useRef(false);
 
-  useEffect(() => {
-    if (isAdmin) {
-      setShowDenied(false);
-      setShowRedirect(false);
-      return;
-    }
-
-    // Only trigger once — prevents re-render loops
-    if (!redirectedRef.current) {
-      redirectedRef.current = true;
-      setShowDenied(true);
-
-      const redirectTimer = setTimeout(() => {
-        setShowRedirect(true);
-        navigate("/user/dashboard", { replace: true });
-      }, 4000);
-
-      return () => {
-        clearTimeout(redirectTimer);
-      };
-    }
-  }, [isAdmin, navigate]);
-
-  // While admin status is being determined, show nothing (the loading screen
-  // in App.tsx handles the initial loading state)
   if (isAdmin) {
     return <>{children}</>;
   }
 
-  if (showRedirect) {
-    return null;
-  }
-
-  // Full-screen access denied
+  // Inside the shell, so the navigation stays on screen and this needs no
+  // full-height frame of its own.
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Box
-        sx={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))",
-          p: 3,
-        }}
-      >
-        <Box
-          sx={{
-            textAlign: "center",
-            maxWidth: 440,
-            animation: "fadeUp 0.3s ease",
-            "@keyframes fadeUp": {
-              from: { opacity: 0, transform: "translateY(12px)" },
-              to: { opacity: 1, transform: "translateY(0)" },
-            },
-          }}
-        >
-          <Box
-            sx={{
-              width: 72,
-              height: 72,
-              borderRadius: "50%",
-              backgroundColor: "rgba(220, 38, 38, 0.08)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              mx: "auto",
-              mb: 3,
-              border: "1px solid rgba(220, 38, 38, 0.12)",
-            }}
-          >
-            <LockOutlinedIcon sx={{ fontSize: 34, color: editorial.error }} />
-          </Box>
-
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              color: editorial.ink,
-              mb: 1,
-              letterSpacing: 0,
-            }}
-          >
-            Access Denied
-          </Typography>
-
-          <Typography
-            variant="body1"
-            sx={{ color: editorial.muted, mb: 0.5, lineHeight: 1.6 }}
-          >
-            You don&apos;t have permission to access this page.
-          </Typography>
-
-          <Typography
-            variant="body2"
-            sx={{ color: editorial.softMuted, mb: 4, lineHeight: 1.5 }}
-          >
-            This area is restricted to {restrictedTo}. You&apos;ll be redirected
-            to the dashboard shortly.
-          </Typography>
-
-          <Button
-            variant="contained"
-            startIcon={<HomeOutlinedIcon />}
-            onClick={() => navigate("/user/dashboard", { replace: true })}
-            sx={{
-              borderRadius: "12px",
-              textTransform: "none",
-              fontWeight: 600,
-              px: 4,
-              py: 1.25,
-              backgroundColor: editorial.pmwBlue,
-              "&:hover": { backgroundColor: editorial.pmwBlueDark },
-            }}
-          >
-            Go to Dashboard
-          </Button>
-        </Box>
-
-        {/* Snackbar notification for backup */}
-        <Snackbar
-          open={showDenied}
-          anchorOrigin={{ vertical: "top", horizontal: "center" }}
-          sx={{ mt: 7 }}
-        >
-          <Alert
-            severity="error"
-            variant="filled"
-            sx={{
-              width: "100%",
-              borderRadius: "12px",
-              fontWeight: 500,
-              boxShadow: "0 8px 32px rgba(220, 38, 38, 0.25)",
-            }}
-          >
-            Access denied — redirecting to the dashboard...
-          </Alert>
-        </Snackbar>
-      </Box>
-    </ThemeProvider>
+    <StatusPanel
+      variant="page"
+      tone="no-access"
+      title="This page isn't open to your account"
+      body={`It's for ${restrictedTo || "HR Forms administrators"}. Ask an HR Forms administrator if you need access.`}
+      primary={{ label: "Go to dashboard", onClick: () => navigate("/user/dashboard", { replace: true }) }}
+    />
   );
 }

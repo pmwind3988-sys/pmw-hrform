@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import StatusPanel, { FailurePanel } from "../common/StatusPanel";
 import { ensureReadable } from "../../theme/contrast";
-import { Alert, Box, Button, Paper, Typography } from "@mui/material";
+import { Box, Paper, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material/styles";
-import { Refresh, SearchOff } from "@mui/icons-material";
+import { SearchOff } from "@mui/icons-material";
 import { editorial, editorialHairline, editorialShadow } from "../../theme/editorial";
 
 export const careerPageSx = {
@@ -203,42 +204,46 @@ export function getCareerErrorMessage(error: unknown, fallback: string): string 
   return message;
 }
 
+/**
+ * A career page that could not show what it was asked for.
+ *
+ * Two cases, kept apart because they need opposite advice:
+ * - A failed load (`message` is an error): the shared failure panel, which
+ *   names what did not load and never blames the reader's connection for a
+ *   server outage. This replaced "Something needs attention / Check your
+ *   connection and retry", which said both.
+ * - Something deliberately unavailable (pass `title`): a closed opening, say.
+ *   Said plainly, with the way forward as the button.
+ */
 export function CareerErrorState({
   message,
   onRetry,
-  retryLabel = "Retry",
+  retryLabel = "Try again",
+  title,
+  what = "this page",
 }: {
   message: string;
   onRetry?: () => void;
   retryLabel?: string;
+  title?: string;
+  what?: string;
 }) {
+  if (title) {
+    return (
+      <Box sx={{ mb: 3 }}>
+        <StatusPanel
+          tone="gone"
+          title={title}
+          body={message}
+          primary={onRetry ? { label: retryLabel, onClick: onRetry } : undefined}
+        />
+      </Box>
+    );
+  }
   return (
-    <Alert
-      severity="error"
-      sx={{
-        mb: 3,
-        borderRadius: "12px",
-        border: "1px solid rgba(198, 40, 40, 0.22)",
-        backgroundColor: "rgba(255,255,255,0.9)",
-        color: editorial.ink,
-        fontWeight: 600,
-        "& .MuiAlert-icon": { color: editorial.error },
-      }}
-      action={
-        onRetry ? (
-          <Button size="small" startIcon={<Refresh />} onClick={onRetry} sx={careerActionButtonSx}>
-            {retryLabel}
-          </Button>
-        ) : undefined
-      }
-    >
-      <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink, lineHeight: 1.4 }}>
-        Something needs attention
-      </Typography>
-      <Typography variant="body2" sx={{ color: editorial.muted, lineHeight: 1.5 }}>
-        {message}
-      </Typography>
-    </Alert>
+    <Box sx={{ mb: 3 }}>
+      <FailurePanel what={what} error={message} onRetry={onRetry} />
+    </Box>
   );
 }
 

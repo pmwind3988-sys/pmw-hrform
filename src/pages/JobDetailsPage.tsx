@@ -270,10 +270,11 @@ export default function JobDetailsPage() {
             <CircularProgress sx={{ color: editorial.pmwBlue }} />
           </Box>
         ) : error ? (
-          <CareerErrorState message={error} onRetry={() => navigate(0)} />
+          <CareerErrorState what="this opportunity" message={error} onRetry={() => navigate(0)} />
         ) : !job ? (
           <CareerErrorState
-            message="This opportunity is no longer open, or the link is out of date."
+            title="This opportunity has closed"
+            message="It is no longer open, or the link is out of date."
             onRetry={() => navigate("/career-portal")}
             retryLabel="Browse opportunities"
           />

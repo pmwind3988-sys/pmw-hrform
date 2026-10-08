@@ -4,6 +4,7 @@ import { AddRounded, LogoutOutlined, SwapHorizOutlined } from "@mui/icons-materi
 import { useLocation, useNavigate } from "react-router-dom";
 import Logo from "../Logo";
 import SectionTabs from "./SectionTabs";
+import ErrorBoundary from "../ErrorBoundary";
 import { NAV_ICONS } from "./navIcons";
 import { editorial, si, siType } from "../../theme/editorial";
 import { useDashboardBackground } from "../../hooks/useDashboardBackground";
@@ -543,7 +544,10 @@ export default function AppShell({
           >
             {pageTitle}
           </Typography>
-          {children}
+          {/* A page that crashes takes only itself down: the navigation stays,
+              so there is always a way to somewhere that works. Reset by the
+              `key` on <main> whenever the path changes. */}
+          <ErrorBoundary variant="inline">{children}</ErrorBoundary>
         </Box>
       </Box>
 

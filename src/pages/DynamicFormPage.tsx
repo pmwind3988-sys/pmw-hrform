@@ -75,6 +75,7 @@ import { getMultiChoiceFieldNames } from "../utils/multiChoiceFields";
 import { getTabularFields, rowsToHtml, type MatrixRow, type MatrixColumn } from "../utils/matrixData";
 import { readStoredGuestSession } from "../utils/guestMemberService";
 import { editorial } from "../theme/editorial";
+import { describeFailure, statusFromError } from "../utils/friendlyError";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -661,10 +662,102 @@ const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay,
   </div>
 );
 
+/** Line icons for the status screens, drawn in the form theme's own colours. */
+const STATUS_ICONS = {
+  cloud: (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z" />
+      <path d="M3 3l18 18" />
+    </svg>
+  ),
+  search: (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4.5 4.5M8.5 11h5" />
+    </svg>
+  ),
+  lock: (
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="5" y="11" width="14" height="9" rx="3" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  ),
+  alert: (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5M12 16.5v.01" />
+    </svg>
+  ),
+} as const;
+
+/**
+ * The form page's status screen: a round icon, a plain headline, one sentence,
+ * and a way forward.
+ *
+ * This replaced a white card whose "icon" was the literal text "ERR" at 44px
+ * over a red headline and the raw server message ("Server returned status
+ * 502:"). That is the screen someone meets after scanning an old QR code, and
+ * it looked unfinished. It also called a server outage "Form not found", which
+ * tells the reader their link is broken when it is not.
+ *
+ * Drawn from the form theme `t` rather than the app's MUI theme, because this
+ * page has its own dark palette.
+ */
+const FormStatusCard = ({
+  t,
+  icon,
+  tone,
+  title,
+  body,
+  code,
+  actions,
+}: {
+  t: FormTheme;
+  icon: keyof typeof STATUS_ICONS;
+  tone: "wait" | "info" | "error";
+  title: string;
+  body: string;
+  code?: string;
+  actions?: Array<{ label: string; onClick?: () => void; href?: string; primary?: boolean }>;
+}) => {
+  const disc = tone === "wait" ? { bg: t.amberPale, fg: t.amber } : tone === "info" ? { bg: t.purplePale, fg: t.purple } : { bg: t.redPale, fg: t.red };
+  return (
+    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <style>{globalCss(t)}</style>
+      <div role="status" style={{ maxWidth: 440, width: "100%", textAlign: "center", animation: "fadeUp .3s ease" }}>
+        <div aria-hidden style={{ width: 96, height: 96, borderRadius: "50%", margin: "0 auto 22px", background: disc.bg, color: disc.fg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {STATUS_ICONS[icon]}
+        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: t.textPrimary, margin: "0 0 10px", letterSpacing: "-0.01em" }}>{title}</h1>
+        <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.65, margin: "0 0 26px" }}>{body}</p>
+        {actions && actions.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch", maxWidth: 300, margin: "0 auto" }}>
+            {actions.map((action) => {
+              const style = {
+                display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: 46, padding: "0 22px",
+                borderRadius: 999, fontSize: 14, fontWeight: 700, cursor: "pointer", textDecoration: "none", fontFamily: "inherit",
+                border: action.primary ? "none" : `1px solid ${t.border}`,
+                background: action.primary ? t.purple : "transparent",
+                color: action.primary ? "#fff" : t.purple,
+              } as const;
+              return action.href ? (
+                <a key={action.label} href={action.href} style={style}>{action.label}</a>
+              ) : (
+                <button key={action.label} type="button" onClick={action.onClick} style={style}>{action.label}</button>
+              );
+            })}
+          </div>
+        )}
+        {code && <div style={{ marginTop: 22, fontSize: 12, color: t.textMuted, fontVariantNumeric: "tabular-nums" }}>Reference for HR: {code}</div>}
+      </div>
+    </div>
+  );
+};
+
 const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: FormTheme }) => (
   <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
     <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
-      <div style={{ width: 66, height: 66, borderRadius: 12, margin: "0 auto 22px", background: t.purplePale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>LOCK</div>
+      <div aria-hidden style={{ width: 72, height: 72, borderRadius: "50%", margin: "0 auto 22px", background: t.purplePale, color: t.purple, display: "flex", alignItems: "center", justifyContent: "center" }}>{STATUS_ICONS.lock}</div>
       <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: t.textPrimary, marginBottom: 10 }}>Sign in required</div>
       <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7, marginBottom: 32 }}><strong>{formTitle || "This form"}</strong> is restricted.</p>
       <button onClick={onSignIn} style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: `linear-gradient(135deg,${t.purple},${t.purpleLight})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
@@ -726,6 +819,9 @@ export default function DynamicFormPage() {
   const enrichedSurveyJsonRef = useRef<Record<string, unknown> | null>(null);
   enrichedSurveyJsonRef.current = enrichedSurveyJson;
   const [error, setError] = useState("");
+  // Kept beside the message so the screen can tell "doesn't exist" (404) from
+  // "couldn't reach it" (5xx) -- they need opposite advice.
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   /** Reference allocated to the submission just made, for the success screen. */
   const [submittedReference, setSubmittedReference] = useState("");
@@ -837,7 +933,7 @@ export default function DynamicFormPage() {
         } catch {
           errorDetail = `Server returned status ${res.status}: ${responseText.substring(0, 200)}`;
         }
-        throw new Error(errorDetail);
+        throw Object.assign(new Error(errorDetail), { status: res.status });
       }
 
       let parsed: { error?: string; formConfig?: Record<string, unknown>; surveyJson?: Record<string, unknown>; meta?: Record<string, unknown> };
@@ -897,11 +993,11 @@ export default function DynamicFormPage() {
             const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig,ReferenceConfig&$top=1`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json;odata=nometadata" } });
             if (!cfgRes.ok) throw new SharePointHttpError("Failed to load form config", cfgRes);
             cfgRaw = (await cfgRes.json()).value?.[0];
-            if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
+            if (!cfgRaw) throw Object.assign(new Error(`Form "${formId}" not found.`), { status: 404 });
             ver = await getFormVersion(accessToken, cfgRaw.Title as string, pinVersion, publishKey);
-            if (!ver) throw new Error(`Version ${pinVersion} not found.`);
-            if (ver.publishStatus === "off") throw new Error("This published form profile is turned off.");
-            if (isExpiredPublishProfile(ver.publishExpiresAt)) throw new Error("This published form profile has expired.");
+            if (!ver) throw Object.assign(new Error(`Version ${pinVersion} not found.`), { status: 404 });
+            if (ver.publishStatus === "off") throw Object.assign(new Error("This published form profile is turned off."), { status: 410 });
+            if (isExpiredPublishProfile(ver.publishExpiresAt)) throw Object.assign(new Error("This published form profile has expired."), { status: 410 });
             if (ver.layerConfig) {
               cfgRaw.LayerConfig = JSON.stringify(ver.layerConfig);
             }
@@ -909,7 +1005,7 @@ export default function DynamicFormPage() {
             if (publishKey) cfgRaw.CurrentPublishKey = publishKey;
           } else {
             const latest = await getLatestFormBySlug(accessToken, formId, publishKey);
-            if (!latest) throw new Error(`Form "${formId}" not found.`);
+            if (!latest) throw Object.assign(new Error(`Form "${formId}" not found.`), { status: 404 });
             cfgRaw = latest.formConfig as unknown as Record<string, unknown>;
             ver = { surveyJson: latest.surveyJson, meta: latest.meta };
           }
@@ -974,6 +1070,7 @@ export default function DynamicFormPage() {
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
+        setErrorStatus(statusFromError(e));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1256,7 +1353,14 @@ export default function DynamicFormPage() {
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
   const documentHeader = documentHeaderFromMeta(formData?.meta, formIdValue, formVersion);
 
-  useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW HR Form"; }, [formTitle]);
+  // The placeholder title used to leak as "Form: Form" while loading.
+  useEffect(() => {
+    document.title = error
+      ? "Form unavailable · PMW HR Group Portal"
+      : formTitle
+        ? `${formTitle} · PMW HR Group Portal`
+        : "Loading form · PMW HR Group Portal";
+  }, [formTitle, error]);
 
   /**
    * The submit gate: the form's own validation first, then the one condition
@@ -2157,26 +2261,39 @@ export default function DynamicFormPage() {
   // A form that loaded without survey content can never be filled in or submitted —
   // say so instead of sitting on a spinner forever.
   if (!error && !formData?.surveyJson) return (
-    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <style>{globalCss(t)}</style>
-      <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
-        <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
-        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form unavailable</div>
-        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>This link has no published form content. Please ask HR to republish the form and share the link again.</p>
-      </div>
-    </div>
+    <FormStatusCard
+      t={t}
+      icon="search"
+      tone="info"
+      title="This form isn't ready yet"
+      body="The link works, but the form behind it hasn't been published. Ask HR to republish it and share the link again."
+      code={formId}
+      actions={[{ label: "Go to the HR portal", href: "/", primary: true }]}
+    />
   );
 
-  if (error) return (
-    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <style>{globalCss(t)}</style>
-      <div style={{ background: t.cardBg, borderRadius: 12, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
-        <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
-        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form not found</div>
-        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>{error}</p>
-      </div>
-    </div>
-  );
+  if (error) {
+    const failure = describeFailure("this form", { status: errorStatus, error });
+    const canRetry = failure.kind !== "not-found" && failure.kind !== "gone" && failure.kind !== "no-access";
+    return (
+      <FormStatusCard
+        t={t}
+        icon={failure.kind === "not-found" || failure.kind === "gone" ? "search" : failure.kind === "no-access" ? "lock" : failure.kind === "unknown" ? "alert" : "cloud"}
+        tone={failure.kind === "unknown" ? "error" : failure.kind === "not-found" || failure.kind === "gone" || failure.kind === "no-access" ? "info" : "wait"}
+        title={failure.title}
+        body={
+          failure.kind === "unreachable"
+            ? "The HR system didn't answer. Your link is fine; try again in a minute."
+            : failure.body
+        }
+        code={[failure.code, formId].filter(Boolean).join(" · ")}
+        actions={[
+          ...(canRetry ? [{ label: "Try again", onClick: () => window.location.reload(), primary: true }] : []),
+          { label: "Go to the HR portal", href: "/", primary: !canRetry },
+        ]}
+      />
+    );
+  }
 
   // Still resolving the link: hold the spinner rather than flashing the general
   // form and then rewriting it with the event's answers a moment later.

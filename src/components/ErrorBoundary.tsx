@@ -3,92 +3,101 @@
  * instead of crashing the entire page.
  */
 import { Component } from "react";
-import { editorial } from "../theme/editorial";
+import { ContentCopyRounded, RefreshRounded } from "@mui/icons-material";
+import StatusPanel from "./common/StatusPanel";
 
 interface Props {
   children: React.ReactNode;
   fallback?: React.ReactNode;
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+  /** `page` owns the screen; `inline` sits inside the shell's content area. */
+  variant?: "page" | "inline";
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
+  copied: boolean;
 }
 
+/** A deploy replaced the code this tab was built from; the fix is a reload. */
+export function isStaleBuildError(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.name} ${error.message}` : String(error ?? "");
+  return /ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+    message,
+  );
+}
+
+/**
+ * The crash screen.
+ *
+ * It used to show a ⚠ glyph and the raw stack trace to everyone, with a plain
+ * <button> that had no focus style. Now it says what happened in one line,
+ * offers a reload, and keeps the technical detail one click away on the
+ * clipboard — where IT can use it — rather than on screen, where nobody else
+ * can.
+ */
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, copied: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("[ErrorBoundary]", error, errorInfo);
     this.props.onError?.(error, errorInfo);
   }
 
+  private copyDetails = () => {
+    const { error } = this.state;
+    const details = [
+      `Page: ${window.location.pathname}`,
+      `Time: ${new Date().toISOString()}`,
+      `Error: ${error?.name ?? "Error"}: ${error?.message ?? "Unknown error"}`,
+      error?.stack ?? "",
+    ].join("\n");
+    void navigator.clipboard?.writeText(details).then(
+      () => this.setState({ copied: true }),
+      () => this.setState({ copied: false }),
+    );
+  };
+
   render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
+    if (!this.state.hasError) return this.props.children;
+    if (this.props.fallback) return this.props.fallback;
+
+    const variant = this.props.variant ?? "page";
+    const reload = { label: "Reload", onClick: () => window.location.reload(), icon: <RefreshRounded /> };
+
+    if (isStaleBuildError(this.state.error)) {
       return (
-        <div
-          style={{
-            padding: 40,
-            maxWidth: 500,
-            margin: "60px auto",
-            fontFamily: "var(--pmw-font-main)",
-          }}
-        >
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              background: editorial.errorSoft,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 24,
-              marginBottom: 16,
-            }}
-          >
-            ⚠
-          </div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: editorial.ink, margin: "0 0 8px" }}>
-            Something went wrong
-          </h2>
-          <p style={{ fontSize: 14, color: editorial.muted, margin: "0 0 16px", lineHeight: 1.5 }}>
-            An unexpected error occurred. Try refreshing the page.
-          </p>
-          <details style={{ fontSize: 12, color: editorial.softMuted, whiteSpace: "pre-wrap" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>Error details</summary>
-            {this.state.error?.stack || this.state.error?.message || "Unknown error"}
-          </details>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              marginTop: 20,
-              padding: "10px 24px",
-              borderRadius: 12,
-              border: "none",
-              background: editorial.pmwBlue,
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            Refresh page
-          </button>
-        </div>
+        <StatusPanel
+          variant={variant}
+          tone="waiting"
+          title="A new version of the portal is ready"
+          body="It was updated while this tab was open. Reload to carry on; nothing you've submitted is lost."
+          primary={reload}
+        />
       );
     }
 
-    return this.props.children;
+    return (
+      <StatusPanel
+        variant={variant}
+        tone="unknown"
+        title="This page ran into a problem"
+        body="Reloading usually fixes it. Anything you already submitted is safe."
+        primary={reload}
+        secondary={{
+          label: this.state.copied ? "Details copied" : "Copy details for IT",
+          onClick: this.copyDetails,
+          icon: <ContentCopyRounded />,
+        }}
+        code={this.state.error?.name && this.state.error.name !== "Error" ? this.state.error.name : undefined}
+      />
+    );
   }
 }

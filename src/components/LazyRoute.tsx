@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
+import StatusPanel from "./common/StatusPanel";
+import { isStaleBuildError } from "./ErrorBoundary";
 
 type RouteModuleLoader = () => Promise<{ default: ComponentType }>;
 
@@ -74,6 +76,20 @@ export default function LazyRoute({ load, fallback = null }: LazyRouteProps) {
     };
   }, [load, state.Component]);
 
+  // A tab opened before a deploy asks for code files that no longer exist.
+  // That is not a crash, and the generic crash screen said it was; it needs a
+  // reload, so say exactly that.
+  if (state.error && isStaleBuildError(state.error)) {
+    return (
+      <StatusPanel
+        variant="page"
+        tone="waiting"
+        title="A new version of the portal is ready"
+        body="It was updated while this tab was open. Reload to carry on; nothing you've submitted is lost."
+        primary={{ label: "Reload", onClick: () => window.location.reload() }}
+      />
+    );
+  }
   if (state.error) throw state.error;
 
   const Component = state.Component;

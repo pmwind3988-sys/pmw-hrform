@@ -3,7 +3,7 @@ import { Box, Button, Typography } from "@mui/material";
 import { PaletteOutlined } from "@mui/icons-material";
 import { useDashboard } from "../contexts/DashboardContext";
 import { useDashboardBackground } from "../hooks/useDashboardBackground";
-import BackgroundPicker from "../components/dashboard/BackgroundPicker";
+import BackgroundPicker, { BackgroundErrorNote } from "../components/dashboard/BackgroundPicker";
 import { findDashboardBackground } from "../utils/dashboardBackgrounds";
 import { editorial, si, siType } from "../theme/editorial";
 import Card from "../components/common/Card";
@@ -98,7 +98,9 @@ export default function AppearancePage() {
         </Box>
 
         {error && (
-          <Typography sx={{ ...siType.subtext, color: editorial.error, mt: 2 }}>{error}</Typography>
+          <Box sx={{ mt: 2 }}>
+            <BackgroundErrorNote error={error} />
+          </Box>
         )}
       </Card>
 
