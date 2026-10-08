@@ -1,20 +1,8 @@
 import { Box, Button, Chip, Paper, Typography } from "@mui/material";
-import {
-  BusinessCenterOutlined,
-  EventBusyOutlined,
-  LocationOnOutlined,
-  ScheduleOutlined,
-  WorkOutlined,
-} from "@mui/icons-material";
+import { CheckRounded, WorkOutlined } from "@mui/icons-material";
 import type { JobListing } from "../../types";
-import { editorial } from "../../theme/editorial";
-import {
-  careerReduceMotionSx,
-  jobBoardBadgeSx,
-  jobBoardCardSx,
-  jobBoardMetaItemSx,
-  jobBoardPrimaryButtonSx,
-} from "./careerUi";
+import { editorial, si, siType } from "../../theme/editorial";
+import { careerReduceMotionSx, jobBoardBadgeSx } from "./careerUi";
 
 /**
  * Job list card, adapted from the Figma job-portal template
@@ -72,100 +60,86 @@ export default function JobCard({ job, onOpen, applied = false }: JobCardProps) 
   const postedAgo = formatPostedAgo(job.created);
   const closing = job.closingDate ? formatClosingDate(job.closingDate) : "";
 
-  const meta = [
-    job.department && { key: "department", icon: <BusinessCenterOutlined />, label: job.department },
-    job.employmentType && { key: "type", icon: <ScheduleOutlined />, label: job.employmentType },
-    job.location && { key: "location", icon: <LocationOnOutlined />, label: job.location },
-    closing && { key: "closing", icon: <EventBusyOutlined />, label: `Closes ${closing}` },
-  ].filter(Boolean) as { key: string; icon: React.ReactElement; label: string }[];
+  const muted = [
+    job.company,
+    job.department,
+    job.location,
+    job.employmentType,
+    closing && `Closes ${closing}`,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <Paper component="article" sx={{ ...jobBoardCardSx, ...careerReduceMotionSx }}>
-      <Box sx={{ display: "flex", flexDirection: "column", gap: { xs: 2, md: 3 } }}>
-        <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5 }}>
-          {postedAgo ? <Chip label={postedAgo} size="small" sx={jobBoardBadgeSx} /> : <Box />}
+    <Paper
+      component="article"
+      onClick={() => onOpen(job)}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.target === event.currentTarget) onOpen(job);
+      }}
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 2,
+        p: { xs: 2, sm: 2.5 },
+        borderRadius: `${si.radius}px`,
+        boxShadow: si.shadow,
+        cursor: "pointer",
+        transition: "background-color 0.15s ease",
+        "&:hover": { backgroundColor: editorial.blueSoft },
+        ...careerReduceMotionSx,
+      }}
+    >
+      <Box
+        aria-hidden
+        sx={{
+          width: 40,
+          height: 40,
+          flexShrink: 0,
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: editorial.blueWash,
+        }}
+      >
+        <WorkOutlined sx={{ fontSize: 20, color: editorial.navy }} />
+      </Box>
+
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography component="h3" sx={{ ...siType.cardTitle, color: editorial.ink, overflowWrap: "anywhere" }}>
+          {job.title}
+        </Typography>
+        {muted && (
+          <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 0.25 }}>{muted}</Typography>
+        )}
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 1 }}>
           {applied && (
             <Chip
+              icon={<CheckRounded />}
               label="Applied"
               size="small"
               sx={{
                 ...jobBoardBadgeSx,
-                backgroundColor: "rgba(16, 124, 16, 0.10)",
+                backgroundColor: editorial.successSoft,
                 color: editorial.success,
+                "& .MuiChip-icon": { color: editorial.success, fontSize: 16 },
               }}
             />
           )}
-        </Box>
-
-        <Box sx={{ display: "flex", gap: 2.5, alignItems: "flex-start", minWidth: 0 }}>
-          <Box
-            aria-hidden
-            sx={{
-              width: 40,
-              height: 40,
-              flexShrink: 0,
-              borderRadius: "12px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: editorial.blueWash,
-              border: `1px solid ${editorial.pmwBlueSoft}`,
-            }}
-          >
-            <WorkOutlined sx={{ fontSize: 20, color: editorial.pmwBlueDark }} />
-          </Box>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-            <Typography
-              variant="h3"
-              sx={{
-                color: editorial.ink,
-                fontWeight: 700,
-                fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem" },
-                lineHeight: 1.15,
-                letterSpacing: "-0.01em",
-                textWrap: "balance",
-              }}
-            >
-              {job.title}
-            </Typography>
-            {job.company && (
-              <Typography variant="body1" sx={{ color: editorial.ink, fontSize: "0.9375rem" }}>
-                {job.company}
-              </Typography>
-            )}
-          </Box>
+          {postedAgo && <Chip label={`Posted ${postedAgo}`} size="small" sx={jobBoardBadgeSx} />}
         </Box>
       </Box>
 
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: { xs: "stretch", md: "flex-end" },
-          justifyContent: "space-between",
-          flexDirection: { xs: "column", md: "row" },
-          gap: 2,
+      <Button
+        variant="text"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen(job);
         }}
+        sx={{ flexShrink: 0, display: { xs: "none", sm: "inline-flex" }, backgroundColor: editorial.skySoft }}
       >
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: { xs: 1.5, md: 3 }, minWidth: 0 }}>
-          {meta.map((item) => (
-            <Box key={item.key} sx={jobBoardMetaItemSx}>
-              {item.icon}
-              <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {item.label}
-              </Box>
-            </Box>
-          ))}
-        </Box>
-
-        <Button
-          variant="contained"
-          disableElevation
-          onClick={() => onOpen(job)}
-          sx={{ ...jobBoardPrimaryButtonSx, ...careerReduceMotionSx, alignSelf: { xs: "stretch", md: "auto" } }}
-        >
-          Job details
-        </Button>
-      </Box>
+        Job details
+      </Button>
     </Paper>
   );
 }

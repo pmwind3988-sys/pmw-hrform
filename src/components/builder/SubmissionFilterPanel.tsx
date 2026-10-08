@@ -1,18 +1,30 @@
 /**
- * SubmissionFilterPanel.tsx — the builder workspace's submission filter bar.
+ * SubmissionFilterPanel.tsx - the submission filter bar for the admin pages.
  *
- * Same model and same engine as the dashboard's `Toolbar`; only the skin differs,
- * because the builder pages are styled with their own inline `C` palette rather
- * than MUI. Each page passes the handful of tokens it uses, so the panel inherits
- * that page's look instead of importing a second one.
+ * Same model and same engine as the dashboard's `Toolbar`; only the skin
+ * differs. The controls are the rounded system's own: a pill search, pill
+ * selects with a soft fill, and chips for the on/off filters.
  *
  * One slim row holds the universal facets (they apply to every submission,
- * whatever form it came from). The form → profile → version → questions chain
- * lives behind a "More filters" button so the page stays one screen tall; it is
- * drawn left to right, and a step only appears once the step before it is
- * chosen, so there is never a greyed-out control to puzzle over.
+ * whatever form it came from). The form > version > questions chain lives
+ * behind a "More filters" chip so the page stays one screen tall; it is drawn
+ * left to right, and a step only appears once the step before it is chosen, so
+ * there is never a greyed-out control to puzzle over.
  */
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
+import {
+  Box,
+  Chip,
+  InputAdornment,
+  ListSubheader,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { CheckRounded, CloseRounded, ExpandLessRounded, ExpandMoreRounded, SearchRounded } from "@mui/icons-material";
+import Card from "../common/Card";
+import { editorial, si, siType } from "../../theme/editorial";
 import {
   OPS_BY_KIND,
   groupFieldsBySection,
@@ -35,21 +47,34 @@ import {
 } from "../../utils/submissionFilters";
 import { LIFECYCLE_STAGES, lifecycleLabel } from "../../utils/submissionLifecycle";
 
-export interface FilterPanelPalette {
-  border: string;
-  cardBg: string;
-  panelBg: string;
-  textPrimary: string;
-  textSecond: string;
-  textMuted: string;
-  accent: string;
-  accentPale: string;
-}
+/** A MUI Select drawn as a soft-filled pill. Shared with the pages around it. */
+export const pillSelectSx = {
+  borderRadius: `${si.radiusPill}px`,
+  backgroundColor: editorial.skySoft,
+  ...siType.subtext,
+  color: editorial.ink,
+  minWidth: 0,
+  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+  "& .MuiSelect-select": { py: 0.9, pl: 2, minHeight: "unset" },
+  "&:hover": { backgroundColor: editorial.blueWash },
+} as const;
+
+/** A TextField drawn as a soft-filled pill. */
+export const pillFieldSx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: `${si.radiusPill}px`,
+    backgroundColor: editorial.skySoft,
+    ...siType.subtext,
+    color: editorial.ink,
+  },
+  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+  "& .MuiOutlinedInput-input": { py: 0.9 },
+} as const;
 
 interface SubmissionFilterPanelProps {
   filters: SubmissionFilterState;
   setFilters: (filters: SubmissionFilterState) => void;
-  /** Omit on a single-form page — there is nothing to scope. */
+  /** Omit on a single-form page - there is nothing to scope. */
   formTypeOptions?: FormTypeOption[];
   publishProfileOptions?: string[];
   /** Versions of the form (and profile) in scope. */
@@ -60,7 +85,6 @@ interface SubmissionFilterPanelProps {
   showStage?: boolean;
   /** True while this form's answers are still being fetched. */
   fieldDataLoading?: boolean;
-  palette: FilterPanelPalette;
   total: number;
   filtered: number;
 }
@@ -88,7 +112,6 @@ export default function SubmissionFilterPanel({
   fieldCatalog,
   showStage = true,
   fieldDataLoading = false,
-  palette,
   total,
   filtered,
 }: SubmissionFilterPanelProps) {
@@ -103,25 +126,9 @@ export default function SubmissionFilterPanel({
   const showProfileStep = publishProfileOptions.length > 1;
   const [open, setOpen] = useState(false);
 
-  const controlStyle: CSSProperties = {
-    padding: "7px 10px",
-    borderRadius: 8,
-    border: `1px solid ${palette.border}`,
-    fontSize: 12.5,
-    color: palette.textPrimary,
-    outline: "none",
-    background: palette.cardBg,
-    minWidth: 0,
-  };
-  const disabledControlStyle: CSSProperties = {
-    ...controlStyle,
-    color: palette.textMuted,
-    background: palette.panelBg,
-    cursor: "not-allowed",
-  };
-  const labelStyle: CSSProperties = { fontSize: 12.5, color: palette.textMuted, whiteSpace: "nowrap" };
-  const stepLabelStyle: CSSProperties = { fontSize: 11.5, fontWeight: 700, color: palette.textSecond };
-  const stepStyle: CSSProperties = { display: "flex", gap: 6, alignItems: "center", flex: "0 1 auto", minWidth: 0 };
+  const labelSx = { ...siType.subtext, color: editorial.softMuted, whiteSpace: "nowrap" } as const;
+  const stepLabelSx = { ...siType.subtext, fontWeight: 600, color: editorial.muted } as const;
+  const stepSx = { display: "flex", gap: 0.75, alignItems: "center", flex: "0 1 auto", minWidth: 0 } as const;
 
   const updateFieldFilter = (next: FieldFilter) => {
     patch({ fieldFilters: filters.fieldFilters.map((entry) => (entry.id === next.id ? next : entry)) });
@@ -132,7 +139,7 @@ export default function SubmissionFilterPanel({
 
   const valueEditor = (filter: FieldFilter) => {
     const arity = opArity(filter.op);
-    if (arity === "none") return <span style={{ ...labelStyle, fontStyle: "italic" }}>no value needed</span>;
+    if (arity === "none") return <Typography sx={{ ...labelSx, fontStyle: "italic" }}>no value needed</Typography>;
 
     const choices = fieldByKey.get(filter.key)?.choices ?? [];
     const inputType = inputTypeFor(filter.kind);
@@ -140,65 +147,77 @@ export default function SubmissionFilterPanel({
     if (arity === "many") {
       if (!choices.length) {
         return (
-          <input
-            type="text"
+          <TextField
+            size="small"
             placeholder="Value"
             value={filter.values[0] ?? ""}
             onChange={(e) => updateFieldFilter({ ...filter, values: e.target.value ? [e.target.value] : [] })}
-            style={{ ...controlStyle, flex: "1 1 160px" }}
+            sx={{ ...pillFieldSx, flex: "1 1 160px" }}
+            slotProps={{ htmlInput: { "aria-label": "Value" } }}
           />
         );
       }
       return (
-        <select
+        <Select
           multiple
+          size="small"
+          displayEmpty
           value={filter.values}
-          onChange={(e) =>
-            updateFieldFilter({
-              ...filter,
-              values: Array.from(e.target.selectedOptions, (option) => option.value),
-            })
-          }
-          style={{ ...controlStyle, flex: "1 1 180px", minHeight: 64 }}
+          onChange={(e) => {
+            const next = e.target.value;
+            updateFieldFilter({ ...filter, values: typeof next === "string" ? next.split(",") : next });
+          }}
+          renderValue={(selected) => {
+            const labels = selected.map((value) => choices.find((choice) => choice.value === value)?.label ?? value);
+            return labels.length ? labels.join(", ") : "Choose values";
+          }}
+          sx={{ ...pillSelectSx, flex: "1 1 180px" }}
+          SelectDisplayProps={{ "aria-label": "Values" }}
         >
           {choices.map((choice) => (
-            <option key={choice.value} value={choice.value}>
+            <MenuItem key={choice.value} value={choice.value}>
               {choice.label}
-            </option>
+            </MenuItem>
           ))}
-        </select>
+        </Select>
       );
     }
 
     if (arity === "two") {
       return (
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "1 1 200px" }}>
-          <input
+        <Box sx={{ display: "flex", gap: 0.75, alignItems: "center", flex: "1 1 200px" }}>
+          <TextField
+            size="small"
             type={inputType}
             placeholder="From"
             value={filter.value}
             onChange={(e) => updateFieldFilter({ ...filter, value: e.target.value })}
-            style={{ ...controlStyle, flex: 1 }}
+            sx={{ ...pillFieldSx, flex: 1 }}
+            slotProps={{ htmlInput: { "aria-label": "From" } }}
           />
-          <span style={labelStyle}>–</span>
-          <input
+          <Typography sx={labelSx}>to</Typography>
+          <TextField
+            size="small"
             type={inputType}
             placeholder="To"
             value={filter.value2}
             onChange={(e) => updateFieldFilter({ ...filter, value2: e.target.value })}
-            style={{ ...controlStyle, flex: 1 }}
+            sx={{ ...pillFieldSx, flex: 1 }}
+            slotProps={{ htmlInput: { "aria-label": "To" } }}
           />
-        </div>
+        </Box>
       );
     }
 
     return (
-      <input
+      <TextField
+        size="small"
         type={inputType}
         placeholder="Value"
         value={filter.value}
         onChange={(e) => updateFieldFilter({ ...filter, value: e.target.value })}
-        style={{ ...controlStyle, flex: "1 1 160px" }}
+        sx={{ ...pillFieldSx, flex: "1 1 160px" }}
+        slotProps={{ htmlInput: { "aria-label": "Value" } }}
       />
     );
   };
@@ -243,7 +262,6 @@ export default function SubmissionFilterPanel({
     });
   }
 
-
   // Everything inside the "More filters" drawer, counted so a closed drawer still
   // says it is doing something.
   const scopeCount =
@@ -253,257 +271,250 @@ export default function SubmissionFilterPanel({
     filters.fieldFilters.length;
   const hasScopeStep = !!formTypeOptions || showProfileStep || formVersionOptions.length > 0 || fieldCatalog.length > 0;
   const arrow = (
-    <span aria-hidden style={{ color: palette.textMuted, fontSize: 14 }}>
+    <Box component="span" aria-hidden sx={{ color: editorial.softMuted, fontSize: 14 }}>
       ›
-    </span>
+    </Box>
   );
   const fieldPickerReady = fieldCatalog.length > 0 && !fieldDataLoading;
 
   return (
-    <div
-      style={{
-        background: palette.panelBg,
-        border: `1px solid ${palette.border}`,
-        borderRadius: 12,
-        padding: "10px 12px",
-        marginBottom: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          type="text"
-          placeholder="Search reference no, form or ID..."
+    <Card pad="tight" sx={{ mb: 2, display: "flex", flexDirection: "column", gap: 1.25 }}>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+        <TextField
+          size="small"
+          placeholder="Search reference no, form or ID"
           value={filters.search}
           onChange={(e) => patch({ search: e.target.value })}
-          style={{ ...controlStyle, flex: "2 1 220px" }}
+          sx={{ ...pillFieldSx, flex: "2 1 220px" }}
+          slotProps={{
+            htmlInput: { "aria-label": "Search submissions" },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchRounded fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
         />
 
         {showStage && (
-          <label style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-            <span style={labelStyle}>Status</span>
-            <select value={filters.stage} onChange={(e) => patch({ stage: e.target.value })} style={controlStyle}>
-              <option value="all">All statuses</option>
-              {LIFECYCLE_STAGES.map((stage) => (
-                <option key={stage} value={stage}>
-                  {lifecycleLabel(stage)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            size="small"
+            value={filters.stage}
+            onChange={(e) => patch({ stage: e.target.value })}
+            sx={{ ...pillSelectSx, flex: "0 0 auto" }}
+            SelectDisplayProps={{ "aria-label": "Status" }}
+          >
+            <MenuItem value="all">All statuses</MenuItem>
+            {LIFECYCLE_STAGES.map((stage) => (
+              <MenuItem key={stage} value={stage}>
+                {lifecycleLabel(stage)}
+              </MenuItem>
+            ))}
+          </Select>
         )}
 
-        <input
-          type="text"
-          placeholder="Filter by submitter email..."
+        <TextField
+          size="small"
+          placeholder="Submitter email"
           value={filters.submitter}
           onChange={(e) => patch({ submitter: e.target.value })}
-          style={{ ...controlStyle, flex: "1 1 180px" }}
+          sx={{ ...pillFieldSx, flex: "1 1 180px" }}
+          slotProps={{ htmlInput: { "aria-label": "Filter by submitter email" } }}
         />
 
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-          <span style={labelStyle}>From</span>
-          <input type="date" value={filters.dateFrom} onChange={(e) => patch({ dateFrom: e.target.value })} style={controlStyle} />
-          <span style={labelStyle}>To</span>
-          <input type="date" value={filters.dateTo} onChange={(e) => patch({ dateTo: e.target.value })} style={controlStyle} />
-        </div>
-
-        {/* Universal, not part of the form → profile → version chain: a test run
-            belongs to no particular form and stays hidden until asked for. */}
-        <label style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto", cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={filters.includeTestRuns}
-            onChange={(e) => patch({ includeTestRuns: e.target.checked })}
+        <Box sx={{ display: "flex", gap: 0.75, alignItems: "center", flex: "0 0 auto" }}>
+          <Typography sx={labelSx}>From</Typography>
+          <TextField
+            size="small"
+            type="date"
+            value={filters.dateFrom}
+            onChange={(e) => patch({ dateFrom: e.target.value })}
+            sx={pillFieldSx}
+            slotProps={{ htmlInput: { "aria-label": "Submitted from" } }}
           />
-          <span style={labelStyle}>Show test runs</span>
-        </label>
+          <Typography sx={labelSx}>to</Typography>
+          <TextField
+            size="small"
+            type="date"
+            value={filters.dateTo}
+            onChange={(e) => patch({ dateTo: e.target.value })}
+            sx={pillFieldSx}
+            slotProps={{ htmlInput: { "aria-label": "Submitted to" } }}
+          />
+        </Box>
+
+        {/* Universal, not part of the form > version chain: a test run belongs
+            to no particular form and stays hidden until asked for. */}
+        <Chip
+          clickable
+          label="Show test runs"
+          icon={filters.includeTestRuns ? <CheckRounded /> : undefined}
+          onClick={() => patch({ includeTestRuns: !filters.includeTestRuns })}
+          aria-pressed={filters.includeTestRuns}
+          sx={{
+            flex: "0 0 auto",
+            backgroundColor: filters.includeTestRuns ? editorial.sky : editorial.skySoft,
+            color: filters.includeTestRuns ? editorial.navyDeep : editorial.muted,
+            fontWeight: 600,
+          }}
+        />
 
         {hasScopeStep && (
-          <button
-            type="button"
+          <Chip
+            clickable
             onClick={() => setOpen(!open)}
             aria-expanded={open}
-            style={{
-              ...controlStyle,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
+            icon={open ? <ExpandLessRounded /> : <ExpandMoreRounded />}
+            label={scopeCount > 0 ? `More filters · ${scopeCount}` : "More filters"}
+            sx={{
               flex: "0 0 auto",
               fontWeight: 600,
-              cursor: "pointer",
-              color: open || scopeCount ? palette.accent : palette.textSecond,
-              background: open ? palette.accentPale : palette.cardBg,
+              backgroundColor: open || scopeCount ? editorial.sky : editorial.skySoft,
+              color: open || scopeCount ? editorial.navyDeep : editorial.muted,
             }}
-          >
-            More filters
-            {scopeCount > 0 && (
-              <span
-                style={{
-                  background: palette.accent,
-                  color: "#fff",
-                  borderRadius: 999,
-                  minWidth: 18,
-                  padding: "0 5px",
-                  fontSize: 11,
-                  lineHeight: "18px",
-                  textAlign: "center",
-                }}
-              >
-                {scopeCount}
-              </span>
-            )}
-            <span aria-hidden style={{ fontSize: 10 }}>
-              {open ? "▲" : "▼"}
-            </span>
-          </button>
+          />
         )}
-      </div>
+      </Box>
 
       {/* The scope chain, left to right: each step narrows what the next can offer. */}
       {open && hasScopeStep && (
-        <div
-          style={{
-            borderTop: `1px dashed ${palette.border}`,
-            paddingTop: 10,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <Box sx={{ pt: 1.25, display: "flex", flexDirection: "column", gap: 1 }}>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
             {formTypeOptions && (
-              <label style={stepStyle}>
-                <span style={stepLabelStyle}>Form</span>
-                <select
+              <Box sx={stepSx}>
+                <Typography sx={stepLabelSx}>Form</Typography>
+                <Select
+                  size="small"
+                  displayEmpty
                   value={filters.formType}
                   onChange={(e) => setFilters(applyFormTypeChange(filters, e.target.value))}
-                  style={{ ...controlStyle, minWidth: 160, maxWidth: 260 }}
+                  sx={{ ...pillSelectSx, minWidth: 160, maxWidth: 260 }}
+                  SelectDisplayProps={{ "aria-label": "Form" }}
                 >
-                  <option value="">All forms</option>
+                  <MenuItem value="">All forms</MenuItem>
                   {formTypeOptions.map((option) => (
-                    <option key={option.title} value={option.title}>
+                    <MenuItem key={option.title} value={option.title}>
                       {option.title}
                       {option.count > 0 ? ` (${option.count})` : ""}
-                    </option>
+                    </MenuItem>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Box>
             )}
 
             {!formChosen && (
-              <span style={{ fontSize: 12, color: palette.textMuted }}>
+              <Typography sx={{ ...siType.subtext, color: editorial.softMuted }}>
                 Pick a form to narrow by profile, version or its own questions.
-              </span>
+              </Typography>
             )}
 
             {formChosen && showProfileStep && (
               <>
                 {formTypeOptions && arrow}
-                <label style={stepStyle}>
-                  <span style={stepLabelStyle}>Profile</span>
-                  <select
+                <Box sx={stepSx}>
+                  <Typography sx={stepLabelSx}>Profile</Typography>
+                  <Select
+                    size="small"
+                    displayEmpty
                     value={filters.publishProfile}
                     onChange={(e) => setFilters(applyPublishProfileChange(filters, e.target.value))}
-                    style={{ ...controlStyle, minWidth: 130, maxWidth: 220 }}
+                    sx={{ ...pillSelectSx, minWidth: 130, maxWidth: 220 }}
+                    SelectDisplayProps={{ "aria-label": "Profile" }}
                     title="The published profile a submission was sent under"
                   >
-                    <option value="">All profiles</option>
+                    <MenuItem value="">All profiles</MenuItem>
                     {publishProfileOptions.map((profile) => (
-                      <option key={profile} value={profile}>
+                      <MenuItem key={profile} value={profile}>
                         {profile}
-                      </option>
+                      </MenuItem>
                     ))}
-                  </select>
-                </label>
+                  </Select>
+                </Box>
               </>
             )}
 
             {formChosen && formVersionOptions.length > 0 && (
               <>
                 {(formTypeOptions || showProfileStep) && arrow}
-                <label style={stepStyle}>
-                  <span style={stepLabelStyle}>Version</span>
-                  <select
+                <Box sx={stepSx}>
+                  <Typography sx={stepLabelSx}>Version</Typography>
+                  <Select
+                    size="small"
+                    displayEmpty
                     value={filters.formVersion}
                     onChange={(e) => setFilters(applyFormVersionChange(filters, e.target.value))}
-                    style={{ ...controlStyle, minWidth: 120, maxWidth: 200 }}
+                    sx={{ ...pillSelectSx, minWidth: 120, maxWidth: 200 }}
+                    SelectDisplayProps={{ "aria-label": "Version" }}
                     title="Conditions cover the questions the chosen version asked."
                   >
-                    <option value="">All versions</option>
+                    <MenuItem value="">All versions</MenuItem>
                     {formVersionOptions.map((option) => (
-                      <option key={option.version} value={option.version}>
+                      <MenuItem key={option.version} value={option.version}>
                         v{option.version}
                         {option.count > 0 ? ` (${option.count})` : ""}
-                      </option>
+                      </MenuItem>
                     ))}
-                  </select>
-                </label>
+                  </Select>
+                </Box>
               </>
             )}
 
             {formChosen && (
               <>
                 {(formTypeOptions || showProfileStep || formVersionOptions.length > 0) && arrow}
-                <select
+                <Select
+                  size="small"
+                  displayEmpty
                   value=""
-                  aria-label="Add a condition on a field"
                   disabled={!fieldPickerReady}
                   onChange={(e) => {
                     const field = fieldByKey.get(e.target.value);
                     if (field) patch({ fieldFilters: [...filters.fieldFilters, createFieldFilter(field)] });
                   }}
-                  style={{
-                    ...(fieldPickerReady ? controlStyle : disabledControlStyle),
-                    borderStyle: "dashed",
-                    color: fieldPickerReady ? palette.accent : palette.textMuted,
-                    fontWeight: 600,
-                    cursor: fieldPickerReady ? "pointer" : "not-allowed",
-                  }}
-                >
-                  <option value="">
-                    {fieldDataLoading
+                  renderValue={() =>
+                    fieldDataLoading
                       ? "Loading this form's answers…"
                       : fieldCatalog.length
-                        ? "+ Add a condition on a field"
-                        : "No filterable questions found"}
-                  </option>
-                  {groups.map((group) => (
-                    <optgroup key={group.section} label={group.section}>
-                      {group.fields.map((field) => (
-                        <option key={field.key} value={field.key}>
-                          {field.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                        ? "Add a condition on a question"
+                        : "No filterable questions found"
+                  }
+                  sx={{ ...pillSelectSx, color: fieldPickerReady ? editorial.navy : editorial.softMuted, fontWeight: 600 }}
+                  SelectDisplayProps={{ "aria-label": "Add a condition on a question" }}
+                >
+                  {groups.flatMap((group) => [
+                    <ListSubheader key={`h-${group.section}`}>{group.section}</ListSubheader>,
+                    ...group.fields.map((field) => (
+                      <MenuItem key={field.key} value={field.key}>
+                        {field.label}
+                      </MenuItem>
+                    )),
+                  ])}
+                </Select>
               </>
             )}
-          </div>
+          </Box>
 
           {formChosen &&
             filters.fieldFilters.map((fieldFilter) => (
-              <div
+              <Box
                 key={fieldFilter.id}
-                style={{
+                sx={{
                   display: "flex",
-                  gap: 8,
+                  gap: 1,
                   alignItems: "center",
                   flexWrap: "wrap",
-                  background: palette.cardBg,
-                  border: `1px solid ${palette.border}`,
-                  borderRadius: 8,
-                  padding: 8,
+                  backgroundColor: editorial.blueSoft,
+                  borderRadius: `${si.radiusSm}px`,
+                  p: 1,
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 12.5,
+                <Typography
+                  sx={{
+                    ...siType.subtext,
                     fontWeight: 700,
-                    color: palette.textPrimary,
+                    color: editorial.ink,
                     flex: "0 1 160px",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -512,9 +523,10 @@ export default function SubmissionFilterPanel({
                   title={fieldByKey.get(fieldFilter.key)?.label ?? fieldFilter.key}
                 >
                   {fieldByKey.get(fieldFilter.key)?.label ?? fieldFilter.key}
-                </span>
+                </Typography>
 
-                <select
+                <Select
+                  size="small"
                   value={fieldFilter.op}
                   onChange={(e) =>
                     updateFieldFilter({
@@ -525,71 +537,49 @@ export default function SubmissionFilterPanel({
                       values: [],
                     })
                   }
-                  style={{ ...controlStyle, flex: "0 0 auto" }}
+                  sx={{ ...pillSelectSx, backgroundColor: editorial.panel, flex: "0 0 auto" }}
+                  SelectDisplayProps={{ "aria-label": "Condition" }}
                 >
                   {(OPS_BY_KIND[fieldFilter.kind] ?? OPS_BY_KIND.text).map((op) => (
-                    <option key={op} value={op}>
+                    <MenuItem key={op} value={op}>
                       {opLabel(op)}
-                    </option>
+                    </MenuItem>
                   ))}
-                </select>
+                </Select>
 
                 {valueEditor(fieldFilter)}
 
-                <button
-                  type="button"
+                <Chip
+                  clickable
+                  size="small"
+                  label="Remove"
+                  icon={<CloseRounded />}
                   onClick={() => removeFieldFilter(fieldFilter.id)}
-                  title="Remove condition"
-                  style={{
-                    marginLeft: "auto",
-                    border: `1px solid ${palette.border}`,
-                    background: "transparent",
-                    color: palette.textMuted,
-                    borderRadius: 8,
-                    padding: "4px 9px",
-                    fontSize: 12.5,
-                    cursor: "pointer",
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
+                  aria-label="Remove condition"
+                  sx={{ ml: "auto", backgroundColor: editorial.panel, color: editorial.muted }}
+                />
+              </Box>
             ))}
-        </div>
+        </Box>
       )}
 
       {activeChips.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ ...labelStyle, fontVariantNumeric: "tabular-nums" }}>
+        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", alignItems: "center" }}>
+          <Typography sx={{ ...labelSx, fontVariantNumeric: "tabular-nums" }}>
             Showing {filtered} of {total}
-          </span>
+          </Typography>
           {activeChips.map((chip) => (
-            <button
+            <Chip
               key={chip.key}
-              type="button"
-              onClick={chip.onClear}
+              size="small"
+              label={chip.label}
+              onDelete={chip.onClear}
               title="Remove this filter"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                maxWidth: 280,
-                background: palette.accentPale,
-                border: `1px solid ${palette.border}`,
-                borderRadius: 999,
-                padding: "2px 9px",
-                fontSize: 12,
-                fontWeight: 600,
-                color: palette.textPrimary,
-                cursor: "pointer",
-              }}
-            >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chip.label}</span>
-              <span style={{ color: palette.textMuted }}>✕</span>
-            </button>
+              sx={{ maxWidth: 280, backgroundColor: editorial.sky, color: editorial.navyDeep, fontWeight: 600 }}
+            />
           ))}
-        </div>
+        </Box>
       )}
-    </div>
+    </Card>
   );
 }

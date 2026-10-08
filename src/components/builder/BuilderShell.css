@@ -131,7 +131,7 @@
   outline-offset: 2px;
 }
 /* PMW blue only clears 3:1 against the navy rail; the ring goes light there. */
-.bx-nav :focus-visible,
+
 .bx-toast :focus-visible {
   outline-color: var(--bx-a100);
 }
@@ -174,38 +174,55 @@
 
 .bx-header {
   flex: none;
-  height: 56px;
+  position: relative;
+  z-index: 30;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  padding: 0 20px;
-  background: var(--bx-panel);
-  border-bottom: 1px solid var(--bx-divider);
+  gap: 10px 14px;
+  min-height: 64px;
+  padding: 10px 20px;
+  background: var(--bx-white);
+  box-shadow: var(--bx-sh-sm);
 }
 
-.bx-mark {
+/* The one round button on the left: the way back out of a full-bleed screen. */
+.bx-circlebtn {
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
-  background: var(--bx-a800);
-  color: var(--bx-bg);
+  border: none;
+  border-radius: 50%;
+  background: var(--bx-a100);
+  color: var(--bx-a800);
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+.bx-circlebtn:hover {
+  background: var(--bx-a200);
 }
 
-.bx-wordmark {
-  font-weight: 700;
-  font-size: 18px;
-  line-height: 1;
-  letter-spacing: -0.017em;
-  white-space: nowrap;
+.bx-header-form {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-
-.bx-vrule {
+.bx-header-extras {
   flex: none;
-  width: 1px;
-  height: 24px;
-  background: var(--bx-divider);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bx-header-end {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 /* Secondary-site banner.
@@ -283,23 +300,22 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  height: 36px;
+  height: 38px;
   max-width: 300px;
-  padding: 0 12px;
+  padding: 0 14px;
   background: transparent;
-  border: 1px solid var(--bx-line-field);
-  border-radius: var(--bx-r-sm);
+  border: none;
+  border-radius: var(--bx-r-pill);
   color: var(--bx-text);
   cursor: pointer;
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  transition: background-color 0.14s ease;
 }
 .bx-switcher:hover {
-  border-color: var(--bx-a800);
   background: var(--bx-a100);
 }
 .bx-switcher-label {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
   letter-spacing: -0.011em;
   white-space: nowrap;
@@ -315,7 +331,6 @@
   width: 330px;
   max-width: calc(100vw - 40px);
   background: var(--bx-panel);
-  border: 1px solid var(--bx-divider);
   border-radius: var(--bx-r-md);
   box-shadow: var(--bx-sh-lg);
   overflow: hidden;
@@ -329,7 +344,6 @@
   gap: 10px;
   padding: 11px 14px;
   background: var(--bx-a100);
-  border-bottom: 1px solid var(--bx-a300);
 }
 .bx-dropdown-list {
   max-height: 340px;
@@ -342,7 +356,7 @@
   width: 100%;
   padding: 11px 14px;
   border: none;
-  border-bottom: 1px solid var(--bx-hairline);
+  border-radius: var(--bx-r-sm);
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -353,7 +367,7 @@
   background: var(--bx-a100);
 }
 .bx-libraryrow[aria-current="true"] {
-  box-shadow: inset 4px 0 0 var(--bx-a800);
+  background: var(--bx-a100);
 }
 
 /* ── Tags & save state ──────────────────────────────────────────────────── */
@@ -402,12 +416,17 @@
 
 .bx-save {
   flex: none;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 9px;
-  font-size: 13.5px;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--bx-r-pill);
+  background: var(--bx-a100);
+  font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
-  color: var(--bx-n700);
+  color: var(--bx-n800);
 }
 .bx-dot {
   width: 8px;
@@ -416,59 +435,41 @@
   flex: none;
 }
 
-/* ── Mode rail ──────────────────────────────────────────────────────────── */
+/* ── Modes and header actions ────────────────────────────────────────────── */
 
-.bx-nav {
+/* A segmented control: a soft tinted track, the selected mode a navy pill. */
+.bx-modes {
   flex: none;
-  height: 52px;
-  display: flex;
-  align-items: stretch;
-  /* The same gradient as the app sidebar (`.si-navy` in index.css) rather than
-     the flat a900 fill. The builder now renders inside that shell, so the rail
-     sits directly beside the sidebar; two different navies meeting at a corner
-     reads as a rendering fault rather than as a design. */
-  background: linear-gradient(160deg, #0f3d91 0%, #0b2f70 100%);
-  color: var(--bx-a100);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--bx-r-pill);
+  background: var(--bx-a100);
 }
-
 .bx-navitem {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 100%;
-  padding: 0 18px;
+  gap: 7px;
+  height: 36px;
+  padding: 0 16px;
   border: none;
+  border-radius: var(--bx-r-pill);
   background: transparent;
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
-  letter-spacing: 0.005em;
   white-space: nowrap;
-  color: var(--bx-a200);
+  color: var(--bx-n800);
   transition: background-color 0.14s ease, color 0.14s ease;
 }
 .bx-navitem:hover {
-  background: rgba(242, 244, 247, 0.12);
-  color: #fff;
+  background: var(--bx-a200);
 }
-.bx-navitem.is-on {
+.bx-navitem.is-on,
+.bx-navitem.is-on:hover {
   background: var(--bx-accent);
   color: #fff;
-}
-.bx-navhome {
-  width: 56px;
-  padding: 0;
-  justify-content: center;
-  background: rgba(242, 244, 247, 0.1);
-}
-
-.bx-navhint {
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  font-size: 13.5px;
-  white-space: nowrap;
-  color: var(--bx-a300);
 }
 
 .bx-navbtn {
@@ -476,40 +477,28 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 36px;
-  padding: 0 14px;
-  background: transparent;
-  border: 1px solid rgba(242, 244, 247, 0.38);
+  height: 38px;
+  padding: 0 16px;
+  background: var(--bx-a100);
+  border: none;
   border-radius: var(--bx-r-pill);
-  color: var(--bx-a100);
+  color: var(--bx-a800);
   font-weight: 600;
   font-size: 13.5px;
-  letter-spacing: 0.002em;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  text-decoration: none;
+  transition: background-color 0.14s ease, color 0.14s ease;
 }
 .bx-navbtn:hover:not(:disabled) {
-  background: rgba(242, 244, 247, 0.12);
+  background: var(--bx-a200);
 }
 .bx-navbtn.is-solid {
   background: var(--bx-accent);
-  border-color: var(--bx-accent);
   color: #fff;
-  padding: 0 16px;
-}
-/* Tools and Preview drop their labels: a wrench and an eye are unambiguous at
-   this size, and the two utilities reading as icons is what lets the one
-   labelled button beside them read as the primary action. The accessible name
-   moves to .bx-sr + title, never to the icon alone. */
-.bx-navbtn.is-icon {
-  width: 36px;
-  padding: 0;
-  justify-content: center;
 }
 .bx-navbtn.is-solid:hover:not(:disabled) {
   background: var(--bx-a600);
-  border-color: var(--bx-a600);
 }
 .bx-navbtn:disabled {
   opacity: 0.45;
@@ -899,9 +888,8 @@ textarea.bx-input {
 .bx-empty {
   padding: 56px 24px;
   text-align: center;
-  border: 2px dashed var(--bx-a400);
   border-radius: var(--bx-r-md);
-  background: rgba(0, 120, 212, 0.05);
+  background: var(--bx-a100);
 }
 .bx-empty h3 {
   font-size: 24px;
@@ -933,7 +921,6 @@ textarea.bx-input {
   flex: none;
   width: 300px;
   background: var(--bx-panel);
-  border-right: 1px solid var(--bx-divider);
   display: flex;
   flex-direction: column;
 }
@@ -942,14 +929,15 @@ textarea.bx-input {
   display: flex;
   align-items: stretch;
   height: 52px;
-  border-bottom: 1px solid var(--bx-divider);
+  gap: 4px;
+  padding: 8px 12px 0;
 }
 .bx-palette-tab {
   flex: 1;
   min-width: 0;
   background: transparent;
   border: none;
-  border-bottom: 2.5px solid transparent;
+  border-radius: var(--bx-r-pill);
   color: var(--bx-n700);
   font-weight: 600;
   font-size: 14px;
@@ -958,16 +946,15 @@ textarea.bx-input {
   transition: color 0.14s ease, border-color 0.14s ease;
 }
 .bx-palette-tab:hover {
+  background: var(--bx-a100);
   color: var(--bx-a700);
 }
 .bx-palette-tab.is-on {
-  border-bottom-color: var(--bx-a800);
+  background: var(--bx-a200);
   color: var(--bx-a800);
 }
 .bx-palette-tabrule {
-  width: 1px;
-  margin: 12px 0;
-  background: var(--bx-divider);
+  display: none;
 }
 .bx-palette-search {
   flex: none;
@@ -987,20 +974,24 @@ textarea.bx-input {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin-bottom: 9px;
+  margin: 0 -6px 4px;
+  padding: 6px 6px;
+  border-radius: var(--bx-r-sm);
+  transition: background-color 0.14s ease;
+}
+.bx-palette-group:hover .bx-palette-grouphead {
+  background: var(--bx-a100);
 }
 .bx-palette-grouphead span:first-child {
   white-space: nowrap;
 }
 .bx-palette-grouprule {
-  flex: 1;
-  height: 1px;
-  background: var(--bx-divider);
+  display: none;
 }
 .bx-palette-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  gap: 2px;
 }
 .bx-pal-btn {
   min-width: 0;
@@ -1008,18 +999,16 @@ textarea.bx-input {
   align-items: center;
   gap: 9px;
   padding: 9px 10px;
-  background: var(--bx-white);
-  border: 1px solid var(--bx-divider);
+  background: transparent;
+  border: none;
   border-radius: var(--bx-r-pill);
   color: var(--bx-text);
   text-align: left;
   cursor: grab;
-  transition: border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
+  transition: background-color 0.14s ease;
 }
 .bx-pal-btn:hover {
-  border-color: var(--bx-a400);
-  background: var(--bx-a100);
-  box-shadow: var(--bx-sh-sm);
+  background: var(--bx-a200);
 }
 .bx-pal-btn:active {
   cursor: grabbing;
@@ -1517,19 +1506,10 @@ textarea.bx-input {
   }
 }
 
-@media (max-width: 1080px) {
-  .bx-navhint {
-    display: none !important;
-  }
-}
-
 @media (max-width: 900px) {
   .bx-header {
-    gap: 10px;
-    padding: 0 12px;
-  }
-  .bx-wordmark {
-    display: none;
+    gap: 8px 10px;
+    padding: 8px 12px;
   }
   .bx-navitem {
     padding: 0 12px;
@@ -1573,12 +1553,6 @@ textarea.bx-input {
   }
   .bx-navbtn {
     padding: 0 12px;
-  }
-  .bx-navbtn.is-solid {
-    padding: 0 12px;
-  }
-  .bx-navhome {
-    width: 46px;
   }
   .bx-fieldrow-label,
   .bx-fieldrow-note {

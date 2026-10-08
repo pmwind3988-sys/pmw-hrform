@@ -10,7 +10,6 @@ import {
   Container,
   InputAdornment,
   Link,
-  Paper,
   Skeleton,
   Stack,
   TextField,
@@ -18,14 +17,13 @@ import {
 } from "@mui/material";
 import {
   HomeRounded,
+  CheckRounded,
   LibraryBooksOutlined,
   LockOutlined,
   LogoutOutlined,
   Refresh,
-  SchoolOutlined,
   SearchOutlined,
   SettingsOutlined,
-  VisibilityOutlined,
 } from "@mui/icons-material";
 import LearningHeader from "../components/learning/LearningHeader";
 import MaterialCard from "../components/learning/MaterialCard";
@@ -39,7 +37,6 @@ import {
   learningContentSx,
   learningInlineSurfaceSx,
   learningPageSx,
-  learningPanelSx,
 } from "../components/learning/learningUi";
 import {
   acquireLearningIdentityToken,
@@ -51,7 +48,7 @@ import { useHrFormsOwner } from "../hooks/useHrFormsOwner";
 import { FailurePanel } from "../components/common/StatusPanel";
 import { useGuestSession } from "../auth/useGuestSession";
 import { mergeViewCounts, useLearningViewCounts } from "../hooks/useLearningViewCounts";
-import { editorial, editorialHairline } from "../theme/editorial";
+import { editorial, si } from "../theme/editorial";
 import type {
   LearningMaterial,
   LearningMaterialKind,
@@ -168,8 +165,7 @@ export default function LearningMaterialsPage() {
     .filter((material) => kindFilter === "all" || material.kind === kindFilter)
     .filter((material) => matchesSearch(material, term));
 
-  const totalViews = materials.reduce((sum, material) => sum + material.viewCount, 0);
-  const breadcrumbSegments = currentPath ? currentPath.split("/") : [];
+    const breadcrumbSegments = currentPath ? currentPath.split("/") : [];
 
   const currentTopic = topics.find((topic) => topic.path === currentPath) ?? null;
   /**
@@ -270,164 +266,75 @@ export default function LearningMaterialsPage() {
 
   return (
     <Box sx={learningPageSx}>
-      <LearningHeader
-        title="Learning Materials"
-        subtitle={
-          guestSession
-            ? `Signed in as ${guestSession.fullName}`
-            : "Training videos, guides, and reference documents for PMW Group staff."
-        }
-        backPath={guestSession ? "/member" : isAdmin ? "/admin/dashboard" : "/user/dashboard"}
-        backLabel={guestSession ? "Back to your account" : "Back to dashboard"}
-        actions={
-          <>
-            <Button
-              size="small"
-              startIcon={<Refresh />}
-              onClick={() => setReloadKey((key) => key + 1)}
-              sx={{ ...learningButtonSx, color: editorial.pmwBlueDark }}
-            >
-              Refresh
-            </Button>
-            {guestSession && (
-              <Button
-                size="small"
-                startIcon={<LogoutOutlined />}
-                onClick={signOutGuest}
-                sx={{ ...learningButtonSx, color: editorial.pmwBlueDark }}
-              >
-                Sign out
-              </Button>
-            )}
-            {isAdmin && (
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<SettingsOutlined />}
-                onClick={() => navigate("/admin/learning")}
-                sx={learningButtonSx}
-              >
-                Manage content
-              </Button>
-            )}
-          </>
-        }
-      />
-
       <Container maxWidth="xl" disableGutters>
         <Box sx={learningContentSx}>
-          {/* On a photo background the hero is the one block with nothing behind
-              it, so it carries its own surface rather than trusting the picture
-              to stay light where the words are. */}
-          <Paper sx={{ ...learningPanelSx, p: { xs: 2, md: 3 }, mb: { xs: 2.5, md: 3.5 } }}>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1, mb: 1.5 }}>
-              <Chip
-                icon={<SchoolOutlined />}
-                size="small"
-                label="Learning hub"
-                sx={{
-                  backgroundColor: editorial.purpleWash,
-                  color: editorial.pmwPurpleDark,
-                  border: `1px solid ${editorial.pmwPurpleSoft}`,
-                  fontWeight: 700,
-                  "& .MuiChip-icon": { color: editorial.pmwPurpleDark },
-                }}
-              />
-              {!error && (<>
-              <Chip
-                size="small"
-                label={`${materials.length} material${materials.length === 1 ? "" : "s"}`}
-                sx={{
-                  backgroundColor: editorial.paperSoft,
-                  color: editorial.muted,
-                  border: editorialHairline,
-                  fontWeight: 700,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              />
-              <Chip
-                size="small"
-                icon={<VisibilityOutlined />}
-                label={`${totalViews} total view${totalViews === 1 ? "" : "s"}`}
-                sx={{
-                  backgroundColor: editorial.paperSoft,
-                  color: editorial.muted,
-                  border: editorialHairline,
-                  fontWeight: 700,
-                  fontVariantNumeric: "tabular-nums",
-                  "& .MuiChip-icon": { color: editorial.softMuted },
-                }}
-              /></>)}
-            </Stack>
+          <LearningHeader
+            title="Learning"
+            description={
+              guestSession
+                ? `Signed in as ${guestSession.fullName}`
+                : "Training videos, guides and reference documents for PMW Group staff."
+            }
+            backPath={guestSession ? "/member" : isAdmin ? "/admin/dashboard" : "/user/dashboard"}
+            backLabel={guestSession ? "Back to your account" : "Back to dashboard"}
+            primary={
+              isAdmin
+                ? { label: "Manage content", icon: <SettingsOutlined />, onClick: () => navigate("/admin/learning") }
+                : undefined
+            }
+            secondary={guestSession ? [{ label: "Sign out", icon: <LogoutOutlined />, onClick: signOutGuest }] : []}
+            more={[{ label: "Refresh", icon: <Refresh />, onClick: () => setReloadKey((key) => key + 1) }]}
+          />
 
-            <Typography
-              variant="h1"
-              sx={{
-                color: editorial.ink,
-                fontSize: { xs: "1.9rem", sm: "2.4rem", md: "2.8rem" },
-                lineHeight: 1.05,
-                textWrap: "balance",
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, mb: 2.5 }}>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Search materials, topics, or file names"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchOutlined sx={{ fontSize: 18, color: editorial.softMuted }} />
+                    </InputAdornment>
+                  ),
+                },
+                htmlInput: { "aria-label": "Search learning materials" },
               }}
-            >
-              Learn at your own pace
-            </Typography>
-            <Typography
-              variant="h6"
-              sx={{ color: editorial.muted, fontWeight: 700, mt: 1, maxWidth: 760, textWrap: "pretty" }}
-            >
-              Browse by topic, open a material in place, and pick up where the team left off. View counts are people,
-              not plays: one per colleague, however often they come back.
-            </Typography>
-          </Paper>
-
-          <Paper sx={{ ...learningPanelSx, p: { xs: 1.5, md: 2 }, mb: { xs: 2.5, md: 3 } }}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" } }}>
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="Search materials, topics, or file names"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchOutlined sx={{ fontSize: 18, color: editorial.softMuted }} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                sx={{
-                  flex: 1,
-                  "& .MuiOutlinedInput-root": { borderRadius: "12px", backgroundColor: editorial.white },
-                }}
-              />
-              <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75 }}>
-                {KIND_FILTERS.map((filter) => {
-                  const selected = kindFilter === filter.value;
-                  return (
-                    <Chip
-                      key={filter.value}
-                      label={filter.label}
-                      onClick={() => setKindFilter(filter.value)}
-                      sx={{
-                        fontWeight: 700,
-                        borderRadius: "12px",
-                        backgroundColor: selected ? editorial.pmwBlueDark : editorial.white,
-                        color: selected ? editorial.white : editorial.muted,
-                        border: `1px solid ${selected ? editorial.pmwBlueDark : editorial.border}`,
-                        "&:hover": {
-                          backgroundColor: selected ? editorial.pmwBlue : editorial.blueWash,
-                        },
-                      }}
-                    />
-                  );
-                })}
-              </Stack>
+              sx={{
+                flex: 1,
+                "& .MuiOutlinedInput-root": { borderRadius: "999px", backgroundColor: editorial.skySoft },
+                "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+              }}
+            />
+            <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", gap: 0.75 }}>
+              {KIND_FILTERS.map((filter) => {
+                const selected = kindFilter === filter.value;
+                return (
+                  <Chip
+                    key={filter.value}
+                    label={filter.label}
+                    icon={selected ? <CheckRounded /> : undefined}
+                    variant={selected ? "filled" : "outlined"}
+                    onClick={() => setKindFilter(filter.value)}
+                    sx={{
+                      fontWeight: 600,
+                      border: "none",
+                      boxShadow: selected ? "none" : si.shadow,
+                      backgroundColor: selected ? editorial.navy : editorial.panel,
+                      color: selected ? editorial.white : editorial.ink,
+                      "& .MuiChip-icon": { color: "inherit" },
+                      "&:hover": { backgroundColor: selected ? editorial.navyDeep : editorial.blueSoft },
+                    }}
+                  />
+                );
+              })}
             </Stack>
-          </Paper>
+          </Stack>
 
-          {!searching && (
+          {!searching && currentPath && (
             <Breadcrumbs
               sx={{
                 ...learningInlineSurfaceSx,
@@ -445,7 +352,7 @@ export default function LearningMaterialsPage() {
                   alignItems: "center",
                   gap: 0.5,
                   fontWeight: 700,
-                  color: currentPath ? editorial.pmwBlueDark : editorial.ink,
+                  color: editorial.navy,
                 }}
               >
                 <HomeRounded sx={{ fontSize: 17 }} />
@@ -465,7 +372,7 @@ export default function LearningMaterialsPage() {
                     type="button"
                     underline="hover"
                     onClick={() => goToPath(path)}
-                    sx={{ fontWeight: 700, color: editorial.pmwBlueDark }}
+                    sx={{ fontWeight: 700, color: editorial.navy }}
                   >
                     {segment}
                   </Link>
@@ -475,7 +382,7 @@ export default function LearningMaterialsPage() {
           )}
 
           {needsSignIn && (
-            <Alert severity="warning" sx={{ mb: 2, borderRadius: "12px", fontWeight: 700 }}>
+            <Alert severity="warning" sx={{ mb: 2, borderRadius: "20px", fontWeight: 600 }}>
               Your Microsoft 365 session could not be confirmed. Refresh the page or sign in again to open learning
               materials.
             </Alert>
@@ -494,7 +401,7 @@ export default function LearningMaterialsPage() {
               }}
             >
               {[0, 1, 2, 3, 4, 5, 6, 7].map((key) => (
-                <Skeleton key={key} variant="rounded" height={248} sx={{ borderRadius: "12px" }} />
+                <Skeleton key={key} variant="rounded" height={248} sx={{ borderRadius: "20px" }} />
               ))}
             </Box>
           ) : !libraryReady ? (
@@ -503,7 +410,7 @@ export default function LearningMaterialsPage() {
               title="The learning library is not set up yet"
               description={
                 isAdmin
-                  ? "Open Manage content to create the SharePoint library and upload your first topic."
+                  ? "Open Manage content to set up the library and upload your first topic."
                   : "An HR Forms Owner needs to set up the learning library before materials appear here."
               }
               action={

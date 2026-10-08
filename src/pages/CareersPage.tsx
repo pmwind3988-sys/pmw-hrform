@@ -3,14 +3,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
-  Badge,
   Button,
   Chip,
-  Grid,
   Container,
   Paper,
   TextField,
   InputAdornment,
+  Badge,
   FormControl,
   InputLabel,
   Select,
@@ -29,15 +28,13 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material";
-import { keyframes } from "@mui/material/styles";
 import {
   ArrowBack,
   AccessTime,
   Search as SearchIcon,
   Close,
   AssignmentTurnedIn,
-  TrendingUp,
-  WorkOutlined,
+  CheckRounded,
   FilterList,
   Description,
 } from "@mui/icons-material";
@@ -54,57 +51,22 @@ import CareerPortalPrivateGate from "../components/careers/CareerPortalPrivateGa
 import CareerPortalHeader from "../components/careers/CareerPortalHeader";
 import CareerPortalCarousel from "../components/careers/CareerPortalCarousel";
 import CareerHero from "../components/careers/CareerHero";
+import PageHeader from "../components/common/PageHeader";
+import { useInShell } from "../components/shell/ShellContext";
 import { FailurePanel } from "../components/common/StatusPanel";
 import JobCard from "../components/careers/JobCard";
 import {
   CareerEmptyState,
-  CareerMetricPill,
   careerActionButtonSx,
   careerIconButtonSx,
   careerPageSx,
+  careerReduceMotionSx as reduceMotionSx,
   careerSearchFieldSx,
   careerToolbarSx,
   getCareerErrorMessage,
-  jobBoardRailSx,
 } from "../components/careers/careerUi";
 import type { JobListing, JobAdminApplication, CareerPortalCard } from "../types";
-import { editorial, editorialShadow } from "../theme/editorial";
-
-const fadeInUp = keyframes`
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-`;
-
-const scaleIn = keyframes`
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-`;
-
-const reduceMotionSx = {
-  "@media (prefers-reduced-motion: reduce)": {
-    animation: "none",
-    transition: "none",
-    transform: "none",
-    "&:hover": {
-      transform: "none",
-    },
-    "&:active": {
-      transform: "none",
-    },
-  },
-};
+import { editorial, si, siType } from "../theme/editorial";
 
 const paginationSx = {
   "& .MuiTablePagination-toolbar": {
@@ -135,10 +97,6 @@ const paginationSx = {
   },
 };
 
-function staggerDelay(index: number, step = 55, max = 440): string {
-  return `${Math.min(index * step, max)}ms`;
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -167,200 +125,19 @@ function dateInputBoundary(value: string, boundary: "start" | "end"): number | n
   return date.getTime();
 }
 
-function PortalWelcomePanel({
-  totalJobs,
-  visibleJobs,
-  applicationsCount,
-  viewingApplications,
-  portalCards,
-  isSignedIn,
-  onViewApplications,
-  onPortalCardTarget,
-}: {
-  totalJobs: number;
-  visibleJobs: number;
-  applicationsCount: number;
-  viewingApplications: boolean;
-  portalCards: CareerPortalCard[];
-  isSignedIn: boolean;
-  onViewApplications: () => void;
-  onPortalCardTarget: (card: CareerPortalCard) => void;
-}) {
-  // Tracking past applications reads the Job Applications list with the visitor's
-  // own delegated token, so it only exists for a signed-in employee. A public
-  // visitor can browse and apply; they just have nothing to track here.
-  const stats = [
-    { label: "Open roles", value: totalJobs, icon: <WorkOutlined />, tone: "blue" as const },
-    {
-      label: viewingApplications ? "Tracked apps" : "Visible now",
-      value: viewingApplications ? applicationsCount : visibleJobs,
-      icon: <TrendingUp />,
-      tone: "purple" as const,
-    },
-    ...(isSignedIn
-      ? [{ label: "My applications", value: applicationsCount, icon: <AssignmentTurnedIn />, tone: "success" as const }]
-      : []),
-  ];
-
-  return (
-    <Paper
-      component="section"
-      sx={{
-        p: { xs: 2.5, md: 3 },
-        mb: 3,
-        borderRadius: "12px",
-        border: `1px solid ${editorial.pmwBlueSoft}`,
-        boxShadow: "none",
-        background: "rgba(255, 255, 255, 0.9)",
-        position: "relative",
-        overflow: "hidden",
-        animation: `${fadeInUp} 0.48s ease both`,
-        ...reduceMotionSx,
-      }}
-    >
-      {/* The eyebrow, headline and standfirst that used to sit beside the
-          carousel are gone: CareerHero now carries that message directly above
-          this panel, and saying it twice pushed the actual jobs below the fold.
-          What remains is the part that does work — the cards and the counts. */}
-      <Box sx={{ position: "relative", minWidth: 0 }}>
-        <CareerPortalCarousel cards={portalCards} onCardTarget={onPortalCardTarget} />
-      </Box>
-
-      {applicationsCount > 0 && (
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: { xs: 2, md: 2.5 } }}>
-          <Button
-            variant={viewingApplications ? "contained" : "outlined"}
-            startIcon={viewingApplications ? <ArrowBack /> : <AssignmentTurnedIn />}
-            onClick={onViewApplications}
-            sx={{
-              ...careerActionButtonSx,
-              fontWeight: 700,
-              borderColor: viewingApplications ? editorial.pmwBlue : editorial.pmwBlueSoft,
-              backgroundColor: viewingApplications ? editorial.pmwBlue : editorial.white,
-              color: viewingApplications ? editorial.white : editorial.pmwBlueDark,
-              "&:hover": {
-                transform: "translateY(-2px)",
-                borderColor: editorial.pmwBlueDark,
-                backgroundColor: viewingApplications ? editorial.pmwBlueDark : editorial.blueWash,
-                boxShadow: "none",
-              },
-              ...reduceMotionSx,
-            }}
-          >
-            {viewingApplications ? "Back to careers" : "My applications"}
-          </Button>
-        </Box>
-      )}
-
-      <Box
-        sx={{
-          position: "relative",
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: `repeat(${stats.length}, minmax(0, 1fr))` },
-          gap: 1,
-          mt: { xs: 2, md: 2.5 },
-        }}
-      >
-        {stats.map((stat) => (
-          <CareerMetricPill
-            key={stat.label}
-            icon={stat.icon}
-            label={stat.label}
-            value={stat.value}
-            tone={stat.tone}
-          />
-        ))}
-      </Box>
-    </Paper>
-  );
-}
-
 function CareersLoadingSkeleton() {
   return (
-    <>
-      <Paper
-        component="section"
-        sx={{
-          p: { xs: 2.5, md: 3 },
-          mb: 3,
-          borderRadius: "12px",
-          border: "1px solid rgba(17, 24, 39, 0.08)",
-          boxShadow: "0 10px 30px rgba(17, 24, 39, 0.06)",
-          background: "linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 48%, #F7F7FF 100%)",
-        }}
-      >
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(320px, 0.92fr)" },
-            gap: { xs: 2.5, md: 3 },
-            alignItems: "center",
-          }}
-        >
-          <Box sx={{ order: { xs: 2, md: 1 } }}>
-            <Skeleton variant="rounded" width={124} height={26} sx={{ borderRadius: "12px", mb: 1.5 }} />
-            <Skeleton variant="text" width="72%" height={38} />
-            <Skeleton variant="text" width="88%" height={24} sx={{ mb: 2 }} />
-            <Skeleton variant="rounded" width={150} height={38} sx={{ borderRadius: "12px" }} />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      {[1, 2, 3, 4].map((item) => (
+        <Paper key={item} sx={{ display: "flex", alignItems: "center", gap: 2, p: 2.5, borderRadius: `${si.radius}px`, boxShadow: si.shadow }}>
+          <Skeleton variant="circular" width={40} height={40} />
+          <Box sx={{ flex: 1 }}>
+            <Skeleton variant="text" width="55%" height={22} />
+            <Skeleton variant="text" width="35%" height={16} />
           </Box>
-          <Box sx={{ order: { xs: 1, md: 2 }, minWidth: 0 }}>
-            <Skeleton variant="rounded" width="100%" height={280} sx={{ borderRadius: "12px" }} />
-          </Box>
-        </Box>
-
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1, mt: { xs: 2, md: 2.5 } }}>
-          {[1, 2, 3].map((item) => (
-            <Skeleton key={item} variant="rounded" height={74} sx={{ borderRadius: "12px" }} />
-          ))}
-        </Box>
-      </Paper>
-
-      <Paper
-        sx={{
-          p: 2,
-          mb: 3,
-          borderRadius: "12px",
-          border: "1px solid rgba(17, 24, 39, 0.08)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
-          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "12px", flex: "1 1 360px", minWidth: { xs: "100%", sm: 320 } }} />
-          <Skeleton variant="rounded" width={40} height={40} sx={{ borderRadius: "12px" }} />
-          <Skeleton variant="rounded" width={96} height={32} sx={{ borderRadius: "12px" }} />
-        </Box>
-      </Paper>
-
-      <Grid container spacing={2.5}>
-        {[1, 2, 3, 4, 5, 6].map((item) => (
-          <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={item}>
-            <Paper
-              sx={{
-                p: 3,
-                borderRadius: "12px",
-                border: "1px solid rgba(17, 24, 39, 0.08)",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              }}
-            >
-              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1.5, mb: 1.5 }}>
-                <Skeleton variant="text" width="64%" height={30} />
-                <Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "12px" }} />
-              </Box>
-              <Box sx={{ display: "flex", gap: 0.5, mb: 2 }}>
-                <Skeleton variant="rounded" width={82} height={24} sx={{ borderRadius: "12px" }} />
-                <Skeleton variant="rounded" width={116} height={24} sx={{ borderRadius: "12px" }} />
-              </Box>
-              <Skeleton variant="text" width="72%" height={20} />
-              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mt: 1 }}>
-                <Skeleton variant="text" width="42%" height={18} />
-                <Skeleton variant="text" width="34%" height={18} />
-              </Box>
-              <Skeleton variant="text" width={88} height={22} sx={{ mt: 2.25 }} />
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
-    </>
+        </Paper>
+      ))}
+    </Box>
   );
 }
 
@@ -369,6 +146,7 @@ export default function CareersPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeAccount = instance.getActiveAccount() ?? accounts[0];
+  const inShell = useInShell();
   // MSAL rebuilds AccountInfo on every read, so `activeAccount` has a new object
   // identity each render. Effects must key on this stable string - depending on
   // the object re-runs them every render, and any effect that then sets state
@@ -387,11 +165,12 @@ export default function CareersPage() {
   const [deptFilter, setDeptFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortBy, setSortBy] = useState("newest");
-  const [showJobAdvancedFilters, setShowJobAdvancedFilters] = useState(true);
   const [selectedApp, setSelectedApp] = useState<JobAdminApplication | null>(null);
   const [myApps, setMyApps] = useState<JobAdminApplication[]>([]);
   const isAdmin = useHrFormsOwner();
-  const [appliedFilter, setAppliedFilter] = useState("all"); // "all" | "applied" | "unapplied"
+  const [appliedFilter, setAppliedFilter] = useState(() =>
+    new URLSearchParams(location.search).get("view") === "applications" ? "applied" : "all",
+  ); // "all" | "applied" | "unapplied"
   const [jobsPage, setJobsPage] = useState(0);
   const [jobsRowsPerPage, setJobsRowsPerPage] = useState(12);
   const [myAppsSearch, setMyAppsSearch] = useState("");
@@ -411,10 +190,6 @@ export default function CareersPage() {
   // Applied/unapplied filtering is derived from the signed-in employee's own
   // application history, which a public visitor has no way to load.
   const canFilterByApplied = isSignedIn;
-
-  // The rail filters the job list, so it has nothing to act on while the user is
-  // reading their own application history — the results column takes full width.
-  const showFilterRail = !loading && !error && jobs.length > 0 && appliedFilter !== "applied";
 
   const isJobApplied = (jobId: string) => appliedJobIds.has(jobId);
 
@@ -520,15 +295,7 @@ export default function CareersPage() {
     return result;
   }, [jobs, searchText, companyFilter, deptFilter, typeFilter, sortBy, appliedFilter, appliedJobIds]);
 
-  const jobAdvancedFilterCount = [
-    Boolean(companyFilter),
-    Boolean(deptFilter),
-    Boolean(typeFilter),
-    appliedFilter !== "all",
-    sortBy !== "newest",
-  ].filter(Boolean).length;
   const hasFilters = Boolean(searchText.trim()) || Boolean(companyFilter) || Boolean(deptFilter) || Boolean(typeFilter) || appliedFilter !== "all";
-  const hasJobSearchOptions = hasFilters || sortBy !== "newest";
   const pagedJobs = filteredJobs.slice(jobsPage * jobsRowsPerPage, jobsPage * jobsRowsPerPage + jobsRowsPerPage);
   const filteredMyApps = useMemo(() => {
     const q = myAppsSearch.trim().toLowerCase();
@@ -586,7 +353,7 @@ export default function CareersPage() {
   const selectedSupportingDocuments = selectedApp?.supportingDocuments?.length
     ? selectedApp.supportingDocuments
     : selectedApp?.coverLetterUrl
-      ? [{ name: "Supporting Document", url: selectedApp.coverLetterUrl }]
+      ? [{ name: "Supporting document", url: selectedApp.coverLetterUrl }]
       : [];
   const requestedJobId = new URLSearchParams(location.search).get("job")?.trim() || "";
 
@@ -621,6 +388,20 @@ export default function CareersPage() {
     return <CareerPortalPrivateGate message={restrictedMessage} />;
   }
 
+  const openRoleCount = jobs.length;
+  const pageDescription = loading
+    ? "Loading open roles"
+    : error
+      ? "Open roles could not be loaded right now"
+      : openRoleCount > 0
+        ? `${openRoleCount} open ${openRoleCount === 1 ? "role" : "roles"} across PMW Group`
+        : isSignedIn
+          ? "Internal roles you can apply for"
+          : "Roles you can apply for at PMW Group";
+  const viewingApplications = appliedFilter === "applied";
+  const toggle = (current: string, value: string, set: (next: string) => void) => set(current === value ? "" : value);
+  const filterChipSx = { "& .MuiChip-icon": { fontSize: 18 } };
+
   return (
     <Box sx={careerPageSx}>
       <CareerPortalHeader
@@ -633,297 +414,196 @@ export default function CareersPage() {
         showBack={Boolean(activeAccount)}
       />
 
-      <CareerHero
-        title={isSignedIn ? "Internal opportunities" : "Careers at PMW Group"}
-        subtitle={
-          isSignedIn
-            ? "Connecting Talent with Opportunity: Your Gateway to Career Success"
-            : "Connecting Talent with Opportunity: Your Gateway to Career Success"
-        }
-      />
+      {!inShell && (
+        <CareerHero
+          title={isSignedIn ? "Internal opportunities" : "Careers at PMW Group"}
+          subtitle={pageDescription}
+        />
+      )}
 
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        {!loading && !error && (
-          <PortalWelcomePanel
-            totalJobs={jobs.length}
-            visibleJobs={filteredJobs.length}
-            applicationsCount={myApps.length}
-            viewingApplications={appliedFilter === "applied"}
-            portalCards={portalCards}
-            isSignedIn={Boolean(activeAccount)}
-            onViewApplications={handleViewApplications}
-            onPortalCardTarget={handlePortalCardTarget}
+      <Container maxWidth="lg" sx={{ py: inShell ? 0 : 4 }}>
+        {inShell && (
+          <PageHeader
+            title={viewingApplications ? "My applications" : "Job portal"}
+            description={
+              viewingApplications
+                ? `${myApps.length} submitted ${myApps.length === 1 ? "application" : "applications"}`
+                : pageDescription
+            }
           />
         )}
 
-        {/* Template layout: filter rail left, results right. The rail only exists
-            in job-browsing mode, so My Applications reclaims the full width. */}
-        <Grid container spacing={3}>
-        {showFilterRail && (
-        <Grid size={{ xs: 12, md: 3.5 }}>
-          <Paper
-            sx={{
-              ...jobBoardRailSx,
-              position: { md: "sticky" },
-              top: { md: 88 },
-              animation: `${fadeInUp} 0.4s ease both`,
-              animationDelay: "90ms",
-              ...reduceMotionSx,
-            }}
-          >
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 1.25, width: "100%" }}>
-              <Box
-                sx={{
-                  flex: "1 1 auto",
-                  minWidth: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.75,
+        {!loading && !error && portalCards.length > 0 && !viewingApplications && (
+          <Box sx={{ mb: 3, minWidth: 0 }}>
+            <CareerPortalCarousel cards={portalCards} onCardTarget={handlePortalCardTarget} />
+          </Box>
+        )}
+
+        {!loading && !error && jobs.length > 0 && !viewingApplications && (
+          <Box sx={{ mb: 2.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+              <TextField
+                placeholder="Search roles, companies, departments"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                size="small"
+                sx={{ ...careerSearchFieldSx, flex: "1 1 320px" }}
+                slotProps={{
+                  htmlInput: { "aria-label": "Search roles" },
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  },
                 }}
-              >
-                <TextField
-                  placeholder="Search opportunities..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  size="small"
+              />
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <Select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  inputProps={{ "aria-label": "Sort roles" }}
                   sx={{
-                    ...careerSearchFieldSx,
-                    flex: "1 1 auto",
-                    minWidth: 0,
-                    "& .MuiOutlinedInput-root": {
-                      borderRadius: "12px",
-                      backgroundColor: editorial.white,
-                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: editorial.blueSoft },
-                      "&.Mui-focused": {
-                        backgroundColor: editorial.white,
-                        boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.16)",
-                      },
-                    },
-                  }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-                <Tooltip title={showJobAdvancedFilters ? "Hide advanced search" : "Show advanced search"}>
-                  <IconButton
-                    aria-label={showJobAdvancedFilters ? "Hide advanced search" : "Show advanced search"}
-                    aria-pressed={showJobAdvancedFilters}
-                    onClick={() => setShowJobAdvancedFilters((open) => !open)}
-                    sx={{
-                      ...careerIconButtonSx,
-                      borderRadius: "12px",
-                      borderColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.pmwBlue : editorial.border,
-                      color: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.pmwBlueDark : editorial.muted,
-                      backgroundColor: showJobAdvancedFilters || jobAdvancedFilterCount > 0 ? editorial.blueWash : editorial.white,
-                      flexShrink: 0,
-                      "&:hover": {
-                        transform: "translateY(-1px)",
-                        backgroundColor: editorial.blueWash,
-                        borderColor: editorial.pmwBlue,
-                      },
-                      "&:active": { transform: "scale(0.96)" },
-                      ...reduceMotionSx,
-                    }}
-                  >
-                    <Badge
-                      badgeContent={jobAdvancedFilterCount}
-                      color="primary"
-                      invisible={jobAdvancedFilterCount === 0}
-                      sx={{ "& .MuiBadge-badge": { fontSize: "0.72rem", minWidth: 16, height: 16 } }}
-                    >
-                      <FilterList sx={{ fontSize: 20 }} />
-                    </Badge>
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              {hasJobSearchOptions && (
-                <Button
-                  size="small"
-                  startIcon={<Close />}
-                  onClick={() => {
-                    setSearchText("");
-                    setCompanyFilter("");
-                    setDeptFilter("");
-                    setTypeFilter("");
-                    setAppliedFilter("all");
-                    setSortBy("newest");
-                  }}
-                  sx={{
-                    ...careerActionButtonSx,
-                    borderRadius: "12px",
-                    color: editorial.muted,
-                    fontWeight: 700,
+                    borderRadius: "999px",
+                    backgroundColor: editorial.skySoft,
+                    "& .MuiOutlinedInput-notchedOutline": { border: "none" },
                   }}
                 >
-                  Clear
-                </Button>
-              )}
-              {hasFilters && (
+                  <MenuItem value="newest">Newest first</MenuItem>
+                  <MenuItem value="closing">Closing soon</MenuItem>
+                  <MenuItem value="name">Name A to Z</MenuItem>
+                  <MenuItem value="applicants">Most applicants</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+
+            <Box className="no-scrollbar" sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 0.5 }} role="group" aria-label="Filter roles">
+              <Chip
+                label="All"
+                clickable
+                color={hasFilters ? "default" : "primary"}
+                variant={hasFilters ? "outlined" : "filled"}
+                icon={hasFilters ? undefined : <CheckRounded />}
+                onClick={() => {
+                  setSearchText("");
+                  setCompanyFilter("");
+                  setDeptFilter("");
+                  setTypeFilter("");
+                  setAppliedFilter("all");
+                }}
+                sx={filterChipSx}
+              />
+              {companies.length > 1 &&
+                companies.map((company) => (
+                  <Chip
+                    key={`c-${company}`}
+                    label={company}
+                    clickable
+                    color={companyFilter === company ? "primary" : "default"}
+                    variant={companyFilter === company ? "filled" : "outlined"}
+                    icon={companyFilter === company ? <CheckRounded /> : undefined}
+                    onClick={() => toggle(companyFilter, company, setCompanyFilter)}
+                    sx={filterChipSx}
+                  />
+                ))}
+              {departments.map((d) => (
                 <Chip
-                  label={`${filteredJobs.length} of ${jobs.length} opportunities`}
-                  size="small"
-                  sx={{
-                    backgroundColor: editorial.blueWash,
-                    color: editorial.pmwBlueDark,
-                    fontWeight: 700,
-                    fontSize: "0.78rem",
-                    height: 32,
-                    fontVariantNumeric: "tabular-nums",
-                    animation: `${scaleIn} 0.22s ease both`,
-                    ...reduceMotionSx,
-                  }}
+                  key={`d-${d}`}
+                  label={d}
+                  clickable
+                  color={deptFilter === d ? "primary" : "default"}
+                  variant={deptFilter === d ? "filled" : "outlined"}
+                  icon={deptFilter === d ? <CheckRounded /> : undefined}
+                  onClick={() => toggle(deptFilter, d, setDeptFilter)}
+                  sx={filterChipSx}
+                />
+              ))}
+              {employmentTypes.map((t) => (
+                <Chip
+                  key={`t-${t}`}
+                  label={t}
+                  clickable
+                  color={typeFilter === t ? "primary" : "default"}
+                  variant={typeFilter === t ? "filled" : "outlined"}
+                  icon={typeFilter === t ? <CheckRounded /> : undefined}
+                  onClick={() => toggle(typeFilter, t, setTypeFilter)}
+                  sx={filterChipSx}
+                />
+              ))}
+              {canFilterByApplied && (
+                <Chip
+                  label="Not applied yet"
+                  clickable
+                  color={appliedFilter === "unapplied" ? "primary" : "default"}
+                  variant={appliedFilter === "unapplied" ? "filled" : "outlined"}
+                  icon={appliedFilter === "unapplied" ? <CheckRounded /> : undefined}
+                  onClick={() => setAppliedFilter((current) => (current === "unapplied" ? "all" : "unapplied"))}
+                  sx={filterChipSx}
+                />
+              )}
+              {myApps.length > 0 && (
+                <Chip
+                  label={`My applications · ${myApps.length}`}
+                  clickable
+                  variant="outlined"
+                  icon={<AssignmentTurnedIn />}
+                  onClick={handleViewApplications}
+                  sx={filterChipSx}
                 />
               )}
             </Box>
-
-            {showJobAdvancedFilters && (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr",
-                  gap: 1.25,
-                  width: "100%",
-                }}
-              >
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Company</InputLabel>
-                  <Select
-                    value={companyFilter}
-                    label="Company"
-                    onChange={(e) => setCompanyFilter(e.target.value)}
-                    sx={{
-                      borderRadius: "12px",
-                      backgroundColor: editorial.paperSoft,
-                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: editorial.white },
-                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                    }}
-                  >
-                    <MenuItem value="">All companies</MenuItem>
-                    {companies.map((company) => (
-                      <MenuItem key={company} value={company}>{company}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Department</InputLabel>
-                  <Select
-                    value={deptFilter}
-                    label="Department"
-                    onChange={(e) => setDeptFilter(e.target.value)}
-                    sx={{
-                      borderRadius: "12px",
-                      backgroundColor: editorial.paperSoft,
-                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: editorial.white },
-                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                    }}
-                  >
-                    <MenuItem value="">All departments</MenuItem>
-                    {departments.map((d) => (
-                      <MenuItem key={d} value={d}>{d}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Type</InputLabel>
-                  <Select
-                    value={typeFilter}
-                    label="Type"
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    sx={{
-                      borderRadius: "12px",
-                      backgroundColor: editorial.paperSoft,
-                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: editorial.white },
-                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                    }}
-                  >
-                    <MenuItem value="">All types</MenuItem>
-                    {employmentTypes.map((t) => (
-                      <MenuItem key={t} value={t}>{t}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {canFilterByApplied && (
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>Applied</InputLabel>
-                    <Select
-                      value={appliedFilter}
-                      label="Applied"
-                      onChange={(e) => setAppliedFilter(e.target.value)}
-                      sx={{
-                        borderRadius: "12px",
-                        backgroundColor: editorial.paperSoft,
-                        transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                        "&:hover": { backgroundColor: editorial.white },
-                        "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                      }}
-                    >
-                      <MenuItem value="all">All opportunities</MenuItem>
-                      <MenuItem value="applied">Applied</MenuItem>
-                      <MenuItem value="unapplied">Unapplied</MenuItem>
-                    </Select>
-                  </FormControl>
-                )}
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Sort</InputLabel>
-                  <Select
-                    value={sortBy}
-                    label="Sort"
-                    onChange={(e) => setSortBy(e.target.value)}
-                    sx={{
-                      borderRadius: "12px",
-                      backgroundColor: editorial.paperSoft,
-                      transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: editorial.white },
-                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(0, 120, 212, 0.10)" },
-                    }}
-                  >
-                    <MenuItem value="newest">Newest</MenuItem>
-                    <MenuItem value="closing">Closing soon</MenuItem>
-                    <MenuItem value="name">Name</MenuItem>
-                    <MenuItem value="applicants">Most applicants</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
+            {hasFilters && (
+              <Typography sx={{ ...siType.subtext, color: editorial.muted, fontVariantNumeric: "tabular-nums" }}>
+                Showing {filteredJobs.length} of {jobs.length} roles
+              </Typography>
             )}
-          </Paper>
-        </Grid>
+          </Box>
         )}
 
-        <Grid size={{ xs: 12, md: showFilterRail ? 8.5 : 12 }}>
-
-        {/* Loading */}
-        {loading && (
-          <CareersLoadingSkeleton />
+        {viewingApplications && (
+          <Box sx={{ mb: 2 }}>
+            <Button
+              variant="text"
+              startIcon={<ArrowBack />}
+              onClick={handleViewApplications}
+              sx={{ backgroundColor: editorial.panel, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)" }}
+            >
+              Back to open roles
+            </Button>
+          </Box>
         )}
 
-        {/* Error */}
+        {loading && <CareersLoadingSkeleton />}
+
         {!loading && error && (
-          <FailurePanel what="openings" error={errorCause} onRetry={() => setReloadKey((key) => key + 1)} />
+          <>
+            <FailurePanel what="openings" error={errorCause} onRetry={() => setReloadKey((key) => key + 1)} />
+            <Box aria-hidden sx={{ opacity: 0.55 }}>
+              <CareersLoadingSkeleton />
+            </Box>
+          </>
         )}
 
-        {/* Empty */}
         {!loading && !error && jobs.length === 0 && (
           <CareerEmptyState
             icon={<AccessTime />}
-            title="No internal opportunities"
-            description="There are no internal advancement openings at the moment. Check back later."
+            title="No open roles right now"
+            description="There are no openings at the moment. Check back later."
           />
         )}
-        {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && appliedFilter !== "applied" && (
+        {!loading && !error && jobs.length > 0 && filteredJobs.length === 0 && !viewingApplications && (
           <CareerEmptyState
             icon={<SearchIcon />}
-            title="No opportunities match"
-            description="Try adjusting your search, company, department, type, or applied filter."
+            title="No roles match"
+            description="Try a different search, or clear the filters."
+          />
+        )}
+        {!loading && !error && viewingApplications && myApps.length === 0 && (
+          <CareerEmptyState
+            icon={<AssignmentTurnedIn />}
+            title="No applications yet"
+            description="Roles you apply for will be listed here."
           />
         )}
 
@@ -934,13 +614,7 @@ export default function CareersPage() {
             sx={{
               ...careerToolbarSx,
               mb: 2,
-              animation: `${fadeInUp} 0.4s ease both`,
-              animationDelay: "80ms",
-              "&:hover": {
-                borderColor: editorial.pmwPurple,
-                boxShadow: editorialShadow,
-              },
-              ...reduceMotionSx,
+                            ...reduceMotionSx,
             }}
           >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
@@ -963,13 +637,14 @@ export default function CareersPage() {
                     flex: "1 1 auto",
                     minWidth: 0,
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "12px",
-                      backgroundColor: editorial.white,
+                      borderRadius: "999px",
+                      backgroundColor: editorial.skySoft,
+                      "& .MuiOutlinedInput-notchedOutline": { border: "none" },
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
-                      "&:hover": { backgroundColor: editorial.purpleWash },
+                      "&:hover": { backgroundColor: editorial.blueSoft },
                       "&.Mui-focused": {
                         backgroundColor: editorial.white,
-                        boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)",
+                        boxShadow: "none",
                       },
                     },
                   }}
@@ -990,15 +665,14 @@ export default function CareersPage() {
                     onClick={() => setShowMyAppsAdvancedFilters((open) => !open)}
                     sx={{
                       ...careerIconButtonSx,
-                      borderRadius: "12px",
-                      borderColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.pmwPurple : editorial.border,
-                      color: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.pmwPurpleDark : editorial.muted,
-                      backgroundColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.purpleWash : editorial.white,
+                      borderColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.navy : editorial.border,
+                      color: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.navy : editorial.muted,
+                      backgroundColor: showMyAppsAdvancedFilters || myAppsAdvancedFilterCount > 0 ? editorial.blueSoft : editorial.white,
                       flexShrink: 0,
                       "&:hover": {
                         transform: "translateY(-1px)",
-                        backgroundColor: editorial.purpleWash,
-                        borderColor: editorial.pmwPurple,
+                        backgroundColor: editorial.blueSoft,
+                        borderColor: editorial.navy,
                       },
                       "&:active": { transform: "scale(0.96)" },
                       ...reduceMotionSx,
@@ -1006,7 +680,7 @@ export default function CareersPage() {
                   >
                     <Badge
                       badgeContent={myAppsAdvancedFilterCount}
-                      color="secondary"
+                      color="primary"
                       invisible={myAppsAdvancedFilterCount === 0}
                       sx={{ "& .MuiBadge-badge": { fontSize: "0.72rem", minWidth: 16, height: 16 } }}
                     >
@@ -1028,10 +702,9 @@ export default function CareersPage() {
                   }}
                   sx={{
                     ...careerActionButtonSx,
-                    borderRadius: "12px",
                     color: editorial.muted,
                     fontWeight: 700,
-                    "&:hover": { transform: "translateY(-1px)", backgroundColor: editorial.purpleWash },
+                    "&:hover": { transform: "translateY(-1px)", backgroundColor: editorial.blueSoft },
                     ...reduceMotionSx,
                   }}
                 >
@@ -1042,7 +715,7 @@ export default function CareersPage() {
                 <Chip
                   label={`${filteredMyApps.length} of ${myApps.length} applications`}
                   size="small"
-                  sx={{ backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark, fontWeight: 700, fontSize: "0.78rem", fontVariantNumeric: "tabular-nums", animation: `${scaleIn} 0.22s ease both`, ...reduceMotionSx }}
+                  sx={{ backgroundColor: editorial.skySoft, color: editorial.navyDeep, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}
                 />
               )}
             </Box>
@@ -1063,11 +736,12 @@ export default function CareersPage() {
                     label="Timeline"
                     onChange={(e) => setMyAppsTimeline(e.target.value)}
                     sx={{
-                      borderRadius: "12px",
-                      backgroundColor: editorial.paperSoft,
+                      borderRadius: "999px",
+                      backgroundColor: editorial.skySoft,
+                      "& .MuiOutlinedInput-notchedOutline": { border: "none" },
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: editorial.white },
-                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)" },
+                      "&.Mui-focused": { boxShadow: "none" },
                     }}
                   >
                     <MenuItem value="all">All dates</MenuItem>
@@ -1086,7 +760,7 @@ export default function CareersPage() {
                       onChange={(e) => setMyAppsFrom(e.target.value)}
                       size="small"
                       fullWidth
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "999px" } } }}
                     />
                     <TextField
                       type="date"
@@ -1095,7 +769,7 @@ export default function CareersPage() {
                       onChange={(e) => setMyAppsTo(e.target.value)}
                       size="small"
                       fullWidth
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
+                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "999px" } } }}
                     />
                   </>
                 )}
@@ -1106,11 +780,12 @@ export default function CareersPage() {
                     label="Sort"
                     onChange={(e) => setMyAppsSort(e.target.value)}
                     sx={{
-                      borderRadius: "12px",
-                      backgroundColor: editorial.paperSoft,
+                      borderRadius: "999px",
+                      backgroundColor: editorial.skySoft,
+                      "& .MuiOutlinedInput-notchedOutline": { border: "none" },
                       transition: "box-shadow 0.18s ease, background-color 0.18s ease",
                       "&:hover": { backgroundColor: editorial.white },
-                      "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(98, 100, 167, 0.12)" },
+                      "&.Mui-focused": { boxShadow: "none" },
                     }}
                   >
                     <MenuItem value="newest">Newest first</MenuItem>
@@ -1124,46 +799,36 @@ export default function CareersPage() {
           </Paper>
           <Paper
             sx={{
-              borderRadius: "12px",
-              border: `1px solid ${editorial.border}`,
-              boxShadow: "none",
+              borderRadius: `${si.radius}px`,
+              boxShadow: si.shadow,
               overflow: "hidden",
-              animation: `${fadeInUp} 0.42s ease both`,
-              animationDelay: "140ms",
-              ...reduceMotionSx,
+                            ...reduceMotionSx,
             }}
           >
             <Table>
               <TableHead>
-                <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>Reference</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>Role</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>Submitted</TableCell>
+                <TableRow>
+                  <TableCell sx={{ ...siType.micro, color: editorial.muted, borderBottom: "none" }}>Reference</TableCell>
+                  <TableCell sx={{ ...siType.micro, color: editorial.muted, borderBottom: "none" }}>Role</TableCell>
+                  <TableCell sx={{ ...siType.micro, color: editorial.muted, borderBottom: "none" }}>Status</TableCell>
+                  <TableCell sx={{ ...siType.micro, color: editorial.muted, borderBottom: "none" }}>Submitted</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {pagedMyApps.map((app, index) => (
+                {pagedMyApps.map((app) => (
                   <TableRow
                     key={app.id}
                     hover
                     sx={{
                       cursor: "pointer",
-                      animation: `${fadeInUp} 0.32s ease both`,
-                      animationDelay: staggerDelay(index, 38, 260),
-                      transition: "background-color 0.18s ease, transform 0.18s ease",
-                      "&:hover": {
-                        backgroundColor: editorial.paperSoft,
-                        transform: "translateX(4px)",
-                        "& .application-ref": { color: editorial.pmwBlueDark },
-                      },
-                      "&:active": { transform: "translateX(2px) scale(0.998)" },
-                      ...reduceMotionSx,
+                                            transition: "background-color 0.15s ease",
+                      "&:hover": { backgroundColor: editorial.blueSoft },
+                      "& .MuiTableCell-root": { borderBottom: "none" },
                     }}
                     onClick={() => setSelectedApp(app)}
                   >
                     <TableCell>
-                      <Typography className="application-ref" variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: editorial.pmwBlue, fontSize: "0.78rem", transition: "color 0.18s ease" }}>
+                      <Typography className="application-ref" variant="body2" sx={{ ...siType.data, color: editorial.navy }}>
                         {app.submissionRef}
                       </Typography>
                     </TableCell>
@@ -1182,11 +847,11 @@ export default function CareersPage() {
                         label={app.status || "New"}
                         size="small"
                         sx={{
-                          borderRadius: "12px",
-                          fontSize: "0.72rem",
+                          borderRadius: "999px",
+                          fontSize: "0.75rem",
                           fontWeight: 600,
                           backgroundColor: app.status === "Reviewed" ? editorial.successSoft : editorial.blueSoft,
-                          color: app.status === "Reviewed" ? editorial.success : editorial.pmwBlue,
+                          color: app.status === "Reviewed" ? editorial.success : editorial.navy,
                         }}
                       />
                     </TableCell>
@@ -1217,35 +882,14 @@ export default function CareersPage() {
           </>
         )}
 
-        {/* Job Cards Grid (hidden when viewing My Applications) */}
-        {!loading && !error && appliedFilter !== "applied" && filteredJobs.length > 0 && (
+        {!loading && !error && !viewingApplications && filteredJobs.length > 0 && (
           <>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
-              {pagedJobs.map((job, index) => (
-                <Box
-                  key={job.id}
-                  sx={{
-                    animation: `${fadeInUp} 0.42s ease both`,
-                    animationDelay: staggerDelay(index),
-                    ...reduceMotionSx,
-                  }}
-                >
-                  <JobCard job={job} onOpen={openJobDetails} applied={isJobApplied(job.id)} />
-                </Box>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              {pagedJobs.map((job) => (
+                <JobCard key={job.id} job={job} onOpen={openJobDetails} applied={isJobApplied(job.id)} />
               ))}
             </Box>
-            <Paper
-              sx={{
-                mt: 2,
-                borderRadius: "12px",
-                border: `1px solid ${editorial.border}`,
-                boxShadow: "none",
-                overflow: "hidden",
-                animation: `${fadeInUp} 0.32s ease both`,
-                animationDelay: "180ms",
-                ...reduceMotionSx,
-              }}
-            >
+            {filteredJobs.length > jobsRowsPerPage && (
               <TablePagination
                 component="div"
                 count={filteredJobs.length}
@@ -1260,12 +904,9 @@ export default function CareersPage() {
                 }}
                 rowsPerPageOptions={[12, 24, 48]}
               />
-            </Paper>
+            )}
           </>
         )}
-
-        </Grid>
-        </Grid>
 
         {/* Application detail dialog */}
         <Dialog
@@ -1276,28 +917,25 @@ export default function CareersPage() {
           slotProps={{
             backdrop: {
               sx: {
-                backgroundColor: "rgba(17, 24, 39, 0.36)",
-                backdropFilter: "blur(3px)",
+                backgroundColor: "rgba(15, 23, 42, 0.36)",
               },
             },
             paper: {
               sx: {
-                borderRadius: "12px",
+                borderRadius: `${si.radiusSheet}px`,
                 overflow: "hidden",
-                border: "1px solid rgba(17, 24, 39, 0.08)",
-                animation: `${scaleIn} 0.24s ease both`,
-                ...reduceMotionSx,
               },
             },
           }}
         >
           {selectedApp && (
             <>
-              <DialogTitle sx={{ pb: 1, background: "linear-gradient(135deg, #FFFFFF 0%, #F8FBFF 100%)", borderBottom: "1px solid rgba(17, 24, 39, 0.08)" }}>
+              <DialogTitle sx={{ pb: 1, backgroundColor: editorial.panel }}>
                 <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
-                  Application Details
+                  Application details
                 </Typography>
                 <IconButton
+                  aria-label="Close"
                   onClick={() => setSelectedApp(null)}
                   size="small"
                   sx={{
@@ -1306,8 +944,7 @@ export default function CareersPage() {
                     top: 12,
                     color: editorial.muted,
                     transition: "transform 0.18s ease, background-color 0.18s ease",
-                    "&:hover": { transform: "rotate(90deg)", backgroundColor: editorial.blueSoft },
-                    ...reduceMotionSx,
+                    "&:hover": { backgroundColor: editorial.blueSoft },
                   }}
                 >
                   <Close />
@@ -1315,14 +952,14 @@ export default function CareersPage() {
               </DialogTitle>
               <DialogContent>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <Box><Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>Reference</Typography><Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: editorial.pmwBlue }}>{selectedApp.submissionRef}</Typography></Box>
+                  <Box><Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>Reference</Typography><Typography variant="body2" sx={{ ...siType.data, color: editorial.navy }}>{selectedApp.submissionRef}</Typography></Box>
                   <Box>
                     <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>Role</Typography>
                     <Typography variant="body1" sx={{ fontWeight: 600, color: editorial.ink }}>{selectedApp.jobTitle}</Typography>
                     {selectedApp.company && <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.25 }}>{selectedApp.company}</Typography>}
                   </Box>
                   <Box><Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>Applicant</Typography><Typography variant="body1" sx={{ fontWeight: 600, color: editorial.ink }}>{selectedApp.applicantName}</Typography><Typography variant="body2" sx={{ color: editorial.muted }}>{selectedApp.applicantEmail}</Typography>{selectedApp.applicantPhone && <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.25 }}>{selectedApp.applicantPhone}</Typography>}</Box>
-                  <Box><Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>Status</Typography><Chip label={selectedApp.status || "New"} size="small" sx={{ borderRadius: "12px", fontWeight: 600, backgroundColor: selectedApp.status === "Reviewed" ? editorial.successSoft : editorial.blueSoft, color: selectedApp.status === "Reviewed" ? editorial.success : editorial.pmwBlue }} /></Box>
+                  <Box><Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>Status</Typography><Chip label={selectedApp.status || "New"} size="small" sx={{ borderRadius: "999px", fontWeight: 600, backgroundColor: selectedApp.status === "Reviewed" ? editorial.successSoft : editorial.blueSoft, color: selectedApp.status === "Reviewed" ? editorial.success : editorial.navy }} /></Box>
                   <Box><Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>Submitted</Typography><Typography variant="body2" sx={{ color: editorial.muted }}>{selectedApp.submittedAt ? formatDate(selectedApp.submittedAt) : "—"}</Typography></Box>
 
                   {(selectedApp.resumeUrl || selectedSupportingDocuments.length > 0) && (
@@ -1337,9 +974,9 @@ export default function CareersPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "12px",
-                              color: editorial.pmwBlue, fontWeight: 600, fontSize: "0.845rem",
-                              backgroundColor: editorial.blueSoft, border: "1px solid rgba(0,120,212,0.15)",
+                              px: 1.75, py: 0.75, borderRadius: "999px",
+                              color: editorial.navy, fontWeight: 600, fontSize: "0.845rem",
+                              backgroundColor: editorial.blueSoft,
                               textDecoration: "none", width: "fit-content",
                               transition: "transform 0.18s ease, background-color 0.18s ease",
                               "&:hover": { backgroundColor: editorial.blueWash, transform: "translateY(-1px)" },
@@ -1348,7 +985,7 @@ export default function CareersPage() {
                             }}
                           >
                             <Description sx={{ fontSize: 16 }} />
-                            View Resume
+                            View resume
                           </Box>
                         )}
                         {selectedSupportingDocuments.map((doc) => (
@@ -1360,9 +997,9 @@ export default function CareersPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "12px",
-                              color: editorial.pmwBlue, fontWeight: 600, fontSize: "0.845rem",
-                              backgroundColor: editorial.blueSoft, border: "1px solid rgba(0,120,212,0.15)",
+                              px: 1.75, py: 0.75, borderRadius: "999px",
+                              color: editorial.navy, fontWeight: 600, fontSize: "0.845rem",
+                              backgroundColor: editorial.blueSoft,
                               textDecoration: "none", width: "fit-content",
                               transition: "transform 0.18s ease, background-color 0.18s ease",
                               "&:hover": { backgroundColor: editorial.blueWash, transform: "translateY(-1px)" },
@@ -1371,7 +1008,7 @@ export default function CareersPage() {
                             }}
                           >
                             <Description sx={{ fontSize: 16 }} />
-                            {doc.name ? `View ${doc.name}` : "View Supporting Document"}
+                            {doc.name ? `View ${doc.name}` : "View supporting document"}
                           </Box>
                         ))}
                       </Box>
@@ -1381,7 +1018,7 @@ export default function CareersPage() {
                   {selectedApp.customAnswers && Object.keys(selectedApp.customAnswers).length > 0 && (
                     <Box>
                       <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 500 }}>
-                        Additional Responses
+                        Additional responses
                       </Typography>
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 0.5 }}>
                         {Object.entries(selectedApp.customAnswers).map(([key, value]) => (
@@ -1399,20 +1036,8 @@ export default function CareersPage() {
                   )}
                 </Box>
               </DialogContent>
-              <DialogActions sx={{ px: 3, pb: 2, backgroundColor: editorial.paperSoft }}>
-                <Button
-                  onClick={() => setSelectedApp(null)}
-                  sx={{
-                    borderRadius: "12px",
-                    textTransform: "none",
-                    color: editorial.muted,
-                    fontWeight: 700,
-                    transition: "transform 0.18s ease, background-color 0.18s ease",
-                    "&:hover": { transform: "translateY(-1px)", backgroundColor: editorial.skySoft },
-                    "&:active": { transform: "translateY(0) scale(0.98)" },
-                    ...reduceMotionSx,
-                  }}
-                >
+              <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button onClick={() => setSelectedApp(null)} variant="text">
                   Close
                 </Button>
               </DialogActions>

@@ -37,7 +37,6 @@ import type {
   RoleHolderLayerAssignee,
 } from "../../types";
 import { isLayerEmail, joinEmailList, parseEmailList } from "../../utils/layerRecipients";
-import { editorial } from "../../theme/editorial";
 
 interface LayerConfigPanelProps {
   value: LayerConfig | null;
@@ -111,7 +110,7 @@ const TOGGLE_BTN = (active: boolean): React.CSSProperties => ({
 
 const SECTION_CARD: React.CSSProperties = {
   background: C.white,
-  border: `1px solid ${C.border}`,
+  
   borderRadius: 20,
   padding: "10px 11px",
   boxShadow: "0 1px 2px rgba(26,31,43,0.04)",
@@ -657,7 +656,7 @@ function EmailChipInput({
       {suggestions.length > 0 && draft.trim() && (
         <div style={{
           marginTop: 4,
-          border: `1px solid ${C.border}`,
+          boxShadow: "0 4px 14px rgba(16,24,40,0.10)",
           borderRadius: 20,
           overflow: "hidden",
           background: C.white,
@@ -666,7 +665,7 @@ function EmailChipInput({
             <div
               key={user.email}
               onMouseDown={e => { e.preventDefault(); commit(user.email); }}
-              style={{ padding: "6px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}
+              style={{ padding: "6px 9px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
               onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
@@ -781,7 +780,6 @@ function DistributionListPicker({
             right: 0,
             zIndex: 200,
             background: C.white,
-            border: `1px solid ${C.border}`,
             borderRadius: 20,
             boxShadow: C.shadowMd,
             overflow: "hidden",
@@ -790,7 +788,7 @@ function DistributionListPicker({
               <div
                 key={group.email}
                 onMouseDown={e => { e.preventDefault(); onChange(group.email); setOpen(false); }}
-                style={{ padding: "7px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+                style={{ padding: "7px 9px", cursor: "pointer", }}
                 onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
@@ -1202,7 +1200,6 @@ export default function LayerConfigPanel({
               right: 0,
               zIndex: 200,
               background: C.white,
-              border: `1px solid ${C.border}`,
               borderRadius: 20,
               boxShadow: C.shadowMd,
               overflow: "hidden",
@@ -1215,7 +1212,7 @@ export default function LayerConfigPanel({
                     search.close();
                     search.setQuery("");
                   }}
-                  style={{ padding: "7px 9px", cursor: "pointer", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}
+                  style={{ padding: "7px 9px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
                   onMouseEnter={e => e.currentTarget.style.background = C.purplePale}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 >
@@ -1296,7 +1293,7 @@ export default function LayerConfigPanel({
           minWidth: 58,
           borderRadius: 12,
           background: C.white,
-          border: `1px solid ${C.border}`,
+          
           padding: "6px 7px",
           fontSize: 11,
           fontWeight: 700,
@@ -1310,7 +1307,7 @@ export default function LayerConfigPanel({
             minWidth: 82,
             borderRadius: 12,
             background: layer.type === "approval" ? C.purplePale : C.greenPale,
-            border: `1px solid ${layer.type === "approval" ? C.purpleMid : editorial.successFill}`,
+            
             padding: "6px 7px",
             color: C.textPrimary,
           }}>
@@ -1326,7 +1323,7 @@ export default function LayerConfigPanel({
           minWidth: 62,
           borderRadius: 12,
           background: C.white,
-          border: `1px solid ${C.border}`,
+          
           padding: "6px 7px",
           fontSize: 11,
           fontWeight: 700,
@@ -1352,7 +1349,7 @@ export default function LayerConfigPanel({
       });
     };
     return (
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 9, background: C.lightGray }}>
+      <div style={{ borderRadius: 12, padding: 9, background: C.lightGray }}>
         <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", display: "block", marginBottom: 5 }}>
           Evaluator Email Timing
         </label>
@@ -1403,7 +1400,7 @@ export default function LayerConfigPanel({
       });
     };
     return (
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 9, background: C.white }}>
+      <div style={{ borderRadius: 12, padding: 9, background: C.white }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
             Submitter Routing
@@ -1430,7 +1427,7 @@ export default function LayerConfigPanel({
           Match by submitted email, employee ID, user ID, full name, or a combination. The first matching rule wins.
         </div>
         {rules.map((rule, ruleIndex) => (
-          <div key={rule.id || ruleIndex} style={{ border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: 8, marginTop: 7, background: C.offWhite }}>
+          <div key={rule.id || ruleIndex} style={{ borderRadius: 12, padding: 8, marginTop: 7, background: C.offWhite }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
               <input
                 value={rule.label}
@@ -1627,7 +1624,7 @@ export default function LayerConfigPanel({
 
         {layer.authMode === "365" && (
           <>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, padding: "8px 9px", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, borderRadius: 12, padding: "8px 9px", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={layer.manualPaperWhenSenderEmail !== false}
@@ -1870,7 +1867,7 @@ export default function LayerConfigPanel({
 
         {layer.authMode === "365" && (
           <>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, padding: "8px 9px", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 7, background: C.offWhite, borderRadius: 12, padding: "8px 9px", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={layer.manualPaperWhenSenderEmail !== false}
@@ -2164,7 +2161,7 @@ export default function LayerConfigPanel({
     <div style={{ animation: "fadeUp .15s ease" }}>
       <div style={{
         background: C.offWhite,
-        border: `1px solid ${C.border}`,
+        
         borderRadius: 20,
         padding: "11px 12px",
         marginBottom: 12,
@@ -2264,7 +2261,7 @@ export default function LayerConfigPanel({
             {branchEnabled ? "On" : "Off"}
           </span>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, background: C.offWhite, border: `1px solid ${C.border}`, borderRadius: 12, padding: "9px 10px", cursor: "pointer" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, background: C.offWhite, borderRadius: 12, padding: "9px 10px", cursor: "pointer" }}>
           <input type="checkbox" checked={branchEnabled}
             onChange={e => {
               setBranchEnabled(e.target.checked);
@@ -2289,13 +2286,13 @@ export default function LayerConfigPanel({
               Branch layers override the main sequence. Each branch can still reference the same HOD or manager email field.
             </div>
             {branches.length === 0 && (
-              <div style={{ background: C.amberPale, border: "1px solid #FDE68A", borderRadius: 12, padding: "9px 11px", fontSize: 11.5, color: C.amber, marginBottom: 10 }}>
+              <div style={{ background: C.amberPale, borderRadius: 12, padding: "9px 11px", fontSize: 11.5, color: C.amber, marginBottom: 10 }}>
                 No branches defined — add a branch to get started.
               </div>
             )}
             {branches.map((branch, bi) => (
-              <div key={bi} style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 20, background: C.white, marginBottom: 10, overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 11px", background: C.purplePale, borderBottom: `1px solid ${C.purpleMid}` }}>
+              <div key={bi} style={{ borderRadius: 20, background: C.white, marginBottom: 10, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 11px", background: C.purplePale }}>
                   <span style={{ width: 24, height: 24, borderRadius: "999px", background: `linear-gradient(135deg,${C.purple},#3B0764)`, color: C.white, fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{bi + 1}</span>
                   <div style={{ flex: 1, display: "flex", gap: 6 }}>
                     <input value={branch.name} onChange={e => updateBranchField(bi, "name", e.target.value)} placeholder="Branch name (key)" style={{ ...inp, flex: 1, height: 26, fontSize: 11.5 }} />

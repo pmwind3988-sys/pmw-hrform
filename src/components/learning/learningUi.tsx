@@ -8,12 +8,12 @@ import {
   PlayCircleOutlined,
   DescriptionOutlined,
 } from "@mui/icons-material";
-import { editorial, editorialHairline, editorialShadow } from "../../theme/editorial";
+import { editorial, si, siType } from "../../theme/editorial";
 import type { LearningMaterialKind } from "../../types";
 
 export const learningPageSx = {
   minHeight: "100vh",
-  background: "var(--app-bg, linear-gradient(180deg, #EEF6FC 0%, #F7FAFD 46%, #FFFFFF 100%))",
+  background: `var(--app-bg, ${editorial.paper})`,
   WebkitFontSmoothing: "antialiased",
 } satisfies SxProps<Theme>;
 
@@ -31,12 +31,10 @@ export const learningContentSx = {
  * readable whichever background an admin picks.
  */
 export const learningPanelSx = {
-  borderRadius: "12px",
-  boxShadow: editorialShadow,
-  backgroundColor: "rgba(255, 255, 255, 0.94)",
-  backdropFilter: "blur(12px)",
+  borderRadius: `${si.radius}px`,
+  boxShadow: si.shadow,
+  backgroundColor: editorial.panel,
   backgroundImage: "none",
-  border: editorialHairline,
 } satisfies SxProps<Theme>;
 
 /**
@@ -46,16 +44,14 @@ export const learningPanelSx = {
 export const learningInlineSurfaceSx = {
   display: "inline-flex",
   alignItems: "center",
-  borderRadius: "12px",
-  px: 1.25,
+  borderRadius: `${si.radiusPill}px`,
+  px: 1.5,
   py: 0.5,
-  backgroundColor: "rgba(255, 255, 255, 0.92)",
-  backdropFilter: "blur(12px)",
-  border: editorialHairline,
+  backgroundColor: editorial.panel,
+  boxShadow: si.shadow,
 } satisfies SxProps<Theme>;
 
 export const learningButtonSx = {
-  borderRadius: "12px",
   textTransform: "none",
   fontWeight: 700,
   minHeight: 40,
@@ -129,8 +125,7 @@ export function LearningSectionLabel({ children }: { children: ReactNode }) {
   return (
     <Box sx={learningInlineSurfaceSx}>
       <Typography
-        variant="overline"
-        sx={{ color: editorial.muted, fontWeight: 700, lineHeight: 1.6, letterSpacing: "0.03em" }}
+        sx={{ ...siType.subtext, color: editorial.muted, fontWeight: 700 }}
       >
         {children}
       </Typography>
@@ -157,23 +152,22 @@ export function LearningEmptyState({
           height: 56,
           mx: "auto",
           mb: 2,
-          borderRadius: "12px",
+          borderRadius: "50%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: editorial.blueWash,
-          color: editorial.pmwBlueDark,
+          color: editorial.navy,
           "& .MuiSvgIcon-root": { fontSize: 28 },
         }}
       >
         {icon}
       </Box>
-      <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink, textWrap: "balance" }}>
+      <Typography sx={{ ...siType.sectionTitle, color: editorial.ink, textWrap: "balance" }}>
         {title}
       </Typography>
       <Typography
-        variant="body2"
-        sx={{ color: editorial.muted, fontWeight: 600, mt: 0.75, maxWidth: 480, mx: "auto", textWrap: "pretty" }}
+        sx={{ ...siType.body, color: editorial.muted, mt: 0.75, maxWidth: 480, mx: "auto", textWrap: "pretty" }}
       >
         {description}
       </Typography>

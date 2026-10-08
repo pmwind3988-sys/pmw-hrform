@@ -70,7 +70,7 @@ import {
 import { mergeViewCounts, useLearningViewCounts } from "../hooks/useLearningViewCounts";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { loginRequest } from "../auth/msalConfig";
-import { editorial } from "../theme/editorial";
+import { editorial, si, siType } from "../theme/editorial";
 import type { LearningMaterial, LearningTopic, LearningViewCounts } from "../types";
 
 type Feedback = { message: string; severity: "success" | "error" } | null;
@@ -387,39 +387,42 @@ export default function AdminLearningPage() {
 
   return (
     <Box sx={learningPageSx}>
-      <LearningHeader
-        title="Manage learning materials"
-        subtitle="Organise topics, upload files, and control who can download or open what."
-        backPath="/learning"
-        backLabel="Back to the learning hub"
-        actions={
-          <>
-            <Button
-              size="small"
-              startIcon={<Refresh />}
-              onClick={reload}
-              disabled={busy}
-              sx={{ ...learningButtonSx, color: editorial.pmwBlueDark }}
-            >
-              Refresh
-            </Button>
-            <Button
-              size="small"
-              variant="contained"
-              startIcon={<LibraryBooksOutlined />}
-              onClick={() => navigate("/learning")}
-              sx={learningButtonSx}
-            >
-              Open hub
-            </Button>
-          </>
-        }
-      />
+      <Container maxWidth="xl" disableGutters>
+        <Box sx={{ ...learningContentSx, pb: 0, pt: { xs: 2.5, sm: 3.5, md: 4 } }}>
+          <LearningHeader
+            title="Learning library"
+            description="Organise topics, upload files and choose who can download or open what."
+            backPath="/learning"
+            backLabel="Back to the learning hub"
+            primary={{
+              label: "Upload files",
+              icon: <CloudUploadOutlined />,
+              onClick: () => fileInputRef.current?.click(),
+              disabled: busy || !spToken || !libraryReady,
+            }}
+            secondary={[
+              {
+                label: "New topic",
+                icon: <CreateNewFolderOutlined />,
+                onClick: () => {
+                  setFolderName("");
+                  setFolderDialog({ mode: "create", path: "" });
+                },
+                disabled: busy || !libraryReady,
+              },
+            ]}
+            more={[
+              { label: "Open hub", icon: <LibraryBooksOutlined />, onClick: () => navigate("/learning") },
+              { label: "Refresh", icon: <Refresh />, onClick: reload, disabled: busy },
+            ]}
+          />
+        </Box>
+      </Container>
 
       {busy && <LinearProgress sx={{ height: 3 }} />}
 
       <Container maxWidth="xl" disableGutters>
-        <Box sx={learningContentSx}>
+        <Box sx={{ ...learningContentSx, pt: 0 }}>
           {error && <FailurePanel what="the learning library" error={errorCause} onRetry={reload} />}
 
           {/*
@@ -503,7 +506,7 @@ export default function AdminLearningPage() {
                 </Stack>
 
                 <TopicTreeButton
-                  label="All materials (root)"
+                  label="Top level"
                   depth={0}
                   count={materials.filter((material) => !material.folderPath).length}
                   selected={selectedPath === ""}
@@ -538,7 +541,7 @@ export default function AdminLearningPage() {
                       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                         <FolderOutlined sx={{ color: editorial.pmwBlueDark }} />
                         <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink }}>
-                          {selectedPath ? selectedPath.replace(/\//g, " › ") : "All materials (root)"}
+                          {selectedPath ? selectedPath.replace(/\//g, " › ") : "Top level"}
                         </Typography>
                       </Stack>
                       <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 600, mt: 0.25 }}>
@@ -547,18 +550,20 @@ export default function AdminLearningPage() {
                     </Box>
 
                     <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-                      <Button
-                        size="small"
-                        startIcon={<CreateNewFolderOutlined />}
-                        disabled={busy}
-                        onClick={() => {
-                          setFolderName("");
-                          setFolderDialog({ mode: "create", path: selectedPath });
-                        }}
-                        sx={{ ...learningButtonSx, color: editorial.pmwBlueDark }}
-                      >
-                        {selectedPath ? "New subtopic" : "New topic"}
-                      </Button>
+                      {selectedPath && (
+                        <Button
+                          size="small"
+                          startIcon={<CreateNewFolderOutlined />}
+                          disabled={busy}
+                          onClick={() => {
+                            setFolderName("");
+                            setFolderDialog({ mode: "create", path: selectedPath });
+                          }}
+                          sx={{ ...learningButtonSx, color: editorial.navy }}
+                        >
+                          New subtopic
+                        </Button>
+                      )}
                       {selectedTopic && (
                         <>
                           {/* The topic's own lock, in the same shape as the
@@ -621,16 +626,6 @@ export default function AdminLearningPage() {
                           </Button>
                         </>
                       )}
-                      <Button
-                        size="small"
-                        variant="contained"
-                        startIcon={<CloudUploadOutlined />}
-                        disabled={busy || !spToken}
-                        onClick={() => fileInputRef.current?.click()}
-                        sx={learningButtonSx}
-                      >
-                        Upload files
-                      </Button>
                     </Stack>
                   </Stack>
 
@@ -660,18 +655,32 @@ export default function AdminLearningPage() {
                     </Box>
                   )}
 
-                  <Alert severity="info" sx={{ mt: 2, borderRadius: "12px", fontWeight: 600 }}>
-                    Uploaded files are view-only by default. Turn on Download for anything staff should be able to keep
-                    a copy of, and the lock switch for anything that needs a password — a locked material shows no
-                    thumbnail and no preview until the password is entered, every time. Files go straight from this
-                    browser to SharePoint, so large videos are fine.
-                  </Alert>
+                  <Box
+                    component="details"
+                    sx={{
+                      mt: 2,
+                      px: 2,
+                      py: 1,
+                      borderRadius: `${si.radiusSm}px`,
+                      backgroundColor: editorial.skySoft,
+                      ...siType.subtext,
+                      color: editorial.ink,
+                      "& summary": { cursor: "pointer", fontWeight: 600 },
+                    }}
+                  >
+                    <summary>How sharing works</summary>
+                    <Box component="ul" sx={{ m: 0, mt: 0.75, pl: 2.5 }}>
+                      <li>New files are view-only. Turn on Download for anything staff may keep a copy of.</li>
+                      <li>Turn on the lock for anything that needs a password; it shows no preview until the password is entered.</li>
+                      <li>Files go straight from this browser to SharePoint, so large videos are fine.</li>
+                    </Box>
+                  </Box>
                 </Paper>
 
                 <Paper sx={{ ...learningPanelSx, p: { xs: 1.25, md: 2 } }}>
                   {loading ? (
                     <Stack sx={{ alignItems: "center", py: 6 }}>
-                      <CircularProgress sx={{ color: editorial.pmwBlue }} />
+                      <CircularProgress sx={{ color: editorial.navy }} />
                     </Stack>
                   ) : folderMaterials.length === 0 ? (
                     <Box sx={{ py: 5, textAlign: "center" }}>
@@ -683,7 +692,7 @@ export default function AdminLearningPage() {
                       </Typography>
                     </Box>
                   ) : (
-                    <Stack divider={<Divider />} spacing={0}>
+                    <Stack spacing={0.5}>
                       {folderMaterials.map((material) => {
                         const style = kindStyle(material.kind);
                         return (
@@ -694,8 +703,10 @@ export default function AdminLearningPage() {
                               gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" },
                               gap: 1.5,
                               alignItems: "center",
-                              py: 1.5,
-                              px: { xs: 0.5, md: 1 },
+                              py: 1.25,
+                              px: { xs: 1, md: 1.5 },
+                              borderRadius: `${si.radius}px`,
+                              "&:hover": { backgroundColor: editorial.blueSoft },
                             }}
                           >
                             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", minWidth: 0 }}>
@@ -703,7 +714,7 @@ export default function AdminLearningPage() {
                                 sx={{
                                   width: 44,
                                   height: 44,
-                                  borderRadius: "12px",
+                                  borderRadius: "50%",
                                   flexShrink: 0,
                                   display: "flex",
                                   alignItems: "center",
@@ -797,9 +808,9 @@ export default function AdminLearningPage() {
                                   value=""
                                   disabled={busy}
                                   onChange={(event) => handleMoveMaterial(material, String(event.target.value))}
-                                  sx={{ borderRadius: "12px" }}
+                                  sx={{ borderRadius: "999px" }}
                                 >
-                                  <MenuItem value="">Root</MenuItem>
+                                  <MenuItem value="">Top level</MenuItem>
                                   {topics
                                     .filter((topic) => topic.path !== material.folderPath)
                                     .map((topic) => (
@@ -1021,7 +1032,7 @@ export default function AdminLearningPage() {
         <Alert
           severity={feedback?.severity ?? "success"}
           onClose={() => setFeedback(null)}
-          sx={{ borderRadius: "12px", fontWeight: 700 }}
+          sx={{ borderRadius: "20px", fontWeight: 600 }}
         >
           {feedback?.message}
         </Alert>
@@ -1029,7 +1040,7 @@ export default function AdminLearningPage() {
 
       {!identityToken && !loading && (
         <Box sx={{ px: 3, pb: 3 }}>
-          <Alert severity="warning" sx={{ borderRadius: "12px", fontWeight: 700 }}>
+          <Alert severity="warning" sx={{ borderRadius: "20px", fontWeight: 600 }}>
             Microsoft 365 identity could not be confirmed, so material lists and view counts may be incomplete. Refresh
             the page to try again.
           </Alert>
@@ -1068,12 +1079,12 @@ function TopicTreeButton({
         pl: 1 + depth * 1.5,
         cursor: "pointer",
         textAlign: "left",
-        borderRadius: "12px",
-        border: selected ? `1px solid ${editorial.pmwBlueSoft}` : "1px solid transparent",
+        borderRadius: `${si.radiusPill}px`,
+        border: "none",
         backgroundColor: selected ? editorial.blueWash : "transparent",
-        color: selected ? editorial.pmwBlueDark : editorial.ink,
+        color: selected ? editorial.navy : editorial.ink,
         transition: "background-color 0.16s ease",
-        "&:hover": { backgroundColor: selected ? editorial.pmwBlueSoft : editorial.paperSoft },
+        "&:hover": { backgroundColor: selected ? editorial.sky : editorial.blueSoft },
         "&:focus-visible": { outline: `2px solid ${editorial.pmwBlue}`, outlineOffset: 1 },
       }}
     >

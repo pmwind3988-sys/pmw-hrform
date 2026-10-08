@@ -23,7 +23,7 @@ import {
   VisibilityOutlined,
 } from "@mui/icons-material";
 import { InputAdornment, TextField } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { editorial, editorialHairline, si } from "../../theme/editorial";
 import {
   formatViewCount,
   isLearningLockedError,
@@ -317,7 +317,7 @@ export default function MaterialViewerDialog({
       slotProps={{
         paper: {
           sx: {
-            borderRadius: fullScreen ? 0 : "14px",
+            borderRadius: fullScreen ? 0 : "28px",
             overflow: "hidden",
             backgroundColor: editorial.white,
             maxHeight: fullScreen ? "100%" : "92vh",
@@ -341,7 +341,7 @@ export default function MaterialViewerDialog({
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "12px",
+              borderRadius: "50%",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -616,8 +616,8 @@ function viewerArrowSx(side: "left" | "right") {
     width: 44,
     height: 44,
     color: editorial.ink,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    border: editorialHairline,
+    backgroundColor: editorial.panel,
+    boxShadow: si.shadow,
     "&:hover": { backgroundColor: editorial.white },
   } as const;
 }

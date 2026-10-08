@@ -4,11 +4,11 @@ import { ensureReadable } from "../../theme/contrast";
 import { Box, Paper, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material/styles";
 import { SearchOff } from "@mui/icons-material";
-import { editorial, editorialHairline, editorialShadow } from "../../theme/editorial";
+import { editorial, si, siType } from "../../theme/editorial";
 
 export const careerPageSx = {
   minHeight: "100vh",
-  background: "var(--app-bg, linear-gradient(180deg, #EAF5FC 0%, #F7FAFD 48%, #FFFFFF 100%))",
+  background: `var(--app-bg, ${editorial.paper})`,
   WebkitFontSmoothing: "antialiased",
   MozOsxFontSmoothing: "grayscale",
 } satisfies SxProps<Theme>;
@@ -21,9 +21,10 @@ export const careerContentSx = {
 } satisfies SxProps<Theme>;
 
 export const careerPanelSx = {
-  borderRadius: "12px",
-  boxShadow: editorialShadow,
-  backgroundColor: "rgba(255,255,255,0.92)",
+  borderRadius: `${si.radius}px`,
+  boxShadow: si.shadow,
+  border: "none",
+  backgroundColor: editorial.panel,
   backgroundImage: "none",
 } satisfies SxProps<Theme>;
 
@@ -39,13 +40,13 @@ export const careerSearchFieldSx = {
   flex: "1 1 300px",
   minWidth: { xs: "100%", sm: 280 },
   "& .MuiOutlinedInput-root": {
-    borderRadius: "12px",
-    backgroundColor: editorial.white,
+    borderRadius: "999px",
+    backgroundColor: editorial.skySoft,
   },
+  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
 } satisfies SxProps<Theme>;
 
 export const careerActionButtonSx = {
-  borderRadius: "12px",
   textTransform: "none",
   fontWeight: 700,
   minHeight: 40,
@@ -58,14 +59,14 @@ export const careerActionButtonSx = {
 export const careerIconButtonSx = {
   width: 40,
   height: 40,
-  borderRadius: "12px",
-  border: `1px solid ${editorial.border}`,
-  backgroundColor: editorial.white,
-  color: editorial.pmwBlueDark,
+  borderRadius: "50%",
+  border: "none",
+  backgroundColor: editorial.panel,
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)",
+  color: editorial.navy,
   transition: "background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease",
   "&:hover": {
-    backgroundColor: editorial.blueWash,
-    borderColor: editorial.pmwBlue,
+    backgroundColor: editorial.blueSoft,
   },
   "&:active": {
     transform: "scale(0.96)",
@@ -98,35 +99,25 @@ export const careerTableShellSx = {
  * than an admin table.
  */
 export const jobBoardCardSx = {
-  backgroundColor: editorial.white,
-  borderRadius: "12px",
-  border: editorialHairline,
-  p: { xs: 2.5, sm: 3.5, md: 5 },
+  backgroundColor: editorial.panel,
+  borderRadius: `${si.radius}px`,
+  p: { xs: 2.5, sm: 3, md: 3.5 },
   display: "flex",
   flexDirection: "column",
-  gap: { xs: 2.5, md: 3.5 },
-  // Template uses a shadow tinted with its accent rather than neutral grey.
-  boxShadow: "0 3px 4px rgba(0, 120, 212, 0.08)",
-  transition: "border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease",
-  "&:hover": {
-    borderColor: editorial.pmwBlue,
-    boxShadow: "0 6px 18px rgba(0, 120, 212, 0.14)",
-    transform: "translateY(-2px)",
-  },
+  gap: { xs: 2, md: 2.5 },
+  boxShadow: si.shadow,
 } satisfies SxProps<Theme>;
 
-/** Small tinted pill — the template's "10 min ago" stamp. */
+/** Small tinted pill, for a posted-ago stamp or a plain label. */
 export const jobBoardBadgeSx = {
-  height: 24,
-  /* 5px: SI gives badges a tighter radius than containers so a card carrying
-     two of them does not read as a row of little boxes. */
-  borderRadius: "5px",
-  px: 1,
-  backgroundColor: "rgba(0, 120, 212, 0.10)",
-  color: editorial.pmwBlueDark,
+  height: 26,
+  borderRadius: `${si.radiusPill}px`,
+  px: 0.5,
+  backgroundColor: editorial.skySoft,
+  color: editorial.navyDeep,
+  ...siType.subtext,
   fontWeight: 600,
-  fontSize: "0.8125rem",
-  "& .MuiChip-label": { px: 0.5 },
+  "& .MuiChip-label": { px: 1 },
 } satisfies SxProps<Theme>;
 
 /** One `icon + label` pair in the card's meta row. */
@@ -135,12 +126,11 @@ export const jobBoardMetaItemSx = {
   alignItems: "center",
   gap: 1.5,
   color: editorial.muted,
-  fontWeight: 600,
-  fontSize: "0.9375rem",
+  ...siType.body,
   minWidth: 0,
   "& .MuiSvgIcon-root": {
-    fontSize: 20,
-    color: editorial.pmwBlue,
+    fontSize: 18,
+    color: editorial.muted,
     flexShrink: 0,
   },
 } satisfies SxProps<Theme>;
@@ -148,22 +138,15 @@ export const jobBoardMetaItemSx = {
 /** Solid primary action ("Job details" / "Apply"). */
 export const jobBoardPrimaryButtonSx = {
   ...careerActionButtonSx,
-  px: 2.5,
-  backgroundColor: editorial.pmwBlue,
-  color: editorial.white,
+  px: 3,
   boxShadow: "none",
-  "&:hover": {
-    backgroundColor: editorial.pmwBlueDark,
-    boxShadow: "none",
-  },
 } satisfies SxProps<Theme>;
 
 /** Left filter rail container from the template's sidebar. */
 export const jobBoardRailSx = {
-  backgroundColor: editorial.white,
-  borderRadius: "12px",
-  border: editorialHairline,
-  boxShadow: "0 3px 4px rgba(0, 120, 212, 0.08)",
+  backgroundColor: editorial.panel,
+  borderRadius: `${si.radius}px`,
+  boxShadow: si.shadow,
   p: { xs: 2, md: 2.5 },
   display: "flex",
   flexDirection: "column",
@@ -271,14 +254,14 @@ export function CareerEmptyState({
         sx={{
           width: 44,
           height: 44,
-          borderRadius: "12px",
+          borderRadius: "50%",
           mx: "auto",
           mb: 1.5,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           color: editorial.muted,
-          backgroundColor: editorial.blueWash,
+          backgroundColor: editorial.skySoft,
           "& .MuiSvgIcon-root": { fontSize: 24 },
         }}
       >
@@ -300,9 +283,9 @@ type MetricTone = "blue" | "purple" | "success" | "warning" | "neutral";
 const metricToneMap: Record<MetricTone, { bg: string; color: string }> = {
   blue: { bg: editorial.blueWash, color: editorial.pmwBlueDark },
   purple: { bg: editorial.purpleWash, color: editorial.pmwPurpleDark },
-  success: { bg: "rgba(16, 124, 16, 0.12)", color: editorial.success },
-  warning: { bg: "rgba(177, 92, 0, 0.12)", color: editorial.warning },
-  neutral: { bg: "rgba(95, 100, 109, 0.12)", color: editorial.muted },
+  success: { bg: editorial.successSoft, color: editorial.success },
+  warning: { bg: editorial.warningSoft, color: editorial.warning },
+  neutral: { bg: editorial.skySoft, color: editorial.muted },
 };
 
 export function CareerMetricPill({
@@ -325,15 +308,9 @@ export function CareerMetricPill({
         gap: { xs: 0.85, sm: 1.1 },
         p: { xs: 1, sm: 1.25 },
         minHeight: { xs: 64, sm: 70 },
-        borderRadius: "12px",
-        border: editorialHairline,
-        backgroundColor: editorial.white,
-        transition: "box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease",
-        "&:hover": {
-          borderColor: colors.color,
-          boxShadow: editorialShadow,
-          transform: "translateY(-2px)",
-        },
+        borderRadius: `${si.radius}px`,
+        backgroundColor: editorial.panel,
+        boxShadow: si.shadow,
         ...careerReduceMotionSx,
       }}
     >
@@ -341,7 +318,7 @@ export function CareerMetricPill({
         sx={{
           width: { xs: 32, sm: 38 },
           height: { xs: 32, sm: 38 },
-          borderRadius: "12px",
+          borderRadius: "50%",
           backgroundColor: colors.bg,
           // The tile's tint comes from config, so the pairing is only known here.
           color: ensureReadable(colors.color, colors.bg),

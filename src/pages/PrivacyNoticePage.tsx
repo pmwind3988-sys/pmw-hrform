@@ -1,7 +1,8 @@
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
+  Chip,
   Container,
   Divider,
   Link,
@@ -13,7 +14,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useInShell } from "../components/shell/ShellContext";
 import ShieldIcon from "@mui/icons-material/Shield";
-import { editorial, siType } from "../theme/editorial";
+import { editorial, si, siType } from "../theme/editorial";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
 import Card from "../components/common/Card";
 import {
@@ -35,7 +36,30 @@ const LIST_STYLE: Record<PdpaListMarker, string> = {
   decimal: "decimal",
 };
 
-const bodyTextSx = { color: editorial.muted, lineHeight: 1.8 } as const;
+const bodyTextSx = { color: editorial.muted, lineHeight: 1.75, fontSize: "0.9375rem" } as const;
+
+/** Comfortable reading measure for the legal text. */
+const MEASURE = "68ch";
+
+/** Plain-words summary, written from sections B, C and J of the notice. Not legal text. */
+const SUMMARY: Record<string, { heading: string; text: string; note: string }> = {
+  en: {
+    heading: "In short",
+    text: "We collect the details you give us in forms and on our portals, and use them for the purposes set out in section B. They may be shared within the Group and with the service providers, authorities and other parties listed in section C. You can ask in writing to see or correct your data, or to withdraw your consent. Section J says where to send your request.",
+    note: "This summary does not replace the full notice below.",
+  },
+  ms: {
+    heading: "Ringkasnya",
+    text: "Kami mengumpul maklumat yang anda berikan dalam borang dan portal kami, dan menggunakannya bagi tujuan yang dinyatakan dalam bahagian B. Maklumat ini mungkin dikongsi dalam Kumpulan dan dengan pembekal perkhidmatan, pihak berkuasa serta pihak lain yang disenaraikan dalam bahagian C. Anda boleh meminta secara bertulis untuk melihat atau membetulkan data anda, atau menarik balik persetujuan anda. Bahagian J menyatakan ke mana permintaan itu dihantar.",
+    note: "Ringkasan ini tidak menggantikan notis penuh di bawah.",
+  },
+};
+
+const BACK_LABEL: Record<string, string> = { en: "Back to HR portal", ms: "Kembali ke portal HR" };
+
+function sectionAnchor(section: PdpaNoticeSection): string {
+  return `notice-section-${section.id || section.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
 
 function NoticeList({ marker, items }: { marker: PdpaListMarker; items: readonly PdpaListItem[] }) {
   return (
@@ -71,8 +95,7 @@ function ContactBlock({ content }: { content: PdpaNoticeContent }) {
       sx={{
         mt: 1.5,
         p: 2,
-        border: `1px solid ${editorial.border}`,
-        borderRadius: "12px",
+        borderRadius: `${si.radiusSm}px`,
         backgroundColor: editorial.blueSoft,
       }}
     >
@@ -114,8 +137,8 @@ function NoticeBlock({ block, content }: { block: PdpaNoticeBlock; content: Pdpa
 
 function NoticeSection({ section, content }: { section: PdpaNoticeSection; content: PdpaNoticeContent }) {
   return (
-    <Box>
-      <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink }}>
+    <Box id={sectionAnchor(section)} sx={{ scrollMarginTop: 24, maxWidth: MEASURE }}>
+      <Typography component="h2" sx={{ ...siType.subsectionTitle, color: editorial.ink }}>
         {section.id ? `${section.id}. ` : ""}
         {section.title}
       </Typography>
@@ -128,6 +151,7 @@ function NoticeSection({ section, content }: { section: PdpaNoticeSection; conte
 
 export default function PrivacyNoticePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { locale, setLocale, content } = usePdpaLocale();
   const inShell = useInShell();
   const { ui } = content;
@@ -139,15 +163,19 @@ export default function PrivacyNoticePage() {
         {!inShell && (
           <Button
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate(-1)}
-            sx={{ mb: 2, textTransform: "none", color: editorial.pmwBlueDark, fontWeight: 600 }}
+            onClick={() => {
+              // A page opened in a new tab has no history to step back through.
+              if (location.key === "default") navigate("/");
+              else navigate(-1);
+            }}
+            sx={{ mb: 2, color: editorial.navy }}
           >
-            {ui.back}
+            {BACK_LABEL[locale] ?? ui.back}
           </Button>
         )}
 
         <Card pad="none" clip>
-          <Box sx={{ p: { xs: 3, md: 4 }, backgroundColor: editorial.white, color: editorial.ink, borderBottom: `1px solid ${editorial.border}` }}>
+          <Box sx={{ p: { xs: 3, md: 4 }, backgroundColor: editorial.white, color: editorial.ink }}>
             <Box
               sx={{
                 mb: 1,
@@ -159,7 +187,7 @@ export default function PrivacyNoticePage() {
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                <ShieldIcon />
+                <ShieldIcon aria-hidden />
                 <Typography variant="overline" sx={{ ...siType.micro, color: editorial.muted }}>
                   {ui.eyebrow}
                 </Typography>
@@ -167,48 +195,73 @@ export default function PrivacyNoticePage() {
 
               <ToggleButtonGroup
                 exclusive
-                size="small"
                 value={locale}
                 onChange={(_, next) => next && setLocale(next)}
                 aria-label="Notice language / Bahasa notis"
                 sx={{
-                  backgroundColor: editorial.appSurface,
-                  borderRadius: "12px",
+                  backgroundColor: editorial.skySoft,
+                  borderRadius: `${si.radiusPill}px`,
+                  p: "3px",
+                  gap: "2px",
+                  "& .MuiToggleButtonGroup-grouped": { border: 0, borderRadius: `${si.radiusPill}px !important` },
                   "& .MuiToggleButton-root": {
                     textTransform: "none",
                     fontWeight: 600,
-                    fontSize: "0.78rem",
+                    fontSize: "0.8125rem",
                     color: editorial.muted,
-                    borderColor: editorial.border,
-                    borderRadius: "12px",
-                    px: 1.5,
+                    minHeight: 36,
+                    px: 2,
                   },
                   "& .MuiToggleButton-root.Mui-selected": {
-                    backgroundColor: editorial.pmwBlue,
+                    backgroundColor: editorial.navy,
                     color: editorial.white,
-                    borderColor: editorial.pmwBlue,
-                    "&:hover": { backgroundColor: editorial.pmwBlueDark },
+                    "&:hover": { backgroundColor: editorial.navyDeep },
                   },
                 }}
               >
                 {PDPA_LOCALES.map((option) => (
-                  <ToggleButton key={option} value={option} lang={option}>
+                  <ToggleButton key={option} value={option} lang={option} aria-pressed={option === locale}>
                     {getPdpaContent(option).ui.languageName}
                   </ToggleButton>
                 ))}
               </ToggleButtonGroup>
             </Box>
 
-            <Typography variant="h1" sx={{ ...siType.pageTitle }}>
+            <Typography component="h1" sx={{ ...siType.pageTitle, color: editorial.ink }}>
               {ui.documentTitle}
             </Typography>
-            <Typography variant="body2" sx={{ mt: 1, opacity: 0.9 }}>
+            <Typography sx={{ ...siType.body, mt: 1, color: editorial.muted }}>
               {PDPA_CONTROLLER_NAME} | {ui.versionLabel(getPdpaNoticeVersion(locale))}
             </Typography>
           </Box>
 
           <Box sx={{ p: { xs: 3, md: 4 } }} lang={locale}>
-            <Typography variant="body1" sx={{ color: editorial.ink, lineHeight: 1.8 }}>
+            <Box sx={{ mb: 3, p: 2.5, borderRadius: `${si.radius}px`, backgroundColor: editorial.sky, maxWidth: MEASURE }}>
+              <Typography component="h2" sx={{ ...siType.cardTitle, color: editorial.navyDeep, mb: 0.5 }}>
+                {(SUMMARY[locale] ?? SUMMARY.en).heading}
+              </Typography>
+              <Typography sx={{ fontSize: "0.9375rem", lineHeight: 1.7, color: editorial.ink }}>
+                {(SUMMARY[locale] ?? SUMMARY.en).text}
+              </Typography>
+              <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 1 }}>
+                {(SUMMARY[locale] ?? SUMMARY.en).note}
+              </Typography>
+            </Box>
+
+            <Box component="nav" aria-label={locale === "ms" ? "Bahagian notis" : "Notice sections"} sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+              {[...content.sections, ...content.additionalTerms].map((section) => (
+                <Chip
+                  key={sectionAnchor(section)}
+                  component="a"
+                  href={`#${sectionAnchor(section)}`}
+                  clickable
+                  label={`${section.id ? `${section.id} · ` : ""}${section.title}`}
+                  sx={{ backgroundColor: editorial.skySoft, color: editorial.ink, fontWeight: 500 }}
+                />
+              ))}
+            </Box>
+
+            <Typography sx={{ ...bodyTextSx, color: editorial.ink, maxWidth: MEASURE }}>
               {content.preamble}
             </Typography>
 
@@ -222,7 +275,7 @@ export default function PrivacyNoticePage() {
 
             <Divider sx={{ my: 3 }} />
 
-            <Typography variant="body1" sx={{ color: editorial.ink, fontWeight: 700, mb: 2 }}>
+            <Typography sx={{ ...bodyTextSx, color: editorial.ink, fontWeight: 700, mb: 2, maxWidth: MEASURE }}>
               {content.additionalTermsIntro}
             </Typography>
 
@@ -234,7 +287,7 @@ export default function PrivacyNoticePage() {
 
             <Divider sx={{ my: 3 }} />
 
-            <Typography variant="body2" sx={bodyTextSx}>
+            <Typography sx={{ ...bodyTextSx, maxWidth: MEASURE }}>
               {ui.footer}
             </Typography>
 
@@ -242,7 +295,7 @@ export default function PrivacyNoticePage() {
               component={RouterLink}
               to="/"
               variant="outlined"
-              sx={{ mt: 3, borderRadius: "12px", textTransform: "none", fontWeight: 600 }}
+              sx={{ mt: 3 }}
             >
               {ui.returnHome}
             </Button>

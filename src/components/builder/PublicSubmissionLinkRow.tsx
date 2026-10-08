@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { spGet } from "../../utils/formBuilderSP";
 import { setSubmissionLink } from "../../utils/publicSubmissionLinkService";
+import { editorial } from "../../theme/editorial";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -129,7 +130,7 @@ export default function PublicSubmissionLinkRow({ token, listTitle, itemId, subm
           <button type="button" disabled={busy} onClick={() => { setEditing(false); setError(""); }}>Cancel</button>
         </div>
       )}
-      {error && <div role="alert" style={{ color: "#b3261e", marginTop: 2 }}>{error}</div>}
+      {error && <div role="alert" style={{ color: editorial.error, marginTop: 2 }}>{error}</div>}
     </div>
   );
 }

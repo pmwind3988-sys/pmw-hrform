@@ -3,7 +3,7 @@ import { Lock as LockIcon, Login as LoginIcon } from "@mui/icons-material";
 import { useMsal } from "@azure/msal-react";
 import Logo from "../Logo";
 import { loginRequest } from "../../auth/msalConfig";
-import { editorial, editorialShadow } from "../../theme/editorial";
+import { editorial, si } from "../../theme/editorial";
 import { careerPageSx } from "./careerUi";
 
 /**
@@ -28,10 +28,9 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
       <Container maxWidth="sm">
         <Card
           sx={{
-            borderRadius: "12px",
-            boxShadow: editorialShadow,
-            border: `1px solid ${editorial.border}`,
-            backgroundColor: "rgba(255,255,255,0.94)",
+            borderRadius: `${si.radius}px`,
+            boxShadow: si.shadow,
+            backgroundColor: editorial.panel,
           }}
         >
           <CardContent sx={{ p: { xs: 3.5, sm: 5 }, textAlign: "center" }}>
@@ -47,7 +46,6 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
                 mb: 2,
                 borderRadius: "50%",
                 backgroundColor: editorial.blueWash,
-                border: `1px solid ${editorial.border}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -57,7 +55,7 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
             </Box>
 
             <Typography variant="h5" component="h1" sx={{ fontWeight: 700, color: editorial.ink, mb: 1.25 }}>
-              Sign in to view openings
+              Sign in to see open roles
             </Typography>
 
             <Typography variant="body2" sx={{ color: editorial.muted, lineHeight: 1.6, mb: 3.5 }}>
@@ -70,16 +68,6 @@ export default function CareerPortalPrivateGate({ message }: { message?: string 
                 size="large"
                 startIcon={<LoginIcon />}
                 onClick={handleSignIn}
-                sx={{
-                  backgroundColor: editorial.black,
-                  color: editorial.white,
-                  borderRadius: "12px",
-                  py: 1.5,
-                  fontWeight: 700,
-                  textTransform: "none",
-                  boxShadow: "none",
-                  "&:hover": { backgroundColor: editorial.muted, boxShadow: "none" },
-                }}
               >
                 Sign in with Microsoft 365
               </Button>

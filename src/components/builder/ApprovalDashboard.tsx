@@ -33,11 +33,12 @@ import {
 import { isTestColumnKnownMissing, setTestColumnKnownMissing } from "../../utils/testColumnProbeCache";
 import { absoluteSharePointUrl } from "../../utils/sharePointUrl";
 import type { LifecycleStage } from "../../utils/submissionLifecycle";
-import SubmissionFilterPanel from "./SubmissionFilterPanel";
+import SubmissionFilterPanel, { pillSelectSx } from "./SubmissionFilterPanel";
 import {
   DEFAULT_PROFILE_KEY,
   EMPTY_SUBMISSION_FILTERS,
   compareVersionsDescending,
+  hasActiveFilters,
   recordMatchesFilters,
   type FilterableRecord,
   type FormTypeOption,
@@ -109,7 +110,12 @@ import { isTestRow } from "../../utils/testRun";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { editorial } from "../../theme/editorial";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import { editorial, si, siType } from "../../theme/editorial";
+import Card from "../common/Card";
+import PageHeader from "../common/PageHeader";
+import PillTabs from "../common/PillTabs";
 import PageSkeleton from "../common/PageSkeleton";
 import StatusPanel from "../common/StatusPanel";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -375,9 +381,6 @@ function getItemTrainingTitle(item: PendingItem): string {
 // Profile is developer-reference metadata only, not a user-facing category.
 function getItemProfileKey(item: PendingItem): string {
   return (item.PublishKey || "").trim();
-}
-function getItemProfileLabel(item: PendingItem): string {
-  return getItemProfileKey(item) || "Default";
 }
 
 function getItemDisplayStatus(item: PendingItem): string {
@@ -3131,7 +3134,7 @@ export default function ApprovalDashboard() {
   if (!isAuthenticated) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
+        <div style={{ background: C.cardBg, borderRadius: si.radius, padding: 40, textAlign: "center", boxShadow: si.shadow }}>
           <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
           <div style={{ fontSize: 17, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
           <div style={{ color: C.textSecond }}>You must be signed in to view approvals.</div>
@@ -3141,63 +3144,55 @@ export default function ApprovalDashboard() {
   }
 
   return (
-    // One screen: the shell's bars and padding take roughly 220px, the rest is ours.
+    // One screen. On a wide screen the shell has no top or bottom bar, only the
+    // page padding (~64px); the header, stage pills and filters above the panes
+    // are ours, so the panes get a usable minimum rather than whatever is left.
     // The two panes below scroll inside themselves, so the page does not.
-    <div style={isWide ? { height: "calc(100dvh - 220px)", minHeight: 560 } : undefined}>
+    <div style={isWide ? { height: "calc(100dvh - 64px)", minHeight: 760 } : undefined}>
       <div style={{ maxWidth: 1400, margin: "0 auto", height: isWide ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
-        <header style={{ marginBottom: 10, display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", background: "rgba(255,255,255,0.94)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "8px 14px" }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
-          <p style={{ color: C.textSecond, margin: 0, fontSize: 13 }}>Review submissions, approvals, and evaluation layers</p>
-        </header>
+        <PageHeader title="All submissions" description="Every submission across all forms." />
 
         {error && (
-          <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: 12, color: C.red, marginBottom: 16 }}>
+          <Box role="alert" sx={{ backgroundColor: editorial.errorSoft, borderRadius: `${si.radiusSm}px`, p: 1.5, color: editorial.error, mb: 2, ...siType.body }}>
             {error}
-          </div>
+          </Box>
         )}
         {emailNotice && (
-          <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: 12, color: editorial.success, marginBottom: 16 }}>
+          <Box role="status" sx={{ backgroundColor: editorial.successSoft, borderRadius: `${si.radiusSm}px`, p: 1.5, color: editorial.success, mb: 2, ...siType.body }}>
             {emailNotice}
-          </div>
+          </Box>
         )}
 
-        {/* Lifecycle tabs — what needs doing, not which layer type the item sits on */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-          {LIFECYCLE_STAGES.map((stage) => {
-            const count = categoryItems.filter((item) => getItemLifecycleStage(item) === stage).length;
-            return (
-              <button
-                key={stage}
-                onClick={() => setStageFilter(stage)}
-                style={{
-                  padding: "5px 14px", borderRadius: 12, border: "none", cursor: "pointer",
-                  fontSize: 13, fontWeight: 600,
-                  background: stageFilter === stage ? C.purple : "#fff",
-                  color: stageFilter === stage ? "#fff" : C.textSecond,
-                  boxShadow: stageFilter === stage ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
-                }}
-              >
-                {lifecycleLabel(stage)} ({count})
-              </button>
-            );
-          })}
-          {/* Workflow type — a filter, not a structural split */}
-          <label style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, fontWeight: 600, color: C.textSecond, background: "rgba(255,255,255,0.94)", border: `1px solid ${C.border}`, borderRadius: 12, padding: "3px 6px 3px 12px" }}>
-            Workflow type
-            <select
+        {/* Lifecycle tabs: what needs doing, not which layer type the item sits on */}
+        <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <Box sx={{ minWidth: 0, maxWidth: "100%" }}>
+            <PillTabs
+              aria-label="Submission stage"
+              value={stageFilter}
+              onChange={setStageFilter}
+              tabs={LIFECYCLE_STAGES.map((stage) => ({
+                value: stage,
+                label: lifecycleLabel(stage),
+                count: categoryItems.filter((item) => getItemLifecycleStage(item) === stage).length,
+              }))}
+            />
+          </Box>
+          {/* Workflow type: a filter, not a structural split */}
+          <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 2 }}>
+            <Box component="span" sx={{ ...siType.subtext, fontWeight: 600, color: editorial.muted }}>Workflow type</Box>
+            <Select
+              size="small"
               value={workflowTypeFilter}
               onChange={(e) => setWorkflowTypeFilter(e.target.value as "all" | "approval" | "evaluation")}
-              style={{
-                padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                fontSize: 13, color: C.textPrimary, outline: "none", background: "#fff",
-              }}
+              sx={{ ...pillSelectSx, backgroundColor: editorial.panel }}
+              SelectDisplayProps={{ "aria-label": "Workflow type" }}
             >
-              <option value="all">All</option>
-              <option value="approval">Approval</option>
-              <option value="evaluation">Evaluation</option>
-            </select>
-          </label>
-        </div>
+              <MenuItem value="all">All</MenuItem>
+              <MenuItem value="approval">Approval</MenuItem>
+              <MenuItem value="evaluation">Evaluation</MenuItem>
+            </Select>
+          </Box>
+        </Box>
 
         <SubmissionFilterPanel
           filters={filters}
@@ -3210,16 +3205,6 @@ export default function ApprovalDashboard() {
           fieldDataLoading={answersLoading}
           total={pendingItems.length}
           filtered={filteredItems.length}
-          palette={{
-            border: C.border,
-            cardBg: C.cardBg,
-            panelBg: C.bg,
-            textPrimary: C.textPrimary,
-            textSecond: C.textSecond,
-            textMuted: C.textMuted,
-            accent: C.purple,
-            accentPale: C.purplePale,
-          }}
         />
 
         {/* Reject Reason Dialog */}
@@ -3233,23 +3218,23 @@ export default function ApprovalDashboard() {
           >
             <div
               style={{
-                background: C.cardBg, borderRadius: 12, padding: 24, width: 420, maxWidth: "90vw",
-                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+                background: C.cardBg, borderRadius: si.radiusSheet, padding: 24, width: 420, maxWidth: "90vw",
+                boxShadow: si.shadow,
               }}
               onClick={e => e.stopPropagation()}
             >
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Reject Submission</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Reject submission</div>
               <div style={{ fontSize: 12.5, color: C.textSecond, marginBottom: 16 }}>
                 Provide a reason for rejecting this submission.
               </div>
               <textarea
                 value={rejectionReason}
                 onChange={e => setRejectionReason(e.target.value)}
-                placeholder="Enter rejection reason..."
+                placeholder="Why is this being rejected?"
                 rows={4}
                 autoFocus
                 style={{
-                  width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+                  width: "100%", padding: "10px 14px", borderRadius: si.radiusSm, border: "none", background: editorial.skySoft,
                   fontSize: 13.5, color: C.textPrimary, resize: "vertical", outline: "none",
                   fontFamily: "inherit", boxSizing: "border-box",
                 }}
@@ -3258,8 +3243,8 @@ export default function ApprovalDashboard() {
                 <button
                   onClick={() => { setShowRejectDialog(false); setRejectionReason(""); }}
                   style={{
-                    padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
-                    background: "#fff", color: C.textSecond, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+                    padding: "9px 18px", borderRadius: 999, border: "none",
+                    background: editorial.skySoft, color: C.textSecond, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
                   }}
                 >
                   Cancel
@@ -3272,13 +3257,13 @@ export default function ApprovalDashboard() {
                   }}
                   disabled={!rejectionReason.trim() || actionLoading}
                   style={{
-                    padding: "9px 18px", borderRadius: 8, border: "none",
+                    padding: "9px 18px", borderRadius: 999, border: "none",
                     background: rejectionReason.trim() && !actionLoading ? C.red : C.border,
-                    color: rejectionReason.trim() && !actionLoading ? "#fff" : C.textMuted,
+                    color: rejectionReason.trim() && !actionLoading ? editorial.white : C.textMuted,
                     fontSize: 13.5, fontWeight: 600, cursor: rejectionReason.trim() && !actionLoading ? "pointer" : "not-allowed",
                   }}
                 >
-                  Confirm Reject
+                  Reject submission
                 </button>
               </div>
             </div>
@@ -3324,18 +3309,18 @@ export default function ApprovalDashboard() {
         {/* Items + Detail Grid */}
         <div style={{ display: "grid", gridTemplateColumns: isWide ? "minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
           {/* Items List */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <Card pad="none" clip sx={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               {showGroupIndex ? (
                 <>
-                  <span style={{ fontWeight: 600, color: C.purple }}>
+                  <span style={{ ...siType.cardTitle, color: C.textPrimary }}>
                     Events ({submissionGroups.length})
                   </span>
                   <span style={{ fontSize: 11.5, color: C.textSecond }}>Most responses first</span>
                 </>
               ) : (
                 <>
-                  <span style={{ fontWeight: 600, color: C.purple, minWidth: 0 }}>
+                  <span style={{ ...siType.cardTitle, color: C.textPrimary, minWidth: 0 }}>
                     {selectedGroup !== null && (
                       <button
                         type="button"
@@ -3348,19 +3333,17 @@ export default function ApprovalDashboard() {
                     {selectedGroup ? `${selectedGroup} — ` : selectedGroup === "" ? "Not in an event — " : ""}
                     {lifecycleLabel(stageFilter)} ({filteredItems.length})
                   </span>
-                  <select
-                    aria-label="Sort submissions"
+                  <Select
+                    size="small"
                     value={listSort}
                     onChange={(e) => setListSort(e.target.value as ListSort)}
-                    style={{
-                      padding: "4px 8px", borderRadius: 8, border: `1px solid ${C.border}`,
-                      fontSize: 12.5, color: C.textPrimary, background: "#fff", outline: "none",
-                    }}
+                    sx={pillSelectSx}
+                    SelectDisplayProps={{ "aria-label": "Sort submissions" }}
                   >
                     {(Object.keys(LIST_SORT_LABELS) as ListSort[]).map((key) => (
-                      <option key={key} value={key}>{LIST_SORT_LABELS[key]}</option>
+                      <MenuItem key={key} value={key}>{LIST_SORT_LABELS[key]}</MenuItem>
                     ))}
-                  </select>
+                  </Select>
                 </>
               )}
             </div>
@@ -3371,13 +3354,13 @@ export default function ApprovalDashboard() {
                 style={{
                   display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: 12,
                   width: "100%", minWidth: TABLE_MIN_WIDTH, position: "sticky", top: 0, zIndex: 1,
-                  padding: "8px 16px", borderBottom: `1px solid ${C.border}`, background: C.cardBg,
-                  fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.textSecond,
+                  padding: "8px 16px", background: C.cardBg,
+                  ...siType.micro, color: C.textSecond,
                 }}
               >
                 <span>Submission</span>
                 <span>Submitted by</span>
-                <span>Version · Layer</span>
+                <span>Version and layer</span>
                 <span>Status</span>
                 <span style={{ textAlign: "right" }}>Actions</span>
               </div>
@@ -3390,7 +3373,12 @@ export default function ApprovalDashboard() {
                   link, because there never was one.
                 */
                 submissionGroups.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions</div>
+                  <StatusPanel
+                    tone="empty"
+                    title="No submissions"
+                    body={hasActiveFilters(filters) ? "Nothing matches the filters you have set." : "There is nothing in this view yet."}
+                    primary={hasActiveFilters(filters) ? { label: "Clear filters", onClick: () => setFilters(EMPTY_SUBMISSION_FILTERS) } : undefined}
+                  />
                 ) : (
                   submissionGroups.map((group) => {
                     const state = group.instance ? instanceState(group.instance) : null;
@@ -3401,7 +3389,7 @@ export default function ApprovalDashboard() {
                         onClick={() => setSelectedGroup(group.value)}
                         style={{
                           display: "block", width: "100%", textAlign: "left", border: "none",
-                          borderBottom: `1px solid ${C.border}`, background: "none",
+                          background: "none", borderRadius: si.radius,
                           padding: "13px 16px", cursor: "pointer", font: "inherit",
                         }}
                       >
@@ -3429,7 +3417,12 @@ export default function ApprovalDashboard() {
                   })
                 )
               ) : filteredItems.length === 0 ? (
-                <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions</div>
+                <StatusPanel
+                    tone="empty"
+                    title="No submissions"
+                    body={hasActiveFilters(filters) ? "Nothing matches the filters you have set." : "There is nothing in this view yet."}
+                    primary={hasActiveFilters(filters) ? { label: "Clear filters", onClick: () => setFilters(EMPTY_SUBMISSION_FILTERS) } : undefined}
+                  />
               ) : (
                 pagedItems.map((item) => {
                   const itemKey = getPendingItemKey(item);
@@ -3443,11 +3436,15 @@ export default function ApprovalDashboard() {
                   const itemStatus = getItemStatus(item);
 
                   const titleBlock = (
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: C.textPrimary, display: "flex", alignItems: "center", gap: 6, overflowWrap: "anywhere" }}>
+                    <div style={{ minWidth: 0, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      <Box aria-hidden sx={{ width: 40, height: 40, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: editorial.sky, color: editorial.navyDeep, ...siType.cardTitle }}>
+                        {(item.Title || "?").trim().charAt(0).toUpperCase()}
+                      </Box>
+                      <div style={{ minWidth: 0 }}>
+                      <div style={{ ...siType.cardTitle, color: C.textPrimary, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", overflowWrap: "anywhere" }}>
                         {item.Title}
                         {isTestRow(item as unknown as Record<string, unknown>) && (
-                          <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
+                          <Chip label="Test run" size="small" sx={{ height: 20, ...siType.subtext, fontWeight: 600, backgroundColor: editorial.accentSoft, color: editorial.accentText }} />
                         )}
                       </div>
                       {trainingTitle && (
@@ -3459,6 +3456,7 @@ export default function ApprovalDashboard() {
                           {trainingTitle}
                         </div>
                       )}
+                      </div>
                     </div>
                   );
 
@@ -3485,14 +3483,6 @@ export default function ApprovalDashboard() {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 11.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span>v{item.FormVersion || "Legacy"}</span>
-                        <span
-                          title="Profile (developer-reference metadata)"
-                          style={{
-                            fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
-                            background: editorial.skySoft, color: C.textMuted, overflowWrap: "anywhere",
-                          }}>
-                          {getItemProfileLabel(item)}
-                        </span>
                       </div>
                       <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 3 }}>
                         {formatLayerProgress(item)}
@@ -3585,8 +3575,8 @@ export default function ApprovalDashboard() {
                           }}
                           disabled={resendingItemKey === itemKey}
                           style={{
-                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                            background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: 32, height: 32, borderRadius: "50%", border: "none",
+                            background: editorial.skySoft, color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
                             cursor: resendingItemKey === itemKey ? "not-allowed" : "pointer",
                             opacity: resendingItemKey === itemKey ? 0.55 : 1,
                           }}
@@ -3604,8 +3594,8 @@ export default function ApprovalDashboard() {
                           }}
                           disabled={pdfRegeneratingItemKey === itemKey}
                           style={{
-                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                            background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: 32, height: 32, borderRadius: "50%", border: "none",
+                            background: editorial.skySoft, color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
                             cursor: pdfRegeneratingItemKey === itemKey ? "not-allowed" : "pointer",
                             opacity: pdfRegeneratingItemKey === itemKey ? 0.55 : 1,
                           }}
@@ -3622,8 +3612,8 @@ export default function ApprovalDashboard() {
                         }}
                         disabled={deleteLoading}
                         style={{
-                          width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.redPale}`,
-                          background: "#fff", color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: 32, height: 32, borderRadius: "50%", border: "none",
+                          background: editorial.errorSoft, color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
                           cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.55 : 1,
                         }}
                       >
@@ -3633,15 +3623,16 @@ export default function ApprovalDashboard() {
                   );
 
                   return (
-                    <div
+                    <Box
                       key={itemKey}
                       onClick={() => loadItemDetails(item)}
-                      style={{
-                        padding: "12px 16px", width: "100%", minWidth: TABLE_MIN_WIDTH,
-                        borderBottom: `1px solid ${C.border}`,
+                      sx={{
+                        p: "12px 16px", width: "100%", minWidth: TABLE_MIN_WIDTH,
+                        borderRadius: `${si.radius}px`,
                         cursor: "pointer",
-                        background: isSelected ? C.purplePale : "transparent",
-                        display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: 12, alignItems: "start",
+                        backgroundColor: isSelected ? editorial.sky : "transparent",
+                        "&:hover": { backgroundColor: isSelected ? editorial.sky : editorial.blueSoft },
+                        display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: "12px", alignItems: "start",
                       }}
                     >
                       {titleBlock}
@@ -3649,13 +3640,13 @@ export default function ApprovalDashboard() {
                       {versionBlock}
                       {statusBlock}
                       {actionsBlock}
-                    </div>
+                    </Box>
                   );
                 })
               )}
             </div>
             {filteredItems.length > SUBMISSIONS_PER_PAGE && (
-              <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div style={{ padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 12.5, color: C.textSecond }}>
                   Showing {(listPage - 1) * SUBMISSIONS_PER_PAGE + 1}-{Math.min(listPage * SUBMISSIONS_PER_PAGE, filteredItems.length)} of {filteredItems.length}
                 </div>
@@ -3664,8 +3655,8 @@ export default function ApprovalDashboard() {
                     onClick={() => setListPage((page) => Math.max(1, page - 1))}
                     disabled={listPage <= 1}
                     style={{
-                      padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                      background: "#fff", color: listPage <= 1 ? C.textMuted : C.textSecond,
+                      padding: "6px 14px", borderRadius: 999, border: "none",
+                      background: editorial.skySoft, color: listPage <= 1 ? C.textMuted : C.textSecond,
                       fontSize: 12.5, fontWeight: 600, cursor: listPage <= 1 ? "not-allowed" : "pointer",
                     }}
                   >
@@ -3676,8 +3667,8 @@ export default function ApprovalDashboard() {
                     onClick={() => setListPage((page) => Math.min(totalListPages, page + 1))}
                     disabled={listPage >= totalListPages}
                     style={{
-                      padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                      background: "#fff", color: listPage >= totalListPages ? C.textMuted : C.textSecond,
+                      padding: "6px 14px", borderRadius: 999, border: "none",
+                      background: editorial.skySoft, color: listPage >= totalListPages ? C.textMuted : C.textSecond,
                       fontSize: 12.5, fontWeight: 600, cursor: listPage >= totalListPages ? "not-allowed" : "pointer",
                     }}
                   >
@@ -3686,21 +3677,21 @@ export default function ApprovalDashboard() {
                 </div>
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Detail Panel */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "auto", minHeight: 0 }}>
+          <Card pad="none" sx={{ overflow: "auto", minHeight: 0 }}>
             {!selectedItem ? (
               <div style={{ padding: 48, textAlign: "center", color: C.textMuted }}>Select an item to review</div>
             ) : (
               <>
-                <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontWeight: 600, color: C.textPrimary }}>{selectedItem.Title}</div>
+                <div style={{ padding: 16 }}>
+                  <div style={{ ...siType.cardTitle, color: C.textPrimary }}>{selectedItem.Title}</div>
                   <div style={{ fontSize: 13.5, color: C.textSecond, marginTop: 4 }}>
                     Submitted by {isPersonEmail(selectedItem.SubmittedBy || "") ? selectedItem.SubmittedBy : "someone with no email set (no outcome email is sent)"} • {formatDateTime(selectedItem.SubmittedAt)}
                   </div>
                   <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
-                    Form Version: {selectedItem.FormVersion || "Legacy"}
+                    Form version: {selectedItem.FormVersion || "Legacy"}
                   </div>
                   {token && (
                     <PublicSubmissionLinkRow
@@ -3751,7 +3742,7 @@ export default function ApprovalDashboard() {
                     />
                   )}
                   {(isAdmin || isSuperuser) && selectedActiveLayers.length > 0 && currentLayerConfig && (
-                    <div style={{ marginTop: 12, padding: 12, borderRadius: 9, border: `1px solid ${C.purpleMid}`, background: C.purplePale }}>
+                    <div style={{ marginTop: 12, padding: 14, borderRadius: si.radiusSm, background: C.purplePale }}>
                       <div style={{ fontSize: 12.5, fontWeight: 700, color: C.purple }}>Workflow email controls</div>
                       <div style={{ fontSize: 11.5, color: C.textSecond, marginTop: 3 }}>
                         {(() => {
@@ -3773,8 +3764,8 @@ export default function ApprovalDashboard() {
                           placeholder="approver@example.com"
                           aria-label="Manual workflow email recipient"
                           style={{
-                            flex: "1 1 220px", minWidth: 190, padding: "7px 9px", borderRadius: 7,
-                            border: `1px solid ${C.border}`, fontSize: 11.5, background: "#fff",
+                            flex: "1 1 220px", minWidth: 190, padding: "7px 12px", borderRadius: 999,
+                            border: "none", fontSize: 12, background: editorial.white,
                           }}
                         />
                         {currentLayerType === "evaluation" && (
@@ -3784,14 +3775,14 @@ export default function ApprovalDashboard() {
                               value={customEmailDate}
                               min={toDateTimeLocalValue(new Date())}
                               onChange={(event) => setCustomEmailDate(event.target.value)}
-                              style={{ padding: "7px 9px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 11.5, background: "#fff" }}
+                              style={{ padding: "7px 12px", borderRadius: 999, border: "none", fontSize: 12, background: editorial.white }}
                             />
                             <button
                               onClick={() => void handleSaveCustomEmailDate()}
                               disabled={scheduleSaving || !customEmailDate}
                               style={{
-                                padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
-                                background: "#fff", color: C.purple, fontSize: 11.5, fontWeight: 700,
+                                padding: "7px 14px", borderRadius: 999, border: "none",
+                                background: editorial.white, color: C.purple, fontSize: 11.5, fontWeight: 700,
                                 cursor: scheduleSaving || !customEmailDate ? "not-allowed" : "pointer",
                                 opacity: scheduleSaving || !customEmailDate ? 0.55 : 1,
                               }}
@@ -3804,13 +3795,13 @@ export default function ApprovalDashboard() {
                           onClick={() => void handleForceResend(selectedItem, manualEmailRecipient)}
                           disabled={resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim()}
                           style={{
-                            padding: "7px 11px", borderRadius: 7, border: "none",
-                            background: C.purple, color: "#fff", fontSize: 11.5, fontWeight: 700,
+                            padding: "7px 14px", borderRadius: 999, border: "none",
+                            background: C.purple, color: editorial.white, fontSize: 11.5, fontWeight: 700,
                             cursor: resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim() ? "not-allowed" : "pointer",
                             opacity: resendingItemKey === getPendingItemKey(selectedItem) || !manualEmailRecipient.trim() ? 0.55 : 1,
                           }}
                         >
-                          Send now / resend
+                          Send now or resend
                         </button>
                       </div>
                       <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>
@@ -3824,7 +3815,7 @@ export default function ApprovalDashboard() {
                   <>
                     <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>
                       <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
-                        Submitted Form Details
+                        Submitted form details
                       </div>
                       <ReadOnlySubmissionPreview
                         surveyJson={surveyJson}
@@ -3834,16 +3825,16 @@ export default function ApprovalDashboard() {
                         compact
                       />
                     </div>
-                    <div style={{ padding: 24, textAlign: "center", borderTop: `1px solid ${C.border}` }}>
+                    <div style={{ padding: 24, textAlign: "center" }}>
                       <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>⑂</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Select Branch</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Select branch</div>
                       <div style={{ fontSize: 12.5, color: C.textSecond, marginBottom: 20, maxWidth: 360, margin: "0 auto 20px" }}>
                         Review the submitted form details, then assign the branch that should handle this approval/evaluation flow.
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 260, margin: "0 auto" }}>
                         {availableBranches.map((branch) => (
                           <button key={branch.name} onClick={() => handleSelectBranch(branch.name)} disabled={branchLoading}
-                            style={{ padding: "12px 16px", borderRadius: 12, border: `1.5px solid ${C.purpleMid}`, background: C.cardBg, cursor: branchLoading ? "not-allowed" : "pointer", fontSize: 13.5, fontWeight: 600, color: C.purple, fontFamily: "inherit", opacity: branchLoading ? 0.6 : 1 }}
+                            style={{ padding: "12px 16px", borderRadius: 999, border: `1.5px solid ${C.purpleMid}`, background: C.cardBg, cursor: branchLoading ? "not-allowed" : "pointer", fontSize: 13.5, fontWeight: 600, color: C.purple, fontFamily: "inherit", opacity: branchLoading ? 0.6 : 1 }}
                             onMouseEnter={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.background = C.purplePale; }}}
                             onMouseLeave={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purpleMid; e.currentTarget.style.background = C.cardBg; }}}>
                             {branch.label || branch.name}
@@ -3860,7 +3851,7 @@ export default function ApprovalDashboard() {
                     <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.amberPale, color: C.amber, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
                       <LockIcon style={{ fontSize: 24 }} />
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>Item Locked</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>Item locked</div>
                     <div style={{ fontSize: 12.5, color: C.textSecond, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
                       This layer is assigned to {selectedLayerAccess?.assignedEmail || "another approver"}. Only that assignee can review or act on it unless a superuser overrides access.
                     </div>
@@ -3877,10 +3868,10 @@ export default function ApprovalDashboard() {
                   />
                 </div>
 
-                {/* Layer History: show completed layers for context */}
+                {/* Layer history: show completed layers for context */}
                 {Object.keys(completedLayers).length > 0 && (
-                  <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 8 }}>Layer History</div>
+                  <div style={{ padding: "16px 16px 16px" }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 8 }}>Layer history</div>
                     {Object.entries(completedLayers)
                       .sort(([a], [b]) => parseInt(a) - parseInt(b))
                       .map(([layerNum, layer]) => {
@@ -3921,9 +3912,9 @@ export default function ApprovalDashboard() {
 
                 {/* Evaluation Form: editable SurveyJS for evaluation layers */}
                 {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) && evalForm && (
-                  <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                  <div style={{ padding: "16px 16px 16px" }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
-                      Evaluation Form
+                      Evaluation form
                     </div>
                     <div className="approval-survey-preview">
                       <NativeFormView runtime={evalRuntime} />
@@ -3935,7 +3926,7 @@ export default function ApprovalDashboard() {
                   currentLayerConfig.confirmationType === "signature" &&
                   getItemStatus(selectedItem) === "pending" &&
                   !isCurrentLayerTerminal(selectedItem, completedLayers) && (
-                    <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                    <div style={{ padding: "16px 16px 16px" }}>
                       <div style={{ fontSize: 13.5, fontWeight: 700, color: C.textPrimary, marginBottom: 10 }}>
                         Approval signature
                       </div>
@@ -3943,25 +3934,25 @@ export default function ApprovalDashboard() {
                     </div>
                   )}
 
-                <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, display: "flex", gap: 12 }}>
+                <div style={{ padding: 16, display: "flex", gap: 12 }}>
                   {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
                     <button onClick={handleEvaluationSubmit} disabled={actionLoading || (!!evalForm && !evalValid)}
-                      style={{ flex: 1, padding: "12px 16px", borderRadius: 8, border: "none",
-                        background: (!evalForm || evalValid) ? C.purple : C.border, color: "#fff", fontWeight: 600,
+                      style={{ flex: 1, padding: "12px 16px", borderRadius: 999, border: "none",
+                        background: (!evalForm || evalValid) ? C.purple : C.border, color: editorial.white, fontWeight: 600,
                         cursor: (actionLoading || (!!evalForm && !evalValid)) ? "not-allowed" : "pointer", opacity: (actionLoading || (!!evalForm && !evalValid)) ? 0.6 : 1 }}>
-                      {actionLoading ? "Submitting..." : evalForm && !evalValid ? "Fill required fields" : <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Submit Evaluation</>}
+                      {actionLoading ? "Submitting..." : evalForm && !evalValid ? "Fill required fields" : <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Submit evaluation</>}
                     </button>
                   ) : getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
                     <>
                       <button onClick={handleApprove} disabled={actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature)}
-                        style={{ flex: 1, padding: "12px 16px", borderRadius: 8, border: "none",
-                          background: C.green, color: "#fff", fontWeight: 600,
+                        style={{ flex: 1, padding: "12px 16px", borderRadius: 999, border: "none",
+                          background: C.green, color: editorial.white, fontWeight: 600,
                           cursor: actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature) ? "not-allowed" : "pointer",
                           opacity: actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature) ? 0.6 : 1 }}>
-                        {currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature ? "Signature required" : "✓ Approve"}
+                        {currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature ? "Signature required" : "Approve"}
                       </button>
                       <button onClick={() => setShowRejectDialog(true)} disabled={actionLoading}
-                        style={{ flex: 1, padding: "12px 16px", borderRadius: 8,
+                        style={{ flex: 1, padding: "12px 16px", borderRadius: 999,
                           border: `1px solid ${C.red}`, background: "transparent", color: C.red, fontWeight: 600,
                           cursor: actionLoading ? "not-allowed" : "pointer", opacity: actionLoading ? 0.6 : 1 }}>
                         <CloseIcon style={{ fontSize: 14, marginRight: 4 }} /> Reject
@@ -3987,8 +3978,8 @@ export default function ApprovalDashboard() {
                           onClick={() => void handleRegeneratePdf(selectedItem)}
                           disabled={pdfRegeneratingItemKey === getPendingItemKey(selectedItem)}
                           style={{
-                            padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
-                            background: "#fff", color: C.purple, fontSize: 11.5, fontWeight: 700,
+                            padding: "7px 14px", borderRadius: 999, border: "none",
+                            background: editorial.skySoft, color: C.purple, fontSize: 11.5, fontWeight: 700,
                             cursor: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "not-allowed" : "pointer",
                             opacity: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? 0.55 : 1,
                           }}
@@ -4005,16 +3996,16 @@ export default function ApprovalDashboard() {
                 )}
               </>
             )}
-          </div>
+          </Card>
         </div>
       </div>
 
       {/* ── Success Animation Overlay ── */}
       {actionSuccess && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "fixed", inset: 0, background: editorial.paper, zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 80, height: 80, borderRadius: "50%", background: actionSuccess.type === "rejected" ? C.red : C.green, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <span style={{ fontSize: 36, color: "#fff", fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}>
+              <span style={{ fontSize: 36, color: editorial.white, fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}>
               {actionSuccess.type === "rejected" ? <CloseIcon style={{ fontSize: 36 }} /> : <CheckIcon style={{ fontSize: 36 }} />}
             </span>
             </div>
@@ -4027,14 +4018,14 @@ export default function ApprovalDashboard() {
                   url: absoluteSharePointUrl(actionSuccess.pdfUrl, SP_SITE_URL),
                   filename: `${selectedItem?.Title ?? "submission"}.pdf`,
                 })}
-                style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer" }}>
+                style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 999, background: C.purple, color: editorial.white, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer" }}>
                 <DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> View PDF
               </button>
             )}
             <div style={{ marginTop: 12 }}>
               <button onClick={() => { setActionSuccess(null); setSelectedItem(null); }}
-                style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: "#fff", color: C.textSecond, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
-                Back to Approvals
+                style={{ padding: "8px 18px", borderRadius: 999, border: "none", background: editorial.skySoft, color: C.textSecond, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
+                Back to submissions
               </button>
             </div>
           </div>

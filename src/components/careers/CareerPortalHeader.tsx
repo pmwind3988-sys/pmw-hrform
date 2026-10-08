@@ -27,7 +27,7 @@ import { useNavigate } from "react-router-dom";
 import { loginRequest } from "../../auth/msalConfig";
 import { clearStoredAuthDecision } from "../../utils/authDecision";
 import Logo from "../Logo";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { editorial, editorialHairline, si } from "../../theme/editorial";
 import { careerActionButtonSx, careerIconButtonSx } from "./careerUi";
 import { useInShell } from "../shell/ShellContext";
 
@@ -212,8 +212,8 @@ export default function CareerPortalHeader({
               sx={{
                 width: { xs: 38, sm: 46 },
                 height: { xs: 38, sm: 46 },
-                borderRadius: "12px",
-                border: `1px solid ${editorial.pmwBlueSoft}`,
+                borderRadius: "50%",
+                border: "none",
                 // The shell's top bar already carries the mark.
                 display: inShell ? "none" : "flex",
                 alignItems: "center",
@@ -284,8 +284,8 @@ export default function CareerPortalHeader({
                 sx={{
                   width: 31,
                   height: 31,
-                  borderRadius: "12px",
-                  backgroundColor: "rgba(0, 120, 212, 0.10)",
+                  borderRadius: "50%",
+                  backgroundColor: editorial.skySoft,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -304,10 +304,10 @@ export default function CareerPortalHeader({
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: "12px",
-                  color: editorial.pmwBlueDark,
-                  backgroundColor: editorial.white,
-                  border: `1px solid ${editorial.border}`,
+                  borderRadius: "50%",
+                  color: editorial.navy,
+                  backgroundColor: editorial.panel,
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)",
                   transition: "transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease",
                   "&:hover": {
                     transform: "translateY(-1px)",
@@ -366,8 +366,8 @@ export default function CareerPortalHeader({
                 sx={{
                   width: 31,
                   height: 31,
-                  borderRadius: "12px",
-                  backgroundColor: "rgba(0, 120, 212, 0.10)",
+                  borderRadius: "50%",
+                  backgroundColor: editorial.skySoft,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -384,9 +384,8 @@ export default function CareerPortalHeader({
                 paper: {
                   sx: {
                     minWidth: 250,
-                    borderRadius: "12px",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
-                    border: "1px solid rgba(0, 0, 0, 0.06)",
+                    borderRadius: `${si.radius}px`,
+                    boxShadow: si.shadowRaised,
                     mt: 1,
                   },
                 },
@@ -466,9 +465,8 @@ export default function CareerPortalHeader({
                 sx: {
                   width: 280,
                   maxWidth: "calc(100vw - 24px)",
-                  borderRadius: "12px",
-                  boxShadow: "0 10px 34px rgba(17, 24, 39, 0.16)",
-                  border: "1px solid rgba(17, 24, 39, 0.08)",
+                  borderRadius: `${si.radius}px`,
+                  boxShadow: si.shadowRaised,
                   mt: 1,
                   overflow: "hidden",
                   "& .MuiMenuItem-root": {
@@ -492,7 +490,6 @@ export default function CareerPortalHeader({
                   "& .MuiButton-root": {
                     width: "100%",
                     justifyContent: "flex-start",
-                    borderRadius: "12px",
                     textTransform: "none",
                     fontWeight: 700,
                   },

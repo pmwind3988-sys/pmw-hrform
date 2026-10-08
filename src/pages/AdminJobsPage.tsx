@@ -2,13 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
   Select,
   MenuItem,
@@ -24,8 +17,6 @@ import {
   Checkbox,
   LinearProgress,
   CircularProgress,
-  ToggleButton,
-  ToggleButtonGroup,
   FormControl,
   InputLabel,
   TextField,
@@ -36,34 +27,21 @@ import {
   Close,
   Refresh,
   People,
-  NewReleases,
-  CheckCircle,
-  AccessTime,
   Delete as DeleteIcon,
   Description,
-  Today as TodayIcon,
-  DateRange as WeekIcon,
-  CalendarMonth as MonthIcon,
   FilterList as FilterIcon,
   Search as SearchIcon,
+  CheckRounded,
 } from "@mui/icons-material";
 import { useMsal } from "@azure/msal-react";
 import { fetchApplications, updateApplicationStatus, deleteApplications } from "../utils/careersService";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
-import CareerPortalHeader from "../components/careers/CareerPortalHeader";
-import {
-  CareerEmptyState,
-  CareerMetricPill,
-  careerActionButtonSx,
-  careerContentSx,
-  careerPageSx,
-  careerSearchFieldSx,
-  careerTableShellSx,
-  careerToolbarSx,
-  getCareerErrorMessage,
-} from "../components/careers/careerUi";
+import { CareerEmptyState, getCareerErrorMessage } from "../components/careers/careerUi";
 import { FailurePanel } from "../components/common/StatusPanel";
-import { editorial } from "../theme/editorial";
+import Card from "../components/common/Card";
+import PageHeader from "../components/common/PageHeader";
+import PillTabs from "../components/common/PillTabs";
+import { editorial, si, siType } from "../theme/editorial";
 import type { JobAdminApplication } from "../types";
 
 type TimelinePreset = "today" | "7d" | "month" | "year" | "custom" | "all";
@@ -102,6 +80,13 @@ const paginationSx = {
     ml: 0,
     flexShrink: 0,
   },
+};
+
+const searchFieldSx = {
+  flex: "1 1 280px",
+  minWidth: { xs: "100%", sm: 280 },
+  "& .MuiOutlinedInput-root": { borderRadius: "999px", backgroundColor: editorial.skySoft },
+  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
 };
 
 function startOfDay(date: Date): Date {
@@ -153,16 +138,31 @@ function getTimelineRange(preset: TimelinePreset, customFrom = "", customTo = ""
   }
 }
 
-const TIMELINE_OPTIONS: { value: TimelinePreset; label: string; icon: React.ReactNode }[] = [
-  { value: "today", label: "Today", icon: <TodayIcon sx={{ fontSize: 16 }} /> },
-  { value: "7d", label: "This Week", icon: <WeekIcon sx={{ fontSize: 16 }} /> },
-  { value: "month", label: "30 Days", icon: <MonthIcon sx={{ fontSize: 16 }} /> },
-  { value: "year", label: "Year", icon: <MonthIcon sx={{ fontSize: 16 }} /> },
-  { value: "custom", label: "Custom", icon: <WeekIcon sx={{ fontSize: 16 }} /> },
-  { value: "all", label: "All", icon: null },
+const TIMELINE_OPTIONS: { value: TimelinePreset; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "7d", label: "This week" },
+  { value: "month", label: "Last 30 days" },
+  { value: "year", label: "Last year" },
+  { value: "custom", label: "Custom dates" },
+  { value: "all", label: "All time" },
 ];
 
+const SORT_LABELS: Record<SortOption, string> = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  applicant: "Applicant A-Z",
+  role: "Role A-Z",
+  status: "Status A-Z",
+};
+
 const STATUS_OPTIONS = ["New", "KIV", "Shortlisted", "Not Suitable"] as const;
+
+const STATUS_LABELS: Record<string, string> = {
+  New: "New",
+  KIV: "KIV",
+  Shortlisted: "Shortlisted",
+  "Not Suitable": "Not suitable",
+};
 
 const STATUS_COLORS: Record<string, string> = {
   New: editorial.pmwBlue,
@@ -171,21 +171,45 @@ const STATUS_COLORS: Record<string, string> = {
   "Not Suitable": editorial.error,
 };
 
+const STATUS_FILLS: Record<string, string> = {
+  New: editorial.blueWash,
+  KIV: editorial.warningSoft,
+  Shortlisted: editorial.successSoft,
+  "Not Suitable": editorial.errorSoft,
+};
+
+/** A dot and a word in a pill: the status, nothing shouted. */
 function StatusChip({ status }: { status: string }) {
   const color = STATUS_COLORS[status] || editorial.muted;
   return (
-    <Chip
-      label={status}
-      size="small"
+    <Box
+      component="span"
       sx={{
-        backgroundColor: `${color}18`,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.75,
+        px: 1.25,
+        height: 26,
+        borderRadius: `${si.radiusPill}px`,
+        backgroundColor: STATUS_FILLS[status] || editorial.skySoft,
         color,
+        ...siType.subtext,
         fontWeight: 600,
-        fontSize: "0.78rem",
-        borderRadius: "12px",
+        whiteSpace: "nowrap",
       }}
-    />
+    >
+      <Box component="span" aria-hidden sx={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: color }} />
+      {STATUS_LABELS[status] ?? status}
+    </Box>
   );
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
+  return (first + last).toUpperCase();
 }
 
 function formatDate(dateStr: string): string {
@@ -205,63 +229,18 @@ function formatDate(dateStr: string): string {
 
 function AdminApplicationsLoadingSkeleton() {
   return (
-    <>
-      <Paper
-        sx={{
-          p: 2,
-          mb: 3,
-          borderRadius: "12px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
-          <Skeleton variant="rounded" height={40} sx={{ borderRadius: "12px", flex: "1 1 300px", minWidth: { xs: "100%", sm: 280 } }} />
-          <Skeleton variant="rounded" width={132} height={40} sx={{ borderRadius: "12px" }} />
-          <Skeleton variant="rounded" width={82} height={32} sx={{ borderRadius: "12px" }} />
+    <Card pad="tight">
+      {[1, 2, 3, 4, 5].map((item) => (
+        <Box key={item} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.25 }}>
+          <Skeleton variant="circular" width={40} height={40} />
+          <Box sx={{ flex: 1 }}>
+            <Skeleton variant="text" width="40%" />
+            <Skeleton variant="text" width="65%" height={16} />
+          </Box>
+          <Skeleton variant="rounded" width={84} height={26} sx={{ borderRadius: "999px" }} />
         </Box>
-      </Paper>
-
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(5, minmax(0, 1fr))" },
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        {[1, 2, 3, 4, 5].map((item) => (
-          <Skeleton key={item} variant="rounded" height={96} sx={{ borderRadius: "12px" }} />
-        ))}
-      </Box>
-
-      <TableContainer component={Paper} sx={{ borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-        <Table>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: editorial.paperSoft }}>
-              {["", "Reference", "Applicant", "Role", "Status", "Submitted", "Actions"].map((h) => (
-                <TableCell key={h || "select"} sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>{h}</TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {[1, 2, 3, 4, 5].map((item) => (
-              <TableRow key={item}>
-                <TableCell padding="checkbox"><Skeleton variant="rounded" width={22} height={22} sx={{ borderRadius: "4px" }} /></TableCell>
-                <TableCell><Skeleton variant="text" width={110} /></TableCell>
-                <TableCell>
-                  <Skeleton variant="text" width={130} />
-                  <Skeleton variant="text" width={160} height={14} />
-                </TableCell>
-                <TableCell><Skeleton variant="text" width={120} /></TableCell>
-                <TableCell><Skeleton variant="rounded" width={84} height={24} sx={{ borderRadius: "12px" }} /></TableCell>
-                <TableCell><Skeleton variant="text" width={100} /></TableCell>
-                <TableCell><Skeleton variant="rounded" width={120} height={34} sx={{ borderRadius: "12px" }} /></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </>
+      ))}
+    </Card>
   );
 }
 
@@ -302,6 +281,8 @@ export default function AdminJobsPage() {
     });
   }, [instance, accounts]);
 
+  // The status pills show a count for every stage at once, so the fetch no
+  // longer narrows by status: the list below is filtered by status on the page.
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -309,7 +290,7 @@ export default function AdminJobsPage() {
       const range = getTimelineRange(timelineFilter, customFrom, customTo);
       const accessToken = await getAdminAccessToken();
       const data = await fetchApplications({ accessToken }, {
-        status: statusFilter,
+        status: "",
         submittedFrom: range.from,
         submittedTo: range.to,
         limit: 999,
@@ -321,7 +302,7 @@ export default function AdminJobsPage() {
     } finally {
       setLoading(false);
     }
-  }, [timelineFilter, statusFilter, customFrom, customTo, getAdminAccessToken]);
+  }, [timelineFilter, customFrom, customTo, getAdminAccessToken]);
 
   useEffect(() => {
     setPage(0);
@@ -331,7 +312,7 @@ export default function AdminJobsPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [searchText, sortBy]);
+  }, [searchText, sortBy, statusFilter]);
 
   const handleStatusChange = useCallback(
     async (applicationId: string, newStatus: string) => {
@@ -357,16 +338,17 @@ export default function AdminJobsPage() {
     [getAdminAccessToken],
   );
 
-  const filteredApplications = useMemo(() => {
+  // Everything except the status stage: the pills count from this, so each
+  // pill tells you what picking it would show.
+  const scopedApplications = (() => {
     const range = getTimelineRange(timelineFilter, customFrom, customTo);
     const fromTime = range.from ? new Date(range.from).getTime() : null;
     const toTime = range.to ? new Date(range.to).getTime() : null;
     const q = searchText.trim().toLowerCase();
-    const result = applications.filter((app) => {
+    return applications.filter((app) => {
       const appTime = new Date(app.submittedAt).getTime();
       if (fromTime !== null && (!Number.isFinite(appTime) || appTime < fromTime)) return false;
       if (toTime !== null && (!Number.isFinite(appTime) || appTime > toTime)) return false;
-      if (statusFilter && app.status !== statusFilter) return false;
       if (q) {
         const haystack = [
           app.applicantName,
@@ -380,6 +362,12 @@ export default function AdminJobsPage() {
       }
       return true;
     });
+  })();
+
+  const filteredApplications = useMemo(() => {
+    const result = statusFilter
+      ? scopedApplications.filter((app) => app.status === statusFilter)
+      : [...scopedApplications];
 
     result.sort((a, b) => {
       switch (sortBy) {
@@ -397,18 +385,13 @@ export default function AdminJobsPage() {
     });
 
     return result;
-  }, [applications, timelineFilter, customFrom, customTo, statusFilter, searchText, sortBy]);
+  }, [scopedApplications, statusFilter, sortBy]);
 
   const pagedApplications = filteredApplications.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
   const allSelected = pagedApplications.length > 0 && pagedApplications.every((app) => selectedIds.has(app.id));
-  const advancedFilterCount = [
-    timelineFilter !== "all",
-    Boolean(statusFilter),
-    sortBy !== "newest",
-  ].filter(Boolean).length;
   const hasFilters = !!searchText.trim() || !!statusFilter || timelineFilter !== "all";
   const hasSearchOptions = hasFilters || sortBy !== "newest";
   const selectedSupportingDocuments = selectedApp?.supportingDocuments?.length
@@ -470,65 +453,45 @@ export default function AdminJobsPage() {
   };
 
   const stats = {
-    total: filteredApplications.length,
-    new: filteredApplications.filter((a) => a.status === "New").length,
-    kiv: filteredApplications.filter((a) => a.status === "KIV").length,
-    shortlisted: filteredApplications.filter((a) => a.status === "Shortlisted").length,
-    notSuitable: filteredApplications.filter((a) => a.status === "Not Suitable").length,
+    total: scopedApplications.length,
+    new: scopedApplications.filter((a) => a.status === "New").length,
+    kiv: scopedApplications.filter((a) => a.status === "KIV").length,
+    shortlisted: scopedApplications.filter((a) => a.status === "Shortlisted").length,
+    notSuitable: scopedApplications.filter((a) => a.status === "Not Suitable").length,
   };
 
+  const clearAll = () => {
+    setTimelineFilter("all");
+    setStatusFilter("");
+    setSearchText("");
+    setSortBy("newest");
+    setCustomFrom("");
+    setCustomTo("");
+    setSelectedIds(new Set());
+  };
+
+  const timelineLabel = TIMELINE_OPTIONS.find((opt) => opt.value === timelineFilter)?.label ?? "";
+
   return (
-    <Box sx={careerPageSx}>
-      <CareerPortalHeader
-        title="Career Applications"
-        subtitle="Review internal advancement submissions and update applicant status."
-        activeSection="applications"
-        isAdmin
-        backPath="/admin/dashboard"
-        backLabel="Back to forms dashboard"
-        maxWidth="xl"
-        actions={(
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={load}
-            disabled={loading}
-            sx={{
-              ...careerActionButtonSx,
-              whiteSpace: "nowrap",
-              borderColor: editorial.pmwBlueSoft,
-              color: editorial.pmwBlueDark,
-            }}
-          >
-            Refresh
-          </Button>
-        )}
+    <Box sx={{ pb: 4 }}>
+      <PageHeader
+        title="Applications"
+        description="Review internal advancement submissions and update applicant status."
+        secondary={[{ label: "Refresh", icon: <Refresh />, onClick: () => void load(), disabled: loading }]}
       />
 
-      <Box sx={careerContentSx}>
-        {/* Filter bar */}
-        {!loading && (
-        <Paper
-          sx={{
-            ...careerToolbarSx,
-            mb: 3,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, width: "100%", flexWrap: "wrap" }}>
+      {/* Search and filters */}
+      {!loading && (
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <TextField
               placeholder="Search applicant, email, role, ref..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               size="small"
-              sx={{
-                ...careerSearchFieldSx,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "12px",
-                  backgroundColor: editorial.white,
-                  fontSize: "0.845rem",
-                },
-              }}
+              sx={searchFieldSx}
               slotProps={{
+                htmlInput: { "aria-label": "Search applications" },
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
@@ -539,101 +502,63 @@ export default function AdminJobsPage() {
               }}
             />
             <Button
-              variant={showAdvancedFilters || advancedFilterCount > 0 ? "contained" : "outlined"}
+              variant="text"
               startIcon={<FilterIcon />}
               onClick={() => setShowAdvancedFilters((open) => !open)}
-              sx={{
-                ...careerActionButtonSx,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                width: { xs: "100%", sm: "auto" },
-              }}
+              aria-expanded={showAdvancedFilters}
+              sx={{ backgroundColor: showAdvancedFilters ? editorial.blueWash : editorial.panel, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)", whiteSpace: "nowrap" }}
             >
-              Advanced{advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ""}
+              Dates and sorting
             </Button>
-            {hasSearchOptions && (
-              <Button
-                size="small"
-                startIcon={<Close />}
-                onClick={() => {
-                  setTimelineFilter("all");
-                  setStatusFilter("");
-                  setSearchText("");
-                  setSortBy("newest");
-                  setCustomFrom("");
-                  setCustomTo("");
-                  setSelectedIds(new Set());
-                }}
-                sx={{ ...careerActionButtonSx, color: editorial.muted, fontWeight: 700, width: { xs: "100%", sm: "auto" } }}
-              >
-                Clear
-              </Button>
-            )}
-            {(filteredApplications.length < applications.length || hasFilters) && (
+            {timelineFilter !== "all" && (
               <Chip
-                label={`${filteredApplications.length} of ${applications.length}`}
-                size="small"
-                sx={{
-                  backgroundColor: editorial.blueWash,
-                  color: editorial.pmwBlueDark,
-                  fontWeight: 700,
-                  fontSize: "0.78rem",
-                  borderRadius: "12px",
-                  fontVariantNumeric: "tabular-nums",
-                }}
+                icon={<CheckRounded />}
+                label={timelineLabel}
+                color="primary"
+                onDelete={() => { setTimelineFilter("all"); setSelectedIds(new Set()); }}
+                deleteIcon={<Close aria-label={`Remove the ${timelineLabel} filter`} />}
               />
+            )}
+            {sortBy !== "newest" && (
+              <Chip
+                icon={<CheckRounded />}
+                label={SORT_LABELS[sortBy]}
+                color="primary"
+                onDelete={() => setSortBy("newest")}
+                deleteIcon={<Close aria-label="Go back to newest first" />}
+              />
+            )}
+            {hasSearchOptions && (
+              <Button size="small" startIcon={<Close />} onClick={clearAll} sx={{ color: editorial.muted }}>
+                Clear all
+              </Button>
             )}
           </Box>
 
           {showAdvancedFilters && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, width: "100%" }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <FilterIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />
-                <Typography variant="body2" sx={{ fontWeight: 700, color: editorial.ink, fontSize: "0.845rem" }}>
-                  Timeline
-                </Typography>
+            <Card pad="tight" sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Typography sx={{ ...siType.cardTitle, color: editorial.ink }}>Submitted</Typography>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                {TIMELINE_OPTIONS.map((opt) => {
+                  const on = timelineFilter === opt.value;
+                  return (
+                    <Chip
+                      key={opt.value}
+                      label={opt.label}
+                      clickable
+                      icon={on ? <CheckRounded /> : undefined}
+                      color={on ? "primary" : "default"}
+                      variant={on ? "filled" : "outlined"}
+                      onClick={() => { setTimelineFilter(opt.value); setSelectedIds(new Set()); }}
+                    />
+                  );
+                })}
               </Box>
-              <ToggleButtonGroup
-                value={timelineFilter}
-                exclusive
-                onChange={(_, val) => { if (val !== null) { setTimelineFilter(val); setSelectedIds(new Set()); } }}
-                size="small"
-                sx={{
-                  gap: 0.5,
-                  flexWrap: "wrap",
-                  "& .MuiToggleButton-root": {
-                    borderRadius: "8px !important",
-                    border: `1px solid ${editorial.border}`,
-                    px: 1.5,
-                    py: 0.5,
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    color: editorial.muted,
-                    textTransform: "none",
-                    "&:not(:first-of-type)": {
-                      borderLeft: "1px solid #E5E7EB",
-                      marginLeft: 0,
-                    },
-                    "&.Mui-selected": {
-                      backgroundColor: editorial.blueWash,
-                      color: editorial.pmwBlueDark,
-                      borderColor: editorial.pmwBlue,
-                    },
-                  },
-                }}
-              >
-                {TIMELINE_OPTIONS.map((opt) => (
-                  <ToggleButton key={opt.value} value={opt.value}>
-                    {opt.icon && <Box sx={{ mr: 0.5, display: "flex" }}>{opt.icon}</Box>}
-                    {opt.label}
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
 
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: timelineFilter === "custom" ? "repeat(4, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))" },
+                  gridTemplateColumns: { xs: "1fr", sm: timelineFilter === "custom" ? "repeat(3, minmax(0, 1fr))" : "minmax(0, 320px)" },
                   gap: 1.25,
                   width: "100%",
                 }}
@@ -647,10 +572,7 @@ export default function AdminJobsPage() {
                       onChange={(e) => setCustomFrom(e.target.value)}
                       size="small"
                       fullWidth
-                      slotProps={{
-                        inputLabel: { shrink: true },
-                        input: { sx: { borderRadius: "12px", fontSize: "0.78rem" } },
-                      }}
+                      slotProps={{ inputLabel: { shrink: true } }}
                     />
                     <TextField
                       type="date"
@@ -659,28 +581,10 @@ export default function AdminJobsPage() {
                       onChange={(e) => setCustomTo(e.target.value)}
                       size="small"
                       fullWidth
-                      slotProps={{
-                        inputLabel: { shrink: true },
-                        input: { sx: { borderRadius: "12px", fontSize: "0.78rem" } },
-                      }}
+                      slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </>
                 )}
-
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={statusFilter}
-                    label="Status"
-                    onChange={(e) => { setStatusFilter(e.target.value); setSelectedIds(new Set()); }}
-                    sx={{ borderRadius: "12px", fontSize: "0.78rem" }}
-                  >
-                    <MenuItem value="">All statuses</MenuItem>
-                    {STATUS_OPTIONS.map((opt) => (
-                      <MenuItem key={opt} value={opt}>{opt}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
 
                 <FormControl size="small" fullWidth>
                   <InputLabel>Sort</InputLabel>
@@ -688,249 +592,208 @@ export default function AdminJobsPage() {
                     value={sortBy}
                     label="Sort"
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    sx={{ borderRadius: "12px", fontSize: "0.78rem" }}
                   >
-                    <MenuItem value="newest">Newest first</MenuItem>
-                    <MenuItem value="oldest">Oldest first</MenuItem>
-                    <MenuItem value="applicant">Applicant A-Z</MenuItem>
-                    <MenuItem value="role">Role A-Z</MenuItem>
-                    <MenuItem value="status">Status A-Z</MenuItem>
+                    {(Object.keys(SORT_LABELS) as SortOption[]).map((key) => (
+                      <MenuItem key={key} value={key}>{SORT_LABELS[key]}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Box>
-            </Box>
+            </Card>
           )}
-        </Paper>
-        )}
+        </Box>
+      )}
 
-        {/* Stats Row */}
-        {!loading && !error && (
+      {/* Pipeline stages: pick one to filter the list */}
+      {!loading && !error && (
+        <PillTabs
+          aria-label="Application status"
+          value={statusFilter || "all"}
+          onChange={(value) => { setStatusFilter(value === "all" ? "" : value); setSelectedIds(new Set()); }}
+          tabs={[
+            { value: "all", label: "All", count: stats.total },
+            { value: "New", label: "New", count: stats.new },
+            { value: "KIV", label: "KIV", count: stats.kiv },
+            { value: "Shortlisted", label: "Shortlisted", count: stats.shortlisted },
+            { value: "Not Suitable", label: "Not suitable", count: stats.notSuitable },
+          ]}
+        />
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <AdminApplicationsLoadingSkeleton />
+      )}
+
+      {/* Error */}
+      {!loading && error && (
+        <FailurePanel what="applications" error={errorCause} onRetry={load} />
+      )}
+
+      {/* Empty */}
+      {!loading && !error && filteredApplications.length === 0 && (
+        <CareerEmptyState
+          icon={<People />}
+          title={applications.length === 0 ? "No applications yet" : "No results match"}
+          description={
+            applications.length === 0
+              ? "Applications from internal advancement openings will appear here."
+              : "Try adjusting your search, dates, or status."
+          }
+        />
+      )}
+
+      {/* Delete bar */}
+      {selectedIds.size > 0 && (
         <Box
           sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(5, minmax(0, 1fr))" },
-            gap: 2,
-            mb: 3,
+            mb: 2,
+            p: 1.5,
+            px: 2,
+            borderRadius: `${si.radius}px`,
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1.5,
+            backgroundColor: editorial.errorSoft,
           }}
         >
-          {[
-            { label: "Total Applications", value: stats.total, icon: <People />, tone: "blue" as const },
-            { label: "New", value: stats.new, icon: <NewReleases />, tone: "blue" as const },
-            { label: "KIV", value: stats.kiv, icon: <AccessTime />, tone: "warning" as const },
-            { label: "Shortlisted", value: stats.shortlisted, icon: <CheckCircle />, tone: "success" as const },
-            { label: "Not Suitable", value: stats.notSuitable, icon: <People />, tone: "neutral" as const },
-          ].map((stat) => (
-            <CareerMetricPill
-              key={stat.label}
-              icon={stat.icon}
-              label={stat.label}
-              value={stat.value}
-              tone={stat.tone}
-            />
-          ))}
+          <Typography sx={{ ...siType.body, color: editorial.error, fontWeight: 600, flex: 1 }}>
+            {selectedIds.size} application{selectedIds.size !== 1 ? "s" : ""} selected
+          </Typography>
+          <Button
+            variant="contained"
+            color="error"
+            size="small"
+            startIcon={<DeleteIcon />}
+            onClick={() => setConfirmDeleteOpen(true)}
+          >
+            Delete
+          </Button>
+          <Button size="small" onClick={() => setSelectedIds(new Set())} sx={{ color: editorial.muted }}>
+            Clear
+          </Button>
         </Box>
-        )}
+      )}
 
-        {/* Loading */}
-        {loading && (
-          <AdminApplicationsLoadingSkeleton />
-        )}
-
-        {/* Error */}
-        {!loading && error && (
-          <FailurePanel what="applications" error={errorCause} onRetry={load} />
-        )}
-
-        {/* Empty */}
-        {!loading && !error && filteredApplications.length === 0 && (
-          <CareerEmptyState
-            icon={<People />}
-            title={applications.length === 0 ? "No applications yet" : "No results match"}
-            description={
-              applications.length === 0
-                ? "Applications from internal advancement openings will appear here."
-                : "Try adjusting your search, timeline, status, or sort filter."
-            }
-          />
-        )}
-
-        {/* Delete bar */}
-        {selectedIds.size > 0 && (
-          <Paper
-            sx={{
-              mb: 2,
-              p: 1.5,
-              borderRadius: "12px",
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              backgroundColor: editorial.errorSoft,
-              border: "1px solid #FECACA",
-            }}
-          >
-            <Typography variant="body2" sx={{ color: editorial.error, fontWeight: 600, flex: 1 }}>
-              {selectedIds.size} application{selectedIds.size !== 1 ? "s" : ""} selected
-            </Typography>
-            <Button
-              variant="contained"
-              color="error"
-              size="small"
-              startIcon={<DeleteIcon />}
-              onClick={() => setConfirmDeleteOpen(true)}
-              sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 600 }}
-            >
-              Delete
-            </Button>
-            <Button
-              size="small"
-              onClick={() => setSelectedIds(new Set())}
-              sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted, fontWeight: 500 }}
-            >
-              Clear
-            </Button>
-          </Paper>
-        )}
-
-        {/* Table */}
-        {!loading && !error && filteredApplications.length > 0 && (
-          <TableContainer
-            component={Paper}
-            sx={{
-              ...careerTableShellSx,
-            }}
-          >
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: editorial.blueSoft }}>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={allSelected}
-                      indeterminate={pagedApplications.some((app) => selectedIds.has(app.id)) && !allSelected}
-                      onChange={toggleSelectAll}
-                      sx={{ color: editorial.border, "&.Mui-checked": { color: editorial.pmwBlue } }}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
-                    Reference
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
-                    Applicant
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
-                    Role
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
-                    Status
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
-                    Submitted
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: editorial.muted, fontSize: "0.78rem", textTransform: "uppercase" }}>
-                    Actions
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {pagedApplications.map((app) => (
-                  <TableRow
-                    key={app.id}
-                    hover
-                    selected={selectedIds.has(app.id)}
-                    sx={{ cursor: "pointer", "&:hover": { backgroundColor: editorial.blueSoft } }}
-                    onClick={() => setSelectedApp(app)}
-                  >
-                    <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedIds.has(app.id)}
-                        onChange={() => toggleSelect(app.id)}
-                        sx={{ color: editorial.border, "&.Mui-checked": { color: editorial.pmwBlue } }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: editorial.pmwBlue, fontSize: "0.78rem" }}>
-                        {app.submissionRef}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: editorial.ink, fontSize: "0.845rem" }}>
-                        {app.applicantName}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: editorial.softMuted }}>
-                        {app.applicantEmail}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ color: editorial.ink, fontSize: "0.845rem" }}>
-                        {app.jobTitle}
-                      </Typography>
-                      {app.company && (
-                        <Typography variant="caption" sx={{ color: editorial.muted, display: "block" }}>
-                          {app.company}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <StatusChip status={app.status} />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ color: editorial.muted, fontSize: "0.78rem" }}>
-                        {formatDate(app.submittedAt)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Box sx={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-                        <Select
-                          value={app.status}
-                          size="small"
-                          disabled={updatingStatusId === app.id}
-                          onChange={(e) => handleStatusChange(app.id, e.target.value)}
-                          sx={{
-                            borderRadius: "12px",
-                            fontSize: "0.78rem",
-                            minWidth: 120,
-                            opacity: updatingStatusId === app.id ? 0.6 : 1,
-                            "& .MuiOutlinedInput-notchedOutline": { borderColor: editorial.border },
-                          }}
-                        >
-                          {STATUS_OPTIONS.map((opt) => (
-                            <MenuItem key={opt} value={opt} sx={{ fontSize: "0.845rem" }}>
-                              {opt}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        {updatingStatusId === app.id && (
-                          <CircularProgress
-                            size={16}
-                            sx={{
-                              position: "absolute",
-                              right: 28,
-                              color: editorial.pmwBlue,
-                              pointerEvents: "none",
-                            }}
-                          />
-                        )}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <TablePagination
-              component="div"
-              count={filteredApplications.length}
-              page={page}
-              onPageChange={(_, nextPage) => setPage(nextPage)}
-              rowsPerPage={rowsPerPage}
-              labelRowsPerPage="Rows"
-              sx={paginationSx}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(Number.parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[25, 50, 100]}
+      {/* List */}
+      {!loading && !error && filteredApplications.length > 0 && (
+        <Card pad="none" clip>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.5, pt: 1 }}>
+            <Checkbox
+              checked={allSelected}
+              indeterminate={pagedApplications.some((app) => selectedIds.has(app.id)) && !allSelected}
+              onChange={toggleSelectAll}
+              slotProps={{ input: { "aria-label": "Select every application on this page" } }}
             />
-          </TableContainer>
-        )}
+            <Typography sx={{ ...siType.subtext, color: editorial.muted }}>
+              {filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""}
+              {filteredApplications.length < applications.length ? ` of ${applications.length}` : ""}
+            </Typography>
+          </Box>
+          <Box sx={{ px: 1, pb: 1 }}>
+            {pagedApplications.map((app) => (
+              <Box
+                key={app.id}
+                onClick={() => setSelectedApp(app)}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 1.5,
+                  px: 1,
+                  py: 1.25,
+                  borderRadius: `${si.radius}px`,
+                  cursor: "pointer",
+                  backgroundColor: selectedIds.has(app.id) ? editorial.blueWash : "transparent",
+                  "&:hover": { backgroundColor: editorial.blueSoft },
+                }}
+              >
+                <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex" }}>
+                  <Checkbox
+                    checked={selectedIds.has(app.id)}
+                    onChange={() => toggleSelect(app.id)}
+                    slotProps={{ input: { "aria-label": `Select ${app.applicantName}` } }}
+                  />
+                </Box>
+                <Box
+                  aria-hidden
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    display: "grid",
+                    placeItems: "center",
+                    backgroundColor: editorial.blueWash,
+                    color: editorial.navyDeep,
+                    ...siType.subtext,
+                    fontWeight: 700,
+                  }}
+                >
+                  {initialsOf(app.applicantName)}
+                </Box>
+                <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
+                  <Typography noWrap sx={{ ...siType.cardTitle, color: editorial.ink }}>
+                    {app.applicantName} <Box component="span" sx={{ color: editorial.muted, fontWeight: 400 }}>· {app.jobTitle}</Box>
+                  </Typography>
+                  <Typography noWrap sx={{ ...siType.subtext, color: editorial.muted }}>
+                    {app.applicantEmail}
+                    {app.company ? ` · ${app.company}` : ""} · {app.submissionRef} · {formatDate(app.submittedAt)}
+                  </Typography>
+                </Box>
+                <StatusChip status={app.status} />
+                <Box
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+                >
+                  <Select
+                    value={app.status}
+                    size="small"
+                    disabled={updatingStatusId === app.id}
+                    onChange={(e) => handleStatusChange(app.id, e.target.value)}
+                    inputProps={{ "aria-label": `Change status for ${app.applicantName}` }}
+                    sx={{
+                      borderRadius: `${si.radiusPill}px`,
+                      ...siType.subtext,
+                      minWidth: 132,
+                      backgroundColor: editorial.skySoft,
+                      opacity: updatingStatusId === app.id ? 0.6 : 1,
+                      "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <MenuItem key={opt} value={opt}>
+                        {STATUS_LABELS[opt]}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {updatingStatusId === app.id && (
+                    <CircularProgress
+                      size={16}
+                      sx={{ position: "absolute", right: 30, color: editorial.pmwBlue, pointerEvents: "none" }}
+                    />
+                  )}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+          <TablePagination
+            component="div"
+            count={filteredApplications.length}
+            page={page}
+            onPageChange={(_, nextPage) => setPage(nextPage)}
+            rowsPerPage={rowsPerPage}
+            labelRowsPerPage="Rows"
+            sx={paginationSx}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(Number.parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            rowsPerPageOptions={[25, 50, 100]}
+          />
+        </Card>
+      )}
 
         {/* Detail Dialog */}
         <Dialog
@@ -940,7 +803,7 @@ export default function AdminJobsPage() {
           fullWidth
           slotProps={{
             paper: {
-              sx: { borderRadius: "12px", p: 1 },
+              sx: { borderRadius: `${si.radiusSheet}px`, p: 1 },
             },
           }}
         >
@@ -950,7 +813,7 @@ export default function AdminJobsPage() {
                 <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
                   Application Details
                 </Typography>
-                <IconButton onClick={() => setSelectedApp(null)} size="small">
+                <IconButton onClick={() => setSelectedApp(null)} size="small" aria-label="Close">
                   <Close />
                 </IconButton>
               </DialogTitle>
@@ -1019,9 +882,9 @@ export default function AdminJobsPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "12px",
+                              px: 1.5, py: 0.75, borderRadius: "999px",
                               color: editorial.pmwBlue, fontWeight: 600, fontSize: "0.845rem",
-                              backgroundColor: editorial.blueSoft, border: "1px solid rgba(0,120,212,0.15)",
+                              backgroundColor: editorial.blueSoft, 
                               textDecoration: "none", width: "fit-content",
                               "&:hover": { backgroundColor: editorial.blueWash },
                             }}
@@ -1039,9 +902,9 @@ export default function AdminJobsPage() {
                             rel="noopener noreferrer"
                             sx={{
                               display: "inline-flex", alignItems: "center", gap: 1,
-                              px: 1.5, py: 0.75, borderRadius: "12px",
+                              px: 1.5, py: 0.75, borderRadius: "999px",
                               color: editorial.pmwBlue, fontWeight: 600, fontSize: "0.845rem",
-                              backgroundColor: editorial.blueSoft, border: "1px solid rgba(0,120,212,0.15)",
+                              backgroundColor: editorial.blueSoft, 
                               textDecoration: "none", width: "fit-content",
                               "&:hover": { backgroundColor: editorial.blueWash },
                             }}
@@ -1079,7 +942,7 @@ export default function AdminJobsPage() {
                 <Button
                   variant="outlined"
                   onClick={() => setSelectedApp(null)}
-                  sx={{ borderRadius: "12px", textTransform: "none", borderColor: editorial.border, color: editorial.muted }}
+                  sx={{ color: editorial.muted }}
                 >
                   Close
                 </Button>
@@ -1089,7 +952,7 @@ export default function AdminJobsPage() {
         </Dialog>
 
         {/* Delete confirmation dialog */}
-        <Dialog open={confirmDeleteOpen} onClose={() => !deleting && setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
+        <Dialog open={confirmDeleteOpen} onClose={() => !deleting && setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: `${si.radiusSheet}px` } } }}>
           <DialogTitle sx={{ pb: 1 }}>
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
               Delete Applications
@@ -1101,14 +964,14 @@ export default function AdminJobsPage() {
             </Typography>
             {deleting && <LinearProgress sx={{ mt: 2, borderRadius: "4px" }} />}
             {deleteResult && (
-              <Alert severity="info" sx={{ mt: 2, borderRadius: "12px" }}>{deleteResult}</Alert>
+              <Alert severity="info" sx={{ mt: 2, borderRadius: `${si.radius}px` }}>{deleteResult}</Alert>
             )}
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
             <Button
               onClick={() => setConfirmDeleteOpen(false)}
               disabled={deleting}
-              sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}
+              sx={{ color: editorial.muted }}
             >
               Cancel
             </Button>
@@ -1117,7 +980,7 @@ export default function AdminJobsPage() {
               color="error"
               onClick={handleDelete}
               disabled={deleting}
-              sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 600 }}
+              
             >
               {deleting ? "Deleting..." : `Delete ${selectedIds.size}`}
             </Button>
@@ -1136,10 +999,10 @@ export default function AdminJobsPage() {
               severity={snackbar.severity}
               onClose={() => setSnackbar(null)}
               sx={{
-                borderRadius: "12px",
+                borderRadius: `${si.radius}px`,
                 fontWeight: 700,
                 fontSize: "0.875rem",
-                boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+                boxShadow: si.shadowRaised,
                 color: editorial.ink,
                 "& .MuiAlert-icon": { fontSize: 22, alignSelf: "center" },
               }}
@@ -1148,7 +1011,6 @@ export default function AdminJobsPage() {
             </Alert>
           ) : undefined}
         </Snackbar>
-      </Box>
     </Box>
   );
 }

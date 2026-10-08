@@ -1,4 +1,5 @@
 import { getPdpaContent, PDPA_LOCALES, type PdpaLocale } from "../utils/pdpa";
+import { editorial } from "../theme/editorial";
 
 type Props = {
   locale: PdpaLocale;
@@ -9,47 +10,61 @@ type Props = {
 };
 
 /**
- * Inline "English | Bahasa Malaysia" switch for the consent wording. Kept as
- * plain elements with inherited typography so it can sit inside the MUI form
- * pages and the native-renderer markup alike.
+ * Inline "English | Bahasa Malaysia" switch for the consent wording, drawn as a
+ * small pill with the chosen language filled. Kept as plain elements with
+ * inherited typography so it can sit inside the MUI form pages and the
+ * native-renderer markup alike.
  *
  * Act 709 s.7(3) requires the notice in both languages, so the person must be
  * able to switch at the point of consent, not only on the notice page.
  */
 export default function PdpaLanguageToggle({ locale, onChange, mutedColor, color }: Props) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.78rem" }}>
-      {PDPA_LOCALES.map((option, index) => {
+    <span
+      role="group"
+      aria-label="Notice language / Bahasa notis"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 2,
+        padding: 2,
+        borderRadius: 999,
+        backgroundColor: editorial.skySoft,
+        fontSize: "0.78rem",
+        verticalAlign: "middle",
+      }}
+    >
+      {PDPA_LOCALES.map((option) => {
         const active = option === locale;
         return (
-          <span key={option} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            {index > 0 && <span style={{ color: mutedColor, opacity: 0.5 }}>|</span>}
-            <button
-              type="button"
-              lang={option}
-              aria-pressed={active}
-              onClick={(e) => {
-                // These sit inside <label> elements on some forms; without this
-                // the click would also toggle the consent checkbox.
-                e.preventDefault();
-                e.stopPropagation();
-                onChange(option);
-              }}
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                font: "inherit",
-                fontSize: "0.78rem",
-                fontWeight: active ? 800 : 500,
-                color: active ? color : mutedColor,
-                textDecoration: active ? "underline" : "none",
-              }}
-            >
-              {getPdpaContent(option).ui.languageName}
-            </button>
-          </span>
+          <button
+            key={option}
+            type="button"
+            lang={option}
+            aria-pressed={active}
+            onClick={(e) => {
+              // These sit inside <label> elements on some forms; without this
+              // the click would also toggle the consent checkbox.
+              e.preventDefault();
+              e.stopPropagation();
+              onChange(option);
+            }}
+            style={{
+              border: "none",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: "0.78rem",
+              fontWeight: active ? 700 : 500,
+              minHeight: 28,
+              padding: "0 12px",
+              borderRadius: 999,
+              backgroundColor: active ? editorial.white : "transparent",
+              boxShadow: active ? "0 1px 2px rgba(15, 23, 42, 0.12)" : "none",
+              color: active ? color ?? editorial.ink : mutedColor ?? editorial.muted,
+            }}
+          >
+            {getPdpaContent(option).ui.languageName}
+          </button>
         );
       })}
     </span>

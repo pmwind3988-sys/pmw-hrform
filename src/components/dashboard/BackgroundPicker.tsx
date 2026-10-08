@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { editorial } from "../../theme/editorial";
+import { editorial, si, siFocusRing, siType } from "../../theme/editorial";
 import {
   Alert,
   Box,
@@ -56,7 +56,7 @@ function resolveInitialId(setting: DashboardBackgroundSetting): string {
 export function BackgroundErrorNote({ error }: { error: string }) {
   const copy = describeFailure("your saved background", { error });
   return (
-    <Box role="status" sx={{ borderRadius: "12px", px: 2, py: 1.5, backgroundColor: editorial.appSurface, border: `1px solid ${editorial.border}` }}>
+    <Box role="status" sx={{ borderRadius: `${si.radiusSm}px`, px: 2, py: 1.5, backgroundColor: editorial.appSurface, border: `1px solid ${editorial.border}` }}>
       <Typography sx={{ fontWeight: 700, color: editorial.ink, fontSize: "0.9rem" }}>{copy.title}</Typography>
       <Typography sx={{ color: editorial.muted, fontSize: "0.845rem", mt: 0.25 }}>The plain background is showing instead.</Typography>
       {copy.code && (
@@ -122,22 +122,22 @@ export default function BackgroundPicker({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: `${si.radiusSheet}px` } } }}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, pb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0 }}>
           <ImageSearch sx={{ color: editorial.pmwBlue }} />
-          <Typography variant="h6" sx={{ fontWeight: 700, color: editorial.ink }}>
-            Dashboard Background
+          <Typography component="span" sx={{ ...siType.sectionTitle, color: editorial.ink }}>
+            Dashboard background
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small" aria-label="Close background picker">
+        <IconButton onClick={onClose} aria-label="Close background picker">
           <Close />
         </IconButton>
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
         {validationError ? (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>
+          <Alert severity="error" sx={{ mb: 2, borderRadius: `${si.radiusSm}px` }}>
             {validationError}
           </Alert>
         ) : error ? (
@@ -148,7 +148,11 @@ export default function BackgroundPicker({
 
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 260px" }, gap: 2.5 }}>
           <Box>
-            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(148px, 1fr))", gap: 1.5 }}>
+            <Box
+              role="group"
+              aria-label="Backgrounds"
+              sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))", gap: 1.5 }}
+            >
               {DASHBOARD_BACKGROUNDS.map((background) => {
                 const selected = selectedId === background.id;
                 return (
@@ -156,50 +160,58 @@ export default function BackgroundPicker({
                     key={background.id}
                     component="button"
                     type="button"
+                    aria-pressed={selected}
                     onClick={() => {
                       setSelectedId(background.id);
                       setValidationError("");
                     }}
                     sx={{
                       appearance: "none",
-                      border: selected ? "2px solid #0078D4" : "1px solid rgba(17,24,39,0.12)",
-                      borderRadius: "12px",
-                      background: "#fff",
+                      border: 0,
+                      background: "none",
                       cursor: "pointer",
-                      p: 0,
-                      overflow: "hidden",
-                      textAlign: "left",
-                      transition: "border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease",
-                      boxShadow: selected ? "0 0 0 3px rgba(0,120,212,0.14)" : "0 1px 3px rgba(17,24,39,0.08)",
-                      "&:hover": {
-                        borderColor: editorial.pmwBlue,
-                        transform: "translateY(-1px)",
-                      },
+                      p: 0.5,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 0.75,
+                      borderRadius: `${si.radiusSm}px`,
+                      font: "inherit",
+                      "&:focus-visible": siFocusRing,
                     }}
                   >
-                    <Box sx={{ position: "relative", height: 90, background: buildDashboardBackgroundDefCss(background, imageOpacity, true) }}>
+                    <Box
+                      aria-hidden
+                      sx={{
+                        position: "relative",
+                        width: 64,
+                        height: 64,
+                        borderRadius: "50%",
+                        background: buildDashboardBackgroundDefCss(background, imageOpacity, true),
+                        boxShadow: selected
+                          ? `0 0 0 3px ${editorial.white}, 0 0 0 5px ${editorial.navy}`
+                          : `inset 0 0 0 1px ${editorial.border}`,
+                        transition: "box-shadow 0.18s ease, transform 0.18s ease",
+                        ".MuiBox-root:hover > &": { transform: "scale(1.05)" },
+                      }}
+                    >
                       {selected && (
-                        <Box sx={{ position: "absolute", top: 8, right: 8, width: 22, height: 22, borderRadius: "50%", backgroundColor: editorial.pmwBlue, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Check sx={{ fontSize: 15, color: "#fff" }} />
+                        <Box sx={{ position: "absolute", right: -2, bottom: -2, width: 22, height: 22, borderRadius: "50%", backgroundColor: editorial.navy, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Check sx={{ fontSize: 15, color: editorial.white }} />
                         </Box>
                       )}
                     </Box>
-                    <Box sx={{ px: 1.25, py: 1 }}>
-                      <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, lineHeight: 1.2 }}>
-                        {background.label}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.25 }}>
-                        {background.source || background.category}
-                      </Typography>
-                    </Box>
+                    <Typography sx={{ ...siType.subtext, color: selected ? editorial.ink : editorial.muted, fontWeight: selected ? 700 : 500, textAlign: "center" }}>
+                      {background.label}
+                    </Typography>
                   </Box>
                 );
               })}
             </Box>
 
-            <Box sx={{ mt: 2.5, p: 2, border: selectedId === "custom" ? "2px solid #0078D4" : "1px solid rgba(17,24,39,0.12)", borderRadius: "12px", backgroundColor: "#fff" }}>
-              <Typography variant="subtitle2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
-                Custom Image
+            <Box sx={{ mt: 2.5, p: 2, borderRadius: `${si.radius}px`, backgroundColor: selectedId === "custom" ? editorial.sky : editorial.skySoft }}>
+              <Typography component="h3" sx={{ ...siType.cardTitle, color: editorial.ink, mb: 1 }}>
+                Custom image
               </Typography>
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr auto" }, gap: 1 }}>
                 <TextField
@@ -215,19 +227,21 @@ export default function BackgroundPicker({
                     if (event.key === "Enter") void handleSave();
                   }}
                   placeholder="https://example.com/background.jpg"
-                  slotProps={{ htmlInput: { sx: { fontSize: "0.875rem" } } }}
+                  slotProps={{ htmlInput: { "aria-label": "Custom image URL", sx: { fontSize: "0.875rem" } } }}
+                  sx={{ "& .MuiOutlinedInput-root": { backgroundColor: editorial.white } }}
                 />
                 <Button
                   variant={selectedId === "custom" ? "contained" : "outlined"}
+                  aria-pressed={selectedId === "custom"}
                   onClick={() => setSelectedId("custom")}
-                  sx={{ textTransform: "none", borderRadius: "12px", minWidth: 92 }}
+                  sx={{ minWidth: 92 }}
                 >
                   Select
                 </Button>
               </Box>
               {selectedId === "custom" && (
                 <TextField
-                  label="Image source / credit"
+                  label="Image source or credit"
                   size="small"
                   value={customSource}
                   onChange={(event) => {
@@ -236,18 +250,17 @@ export default function BackgroundPicker({
                   }}
                   placeholder="PMW owned asset, photographer, license, or source URL"
                   fullWidth
-                  sx={{ mt: 1.25 }}
-                  slotProps={{ input: { sx: { borderRadius: "12px" } } }}
+                  sx={{ mt: 1.25, "& .MuiOutlinedInput-root": { backgroundColor: editorial.white } }}
                 />
               )}
             </Box>
 
-            <Box sx={{ mt: 2, p: 2, border: "1px solid rgba(17,24,39,0.12)", borderRadius: "12px", backgroundColor: "#fff" }}>
+            <Box sx={{ mt: 2, p: 2, borderRadius: `${si.radius}px`, backgroundColor: editorial.skySoft }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, mb: 0.75 }}>
-                <Typography variant="subtitle2" sx={{ color: editorial.ink, fontWeight: 700 }}>
-                  Image Opacity
+                <Typography component="h3" sx={{ ...siType.cardTitle, color: editorial.ink }}>
+                  Image opacity
                 </Typography>
-                <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
+                <Typography sx={{ ...siType.data, color: editorial.muted }}>
                   {Math.round(imageOpacity * 100)}%
                 </Typography>
               </Box>
@@ -267,22 +280,22 @@ export default function BackgroundPicker({
           </Box>
 
           <Box>
-            <Typography variant="subtitle2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
+            <Typography component="h3" sx={{ ...siType.cardTitle, color: editorial.ink, mb: 1 }}>
               Preview
             </Typography>
             <Box
               sx={{
                 height: { xs: 180, md: 300 },
-                borderRadius: "12px",
-                border: "1px solid rgba(17,24,39,0.12)",
+                borderRadius: `${si.radius}px`,
                 background: previewCss,
+                boxShadow: `inset 0 0 0 1px ${editorial.border}`,
                 overflow: "hidden",
                 position: "relative",
               }}
             >
-              <Box sx={{ position: "absolute", left: 16, right: 16, top: 18, height: 38, borderRadius: "12px", backgroundColor: "rgba(255,255,255,0.92)", border: "1px solid rgba(17,24,39,0.08)" }} />
-              <Box sx={{ position: "absolute", left: 16, right: 16, top: 72, height: 74, borderRadius: "12px", backgroundColor: "rgba(255,255,255,0.9)", border: "1px solid rgba(17,24,39,0.08)" }} />
-              <Box sx={{ position: "absolute", left: 16, right: 16, top: 162, bottom: 18, borderRadius: "12px", backgroundColor: "rgba(255,255,255,0.88)", border: "1px solid rgba(17,24,39,0.08)" }} />
+              <Box sx={{ position: "absolute", left: 16, right: 16, top: 18, height: 38, borderRadius: `${si.radiusSm}px`, backgroundColor: "rgba(255,255,255,0.92)" }} />
+              <Box sx={{ position: "absolute", left: 16, right: 16, top: 72, height: 74, borderRadius: `${si.radiusSm}px`, backgroundColor: "rgba(255,255,255,0.9)" }} />
+              <Box sx={{ position: "absolute", left: 16, right: 16, top: 162, bottom: 18, borderRadius: `${si.radiusSm}px`, backgroundColor: "rgba(255,255,255,0.88)" }} />
               {loading && (
                 <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.52)" }}>
                   <CircularProgress size={28} />
@@ -290,11 +303,11 @@ export default function BackgroundPicker({
               )}
             </Box>
             {selectedId === "custom" && customPreviewUrl && (
-              <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 1, wordBreak: "break-all", lineHeight: 1.35 }}>
+              <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 1, wordBreak: "break-all" }}>
                 {customPreviewUrl}
               </Typography>
             )}
-            <Typography variant="caption" sx={{ color: editorial.muted, display: "block", mt: 0.75, wordBreak: "break-word", lineHeight: 1.35 }}>
+            <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 0.75, wordBreak: "break-word" }}>
               {selectedId === "custom" ? customSource.trim() : selectedBackground.source || selectedBackground.category}
             </Typography>
           </Box>
@@ -302,16 +315,17 @@ export default function BackgroundPicker({
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
-        <Button onClick={onClose} sx={{ textTransform: "none", borderRadius: "12px" }}>
+        <Button onClick={onClose}>
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={() => { void handleSave(); }}
           disabled={saving}
-          sx={{ textTransform: "none", borderRadius: "12px", minWidth: 150 }}
+          aria-label={saving ? "Saving" : undefined}
+          sx={{ minWidth: 120 }}
         >
-          {saving ? <CircularProgress size={20} color="inherit" /> : "Save Background"}
+          {saving ? <CircularProgress size={20} color="inherit" /> : "Save"}
         </Button>
       </DialogActions>
     </Dialog>

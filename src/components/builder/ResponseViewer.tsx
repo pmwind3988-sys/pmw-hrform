@@ -12,8 +12,6 @@ import { useNativeForm } from "../../native/useNativeForm";
 import "../../native/native-form.css";
 
 import DOMPurify from "dompurify";
-import LockIcon from "@mui/icons-material/Lock";
-import BlockIcon from "@mui/icons-material/Block";
 import { spGet, getFormConfigByTitle, readMatrixChildItems } from "../../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
@@ -28,6 +26,7 @@ import {
   DEFAULT_PROFILE_KEY,
   EMPTY_SUBMISSION_FILTERS,
   compareVersionsDescending,
+  hasActiveFilters,
   recordMatchesFilters,
   type FormVersionOption,
   type SubmissionFilterState,
@@ -43,8 +42,14 @@ import { resolveLifecycleStage } from "../../utils/submissionLifecycle";
 import { isTestRow } from "../../utils/testRun";
 import { isTestColumnKnownMissing, setTestColumnKnownMissing } from "../../utils/testColumnProbeCache";
 import { absoluteSharePointUrl } from "../../utils/sharePointUrl";
+import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
-import { editorial } from "../../theme/editorial";
+import { editorial, si, siType } from "../../theme/editorial";
+import Card from "../common/Card";
+import PageHeader from "../common/PageHeader";
+import PageSkeleton from "../common/PageSkeleton";
+import StatusPanel from "../common/StatusPanel";
+import { DownloadRounded } from "@mui/icons-material";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -457,77 +462,40 @@ export default function ResponseViewer() {
   };
 
   if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: C.textMuted }}>Loading submissions...</div>
-      </div>
-    );
+    return <PageSkeleton label="Loading responses" rows={6} />;
   }
 
   if (!isAuthenticated) {
-    return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 17, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
-          <div style={{ color: C.textSecond }}>You must be signed in to view submissions.</div>
-        </div>
-      </div>
-    );
+    return <StatusPanel tone="lock" title="Sign in required" body="You must be signed in to view submissions." />;
   }
 
   if (adminChecked && !isAdmin) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 12, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 17, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
-          <div style={{ color: C.textSecond }}>
-            {isSuperuserOnlyForm(formTitle)
-              ? "This form's responses are limited to Form Builder Superusers."
-              : "You need HR Form Owner permissions to view this page."}
-          </div>
-          <div style={{ color: C.textMuted, marginTop: 8, fontSize: 13.5 }}>Please return to the dashboard.</div>
-        </div>
-      </div>
+      <StatusPanel
+        tone="no-access"
+        title="You do not have access to these responses"
+        body={
+          isSuperuserOnlyForm(formTitle)
+            ? "This form's responses are limited to Form Builder superusers."
+            : "You need HR Forms Owner permissions to view this page. Please return to the dashboard."
+        }
+      />
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, padding: 24 }}>
+    <div>
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-        <header style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>
-              {formTitle} Responses
-            </h1>
-            <p style={{ color: C.textSecond, marginTop: 4 }}>
-              {submissions.length} submission{submissions.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button
-              onClick={handleExportCSV}
-              style={{
-                padding: "8px 16px",
-                borderRadius: 8,
-                border: `1px solid ${C.border}`,
-                background: C.cardBg,
-                color: C.textPrimary,
-                fontSize: 13.5,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              📥 Export CSV
-            </button>
-          </div>
-        </header>
+        <PageHeader
+          title={`${formTitle} responses`}
+          description={`${submissions.length} submission${submissions.length !== 1 ? "s" : ""}`}
+          secondary={[{ label: "Export CSV", onClick: handleExportCSV, icon: <DownloadRounded /> }]}
+        />
 
         {error && (
-          <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: 12, color: C.red, marginBottom: 16 }}>
+          <Box role="alert" sx={{ backgroundColor: editorial.errorSoft, borderRadius: `${si.radiusSm}px`, p: 1.5, color: editorial.error, mb: 2, ...siType.body }}>
             {error}
-          </div>
+          </Box>
         )}
 
         <SubmissionFilterPanel
@@ -537,47 +505,43 @@ export default function ResponseViewer() {
           fieldCatalog={fieldCatalog}
           total={submissions.length}
           filtered={filteredSubmissions.length}
-          palette={{
-            border: C.border,
-            cardBg: C.cardBg,
-            panelBg: C.bg,
-            textPrimary: C.textPrimary,
-            textSecond: C.textSecond,
-            textMuted: C.textMuted,
-            accent: C.purple,
-            accentPale: C.purplePale,
-          }}
         />
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: 16 }}>
           {/* Submissions List */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 600, color: C.textPrimary }}>Submissions</span>
+          <Card pad="none" clip>
+            <div style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...siType.cardTitle, color: C.textPrimary }}>Submissions</span>
               <span style={{ fontSize: 12.5, color: C.textMuted }}>{filteredSubmissions.length} items</span>
             </div>
             <div style={{ maxHeight: 600, overflow: "auto" }}>
               {filteredSubmissions.length === 0 ? (
-                <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions found</div>
+                <StatusPanel
+                  tone="empty"
+                  title="No submissions found"
+                  body={hasActiveFilters(filters) ? "Nothing matches the filters you have set." : "Nobody has submitted this form yet."}
+                  primary={hasActiveFilters(filters) ? { label: "Clear filters", onClick: () => setFilters(EMPTY_SUBMISSION_FILTERS) } : undefined}
+                />
               ) : (
                 filteredSubmissions.map((item) => {
                   const statusStyle = getStatusColor(item.Status);
                   return (
-                    <div
+                    <Box
                       key={item.Id}
                       onClick={() => loadSubmissionDetails(item)}
-                      style={{
-                        padding: 16,
-                        borderBottom: `1px solid ${C.border}`,
+                      sx={{
+                        p: 2,
+                        borderRadius: `${si.radius}px`,
                         cursor: "pointer",
-                        background: selectedSubmission?.Id === item.Id ? C.purplePale : "transparent",
+                        backgroundColor: selectedSubmission?.Id === item.Id ? editorial.sky : "transparent",
+                        "&:hover": { backgroundColor: selectedSubmission?.Id === item.Id ? editorial.sky : editorial.blueSoft },
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={{ fontSize: 12.5, color: C.textMuted }}>#{item.Id}</span>
                           {isTestRow(item as unknown as Record<string, unknown>) && (
-                            <Chip label="TEST" size="small" color="error" sx={{ height: 18, fontSize: 11, fontWeight: 700 }} />
+                            <Chip label="Test run" size="small" sx={{ height: 20, ...siType.subtext, fontWeight: 600, backgroundColor: editorial.accentSoft, color: editorial.accentText }} />
                           )}
                         </span>
                         <span
@@ -604,22 +568,22 @@ export default function ResponseViewer() {
                           Layer {item.CurrentLayer || item.CurrentApprovalLayer}
                         </div>
                       )}
-                    </div>
+                    </Box>
                   );
                 })
               )}
             </div>
-          </div>
+          </Card>
 
           {/* Detail Panel */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <Card pad="none" clip>
             {!selectedSubmission ? (
               <div style={{ padding: 48, textAlign: "center", color: C.textMuted }}>
-                Select a submission to view details
+                Select a submission to see its details
               </div>
             ) : (
               <>
-                <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ padding: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontWeight: 600, color: C.textPrimary }}>Submission #{selectedSubmission.Id}</div>
@@ -660,7 +624,7 @@ export default function ResponseViewer() {
                     </div>
                   </div>
                   <div style={{ marginTop: 8, fontSize: 12.5, color: C.textMuted }}>
-                    Submitted by: <strong>{selectedSubmission.SubmittedBy}</strong> • Version: {selectedSubmission.FormVersion}
+                    Submitted by <strong>{selectedSubmission.SubmittedBy}</strong> • Version: {selectedSubmission.FormVersion}
                     {(selectedSubmission.CurrentLayer ?? selectedSubmission.CurrentApprovalLayer) > 0 && (
                       <> • Layer: <strong>{selectedSubmission.CurrentLayer || selectedSubmission.CurrentApprovalLayer}</strong></>
                     )}
@@ -695,7 +659,7 @@ export default function ResponseViewer() {
                         marginBottom: 12,
                       }}
                     >
-                      Matrix Tables
+                      Matrix tables
                     </div>
                     {Object.entries(matrixTables).map(([fieldName, entry]) => (
                       <div key={fieldName} style={{ marginBottom: 18 }}>
@@ -712,7 +676,6 @@ export default function ResponseViewer() {
                         <div
                           style={{
                             overflow: "auto",
-                            border: `1px solid ${C.border}`,
                             borderRadius: 8,
                           }}
                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
@@ -729,9 +692,9 @@ export default function ResponseViewer() {
                 )}
 
                 {selectedSubmission.RawJSON && (
-                  <details style={{ padding: 16, borderTop: `1px solid ${C.border}`, background: C.bg }}>
+                  <details style={{ padding: 16, background: C.bg }}>
                     <summary style={{ cursor: "pointer", color: C.textSecond, fontSize: 13.5 }}>
-                      View Raw JSON
+                      View raw data
                     </summary>
                     <pre
                       style={{
@@ -750,7 +713,7 @@ export default function ResponseViewer() {
                 )}
               </>
             )}
-          </div>
+          </Card>
         </div>
       </div>
     </div>

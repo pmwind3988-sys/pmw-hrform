@@ -1,136 +1,59 @@
 import type { ReactNode } from "react";
-import { Box, Container, IconButton, Paper, Stack, Typography } from "@mui/material";
-import { ArrowBack } from "@mui/icons-material";
-import { useInShell } from "../shell/ShellContext";
+import { Box, Button } from "@mui/material";
+import { ArrowBackRounded } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import Logo from "../Logo";
-import { editorial, editorialHairline } from "../../theme/editorial";
-import { learningButtonSx, learningReduceMotionSx } from "./learningUi";
+import { useInShell } from "../shell/ShellContext";
+import PageHeader, { type PageAction } from "../common/PageHeader";
+import { editorial, onCanvas } from "../../theme/editorial";
 
 interface LearningHeaderProps {
   title: string;
-  subtitle: string;
+  description?: ReactNode;
   backPath: string;
   backLabel: string;
-  actions?: ReactNode;
+  primary?: PageAction;
+  secondary?: PageAction[];
+  more?: PageAction[];
   /**
-   * Off where there is no dashboard behind this page — a back
+   * Off where there is no dashboard behind this page -- a back
    * arrow that only ever returns here is worse than no arrow.
    */
   showBack?: boolean;
 }
 
+/**
+ * The top of the learning pages: the shared page header, plus a way back for
+ * the visitors who are not inside the app shell (guest members), whose only
+ * other route out is the browser's back button.
+ */
 export default function LearningHeader({
   title,
-  subtitle,
+  description,
   backPath,
   backLabel,
-  actions,
+  primary,
+  secondary,
+  more,
   showBack = true,
 }: LearningHeaderProps) {
-  // Hidden inside the shell: this returns to a page the tab strip and bottom bar already reach. Public and guest renders get no shell, so they keep it.
   const inShell = useInShell();
   const navigate = useNavigate();
 
   return (
-    <Paper
-      sx={{
-        borderRadius: 0,
-        boxShadow: "none",
-        backgroundColor: "rgba(255, 255, 255, 0.9)",
-        backdropFilter: "blur(14px)",
-        borderBottom: editorialHairline,
-        position: "sticky",
-        top: 0,
-        zIndex: 10,
-      }}
-    >
-      <Container maxWidth="xl">
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: { xs: 1, sm: 2 },
-            py: { xs: 1, md: 1.75 },
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.5 }, minWidth: 0 }}>
-            {showBack && !inShell && (
-              <IconButton
-                onClick={() => navigate(backPath)}
-                aria-label={backLabel}
-                sx={{
-                  color: editorial.pmwBlueDark,
-                  flexShrink: 0,
-                  transition: "transform 0.18s ease, background-color 0.18s ease",
-                  "&:hover": { transform: "translateX(-2px)", backgroundColor: editorial.blueWash },
-                  ...learningReduceMotionSx,
-                }}
-              >
-                <ArrowBack />
-              </IconButton>
-            )}
-            <Box
-              sx={{
-                width: { xs: 38, sm: 46 },
-                height: { xs: 38, sm: 46 },
-                borderRadius: "12px",
-                border: `1px solid ${editorial.pmwBlueSoft}`,
-                display: { xs: "none", sm: "flex" },
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.85)",
-                flexShrink: 0,
-                overflow: "hidden",
-              }}
-            >
-              <Logo size={{ xs: 30, sm: 38 }} />
-            </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography
-                variant="h5"
-                component="h1"
-                sx={{
-                  fontWeight: 700,
-                  color: editorial.ink,
-                  fontSize: { xs: "1.05rem", sm: "1.3rem", md: "1.45rem" },
-                  lineHeight: 1.15,
-                  letterSpacing: 0,
-                  textWrap: "balance",
-                }}
-              >
-                {title}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: editorial.muted,
-                  fontWeight: 600,
-                  fontSize: "0.845rem",
-                  display: { xs: "none", md: "block" },
-                }}
-              >
-                {subtitle}
-              </Typography>
-            </Box>
-          </Box>
-
-          {actions && (
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{
-                alignItems: "center",
-                flexShrink: 0,
-                "& > .MuiButton-root": { ...learningButtonSx, ...learningReduceMotionSx },
-              }}
-            >
-              {actions}
-            </Stack>
-          )}
+    <>
+      {showBack && !inShell && (
+        <Box sx={{ mb: 1 }}>
+          <Button
+            variant="text"
+            startIcon={<ArrowBackRounded />}
+            onClick={() => navigate(backPath)}
+            sx={{ ...onCanvas, "&:hover": { backgroundColor: editorial.blueSoft } }}
+          >
+            {backLabel}
+          </Button>
         </Box>
-      </Container>
-    </Paper>
+      )}
+      <PageHeader title={title} description={description} primary={primary} secondary={secondary} more={more} />
+    </>
   );
 }

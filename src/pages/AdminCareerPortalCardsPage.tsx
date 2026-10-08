@@ -4,8 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
   Dialog,
@@ -18,7 +16,6 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Slider,
   Skeleton,
@@ -46,17 +43,11 @@ import {
 } from "../utils/careersService";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { ensureCareerPortalCardList } from "../utils/formBuilderSP";
-import CareerPortalHeader from "../components/careers/CareerPortalHeader";
-import {
-  CareerEmptyState,
-  careerActionButtonSx,
-  careerPageSx,
-  careerSearchFieldSx,
-  careerToolbarSx,
-  getCareerErrorMessage,
-} from "../components/careers/careerUi";
+import { CareerEmptyState, getCareerErrorMessage } from "../components/careers/careerUi";
 import { FailurePanel } from "../components/common/StatusPanel";
-import { editorial } from "../theme/editorial";
+import Card from "../components/common/Card";
+import PageHeader from "../components/common/PageHeader";
+import { editorial, si, siType } from "../theme/editorial";
 import type { CareerPortalCard, JobListing } from "../types";
 
 type PortalCardForm = Omit<CareerPortalCard, "id" | "created">;
@@ -82,19 +73,6 @@ const EMPTY_PORTAL_CARD: PortalCardForm = {
   colorStart: DEFAULT_CARD_COLORS.start,
   colorEnd: DEFAULT_CARD_COLORS.end,
   colorAccent: DEFAULT_CARD_COLORS.accent,
-};
-
-const reduceMotionSx = {
-  "@media (prefers-reduced-motion: reduce)": {
-    transition: "none",
-    transform: "none",
-    "&:hover": {
-      transform: "none",
-    },
-    "&:active": {
-      transform: "none",
-    },
-  },
 };
 
 function safeColor(value: string | undefined, fallback: string): string {
@@ -159,52 +137,21 @@ function sharePointScope(): string {
 
 function CardsLoadingSkeleton() {
   return (
-    <>
-      <Paper
-        sx={{
-          p: { xs: 2, md: 2.5 },
-          mb: 3,
-          borderRadius: "12px",
-          border: "1px solid rgba(17, 24, 39, 0.08)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        }}
-      >
-        <Skeleton variant="rounded" width="100%" height={40} sx={{ maxWidth: 420, borderRadius: "12px" }} />
-      </Paper>
-      <Grid container spacing={2}>
-        {[1, 2, 3, 4, 5, 6].map((item) => (
-          <Grid key={item} size={{ xs: 12, md: 6, lg: 4 }}>
-            <Card
-              sx={{
-                height: "100%",
-                borderRadius: "12px",
-                border: "1px solid rgba(17, 24, 39, 0.08)",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                overflow: "hidden",
-              }}
-            >
-              <Skeleton variant="rounded" height={150} sx={{ borderRadius: 0 }} />
-              <CardContent sx={{ p: 2 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, mb: 1 }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Skeleton variant="text" width="72%" height={26} />
-                    <Skeleton variant="text" width={76} height={18} />
-                  </Box>
-                  <Skeleton variant="rounded" width={74} height={22} sx={{ borderRadius: "12px" }} />
-                </Box>
-                <Skeleton variant="text" width="100%" height={20} />
-                <Skeleton variant="text" width="82%" height={20} sx={{ mb: 1.25 }} />
-                <Skeleton variant="rounded" width="70%" height={26} sx={{ borderRadius: "12px" }} />
-                <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5, mt: 1.5 }}>
-                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "12px" }} />
-                  <Skeleton variant="rounded" width={30} height={30} sx={{ borderRadius: "12px" }} />
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-    </>
+    <Grid container spacing={2}>
+      {[1, 2, 3, 4, 5, 6].map((item) => (
+        <Grid key={item} size={{ xs: 12, md: 6, lg: 4 }}>
+          <Card pad="none" clip sx={{ height: "100%" }}>
+            <Skeleton variant="rectangular" height={150} />
+            <Box sx={{ p: 2 }}>
+              <Skeleton variant="text" width="72%" height={26} />
+              <Skeleton variant="text" width={76} height={18} />
+              <Skeleton variant="text" width="100%" height={20} />
+              <Skeleton variant="text" width="82%" height={20} />
+            </Box>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
   );
 }
 
@@ -242,18 +189,18 @@ function PortalCardDialog({
       onClose={saving ? () => {} : onClose}
       maxWidth="md"
       fullWidth
-      slotProps={{ paper: { sx: { borderRadius: "12px" } } }}
+      slotProps={{ paper: { sx: { borderRadius: `${si.radiusSheet}px` } } }}
     >
       <DialogTitle sx={{ pb: 1 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
           <Typography variant="h6" component="div" sx={{ fontWeight: 700, color: editorial.ink }}>
-            {initial ? "Edit Card" : "Add Card"}
+            {initial ? "Edit card" : "Add card"}
           </Typography>
           {isSystemDefault && (
             <Chip
-              label="System Default"
+              label="Built in"
               size="small"
-              sx={{ borderRadius: "12px", backgroundColor: editorial.blueSoft, color: editorial.pmwBlue, fontWeight: 700 }}
+              sx={{ backgroundColor: editorial.accentSoft, color: editorial.accentText, fontWeight: 600 }}
             />
           )}
         </Stack>
@@ -269,7 +216,7 @@ function PortalCardDialog({
                 fullWidth
                 required
                 size="small"
-                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
+                
               />
               <TextField
                 label="Description"
@@ -279,7 +226,7 @@ function PortalCardDialog({
                 multiline
                 rows={4}
                 size="small"
-                slotProps={{ input: { sx: { borderRadius: "12px" } } }}
+                
               />
               {!isSystemDefault && (
                 <>
@@ -290,7 +237,7 @@ function PortalCardDialog({
                     fullWidth
                     size="small"
                     placeholder="https://..."
-                    slotProps={{ input: { sx: { borderRadius: "12px" } } }}
+                    
                   />
                   <TextField
                     label="Image source / credit"
@@ -300,7 +247,7 @@ function PortalCardDialog({
                     required={hasCustomImage}
                     size="small"
                     placeholder="PMW owned asset, photographer, license, or source URL"
-                    slotProps={{ input: { sx: { borderRadius: "12px" } } }}
+                    
                   />
                   <Box>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.25 }}>
@@ -336,7 +283,7 @@ function PortalCardDialog({
                       onChange={(e) => updateField("colorStart", e.target.value)}
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
+                      slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -347,7 +294,7 @@ function PortalCardDialog({
                       onChange={(e) => updateField("colorEnd", e.target.value)}
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
+                      slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -358,7 +305,7 @@ function PortalCardDialog({
                       onChange={(e) => updateField("colorAccent", e.target.value)}
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true }, input: { sx: { borderRadius: "12px" } } }}
+                      slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
                 </Grid>
@@ -372,7 +319,7 @@ function PortalCardDialog({
                     onChange={(e) => updateField("sortOrder", Number(e.target.value))}
                     fullWidth
                     size="small"
-                    slotProps={{ input: { sx: { borderRadius: "12px" } } }}
+                    
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
@@ -382,7 +329,7 @@ function PortalCardDialog({
                       value={form.status}
                       label="Status"
                       onChange={(e) => updateField("status", e.target.value as CareerPortalCard["status"])}
-                      sx={{ borderRadius: "12px" }}
+                     
                     >
                       <MenuItem value="Active">Active</MenuItem>
                       <MenuItem value="Hidden" disabled={mustStayActive}>Hidden</MenuItem>
@@ -391,7 +338,7 @@ function PortalCardDialog({
                 </Grid>
               </Grid>
               {mustStayActive && (
-                <Alert severity="info" sx={{ borderRadius: "12px" }}>
+                <Alert severity="info" sx={{ borderRadius: `${si.radius}px` }}>
                   At least one carousel card must stay active.
                 </Alert>
               )}
@@ -402,9 +349,8 @@ function PortalCardDialog({
             <Stack spacing={2}>
               <Box
                 sx={{
-                  borderRadius: "12px",
+                  borderRadius: `${si.radius}px`,
                   overflow: "hidden",
-                  border: "1px solid #E5E7EB",
                   minHeight: 190,
                   backgroundColor: editorial.skySoft,
                   display: "flex",
@@ -424,7 +370,7 @@ function PortalCardDialog({
                     {form.imageSource.trim() && (
                       <Typography
                         variant="caption"
-                        sx={{ position: "absolute", right: 10, bottom: 8, color: "rgba(255,255,255,0.76)", maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.72rem" }}
+                        sx={{ position: "absolute", right: 10, bottom: 8, color: "rgba(255,255,255,0.85)", maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.72rem" }}
                       >
                         {form.imageSource.trim()}
                       </Typography>
@@ -456,7 +402,7 @@ function PortalCardDialog({
                     const targetType = e.target.value as CareerPortalCard["targetType"];
                     setForm((prev) => ({ ...prev, targetType, targetValue: "" }));
                   }}
-                  sx={{ borderRadius: "12px" }}
+                 
                 >
                   <MenuItem value="none">No target</MenuItem>
                   <MenuItem value="job">Job item</MenuItem>
@@ -471,7 +417,7 @@ function PortalCardDialog({
                     value={form.targetValue}
                     label="Target Job"
                     onChange={(e) => updateField("targetValue", e.target.value)}
-                    sx={{ borderRadius: "12px" }}
+                   
                   >
                     {jobs.map((job) => (
                       <MenuItem key={job.id} value={job.id}>
@@ -491,7 +437,7 @@ function PortalCardDialog({
                   required
                   size="small"
                   placeholder="https://... or /career-portal"
-                  slotProps={{ input: { sx: { borderRadius: "12px" } } }}
+                  
                 />
               )}
             </Stack>
@@ -499,7 +445,7 @@ function PortalCardDialog({
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        <Button onClick={onClose} disabled={saving} sx={{ borderRadius: "12px", textTransform: "none", color: editorial.muted }}>
+        <Button onClick={onClose} disabled={saving} sx={{ color: editorial.muted }}>
           Cancel
         </Button>
         <Button
@@ -517,9 +463,9 @@ function PortalCardDialog({
             colorEnd: safeColor(form.colorEnd, DEFAULT_CARD_COLORS.end),
             colorAccent: safeColor(form.colorAccent, DEFAULT_CARD_COLORS.accent),
           })}
-          sx={{ borderRadius: "12px", textTransform: "none", backgroundColor: editorial.pmwBlue, fontWeight: 700 }}
+          sx={{ fontWeight: 700 }}
         >
-          {saving ? "Saving..." : initial ? "Update Card" : "Add Card"}
+          {saving ? "Saving..." : initial ? "Update card" : "Add card"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -663,247 +609,189 @@ export default function AdminCareerPortalCardsPage() {
     }
   };
 
+
   return (
-    <Box sx={careerPageSx}>
-      <CareerPortalHeader
-        title="Manage Cards"
-        subtitle="Control the carousel shown on the careers portal welcome card."
-        activeSection="cards"
-        isAdmin
-        backPath="/career-portal"
-        backLabel="Back to career portal"
-        maxWidth="xl"
-        actions={(
-          <>
-            <Button
-              variant="outlined"
-              startIcon={<Refresh />}
-              onClick={() => void load()}
-              disabled={loading}
-              sx={{ ...careerActionButtonSx, backgroundColor: editorial.white, borderColor: editorial.pmwBlueSoft, color: editorial.pmwBlueDark }}
-            >
-              Refresh
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={handleCreate}
-              sx={{ ...careerActionButtonSx, backgroundColor: editorial.pmwBlue, color: editorial.white }}
-            >
-              Add Card
-            </Button>
-          </>
-        )}
+    <Box sx={{ pb: 4 }}>
+      <PageHeader
+        title="Portal cards"
+        description="Control the carousel shown on the careers portal welcome card."
+        primary={{ label: "Add card", icon: <Add />, onClick: handleCreate }}
+        secondary={[{ label: "Refresh", icon: <Refresh />, onClick: () => void load(), disabled: loading }]}
       />
 
-      <Box sx={{ maxWidth: 1320, mx: "auto", px: { xs: 2, sm: 3 }, py: 4 }}>
-        {!loading && !error && (
-        <Paper
+      {/* A failed load comes first: nothing below it is trustworthy. */}
+      {!loading && error && (
+        <FailurePanel what="portal cards" error={errorCause} onRetry={() => void load()} />
+      )}
+
+      {!loading && !error && cards.length > 0 && (
+        <TextField
+          placeholder="Search cards, targets, links..."
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          size="small"
           sx={{
-            ...careerToolbarSx,
-            mb: 3,
+            mb: 2.5,
+            width: { xs: "100%", md: 420 },
+            "& .MuiOutlinedInput-root": { borderRadius: "999px", backgroundColor: editorial.skySoft },
+            "& .MuiOutlinedInput-notchedOutline": { border: "none" },
           }}
-        >
-          <TextField
-            placeholder="Search cards, targets, links..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            size="small"
-            sx={{
-              ...careerSearchFieldSx,
-              width: { xs: "100%", md: 420 },
-              "& .MuiOutlinedInput-root": { borderRadius: "12px", backgroundColor: editorial.white },
-            }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-        </Paper>
-        )}
+          slotProps={{
+            htmlInput: { "aria-label": "Search cards" },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: editorial.muted, fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+      )}
 
-        {!loading && error && (
-          <FailurePanel what="portal cards" error={errorCause} onRetry={() => void load()} />
-        )}
-
-        {loading ? (
-          <CardsLoadingSkeleton />
-        ) : !error && cards.length === 0 ? (
-          <CareerEmptyState
-            icon={<AutoAwesome />}
-            title="No cards"
-            description="Add the first carousel item for the careers page."
-            action={
-              <Button variant="contained" startIcon={<Add />} onClick={handleCreate} sx={{ ...careerActionButtonSx, borderRadius: "12px", backgroundColor: editorial.pmwBlue }}>
-                Add Card
-              </Button>
-            }
-          />
-        ) : !error && filteredCards.length === 0 ? (
-          <CareerEmptyState
-            icon={<SearchIcon />}
-            title="No matching cards"
-            description="Try a different title, target, link, or status."
-          />
-        ) : (
-          <Grid container spacing={2}>
-            {filteredCards.map((card) => (
-              <Grid key={card.id} size={{ xs: 12, md: 6, lg: 4 }}>
-                <Card
+      {loading ? (
+        <CardsLoadingSkeleton />
+      ) : !error && cards.length === 0 ? (
+        <CareerEmptyState
+          icon={<AutoAwesome />}
+          title="No cards"
+          description="Add the first carousel item for the careers page."
+          action={
+            <Button variant="contained" startIcon={<Add />} onClick={handleCreate}>
+              Add card
+            </Button>
+          }
+        />
+      ) : !error && filteredCards.length === 0 ? (
+        <CareerEmptyState
+          icon={<SearchIcon />}
+          title="No matching cards"
+          description="Try a different title, target, link, or status."
+        />
+      ) : !error ? (
+        <Grid container spacing={2}>
+          {filteredCards.map((card) => (
+            <Grid key={card.id} size={{ xs: 12, md: 6, lg: 4 }}>
+              <Card pad="none" clip sx={{ height: "100%" }}>
+                <Box
                   sx={{
-                    height: "100%",
-                    borderRadius: "12px",
-                    border: `1px solid ${editorial.border}`,
-                    boxShadow: "none",
+                    height: 150,
+                    position: "relative",
                     overflow: "hidden",
-                    transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
-                    "&:hover": {
-                      transform: "translateY(-3px)",
-                      borderColor: editorial.pmwBlue,
-                      boxShadow: "0 12px 28px rgba(0, 90, 158, 0.10)",
-                    },
-                    ...reduceMotionSx,
+                    background: card.imageUrl ? editorial.ink : cardGradient(card),
                   }}
                 >
-                  <Box
+                  {card.imageUrl && (
+                    <>
+                      <Box
+                        component="img"
+                        src={card.imageUrl}
+                        alt=""
+                        sx={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          opacity: safeImageOpacity(card.imageOpacity),
+                        }}
+                      />
+                      <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(17,24,39,0.04), rgba(17,24,39,0.34))" }} />
+                      {card.imageSource && (
+                        <Typography
+                          sx={{
+                            ...siType.subtext,
+                            position: "absolute",
+                            right: 10,
+                            bottom: 8,
+                            color: "rgba(255,255,255,0.85)",
+                            maxWidth: "72%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {card.imageSource}
+                        </Typography>
+                      )}
+                    </>
+                  )}
+                </Box>
+                <Box sx={{ p: 2 }}>
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ ...siType.cardTitle, color: editorial.ink }}>
+                        {card.title}
+                      </Typography>
+                      <Typography sx={{ ...siType.subtext, color: editorial.muted, fontVariantNumeric: "tabular-nums" }}>
+                        Order {card.sortOrder}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {card.isSystemDefault && (
+                        <Chip label="Built in" size="small" sx={{ backgroundColor: editorial.accentSoft, color: editorial.accentText, fontWeight: 600 }} />
+                      )}
+                      <Chip
+                        label={card.status === "Active" ? "Active" : "Hidden"}
+                        size="small"
+                        sx={{
+                          fontWeight: 600,
+                          backgroundColor: card.status === "Active" ? editorial.successSoft : editorial.skySoft,
+                          color: card.status === "Active" ? editorial.success : editorial.muted,
+                        }}
+                      />
+                    </Stack>
+                  </Stack>
+                  <Typography
                     sx={{
-                      height: 150,
-                      position: "relative",
+                      ...siType.body,
+                      color: editorial.muted,
+                      minHeight: 44,
+                      mb: 1.25,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
                       overflow: "hidden",
-                      background: card.imageUrl ? editorial.ink : cardGradient(card),
                     }}
                   >
-                    {card.imageUrl && (
-                      <>
-                        <Box
-                          component="img"
-                          src={card.imageUrl}
-                          alt=""
-                          sx={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            opacity: safeImageOpacity(card.imageOpacity),
-                          }}
-                        />
-                        <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(17,24,39,0.04), rgba(17,24,39,0.34))" }} />
-                        {card.imageSource && (
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              position: "absolute",
-                              right: 10,
-                              bottom: 8,
-                              color: "rgba(255,255,255,0.78)",
-                              maxWidth: "72%",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              fontSize: "0.72rem",
-                            }}
-                          >
-                            {card.imageSource}
-                          </Typography>
-                        )}
-                      </>
+                    {card.description || "No description"}
+                  </Typography>
+                  <Chip
+                    icon={targetIcon(card)}
+                    label={targetSummary(card, jobs)}
+                    size="small"
+                    sx={{
+                      maxWidth: "100%",
+                      backgroundColor: card.targetType === "none" ? editorial.skySoft : editorial.blueWash,
+                      color: card.targetType === "none" ? editorial.muted : editorial.pmwBlueDark,
+                      fontWeight: 600,
+                      "& .MuiChip-label": {
+                        display: "block",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      },
+                    }}
+                  />
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5, mt: 1.5 }}>
+                    <IconButton aria-label={`Edit ${card.title}`} size="small" onClick={() => handleEdit(card)} sx={{ color: editorial.muted }}>
+                      <Edit sx={{ fontSize: 18 }} />
+                    </IconButton>
+                    {!card.isSystemDefault && (
+                      <IconButton
+                        aria-label={`Delete ${card.title}`}
+                        size="small"
+                        disabled={deletingId === card.id}
+                        onClick={() => setDeleteConfirm(card)}
+                        sx={{ color: deletingId === card.id ? editorial.softMuted : editorial.error }}
+                      >
+                        {deletingId === card.id ? <CircularProgress size={18} sx={{ color: editorial.error }} /> : <Delete sx={{ fontSize: 18 }} />}
+                      </IconButton>
                     )}
                   </Box>
-                  <CardContent sx={{ p: 2 }}>
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: editorial.ink, lineHeight: 1.25 }}>
-                          {card.title}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                          Order {card.sortOrder}
-                        </Typography>
-                      </Box>
-                      <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {card.isSystemDefault && (
-                          <Chip
-                            label="System Default"
-                            size="small"
-                            sx={{
-                              borderRadius: "12px",
-                              fontSize: "0.72rem",
-                              fontWeight: 700,
-                              backgroundColor: editorial.purpleWash,
-                              color: editorial.pmwPurpleDark,
-                            }}
-                          />
-                        )}
-                        <Chip
-                          label={card.status}
-                          size="small"
-                          sx={{
-                            borderRadius: "12px",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            backgroundColor: card.status === "Active" ? "rgba(16, 124, 16, 0.12)" : "rgba(95, 100, 109, 0.12)",
-                            color: card.status === "Active" ? editorial.success : editorial.muted,
-                          }}
-                        />
-                      </Stack>
-                    </Stack>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: editorial.muted,
-                        minHeight: 44,
-                        mb: 1.25,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {card.description || "No description"}
-                    </Typography>
-                    <Chip
-                      icon={targetIcon(card)}
-                      label={targetSummary(card, jobs)}
-                      size="small"
-                      sx={{
-                        maxWidth: "100%",
-                        borderRadius: "12px",
-                        backgroundColor: card.targetType === "none" ? "rgba(95, 100, 109, 0.12)" : editorial.blueWash,
-                        color: card.targetType === "none" ? editorial.muted : editorial.pmwBlueDark,
-                        fontWeight: 700,
-                        "& .MuiChip-label": {
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        },
-                      }}
-                    />
-                    <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5, mt: 1.5 }}>
-                      <IconButton aria-label={`Edit ${card.title}`} size="small" onClick={() => handleEdit(card)} sx={{ color: editorial.muted }}>
-                        <Edit sx={{ fontSize: 18 }} />
-                      </IconButton>
-                      {!card.isSystemDefault && (
-                        <IconButton
-                          aria-label={`Delete ${card.title}`}
-                          size="small"
-                          disabled={deletingId === card.id}
-                          onClick={() => setDeleteConfirm(card)}
-                          sx={{ color: deletingId === card.id ? editorial.softMuted : editorial.error }}
-                        >
-                          {deletingId === card.id ? <CircularProgress size={18} sx={{ color: editorial.error }} /> : <Delete sx={{ fontSize: 18 }} />}
-                        </IconButton>
-                      )}
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        )}
-      </Box>
+                </Box>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      ) : null}
 
       {dialogOpen && (
         <PortalCardDialog
@@ -925,7 +813,7 @@ export default function AdminCareerPortalCardsPage() {
         onClose={() => deletingId ? undefined : setDeleteConfirm(null)}
         maxWidth="xs"
         fullWidth
-        slotProps={{ paper: { sx: { borderRadius: "12px" } } }}
+        slotProps={{ paper: { sx: { borderRadius: `${si.radiusSheet}px` } } }}
       >
         <DialogTitle sx={{ fontWeight: 700 }}>Delete card?</DialogTitle>
         <DialogContent>
@@ -934,7 +822,7 @@ export default function AdminCareerPortalCardsPage() {
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDeleteConfirm(null)} disabled={Boolean(deletingId)} sx={{ borderRadius: "12px", textTransform: "none" }}>
+          <Button onClick={() => setDeleteConfirm(null)} disabled={Boolean(deletingId)}>
             Cancel
           </Button>
           <Button
@@ -942,7 +830,7 @@ export default function AdminCareerPortalCardsPage() {
             color="error"
             onClick={() => void handleDelete()}
             disabled={Boolean(deletingId)}
-            sx={{ borderRadius: "12px", textTransform: "none" }}
+           
           >
             {deletingId ? "Deleting..." : "Delete"}
           </Button>
@@ -958,7 +846,7 @@ export default function AdminCareerPortalCardsPage() {
         <Alert
           severity={snackbar?.severity || "success"}
           onClose={() => setSnackbar(null)}
-          sx={{ borderRadius: "12px", boxShadow: "0 8px 24px rgba(17,24,39,0.16)", fontWeight: 700 }}
+          sx={{ borderRadius: `${si.radius}px`, boxShadow: si.shadowRaised, fontWeight: 700 }}
         >
           {snackbar?.message}
         </Alert>

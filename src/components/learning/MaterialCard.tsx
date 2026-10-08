@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, Chip, Stack, Typography } from "@mui/material";
+import { Box, Chip, Stack, Tooltip, Typography } from "@mui/material";
 import {
   CheckCircle,
+  DownloadOutlined,
   LockOutlined,
   PlayArrowRounded,
   VisibilityOutlined,
 } from "@mui/icons-material";
-import { editorial, editorialHairline, editorialShadow, editorialShadowHover } from "../../theme/editorial";
+import { editorial, si, siType } from "../../theme/editorial";
 import { formatFileSize, formatViewCount } from "../../utils/learningService";
 import { kindStyle, learningReduceMotionSx } from "./learningUi";
 import type { LearningMaterial } from "../../types";
@@ -125,19 +126,15 @@ export default function MaterialCard({
         p: 0,
         textAlign: "left",
         cursor: "pointer",
-        borderRadius: "12px",
+        borderRadius: `${si.radius}px`,
         overflow: "hidden",
-        border: editorialHairline,
+        border: "none",
         backgroundColor: editorial.white,
-        boxShadow: editorialShadow,
-        transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
-        "&:hover": {
-          transform: "translateY(-3px)",
-          boxShadow: editorialShadowHover,
-          borderColor: editorial.pmwBlueSoft,
-        },
+        boxShadow: si.shadow,
+        transition: "background-color 0.15s ease",
+        "&:hover": { backgroundColor: editorial.blueSoft },
         "&:focus-visible": {
-          outline: `3px solid ${editorial.pmwBlueSoft}`,
+          outline: `2px solid ${editorial.navy}`,
           outlineOffset: 2,
         },
         ...learningReduceMotionSx,
@@ -234,9 +231,9 @@ export default function MaterialCard({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "rgba(16, 16, 16, 0.58)",
-                color: editorial.white,
-                boxShadow: "0 6px 18px rgba(16, 16, 16, 0.28)",
+                backgroundColor: editorial.white,
+                color: editorial.navy,
+                boxShadow: si.shadow,
               }}
             >
               <PlayArrowRounded sx={{ fontSize: 32 }} />
@@ -255,8 +252,7 @@ export default function MaterialCard({
             fontWeight: 700,
             fontSize: "0.72rem",
             color: style.color,
-            backgroundColor: "rgba(255, 255, 255, 0.94)",
-            border: `1px solid ${style.wash}`,
+            backgroundColor: editorial.white,
           }}
         />
 
@@ -272,9 +268,8 @@ export default function MaterialCard({
               px: 0.9,
               py: 0.35,
               borderRadius: "999px",
-              backgroundColor: "rgba(255, 255, 255, 0.94)",
-              border: `1px solid ${editorial.pmwBlueSoft}`,
-              color: editorial.pmwBlueDark,
+              backgroundColor: editorial.white,
+              color: editorial.navy,
             }}
           >
             <LockOutlined sx={{ fontSize: 14 }} />
@@ -296,8 +291,7 @@ export default function MaterialCard({
               px: 0.9,
               py: 0.35,
               borderRadius: "999px",
-              backgroundColor: "rgba(255, 255, 255, 0.94)",
-              border: `1px solid rgba(16, 124, 16, 0.28)`,
+              backgroundColor: editorial.successSoft,
               color: editorial.success,
             }}
           >
@@ -311,11 +305,9 @@ export default function MaterialCard({
 
       <Box sx={{ p: 1.75, display: "flex", flexDirection: "column", gap: 0.75, flexGrow: 1, minWidth: 0 }}>
         <Typography
-          variant="subtitle1"
           sx={{
-            fontWeight: 700,
+            ...siType.cardTitle,
             color: editorial.ink,
-            lineHeight: 1.3,
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
@@ -328,10 +320,9 @@ export default function MaterialCard({
 
         {material.description && (
           <Typography
-            variant="body2"
             sx={{
+              ...siType.subtext,
               color: editorial.muted,
-              fontWeight: 600,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -353,12 +344,33 @@ export default function MaterialCard({
           spacing={1.25}
           sx={{ mt: "auto", pt: 0.5, alignItems: "center", color: editorial.softMuted }}
         >
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-            <VisibilityOutlined sx={{ fontSize: 15 }} />
-            <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              {formatViewCount(material.viewCount)}
-            </Typography>
-          </Stack>
+          <Tooltip title="Counts each colleague once, however often they come back.">
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+              <VisibilityOutlined sx={{ fontSize: 15 }} />
+              <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                {formatViewCount(material.viewCount)}
+              </Typography>
+            </Stack>
+          </Tooltip>
+          {material.downloadable && !material.locked && (
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{
+                alignItems: "center",
+                px: 1,
+                py: 0.25,
+                borderRadius: `${si.radiusPill}px`,
+                backgroundColor: editorial.successSoft,
+                color: editorial.success,
+              }}
+            >
+              <DownloadOutlined sx={{ fontSize: 14 }} />
+              <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                Downloadable
+              </Typography>
+            </Stack>
+          )}
           {material.sizeBytes > 0 && (
             <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
               {formatFileSize(material.sizeBytes)}

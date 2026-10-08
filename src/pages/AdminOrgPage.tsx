@@ -21,8 +21,7 @@
  * company's Finance can be pulled out of the pool without touching anybody
  * else's.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
 import {
@@ -39,25 +38,23 @@ import {
   DialogTitle,
   IconButton,
   InputAdornment,
+  Menu,
+  ListItemIcon,
   MenuItem,
-  Paper,
   Snackbar,
   Stack,
   Switch,
-  Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useInShell } from "../components/shell/ShellContext";
+import BusinessIcon from "@mui/icons-material/BusinessOutlined";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import MoreHorizRounded from "@mui/icons-material/MoreHorizRounded";
+import PageHeader from "../components/common/PageHeader";
+import PillTabs from "../components/common/PillTabs";
+import Card from "../components/common/Card";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import EditIcon from "@mui/icons-material/Edit";
 import ManageSearchIcon from "@mui/icons-material/ManageSearch";
@@ -66,7 +63,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
-import { editorial, editorialShadow } from "../theme/editorial";
+import { editorial, onCanvasMuted, si, siType } from "../theme/editorial";
 import {
   COMPANY_LIST,
   DEPARTMENT_LIST,
@@ -101,8 +98,6 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function AdminOrgPage() {
-  const navigate = useNavigate();
-  const inShell = useInShell();
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -130,6 +125,7 @@ export default function AdminOrgPage() {
   >(null);
   const [conversionOpen, setConversionOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState>(null);
+  const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement; onEdit: () => void; onRemove?: () => void } | null>(null);
 
   // Access check, backing up the route guard.
   useEffect(() => {
@@ -296,303 +292,288 @@ export default function AdminOrgPage() {
     );
   }
 
-  return (
-    <Box sx={{ minHeight: "100vh", backgroundColor: editorial.appSurface }}>
-      <Box sx={{ backgroundColor: editorial.white, borderBottom: `1px solid ${editorial.border}` }}>
-        <Container maxWidth="lg" sx={{ py: 2.5 }}>
-          <Stack direction="row" sx={{ alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-            {/* Hidden inside the shell: this returns to a page the tab strip and bottom bar already reach. Public and guest renders get no shell, so they keep it. */}
-            {!inShell && (
-              <IconButton onClick={() => navigate("/admin/dashboard")} size="small" aria-label="Back to dashboard">
-                <ArrowBackIcon fontSize="small" />
-              </IconButton>
-            )}
-            <Box sx={{ flex: 1, minWidth: 220 }}>
-              <Typography sx={{ fontSize: "1.15rem", fontWeight: 700, color: editorial.ink, lineHeight: 1.2 }}>
-                Companies and departments
-              </Typography>
-              <Typography sx={{ fontSize: "0.78rem", color: editorial.muted }}>
-                One list each, for every form to choose from.
-              </Typography>
-            </Box>
-            <Button
-              startIcon={<RefreshIcon />}
-              onClick={() => token && void load(token)}
-              disabled={loading || !token}
-              sx={{ textTransform: "none" }}
-            >
-              Refresh
-            </Button>
+  const ready = !loading && !loadError && listsExist;
+
+  const renderRow = (
+    key: string | number,
+    item: { name: string; code: string; isActive: boolean },
+    subline: ReactNode,
+    onEdit: () => void,
+    onRemove: (() => void) | undefined,
+  ) => {
+    const label = item.name || item.code;
+    return (
+      <Box
+        key={key}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          px: 1.5,
+          py: 1,
+          borderRadius: `${si.radius}px`,
+          opacity: item.isActive ? 1 : 0.6,
+          "&:hover": { backgroundColor: editorial.blueSoft },
+        }}
+      >
+        <Box
+          aria-hidden
+          sx={{
+            width: 40,
+            height: 40,
+            flexShrink: 0,
+            borderRadius: "50%",
+            display: "grid",
+            placeItems: "center",
+            backgroundColor: editorial.blueWash,
+            color: editorial.navy,
+          }}
+        >
+          {tab === "companies" ? <BusinessIcon fontSize="small" /> : <AccountTreeOutlinedIcon fontSize="small" />}
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
+            <Typography sx={{ ...siType.cardTitle, color: editorial.ink, overflowWrap: "anywhere" }}>{label}</Typography>
+            {!item.isActive && <Chip size="small" label="Off" />}
           </Stack>
-        </Container>
+          {subline}
+        </Box>
+        <IconButton
+          aria-label={`Options for ${label}`}
+          aria-haspopup="menu"
+          onClick={(event) => setRowMenu({ anchor: event.currentTarget, onEdit, onRemove })}
+        >
+          <MoreHorizRounded />
+        </IconButton>
       </Box>
+    );
+  };
 
-      <Container maxWidth="lg" sx={{ py: 3 }}>
-        {loading && (
-          <Stack sx={{ alignItems: "center", py: 8, gap: 2 }}>
-            <CircularProgress size={28} />
-            <Typography sx={{ color: editorial.muted, fontSize: "0.845rem" }}>Reading the lists...</Typography>
-          </Stack>
-        )}
+  const sublineSx = { ...siType.subtext, color: editorial.muted } as const;
+  const codeLine = (item: { name: string; code: string }) =>
+    item.code && item.name && item.code.trim() !== item.name.trim()
+      ? (
+        <Tooltip title="The value forms save on each submission. Renaming never changes it.">
+          <Typography sx={sublineSx}>Saved on forms as {item.code}</Typography>
+        </Tooltip>
+      )
+      : null;
 
-        {!loading && loadError && (
-          <Alert
-            severity="error"
-            action={<Button size="small" onClick={() => token && void load(token)}>Try again</Button>}
-          >
-            {loadError}
-          </Alert>
-        )}
+  return (
+    <Box>
+      <PageHeader
+        title="Companies and departments"
+        description="One list each, for every form to choose from."
+        primary={ready
+          ? {
+            label: tab === "companies" ? "Add company" : "Add department",
+            icon: <AddIcon />,
+            onClick: () => {
+              if (tab === "companies") setEditingCompany({ name: "", code: "", isActive: true });
+              else setEditingDepartment({ name: "", code: "", company: "", isActive: true });
+            },
+          }
+          : undefined}
+        more={[
+          { label: "Build from existing forms", icon: <ManageSearchIcon fontSize="small" />, onClick: () => setConversionOpen(true), disabled: !ready },
+          { label: "Refresh", icon: <RefreshIcon fontSize="small" />, onClick: () => token && void load(token), disabled: loading || !token },
+        ]}
+      />
 
-        {!loading && !loadError && !listsExist && (
-          <Paper sx={{ p: 4, borderRadius: "12px", boxShadow: editorialShadow, textAlign: "center" }}>
-            <Typography sx={{ fontSize: "1.0625rem", fontWeight: 700, color: editorial.ink, mb: 1 }}>
-              The company and department lists have not been set up yet
-            </Typography>
-            <Typography sx={{ fontSize: "0.875rem", color: editorial.muted, maxWidth: 640, mx: "auto", mb: 3 }}>
-              Two SharePoint lists, so every form offers the same companies and departments instead of each
-              keeping its own copy. Once they exist, "Build from existing forms" reads what your forms use
-              today and fills them in, so nothing has to be typed twice and nothing already submitted changes.
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={handleProvision}
-              disabled={provisioning}
-              sx={{ textTransform: "none", fontWeight: 700 }}
+      {loading && (
+        <Stack sx={{ alignItems: "center", py: 8, gap: 2 }}>
+          <CircularProgress size={28} />
+          <Typography sx={{ ...siType.body, ...onCanvasMuted }}>Reading the lists...</Typography>
+        </Stack>
+      )}
+
+      {!loading && loadError && (
+        <Alert
+          severity="error"
+          action={<Button size="small" onClick={() => token && void load(token)}>Try again</Button>}
+        >
+          {loadError}
+        </Alert>
+      )}
+
+      {!loading && !loadError && !listsExist && (
+        <Card sx={{ textAlign: "center" }}>
+          <Typography sx={{ ...siType.sectionTitle, color: editorial.ink, mb: 1 }}>
+            The company and department lists have not been set up yet
+          </Typography>
+          <Typography sx={{ ...siType.body, color: editorial.muted, maxWidth: 640, mx: "auto", mb: 3 }}>
+            Two SharePoint lists, so every form offers the same companies and departments instead of each
+            keeping its own copy. Once they exist, "Build from existing forms" reads what your forms use
+            today and fills them in, so nothing has to be typed twice and nothing already submitted changes.
+          </Typography>
+          <Button variant="contained" onClick={handleProvision} disabled={provisioning}>
+            {provisioning ? "Creating..." : "Create the two lists"}
+          </Button>
+        </Card>
+      )}
+
+      {ready && (
+        <Stack sx={{ gap: 2 }}>
+          {companies.length === 0 && departments.length === 0 && (
+            <Alert
+              severity="info"
+              action={(
+                <Button size="small" onClick={() => setConversionOpen(true)}>
+                  Build them
+                </Button>
+              )}
             >
-              {provisioning ? "Creating..." : "Create the two lists"}
-            </Button>
-          </Paper>
-        )}
+              <AlertTitle>Both lists are empty</AlertTitle>
+              Build them from what your forms already use, so the codes match what submissions have been
+              storing and nothing needs migrating.
+            </Alert>
+          )}
 
-        {!loading && !loadError && listsExist && (
-          <Stack sx={{ gap: 2 }}>
-            {companies.length === 0 && departments.length === 0 && (
-              <Alert
-                severity="info"
-                action={(
-                  <Button size="small" onClick={() => setConversionOpen(true)} sx={{ fontWeight: 700 }}>
-                    Build them
-                  </Button>
-                )}
-              >
-                <AlertTitle>Both lists are empty</AlertTitle>
-                Build them from what your forms already use, so the codes match what submissions have been
-                storing and nothing needs migrating.
-              </Alert>
-            )}
+          <PillTabs
+            aria-label="Companies or departments"
+            value={tab}
+            onChange={(value) => { setTab(value); setSearch(""); }}
+            tabs={[
+              { value: "companies", label: "Companies", count: companies.length },
+              { value: "departments", label: "Departments", count: departments.length },
+            ]}
+          />
 
-            <Paper sx={{ borderRadius: "12px", boxShadow: editorialShadow, overflow: "hidden" }}>
-              <Tabs
-                value={tab}
-                onChange={(_, value: OrgTab) => { setTab(value); setSearch(""); }}
-                sx={{ px: 2, borderBottom: `1px solid ${editorial.border}` }}
-              >
-                <Tab
-                  value="companies"
-                  label={`Companies (${companies.length})`}
-                  sx={{ textTransform: "none", fontWeight: 700 }}
-                />
-                <Tab
-                  value="departments"
-                  label={`Departments (${departments.length})`}
-                  sx={{ textTransform: "none", fontWeight: 700 }}
-                />
-              </Tabs>
+          <Card pad="tight">
+            <Stack direction={{ xs: "column", md: "row" }} sx={{ gap: 1.5, mb: 2 }}>
+              <TextField
+                size="small"
+                placeholder={tab === "companies" ? "Search company or code..." : "Search department or code..."}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                sx={{
+                  flex: 1,
+                  minWidth: 200,
+                  "& .MuiOutlinedInput-root": { borderRadius: "999px", backgroundColor: editorial.skySoft },
+                  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" sx={{ color: editorial.softMuted }} />
+                      </InputAdornment>
+                    ),
+                  },
+                  htmlInput: { "aria-label": tab === "companies" ? "Search companies" : "Search departments" },
+                }}
+              />
+              {tab === "departments" && (
+                <TextField
+                  select
+                  size="small"
+                  value={companyFilter}
+                  onChange={(event) => setCompanyFilter(event.target.value)}
+                  sx={{
+                    minWidth: 220,
+                    "& .MuiOutlinedInput-root": { borderRadius: "999px", backgroundColor: editorial.skySoft },
+                    "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                  }}
+                  slotProps={{ htmlInput: { "aria-label": "Filter by company" } }}
+                >
+                  <MenuItem value={ALL_COMPANIES}>All companies</MenuItem>
+                  <MenuItem value={SHARED_ONLY}>Shared by all companies ({sharedCount})</MenuItem>
+                  {companies.map((company) => (
+                    <MenuItem key={company.code} value={company.code}>
+                      {company.name || company.code}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+            </Stack>
 
-              <Box sx={{ p: 2 }}>
-                <Stack direction={{ xs: "column", md: "row" }} sx={{ gap: 1.5, mb: 2 }}>
-                  <TextField
-                    size="small"
-                    placeholder={tab === "companies" ? "Search company or code..." : "Search department or code..."}
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    sx={{ flex: 1, minWidth: 200 }}
-                    slotProps={{
-                      input: {
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon fontSize="small" sx={{ color: editorial.softMuted }} />
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
-                  />
-                  {tab === "departments" && (
-                    <TextField
-                      select
-                      size="small"
-                      value={companyFilter}
-                      onChange={(event) => setCompanyFilter(event.target.value)}
-                      sx={{ minWidth: 220 }}
-                    >
-                      <MenuItem value={ALL_COMPANIES}>Every department</MenuItem>
-                      <MenuItem value={SHARED_ONLY}>Shared by all companies ({sharedCount})</MenuItem>
-                      {companies.map((company) => (
-                        <MenuItem key={company.code} value={company.code}>
-                          {company.name || company.code}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                  <Button
-                    startIcon={<ManageSearchIcon />}
-                    onClick={() => setConversionOpen(true)}
-                    sx={{ textTransform: "none", whiteSpace: "nowrap" }}
-                  >
-                    Build from existing forms
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      if (tab === "companies") setEditingCompany({ name: "", code: "", isActive: true });
-                      else setEditingDepartment({ name: "", code: "", company: "", isActive: true });
-                    }}
-                    sx={{ textTransform: "none", fontWeight: 700, whiteSpace: "nowrap" }}
-                  >
-                    {tab === "companies" ? "Add company" : "Add department"}
-                  </Button>
-                </Stack>
-
-                {tab === "companies" && (
-                  <Box sx={{ overflowX: "auto" }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 700 }}>Company</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>Code stored on submissions</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">Edit</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {visibleCompanies.map((company) => (
-                          <TableRow key={company.id ?? company.code} hover sx={{ opacity: company.isActive ? 1 : 0.55 }}>
-                            <TableCell>
-                              <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
-                                <Typography sx={{ fontSize: "0.845rem", fontWeight: 700, color: editorial.ink }}>
-                                  {company.name || company.code}
-                                </Typography>
-                                {!company.isActive && (
-                                  <Chip size="small" label="Off" sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
-                                )}
-                              </Stack>
-                            </TableCell>
-                            <TableCell sx={{ fontSize: "0.78rem", color: editorial.softMuted }}>
-                              {company.code}
-                            </TableCell>
-                            <TableCell align="right">
-                              <IconButton
-                                size="small"
-                                aria-label={`Edit ${company.name || company.code}`}
-                                onClick={() => setEditingCompany(company)}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                              <Tooltip title="Prefer switching a company off — a submission that stored this code still has to resolve">
-                                <IconButton
-                                  size="small"
-                                  aria-label={`Remove ${company.name || company.code}`}
-                                  onClick={() => company.id !== undefined && setDeleteTarget({
-                                    kind: "companies",
-                                    id: company.id,
-                                    label: company.name || company.code,
-                                  })}
-                                >
-                                  <DeleteOutlinedIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {visibleCompanies.length === 0 && (
-                      <Typography sx={{ py: 4, textAlign: "center", color: editorial.muted, fontSize: "0.845rem" }}>
-                        {companies.length === 0 ? "No companies listed yet." : "Nothing matches that search."}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-
-                {tab === "departments" && (
-                  <Box sx={{ overflowX: "auto" }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>Belongs to</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }}>Code stored on submissions</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">Edit</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {visibleDepartments.map((department) => (
-                          <TableRow
-                            key={department.id ?? `${department.company}|${department.code}`}
-                            hover
-                            sx={{ opacity: department.isActive ? 1 : 0.55 }}
-                          >
-                            <TableCell>
-                              <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
-                                <Typography sx={{ fontSize: "0.845rem", fontWeight: 700, color: editorial.ink }}>
-                                  {department.name || department.code}
-                                </Typography>
-                                {!department.isActive && (
-                                  <Chip size="small" label="Off" sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
-                                )}
-                              </Stack>
-                            </TableCell>
-                            <TableCell sx={{ fontSize: "0.78rem" }}>
-                              {department.company.trim()
-                                ? departmentScopeLabel(department, companies)
-                                : <em style={{ color: editorial.softMuted }}>All companies</em>}
-                            </TableCell>
-                            <TableCell sx={{ fontSize: "0.78rem", color: editorial.softMuted }}>
-                              {department.code}
-                            </TableCell>
-                            <TableCell align="right">
-                              <IconButton
-                                size="small"
-                                aria-label={`Edit ${department.name || department.code}`}
-                                onClick={() => setEditingDepartment(department)}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                              <IconButton
-                                size="small"
-                                aria-label={`Remove ${department.name || department.code}`}
-                                onClick={() => department.id !== undefined && setDeleteTarget({
-                                  kind: "departments",
-                                  id: department.id,
-                                  label: department.name || department.code,
-                                })}
-                              >
-                                <DeleteOutlinedIcon fontSize="small" />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {visibleDepartments.length === 0 && (
-                      <Typography sx={{ py: 4, textAlign: "center", color: editorial.muted, fontSize: "0.845rem" }}>
-                        {departments.length === 0 ? "No departments listed yet." : "Nothing matches that filter."}
-                      </Typography>
-                    )}
-                  </Box>
+            {tab === "companies" && (
+              <Box>
+                {visibleCompanies.map((company) => renderRow(
+                  company.id ?? company.code,
+                  company,
+                  codeLine(company),
+                  () => setEditingCompany(company),
+                  company.id !== undefined
+                    ? () => setDeleteTarget({ kind: "companies", id: company.id as number, label: company.name || company.code })
+                    : undefined,
+                ))}
+                {visibleCompanies.length === 0 && (
+                  <Typography sx={{ ...siType.body, py: 4, textAlign: "center", color: editorial.muted }}>
+                    {companies.length === 0 ? "No companies listed yet." : "Nothing matches that search."}
+                  </Typography>
                 )}
               </Box>
-            </Paper>
+            )}
 
-            <Typography sx={{ fontSize: "0.78rem", color: editorial.muted }}>
-              A form stores the code and shows the name, so renaming something here never changes what has
-              already been submitted. Switch a row off rather than removing it: a submission that stored its
-              code still has to resolve to a readable name.
-            </Typography>
-          </Stack>
-        )}
-      </Container>
+            {tab === "departments" && (
+              <Box>
+                {visibleDepartments.map((department) => renderRow(
+                  department.id ?? `${department.company}|${department.code}`,
+                  department,
+                  (
+                    <>
+                      <Typography sx={sublineSx}>
+                        {department.company.trim()
+                          ? departmentScopeLabel(department, companies)
+                          : "All companies"}
+                      </Typography>
+                      {codeLine(department)}
+                    </>
+                  ),
+                  () => setEditingDepartment(department),
+                  department.id !== undefined
+                    ? () => setDeleteTarget({ kind: "departments", id: department.id as number, label: department.name || department.code })
+                    : undefined,
+                ))}
+                {visibleDepartments.length === 0 && (
+                  <Typography sx={{ ...siType.body, py: 4, textAlign: "center", color: editorial.muted }}>
+                    {departments.length === 0 ? "No departments listed yet." : "Nothing matches that filter."}
+                  </Typography>
+                )}
+              </Box>
+            )}
+
+            <Menu
+              anchorEl={rowMenu?.anchor}
+              open={Boolean(rowMenu)}
+              onClose={() => setRowMenu(null)}
+              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+              transformOrigin={{ vertical: "top", horizontal: "right" }}
+            >
+              <MenuItem
+                onClick={() => {
+                  const action = rowMenu?.onEdit;
+                  setRowMenu(null);
+                  action?.();
+                }}
+              >
+                <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+                Edit
+              </MenuItem>
+              {rowMenu?.onRemove && (
+                <MenuItem
+                  onClick={() => {
+                    const action = rowMenu?.onRemove;
+                    setRowMenu(null);
+                    action?.();
+                  }}
+                  sx={{ color: editorial.error }}
+                >
+                  <ListItemIcon sx={{ color: "inherit" }}><DeleteOutlinedIcon fontSize="small" /></ListItemIcon>
+                  Remove
+                </MenuItem>
+              )}
+            </Menu>
+          </Card>
+
+          <Typography sx={{ ...siType.subtext, ...onCanvasMuted }}>
+            A form stores the code and shows the name, so renaming something here never changes what has
+            already been submitted. Switch a row off rather than removing it: a submission that stored its
+            code still has to resolve to a readable name.
+          </Typography>
+        </Stack>
+      )}
 
       <Dialog open={!!editingCompany} onClose={saving ? undefined : () => setEditingCompany(null)} fullWidth maxWidth="sm">
         <DialogTitle sx={{ fontWeight: 700 }}>

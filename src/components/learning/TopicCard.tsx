@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Box, Stack, Typography } from "@mui/material";
-import { FolderOutlined, LayersOutlined, LockOutlined, PlayLessonOutlined } from "@mui/icons-material";
-import { editorial, editorialHairline, editorialShadow, editorialShadowHover } from "../../theme/editorial";
+import { Box, Typography } from "@mui/material";
+import { FolderOutlined, LockOutlined } from "@mui/icons-material";
+import { editorial, si, siType } from "../../theme/editorial";
 import { learningReduceMotionSx } from "./learningUi";
 import type { LearningTopic } from "../../types";
 
@@ -34,6 +34,8 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
   }, [hovering, covers.length]);
 
   const activeCover = covers[hovering ? coverIndex : 0];
+  const itemCount = `${topic.totalMaterialCount} item${topic.totalMaterialCount === 1 ? "" : "s"}`;
+  const subtopicCount = topic.subtopicCount > 0 ? ` · ${topic.subtopicCount} subtopic${topic.subtopicCount === 1 ? "" : "s"}` : "";
 
   return (
     <Box
@@ -49,133 +51,85 @@ export default function TopicCard({ topic, onOpen }: TopicCardProps) {
       onBlur={() => setHovering(false)}
       aria-label={needsPassword ? `Unlock topic ${topic.name}` : `Open topic ${topic.name}`}
       sx={{
-        position: "relative",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "flex-end",
         width: "100%",
-        minHeight: 168,
-        p: 2,
+        p: 0,
         textAlign: "left",
         cursor: "pointer",
         overflow: "hidden",
-        borderRadius: "12px",
-        border: editorialHairline,
-        boxShadow: editorialShadow,
-        color: editorial.white,
-        backgroundColor: editorial.pmwBlueDark,
-        transition: "transform 0.2s ease, box-shadow 0.2s ease",
-        "&:hover": { transform: "translateY(-3px)", boxShadow: editorialShadowHover },
-        "&:focus-visible": { outline: `3px solid ${editorial.pmwBlueSoft}`, outlineOffset: 2 },
+        border: "none",
+        borderRadius: `${si.radius}px`,
+        boxShadow: si.shadow,
+        color: editorial.ink,
+        backgroundColor: editorial.panel,
+        transition: "background-color 0.15s ease",
+        "&:hover": { backgroundColor: editorial.blueSoft },
+        "&:focus-visible": { outline: `2px solid ${editorial.navy}`, outlineOffset: 2 },
         ...learningReduceMotionSx,
       }}
     >
+      {/* A locked topic has no cover to cycle -- the server sends none -- so
+          the lock icon and the words beneath the name are what say why the
+          card looks plain. */}
       {activeCover && (
         <Box
           component="img"
           src={activeCover}
           alt=""
           loading="lazy"
-          sx={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            transition: "opacity 0.5s ease",
-            ...learningReduceMotionSx,
-          }}
+          sx={{ width: "100%", aspectRatio: "16 / 9", objectFit: "cover", display: "block" }}
         />
       )}
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          background: activeCover
-            ? "linear-gradient(180deg, rgba(16,16,16,0.12) 0%, rgba(16,16,16,0.78) 100%)"
-            : `linear-gradient(135deg, ${editorial.pmwBlue} 0%, ${editorial.pmwPurple} 100%)`,
-        }}
-      />
 
-      {/* A locked topic has no cover to cycle — the server sends none — so the
-          badge is the only thing that says why the card looks bare. It stays on
-          after the password is given, because "this topic is protected" is worth
-          knowing even once you are inside. */}
-      {topic.locked && (
-        <Stack
-          direction="row"
-          spacing={0.5}
+      <Box sx={{ p: 2, display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0, width: "100%" }}>
+        <Box
           sx={{
-            position: "absolute",
-            top: 12,
-            right: 12,
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            flexShrink: 0,
+            display: "flex",
             alignItems: "center",
-            px: 0.9,
-            py: 0.4,
-            borderRadius: "999px",
-            backgroundColor: "rgba(255, 255, 255, 0.94)",
-            color: needsPassword ? editorial.pmwBlueDark : editorial.success,
+            justifyContent: "center",
+            backgroundColor: needsPassword ? editorial.skySoft : editorial.blueWash,
+            color: needsPassword ? editorial.muted : editorial.navy,
           }}
         >
-          <LockOutlined sx={{ fontSize: 14 }} />
-          <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>
-            {needsPassword ? "Locked" : "Unlocked"}
-          </Typography>
-        </Stack>
-      )}
-
-      <Box sx={{ position: "relative", minWidth: 0 }}>
-        {needsPassword ? (
-          <LockOutlined sx={{ fontSize: 22, opacity: 0.9, mb: 0.5 }} />
-        ) : (
-          <FolderOutlined sx={{ fontSize: 22, opacity: 0.9, mb: 0.5 }} />
-        )}
-        <Typography
-          variant="subtitle1"
-          sx={{
-            fontWeight: 700,
-            lineHeight: 1.25,
-            textWrap: "pretty",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {topic.name}
-        </Typography>
-        {topic.description && (
+          {needsPassword ? <LockOutlined fontSize="small" /> : <FolderOutlined fontSize="small" />}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography
-            variant="caption"
             sx={{
+              ...siType.cardTitle,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
-              opacity: 0.86,
-              fontWeight: 600,
-              mt: 0.25,
+              textWrap: "pretty",
             }}
           >
-            {topic.description}
+            {topic.name}
           </Typography>
-        )}
-        <Stack direction="row" spacing={1.5} sx={{ mt: 1, alignItems: "center", opacity: 0.92 }}>
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-            <PlayLessonOutlined sx={{ fontSize: 15 }} />
-            <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              {topic.totalMaterialCount} item{topic.totalMaterialCount === 1 ? "" : "s"}
+          {topic.description && !needsPassword && (
+            <Typography
+              sx={{
+                ...siType.subtext,
+                color: editorial.muted,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {topic.description}
             </Typography>
-          </Stack>
-          {topic.subtopicCount > 0 && (
-            <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-              <LayersOutlined sx={{ fontSize: 15 }} />
-              <Typography variant="caption" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                {topic.subtopicCount} subtopic{topic.subtopicCount === 1 ? "" : "s"}
-              </Typography>
-            </Stack>
           )}
-        </Stack>
+          <Typography sx={{ ...siType.subtext, color: editorial.muted, mt: 0.25 }}>
+            {needsPassword ? "Password required" : `${itemCount}${subtopicCount}`}
+            {topic.locked && !needsPassword && " · Unlocked"}
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );

@@ -1840,8 +1840,8 @@ export default function AdminFormBuilder() {
     : unsaved
       ? { text: "Unsaved changes", color: C.amber }
       : savedSignature === null
-        ? { text: "Nothing saved yet", color: C.textMuted }
-        : { text: "All changes saved", color: C.purple };
+        ? { text: "Draft · not saved yet", color: C.textMuted }
+        : { text: "Saved", color: C.purple };
 
   const effectiveLayerCount = getEffectiveLayerCount(layerConfig, numLayers);
 
@@ -1883,38 +1883,34 @@ export default function AdminFormBuilder() {
         </div>
       )}
 
-      {/* ── Brand header ─────────────────────────────────────────────── */}
+      {/* ── Header: one light row ───────────────────────────────────────
+          Home, the form and its save state, the four modes, then the actions.
+          The builder renders full bleed, outside the app shell, so the home
+          button is the only way back to the rest of the app -- which is also
+          why it navigates rather than calling window.location.assign("/").
+          That reloaded the whole SPA: a fresh MSAL handshake, every list
+          rediscovered, and all 100+ submissions refetched, to reach a screen
+          the router can already render. */}
       <header className="bx-header">
-        <span className="bx-mark"><Icon name="doc" size={17} strokeWidth={1.6} /></span>
-        <span className="bx-wordmark">PMW Forms</span>
-        {availableSites().length > 1 && (
-          <label className="bx-site-picker">
-            <span className="bx-site-picker-label">Site</span>
-            <select
-              value={siteKey}
-              // A full navigation, not a state change: it reloads the builder
-              // against the new site, so no request started under the previous
-              // site can land afterwards.
-              onChange={(e) => {
-                const next = e.target.value;
-                window.location.assign(next === HOME_SITE_KEY ? "/admin/builder" : `/admin/builder?site=${encodeURIComponent(next)}`);
-              }}
-            >
-              {availableSites().map((site) => (
-                <option key={site.key} value={site.key}>{site.label}</option>
-              ))}
-            </select>
-          </label>
-        )}
-        <span className="bx-vrule" />
+        <button
+          type="button"
+          className="bx-circlebtn"
+          aria-label="Back to the dashboard"
+          title="Back to the dashboard"
+          onClick={() => navigate("/")}
+        >
+          <Icon name="home" size={18} strokeWidth={1.6} />
+        </button>
 
-        <div style={{ flex: "none", position: "relative" }}>
+        <div className="bx-header-form">
+          <div style={{ flex: "none", position: "relative", minWidth: 0 }}>
           <button
             type="button"
             className="bx-switcher"
             onClick={() => { setSwitcherOpen(o => !o); setToolsOpen(false); setPreviewMenuOpen(false); }}
             aria-expanded={switcherOpen}
             aria-haspopup="true"
+            aria-label={`Form: ${meta.formTitle || "New form"}. Switch form`}
             title="Switch form"
           >
             <span className="bx-switcher-label">{meta.formTitle || "New form"}</span>
@@ -1958,6 +1954,7 @@ export default function AdminFormBuilder() {
                       type="button"
                       className="bx-ghost bx-ghost-bare"
                       style={{ alignSelf: "center", marginRight: 2 }}
+                      aria-label={`Delete “${f.Title}” — keeps its submissions`}
                       title={`Delete “${f.Title}” — keeps its submissions`}
                       onClick={() => { setSwitcherOpen(false); handleDelete(f); }}
                     >
@@ -1967,6 +1964,7 @@ export default function AdminFormBuilder() {
                       type="button"
                       className="bx-ghost bx-ghost-bare"
                       style={{ alignSelf: "center", marginRight: 8 }}
+                      aria-label={`Delete “${f.Title}” and ALL its submissions — irreversible`}
                       title={`Delete “${f.Title}” and ALL its submissions — irreversible`}
                       onClick={() => { setSwitcherOpen(false); handleHardDelete(f); }}
                     >
@@ -1978,9 +1976,33 @@ export default function AdminFormBuilder() {
             </div>
           )}
         </div>
+        <div className="bx-save" role="status" aria-live="polite">
+          {saveBusy ? <span className="bx-spinner" style={{ width: 12, height: 12 }} /> : <span className="bx-dot" style={{ background: saveState.color }} />}
+          {saveState.text}
+        </div>
+        </div>
 
-        <div style={{ flex: "none", display: "flex", gap: 6, alignItems: "center" }}>
-          <span className="bx-tag bx-tag-outline">Admin</span>
+        {availableSites().length > 1 && (
+          <label className="bx-site-picker">
+            <span className="bx-site-picker-label">Site</span>
+            <select
+              value={siteKey}
+              // A full navigation, not a state change: it reloads the builder
+              // against the new site, so no request started under the previous
+              // site can land afterwards.
+              onChange={(e) => {
+                const next = e.target.value;
+                window.location.assign(next === HOME_SITE_KEY ? "/admin/builder" : `/admin/builder?site=${encodeURIComponent(next)}`);
+              }}
+            >
+              {availableSites().map((site) => (
+                <option key={site.key} value={site.key}>{site.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div className="bx-header-extras">
           {isEditing && <span className="bx-tag bx-tag-neutral bx-chip-sec">v{meta.formVersion}</span>}
           {isDraft && <span className="bx-tag bx-tag-warn bx-chip-sec">Draft</span>}
           {/* Rehearse this form's approval workflow with every email redirected
@@ -2019,61 +2041,37 @@ export default function AdminFormBuilder() {
           )}
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }} />
-
-        <div className="bx-save" role="status" aria-live="polite">
-          {saveBusy ? <span className="bx-spinner" style={{ width: 12, height: 12 }} /> : <span className="bx-dot" style={{ background: saveState.color }} />}
-          {saveState.text}
+        <div className="bx-modes" role="group" aria-label="Builder modes" title={modeHint}>
+          {MODES.map(m => (
+            <button
+              key={m.id}
+              type="button"
+              className={`bx-navitem${mode === m.id ? " is-on" : ""}`}
+              aria-current={mode === m.id}
+              aria-label={m.label}
+              title={`${m.label} — ${m.hint}`}
+              onClick={() => { setMode(m.id); setToolsOpen(false); setSwitcherOpen(false); setPreviewMenuOpen(false); }}
+            >
+              <Icon name={m.icon} size={16} strokeWidth={1.6} />
+              <span className="bx-navitem-label">{m.label}</span>
+            </button>
+          ))}
         </div>
-      </header>
 
-      {/* ── Mode rail ────────────────────────────────────────────────── */}
-      <nav className="bx-nav" aria-label="Builder modes">
-        {/* The builder renders full bleed, outside the app shell, so this is
-            the only way back to the rest of the app -- which is also why it
-            navigates rather than calling window.location.assign("/"). That
-            reloaded the whole SPA: a fresh MSAL handshake, every list
-            rediscovered, and all 100+ submissions refetched, to reach a screen
-            the router can already render. */}
-        <button
-          type="button"
-          className="bx-navitem bx-navhome"
-          title="Back to the dashboard"
-          onClick={() => navigate("/")}
-        >
-          <Icon name="home" size={19} strokeWidth={1.6} />
-        </button>
-        {MODES.map(m => (
-          <button
-            key={m.id}
-            type="button"
-            className={`bx-navitem${mode === m.id ? " is-on" : ""}`}
-            aria-current={mode === m.id}
-            aria-label={m.label}
-            title={`${m.label} — ${m.hint}`}
-            onClick={() => { setMode(m.id); setToolsOpen(false); setSwitcherOpen(false); setPreviewMenuOpen(false); }}
-          >
-            <Icon name={m.icon} size={17} strokeWidth={1.6} />
-            <span className="bx-navitem-label">{m.label}</span>
-          </button>
-        ))}
-
-        <div style={{ flex: 1 }} />
-        <div className="bx-navhint">{modeHint}</div>
-
-        <div style={{ position: "relative", display: "flex", alignItems: "center", paddingRight: 8 }}>
-          <button
-            type="button"
-            className="bx-navbtn is-icon"
-            onClick={() => { setToolsOpen(o => !o); setSwitcherOpen(false); setPreviewMenuOpen(false); }}
-            aria-expanded={toolsOpen}
-            aria-haspopup="true"
-            aria-label="Tools"
-            title="Templates, translations, data sources, permissions and the raw survey JSON"
-          >
-            <Icon name="wrench" size={16} strokeWidth={1.6} />
-            <span className="bx-sr">Tools</span>
-          </button>
+        <div className="bx-header-end">
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <button
+              type="button"
+              className="bx-navbtn"
+              onClick={() => { setToolsOpen(o => !o); setSwitcherOpen(false); setPreviewMenuOpen(false); }}
+              aria-expanded={toolsOpen}
+              aria-haspopup="true"
+              aria-label="Tools"
+              title="Templates, translations, data sources, permissions and the raw survey JSON"
+            >
+              <Icon name="wrench" size={16} strokeWidth={1.6} />
+              <span className="bx-navitem-label">Tools</span>
+            </button>
           {toolsOpen && (
             <div className="bx-menu">
               {TOOL_GROUPS.map(group => (
@@ -2089,23 +2087,23 @@ export default function AdminFormBuilder() {
               ))}
             </div>
           )}
-        </div>
+          </div>
 
-        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "0 16px 0 4px" }}>
-          <button
-            type="button"
-            className="bx-navbtn is-icon"
-            onClick={() => { setPreviewMenuOpen(o => !o); setToolsOpen(false); setSwitcherOpen(false); }}
-            aria-expanded={previewMenuOpen}
-            aria-haspopup="true"
-            aria-label="Preview"
-            title="Open a live preview of this form"
-          >
-            <Icon name="eye" size={16} strokeWidth={1.6} />
-            <span className="bx-sr">Preview</span>
-          </button>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <button
+              type="button"
+              className="bx-navbtn"
+              onClick={() => { setPreviewMenuOpen(o => !o); setToolsOpen(false); setSwitcherOpen(false); }}
+              aria-expanded={previewMenuOpen}
+              aria-haspopup="true"
+              aria-label="Preview"
+              title="Open a live preview of this form"
+            >
+              <Icon name="eye" size={16} strokeWidth={1.6} />
+              <span className="bx-navitem-label">Preview</span>
+            </button>
           {previewMenuOpen && (
-            <div className="bx-menu" style={{ width: 230, right: "auto", left: 0 }}>
+            <div className="bx-menu" style={{ width: 230 }}>
               <div className="bx-menu-group">
                 <div className="bx-eyebrow bx-eyebrow-sm" style={{ marginBottom: 5 }}>Live preview</div>
                 {([["preview-desktop", "Desktop"], ["preview-tablet", "Tablet"], ["preview-mobile", "Mobile"]] as const).map(([key, label]) => (
@@ -2116,6 +2114,7 @@ export default function AdminFormBuilder() {
               </div>
             </div>
           )}
+          </div>
           {meta.slug ? (
             <a
               className="bx-navbtn is-solid"
@@ -2145,7 +2144,7 @@ export default function AdminFormBuilder() {
             </button>
           )}
         </div>
-      </nav>
+      </header>
 
       {viewingOld && (
         <div style={{ flex: "none", background: C.amberPale, borderBottom: "1px solid #FDE68A", padding: "9px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", fontSize: 14, color: C.amber }}>

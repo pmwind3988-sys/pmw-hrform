@@ -23,7 +23,6 @@ const TAXONOMY: Record<string, Entry> = {
   // Basic · Text
   text: { tab: "basic", section: "Text", shortLabel: "Single Line" },
   comment: { tab: "basic", section: "Text", shortLabel: "Multi Line" },
-  password: { tab: "basic", section: "Text", shortLabel: "Password" },
   nric: { tab: "basic", section: "Text", shortLabel: "NRIC / IC" },
   // Basic · Choice
   dropdown: { tab: "basic", section: "Choice", shortLabel: "Dropdown" },
@@ -47,6 +46,7 @@ const TAXONOMY: Record<string, Entry> = {
   imageupload: { tab: "advanced", section: "Rich input", shortLabel: "Image Upload" },
   signaturepad: { tab: "advanced", section: "Rich input", shortLabel: "Signature" },
   jsoneditor: { tab: "advanced", section: "Rich input", shortLabel: "JSON Editor" },
+  password: { tab: "advanced", section: "Rich input", shortLabel: "Password" },
   // Advanced · Tables
   dynamicmatrix: { tab: "advanced", section: "Tables", shortLabel: "Dynamic Matrix" },
   tableinput: { tab: "advanced", section: "Tables", shortLabel: "Table Input" },

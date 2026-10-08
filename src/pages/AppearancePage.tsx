@@ -1,41 +1,34 @@
 import { useState } from "react";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { PaletteOutlined } from "@mui/icons-material";
 import { useDashboard } from "../contexts/DashboardContext";
 import { useDashboardBackground } from "../hooks/useDashboardBackground";
 import BackgroundPicker, { BackgroundErrorNote } from "../components/dashboard/BackgroundPicker";
-import { findDashboardBackground } from "../utils/dashboardBackgrounds";
+import { buildDashboardBackgroundCss, findDashboardBackground } from "../utils/dashboardBackgrounds";
 import { editorial, si, siType } from "../theme/editorial";
 import Card from "../components/common/Card";
+import PageHeader from "../components/common/PageHeader";
 
 /**
  * Profile → Appearance.
  *
- * The dashboard background setting, which used to be reachable only from an
- * item in the header's overflow menu.
- *
- * WHY IT SURVIVED THE OVERHAUL. The SI canvas is one flat off-white, and a
- * photographic background under flat white cards is not that design. But this
- * is a real, working, tenant-wide setting an administrator may already have
- * chosen, and deleting it would have silently reverted their choice. So the
- * flat canvas became the DEFAULT rather than the only option: out of the box
- * the app looks like SI, and the gallery is still here for anyone who wants it.
+ * The dashboard background setting. The flat canvas is the DEFAULT rather than
+ * the only option, so an administrator's earlier choice is never silently
+ * reverted.
  *
  * Read-only for a non-administrator, because the setting is stored once for the
- * whole tenant rather than per person — an employee changing it here would be
- * changing it for everybody, which is not what "Appearance" under "Profile"
- * leads anyone to expect.
+ * whole tenant rather than per person -- an employee changing it here would be
+ * changing it for everybody.
+ *
+ * Saving is NOT immediate: the picker dialog applies the choice only when its
+ * Save button is pressed, so the page copy says "pick, then save".
  */
 export default function AppearancePage() {
   const { isAdmin } = useDashboard();
   const { setting, loading, saving, error, save } = useDashboardBackground(isAdmin);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  /**
-   * The gallery's own label, not the stored id. Reading it live showed
-   * "city-glass" where a person expects "City Glass" -- the id is a storage
-   * key, and putting it on screen leaks the database into the interface.
-   */
+  /** The gallery's own label, not the stored id ("City Glass", not "city-glass"). */
   const currentLabel = loading
     ? "Loading…"
     : setting.backgroundId === "custom"
@@ -44,53 +37,43 @@ export default function AppearancePage() {
 
   return (
     <Box sx={{ maxWidth: 860, mx: "auto" }}>
+      <PageHeader
+        title="Appearance"
+        description={isAdmin ? "Pick a background, then save." : "The background is shared by the whole organisation."}
+        primary={isAdmin ? { label: "Change background", icon: <PaletteOutlined />, onClick: () => setPickerOpen(true) } : undefined}
+      />
+
       <Card>
-        <Typography sx={{ ...siType.sectionTitle, color: editorial.ink }}>
+        <Typography component="h3" sx={{ ...siType.sectionTitle, color: editorial.ink }}>
           Dashboard background
-        </Typography>
-        <Typography sx={{ ...siType.body, color: editorial.muted, mt: 0.75 }}>
-          The backdrop behind every page. The flat canvas is the default and the one the rest of
-          this design is built for; the gallery offers tinted gradients and a custom image.
         </Typography>
 
         <Box
+          role="img"
+          aria-label={`Preview of the current background: ${currentLabel}`}
           sx={{
-            mt: 2.5,
+            mt: 2,
+            height: { xs: 160, sm: 220 },
+            borderRadius: `${si.radiusSheet}px`,
+            background: loading ? editorial.skySoft : buildDashboardBackgroundCss(setting),
+            boxShadow: `inset 0 0 0 1px ${editorial.border}`,
             display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 2,
+            alignItems: "flex-end",
+            gap: 1.5,
             p: 2,
-            borderRadius: `${si.radiusSm}px`,
-            backgroundColor: editorial.appSurface,
-            border: `1px solid ${editorial.border}`,
           }}
         >
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography sx={{ ...siType.micro, color: editorial.muted }}>
-              Currently applied
-            </Typography>
-            <Typography sx={{ ...siType.cardTitle, color: editorial.ink, mt: 0.25 }}>
-              {currentLabel}
-            </Typography>
-          </Box>
+          <Box sx={{ width: "60%", height: 64, borderRadius: `${si.radiusSm}px`, backgroundColor: "rgba(255,255,255,0.92)" }} />
+          <Box sx={{ flex: 1, height: 64, borderRadius: `${si.radiusSm}px`, backgroundColor: "rgba(255,255,255,0.92)" }} />
+        </Box>
 
-          {isAdmin ? (
-            <Button
-              variant="contained"
-              startIcon={<PaletteOutlined />}
-              onClick={() => setPickerOpen(true)}
-              sx={{
-                borderRadius: `${si.radius}px`,
-                minHeight: si.touchTarget,
-                textTransform: "none",
-                fontWeight: 700,
-              }}
-            >
-              Change background
-            </Button>
-          ) : (
-            <Typography sx={{ ...siType.subtext, color: editorial.muted, maxWidth: 320 }}>
+        <Box sx={{ mt: 2, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 2 }}>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography sx={{ ...siType.subtext, color: editorial.muted }}>Currently applied</Typography>
+            <Typography sx={{ ...siType.cardTitle, color: editorial.ink }}>{currentLabel}</Typography>
+          </Box>
+          {!isAdmin && (
+            <Typography sx={{ ...siType.subtext, color: editorial.muted, maxWidth: 360 }}>
               This is a shared setting for the whole organisation, so only an administrator can
               change it.
             </Typography>

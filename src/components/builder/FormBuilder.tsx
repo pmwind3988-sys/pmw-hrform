@@ -1262,10 +1262,10 @@ function FormSheet({ fields, selectedId, onSelect, onRemove, onDuplicate, onReor
                 {errors.length} error{errors.length !== 1 ? "s" : ""}
               </span>
             )}
-            <button type="button" className="bx-ghost" title="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
+            <button type="button" className="bx-ghost" aria-label="Undo" title="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo}>
               <Icon name="undo" size={15} strokeWidth={1.6} />
             </button>
-            <button type="button" className="bx-ghost" title="Redo (Ctrl+Y)" onClick={onRedo} disabled={!canRedo}>
+            <button type="button" className="bx-ghost" aria-label="Redo" title="Redo (Ctrl+Y)" onClick={onRedo} disabled={!canRedo}>
               <Icon name="redo" size={15} strokeWidth={1.6} />
             </button>
           </div>
@@ -2478,7 +2478,7 @@ function LivePreviewModal({ json, onClose, showBanner, meta, device = "desktop" 
 
   return <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(17,24,39,0.6)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}>
-    <div style={{ background: C.white, borderRadius: 28, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden", transition: "width 0.3s" }}>
+    <div style={{ background: C.white, borderRadius: 28, width: deviceWidth, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.border}`, animation: "fadeUp 0.2s ease", overflow: "hidden" }}>
       <div style={{ background: `linear-gradient(135deg,${C.purpleDark},${C.purple})`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 2 }}>Live Form Preview</div>

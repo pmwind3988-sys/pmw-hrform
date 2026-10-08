@@ -5,7 +5,7 @@ import { careerReduceMotionSx } from "./careerUi";
 import heroImage from "../../assets/hero.png";
 
 /**
- * Dark title band for the public career surfaces, adapted from the Figma
+ * Modest navy title band for the signed-out career surfaces, adapted from the Figma
  * job-portal template (file its0mTyfN3jAVbef8BKpEr, Hero 25:6654).
  *
  * This is a separate component rather than a restyle of CareerPortalHeader on
@@ -37,15 +37,10 @@ export default function CareerHero({ title, subtitle, children }: CareerHeroProp
           content: '""',
           position: "absolute",
           inset: 0,
-          // Template lays flat black over the photo. Angling it toward PMW blue
-          // keeps the brand present without lifting text contrast off AA.
-          // The navy family, and four points lighter than it was. The old
-          // overlay ran near-black #101010 into an off-system #00335A at 0.84
-          // and 0.88, which sat the hero photograph so far under the scrim that
-          // the band read as a flat dark rectangle. White text still clears AA
-          // against both stops.
-          background:
-            "linear-gradient(180deg, rgba(11, 47, 112, 0.8) 0%, rgba(15, 61, 145, 0.84) 100%)",
+          // One flat navy veil over the photograph: the brand colour, and
+          // white text clears AA against it.
+          backgroundColor: editorial.navyDeep,
+          opacity: 0.88,
         },
         ...careerReduceMotionSx,
       }}
@@ -54,11 +49,11 @@ export default function CareerHero({ title, subtitle, children }: CareerHeroProp
         maxWidth="lg"
         sx={{
           position: "relative",
-          py: { xs: 4, sm: 5, md: 7 },
+          py: { xs: 3, sm: 3.5, md: 4.5 },
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: { xs: 1.25, md: 2 },
+          gap: { xs: 0.75, md: 1 },
           textAlign: "center",
         }}
       >
@@ -67,10 +62,8 @@ export default function CareerHero({ title, subtitle, children }: CareerHeroProp
           sx={{
             color: editorial.white,
             fontWeight: 700,
-            // Template sets 60px; scaled down so it does not overpower the
-            // portal header sitting directly above it.
-            fontSize: { xs: "2rem", sm: "2.75rem", md: "3.25rem" },
-            lineHeight: 1.05,
+            fontSize: { xs: "1.5rem", sm: "1.85rem", md: "2.15rem" },
+            lineHeight: 1.15,
             letterSpacing: "-0.01em",
             textWrap: "balance",
           }}
@@ -81,7 +74,7 @@ export default function CareerHero({ title, subtitle, children }: CareerHeroProp
           <Typography
             variant="body1"
             sx={{
-              color: "rgba(255, 255, 255, 0.82)",
+              color: editorial.sky,
               maxWidth: 620,
               fontSize: { xs: "0.9375rem", md: "1rem" },
               textWrap: "pretty",

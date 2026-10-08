@@ -79,13 +79,12 @@ export default function LayerCard({
   return (
     <div
       style={{
-        border: `1px solid ${expanded ? C.purpleMid : C.border}`,
         borderRadius: 20,
         background: expanded ? C.white : C.offWhite,
         marginBottom: 8,
         overflow: "hidden",
         boxShadow: expanded ? "0 10px 24px rgba(16,16,16,0.07)" : "0 3px 10px rgba(16,16,16,0.04)",
-        transition: "border-color .15s, box-shadow .15s, background .15s",
+        transition: "box-shadow .15s, background .15s",
       }}
     >
       {/* Header row */}
@@ -161,11 +160,13 @@ export default function LayerCard({
         <div style={{ display: "flex", gap: 3, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button
             onClick={onMoveUp}
+            aria-label="Move layer up"
+            title="Move layer up"
             disabled={index === 0 || actionsDisabled}
             style={{
               width: 30,
               height: 30,
-              border: `1px solid ${C.border}`,
+              border: "none",
               borderRadius: "50%",
               background: C.white,
               color: index === 0 || actionsDisabled ? C.textMuted : C.textSecond,
@@ -180,11 +181,13 @@ export default function LayerCard({
           </button>
           <button
             onClick={onMoveDown}
+            aria-label="Move layer down"
+            title="Move layer down"
             disabled={index === total - 1 || actionsDisabled}
             style={{
               width: 30,
               height: 30,
-              border: `1px solid ${C.border}`,
+              border: "none",
               borderRadius: "50%",
               background: C.white,
               color: index === total - 1 || actionsDisabled ? C.textMuted : C.textSecond,
@@ -199,6 +202,8 @@ export default function LayerCard({
           </button>
           <button
             onClick={onDelete}
+            aria-label="Remove layer"
+            title="Remove layer"
             disabled={actionsDisabled}
             onMouseEnter={() => !actionsDisabled && setHoverDel(true)}
             onMouseLeave={() => !actionsDisabled && setHoverDel(false)}
@@ -238,7 +243,7 @@ export default function LayerCard({
         <div
           style={{
             padding: "0 11px 11px",
-            borderTop: `1px solid ${C.border}`,
+            paddingTop: 4,
             animation: "fadeUp .15s ease",
           }}
         >

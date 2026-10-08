@@ -74,14 +74,14 @@ export default function SetLockPasswordDialog({
   };
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: "12px" } } }}>
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: "28px" } } }}>
       <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
           <Box
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "12px",
+              borderRadius: "50%",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
