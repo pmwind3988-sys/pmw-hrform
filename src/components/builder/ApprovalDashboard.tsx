@@ -112,6 +112,10 @@ import Chip from "@mui/material/Chip";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
+import Checkbox from "@mui/material/Checkbox";
+import Button from "@mui/material/Button";
+import FileDownloadOutlined from "@mui/icons-material/FileDownloadOutlined";
+import { csvRow, downloadCsv } from "../../utils/csv";
 import { editorial, si, siType } from "../../theme/editorial";
 import Card from "../common/Card";
 import PageHeader from "../common/PageHeader";
@@ -132,7 +136,7 @@ const CONFIGURED_MANUAL_PAPER_EMAIL = (
 ).trim().toLowerCase();
 const SUBMISSIONS_PER_PAGE = 12;
 /** Desktop list columns: submission | submitted by | version & layer | status | actions. */
-const TABLE_MIN_WIDTH = 720;
+const TABLE_MIN_WIDTH = 752;
 type ListSort = "newest" | "oldest" | "az" | "za";
 const LIST_SORT_LABELS: Record<ListSort, string> = {
   newest: "Newest first",
@@ -143,7 +147,8 @@ const LIST_SORT_LABELS: Record<ListSort, string> = {
 function submittedTime(item: Pick<PendingItem, "SubmittedAt">): number {
   return item.SubmittedAt ? new Date(item.SubmittedAt).getTime() || 0 : 0;
 }
-const LIST_COLUMNS = "minmax(0,2fr) minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr) 96px";
+// The first column is the tick box for bulk actions.
+const LIST_COLUMNS = "32px minmax(0,2fr) minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr) 96px";
 
 // SharePoint answers a list query with ONE page and a link to the next, so a
 // query that reads only the response is capped at whatever `$top` asked for.
@@ -828,6 +833,11 @@ export default function ApprovalDashboard() {
   const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PendingItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  // Ticked rows, by item key. Kept across pages and filters on purpose, so a
+  // selection can be built up; only rows still in the filtered list are acted on.
+  const [checkedKeys, setCheckedKeys] = useState<Set<string>>(() => new Set());
+  const [bulkProgress, setBulkProgress] = useState<{ label: string; done: number; total: number } | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [resendingItemKey, setResendingItemKey] = useState("");
   const [emailNotice, setEmailNotice] = useState("");
   const [customEmailDate, setCustomEmailDate] = useState("");
@@ -2053,12 +2063,12 @@ export default function ApprovalDashboard() {
     finally { setBranchLoading(false); }
   };
 
-  const handleForceResend = async (item: PendingItem, overrideRecipient?: string) => {
-    if (!token || !isSuperuser) return;
+  const handleForceResend = async (item: PendingItem, overrideRecipient?: string): Promise<boolean> => {
+    if (!token || !isSuperuser) return false;
     const manualRecipient = overrideRecipient?.trim() || "";
     if (manualRecipient && !EMAIL_RE.test(manualRecipient)) {
       setError("Enter a valid approver or evaluator email address before sending.");
-      return;
+      return false;
     }
     const itemKey = getPendingItemKey(item);
     setResendingItemKey(itemKey);
@@ -2235,8 +2245,10 @@ export default function ApprovalDashboard() {
           ? `Paper/manual ${currentLayer.type === "evaluation" ? "evaluation" : "approval"} sent to ${refreshedRecipient}.`
           : `Workflow email sent to ${refreshedRecipient}.`,
       );
+      return true;
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not resend the workflow email.");
+      return false;
     } finally {
       setResendingItemKey("");
     }
@@ -2790,8 +2802,8 @@ export default function ApprovalDashboard() {
     }
   };
 
-  const handleRegeneratePdf = async (item: PendingItem) => {
-    if (!token || !isSuperuser) return;
+  const handleRegeneratePdf = async (item: PendingItem): Promise<boolean> => {
+    if (!token || !isSuperuser) return false;
     const itemKey = getPendingItemKey(item);
     setPdfRegeneratingItemKey(itemKey);
     setError("");
@@ -2811,22 +2823,27 @@ export default function ApprovalDashboard() {
         current && getPendingItemKey(current) === itemKey ? { ...current, PdfUrl: pdfUrl } : current
       );
       setEmailNotice("PDF rebuilt and replaced successfully.");
+      return true;
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not rebuild the PDF.");
+      return false;
     } finally {
       setPdfRegeneratingItemKey("");
     }
   };
 
-  const handleDeleteSubmission = async () => {
-    if (!token || !deleteTarget) return;
+  // `targetOverride` lets the bulk bar delete rows without opening the
+  // single-row dialog; the dialog itself calls this with no argument.
+  const handleDeleteSubmission = async (targetOverride?: PendingItem): Promise<boolean> => {
+    const target = targetOverride ?? deleteTarget;
+    if (!token || !target) return false;
 
     setDeleteLoading(true);
     setError("");
     try {
       const rawItem = await spGet(
         token,
-        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(deleteTarget.Title)}')/items(${deleteTarget.Id})`
+        `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(target.Title)}')/items(${target.Id})`
       ) as Record<string, unknown>;
 
       const submissionData: Record<string, unknown> = {};
@@ -2838,7 +2855,7 @@ export default function ApprovalDashboard() {
         const layerMatch = key.match(/^L(\d+)_(Status|Email|SignedAt|Rejection|Signature)$/);
         if (layerMatch) layerNumbers.add(parseInt(layerMatch[1], 10));
       }
-      const totalLayers = deleteTarget.totalLayers || Math.max(deleteTarget.CurrentLayer || 0, deleteTarget.CurrentApprovalLayer || 0, layerNumbers.size);
+      const totalLayers = target.totalLayers || Math.max(target.CurrentLayer || 0, target.CurrentApprovalLayer || 0, layerNumbers.size);
       for (let n = 1; n <= totalLayers; n++) layerNumbers.add(n);
 
       const layers: Submission["layers"] = Array.from(layerNumbers)
@@ -2854,31 +2871,31 @@ export default function ApprovalDashboard() {
 
       const client = createSpClient(instance, accounts);
       const result = await client.hardDeleteSubmission({
-        id: String(deleteTarget.Id),
-        submissionId: String(deleteTarget.Id),
-        listTitle: deleteTarget.Title,
+        id: String(target.Id),
+        submissionId: String(target.Id),
+        listTitle: target.Title,
         formId: valueToText(rawItem.FormID),
-        formVersion: deleteTarget.FormVersion || valueToText(rawItem.FormVersion),
-        title: deleteTarget.Title,
-        submittedByEmail: deleteTarget.SubmittedBy || valueToText(rawItem.SubmittedBy),
-        submittedAt: deleteTarget.SubmittedAt || valueToText(rawItem.SubmittedAt) || null,
-        formStatus: deleteTarget.FormStatus || deleteTarget.Status || valueToText(rawItem.FormStatus) || null,
+        formVersion: target.FormVersion || valueToText(rawItem.FormVersion),
+        title: target.Title,
+        submittedByEmail: target.SubmittedBy || valueToText(rawItem.SubmittedBy),
+        submittedAt: target.SubmittedAt || valueToText(rawItem.SubmittedAt) || null,
+        formStatus: target.FormStatus || target.Status || valueToText(rawItem.FormStatus) || null,
         totalLayers,
         layers,
         meta: { icon: "", color: "", pale: "", category: "" },
         submissionData,
-        currentLayer: deleteTarget.CurrentLayer,
-        selectedBranch: deleteTarget.SelectedBranch,
+        currentLayer: target.CurrentLayer,
+        selectedBranch: target.SelectedBranch,
         isTest: isTestRow(rawItem),
       });
 
-      setPendingItems((prev) => prev.filter((item) => !(item.Id === deleteTarget.Id && item.Title === deleteTarget.Title)));
+      setPendingItems((prev) => prev.filter((item) => !(item.Id === target.Id && item.Title === target.Title)));
       setItemCurrentTypes((prev) => {
         const next = { ...prev };
-        delete next[getPendingItemKey(deleteTarget)];
+        delete next[getPendingItemKey(target)];
         return next;
       });
-      if (selectedItem?.Id === deleteTarget.Id && selectedItem.Title === deleteTarget.Title) {
+      if (selectedItem?.Id === target.Id && selectedItem.Title === target.Title) {
         setSelectedItem(null);
         setSurveyJson(null);
         setResponseData(null);
@@ -2889,11 +2906,82 @@ export default function ApprovalDashboard() {
       if (result.warnings.length > 0) {
         setError(`Submission deleted. Cleanup warnings: ${result.warnings.join(" ")}`);
       }
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setDeleteLoading(false);
     }
+  };
+
+  // ── Bulk actions ────────────────────────────────────────────────────────
+  // Only actions that already work one row at a time, run once per ticked row
+  // with their own checks intact. Approve and reject are deliberately absent:
+  // each depends on who holds that step, a signature or an evaluation form,
+  // and the next approver for that particular submission.
+  const checkedItems = filteredItems.filter((item) => checkedKeys.has(getPendingItemKey(item)));
+  const pageKeys = pagedItems.map(getPendingItemKey);
+  const pageAllChecked = pageKeys.length > 0 && pageKeys.every((key) => checkedKeys.has(key));
+  const pageSomeChecked = pageKeys.some((key) => checkedKeys.has(key));
+
+  const toggleChecked = (key: string) => {
+    setCheckedKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const togglePageChecked = () => {
+    setCheckedKeys((previous) => {
+      const next = new Set(previous);
+      if (pageAllChecked) pageKeys.forEach((key) => next.delete(key));
+      else pageKeys.forEach((key) => next.add(key));
+      return next;
+    });
+  };
+
+  const runBulk = async (label: string, done: string, action: (item: PendingItem) => Promise<boolean>) => {
+    const targets = checkedItems;
+    if (targets.length === 0) return;
+    setError("");
+    setEmailNotice("");
+    let succeeded = 0;
+    const failedKeys: string[] = [];
+    for (let index = 0; index < targets.length; index += 1) {
+      setBulkProgress({ label, done: index, total: targets.length });
+      // One at a time: these write to SharePoint and send mail, and running
+      // them in parallel would trip throttling and interleave their notices.
+      const ok = await action(targets[index]);
+      if (ok) succeeded += 1;
+      else failedKeys.push(getPendingItemKey(targets[index]));
+    }
+    setBulkProgress(null);
+    // Leave only the failures ticked, so "try again" is one click.
+    setCheckedKeys(new Set(failedKeys));
+    if (failedKeys.length === 0) {
+      setError("");
+      setEmailNotice(`${done} ${succeeded} of ${targets.length}.`);
+    } else {
+      setEmailNotice(succeeded > 0 ? `${done} ${succeeded} of ${targets.length}.` : "");
+      setError(`${failedKeys.length} didn't go through and are still ticked. Open one to see why, or try again.`);
+    }
+  };
+
+  const exportChecked = () => {
+    const header = ["Form", "Item ID", "Submitted by", "Submitted at", "Status", "Current layer", "Form version"];
+    const lines = [csvRow(header), ...checkedItems.map((item) => csvRow([
+      item.Title,
+      item.Id,
+      item.SubmittedBy || "",
+      item.SubmittedAt || "",
+      item.FormStatus || item.Status || "",
+      Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || "",
+      item.FormVersion || "",
+    ]))];
+    downloadCsv(lines.join("\r\n"), `submissions-${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
   // Handle approve
@@ -3294,8 +3382,32 @@ export default function ApprovalDashboard() {
           confirmLabel={deleteLoading ? "Deleting…" : "Delete permanently"}
           destructive
           busy={deleteLoading}
-          onConfirm={handleDeleteSubmission}
+          onConfirm={() => void handleDeleteSubmission()}
           onClose={() => { setDeleteTarget(null); }}
+        />
+
+        <ConfirmDialog
+          open={bulkDeleteOpen}
+          title={`Delete ${checkedItems.length} submission${checkedItems.length === 1 ? "" : "s"} permanently?`}
+          body={
+            <>
+              <Box component="span" sx={{ display: "block" }}>
+                Each one is removed with its generated PDFs, signature images, uploaded files and
+                matrix rows. It cannot be undone.
+              </Box>
+              <Box component="span" sx={{ display: "block", mt: 1 }}>
+                Export them first if you might need a record.
+              </Box>
+            </>
+          }
+          confirmLabel={`Delete ${checkedItems.length}`}
+          destructive
+          busy={Boolean(bulkProgress)}
+          onConfirm={() => {
+            setBulkDeleteOpen(false);
+            void runBulk("Deleting", "Deleted", (item) => handleDeleteSubmission(item));
+          }}
+          onClose={() => setBulkDeleteOpen(false)}
         />
 
         <PdfPreviewDialog
@@ -3347,6 +3459,48 @@ export default function ApprovalDashboard() {
                 </>
               )}
             </div>
+            {checkedItems.length > 0 && (
+              <Box
+                role="toolbar"
+                aria-label="Actions for ticked submissions"
+                sx={{
+                  display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1,
+                  mx: 1.5, mb: 1, px: 1.5, py: 1,
+                  // Card corners, not a pill: in the narrow list column the
+                  // bar wraps to two lines, and a two-line pill reads as a blob.
+                  borderRadius: `${si.radius}px`,
+                  backgroundColor: editorial.sky,
+                }}
+              >
+                <Box component="span" sx={{ ...siType.cardTitle, color: editorial.navyDeep, mr: 1, fontVariantNumeric: "tabular-nums" }}>
+                  {bulkProgress
+                    ? `${bulkProgress.label} ${bulkProgress.done + 1} of ${bulkProgress.total}…`
+                    : `${checkedItems.length} selected`}
+                </Box>
+                {(isAdmin || isSuperuser) && (
+                  <Button size="small" variant="contained" startIcon={<ReplayIcon />} disabled={Boolean(bulkProgress)}
+                    onClick={() => void runBulk("Sending", "Workflow email sent for", (item) => handleForceResend(item))}>
+                    Resend email
+                  </Button>
+                )}
+                {(isAdmin || isSuperuser) && (
+                  <Button size="small" variant="text" startIcon={<DescriptionIcon />} disabled={Boolean(bulkProgress)}
+                    onClick={() => void runBulk("Rebuilding PDF", "PDF rebuilt for", (item) => handleRegeneratePdf(item))}>
+                    Rebuild PDFs
+                  </Button>
+                )}
+                <Button size="small" variant="text" startIcon={<FileDownloadOutlined />} disabled={Boolean(bulkProgress)} onClick={exportChecked}>
+                  Export
+                </Button>
+                <Button size="small" variant="text" startIcon={<DeleteIcon />} disabled={Boolean(bulkProgress)}
+                  onClick={() => setBulkDeleteOpen(true)} sx={{ color: editorial.error }}>
+                  Delete
+                </Button>
+                <Button size="small" variant="text" disabled={Boolean(bulkProgress)} onClick={() => setCheckedKeys(new Set())} sx={{ ml: "auto" }}>
+                  Clear
+                </Button>
+              </Box>
+            )}
             <div style={isWide ? { flex: 1, minHeight: 0, overflow: "auto" } : { maxHeight: 600, overflow: "auto" }}>
             {!showGroupIndex && filteredItems.length > 0 && (
               <div
@@ -3358,6 +3512,16 @@ export default function ApprovalDashboard() {
                   ...siType.micro, color: C.textSecond,
                 }}
               >
+                <span>
+                  <Checkbox
+                    size="small"
+                    checked={pageAllChecked}
+                    indeterminate={!pageAllChecked && pageSomeChecked}
+                    onChange={togglePageChecked}
+                    slotProps={{ input: { "aria-label": "Select every submission on this page" } }}
+                    sx={{ p: 0.25, minWidth: 0, minHeight: 0 }}
+                  />
+                </span>
                 <span>Submission</span>
                 <span>Submitted by</span>
                 <span>Version and layer</span>
@@ -3635,6 +3799,15 @@ export default function ApprovalDashboard() {
                         display: "grid", gridTemplateColumns: LIST_COLUMNS, columnGap: "12px", alignItems: "start",
                       }}
                     >
+                      <span onClick={(event) => event.stopPropagation()} style={{ display: "flex", alignItems: "center", minHeight: 28 }}>
+                        <Checkbox
+                          size="small"
+                          checked={checkedKeys.has(itemKey)}
+                          onChange={() => toggleChecked(itemKey)}
+                          slotProps={{ input: { "aria-label": `Select ${item.Title} submission ${item.Id}` } }}
+                          sx={{ p: 0.25, minWidth: 0, minHeight: 0 }}
+                        />
+                      </span>
                       {titleBlock}
                       {submitterBlock}
                       {versionBlock}
