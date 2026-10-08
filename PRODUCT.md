@@ -6,7 +6,7 @@ product
 
 ## Users
 
-PMW employees use the public career portal to browse internal opportunities, review role details, submit applications, and track their own submissions. HR administrators use the authenticated career admin screens to manage openings, review applications, update statuses, and maintain the portal cards. The employee applicant journey is the first priority; HR admin workflows are second and should stay efficient, dense, and consistent.
+PMW employees use the public career portal to browse job opportunities, review role details, submit applications, and track their own submissions. HR administrators use the authenticated career admin screens to manage openings, review applications, update statuses, and maintain the portal cards. The employee applicant journey is the first priority; HR admin workflows are second and should stay efficient, dense, and consistent.
 
 ## Product Purpose
 
