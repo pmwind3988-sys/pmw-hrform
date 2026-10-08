@@ -1,0 +1,1385 @@
+<meta charset="utf-8">
+<title>PMW HR Redesign Canvas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a long review wall. Hero + live shell up top, then one row per screen: before phone | after phone | nitpicks. */
+:root{
+  --bg:#F3F5F9; --card:#FFFFFF; --ink:#141B2B; --muted:#5A6576; --faint:#8A93A3; --line:#E3E7EE;
+  --accent:#0F3D91; --accent-soft:#E2EAF8; --accent-ink:#0B2F70;
+  --amber:#B86E00; --amber-soft:#FDEFD6; --bad:#B42318; --bad-soft:#FDE7E4; --good:#137536; --good-soft:#DFF5E6;
+  --p0:#B42318; --p1:#C2410C; --p2:#1E4FA0; --p3:#6B7280;
+  --display:"Figtree","Segoe UI",system-ui,sans-serif; --body:"Figtree","Segoe UI",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  /* the app being mocked: always light, it is a picture of a screen */
+  --m-bg:#F6F8FC; --m-card:#FFFFFF; --m-ink:#1B2333; --m-muted:#5E6878; --m-line:#E4E8EF; --m-navy:#0F3D91; --m-navy2:#0B2F70;
+  --m-tonal:#DCE6F8; --m-tonal-ink:#0B2F70; --m-hover:rgba(15,61,145,.07); --m-amber:#F59E0B; --m-amber-soft:#FEF0D7; --m-amber-ink:#855405;
+  --m-red:#C1291F; --m-red-soft:#FDE4E1; --m-green:#137536; --m-green-soft:#DCFCE7;
+  --old-blue-bg:linear-gradient(180deg,#CFE3F5 0%,#E9F1F8 60%,#F3F6FA 100%);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E131C; --card:#161D29; --ink:#E7EBF2; --muted:#A3ADBD; --faint:#7D8798; --line:#273042;
+  --accent:#8FB2F0; --accent-soft:#1D2B46; --accent-ink:#C9D9F7; --amber:#F4B54A; --amber-soft:#3A2A10; --bad:#F2877C; --bad-soft:#3B1A17; --good:#6FD394; --good-soft:#15301F;
+  --p0:#F2877C; --p1:#F3A066; --p2:#8FB2F0; --p3:#A3ADBD; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0E131C; --card:#161D29; --ink:#E7EBF2; --muted:#A3ADBD; --faint:#7D8798; --line:#273042;
+  --accent:#8FB2F0; --accent-soft:#1D2B46; --accent-ink:#C9D9F7; --amber:#F4B54A; --amber-soft:#3A2A10; --bad:#F2877C; --bad-soft:#3B1A17; --good:#6FD394; --good-soft:#15301F;
+  --p0:#F2877C; --p1:#F3A066; --p2:#8FB2F0; --p3:#A3ADBD; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;margin:0}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:24px;padding-block:0 96px}
+@media (max-width:600px){.wrap{padding-inline:16px}}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+a{color:var(--accent)}
+code,.mono{font-family:var(--mono);font-size:.82em}
+button{font:inherit;cursor:pointer;color:inherit}
+[hidden]{display:none!important}
+section.block{scroll-margin-top:64px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- hero ---------- */
+.hero{padding-block:56px 32px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:40px;align-items:end}
+@media (max-width:900px){.hero{grid-template-columns:1fr;padding-top:36px}}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.hero h1{font-size:clamp(40px,6vw,76px);line-height:.98;letter-spacing:-.035em;font-weight:800;margin-top:14px}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p.lede{font-size:18px;color:var(--muted);max-width:60ch;margin:18px 0 0}
+.scorecard{background:var(--card);border-radius:28px;padding:24px;display:grid;gap:16px}
+.score-row{display:flex;align-items:center;gap:18px}
+.ring{--v:0;width:92px;height:92px;border-radius:50%;background:conic-gradient(var(--accent) calc(var(--v)*1%),var(--accent-soft) 0);display:grid;place-items:center;flex:none}
+.ring b{width:72px;height:72px;border-radius:50%;background:var(--card);display:grid;place-items:center;font:800 22px/1 var(--display);font-variant-numeric:tabular-nums}
+.ring b small{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
+.sev{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;background:var(--accent-soft);color:var(--accent-ink);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.c-p0{color:var(--p0)} .c-p1{color:var(--p1)} .c-p2{color:var(--p2)} .c-p3{color:var(--p3)}
+.chip.sev-chip{background:transparent;border:1px solid var(--line);color:var(--ink)}
+
+.principles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:8px}
+@media (max-width:900px){.principles{grid-template-columns:1fr}}
+.pr{background:var(--card);border-radius:24px;padding:20px 22px;display:flex;gap:14px;align-items:flex-start}
+.pr .shape{width:44px;height:44px;flex:none;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;border-radius:50%}
+.pr:nth-child(2) .shape{border-radius:14px}
+.pr:nth-child(3) .shape{border-radius:999px;width:64px}
+.pr h3{font-size:17px;font-weight:700}
+.pr p{margin:4px 0 0;color:var(--muted);font-size:14px}
+
+/* ---------- index ---------- */
+.index{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);padding-block:12px;margin-block:28px 8px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.index a{flex:none;text-decoration:none;color:var(--ink);background:var(--card);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;transition:background .15s}
+.index a:hover{background:var(--accent-soft);color:var(--accent-ink)}
+
+/* ---------- sections ---------- */
+section.block{padding-block:48px 8px}
+.sec-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+.sec-head .num{font:700 13px/1 var(--mono);color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:6px 10px}
+.sec-head h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.02em;font-weight:800}
+.sec-head .route{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.sec-head p{flex-basis:100%;margin:0;color:var(--muted);max-width:75ch}
+
+.compare{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:1100px){.compare{grid-template-columns:auto auto}.compare .notes{grid-column:1/-1}}
+@media (max-width:680px){.compare{grid-template-columns:minmax(0,1fr);justify-items:center}.compare .notes{justify-self:stretch}}
+.fig{display:grid;gap:10px;justify-items:center}
+.fig .cap{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;gap:8px;align-items:center}
+.fig .cap .dot{width:10px;height:10px}
+.fig.before .cap .dot{background:var(--faint)} .fig.after .cap .dot{background:var(--accent)}
+
+.notes{background:var(--card);border-radius:24px;padding:8px 6px;min-width:0}
+.notes ol{list-style:none;margin:0;padding:0;counter-reset:n}
+.notes li{counter-increment:n;display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;padding:12px 14px;border-radius:16px}
+.notes li:hover{background:var(--accent-soft)}
+.notes li::before{content:counter(n);width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--card);font:700 12px/24px var(--display);text-align:center;margin-top:1px}
+.notes .t{font-weight:600}
+.notes .t .tag{font:700 10.5px/1 var(--mono);border-radius:999px;padding:3px 7px;margin-right:6px;vertical-align:2px;border:1px solid currentColor}
+.notes .fix{color:var(--muted);font-size:14px;margin-top:2px}
+.notes .fix b{color:var(--ink);font-weight:600}
+.notes .ref{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:4px;word-break:break-all}
+.notes .src{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:10px 14px 2px}
+
+/* ---------- phone frames ---------- */
+.phone{width:300px;height:600px;border-radius:40px;background:#1C2230;padding:8px;flex:none;box-shadow:0 1px 0 rgba(0,0,0,.04),0 18px 40px -22px rgba(16,24,40,.45)}
+.screen{width:100%;height:100%;border-radius:32px;overflow:hidden;position:relative;background:var(--m-bg);color:var(--m-ink);font-family:"Figtree",system-ui,sans-serif;font-size:12px;line-height:1.4;display:flex;flex-direction:column}
+.screen .scroll{flex:1;overflow:auto;scrollbar-width:none}
+.old{font-family:"Inter",system-ui,sans-serif !important;background:var(--old-blue-bg)}
+.old .bar{background:#fff;padding:12px 12px 10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;border-bottom:1px solid var(--m-line)}
+.old .logo{width:22px;height:12px;border-radius:50%;background:#2B3990;flex:none}
+.old .ava{margin-left:auto;width:22px;height:22px;border-radius:50%;background:var(--m-navy);color:#fff;font-size:9px;display:grid;place-items:center;font-weight:700}
+.old .tabs{background:#fff;display:flex;gap:12px;padding:0 10px;font-size:10.5px;color:var(--m-muted);border-bottom:1px solid var(--m-line);white-space:nowrap;overflow:hidden}
+.old .tabs span{padding:8px 0}
+.old .tabs .on{color:var(--m-navy);font-weight:700;border-bottom:2px solid var(--m-navy)}
+.old .card{background:#fff;border-radius:12px;padding:12px;margin:8px 8px 0;border:1px solid var(--m-line)}
+.old .btn{background:var(--m-navy);color:#fff;border-radius:8px;padding:7px 10px;font-weight:700;font-size:10.5px;text-align:center}
+.old .lbl{font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--m-muted);font-weight:700}
+.old .bbar{background:linear-gradient(160deg,#0F3D91,#0B2F70);display:flex;justify-content:space-around;padding:8px 4px 10px;color:#BFD0EE;font-size:7.5px;flex:none}
+.old .bbar span{display:grid;justify-items:center;gap:3px;position:relative}
+.old .bbar span i{width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;display:block}
+.old .bbar .on{color:#fff;font-weight:700}
+.old .bbar .on::before{content:"";position:absolute;top:-8px;width:16px;height:2px;background:var(--m-amber)}
+.pin{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:#E5484D;color:#fff;font:700 9px/1 "Figtree",sans-serif;flex:none;vertical-align:middle;box-shadow:0 0 0 2px #fff}
+.pin.abs{position:absolute;z-index:5}
+
+/* new app language */
+.new .top{display:flex;align-items:center;gap:8px;padding:12px 12px 6px}
+.new .search{flex:1;display:flex;align-items:center;gap:8px;background:#E9EEF6;border-radius:999px;padding:9px 12px;color:var(--m-muted);font-size:12px}
+.new .search svg{width:15px;height:15px;flex:none}
+.new .av{width:28px;height:28px;border-radius:50%;background:var(--m-navy);color:#fff;font-weight:700;font-size:11px;display:grid;place-items:center;flex:none}
+.new h4{font:700 20px/1.15 "Figtree",sans-serif;margin:8px 16px 2px;letter-spacing:-.01em}
+.new .sub{color:var(--m-muted);margin:0 16px 10px;font-size:12px}
+.new .chips{display:flex;gap:6px;padding:4px 12px 10px;overflow-x:auto;scrollbar-width:none}
+.mchip{flex:none;border-radius:999px;border:1px solid #C9D1DE;padding:5px 10px;font-weight:600;font-size:11px;color:var(--m-ink);background:transparent;display:inline-flex;gap:4px;align-items:center;transition:background .15s,border-color .15s}
+.mchip svg{width:12px;height:12px}
+.mchip[aria-pressed="true"]{background:var(--m-tonal);border-color:transparent;color:var(--m-tonal-ink)}
+.new .row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:999px;margin:0 6px;transition:background .15s}
+.new .row:hover{background:var(--m-hover)}
+.new .row .ic{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--m-tonal);color:var(--m-tonal-ink);font-weight:700}
+.new .row .ic svg{width:17px;height:17px}
+.new .row .tx{flex:1;min-width:0}
+.new .row .tx b{display:block;font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.new .row .tx span{color:var(--m-muted);font-size:11px}
+.new .row .meta{font-size:10.5px;color:var(--m-muted);text-align:right}
+.st{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 8px;font-size:10.5px;font-weight:600}
+.st::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.st.rev{background:var(--m-amber-soft);color:var(--m-amber-ink)} .st.ok{background:var(--m-green-soft);color:var(--m-green)} .st.no{background:var(--m-red-soft);color:var(--m-red)}
+.pill{border:0;border-radius:999px;padding:9px 16px;font-weight:700;font-size:12px;display:inline-flex;align-items:center;gap:6px;justify-content:center;transition:transform .12s,box-shadow .15s,background .15s}
+.pill svg{width:15px;height:15px}
+.pill.fill{background:var(--m-navy);color:#fff}
+.pill.fill:hover{box-shadow:0 4px 14px -6px rgba(15,61,145,.6)}
+.pill.tonal{background:var(--m-tonal);color:var(--m-tonal-ink)}
+.pill.text{background:transparent;color:var(--m-navy)}
+.pill.text:hover{background:var(--m-hover)}
+.pill.out{background:transparent;border:1px solid #C9D1DE;color:var(--m-ink)}
+.pill:active{transform:scale(.97)}
+.iconbtn{width:34px;height:34px;border-radius:50%;border:0;background:transparent;color:var(--m-muted);display:grid;place-items:center;transition:background .15s}
+.iconbtn:hover{background:var(--m-hover);color:var(--m-ink)}
+.iconbtn svg{width:17px;height:17px}
+.fab{position:absolute;right:14px;bottom:76px;border:0;border-radius:18px;background:var(--m-tonal);color:var(--m-tonal-ink);padding:14px 18px;font-weight:700;font-size:12.5px;display:flex;gap:8px;align-items:center;box-shadow:0 6px 16px -6px rgba(15,61,145,.35);z-index:3}
+.fab svg{width:18px;height:18px}
+.mnav{flex:none;display:flex;justify-content:space-around;background:#EEF2F8;padding:8px 4px 12px}
+.mnav button{border:0;background:transparent;display:grid;justify-items:center;gap:3px;font-size:10px;font-weight:600;color:var(--m-muted);padding:0}
+.mnav button i{width:52px;height:28px;border-radius:999px;display:grid;place-items:center;transition:background .2s}
+.mnav button svg{width:18px;height:18px}
+.mnav button[aria-current="page"]{color:var(--m-ink)}
+.mnav button[aria-current="page"] i{background:var(--m-tonal);color:var(--m-tonal-ink)}
+.sheet{background:var(--m-card);border-radius:24px;margin:0 10px 10px;padding:12px 4px}
+.seg{display:inline-flex;position:relative;background:#E9EEF6;border-radius:999px;padding:3px}
+.seg button{position:relative;z-index:1;border:0;background:transparent;border-radius:999px;padding:6px 12px;font-weight:600;font-size:11px;color:var(--m-muted);transition:color .2s}
+.seg button[aria-pressed="true"]{color:var(--m-tonal-ink)}
+.seg .thumb{position:absolute;top:3px;bottom:3px;left:3px;border-radius:999px;background:#fff;box-shadow:0 1px 3px rgba(16,24,40,.15);transition:transform .25s cubic-bezier(.3,.7,.2,1),width .25s}
+.snack{position:absolute;left:10px;right:10px;bottom:74px;background:#1F2633;color:#fff;border-radius:14px;padding:11px 12px 11px 14px;display:flex;align-items:center;gap:8px;font-size:11.5px;z-index:4}
+.snack b{margin-left:auto;color:#A9C4F5;font-weight:700}
+
+/* skeleton shimmer */
+.sk{background:linear-gradient(90deg,#E8ECF2 0%,#F3F5F9 40%,#E8ECF2 80%);background-size:200% 100%;animation:sh 1.4s linear infinite;border-radius:999px}
+@keyframes sh{to{background-position:-200% 0}}
+.spin-ring{width:56px;height:56px;border-radius:50%;background:conic-gradient(var(--m-navy) var(--p,30%),#DCE3EE 0);display:grid;place-items:center;transition:--p .4s}
+.spin-ring::after{content:"";width:44px;height:44px;border-radius:50%;background:var(--m-bg)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- live shell (desktop) ---------- */
+.live{background:var(--card);border-radius:32px;padding:14px;margin-top:8px}
+.live-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:6px 10px 14px}
+.live-head p{margin:0;color:var(--muted);font-size:14px;flex:1;min-width:240px}
+.desk-scroll{overflow-x:auto;border-radius:22px}
+.desk{width:1040px;height:620px;background:var(--m-bg);color:var(--m-ink);font-family:"Figtree",system-ui,sans-serif;font-size:13px;display:grid;grid-template-columns:auto 1fr;grid-template-rows:64px 1fr;border-radius:22px;overflow:hidden;position:relative}
+.d-top{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px 0 10px}
+.d-brand{display:flex;align-items:center;gap:10px;width:228px;font-weight:700;font-size:17px;transition:width .25s}
+.desk.mini .d-brand{width:60px}
+.desk.mini .d-brand span{display:none}
+.d-brand .lg{width:30px;height:17px;border-radius:50%;background:var(--m-navy);flex:none}
+.d-search{flex:1;max-width:680px;display:flex;align-items:center;gap:10px;background:#E9EEF6;border-radius:999px;padding:0 8px 0 16px;height:46px;transition:background .15s,box-shadow .15s}
+.d-search:focus-within{background:#fff;box-shadow:0 1px 3px rgba(16,24,40,.18)}
+.d-search input{flex:1;border:0;background:transparent;font:inherit;font-size:14px;color:var(--m-ink);outline:none;min-width:0}
+.d-search svg{width:18px;height:18px;color:var(--m-muted);flex:none}
+.d-rail{padding:6px 12px 12px 8px;width:256px;display:flex;flex-direction:column;gap:2px;transition:width .25s}
+.desk.mini .d-rail{width:76px}
+.compose{border:0;display:inline-flex;align-items:center;gap:12px;background:var(--m-tonal);color:var(--m-tonal-ink);border-radius:18px;padding:16px 20px;font-weight:700;font-size:14px;margin:4px 0 14px 6px;width:max-content;transition:box-shadow .15s,padding .25s}
+.compose:hover{box-shadow:0 4px 12px -4px rgba(15,61,145,.4)}
+.compose svg{width:20px;height:20px}
+.desk.mini .compose{padding:16px}
+.desk.mini .compose span,.desk.mini .navi span,.desk.mini .navi em,.desk.mini .rail-lbl{display:none}
+.navi{border:0;background:transparent;display:flex;align-items:center;gap:16px;padding:0 14px 0 18px;height:36px;border-radius:999px;color:var(--m-ink);font-size:13.5px;font-weight:500;text-align:left;width:100%;transition:background .15s}
+.navi svg{width:19px;height:19px;flex:none;color:var(--m-muted)}
+.navi em{font-style:normal;margin-left:auto;font-size:12px;font-weight:700}
+.navi:hover{background:var(--m-hover)}
+.navi[aria-current="page"]{background:var(--m-tonal);color:var(--m-tonal-ink);font-weight:700}
+.navi[aria-current="page"] svg{color:var(--m-tonal-ink)}
+.rail-lbl{font-size:11px;font-weight:700;color:var(--m-muted);letter-spacing:.06em;text-transform:uppercase;padding:14px 18px 6px}
+.d-main{background:var(--m-card);border-radius:16px;margin:0 16px 16px 0;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.d-tool{display:flex;align-items:center;gap:6px;padding:8px 12px;min-height:52px;border-bottom:1px solid var(--m-line)}
+.d-tool .grow{flex:1}
+.d-tool .count{font-size:12px;color:var(--m-muted);padding-right:6px}
+.cb{width:18px;height:18px;border-radius:5px;border:2px solid #8A94A6;display:grid;place-items:center;flex:none;background:transparent;padding:0}
+.cb[aria-checked="true"]{background:var(--m-navy);border-color:var(--m-navy)}
+.cb[aria-checked="true"]::after{content:"";width:8px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.cb-wrap{width:36px;height:36px;border-radius:50%;display:grid;place-items:center}
+.cb-wrap:hover{background:var(--m-hover)}
+.d-list{flex:1;overflow:auto}
+.lrow{display:grid;grid-template-columns:40px 36px 220px minmax(0,1fr) 150px;align-items:center;gap:6px;padding:0 14px 0 6px;height:52px;border-bottom:1px solid #F0F2F6;position:relative;transition:box-shadow .15s,background .15s;cursor:pointer}
+.lrow:hover{box-shadow:inset 1px 0 0 #DADCE0,inset -1px 0 0 #DADCE0,0 1px 2px 0 rgba(60,64,67,.3),0 1px 3px 1px rgba(60,64,67,.15);z-index:1}
+.lrow.sel{background:var(--m-tonal)}
+.lrow .who{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .what{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--m-muted)}
+.lrow .what b{color:var(--m-ink);font-weight:600}
+.lrow .when{text-align:right;font-size:12px;font-weight:600;color:var(--m-muted)}
+.lrow .acts{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:none;gap:2px;background:inherit}
+.lrow:hover .acts{display:flex}
+.lrow:hover .when{visibility:hidden}
+.lrow .avc{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:11px;color:#fff}
+.lrow.gone{height:0;opacity:0;border:0;overflow:hidden;transition:height .25s,opacity .2s}
+.d-snack{position:absolute;left:24px;bottom:24px;background:#1F2633;color:#fff;border-radius:12px;padding:14px 10px 14px 18px;display:flex;gap:20px;align-items:center;font-size:13.5px;box-shadow:0 8px 24px -8px rgba(0,0,0,.4);transform:translateY(140%);transition:transform .25s cubic-bezier(.3,.7,.2,1);z-index:10}
+.d-snack.show{transform:none}
+.d-snack button{border:0;background:transparent;color:#A9C4F5;font-weight:700;border-radius:999px;padding:6px 12px}
+.d-snack button:hover{background:rgba(255,255,255,.08)}
+.menu{position:absolute;left:20px;top:132px;background:#fff;border-radius:18px;box-shadow:0 12px 32px -10px rgba(16,24,40,.35);padding:8px;width:280px;z-index:9;display:grid;gap:2px}
+.menu .mh{font-size:11px;font-weight:700;color:var(--m-muted);letter-spacing:.06em;text-transform:uppercase;padding:8px 12px 4px}
+.menu button{border:0;background:transparent;text-align:left;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--m-ink)}
+.menu button:hover{background:var(--m-hover)}
+.menu button i{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--m-tonal);color:var(--m-tonal-ink)}
+.menu button i svg{width:15px;height:15px}
+.home{padding:28px 32px;overflow:auto;flex:1}
+.home h3{font:700 26px/1.15 "Figtree",sans-serif;letter-spacing:-.02em}
+.home .hsub{color:var(--m-muted);margin:4px 0 22px}
+.rings{display:flex;gap:14px;flex-wrap:wrap}
+.rbtn{border:0;background:#F3F6FB;border-radius:999px;padding:8px 22px 8px 8px;display:flex;align-items:center;gap:14px;text-align:left;transition:background .15s,transform .12s}
+.rbtn:hover{background:var(--m-tonal)}
+.rbtn:active{transform:scale(.98)}
+.rbtn .rr{--v:0;width:58px;height:58px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--v)*1%),#E3E8F0 0);display:grid;place-items:center}
+.rbtn .rr b{width:46px;height:46px;border-radius:50%;background:#fff;display:grid;place-items:center;font:800 15px/1 "Figtree",sans-serif;font-variant-numeric:tabular-nums}
+.rbtn .rl b{display:block;font-size:14px}
+.rbtn .rl span{font-size:12px;color:var(--m-muted)}
+.hl{margin-top:26px;display:flex;align-items:center;gap:16px;background:linear-gradient(120deg,#0F3D91,#1E4FA0);color:#fff;border-radius:28px;padding:18px 22px}
+.hl .bub{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;flex:none}
+.hl .bub svg{width:22px;height:22px}
+.hl p{margin:2px 0 0;color:#C9D8F3;font-size:12.5px}
+.hl .pill{margin-left:auto;background:#fff;color:var(--m-navy)}
+.qa{margin-top:26px}
+.qa h5{margin:0 0 10px;font-size:13px;color:var(--m-muted);font-weight:700}
+.qa .qrow{display:flex;gap:10px;flex-wrap:wrap}
+.empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--m-muted);padding:20px}
+.empty .bigc{width:84px;height:84px;border-radius:50%;background:var(--m-tonal);color:var(--m-tonal-ink);display:grid;place-items:center;margin:0 auto 12px}
+.empty .bigc svg{width:36px;height:36px}
+.empty b{display:block;color:var(--m-ink);font-size:16px;margin-bottom:4px}
+
+/* ---------- system table ---------- */
+.sys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.sys{grid-template-columns:1fr}}
+.panel{background:var(--card);border-radius:24px;padding:22px;min-width:0}
+.panel h3{font-size:18px;font-weight:700;margin-bottom:4px}
+.panel > p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.vs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.vs > div{background:var(--bg);border-radius:18px;padding:14px;min-width:0}
+.vs h4{margin:0 0 10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.swatches{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.sh{background:var(--accent-soft);border:2px solid var(--accent);width:52px;height:36px}
+.typescale{display:grid;gap:6px}
+.typescale div{display:flex;justify-content:space-between;gap:10px;align-items:baseline;border-bottom:1px dashed var(--line);padding-bottom:4px}
+.typescale span{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--card);border-radius:22px;padding:18px}
+.stat b{display:block;font:800 30px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+.roadmap{display:grid;gap:10px}
+.step{background:var(--card);border-radius:22px;padding:16px 20px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
+.step .n{width:40px;height:40px;border-radius:50%;background:var(--accent);color:var(--card);display:grid;place-items:center;font:800 15px/1 var(--display)}
+.step b{display:block}
+.step span{color:var(--muted);font-size:14px}
+.step code{color:var(--accent)}
+.foot{margin-top:56px;color:var(--faint);font-size:13px}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM14 3v5h5M9 13h6M9 17h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13l2.5-8h11L20 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 13h5l1 2h4l1-2h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-brief" viewBox="0 0 24 24"><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM9 8V5h6v3M4 13h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-school" viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 3 9 3 12 0v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-tune" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2 6M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9zM3 3l18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 6H15a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h6.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-org" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="6" height="5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="15" y="16" width="6" height="5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M6 16v-2h12v2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/><circle cx="11" cy="7" r="1.3" fill="currentColor"/><circle cx="16" cy="8.5" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-ms" viewBox="0 0 24 24"><rect x="3" y="3" width="8.5" height="8.5" fill="#F25022"/><rect x="12.5" y="3" width="8.5" height="8.5" fill="#7FBA00"/><rect x="3" y="12.5" width="8.5" height="8.5" fill="#00A4EF"/><rect x="12.5" y="12.5" width="8.5" height="8.5" fill="#FFB900"/></symbol>
+    <symbol id="i-g" viewBox="0 0 24 24"><path d="M21.6 12.2c0-.7-.1-1.3-.2-1.9H12v3.7h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z" fill="#4285F4"/><path d="M12 22c2.7 0 5-.9 6.6-2.5l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z" fill="#34A853"/><path d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9z" fill="#FBBC05"/><path d="M12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.5l3.3 2.6C7.2 7.8 9.4 6 12 6z" fill="#EA4335"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <div class="eyebrow">PMW HR Forms · design review · 8 Oct 2026</div>
+    <h1>Fewer boxes.<br>Rounder, <em>quieter</em>,<br>and it answers back.</h1>
+    <p class="lede">I went through every screen I could reach, from the blank page before the app loads to the form builder, and listed what I'd change. Each screen below has the current version on the left and a proposed version on the right, borrowing Gmail's patterns in PMW navy. The proposed versions respond to clicks.</p>
+  </div>
+  <aside class="scorecard" aria-label="Review summary">
+    <div class="score-row">
+      <div class="ring" style="--v:50" id="scoreRing"><b>20<small>/ 40</small></b></div>
+      <div>
+        <div style="font-weight:700;font-size:17px">Usability score: Acceptable</div>
+        <div style="color:var(--muted);font-size:14px">The basics work, but the screens are crowded with boxes. Loading and error screens break down whenever a service is unavailable.</div>
+      </div>
+    </div>
+    <div class="sev" id="sevCounts"></div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;font-size:11px;color:var(--muted);text-align:center" aria-label="Scores on Nielsen's ten usability heuristics">
+      <div><b style="display:block;font-size:16px;color:var(--ink)">2</b>Status</div><div><b style="display:block;font-size:16px;color:var(--ink)">2</b>Plain words</div><div><b style="display:block;font-size:16px;color:var(--ink)">2</b>Way out</div><div><b style="display:block;font-size:16px;color:var(--bad)">1</b>Consistency</div><div><b style="display:block;font-size:16px;color:var(--ink)">3</b>Prevention</div>
+      <div><b style="display:block;font-size:16px;color:var(--ink)">3</b>Recognise</div><div><b style="display:block;font-size:16px;color:var(--ink)">2</b>Speed</div><div><b style="display:block;font-size:16px;color:var(--ink)">2</b>Minimal</div><div><b style="display:block;font-size:16px;color:var(--bad)">1</b>Recovery</div><div><b style="display:block;font-size:16px;color:var(--ink)">2</b>Help</div></div>
+    <div style="font-size:12.5px;color:var(--faint)">Sources: a walk-through of every signed-in screen, a full read of the source code, and the automated design scanner. I only looked at the form builder, not the published forms.</div>
+  </aside>
+</header>
+
+<div class="principles">
+  <div class="pr"><div class="shape"><svg width="20" height="20"><use href="#i-inbox"/></svg></div><div><h3>Surfaces, not boxes</h3><p>Lists sit flat on one white sheet. A row lifts only when you point at it. No borders, no coloured top bars, no card inside a card.</p></div></div>
+  <div class="pr"><div class="shape"><svg width="20" height="20"><use href="#i-plus"/></svg></div><div><h3>Everything you press is round</h3><p>Pill buttons, pill search, round icon buttons, a pill behind the active menu item. Square corners are kept for content, like files and photos.</p></div></div>
+  <div class="pr"><div class="shape"><svg width="20" height="20"><use href="#i-check"/></svg></div><div><h3>Shapes that respond</h3><p>Rings you can tap to filter, chips that show a tick when on, rows that reveal their actions on hover, and an Undo bar instead of a confirmation dialog.</p></div></div>
+</div>
+
+<nav class="index" aria-label="Screens">
+  <a href="#shell">Live shell</a><a href="#system">Shape system</a><a href="#s00">Loading</a><a href="#s01">Sign-in</a><a href="#s02">Navigation</a><a href="#s03">Dashboard</a><a href="#s04">Forms</a><a href="#s05">My Submissions</a><a href="#s06">All Submissions</a><a href="#s07">Profile</a><a href="#s08">Appearance</a><a href="#s09">Learning</a><a href="#s10">Careers</a><a href="#s11">Form link errors</a><a href="#s12">Admin lists</a><a href="#s13">Guest members</a><a href="#s14">Organisation</a><a href="#s15">Routing</a><a href="#s16">Form builder</a><a href="#s17">Privacy</a><a href="#extra">Not seen live</a><a href="#global">Across the app</a><a href="#plan">Order of work</a>
+</nav>
+
+<!-- ======================= LIVE SHELL ======================= -->
+<section class="block" id="shell">
+  <div class="sec-head"><span class="num">★</span><h2>The new shell, working</h2><span class="route">desktop ≥ 1024px</span>
+    <p>This is a working mockup, so try it. Use the menu button (≡) to shrink the left rail to icons. "New request" opens a menu of the five forms. Tick some rows to get the bulk-action bar. Point at a row to see its actions, delete one, then press Undo. The chips filter the list and the search box searches it. The rings on Home take you to a filtered list. The names and dates are examples.</p></div>
+  <div class="live">
+    <div class="desk-scroll">
+    <div class="desk" id="desk">
+      <div class="d-top">
+        <div class="d-brand"><button class="iconbtn" id="railToggle" aria-label="Collapse menu" style="width:44px;height:44px;margin-left:2px"><svg><use href="#i-menu"/></svg></button><span class="lg" aria-hidden="true"></span><span>HR Portal</span></div>
+        <label class="d-search"><svg><use href="#i-search"/></svg><input id="dSearch" placeholder="Search submissions, forms or people" aria-label="Search"><button class="iconbtn" aria-label="Search options" type="button"><svg><use href="#i-tune"/></svg></button></label>
+        <div style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" aria-label="Notifications" style="width:40px;height:40px"><svg><use href="#i-bell"/></svg></button><span class="av" style="width:34px;height:34px;border-radius:50%;background:var(--m-navy);color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px">AR</span></div>
+      </div>
+      <nav class="d-rail" aria-label="Main">
+        <button class="compose" id="compose" aria-haspopup="menu" aria-expanded="false"><svg><use href="#i-pen"/></svg><span>New request</span></button>
+        <button class="navi" data-view="home" aria-current="page"><svg><use href="#i-home"/></svg><span>Home</span></button>
+        <button class="navi" data-view="subs"><svg><use href="#i-inbox"/></svg><span>Waiting on me</span><em id="cntWait">6</em></button>
+        <button class="navi" data-view="mine"><svg><use href="#i-send"/></svg><span>My submissions</span><em>1</em></button>
+        <button class="navi" data-view="forms"><svg><use href="#i-doc"/></svg><span>Forms</span></button>
+        <div class="rail-lbl">Portal</div>
+        <button class="navi" data-view="empty-careers"><svg><use href="#i-brief"/></svg><span>Careers</span></button>
+        <button class="navi" data-view="empty-learn"><svg><use href="#i-school"/></svg><span>Learning</span></button>
+        <div class="rail-lbl">Admin</div>
+        <button class="navi" data-view="empty-routing"><svg><use href="#i-route"/></svg><span>Routing</span><em style="color:var(--m-red)">22</em></button>
+        <button class="navi" data-view="empty-builder"><svg><use href="#i-pen"/></svg><span>Form builder</span></button>
+      </nav>
+      <main class="d-main" aria-live="polite">
+        <!-- HOME -->
+        <div class="view home" data-v="home">
+          <h3>Good morning, Aiman</h3>
+          <div class="hsub">6 requests are waiting on you. The oldest has waited 4 days.</div>
+          <div class="rings">
+            <button class="rbtn" data-jump="rev"><span class="rr" style="--c:var(--m-amber);--v:72"><b>157</b></span><span class="rl"><b>In review</b><span>Open the list</span></span></button>
+            <button class="rbtn" data-jump="ok"><span class="rr" style="--c:var(--m-green);--v:18"><b>41</b></span><span class="rl"><b>Approved</b><span>This month</span></span></button>
+            <button class="rbtn" data-jump="no"><span class="rr" style="--c:var(--m-red);--v:6"><b>9</b></span><span class="rl"><b>Sent back</b><span>Need a fix</span></span></button>
+          </div>
+          <div class="hl"><span class="bub"><svg><use href="#i-brief"/></svg></span><div><b style="font-size:15px">3 internal openings this week</b><p>Your next role might already be posted.</p></div><button class="pill">See openings</button></div>
+          <div class="qa"><h5>Start a form</h5><div class="qrow">
+            <button class="pill out"><svg><use href="#i-doc"/></svg>Training Attendance</button>
+            <button class="pill out"><svg><use href="#i-doc"/></svg>Training Evaluation</button>
+            <button class="pill out"><svg><use href="#i-doc"/></svg>Training Needs Analysis</button>
+            <button class="pill out"><svg><use href="#i-doc"/></svg>Training Requisition</button></div></div>
+        </div>
+        <!-- LIST -->
+        <div class="view" data-v="subs" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div class="d-tool" id="tool">
+            <span class="cb-wrap"><button class="cb" id="allCb" role="checkbox" aria-checked="false" aria-label="Select all"></button></span>
+            <span id="normalTools" style="display:flex;gap:6px;align-items:center;flex:1">
+              <button class="iconbtn" aria-label="Refresh"><svg><use href="#i-refresh"/></svg></button>
+              <span style="width:8px"></span>
+              <button class="mchip" data-f="rev" aria-pressed="false"><svg hidden><use href="#i-check"/></svg>In review</button>
+              <button class="mchip" data-f="ok" aria-pressed="false"><svg hidden><use href="#i-check"/></svg>Approved</button>
+              <button class="mchip" data-f="no" aria-pressed="false"><svg hidden><use href="#i-check"/></svg>Sent back</button>
+              <button class="mchip" aria-pressed="false">Any form ▾</button>
+              <span class="grow"></span><span class="count" id="countLbl">1–8 of 8</span>
+            </span>
+            <span id="bulkTools" hidden style="display:flex;gap:6px;align-items:center;flex:1">
+              <b id="selCount" style="font-size:13px;margin:0 8px">2 selected</b>
+              <button class="pill tonal"><svg><use href="#i-check"/></svg>Approve</button>
+              <button class="pill text"><svg><use href="#i-bell"/></svg>Remind</button>
+              <button class="pill text" id="bulkDel"><svg><use href="#i-trash"/></svg>Delete</button>
+            </span>
+          </div>
+          <div class="d-list" id="dList"></div>
+        </div>
+        <div class="view" data-v="placeholder" hidden style="display:flex;flex:1"><div class="empty"><div><div class="bigc" id="phIcon"><svg><use href="#i-doc"/></svg></div><b id="phTitle">Nothing here yet</b><span id="phText">This mockup only builds Home and the lists.</span></div></div></div>
+        <div class="menu" id="composeMenu" role="menu" hidden>
+          <div class="mh">Start a new request</div>
+          <button role="menuitem"><i><svg><use href="#i-doc"/></svg></i>Training Attendance Form</button>
+          <button role="menuitem"><i><svg><use href="#i-doc"/></svg></i>Training Evaluation Form</button>
+          <button role="menuitem"><i><svg><use href="#i-doc"/></svg></i>Training Needs Analysis</button>
+          <button role="menuitem"><i><svg><use href="#i-doc"/></svg></i>Training Requisition Form</button>
+          <button role="menuitem" style="color:var(--m-muted)"><i style="background:#EEF0F4;color:var(--m-muted)"><svg><use href="#i-lock"/></svg></i>ZZ TEST RUN <span class="st rev" style="margin-left:auto">Test</span></button>
+        </div>
+      </main>
+      <div class="d-snack" id="dSnack" role="status"><span id="snackTxt">Submission deleted</span><button id="undo">Undo</button></div>
+    </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= SYSTEM ======================= -->
+<section class="block" id="system">
+  <div class="sec-head"><span class="num">00</span><h2>Shape system: from boxes to pills</h2><p>Most of the screen-by-screen notes come from these few decisions. Change them in <code>src/theme/editorial.ts</code> once, and most screens follow.</p></div>
+  <div class="sys">
+    <div class="panel"><h3>Corners</h3><p>Today the app uses three square-ish corner sizes (5px, 8px, 12px) on everything, so a tag, a button and a page all read as "box". Proposed: one shape per kind of thing.</p>
+      <div class="vs"><div><h4>Now</h4><div class="swatches"><div class="sh" style="border-radius:5px"></div><div class="sh" style="border-radius:8px"></div><div class="sh" style="border-radius:12px"></div></div><div style="font-size:12px;color:var(--muted);margin-top:8px">badge 5 · control 8 · card 12</div></div>
+      <div><h4>Proposed</h4><div class="swatches"><div class="sh" style="border-radius:999px"></div><div class="sh" style="border-radius:18px;width:44px;height:44px"></div><div class="sh" style="border-radius:24px;width:60px;height:44px"></div><div class="sh" style="border-radius:50%;width:36px;height:36px"></div></div><div style="font-size:12px;color:var(--muted);margin-top:8px">anything you press: pill · new-request button: 18 · sheets: 24 · icon buttons and avatars: circle</div></div></div>
+    </div>
+    <div class="panel"><h3>Type</h3><p>The code uses <b>51 different text sizes</b> across 1,365 places, including half-pixel sizes and a mix of pixel and rem units. Proposed: six sizes. Figtree is optional. It has Google Sans's rounded feel, but staying on Inter is fine.</p>
+      <div class="vs"><div><h4>Now (top 8 of 51)</h4><div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.9">11 ·11.5 ·12 ·12.5 ·13 ·13.5 ·14 ·15 ·16 ·0.72rem ·0.78rem ·0.845rem …</div></div>
+      <div><h4>Proposed</h4><div class="typescale">
+        <div><b style="font-size:24px;font-weight:700">Page</b><span>24/700</span></div>
+        <div><b style="font-size:18px;font-weight:700">Section</b><span>18/700</span></div>
+        <div><span style="font-size:15px;color:var(--ink);font-family:var(--body)">Row title</span><span>15/600</span></div>
+        <div><span style="font-size:14px;color:var(--ink);font-family:var(--body)">Body</span><span>14/400</span></div>
+        <div><span style="font-size:12.5px;color:var(--muted);font-family:var(--body)">Meta</span><span>12.5/500</span></div>
+        <div><span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-family:var(--body)">Label</span><span>11.5/700</span></div></div></div></div>
+    </div>
+    <div class="panel"><h3>Buttons</h3><p>Today nearly every action is a filled navy rectangle, so five "Open" buttons stacked down a page are all shouting. Proposed: four levels of emphasis, plus one "New request" button per screen.</p>
+      <div class="new" style="background:var(--m-bg);border-radius:18px;padding:16px;color:var(--m-ink);font-family:'Figtree',sans-serif">
+        <div class="btnrow"><button class="pill fill"><svg><use href="#i-check"/></svg>Approve</button><button class="pill tonal">Request changes</button><button class="pill out">Save draft</button><button class="pill text">Cancel</button><button class="iconbtn" aria-label="More details"><svg><use href="#i-eye"/></svg></button></div>
+        <div class="btnrow" style="margin-top:12px"><button class="fab" style="position:static"><svg><use href="#i-pen"/></svg>New request</button>
+          <div class="seg" data-seg><span class="thumb"></span><button aria-pressed="true">Day</button><button aria-pressed="false">Week</button><button aria-pressed="false">Month</button></div></div>
+      </div>
+    </div>
+    <div class="panel"><h3>Status and state</h3><p>Today status is shown in up to four ways at once: a coloured top bar, a coloured icon tile, a coloured progress bar and an uppercase label. Proposed: a dot and a word in a pill. Hovering anything clickable gives it a light navy tint.</p>
+      <div class="new" style="background:var(--m-bg);border-radius:18px;padding:16px;color:var(--m-ink);font-family:'Figtree',sans-serif;display:grid;gap:10px">
+        <div class="btnrow"><span class="st rev">In review · layer 2</span><span class="st ok">Approved</span><span class="st no">Sent back</span></div>
+        <div class="btnrow"><button class="mchip" aria-pressed="true"><svg><use href="#i-check"/></svg>In review</button><button class="mchip" aria-pressed="false"><svg hidden><use href="#i-check"/></svg>Approved</button><button class="mchip" aria-pressed="false"><svg hidden><use href="#i-check"/></svg>This month</button></div>
+        <div class="row" style="background:#fff;margin:0"><span class="ic">TE</span><span class="tx"><b>Training Evaluation Form</b><span>Point at this row to see the hover tint</span></span><span class="st rev">Review</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 00 LOADING ======================= -->
+<section class="block" id="s00">
+  <div class="sec-head"><span class="num">01</span><h2>Before the app, and while it loads</h2><span class="route">index.html · LoadingScreen.tsx · LazyRoute.tsx</span><p>The first two things every person sees. Today it's a blank white page, then a screen showing six progress indicators at once.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old" style="background:#F6F8FB;align-items:center;justify-content:flex-start;padding:30px 16px 0;gap:8px">
+        <span class="pin abs" style="top:10px;left:10px">1</span>
+        <div class="logo" style="width:34px;height:18px"></div>
+        <div style="width:30px;height:30px;border-radius:50%;border:3px solid #DCE3EE;border-top-color:var(--m-navy);margin-top:10px"></div>
+        <div style="font-weight:800;font-size:20px">20% <span class="pin">2</span></div>
+        <div style="font-weight:700;font-size:10px">Loading...</div>
+        <div style="color:var(--m-muted);font-size:10px">Loading permissions and form configuration...</div>
+        <div style="height:4px;width:70%;background:#E3E8F0;border-radius:4px"><div style="height:4px;width:20%;background:var(--m-navy);border-radius:4px"></div></div>
+        <div style="background:#fff;border-radius:10px;padding:8px;width:100%;font-size:9px;display:grid;gap:7px;margin-top:6px;border:1px solid var(--m-line)">
+          <div><b style="color:var(--m-green)">✓ Confirm Microsoft 365 session</b><br><span style="color:var(--m-green)">Checking the signed-in account and token state.</span> <span class="pin">3</span></div>
+          <div><b style="color:var(--m-green)">✓ Check SharePoint access</b><br><span style="color:var(--m-green)">Confirming this account can reach the PMW HR Docs site.</span></div>
+          <div style="background:#EAF1FB;padding:5px;border-radius:6px"><b style="color:var(--m-navy)">◌ Load portal permissions</b><br><span style="color:var(--m-navy)">Reading HR Forms Owner and Form Builder Superuser access.</span></div>
+          <div><b>○ Discover form lists</b><br><span style="color:var(--m-muted)">Finding the form libraries this account can use.</span></div>
+          <div style="opacity:.5"><b>○ Finish set-up</b> <span class="pin">4</span></div>
+        </div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new" style="align-items:center;justify-content:center;gap:18px;text-align:center">
+        <div style="position:relative;width:96px;height:96px;display:grid;place-items:center">
+          <div class="spin-ring" id="bootRing" style="width:96px;height:96px;position:absolute"></div>
+          <div style="position:relative;width:44px;height:24px;border-radius:50%;background:var(--m-navy)"></div>
+        </div>
+        <div><div style="font:700 17px/1.2 Figtree" id="bootMsg">Signing you in</div><div style="color:var(--m-muted);margin-top:4px" id="bootSub">Usually takes 2 or 3 seconds</div></div>
+        <div style="display:flex;gap:6px" id="bootDots"><span class="dot" style="width:8px;height:8px;color:var(--m-navy)"></span><span class="dot" style="width:8px;height:8px;color:#C9D1DE"></span><span class="dot" style="width:8px;height:8px;color:#C9D1DE"></span></div>
+        <button class="pill text" style="position:absolute;bottom:22px">Taking long? Try again</button>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A blank white page until the app's code has downloaded</div><div class="fix">The page starts completely empty, so on a slow connection people stare at white. <b>Put the logo and a ring directly in index.html</b> using plain CSS, so they show instantly and the app replaces them. Also: the browser bar colour is still the old Microsoft blue <code>#0078D4</code> (should be navy <code>#0F3D91</code>), and the page has no description for link previews.</div><div class="ref">index.html · &lt;div id="root"&gt;&lt;/div&gt; · meta theme-color</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>Six progress indicators for one wait</div><div class="fix">A spinner, a percentage, "Loading...", a sentence, a progress bar and a 5-step checklist all report the same thing. <b>Keep one ring that fills, with one sentence under it</b> that changes as it goes: "Signing you in", then "Getting your forms", then "Almost there".</div><div class="ref">src/components/auth/LoadingScreen.tsx</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The steps describe the system, not the person</div><div class="fix">"Token state", "PMW HR Docs site" and "HR Forms Owner and Form Builder Superuser access" mean nothing to an employee. Only show this detail if a step fails, and then say what to do: "We couldn't reach SharePoint. Try again, or contact IT at …".</div><div class="ref">App.tsx loading steps</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The checklist runs off the bottom of the screen</div><div class="fix">At 856px tall the last step sits below the fold, so a loading screen gets a scroll bar. Six things moving at once also makes the wait feel longer than one ring would. When the ring goes away, fade it out rather than cutting to the dashboard.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>Opening a tab for the first time wipes the whole screen</div><div class="fix">Every page's loading state is the full-screen loader, so the first visit to any tab removes the header and menu and shows the boot splash again. It looks like the app restarted. <b>Keep the menu in place and load inside the page area</b>, with placeholder rows. Wait 200ms before showing anything, so pages that are already cached don't flash. Keep the full-screen loader for sign-in only.</div><div class="ref">App.tsx:1697 withSubmissions · App.tsx:1766–2081 LazyRoute fallback · AdminGuard.tsx:73</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Leftovers from the old colour scheme</div><div class="fix">The loader still draws blobs in the retired Microsoft blue and purple, wavy lines, and a glow that pulses forever even when the device asks for reduced motion. The 36px percentage is the loudest thing on the screen. Remove all of it.</div><div class="ref">LoadingScreen.tsx:79–138, 152–167, 184–194</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>After an update, old tabs show a generic error</div><div class="fix">When a new version is deployed, a tab that was already open can fail to load the next page and lands on the generic error screen. Catch that case and show a pill banner: "A new version is ready · Reload".</div><div class="ref">LazyRoute.tsx:77</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 01 SIGN-IN ======================= -->
+<section class="block" id="s01">
+  <div class="sec-head"><span class="num">02</span><h2>Sign-in</h2><span class="route">/ · ChoiceScreen.tsx</span><p>The front door. It already looks calm, so most of the changes are wording and making the two ways in easier to tell apart.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old" style="background:#F6F8FB;padding:40px 14px 0">
+        <div class="card" style="text-align:center;padding:18px 12px;display:grid;gap:9px;margin:0">
+          <div class="logo" style="margin:0 auto;width:30px;height:16px"></div>
+          <div style="font-weight:700;font-size:16px">PMW Group HR Portal <span class="pin">1</span></div>
+          <div style="color:var(--m-muted);font-size:10.5px">Sign in to reach your submissions, approvals, and learning materials.</div>
+          <div class="btn" style="padding:10px;display:flex;gap:6px;justify-content:center;align-items:center"><svg width="12" height="12"><use href="#i-ms"/></svg>Continue with Microsoft 365</div>
+          <div style="display:flex;align-items:center;gap:8px;color:var(--m-muted);font-size:9px"><span style="flex:1;height:1px;background:var(--m-line)"></span>or <span class="pin">2</span><span style="flex:1;height:1px;background:var(--m-line)"></span></div>
+          <div style="color:var(--m-muted);font-size:9.5px">Signing in with Google makes you a guest member. You will be asked for your name, position and department once.</div>
+          <div style="border-top:1px solid var(--m-line);padding-top:8px;color:var(--m-muted);font-size:9.5px">PMW staff sign in with Microsoft 365. Everyone else is welcome to continue with Google. <b style="color:var(--m-navy);text-decoration:underline">Privacy Notice</b> <span class="pin">3</span></div>
+        </div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new" style="padding:56px 20px 20px;gap:0">
+        <div style="width:64px;height:64px;border-radius:50%;background:var(--m-tonal);display:grid;place-items:center;margin:0 auto"><div style="width:34px;height:18px;border-radius:50%;background:var(--m-navy)"></div></div>
+        <div style="text-align:center;margin-top:18px"><div style="font:700 22px/1.15 Figtree;letter-spacing:-.01em">PMW HR Portal</div><div style="color:var(--m-muted);margin-top:6px">Forms, approvals and learning, in one place.</div></div>
+        <div style="display:grid;gap:10px;margin-top:28px">
+          <button class="pill fill" style="padding:13px;font-size:13px"><svg><use href="#i-ms"/></svg>I work at PMW</button>
+          <button class="pill out" style="padding:13px;font-size:13px;background:#fff"><svg><use href="#i-g"/></svg>I'm a guest · use Google</button>
+        </div>
+        <div style="margin-top:auto;text-align:center;color:var(--m-muted);font-size:11px">Guests are asked for their name and department once.<br><a href="#s17" style="color:var(--m-navy);font-weight:600">Privacy notice</a></div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>The product has seven names</div><div class="fix">"PMW HR Group Portal" (browser tab), "PMW Group HR Portal" (this heading), "PMW HR Forms" (app header), "PMW HR Form" (inner tabs), "PMW Careers", "PMW International Berhad HR Forms" (form footer) and "PMW HR FORM" (the PDF stamp). <b>Use whatever is printed on the QR posters</b>, everywhere, and set it from one helper.</div><div class="ref">index.html &lt;title&gt; · ChoiceScreen.tsx · document.title in AdminRoutingPage / AdminOrgPage / ApprovalDashboard</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"or" with nothing after it</div><div class="fix">When Google sign-in isn't set up, the "or" divider and both Google sentences still show with no button to press. Hide the divider and the Google text when the Google button isn't there.</div><div class="ref">ChoiceScreen.tsx ~238–293 · googleSignInConfigured()</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The Google rule is explained twice</div><div class="fix">One paragraph in the middle and a footer below both say "staff use Microsoft, everyone else uses Google". <b>Put the choice in the button labels</b> ("I work at PMW" / "I'm a guest") and keep a single footnote.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The logo is tiny and the card adds a box around nothing</div><div class="fix">Remove the card. Put the logo on a round tinted backing at 64px, with the buttons on the page background. Two full-width pill buttons at equal size make both choices look equally valid. A global style also draws a thin outline around every image, which is why the logo has a box around it.</div><div class="ref">index.css:72–76 img outline</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>No hover feedback, and a focus ring you can't see</div><div class="fix">The Microsoft button's hover colour is the same as its normal colour. The keyboard focus ring is pale blue on white, about 1.3:1 contrast, so keyboard users can't see where they are. Hover: a light tint over the button. Focus: a 2px navy ring.</div><div class="ref">ChoiceScreen.tsx:367, 563</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The guest sign-in looks like a different company</div><div class="fix">The guest screen uses a Georgia serif headline, a square black button, and an ink-bordered card with a yellow strip at a different corner size. Rebuild it from the same pills and type as everything else.</div><div class="ref">GuestLanding.tsx:135–255</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 02 NAV ======================= -->
+<section class="block" id="s02">
+  <div class="sec-head"><span class="num">03</span><h2>Navigation</h2><span class="route">AppShell.tsx · SectionTabs.tsx · navigation.ts</span><p>The source notes say the phone-style bottom bar at every width was a deliberate choice. Gmail answers the same question differently: a left menu on desktop, a bottom bar on phones, one set of menu items behind both. The working mockup above shows the desktop half.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Admin <span class="pin">1</span><span class="ava">AR</span></div>
+        <div class="tabs"><span>⚒ Form Builder</span><span>≡ Routing</span><span class="on">▦ Organisation</span><span>▣ Opportunities</span><span>▤ Appl› <span class="pin">2</span></span></div>
+        <div class="scroll"></div>
+        <div style="position:relative"><span class="pin abs" style="top:-20px;left:40%">3</span></div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span class="on"><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed (phone)</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search admin</span><span class="av">AR</span></div>
+        <h4>Organisation</h4>
+        <div class="chips" role="tablist">
+          <button class="mchip" aria-pressed="false">Form builder</button><button class="mchip" aria-pressed="false">Routing</button><button class="mchip" aria-pressed="true">Organisation</button><button class="mchip" aria-pressed="false">Careers ▾</button><button class="mchip" aria-pressed="false">More ▾</button>
+        </div>
+        <div class="scroll"></div>
+        <nav class="mnav" data-nav><button><i><svg><use href="#i-home"/></svg></i>Home</button><button><i><svg><use href="#i-inbox"/></svg></i>Requests</button><button><i><svg><use href="#i-brief"/></svg></i>Portal</button><button aria-current="page"><i><svg><use href="#i-shield"/></svg></i>Admin</button><button><i><svg><use href="#i-user"/></svg></i>You</button></nav>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The header shows the section, not the page</div><div class="fix">"Forms" appears as the title on My Submissions and All Submissions too. "Admin" covers seven different tools. <b>Title the page itself</b>, and show the section only through the highlighted menu item.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>Admin has more tabs than fit</div><div class="fix">Form Builder, Routing, Organisation, Opportunities and Applications already cut off at 800px wide, and Cards, Learning and Guest members are hidden behind a small arrow. <b>Group them</b>: Forms (builder, routing, organisation), Careers (openings, applications, cards), People (guests, learning). Then 3 or 4 chips fit, and the overflow opens in a menu.</div><div class="ref">src/config/navigation.ts</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>A phone bar on a 1440px monitor, with 10px labels</div><div class="fix">At every size the menu is a 60px bar along the bottom. Its labels are 10px, below the 11px minimum the scanner checks for, and the selected item is marked only by a 2px amber line above the icon. <b>On desktop: a left menu like the one above</b>, with a pill behind the selected item and counts of what's waiting. <b>On phones: a bottom bar</b> with a 52×28 pill behind the selected icon and 12px labels.</div><div class="ref">AppShell.tsx:385–392 · fontSize 0.625rem · detector: undersized-ui-text ×6</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The account role text is too small to read</div><div class="fix">"Administrator · Form Builder" is about 10.5px under your name. Move it into the account menu, as Gmail does: click the avatar to get a round card with your name, roles, Switch account and Sign out.</div><div class="ref">AppShell.tsx:237 · 0.66rem</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Every page change throws away your place</div><div class="fix">The page area is rebuilt and re-animated on every navigation, so going back to a long list resets the scroll position and filters. Fade between pages without rebuilding them, as Gmail does when you return to the inbox.</div><div class="ref">AppShell.tsx:310–316 key={pathname}</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The skip link hides under the header, and there's no Help</div><div class="fix">The "skip to content" link appears underneath the sticky header. The account menu has no "Help and contact HR" item.</div><div class="ref">AppShell.tsx:117–139</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>DESIGN.md still describes the sidebar</div><div class="fix">The design notes describe a 224px navy sidebar at ≥1024px that the code no longer has. Update them in the same change that brings back a left menu, or the notes and the app will disagree a second time.</div><div class="ref">DESIGN.md "Navigation"</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 03 DASHBOARD ======================= -->
+<section class="block" id="s03">
+  <div class="sec-head"><span class="num">04</span><h2>Dashboard</h2><span class="route">/admin/dashboard · /user/dashboard · DashboardPage.tsx · StatsRow.tsx</span><p>This should answer "what needs me?" in one glance. Today the first screen is mostly a careers advert, and the one useful sentence tells you where to click instead of being a link.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Dashboard<span class="ava">AR</span></div>
+        <div class="scroll">
+          <div class="card" style="padding:6px"><div style="background:linear-gradient(160deg,#1A3E8C,#0B2350);height:150px;border-radius:9px;color:#fff;padding:10px;display:flex;flex-direction:column;justify-content:flex-end;gap:4px"><span style="background:#fff;color:var(--m-ink);font-size:7.5px;border-radius:3px;padding:2px 4px;width:max-content;font-weight:700">Portal highlight</span><b style="font-size:13px">Grow into your next role <span class="pin">1</span></b><span style="font-size:8px">Browse internal openings, compare fit, and move forward with confidence.</span><span style="align-self:center;font-size:8px">▬ • •</span></div></div>
+          <div class="card"><div class="lbl">Needs your attention</div><b style="font-size:13px">157 submissions still moving</b><div style="color:var(--m-muted);font-size:9.5px">Open Forms → My Submissions to see where each one has stopped. <span class="pin">2</span></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 8px 0">
+            <div class="card" style="margin:0;border-top:3px solid var(--m-navy)"><div class="lbl">Total <span class="pin">3</span></div><b style="font-size:18px">157</b><div style="font-size:8px;color:var(--m-muted)">157 visible submissions</div><div style="height:3px;background:var(--m-navy);border-radius:3px;margin-top:5px"></div></div>
+            <div class="card" style="margin:0;border-top:3px solid #22C55E"><div class="lbl">Approved</div><b style="font-size:18px">0</b><div style="font-size:8px;color:var(--m-muted)">0 approved submissions</div><div style="height:3px;background:#EEF0F4;border-radius:3px;margin-top:5px"></div></div>
+            <div class="card" style="margin:0;border-top:3px solid var(--m-amber)"><div class="lbl">Pending <span class="pin">4</span></div><b style="font-size:18px">157</b><div style="font-size:8px;color:var(--m-muted)">157 pending submissions</div><div style="height:3px;background:var(--m-amber);border-radius:3px;margin-top:5px"></div></div>
+            <div class="card" style="margin:0;border-top:3px solid #EF4444"><div class="lbl">Rejected</div><b style="font-size:18px">0</b><div style="font-size:8px;color:var(--m-muted)">0 rejected submissions</div></div>
+          </div>
+          <div style="font-size:8.5px;color:var(--m-muted);padding:8px 2px">5 forms available to you · administrator access. <span class="pin">5</span></div>
+        </div>
+        <div class="bbar"><span class="on"><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search requests</span><span class="av">AR</span></div>
+        <div class="scroll">
+          <h4>Good morning, Aiman</h4><div class="sub">6 waiting on you · oldest 4 days</div>
+          <div style="display:grid;gap:8px;padding:0 12px">
+            <button class="rbtn" style="width:100%"><span class="rr" style="--c:var(--m-amber);--v:72;width:50px;height:50px"><b style="width:38px;height:38px;font-size:13px">157</b></span><span class="rl"><b>In review</b><span>Tap to see where each one is</span></span><svg width="16" height="16" style="margin-left:auto;color:var(--m-muted)"><use href="#i-chev"/></svg></button>
+            <div style="display:flex;gap:8px"><button class="rbtn" style="flex:1;padding-right:12px"><span class="rr" style="--c:var(--m-green);--v:18;width:40px;height:40px"><b style="width:30px;height:30px;font-size:12px">41</b></span><span class="rl"><b style="font-size:12px">Approved</b></span></button><button class="rbtn" style="flex:1;padding-right:12px"><span class="rr" style="--c:var(--m-red);--v:6;width:40px;height:40px"><b style="width:30px;height:30px;font-size:12px">9</b></span><span class="rl"><b style="font-size:12px">Sent back</b></span></button></div>
+          </div>
+          <div style="font-weight:700;font-size:12px;color:var(--m-muted);margin:18px 16px 6px">Waiting on you</div>
+          <div class="row"><span class="ic" style="background:#E8DEF8;color:#4A2A86">SA</span><span class="tx"><b>Training Requisition</b><span>Siti A. · layer 2 of 3</span></span><span class="meta">4d</span></div>
+          <div class="row"><span class="ic" style="background:#FDE7C4;color:#855405">RK</span><span class="tx"><b>Training Evaluation</b><span>Raj K. · your approval</span></span><span class="meta">2d</span></div>
+          <div class="hl" style="margin:14px 12px;padding:12px 14px;border-radius:22px"><span class="bub" style="width:36px;height:36px"><svg><use href="#i-brief"/></svg></span><div><b>3 openings</b><p style="font-size:11px">this week</p></div><button class="pill" style="padding:7px 12px">View</button></div>
+        </div>
+        <button class="fab"><svg><use href="#i-pen"/></svg>New request</button>
+        <nav class="mnav" data-nav><button aria-current="page"><i><svg><use href="#i-home"/></svg></i>Home</button><button><i><svg><use href="#i-inbox"/></svg></i>Requests</button><button><i><svg><use href="#i-brief"/></svg></i>Portal</button><button><i><svg><use href="#i-shield"/></svg></i>Admin</button><button><i><svg><use href="#i-user"/></svg></i>You</button></nav>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>A careers advert takes the top half of the screen</div><div class="fix">"Grow into your next role" fills about 40% of the first screen on an HR admin's dashboard, and its slide dots are 6px (the scanner also flags the dot's width animation). It also changes slide every 4.4 seconds with no way to pause, which fails WCAG 2.2.2. When an admin hasn't set any cards, it fills the space with stock wording. <b>Shrink it to a one-line pill banner</b> lower down: "3 openings this week · View".</div><div class="ref">CareerPortalCarousel.tsx:137, 393 · DashboardPage.tsx:107</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>"Needs your attention" isn't about you</div><div class="fix">For an admin, "157 submissions still moving" counts everyone's submissions, not the ones waiting on this person. Approvers do their real work from email links, and the dashboard never shows "waiting on you". <b>Start with a greeting, then a "Waiting on you" list</b> linking to each review, then your recent submissions. Also check whether 157 pending and 0 approved is real data or a counting bug.</div><div class="ref">DashboardPage.tsx:110 · bucketSubmissions</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>An instruction where a link should be</div><div class="fix">"Open Forms → My Submissions to see where each one has stopped" asks people to navigate there themselves. <b>Make the whole line tappable</b> and have it open the filtered list.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Four boxes, each saying its number twice</div><div class="fix">"157" over "157 visible submissions", "0" over "0 approved submissions". The Total progress bar is always full, so it carries no information. Each tile also has a coloured top bar and a coloured icon tile. <b>Replace them with three rings you can tap</b>; the total is just the sum.</div><div class="ref">StatsRow.tsx</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Pending" and "Total" are the same number</div><div class="fix">When everything is pending, two tiles say 157 and two say 0. That's half the space spent on nothing. Rings make a gap like that easy to see (the amber ring nearly full, green almost empty), which is the actual story.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>A stray sentence pinned to the left edge</div><div class="fix">"5 forms available to you · administrator access." has no left margin. On the sky background it measures 4.0:1 contrast, below the 4.5:1 minimum for text. Move it to Forms as a count.</div><div class="ref">detector: low-contrast 4.0:1 #5a6880 on #bfddf4 · body-text-viewport-edge ×2</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Boxes inside boxes</div><div class="fix">The scanner found 3 cards nested inside cards (the carousel sits in a white card with a coloured card inside it). Keep one level of surface.</div><div class="ref">detector: nested-cards ×3</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 04 FORMS ======================= -->
+<section class="block" id="s04">
+  <div class="sec-head"><span class="num">05</span><h2>Forms</h2><span class="route">/forms · FormsPage.tsx · FormList.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Forms<span class="ava">AR</span></div>
+        <div class="tabs"><span class="on">Available forms</span><span>My Submissions</span><span>All Submissions</span></div>
+        <div class="scroll">
+          <div style="font-size:8.5px;color:var(--m-muted);padding:6px 2px">5 forms available to you. <span class="pin">5</span></div>
+          <div class="card" style="padding:4px 8px">
+            <div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--m-line)"><span style="width:18px;height:18px;border-radius:5px;background:#E8E3F8"></span><span style="flex:1"><b style="font-size:10px">Training Attendance Form</b><br><span style="font-size:8px;color:var(--m-muted)">General</span> <span class="pin">2</span></span>✎ <span class="pin">3</span><span class="btn">Open ↗</span></div>
+            <div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--m-line)"><span style="width:18px;height:18px;border-radius:5px;background:#E6E9EE"></span><span style="flex:1"><b style="font-size:10px">Training Evaluation Form</b><br><span style="font-size:8px;color:var(--m-muted)">General</span></span>✎<span class="btn">Open ↗</span></div>
+            <div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--m-line)"><span style="width:18px;height:18px;border-radius:5px;background:#FDE2E0"></span><span style="flex:1"><b style="font-size:10px">Training Needs Analysis</b><br><span style="font-size:8px;color:var(--m-muted)">General</span></span>✎<span class="btn">Open ↗</span></div>
+            <div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--m-line)"><span style="width:18px;height:18px;border-radius:5px;background:#FDEBC4"></span><span style="flex:1"><b style="font-size:10px">Training Requisition Form</b><br><span style="font-size:8px;color:var(--m-muted)">General</span></span>✎<span class="btn">Open ↗ <span class="pin">1</span></span></div>
+            <div style="display:flex;align-items:center;gap:7px;padding:7px 0"><span style="width:18px;height:18px;border-radius:5px;background:#FDE2E0"></span><span style="flex:1"><b style="font-size:10px">ZZ TEST RUN</b> <span class="pin">4</span><br><span style="font-size:8px;color:var(--m-muted)">General</span></span>✎<span class="btn">Open ↗</span></div>
+          </div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span class="on"><i></i>Forms</span><span><i></i>Portal</span><span><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search 5 forms</span><span class="av">AR</span></div>
+        <h4>Forms</h4>
+        <div class="chips"><button class="mchip" aria-pressed="true"><svg><use href="#i-check"/></svg>All</button><button class="mchip" aria-pressed="false">Training</button><button class="mchip" aria-pressed="false">Recently used</button></div>
+        <div class="scroll">
+          <div style="font-size:11px;font-weight:700;color:var(--m-muted);margin:4px 18px 4px;letter-spacing:.05em;text-transform:uppercase">Training · 4</div>
+          <div class="row"><span class="ic"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>Training Attendance</b><span>Used 12 times · ~3 min</span></span><svg width="16" height="16" style="color:var(--m-muted)"><use href="#i-chev"/></svg></div>
+          <div class="row"><span class="ic"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>Training Evaluation</b><span>~5 min · needs a signature</span></span><svg width="16" height="16" style="color:var(--m-muted)"><use href="#i-chev"/></svg></div>
+          <div class="row"><span class="ic"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>Training Needs Analysis</b><span>~8 min</span></span><svg width="16" height="16" style="color:var(--m-muted)"><use href="#i-chev"/></svg></div>
+          <div class="row"><span class="ic"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>Training Requisition</b><span>~4 min · 3 approvals</span></span><svg width="16" height="16" style="color:var(--m-muted)"><use href="#i-chev"/></svg></div>
+          <div style="font-size:11px;font-weight:700;color:var(--m-muted);margin:12px 18px 4px;letter-spacing:.05em;text-transform:uppercase">Testing · only you see these</div>
+          <div class="row" style="opacity:.8"><span class="ic" style="background:#EEF0F4;color:var(--m-muted)"><svg><use href="#i-lock"/></svg></span><span class="tx"><b>ZZ TEST RUN</b><span>Superuser only</span></span><button class="iconbtn" aria-label="Edit in builder"><svg><use href="#i-pen"/></svg></button></div>
+        </div>
+        <nav class="mnav" data-nav><button><i><svg><use href="#i-home"/></svg></i>Home</button><button aria-current="page"><i><svg><use href="#i-inbox"/></svg></i>Requests</button><button><i><svg><use href="#i-brief"/></svg></i>Portal</button><button><i><svg><use href="#i-shield"/></svg></i>Admin</button><button><i><svg><use href="#i-user"/></svg></i>You</button></nav>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Five identical filled buttons</div><div class="fix">Every row ends in the same heavy navy "Open ↗", so nothing on the page stands out. The ↗ icon means "opens elsewhere", but the form opens in the same place. <b>Make the whole row tappable</b>, with a chevron at the end.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"General" repeated on every row</div><div class="fix">The category under each title is identical five times. Show it once as a group heading with a count, and use the second line for something useful: roughly how long the form takes, how many approvals, whether it needs a signature.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>An unexplained pencil icon</div><div class="fix">The ✎ next to Open opens the builder, which is admin-only, yet it has the same weight as Open and no label on touch screens. Move "Edit in builder" into a ⋯ menu, or show it on hover for superusers only.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Open X?" before opening a form</div><div class="fix">Clicking Open shows a confirmation dialog before the form opens. That's an extra step for the most common action in the app. Open the form directly. If it opens in a new tab, say so in the button's label.</div><div class="ref">FormsPage.tsx:271–282</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The test form looks like a real one</div><div class="fix">"ZZ TEST RUN" sits in the list with the same weight as live forms. Put it in its own "Testing · only you see these" group with a lock icon.</div><div class="ref">superuserOnlyForms.ts</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Icon colours that mean nothing</div><div class="fix">The icon tiles are purple, grey, red, amber and red in turn. Red reads as "error". Either use one tonal colour, or give each colour a meaning (the form's category) and show a legend.</div><div class="ref">META_PALETTES in spConfig.ts</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 05 MY SUBMISSIONS ======================= -->
+<section class="block" id="s05">
+  <div class="sec-head"><span class="num">06</span><h2>My Submissions</h2><span class="route">/submissions · MySubmissionsPage.tsx · SubmissionRow.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Forms<span class="ava">AR</span></div>
+        <div class="tabs"><span>Available forms</span><span class="on">My Submissions</span><span>All Submissions</span></div>
+        <div class="scroll">
+          <div class="card" style="display:grid;gap:6px"><div style="display:flex;gap:5px"><span style="flex:1.4;border:1px solid #C9D1DE;border-radius:7px;padding:5px;font-size:9px;color:var(--m-muted)">🔍 Search reference, form or ID.. <span class="pin">4</span></span><span style="flex:1;border:1px solid #C9D1DE;border-radius:7px;padding:5px;font-size:9px;color:var(--m-muted)">Form type ▾</span></div><span style="border:1px solid var(--m-navy);color:var(--m-navy);border-radius:7px;padding:5px;font-size:9px;width:max-content;font-weight:700">☰ Advanced Search ⌄ <span class="pin">5</span></span></div>
+          <div style="font-size:8.5px;color:var(--m-muted);padding:6px 2px">1 submission · 0 approved · 1 pending · 0 rejected</div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between"><b style="font-size:11px">Aiman Rahman Bin Zainal <span class="pin">1</span></b><span style="display:flex;gap:4px"><span style="width:20px;height:20px;border-radius:6px;background:var(--m-red-soft);color:var(--m-red);display:grid;place-items:center;font-size:9px">🗑</span><span class="pin">2</span><span style="width:20px;height:20px;border-radius:6px;background:#EAF1FB;display:grid;place-items:center;font-size:9px">👁</span></span></div>
+            <div style="display:flex;gap:4px;margin-top:4px"><span style="background:#EEF2F8;border-radius:4px;padding:2px 5px;font-size:8px;font-weight:700"># Ref 101</span><span style="font-size:8px;color:var(--m-muted)">26 Aug 2026</span></div>
+            <div style="display:flex;gap:4px;margin-top:6px"><span style="border:1px solid #C9D1DE;border-radius:4px;padding:2px 5px;font-size:8px">Training Evaluation Form</span><span style="border:1px solid #C9D1DE;border-radius:4px;padding:2px 5px;font-size:8px;color:var(--m-navy)">◷ In Review</span></div>
+            <div style="font-size:8px;color:var(--m-muted);margin-top:6px">General · 12:35 PM<br>Submitted by SharePoint App <span class="pin">3</span></div>
+          </div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span class="on"><i></i>Forms</span><span><i></i>Portal</span><span><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new" id="msPhone">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search by form or ref no.<svg style="margin-left:auto"><use href="#i-tune"/></svg></span><span class="av">AR</span></div>
+        <h4>My submissions</h4>
+        <div class="chips"><button class="mchip" aria-pressed="false">Status ▾</button><button class="mchip" aria-pressed="false">Form ▾</button><button class="mchip" aria-pressed="false">Any time ▾</button></div>
+        <div class="scroll" id="msList">
+          <div class="row" id="msRow"><span class="ic"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>Training Evaluation</b><span>Ref 101 · waiting on layer 2 (HOD)</span></span><span class="meta"><span class="st rev">Review</span><br>26 Aug</span></div>
+          <div style="padding:10px 18px"><div style="display:flex;align-items:center;gap:4px">
+            <span style="width:12px;height:12px;border-radius:50%;background:var(--m-green)"></span><span style="flex:1;height:3px;background:var(--m-green);border-radius:3px"></span>
+            <span style="width:12px;height:12px;border-radius:50%;background:var(--m-amber);box-shadow:0 0 0 4px var(--m-amber-soft)"></span><span style="flex:1;height:3px;background:#E3E8F0;border-radius:3px"></span>
+            <span style="width:12px;height:12px;border-radius:50%;background:#E3E8F0"></span></div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--m-muted);margin-top:5px"><span>Sent</span><span>HOD</span><span>HR</span></div></div>
+          <div style="display:flex;gap:8px;padding:6px 16px"><button class="pill tonal"><svg><use href="#i-eye"/></svg>View</button><button class="pill text" id="msDel"><svg><use href="#i-trash"/></svg>Withdraw</button></div>
+        </div>
+        <div class="snack" id="msSnack" hidden>Request withdrawn<b id="msUndo" role="button" tabindex="0">Undo</b></div>
+        <nav class="mnav" data-nav><button><i><svg><use href="#i-home"/></svg></i>Home</button><button aria-current="page"><i><svg><use href="#i-inbox"/></svg></i>Requests</button><button><i><svg><use href="#i-brief"/></svg></i>Portal</button><button><i><svg><use href="#i-shield"/></svg></i>Admin</button><button><i><svg><use href="#i-user"/></svg></i>You</button></nav>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>The card is titled with your own name</div><div class="fix">On My Submissions, every card is headed "Aiman Rahman Bin Zainal", which is you, every time. The form name is pushed into a small chip. <b>Lead with the form</b>, then the reference number and the step it's waiting on.</div><div class="ref">SubmissionRow.tsx</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>Delete is as prominent as View</div><div class="fix">The red-filled delete square sits right next to View at the same size, the easiest thing on the card to hit by mistake. <b>Make it a text button ("Withdraw")</b> and show an Undo bar for 6 seconds instead of a confirmation dialog. Try it in the mockup. The current dialog talks about "the SharePoint item … matrix child rows", and the success message says "Removed N managed files and N matrix rows". Replace both with "Submission deleted."</div><div class="ref">SubmissionRow.tsx:159 · MySubmissionsPage.tsx:204–212, 376–379</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A "view" icon that isn't a button, inside a card that is</div><div class="fix">The eye icon is decoration, not a button. The real delete button sits inside a clickable card, which confuses screen readers. Replace them with a row that has one chevron and a ⋯ menu.</div><div class="ref">SubmissionRow.tsx:116, 188–202</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Seven names for a status, and ten filter controls</div><div class="fix">"Pending", "In Review", "still moving", "Being reviewed", "Fully Approved" next to "Approved", and "Confirmed". The toolbar offers ten filters, including developer-only ones ("Profile", "Version"). <b>Use three words: In review, Approved, Sent back.</b> Show three chips, and put the rest behind the filter icon.</div><div class="ref">StatusBadge.tsx:13–20 · Toolbar.tsx:408–433</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Submitted by SharePoint App"</div><div class="fix">This is an internal system name leaking onto the screen. Hide it when the submitter is the system account, or say "Submitted from a public link".</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The search hint is cut off</div><div class="fix">"Search reference, form or ID.." (two dots) is cut off at phone width. Shorten it to "Search by form or ref no.".</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Three controls before the first result</div><div class="fix">Search, a "Form type" dropdown and an "Advanced Search" button sit inside their own box above the list. <b>Gmail's pattern</b>: one pill search with a filter icon inside it, and chips below (Status, Form, Any time) that open small menus. Also, the "where is it now" question gets a 3-dot progress track instead of a lone "In Review" tag.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 06 ALL SUBMISSIONS ======================= -->
+<section class="block" id="s06">
+  <div class="sec-head"><span class="num">07</span><h2>All Submissions (admin)</h2><span class="route">/admin/submissions · ApprovalDashboard.tsx</span><p>The screen most used for repeated admin work, and the one where a stuck load hurts most.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now (after 10+ seconds)</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Forms<span class="ava">AR</span></div>
+        <div class="tabs"><span>Available forms</span><span>My Submissions</span><span class="on">All Submissions</span></div>
+        <div style="flex:1;background:#F6F8FB;margin:8px;border-radius:4px;display:grid;place-items:center;color:var(--m-muted);font-size:10px">Loading approvals... <span class="pin">1</span></div>
+        <div class="bbar"><span><i></i>Home</span><span class="on"><i></i>Forms</span><span><i></i>Portal</span><span><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed (loading, then stuck)</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search all submissions</span><span class="av">AR</span></div>
+        <h4>All submissions</h4>
+        <div class="chips"><span class="sk" style="width:70px;height:26px"></span><span class="sk" style="width:60px;height:26px"></span><span class="sk" style="width:80px;height:26px"></span></div>
+        <div style="display:grid;gap:14px;padding:6px 16px">
+          <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:34px;height:34px"></span><span style="flex:1;display:grid;gap:6px"><span class="sk" style="height:10px;width:70%"></span><span class="sk" style="height:8px;width:45%"></span></span></div>
+          <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:34px;height:34px"></span><span style="flex:1;display:grid;gap:6px"><span class="sk" style="height:10px;width:60%"></span><span class="sk" style="height:8px;width:35%"></span></span></div>
+          <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:34px;height:34px"></span><span style="flex:1;display:grid;gap:6px"><span class="sk" style="height:10px;width:75%"></span><span class="sk" style="height:8px;width:40%"></span></span></div>
+        </div>
+        <div style="margin:18px 12px 0;background:#fff;border-radius:22px;padding:14px;display:flex;gap:10px;align-items:center"><span style="width:36px;height:36px;border-radius:50%;background:var(--m-amber-soft);color:var(--m-amber-ink);display:grid;place-items:center;flex:none"><svg width="18" height="18"><use href="#i-clock"/></svg></span><span style="flex:1"><b>Taking longer than usual</b><br><span style="color:var(--m-muted);font-size:11px">157 submissions across 5 forms</span></span><button class="pill tonal" style="padding:7px 12px">Retry</button></div>
+        <div style="flex:1"></div>
+        <nav class="mnav" data-nav><button><i><svg><use href="#i-home"/></svg></i>Home</button><button aria-current="page"><i><svg><use href="#i-inbox"/></svg></i>Requests</button><button><i><svg><use href="#i-brief"/></svg></i>Portal</button><button><i><svg><use href="#i-shield"/></svg></i>Admin</button><button><i><svg><use href="#i-user"/></svg></i>You</button></nav>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>It loads forever when a service is down</div><div class="fix">With the app's own server unavailable, the page showed "Loading approvals..." for over 10 seconds and never changed: no timeout, no error, no retry, just a grey sentence in an empty box. <b>Show placeholder rows straight away.</b> After about 8 seconds, say it's taking longer than usual and offer Retry. If it fails, say what couldn't be reached.</div><div class="ref">src/components/builder/ApprovalDashboard.tsx</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Approvals" on a tab called "Submissions"</div><div class="fix">The tab says All Submissions, the loading text says "approvals", and the browser tab says "Submissions — PMW HR Form". Use one word.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A rich admin list with no bulk actions</div><div class="fix">HR repeats the same decision across many rows. Copy Gmail: tick boxes that switch the toolbar to Approve / Remind / Reassign, and Shift-click to select a range. The working mockup above shows this.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Two page titles, and a red "TEST" tag</div><div class="fix">The page adds its own "Submissions" heading under the app's "Forms" heading, so there are two top-level headings that disagree. Test runs get a red tag, but red means "failed". It also uses plain browser dropdowns and the builder's colours inside the app. Show "Test run" in amber, use the same dropdowns as everywhere else, and hide the "Profile (developer-reference metadata)" column.</div><div class="ref">ApprovalDashboard.tsx:3144, 3191, 3445, 3484</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>22 hard-coded colours in one file</div><div class="fix">The most of any file: mostly <code>#fff</code> and <code>#FCA5A5</code> written next to the shared colour settings, so a future theme change will miss them.</div><div class="ref">ApprovalDashboard.tsx:3149, 3170–3272</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 07 PROFILE ======================= -->
+<section class="block" id="s07">
+  <div class="sec-head"><span class="num">08</span><h2>Profile</h2><span class="route">/profile · ProfilePage.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Profile<span class="ava">AR</span></div>
+        <div class="tabs"><span class="on">My Profile</span><span>Appearance</span><span>Privacy Notice</span></div>
+        <div class="scroll">
+          <div class="card"><div style="display:flex;gap:8px;align-items:center"><span style="width:32px;height:32px;border-radius:50%;background:var(--m-navy);color:#fff;display:grid;place-items:center;font-weight:700">M</span><span><b style="font-size:12px">Aiman Rahman Bin Zainal</b><br><span style="font-size:8.5px;color:var(--m-muted)">aiman@example.com</span> <span class="pin">1</span></span></div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:9px 14px;margin-top:10px;font-size:9px;border-top:1px solid var(--m-line);padding-top:9px"><span class="lbl">@ Email <span class="pin">2</span></span><span>aiman@example.com</span><span class="lbl">▣ Job title</span><span>HR Executive</span><span class="lbl">▦ Department</span><span>IT</span><span class="lbl">☎ Phone</span><span style="color:var(--m-muted)">Not set in the directory</span></div></div>
+          <div class="card"><b style="font-size:12px">Your access</b><div style="font-size:8.5px;color:var(--m-muted)">These come from SharePoint group membership. An HR Forms administrator changes them. <span class="pin">3</span></div>
+            <div style="margin-top:8px;font-size:9.5px"><b>✓ Administrator</b> <span style="background:var(--m-green-soft);color:var(--m-green);font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px">GRANTED</span><div style="font-size:8px;color:var(--m-muted)">Manage jobs, portal cards, learning content and guest members.</div></div>
+            <div style="margin-top:6px;font-size:9.5px"><b>✓ Form Builder superuser</b> <span style="background:var(--m-green-soft);color:var(--m-green);font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px">GRANTED</span> <span class="pin">4</span></div></div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span><i></i>Admin</span><span class="on"><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="scroll" style="padding-top:28px">
+          <div style="text-align:center"><div style="width:84px;height:84px;border-radius:50%;background:var(--m-navy);color:#fff;font:700 30px/84px Figtree;margin:0 auto;box-shadow:0 0 0 6px var(--m-tonal)">AR</div>
+            <div style="font:700 18px/1.2 Figtree;margin-top:14px">Aiman Rahman</div><div style="color:var(--m-muted)">HR Executive · IT</div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:10px"><span class="st ok">Admin</span><span class="st ok">Form builder</span></div></div>
+          <div class="sheet" style="margin-top:18px">
+            <div class="row"><span class="ic"><svg><use href="#i-send"/></svg></span><span class="tx"><b>aiman@example.com</b><span>Work email</span></span></div>
+            <div class="row"><span class="ic" style="background:#EEF0F4;color:var(--m-muted)">☎</span><span class="tx"><b style="color:var(--m-muted);font-weight:500">No phone number</b><span>Added by HR in the directory</span></span></div>
+          </div>
+          <div class="sheet">
+            <div class="row"><span class="ic"><svg><use href="#i-palette"/></svg></span><span class="tx"><b>Appearance</b><span>Background</span></span><svg width="16" height="16" style="color:var(--m-muted)"><use href="#i-chev"/></svg></div>
+            <div class="row"><span class="ic"><svg><use href="#i-shield"/></svg></span><span class="tx"><b>Privacy notice</b><span>English · Bahasa Malaysia</span></span><svg width="16" height="16" style="color:var(--m-muted)"><use href="#i-chev"/></svg></div>
+          </div>
+          <div style="text-align:center"><button class="pill out">Sign out</button></div>
+        </div>
+        <nav class="mnav" data-nav><button><i><svg><use href="#i-home"/></svg></i>Home</button><button><i><svg><use href="#i-inbox"/></svg></i>Requests</button><button><i><svg><use href="#i-brief"/></svg></i>Portal</button><button><i><svg><use href="#i-shield"/></svg></i>Admin</button><button aria-current="page"><i><svg><use href="#i-user"/></svg></i>You</button></nav>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The email address appears twice</div><div class="fix">It's under the name and again in the Email row. Put the job title and department under the name instead, since that's what identifies a person at work.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Grey capital labels with icons for four fields</div><div class="fix">"@ EMAIL", "JOB TITLE", "DEPARTMENT" and "PHONE" each get a capital label, an icon and a divider line. Use flat rows with a round icon, the value as the main line and the label underneath.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"These come from SharePoint group membership"</div><div class="fix">This explains the system rather than the person's situation. Say "Ask HR if something here is wrong" and show roles as two pills under the name. The long descriptions belong in a tooltip.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Green "GRANTED" tags</div><div class="fix">Tiny 7px capital-letter tags next to a tick say the same thing twice. Showing a role at all means you have it.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Profile, Appearance and Privacy as three tabs</div><div class="fix">A personal page reads better as one scrolling page with links, like the Google Account page, than as three tabs in a strip.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Appearance is under Profile, but only admins can use it</div><div class="fix">The background applies to the whole company, and only admins can change it, yet the tab shows for everyone under Profile. An employee opens a page where nothing works. Move it to Admin as "Branding".</div><div class="ref">navigation.ts:224 · AppearancePage.tsx:96–102</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 08 APPEARANCE ======================= -->
+<section class="block" id="s08">
+  <div class="sec-head"><span class="num">09</span><h2>Appearance</h2><span class="route">/profile/appearance · AppearancePage.tsx · BackgroundPicker.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Profile<span class="ava">AR</span></div>
+        <div class="tabs"><span>My Profile</span><span class="on">Appearance</span><span>Privacy Notice</span></div>
+        <div class="card"><b style="font-size:13px">Dashboard background</b><div style="font-size:9px;color:var(--m-muted);margin-top:3px">The backdrop behind every page. The flat canvas is the default and the one the rest of this design is built for; the gallery offers tinted gradients and a custom image. <span class="pin">1</span></div>
+          <div style="background:#F6F8FB;border:1px solid var(--m-line);border-radius:8px;padding:8px;margin-top:8px;display:flex;align-items:center;justify-content:space-between"><span><span class="lbl">Currently applied</span><br><b style="font-size:10px">Editorial Sky <span class="pin">2</span></b></span><span class="btn" style="border-radius:999px">🎨 Change background</span></div>
+          <div style="color:var(--m-red);font-size:8.5px;margin-top:8px">Failed to load dashboard background: 502 <span class="pin">3</span></div></div>
+        <div style="flex:1"></div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span><i></i>Admin</span><span class="on"><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed (tap a swatch)</figcaption>
+      <div class="phone"><div class="screen new" id="appPhone">
+        <div class="top"><button class="iconbtn" aria-label="Back"><svg><use href="#i-back"/></svg></button><b style="font-size:15px">Appearance</b></div>
+        <div id="appPreview" style="margin:6px 14px 0;height:150px;border-radius:24px;background:#F6F8FC;display:flex;align-items:flex-end;padding:12px;gap:8px;transition:background .3s">
+          <span style="width:60%;height:56px;border-radius:16px;background:rgba(255,255,255,.92)"></span><span style="flex:1;height:56px;border-radius:16px;background:rgba(255,255,255,.92)"></span></div>
+        <div style="font-weight:700;margin:14px 18px 8px">Background</div>
+        <div id="swatches" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 18px">
+          <button aria-pressed="true" data-bg="#F6F8FC" style="aspect-ratio:1;border-radius:50%;border:0;background:#F6F8FC;box-shadow:inset 0 0 0 1px #D5DBE5"></button>
+          <button aria-pressed="false" data-bg="linear-gradient(160deg,#CFE3F5,#F3F6FA)" style="aspect-ratio:1;border-radius:50%;border:0;background:linear-gradient(160deg,#CFE3F5,#F3F6FA)"></button>
+          <button aria-pressed="false" data-bg="linear-gradient(160deg,#E7DEF8,#F6F3FB)" style="aspect-ratio:1;border-radius:50%;border:0;background:linear-gradient(160deg,#E7DEF8,#F6F3FB)"></button>
+          <button aria-pressed="false" data-bg="linear-gradient(160deg,#FDE7C4,#FBF6EE)" style="aspect-ratio:1;border-radius:50%;border:0;background:linear-gradient(160deg,#FDE7C4,#FBF6EE)"></button>
+          <button aria-pressed="false" data-bg="linear-gradient(160deg,#D4F0DF,#F2FAF5)" style="aspect-ratio:1;border-radius:50%;border:0;background:linear-gradient(160deg,#D4F0DF,#F2FAF5)"></button>
+          <button aria-pressed="false" data-bg="linear-gradient(160deg,#0F3D91,#1E4FA0)" style="aspect-ratio:1;border-radius:50%;border:0;background:linear-gradient(160deg,#0F3D91,#1E4FA0)"></button>
+          <button aria-pressed="false" data-bg="#EDEFF3" style="aspect-ratio:1;border-radius:50%;border:2px dashed #B9C2D0;background:transparent;display:grid;place-items:center;color:var(--m-muted)"><svg width="18" height="18"><use href="#i-plus"/></svg></button>
+        </div>
+        <div style="color:var(--m-muted);font-size:11px;margin:12px 18px">Plain is the default. Changes save straight away.</div>
+        <div style="flex:1"></div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The explanation reads like a design note</div><div class="fix">"The flat canvas is the default and the one the rest of this design is built for; the gallery offers tinted gradients…" is written for designers. Replace it with "Plain is the default. Changes save straight away."</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>A name where a picture should be</div><div class="fix">"Currently applied: Editorial Sky" asks people to imagine what that looks like. <b>Show a live preview at the top and round swatches below it</b> (try it), with a tick on the selected one. No "Change background" button or extra dialog needed.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A raw error number</div><div class="fix">"Failed to load dashboard background: 502" in small red text, with no way to recover. Use "Couldn't load your saved background, so the plain one is showing" plus Retry. This "Failed to … (502)" pattern appears on four screens; it should come from one shared error component.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 09 LEARNING ======================= -->
+<section class="block" id="s09">
+  <div class="sec-head"><span class="num">10</span><h2>Learning hub</h2><span class="route">/learning · LearningMaterialsPage.tsx · LearningHeader.tsx · TopicCard / MaterialCard</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now (service unavailable)</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Internal Portal <span class="pin">1</span><span class="ava">AR</span></div>
+        <div class="tabs"><span>Job Portal</span><span class="on">Learning</span></div>
+        <div class="scroll">
+          <div style="background:#fff;margin:6px;padding:8px;display:flex;align-items:center;gap:6px;border-radius:6px"><span style="width:22px;height:22px;border-radius:6px;border:1px solid var(--m-line);display:grid;place-items:center"><span class="logo" style="width:14px;height:8px"></span></span><b style="font-size:11.5px;flex:1">Learning Materials</b><span style="font-size:8.5px;color:var(--m-navy);font-weight:700">↻ Refresh</span><span class="btn" style="font-size:8.5px">⚙ Manage content</span></div>
+          <div class="card"><div style="display:flex;gap:4px;font-size:7.5px"><span style="border:1px solid var(--m-line);border-radius:4px;padding:1px 4px">🎓 Learning hub</span><span style="border:1px solid var(--m-line);border-radius:4px;padding:1px 4px">0 materials <span class="pin">2</span></span><span style="border:1px solid var(--m-line);border-radius:4px;padding:1px 4px">👁 0 total views</span></div>
+            <b style="font-size:19px;display:block;line-height:1.05;margin-top:6px">Learn at your own pace</b><div style="font-size:8.5px;color:var(--m-muted);margin-top:4px">Browse by topic, open a material in place, and pick up where the team left off. View counts are people, not plays: one per colleague, however often they come back. <span class="pin">3</span></div></div>
+          <div class="card"><div style="border:1px solid #C9D1DE;border-radius:7px;padding:5px;font-size:9px;color:var(--m-muted)">🔍 Search materials, topics, or file names</div><div style="display:flex;gap:4px;margin-top:6px;font-size:8px"><span style="background:var(--m-navy);color:#fff;border-radius:999px;padding:2px 6px">All</span><span style="border:1px solid var(--m-line);border-radius:999px;padding:2px 6px">Videos</span><span style="border:1px solid var(--m-line);border-radius:999px;padding:2px 6px">Documents</span><span style="border:1px solid var(--m-line);border-radius:999px;padding:2px 6px">PDFs</span></div></div>
+          <div style="margin:8px;font-size:9px;font-weight:700;background:#fff;border-radius:999px;padding:3px 8px;width:max-content">⌂ All topics <span class="pin">5</span></div>
+          <div class="card" style="background:#FDECEC;border-color:#F5B5B0;display:flex;justify-content:space-between;font-size:9px"><span>⓵ Failed to load learning materials (502)</span><b style="color:var(--m-navy)">Retry <span class="pin">4</span></b></div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span class="on"><i></i>Portal</span><span><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search lessons</span><span class="av">AR</span></div>
+        <div class="chips"><button class="mchip" aria-pressed="true"><svg><use href="#i-check"/></svg>All</button><button class="mchip" aria-pressed="false">Videos</button><button class="mchip" aria-pressed="false">Documents</button><button class="mchip" aria-pressed="false">New</button></div>
+        <div class="scroll">
+          <div style="font-weight:700;margin:4px 16px 8px">Continue</div>
+          <div style="margin:0 12px;border-radius:24px;overflow:hidden;background:#fff">
+            <div style="height:96px;background:linear-gradient(135deg,#1E4FA0,#0B2F70);display:grid;place-items:center;position:relative"><span style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.95);color:var(--m-navy);display:grid;place-items:center"><svg width="18" height="18"><use href="#i-play"/></svg></span><span style="position:absolute;left:0;bottom:0;height:4px;width:62%;background:var(--m-amber)"></span></div>
+            <div style="padding:10px 14px"><b>Fire Safety Briefing</b><div style="color:var(--m-muted);font-size:11px">6 min left · Safety</div></div></div>
+          <div style="font-weight:700;margin:16px 16px 8px">Topics</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px">
+            <div style="background:#fff;border-radius:22px;padding:12px"><span class="ic" style="width:34px;height:34px;border-radius:50%;background:var(--m-tonal);color:var(--m-tonal-ink);display:grid;place-items:center"><svg width="16" height="16"><use href="#i-shield"/></svg></span><b style="display:block;margin-top:8px">Safety</b><span style="color:var(--m-muted);font-size:11px">8 lessons</span></div>
+            <div style="background:#fff;border-radius:22px;padding:12px"><span style="width:34px;height:34px;border-radius:50%;background:#EEF0F4;color:var(--m-muted);display:grid;place-items:center"><svg width="16" height="16"><use href="#i-lock"/></svg></span><b style="display:block;margin-top:8px">Management</b><span style="color:var(--m-muted);font-size:11px">Needs a password</span></div>
+          </div>
+        </div>
+        <nav class="mnav" data-nav><button><i><svg><use href="#i-home"/></svg></i>Home</button><button><i><svg><use href="#i-inbox"/></svg></i>Requests</button><button aria-current="page"><i><svg><use href="#i-school"/></svg></i>Learn</button><button><i><svg><use href="#i-shield"/></svg></i>Admin</button><button><i><svg><use href="#i-user"/></svg></i>You</button></nav>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>Four headers stacked before any content</div><div class="fix">"Internal Portal" title, then the Job Portal/Learning tabs, then a "Learning Materials" bar showing the logo again with Refresh and Manage content, then a large "Learn at your own pace" banner. Content starts about 450px down a phone screen. <b>Start with search and a "Continue" row.</b> "Manage content" belongs in Admin, or in a ⋯ menu for admins.</div><div class="ref">LearningHeader.tsx · LearningMaterialsPage.tsx</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Zeros shown when loading failed</div><div class="fix">"0 materials · 0 total views" shows confidently even though nothing loaded. When the data fails, hide counts or show "—" rather than presenting zeros as fact. The same happens on the Applications and Opportunities admin screens.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>How views are counted, explained to learners</div><div class="fix">"View counts are people, not plays: one per colleague, however often they come back" is a technical detail. Move it to a tooltip on the view count, for admins.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Two reload buttons</div><div class="fix">"↻ Refresh" in the header and "Retry" in the error message do the same thing. Keep Retry inside the error, and let pull-to-refresh or the 60-second auto-update cover the rest.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>An "All topics" pill on its own</div><div class="fix">A one-item breadcrumb floats on the background. Only show the breadcrumb once you're inside a topic. Locked topics should look locked at a glance, with a round lock icon in place of a thumbnail.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 10 CAREERS ======================= -->
+<section class="block" id="s10">
+  <div class="sec-head"><span class="num">11</span><h2>Careers portal</h2><span class="route">/career-portal · CareersPage.tsx · CareerHero.tsx · CareerPortalHeader.tsx</span><p>PRODUCT.md says employees applying for jobs come first. This screen should hold up best when something goes wrong, but today it ends up as a hero banner, a pink error box and an empty page.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now (service unavailable)</figcaption>
+      <div class="phone"><div class="screen old" style="background:#F6F8FB">
+        <div class="bar" style="font-size:12px"><span class="logo"></span><span>PMW Careers<br><span style="font-size:7.5px;font-weight:400;color:var(--m-muted)">Explore internal openings and track your submitted applications.</span></span><span class="ava" style="background:#EAF1FB;color:var(--m-navy)">👤</span></div>
+        <div style="background:linear-gradient(160deg,#1A3E8C,#0B2350);color:#fff;text-align:center;padding:22px 10px"><b style="font-size:17px">Careers at PMW Group <span class="pin">1</span></b><div style="font-size:8.5px;margin-top:5px;color:#C9D8F3">Connecting Talent with Opportunity: Your Gateway to Career Success <span class="pin">2</span></div></div>
+        <div class="card" style="background:#FDECEC;border-color:#F5B5B0;font-size:8.5px"><b>Something needs attention <span class="pin">3</span></b><br>Could not reach the career service. Check your connection and retry. <b style="color:var(--m-navy);float:right">↻ Retry</b></div>
+        <div style="flex:1;display:grid;place-items:center"><span class="pin">4</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search roles, sites, departments</span><span class="av">AR</span></div>
+        <h4>Openings at PMW</h4><div class="sub">Internal roles. Applying doesn't tell your manager.</div>
+        <div class="chips"><button class="mchip" aria-pressed="true"><svg><use href="#i-check"/></svg>All</button><button class="mchip" aria-pressed="false">Kuching</button><button class="mchip" aria-pressed="false">Full time</button><button class="mchip" aria-pressed="false">My applications</button></div>
+        <div style="margin:4px 12px 10px;background:#fff;border-radius:22px;padding:12px;display:flex;gap:10px;align-items:center"><span style="width:36px;height:36px;border-radius:50%;background:#EEF0F4;color:var(--m-muted);display:grid;place-items:center;flex:none"><svg width="18" height="18"><use href="#i-cloud"/></svg></span><span style="flex:1;font-size:11px"><b style="font-size:12px">Openings didn't load</b><br><span style="color:var(--m-muted)">Last checked just now</span></span><button class="pill tonal" style="padding:7px 12px">Retry</button></div>
+        <div style="display:grid;gap:12px;padding:6px 16px;opacity:.6">
+          <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:40px;height:40px"></span><span style="flex:1;display:grid;gap:6px"><span class="sk" style="height:10px;width:65%"></span><span class="sk" style="height:8px;width:40%"></span></span></div>
+          <div style="display:flex;gap:10px;align-items:center"><span class="sk" style="width:40px;height:40px"></span><span style="flex:1;display:grid;gap:6px"><span class="sk" style="height:10px;width:55%"></span><span class="sk" style="height:8px;width:30%"></span></span></div>
+        </div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Said twice in a row</div><div class="fix">The bar says "PMW Careers" with a subtitle, and immediately below a navy hero says "Careers at PMW Group". Use one title, with one sentence that matters to an employee.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A slogan instead of information</div><div class="fix">"Connecting Talent with Opportunity: Your Gateway to Career Success" says nothing to someone who already works here. Replace it with something they'd actually wonder about: "Applying doesn't tell your manager" or "Applications close on the date shown".</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Check your connection", when the problem is on our side</div><div class="fix">"Something needs attention · Could not reach the career service. Check your connection" blames the employee's network when the server is down. This heading is also reused for every failure on every admin and careers screen. Say "Openings didn't load. This is on our side; try again in a minute."</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>On a phone, Apply is below the whole job description</div><div class="fix">The side panel with "Apply for this role" drops below the full description on small screens. Add a sticky bottom bar on phones with one full-width Apply pill button. "Already submitted" also appears twice (a chip and a disabled button). Show "You applied on 3 Oct · Ref …" with a link to track it.</div><div class="ref">JobDetailsPage.tsx:286–296, 350–356</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>An empty page after the error</div><div class="fix">Below the banner there's nothing: no outline of the page, no "My applications" link that might still work, no hint of what will appear. Keep the page layout visible with placeholder rows so it's clear what's missing.</div><div class="ref">CareersPage.tsx</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 11 FORM ERRORS ======================= -->
+<section class="block" id="s11">
+  <div class="sec-head"><span class="num">12</span><h2>When a form link fails</h2><span class="route">/form/:formId · DynamicFormPage.tsx</span><p>This is what someone sees after scanning a printed QR code when something goes wrong. I didn't open the form itself, as you asked.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old" style="background:#F6F8FB;padding:110px 30px 0">
+        <div style="background:#fff;border-radius:12px;box-shadow:0 10px 40px -8px rgba(16,24,40,.25);border:.8px solid var(--m-line);padding:18px;text-align:center">
+          <div style="font-size:26px;font-weight:400;letter-spacing:.02em">ERR <span class="pin">1</span></div>
+          <div style="color:var(--m-red);font-size:11px;margin-top:4px">Form not found <span class="pin">2</span></div>
+          <div style="color:var(--m-muted);font-size:8.5px;margin-top:6px">Server returned status 502: <span class="pin">3</span></div>
+        </div>
+        <div style="margin-top:30px;text-align:center;font-size:9px;color:var(--m-muted)">tab title: "Form: Form" <span class="pin">4</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new" style="padding:80px 22px 22px;text-align:center">
+        <div style="width:110px;height:110px;border-radius:50%;background:var(--m-amber-soft);color:var(--m-amber-ink);display:grid;place-items:center;margin:0 auto"><svg width="46" height="46"><use href="#i-cloud"/></svg></div>
+        <div style="font:700 19px/1.2 Figtree;margin-top:20px">We can't reach the form right now</div>
+        <div style="color:var(--m-muted);margin-top:8px">Nothing you did. The HR system didn't answer. Your link is fine; try again in a minute.</div>
+        <div style="display:grid;gap:8px;margin-top:22px"><button class="pill fill" style="padding:12px"><svg><use href="#i-refresh"/></svg>Try again</button><button class="pill text">Go to HR Portal</button></div>
+        <div style="margin-top:auto;color:var(--m-muted);font-size:10.5px">Still stuck? Tell HR the code <b class="mono" style="color:var(--m-ink)">502·leave-application</b></div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p0">P0</span>Placeholder text where the icons should be</div><div class="fix">The code puts the letters "ERR" (44px) and "LOCK" (30px) where icons belong, and they ship to users. This is the screen someone lands on from an outdated QR code, and it looks unfinished. <b>Use a round illustration and a plain-language headline</b>, then two pill buttons: Try again and Go to my forms. Move the technical detail into one small line at the bottom.</div><div class="ref">DynamicFormPage.tsx:2163, 2174 ("ERR") · 666 ("LOCK")</div></div></li>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>The wrong message</div><div class="fix">The server was down (502), but the page says "Form not found", which tells someone their QR code or link is broken. Tell "doesn't exist" (404), "can't reach" (5xx) and "closed" (unpublished) apart, and write each one for a person.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Server returned status 502:"</div><div class="fix">A raw status code with a colon and nothing after it. Put the code in small type with the form name, so someone can quote it to HR.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The tab says "Form: Form"</div><div class="fix">A placeholder has slipped into the browser tab title. Before the form loads, use "Loading form · PMW HR"; on error, "Form unavailable · PMW HR".</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Thin border, heavy shadow</div><div class="fix">A 0.8px border with a 42px blurred shadow (flagged by the scanner). Under the new direction there's no card at all; the message sits directly on the page.</div><div class="ref">detector: gpt-thin-border-wide-shadow</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 12 ADMIN LISTS ======================= -->
+<section class="block" id="s12">
+  <div class="sec-head"><span class="num">13</span><h2>Admin career screens</h2><span class="route">/admin/career/applications · /opportunities · /cards · AdminJobsPage · AdminJobManagePage · AdminCareerPortalCardsPage</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now (Applications)</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Admin<span class="ava">AR</span></div>
+        <div class="tabs"><span>Form Builder</span><span>Routing</span><span>Organisation</span><span>Opportunities</span><span class="on">Appl›</span></div>
+        <div class="scroll">
+          <div style="background:#F6F8FB;height:34px;margin:6px;display:flex;justify-content:flex-end;align-items:center;padding:0 6px;border-radius:4px"><span class="pin" style="margin-right:6px">1</span><span style="width:22px;height:22px;border-radius:6px;background:#fff;border:1px solid var(--m-line);display:grid;place-items:center;font-size:10px">≡</span></div>
+          <div class="card" style="display:flex;gap:5px;align-items:center"><span style="flex:1;border:1px solid #C9D1DE;border-radius:7px;padding:5px;font-size:9px;color:var(--m-muted)">🔍 Search applicant, email…</span><span class="btn" style="font-size:8.5px">☰ Advanced (1) <span class="pin">3</span></span></div>
+          <div style="font-size:8.5px;padding:4px 10px">✕ Clear <span style="background:#EAF1FB;border-radius:999px;padding:1px 5px;font-weight:700">0 of 0</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 8px">
+            <div class="card" style="margin:0;font-size:9px"><b style="font-size:13px">0</b> <span class="pin">2</span><br>Total Applications</div><div class="card" style="margin:0;font-size:9px"><b style="font-size:13px">0</b><br>New</div>
+            <div class="card" style="margin:0;font-size:9px"><b style="font-size:13px">0</b><br>KIV</div><div class="card" style="margin:0;font-size:9px"><b style="font-size:13px">0</b><br>Shortlisted</div>
+            <div class="card" style="margin:0;font-size:9px"><b style="font-size:13px">0</b><br>Not Suitable <span class="pin">4</span></div>
+          </div>
+          <div class="card" style="background:#FDECEC;border-color:#F5B5B0;font-size:8.5px"><b>Something needs attention</b>…</div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span class="on"><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search applicants</span><span class="av">AR</span></div>
+        <div style="display:flex;align-items:center;padding:0 12px 0 0"><h4 style="flex:1">Applications</h4><button class="iconbtn" aria-label="More actions"><svg><use href="#i-menu"/></svg></button></div>
+        <div style="padding:2px 12px 10px"><div class="seg" data-seg style="display:flex"><span class="thumb"></span><button aria-pressed="true" style="flex:1">New <b>12</b></button><button aria-pressed="false" style="flex:1">KIV <b>4</b></button><button aria-pressed="false" style="flex:1">Shortlist <b>3</b></button><button aria-pressed="false" style="flex:1">Closed</button></div></div>
+        <div class="row"><span class="ic" style="background:#E8DEF8;color:#4A2A86">NL</span><span class="tx"><b>Nur L. · Safety Officer</b><span>Applied 2d ago · CV + 2 files</span></span><span class="st rev">New</span></div>
+        <div class="row"><span class="ic" style="background:#D4F0DF;color:#137536">JT</span><span class="tx"><b>James T. · Site Clerk</b><span>Applied 3d ago</span></span><span class="st rev">New</span></div>
+        <div class="row"><span class="ic" style="background:#FDE7C4;color:#855405">AH</span><span class="tx"><b>Aisyah H. · Safety Officer</b><span>Applied 5d ago</span></span><span class="st rev">New</span></div>
+        <div style="text-align:center;color:var(--m-muted);font-size:10.5px;margin-top:10px">Example applicants</div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>A header with no title</div><div class="fix">The Applications, Opportunities and Cards screens all open with an empty band holding only a hamburger icon. The page name and its main action are hidden inside that menu. <b>Show the page title on the left, put the main action in a pill button, and move the rest into ⋯.</b></div><div class="ref">AdminJobsPage.tsx · AdminJobManagePage.tsx · AdminCareerPortalCardsPage.tsx</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Zeros shown when loading failed</div><div class="fix">Five tiles each show "0" while the error explains nothing loaded. Without data, show placeholder shapes or "—".</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A filter is already on</div><div class="fix">"Advanced (1)" is filled navy on a fresh visit, and next to it "0 of 0" sits by a "✕ Clear". If there's a default filter, show it as a chip with a tick that says what it filters.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Five tiles in a two-column grid</div><div class="fix">"Not Suitable" ends up alone on the last row. These numbers are really stages of the hiring pipeline, so <b>show them as a segmented pill control with counts</b> that also filters the list. Try it.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Icon buttons without names</div><div class="fix">24 of the app's 47 icon-only buttons have no accessible name for screen readers. Six of them are on Opportunities. Add a label to each one; the round icon-button component can require one.</div><div class="ref">AdminJobManagePage ×6 · MaterialViewerDialog ×3 · AdminLearningPage ×3 · SetLockPasswordDialog ×2</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Cards: an empty box, with the error below the fold</div><div class="fix">On Portal cards, a large white panel holding only a search box fills the screen, and the error message only shows after scrolling. Show the error first.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 13 GUEST MEMBERS ======================= -->
+<section class="block" id="s13">
+  <div class="sec-head"><span class="num">14</span><h2>Guest members</h2><span class="route">/admin/guest-members · AdminGuestMembersPage.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now (service unavailable)</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Admin<span class="ava">AR</span></div>
+        <div class="tabs"><span>Form Builder</span><span>Routing</span><span>Organisation</span><span>Opportunities</span><span>App›</span></div>
+        <div class="scroll" style="padding:14px 10px">
+          <b style="font-size:14px">Guest members</b> <span class="pin">4</span><div style="font-size:9px;color:var(--m-muted);margin-top:3px">Anyone with a Google account can sign in and become a permanent member. They can browse jobs, apply, and submit forms straight away. The learning hub stays closed to them until you approve it here.</div>
+          <div style="background:#FDECEC;border:1px solid #F5B5B0;border-radius:8px;padding:7px;font-size:9px;margin-top:10px;font-weight:700">ⓘ Could not load guest members. <span class="pin">1</span></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-top:12px"><span style="flex:1;border:1px solid #C9D1DE;border-radius:7px;padding:6px;font-size:9px;color:var(--m-muted);background:#fff">Search name, email, position…</span><span style="font-size:8.5px;color:var(--m-muted)">No members <span class="pin">2</span></span><span style="font-size:8.5px;color:var(--m-navy);font-weight:700;width:30px;line-height:1.2">View access log <span class="pin">3</span></span></div>
+          <div class="card" style="margin:12px 0 0;text-align:center;font-size:9px;color:var(--m-muted);padding:16px">Nobody has signed in with Google yet.</div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span class="on"><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search guests</span><span class="av">AR</span></div>
+        <div style="display:flex;align-items:center;padding-right:10px"><h4 style="flex:1">Guest members</h4><button class="pill text" style="padding:6px 10px">Access log</button></div>
+        <div class="chips"><button class="mchip" aria-pressed="true"><svg><use href="#i-check"/></svg>Waiting for you · 3</button><button class="mchip" aria-pressed="false">Approved</button><button class="mchip" aria-pressed="false">Disabled</button></div>
+        <div class="row"><span class="ic" style="background:#E8DEF8;color:#4A2A86">FZ</span><span class="tx"><b>Farah Z.</b><span>Contractor · Safety · profile done</span></span><button class="pill tonal" style="padding:6px 10px">Approve</button></div>
+        <div class="row"><span class="ic" style="background:#EEF0F4;color:var(--m-muted)">K</span><span class="tx"><b>kelvin.l@gmail.com</b><span>Profile not finished</span></span><span style="font-size:10.5px;color:var(--m-muted)">Can't approve yet</span></div>
+        <div style="text-align:center;color:var(--m-muted);font-size:10.5px;margin-top:12px">Example guests</div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p1">P1</span>Three messages that contradict each other</div><div class="fix">"Could not load guest members", "No members" and "Nobody has signed in with Google yet" all show at once. The last two are presented as facts even though the first says nothing loaded. <b>An error replaces the empty state; it never sits beside it.</b></div><div class="ref">AdminGuestMembersPage.tsx</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>"No members" squeezed next to the search box</div><div class="fix">The count is crammed in beside the search field. Put counts on the filter chips: "Waiting for you · 3".</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>"View access log" wraps onto three lines</div><div class="fix">It's a link in a column about 30px wide. Make it a text pill button in the header.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The approval queue looks like a directory</div><div class="fix">The source notes call this page an approvals queue, but it opens as a searchable list of people. <b>Open on "Waiting for you"</b> with a one-tap Approve on each row. Rows whose profile isn't finished say why they can't be approved yet.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 14 ORG ======================= -->
+<section class="block" id="s14">
+  <div class="sec-head"><span class="num">15</span><h2>Companies and departments</h2><span class="route">/admin/org · AdminOrgPage.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Admin<span class="ava">AR</span></div>
+        <div class="tabs"><span>Form Builder</span><span>Routing</span><span class="on">Organisation</span><span>Opportunities</span></div>
+        <div class="scroll">
+          <div class="card" style="display:flex;justify-content:space-between"><span><b style="font-size:12px">Companies and departments</b><br><span style="font-size:8.5px;color:var(--m-muted)">One list each, for every form to choose from.</span></span><b style="font-size:9px;color:var(--m-navy)">↻ Refresh</b></div>
+          <div class="card">
+            <div style="display:flex;gap:12px;font-size:9.5px;font-weight:700;border-bottom:1px solid var(--m-line);padding-bottom:5px"><span style="color:var(--m-navy)">Companies (8)</span><span style="color:var(--m-muted)">Departments (30)</span></div>
+            <div style="border:1px solid #C9D1DE;border-radius:7px;padding:5px;font-size:9px;color:var(--m-muted);margin-top:7px">🔍 Search company or code...</div>
+            <div style="text-align:center;font-size:9px;color:var(--m-navy);font-weight:700;margin:7px 0">Build from existing forms</div>
+            <div class="btn">+ Add company <span class="pin">4</span></div>
+            <div style="display:grid;grid-template-columns:1.2fr 1.2fr .4fr;font-size:7.5px;font-weight:700;color:var(--m-muted);background:#F3F5F9;padding:6px 5px;margin-top:7px;letter-spacing:.05em"><span>COMPANY</span><span>CODE STORED ON SUBMISSIONS <span class="pin">3</span></span><span>EDIT</span></div>
+            <div style="display:grid;grid-template-columns:1.2fr 1.2fr .4fr;font-size:8.5px;padding:8px 5px;align-items:center;border-bottom:1px solid var(--m-line)"><b>BORNEO POLE SDN BHD <span class="pin">1</span></b><span style="color:var(--m-muted)">BORNEO POLE SDN BHD</span><span style="display:grid;gap:8px">✎<br>🗑 <span class="pin">2</span></span></div>
+            <div style="display:grid;grid-template-columns:1.2fr 1.2fr .4fr;font-size:8.5px;padding:8px 5px;align-items:center"><b>PMW INDUSTRIES SDN BHD</b><span style="color:var(--m-muted)">PMW INDUSTRIES SDN BHD</span><span style="display:grid;gap:8px">✎<br>🗑</span></div>
+          </div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span class="on"><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Search companies</span><span class="av">AR</span></div>
+        <h4>Organisation</h4>
+        <div style="padding:0 12px 10px"><div class="seg" data-seg style="display:flex"><span class="thumb"></span><button aria-pressed="true" style="flex:1">Companies · 8</button><button aria-pressed="false" style="flex:1">Departments · 30</button></div></div>
+        <div class="row"><span class="ic"><svg><use href="#i-org"/></svg></span><span class="tx"><b>Borneo Pole Sdn Bhd</b><span>Saved on forms as the same name</span></span><button class="iconbtn" aria-label="Options for Borneo Pole"><svg><use href="#i-menu"/></svg></button></div>
+        <div class="row"><span class="ic"><svg><use href="#i-org"/></svg></span><span class="tx"><b>PMW Industries Sdn Bhd</b><span>Used on 4 forms</span></span><button class="iconbtn" aria-label="Options for PMW Industries"><svg><use href="#i-menu"/></svg></button></div>
+        <div style="text-align:center;margin-top:8px"><button class="pill text">Fill from existing forms</button></div>
+        <button class="fab"><svg><use href="#i-plus"/></svg>Add company</button>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>All-caps bold names, repeated in the next column</div><div class="fix">"BORNEO POLE SDN BHD" is in capitals and bold, and the code column often repeats it exactly. Display names in normal capitalisation. Only show the stored code when it differs from the name.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Every department" in the company filter</div><div class="fix">The company filter's "all" option is labelled "Every department". It should be "All companies". The page also draws a second white header band under the app's header; Routing has the same problem.</div><div class="ref">AdminOrgPage.tsx:297, 429 · AdminRoutingPage.tsx:597</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Edit and delete stacked vertically</div><div class="fix">The pencil above the bin doubles every row's height. Put both in one ⋯ menu per row, and keep delete away from a mis-tap.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>"CODE STORED ON SUBMISSIONS"</div><div class="fix">A column heading that describes how the data is stored. Show it as a quiet second line on each row only when it matters.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>A full-width "Add company" bar</div><div class="fix">The heaviest thing on the page sits between the search box and the table. Make it a floating pill button at the bottom right, where a thumb can reach it.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 15 ROUTING ======================= -->
+<section class="block" id="s15">
+  <div class="sec-head"><span class="num">16</span><h2>Approval routing</h2><span class="route">/admin/routing · AdminRoutingPage.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old">
+        <div class="bar"><span class="logo"></span>Admin<span class="ava">AR</span></div>
+        <div class="tabs"><span>Form Builder</span><span class="on">Routing</span><span>Organisation</span><span>Opportunities</span></div>
+        <div class="scroll">
+          <div class="card" style="display:flex;gap:6px;align-items:flex-start"><span style="flex:1"><b style="font-size:12px">Approval routing</b><br><span style="font-size:8.5px;color:var(--m-muted)">Who approves whom. Forms set to a reporting line read their answer from here. <span class="pin">1</span></span></span><b style="font-size:8.5px;color:var(--m-navy)">Link public submissions</b><b style="font-size:8.5px;color:var(--m-navy)">↻ Refresh</b></div>
+          <div class="card" style="background:#EEF3FB;font-size:8.5px">ⓘ <b>11 people need review</b><br>A form added them from an evaluation and guessed their superior. Their submissions are waiting on the Approvals screen until you confirm the row. <span class="pin">2</span> <b style="color:var(--m-navy)">Review</b></div>
+          <div class="card">
+            <div style="display:flex;gap:10px;font-size:9px;font-weight:700"><span style="color:var(--m-navy);border-bottom:2px solid var(--m-navy)">People (132)</span><span>Trace a line</span><span style="color:var(--m-red)">Problems (22) <span class="pin">3</span></span></div>
+            <div style="border:1px solid #C9D1DE;border-radius:7px;padding:5px;font-size:9px;color:var(--m-muted);margin-top:7px">🔍 Search name, email, department...</div>
+            <div style="border:1px solid #C9D1DE;border-radius:7px;padding:5px;font-size:9px;margin-top:5px">All departments ▾</div>
+            <div style="text-align:center;margin-top:6px"><span style="border:1px solid var(--m-line);border-radius:999px;padding:2px 6px;font-size:8px;font-weight:700">Needs review (11)</span></div>
+            <div style="text-align:center;font-size:9px;color:var(--m-navy);font-weight:700;margin-top:6px">⌕ Scan submissions <span class="pin">4</span></div>
+          </div>
+        </div>
+        <div class="bbar"><span><i></i>Home</span><span><i></i>Forms</span><span><i></i>Portal</span><span class="on"><i></i>Admin</span><span><i></i>You</span></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><span class="search"><svg><use href="#i-search"/></svg>Find a person</span><span class="av">AR</span></div>
+        <div style="display:flex;align-items:center;padding-right:10px"><h4 style="flex:1">Who approves whom</h4><button class="iconbtn" aria-label="More routing actions"><svg><use href="#i-menu"/></svg></button></div>
+        <div class="chips"><button class="mchip" aria-pressed="true"><svg><use href="#i-check"/></svg>Check · 11</button><button class="mchip" aria-pressed="false" style="color:var(--m-red);border-color:#F2B8B5">Problems · 22</button><button class="mchip" aria-pressed="false">Everyone · 132</button><button class="mchip" aria-pressed="false">Dept ▾</button></div>
+        <div style="margin:0 12px 6px;background:var(--m-amber-soft);border-radius:20px;padding:10px 14px;font-size:11px;color:var(--m-amber-ink)">11 people were added automatically. Confirm who they report to so their requests can move.</div>
+        <div class="row"><span class="ic" style="background:#E8DEF8;color:#4A2A86">HM</span><span class="tx"><b>Hafiz M.</b><span>Reports to <b style="display:inline;color:var(--m-ink)">Lim W.</b>? · guessed</span></span><button class="iconbtn" aria-label="Confirm" style="background:var(--m-green-soft);color:var(--m-green)"><svg><use href="#i-check"/></svg></button></div>
+        <div class="row"><span class="ic" style="background:#D4F0DF;color:#137536">SR</span><span class="tx"><b>Suriani R.</b><span>Reports to <b style="display:inline;color:var(--m-ink)">Tan C.</b>? · guessed</span></span><button class="iconbtn" aria-label="Confirm" style="background:var(--m-green-soft);color:var(--m-green)"><svg><use href="#i-check"/></svg></button></div>
+        <div style="text-align:center;color:var(--m-muted);font-size:10.5px;margin-top:10px">Example people</div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>The header is squeezed into a narrow column</div><div class="fix">The title and its sentence wrap at about 180px because two text links sit beside them. Put the actions in ⋯ and make the title say what the page does: "Who approves whom".</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A banner written by and for engineers</div><div class="fix">"A form added them from an evaluation and guessed their superior. Their submissions are waiting on the Approvals screen until you confirm the row." Replace it with one sentence, and put a one-tap Confirm (✓) on each row.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Six controls before the first person</div><div class="fix">Tabs, search, a department dropdown, a "Needs review" chip and a "Scan submissions" link. Two of the tabs (People and Problems) are really filters. <b>Make them all chips in one row</b>, with "Check · 11" first.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>"Scan submissions" and "Link public submissions"</div><div class="fix">Occasional maintenance tasks with the same weight as daily work. Move them into the ⋯ menu.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 16 BUILDER ======================= -->
+<section class="block" id="s16">
+  <div class="sec-head"><span class="num">17</span><h2>Form builder</h2><span class="route">/admin/builder · AdminFormBuilder.tsx · FormBuilder.tsx · BuilderShell.css</span><p>The one screen without the app's header and menu. Its empty state is the best in the app, so these changes are mostly about extending what already works.</p></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old" style="background:#F6F8FB">
+        <div style="background:#fff;display:flex;gap:5px;align-items:center;padding:8px;font-size:8.5px;border-bottom:1px solid var(--m-line)"><span style="width:16px;height:16px;border-radius:4px;background:var(--m-navy)"></span><span class="lbl">Site</span><b style="border:1px solid #C9D1DE;border-radius:5px;padding:2px 5px">PMW HR ⌄</b><b style="border:1px solid #C9D1DE;border-radius:5px;padding:2px 5px">New form ⌄</b><span style="border:1px solid #C9D1DE;border-radius:999px;padding:1px 5px;font-size:7px">ADMIN</span></div>
+        <div style="background:linear-gradient(160deg,#0F3D91,#0B2F70);display:flex;gap:12px;padding:8px 10px;color:#BFD0EE;font-size:10px">⌂ ▦ ☰ ⚙ ✎ <span class="pin">1</span><span style="margin-left:auto">⚒ 👁</span></div>
+        <div style="display:flex;flex:1;min-height:0">
+          <div style="width:96px;background:#fff;padding:5px;font-size:8px;display:grid;gap:4px;align-content:start;border-right:1px solid var(--m-line)"><span style="font-weight:700;color:var(--m-navy)">Basic · Advanced</span><span style="border:1px solid #C9D1DE;border-radius:5px;padding:3px">Search fields</span><span class="lbl">Text</span><span style="border:1px solid var(--m-line);border-radius:5px;padding:3px">T Single Line</span><span style="border:1px solid var(--m-line);border-radius:5px;padding:3px">≡ Multi Line</span><span style="border:1px solid var(--m-line);border-radius:5px;padding:3px">🔒 Password <span class="pin">2</span></span><span style="border:1px solid var(--m-line);border-radius:5px;padding:3px">▭ NRIC / IC</span><span class="lbl">Choice</span><span style="border:1px solid var(--m-line);border-radius:5px;padding:3px">⌄ Dropdown <span class="pin">4</span></span><span style="border:1px solid var(--m-line);border-radius:5px;padding:3px">◎ Radio</span></div>
+          <div style="flex:1;padding:6px"><div style="background:#fff;border-radius:10px;padding:7px;font-size:8px"><span class="lbl">ISO 9001 · ISO 14001 · ISO 45001 <span class="pin">3</span></span><br><b style="color:var(--m-muted)">Untitled form</b><div style="border:1.5px dashed #9FB6DA;border-radius:8px;background:#EEF4FC;margin-top:8px;padding:12px 4px;text-align:center"><b style="font-size:10px">Drag a field here</b><div style="font-size:7px;color:var(--m-muted)">Choose from Basic or Advanced fields on the left.</div><div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:5px"><span style="border:1px solid #C9D1DE;border-radius:5px;padding:2px 4px;background:#fff">+ Single Line</span><span style="border:1px solid #C9D1DE;border-radius:5px;padding:2px 4px;background:#fff">+ Date</span></div></div></div></div>
+        </div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div style="display:flex;align-items:center;gap:6px;padding:10px 10px 6px"><button class="iconbtn" aria-label="Back to forms"><svg><use href="#i-back"/></svg></button><span style="flex:1"><b style="font-size:14px">Untitled form</b><br><span style="color:var(--m-muted);font-size:10.5px">Draft · not saved yet</span></span><button class="pill tonal" style="padding:7px 12px">Preview</button></div>
+        <div style="padding:0 10px 8px"><div class="seg" data-seg style="display:flex"><span class="thumb"></span><button aria-pressed="true" style="flex:1">Questions</button><button aria-pressed="false" style="flex:1">Approvals</button><button aria-pressed="false" style="flex:1">PDF</button><button aria-pressed="false" style="flex:1">Settings</button></div></div>
+        <div style="margin:4px 12px;border-radius:26px;border:2px dashed #B9C8E2;padding:22px 14px;text-align:center;background:#fff">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--m-tonal);color:var(--m-tonal-ink);display:grid;place-items:center;margin:0 auto"><svg width="24" height="24"><use href="#i-plus"/></svg></div>
+          <b style="display:block;font-size:14px;margin-top:10px">Add your first question</b><span style="color:var(--m-muted);font-size:11px">Or start from a common one:</span>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px"><button class="mchip" aria-pressed="false">Full name</button><button class="mchip" aria-pressed="false">Staff no.</button><button class="mchip" aria-pressed="false">Department</button><button class="mchip" aria-pressed="false">Date</button><button class="mchip" aria-pressed="false">Signature</button></div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:var(--m-muted);margin:14px 18px 4px;text-transform:uppercase;letter-spacing:.05em">Field types</div>
+        <div class="row"><span class="ic"><svg><use href="#i-doc"/></svg></span><span class="tx"><b>Short answer</b><span>Name, staff no., IC</span></span></div>
+        <div class="row"><span class="ic"><svg><use href="#i-check"/></svg></span><span class="tx"><b>Choice</b><span>Dropdown, radio, yes / no</span></span></div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A row of unlabelled icons for the builder's main sections</div><div class="fix">Five icons on the navy bar (⌂ ▦ ☰ ⚙ ✎) switch between whole sections of the builder, with no words. <b>Use a labelled segmented pill</b>: Questions · Approvals · PDF · Settings. On a wide screen, a narrow labelled rail like Gmail's works too.</div><div class="ref">BuilderShell.css · mode rail</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Password" listed among the basic fields</div><div class="fix">An HR form should almost never collect passwords, yet it sits third in the Basic list between Multi Line and NRIC. Move it under Advanced, with a warning.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>ISO badges on a blank form</div><div class="fix">"ISO 9001 · ISO 14001 · ISO 45001" shows above "Untitled form" before anything exists. Show it once someone turns on the ISO header in Settings, or as a light placeholder.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Twenty boxed palette items</div><div class="fix">Every field type is a bordered rectangle. Use flat rows that tint on hover, grouped by what the person wants to ask rather than by field type. The quick-add buttons in the empty area are good; make them round and offer HR's most common fields.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>Small details</div><div class="fix">"Nothing saved yet" sits next to a grey dot. Make it a status pill (Draft · Saved 2 min ago · Publishing…). The live preview animates its width (flagged by the scanner); switch device sizes with a scale animation instead. The builder file has 9 hard-coded colours.</div><div class="ref">FormBuilder.tsx:2481 · AdminFormBuilder.tsx</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= 17 PRIVACY ======================= -->
+<section class="block" id="s17">
+  <div class="sec-head"><span class="num">18</span><h2>Privacy notice</h2><span class="route">/privacy · PrivacyNoticePage.tsx · PdpaLanguageToggle.tsx</span></div>
+  <div class="compare">
+    <figure class="fig before"><figcaption class="cap"><span class="dot"></span>Now</figcaption>
+      <div class="phone"><div class="screen old" style="background:#F6F8FB">
+        <div style="padding:8px;font-size:9px;color:var(--m-navy);font-weight:700">← Back</div>
+        <div class="card" style="font-size:8px;margin-top:0"><div style="display:flex;justify-content:space-between;align-items:center"><span class="lbl">🛡 PDPA privacy notice</span><span style="display:flex;border:1px solid var(--m-line);border-radius:999px;font-size:7.5px"><b style="background:var(--m-navy);color:#fff;border-radius:999px;padding:2px 5px">English</b><span style="padding:2px 5px">Bahasa Malaysia</span></span></div>
+          <b style="font-size:14px;display:block;margin-top:5px">Privacy Notice <span class="pin">1</span></b><div style="font-size:7px;color:var(--m-muted)">PMW International Berhad · Notice version PMW-PRIVACY-NOTICE-2025-06</div>
+          <p style="margin:8px 0;line-height:1.5;color:#333">PMW International Berhad, its subsidiaries, associates, jointly controlled entities and affiliates (including but not limited to PMW Industries Sdn Bhd …) respect the privacy of individuals with regard to personal data. This Privacy Notice is formulated in accordance with the Personal Data Protection Act 2010 ("PDPA")… <span class="pin">2</span></p>
+          <b>A. Information Collected</b> <span class="pin">3</span><p style="margin:4px 0;line-height:1.5;color:#333">1. The Personal Data that we collect from you may include …<br>a. Information collected when you fill in or update your information…</p></div>
+      </div></div>
+    </figure>
+    <figure class="fig after"><figcaption class="cap"><span class="dot"></span>Proposed</figcaption>
+      <div class="phone"><div class="screen new">
+        <div class="top"><button class="iconbtn" aria-label="Back"><svg><use href="#i-back"/></svg></button><span style="flex:1"></span><div class="seg" data-seg><span class="thumb"></span><button aria-pressed="true">EN</button><button aria-pressed="false">BM</button></div></div>
+        <h4>Privacy notice</h4><div class="sub">Version 2025-06 · PDPA 2010</div>
+        <div style="margin:0 12px 10px;background:var(--m-tonal);color:var(--m-tonal-ink);border-radius:22px;padding:12px 14px;font-size:11.5px"><b style="display:block;margin-bottom:4px">In short</b>We keep what you put in HR forms to process them. HR and your approvers see it. Ask HR to see or correct it.</div>
+        <div class="chips" style="flex-wrap:wrap"><button class="mchip" aria-pressed="false">A · What we collect</button><button class="mchip" aria-pressed="false">B · Why</button><button class="mchip" aria-pressed="false">C · Who sees it</button><button class="mchip" aria-pressed="false">D · Your rights</button><button class="mchip" aria-pressed="false">E · Contact</button></div>
+        <div style="padding:4px 18px;font-size:12px;line-height:1.6;color:#333"><b style="font-size:13.5px;display:block;color:var(--m-ink);margin-bottom:4px">A. Information collected</b>The personal data we collect from you may include your name, staff number and contact details…</div>
+      </div></div>
+    </figure>
+    <div class="notes"><ol>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>A 19,000-character page with one heading</div><div class="fix">Sections like "A. Information Collected" are styled bold text, not real headings, so screen-reader users can't jump between them. Make each section a proper heading and add a row of chips at the top to jump to sections.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>Long, small lines of legal text</div><div class="fix">Lines run to about 86 characters at about 13px. Limit lines to about 68 characters at 15px with more line spacing, and add a 3-line "In short" summary in plain words above the legal text.</div></div></li>
+      <li><div><div class="t"><span class="tag c-p2">P2</span>"Back" does nothing when opened from a form</div><div class="fix">The consent text on forms opens the notice in a new tab, which has no history to go back to, so Back does nothing. If there's no history, link to the portal instead, and label it "Back to PMW HR Portal". There's also no logo on the page.</div><div class="ref">PrivacyNoticePage.tsx:142</div></div></li>
+      <li><div><div class="t"><span class="tag c-p3">P3</span>The language toggle works; give it more room</div><div class="fix">The English / Bahasa Malaysia toggle is the strongest part of the page. Put it in the header as a two-option pill switch (EN / BM) that stays visible while you scroll.</div></div></li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ======================= EXTRA (from source review) ======================= -->
+<section class="block" id="extra">
+  <div class="sec-head"><span class="num">19</span><h2>Screens I didn't open live</h2><p>Reviewed from the source code only: the reviewer page, the job details and application flow, guest setup, error and restricted screens. These are the details that stand out.</p></div>
+  <div class="sys">
+  <div class="notes"><div class="src">Approving and evaluating · EvaluationPage.tsx · reviewer/*</div><ol>
+    <li><div><div class="t"><span class="tag c-p3">P3</span>The best screen in the app, in a different colour</div><div class="fix">The reviewer page has the best wording in the product: grouped answers, a step trail, "This was the final step, the submitter will be notified." But it uses its own indigo <code>#2b2870</code> and teal links with 6px and 10px corners, so an approver moves between two brands. Either switch it to navy and pills, or write it down in DESIGN.md as a deliberate sub-brand.</div><div class="ref">reviewerTokens.ts:14, 44 · DecisionCard.tsx:35, 53</div></div></li>
+    <li><div><div class="t"><span class="tag c-p3">P3</span>Approving takes two confirmations</div><div class="fix">The "I approve this submission" tick box is followed by an "Approve request" button. Keep the tick box only where a signature or legal statement needs it, and word it "I've reviewed this request". "Guest (submitted via public link)" → "Public link (no sign-in)".</div><div class="ref">EvaluationPage.tsx:1251, 920</div></div></li>
+  </ol></div>
+  <div class="notes"><div class="src">Filling in a form · DynamicFormPage.tsx (code only)</div><ol>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>The most important button just says "Submit"</div><div class="fix">A 14px "Submit" button, with the data-consent text in 12px grey above it. Make it a 48px pill with a send icon ("Submit Training Evaluation"), and set the consent text at 13.5px in normal body colour.</div><div class="ref">DynamicFormPage.tsx:2380, 2394–2414</div></div></li>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>After submitting, there's nowhere to go</div><div class="fix">The success screen is the high point of the app: a drawn tick and a reference number you can copy. But a signed-in person gets no next step. Add "View in My submissions" and "Back to forms" pill buttons. "You can close this page" is for guests only.</div><div class="ref">DynamicFormPage.tsx:660</div></div></li>
+    <li><div><div class="t"><span class="tag c-p3">P3</span>A crowded form header</div><div class="fix">The 56px form header holds the logo, title, version tag, Private tag, Share (icon only, 30px, no label for screen readers), the user and Sign out. Document-control labels show even when empty ("Document Number:" with nothing after it). Respondents don't need to see "v3".</div><div class="ref">DynamicFormPage.tsx:2282–2321</div></div></li>
+  </ol></div>
+  <div class="notes"><div class="src">Applying for a job · JobApplyPage.tsx</div><ol>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>A flat ending to an important moment</div><div class="fix">The success view removes the header, doesn't name the role, and uses a 17px heading with one "Browse opportunities" link. Copy the form success screen: a drawn tick, "Application for Safety Officer received", a reference you can copy, then "Track my application" and "Browse more roles".</div><div class="ref">JobApplyPage.tsx:148</div></div></li>
+    <li><div><div class="t"><span class="tag c-p3">P3</span>"Reasoning (Optional)"</div><div class="fix">Change it to "Why this role? (optional)". Labels use Title Case ("Full Name", "Email Address"); use sentence case. The summary chips mix three styles; use one.</div><div class="ref">JobApplyPage.tsx:985–1045, 1078–1219, 1502</div></div></li>
+  </ol></div>
+  <div class="notes"><div class="src">Locked out and error screens · auth/*</div><ol>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>A countdown that sends you away</div><div class="fix">On "Access Denied", a timer redirects you while a red snackbar repeats the message. Remove the timer and show one card: "This page is for HR Forms administrators. You're signed in as …" with a "Go to dashboard" pill button.</div><div class="ref">AdminGuard.tsx:47, 118, 174</div></div></li>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>Wrong account, restricted access, crash</div><div class="fix">"is not part of the authorised PMW organisation" → "You're signed in as {email}. Use your @pmw-group.com account." "…not a member of the PMW HR Docs SharePoint site" → "Ask IT Support to add {email}", with a Copy button. The crash screen shows a raw stack trace with a ⚠ symbol to everyone. It also sits outside the menu, so one broken page takes the whole menu with it.</div><div class="ref">WrongTenantScreen.tsx:134–208 · RestrictedAccessScreen.tsx:74–210 · ErrorBoundary.tsx:140–152</div></div></li>
+    <li><div><div class="t"><span class="tag c-p3">P3</span>Guest setup with no sense of progress</div><div class="fix">Add "Step 1 of 2 · then HR approves your access" above the heading, and drop the blank helper text that reserves space under every field.</div><div class="ref">GuestProfileSetupPage.tsx:105, 190</div></div></li>
+  </ol></div>
+  </div>
+</section>
+
+<!-- ======================= GLOBAL ======================= -->
+<section class="block" id="global">
+  <div class="sec-head"><span class="num">20</span><h2>Across the app</h2><p>Counted from the code and the automated scanner. Most of these get fixed once, in one place, and every screen improves.</p></div>
+  <div class="stats">
+    <div class="stat"><b>51</b><span>different text sizes in 1,365 places, mixing px and rem, with half-pixel sizes. Proposed: 6.</span></div>
+    <div class="stat"><b>91</b><span>hard-coded colours outside the shared colour files, across 36 files. ApprovalDashboard alone has 22.</span></div>
+    <div class="stat"><b>24 / 47</b><span>icon-only buttons with no name for screen readers</span></div>
+    <div class="stat"><b>17 : 1</b><span>spinners to placeholder rows in shared components. Careers uses placeholders; admin uses spinners.</span></div>
+    <div class="stat"><b>5</b><span>screens that show raw error codes ("502") to people</span></div>
+    <div class="stat"><b>4</b><span>different browser tab titles for one product</span></div>
+  </div>
+  <div class="notes" style="margin-top:16px"><ol>
+    <li><div><div class="t"><span class="tag c-p1">P1</span>Every error message is written separately</div><div class="fix">"Something needs attention", "Failed to load … (502)", "Could not load …", "ERR". <b>Build one shared error message</b> (round icon, a plain headline that names what failed, Retry, and a small code for HR) and one rule: an error replaces the zeros and the empty state, never sits beside them.</div></div></li>
+    <li><div><div class="t"><span class="tag c-p1">P1</span>Loading never gives up</div><div class="fix">One shared loading wrapper should show placeholder rows straight away, a "Taking longer than usual · Retry" message after 8 seconds, and the shared error after 20 seconds. Today All Submissions waits forever.</div></div></li>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>One name and one title pattern</div><div class="fix">A small <code>usePageTitle("Routing")</code> hook would produce "Routing · PMW HR Portal" everywhere, replacing "PMW HR Group Portal", "Submissions — PMW HR Form", "Approval routing - PMW HR Form" and "Form: Form".</div></div></li>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>Text below the 11px minimum</div><div class="fix">Menu labels are 10px and the role label 10.5px. Before/after cards here use 7–8.5px labels because they're mock-ups; the real app shouldn't go below 11.5px anywhere.</div></div></li>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>A global style quietly overrides fonts</div><div class="fix">A single rule forces Inter onto everything, so the monospace reference number and the form's display fonts never actually show. The orange-brown accent in the CSS has drifted from the shared colour file, and the font file loads two weights that are never used.</div><div class="ref">index.css:1, 9, 35</div></div></li>
+    <li><div><div class="t"><span class="tag c-p2">P2</span>Four corner sizes for one kind of tag</div><div class="fix">Badges use 4px, 5px, 12px or fully round corners depending on the file, and table headers come in three styles. Choose one shape for each kind of thing (see section 00).</div></div></li>
+    <li><div><div class="t"><span class="tag c-p3">P3</span>Notes for maintainers are out of date</div><div class="fix">AGENTS.md says "37 console calls across 10 files" but there are now 8. DESIGN.md describes a sidebar that was removed. This review only reports it; I haven't changed either file.</div></div></li>
+  </ol></div>
+</section>
+
+<!-- ======================= PLAN ======================= -->
+<section class="block" id="plan">
+  <div class="sec-head"><span class="num">21</span><h2>Order of work</h2><p>Ordered so each step makes the next one cheaper. Steps 1 and 2 fix most of the "broken"-feeling moments without changing how anything looks.</p></div>
+  <div class="roadmap">
+    <div class="step"><span class="n">1</span><div><b>One shared error and loading pattern</b><span>Placeholder rows, then "taking longer", then a plain error, used on every data screen. Fixes All Submissions, Guest members, Learning, Careers, the admin career screens and the form link error. <code>/impeccable harden</code></span></div></div>
+    <div class="step"><span class="n">2</span><div><b>Plain-language wording</b><span>Loading steps, Profile access, Routing banner, Appearance, Learning; one product name and page-title pattern. <code>/impeccable clarify</code></span></div></div>
+    <div class="step"><span class="n">3</span><div><b>New shapes and type scale</b><span>Pill, 18 and 24px corners plus circles in <code>editorial.ts</code>, six text sizes, four button levels, status shown as a dot in a pill. <code>/impeccable typeset</code> · <code>/impeccable polish</code></span></div></div>
+    <div class="step"><span class="n">4</span><div><b>Gmail-style navigation</b><span>Left menu with "New request" on desktop, bottom bar with a pill highlight on phones, admin tabs grouped, page titles in the header. Update DESIGN.md in the same change. <code>/impeccable layout</code> · <code>/impeccable adapt</code></span></div></div>
+    <div class="step"><span class="n">5</span><div><b>Lists instead of cards</b><span>Forms, both Submissions screens, Org, Routing and Guests become flat rows with hover actions, tick boxes for bulk actions and Undo bars. The dashboard gets tappable rings. <code>/impeccable distill</code> · <code>/impeccable animate</code></span></div></div>
+  </div>
+  <p class="foot">Built from: a signed-in walk-through on localhost (the app's own server was unavailable locally, so screens that depend on it show their error state), the automated design scanner over <code>src/pages</code>, <code>src/components</code> and <code>index.html</code>, and a source-code review. The forms themselves were not opened. People in the mockups are examples.</p>
+</section>
+
+</div>
+
+<script>
+(function(){
+  // severity counts from every note list
+  const counts={P0:0,P1:0,P2:0,P3:0};
+  document.querySelectorAll('.notes .tag').forEach(t=>{const k=t.textContent.trim(); if(k in counts) counts[k]++;});
+  const names={P0:'blocking',P1:'major',P2:'minor',P3:'polish'};
+  document.getElementById('sevCounts').innerHTML=Object.keys(counts).filter(k=>counts[k]).map(k=>`<span class="chip sev-chip"><span class="dot c-${k.toLowerCase()}"></span>${counts[k]} ${names[k]}</span>`).join('');
+
+  // segmented controls
+  function layoutSeg(seg){const on=seg.querySelector('button[aria-pressed="true"]'),th=seg.querySelector('.thumb'); if(!on||!th) return; th.style.width=on.offsetWidth+'px'; th.style.transform=`translateX(${on.offsetLeft-3}px)`;}
+  document.querySelectorAll('[data-seg]').forEach(seg=>{
+    seg.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; seg.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); layoutSeg(seg);});
+    requestAnimationFrame(()=>layoutSeg(seg));
+  });
+  addEventListener('resize',()=>document.querySelectorAll('[data-seg]').forEach(layoutSeg));
+  document.fonts&&document.fonts.ready.then(()=>document.querySelectorAll('[data-seg]').forEach(layoutSeg));
+
+  // phone nav pills
+  document.querySelectorAll('[data-nav]').forEach(n=>n.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; n.querySelectorAll('button').forEach(x=>x.removeAttribute('aria-current')); b.setAttribute('aria-current','page');}));
+  // generic chips outside the live shell toggle
+  document.querySelectorAll('.screen .mchip, .panel .mchip').forEach(c=>c.addEventListener('click',()=>{const on=c.getAttribute('aria-pressed')!=='true'; c.setAttribute('aria-pressed',on); const s=c.querySelector('svg'); if(s) s.hidden=!on;}));
+
+  // boot ring
+  const ring=document.getElementById('bootRing'),msg=document.getElementById('bootMsg'),sub=document.getElementById('bootSub'),dots=[...document.querySelectorAll('#bootDots .dot')];
+  const steps=[['Signing you in','Usually takes 2 or 3 seconds',28],['Getting your forms','5 forms found',64],['Almost there','Opening your dashboard',92]];
+  let bi=0; function boot(){const s=steps[bi%3]; msg.textContent=s[0]; sub.textContent=s[1]; ring.style.background=`conic-gradient(var(--m-navy) ${s[2]}%, #DCE3EE 0)`; dots.forEach((d,i)=>d.style.color=i<=bi%3?'var(--m-navy)':'#C9D1DE'); bi++;}
+  boot(); if(!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(boot,1600);
+
+  // appearance swatches
+  const sw=document.getElementById('swatches'),pv=document.getElementById('appPreview');
+  sw.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; sw.querySelectorAll('button').forEach(x=>{x.setAttribute('aria-pressed',x===b); x.style.outline=x===b?'3px solid var(--m-navy)':'none'; x.style.outlineOffset='3px';}); pv.style.background=b.dataset.bg;});
+  sw.querySelector('button').style.outline='3px solid var(--m-navy)'; sw.querySelector('button').style.outlineOffset='3px';
+
+  // my submissions withdraw + undo
+  const msDel=document.getElementById('msDel'),msList=document.getElementById('msList'),msSnack=document.getElementById('msSnack'),msUndo=document.getElementById('msUndo'); let msT;
+  msDel.addEventListener('click',()=>{msList.style.opacity='.25'; msSnack.hidden=false; clearTimeout(msT); msT=setTimeout(()=>{msSnack.hidden=true;},6000);});
+  const undoMs=()=>{msList.style.opacity='1'; msSnack.hidden=true;}; msUndo.addEventListener('click',undoMs); msUndo.addEventListener('keydown',e=>{if(e.key==='Enter')undoMs();});
+
+  // ---------- live shell ----------
+  const desk=document.getElementById('desk');
+  const rows=[
+    {who:'Siti Aminah',ini:'SA',c:'#7C4DCC',form:'Training Requisition',det:'Layer 2 of 3 · waiting on your approval',when:'4 Oct',s:'rev'},
+    {who:'Raj Kumar',ini:'RK',c:'#C2410C',form:'Training Evaluation',det:'Signature attached · 2 files',when:'5 Oct',s:'rev'},
+    {who:'Lim Wei',ini:'LW',c:'#137536',form:'Training Needs Analysis',det:'Department: Safety · priority high',when:'6 Oct',s:'rev'},
+    {who:'Nurul Huda',ini:'NH',c:'#0F3D91',form:'Training Attendance',det:'Fire Safety Briefing · 12 attendees',when:'6 Oct',s:'ok'},
+    {who:'Tan Chee',ini:'TC',c:'#855405',form:'Training Requisition',det:'Sent back: budget code missing',when:'7 Oct',s:'no'},
+    {who:'Farah Zain',ini:'FZ',c:'#B42318',form:'Training Evaluation',det:'Layer 1 of 2 · HOD',when:'7 Oct',s:'rev'},
+    {who:'James Tiong',ini:'JT',c:'#1E4FA0',form:'Training Attendance',det:'Forklift refresher · 6 attendees',when:'8 Oct',s:'ok'},
+    {who:'Aisyah H.',ini:'AH',c:'#4A2A86',form:'Training Needs Analysis',det:'Department: QA',when:'8 Oct',s:'rev'}
+  ];
+  const label={rev:'In review',ok:'Approved',no:'Sent back'};
+  const list=document.getElementById('dList'); const sel=new Set(); const filt=new Set(); let q=''; let lastDeleted=null;
+  function render(){
+    const vis=rows.filter(r=>!r.gone&&(!filt.size||filt.has(r.s))&&(!q||(r.who+r.form+r.det).toLowerCase().includes(q)));
+    list.innerHTML=vis.length?vis.map(r=>{const i=rows.indexOf(r);return `<div class="lrow ${sel.has(i)?'sel':''}" data-i="${i}">
+      <span class="cb-wrap"><button class="cb" role="checkbox" aria-checked="${sel.has(i)}" aria-label="Select ${r.who}"></button></span>
+      <span class="avc" style="background:${r.c}">${r.ini}</span>
+      <span class="who">${r.who}</span>
+      <span class="what"><b>${r.form}</b> — ${r.det}</span>
+      <span class="when"><span class="st ${r.s}" style="margin-right:8px">${label[r.s]}</span>${r.when}</span>
+      <span class="acts"><button class="iconbtn" aria-label="Open"><svg><use href="#i-eye"/></svg></button><button class="iconbtn" aria-label="Remind"><svg><use href="#i-bell"/></svg></button><button class="iconbtn" data-del aria-label="Delete"><svg><use href="#i-trash"/></svg></button></span>
+    </div>`}).join(''):`<div class="empty" style="height:100%"><div><div class="bigc"><svg><use href="#i-check"/></svg></div><b>Nothing matches</b>Try another filter, or clear the search.</div></div>`;
+    document.getElementById('countLbl').textContent=vis.length?`1–${vis.length} of ${vis.length}`:'0';
+    const any=sel.size>0; document.getElementById('bulkTools').hidden=!any; document.getElementById('normalTools').hidden=any;
+    document.getElementById('normalTools').style.display=any?'none':'flex'; document.getElementById('bulkTools').style.display=any?'flex':'none';
+    document.getElementById('selCount').textContent=`${sel.size} selected`;
+    const all=document.getElementById('allCb'); all.setAttribute('aria-checked',any&&sel.size===vis.length);
+    document.getElementById('cntWait').textContent=rows.filter(r=>!r.gone&&r.s==='rev').length;
+  }
+  function snack(t){const s=document.getElementById('dSnack'); document.getElementById('snackTxt').textContent=t; s.classList.add('show'); clearTimeout(snack.t); snack.t=setTimeout(()=>s.classList.remove('show'),6000);}
+  list.addEventListener('click',e=>{
+    const row=e.target.closest('.lrow'); if(!row) return; const i=+row.dataset.i;
+    if(e.target.closest('[data-del]')){row.classList.add('gone'); setTimeout(()=>{rows[i].gone=true; sel.delete(i); lastDeleted=[i]; render();},220); snack('Submission deleted'); return;}
+    if(e.target.closest('.cb')){sel.has(i)?sel.delete(i):sel.add(i); render(); return;}
+    if(e.target.closest('.acts')) return;
+    snack(`Opening ${rows[i].form} from ${rows[i].who}`);
+  });
+  document.getElementById('allCb').addEventListener('click',()=>{const vis=[...list.querySelectorAll('.lrow')].map(r=>+r.dataset.i); if(sel.size===vis.length) sel.clear(); else vis.forEach(i=>sel.add(i)); render();});
+  document.getElementById('bulkDel').addEventListener('click',()=>{lastDeleted=[...sel]; lastDeleted.forEach(i=>rows[i].gone=true); const n=sel.size; sel.clear(); render(); snack(`${n} submission${n>1?'s':''} deleted`);});
+  document.getElementById('undo').addEventListener('click',()=>{ if(lastDeleted){lastDeleted.forEach(i=>rows[i].gone=false); lastDeleted=null; render();} document.getElementById('dSnack').classList.remove('show');});
+  document.querySelectorAll('#normalTools .mchip[data-f]').forEach(c=>c.addEventListener('click',()=>{const f=c.dataset.f; filt.has(f)?filt.delete(f):filt.add(f); c.setAttribute('aria-pressed',filt.has(f)); c.querySelector('svg').hidden=!filt.has(f); render();}));
+  document.getElementById('dSearch').addEventListener('input',e=>{q=e.target.value.trim().toLowerCase(); if(q) show('subs'); render();});
+  const views=desk.querySelectorAll('.view');
+  const ph={'empty-careers':['i-brief','Careers','Openings would list here as rows, with the same chips and hover actions.'],'empty-learn':['i-school','Learning','A "Continue" row and round topic tiles. See section 10.'],'empty-routing':['i-route','22 routing problems','Each one becomes a row with a one-tap fix. See section 16.'],'empty-builder':['i-pen','Form builder','Opens full screen. See section 17.'],'forms':['i-doc','Forms','The five forms as flat rows, grouped by category. See section 05.'],'mine':['i-send','My submissions','Your one request, with a 3-step progress track. See section 06.']};
+  function show(v){
+    desk.querySelectorAll('.navi').forEach(n=>n.toggleAttribute('aria-current',n.dataset.view===v)); desk.querySelectorAll('.navi[aria-current]').forEach(n=>n.setAttribute('aria-current','page'));
+    views.forEach(x=>x.hidden=true);
+    if(v==='home') desk.querySelector('[data-v="home"]').hidden=false;
+    else if(v==='subs') desk.querySelector('[data-v="subs"]').hidden=false;
+    else {const p=ph[v]; const el=desk.querySelector('[data-v="placeholder"]'); el.hidden=false; document.getElementById('phIcon').innerHTML=`<svg><use href="#${p[0]}"/></svg>`; document.getElementById('phTitle').textContent=p[1]; document.getElementById('phText').textContent=p[2];}
+  }
+  desk.querySelectorAll('.navi').forEach(n=>n.addEventListener('click',()=>show(n.dataset.view)));
+  desk.querySelectorAll('[data-jump]').forEach(b=>b.addEventListener('click',()=>{filt.clear(); filt.add(b.dataset.jump); document.querySelectorAll('#normalTools .mchip[data-f]').forEach(c=>{const on=filt.has(c.dataset.f); c.setAttribute('aria-pressed',on); c.querySelector('svg').hidden=!on;}); show('subs'); render();}));
+  document.getElementById('railToggle').addEventListener('click',()=>desk.classList.toggle('mini'));
+  const cm=document.getElementById('composeMenu'),cb=document.getElementById('compose');
+  cb.addEventListener('click',e=>{e.stopPropagation(); cm.hidden=!cm.hidden; cb.setAttribute('aria-expanded',!cm.hidden);});
+  cm.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; cm.hidden=true; snack(`Starting ${b.textContent.trim().replace(/Test$/,'')}`);});
+  document.addEventListener('click',e=>{if(!cm.hidden&&!e.target.closest('#composeMenu')){cm.hidden=true; cb.setAttribute('aria-expanded','false');}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){cm.hidden=true;}});
+  render();
+})();
+</script>
