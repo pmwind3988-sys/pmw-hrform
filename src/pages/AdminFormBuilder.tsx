@@ -86,6 +86,7 @@ import {
 } from "../utils/formBuilderSP";
 import { resolveSite, availableSites, isSiteKey, siteAppOrigin, HOME_SITE_KEY, type SiteKey } from "../config/sites";
 import { editorial } from "../theme/editorial";
+import { DEFAULT_COMPANIES, DEFAULT_DOCUMENT_HEADER, DEFAULT_ISO_STANDARDS, DEFAULT_PDF_CONFIG, withDocumentHeaderDefaults } from "../utils/publishDefaults";
 
 /**
  * `isGroupMember` returns false for a missing group, a 403 and a network error
@@ -115,38 +116,11 @@ async function describeSiteGroups(
   }
 }
 
-const DEFAULT_COMPANIES = [
-  "PMW INDUSTRIES SDN BHD",
-  "PMW CONCRETE INDUSTRIES SDN BHD",
-  "PMW LIGHTING INDUSTRIES SDN BHD",
-  "PMW WINABUMI SDN BHD",
-].join("\n");
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
 type MetaTextKey = "formTitle" | "formId" | "formVersion" | "slug" | "isoStandards" | "companies" | "logoUrl";
 type DocumentHeaderKey = keyof DocumentControlHeader;
 type PublishIntent = "profile" | "live";
-const DEFAULT_PDF_CONFIG: PdfConfig = {
-  enabled: true,
-  title: "Form Submission",
-  deliveryMethod: "sharepoint",
-  showSubmissionDate: true,
-  showApproverChain: true,
-  showEvaluationDetails: true,
-  showSignatures: true,
-  showStatusBadge: true,
-  includeEmptyEvaluationFields: false,
-  density: "compact",
-  primaryColor: editorial.pmwBlue,
-  secondaryColor: editorial.pmwPurple,
-};
-const DEFAULT_DOCUMENT_HEADER: DocumentControlHeader = {
-  documentNumber: "",
-  issueNumber: "",
-  effectiveDate: "",
-  revisionNumber: "",
-  revisionDate: "",
-};
 
 function getLayerFieldOptions(json: SurveyJson | null | undefined): LayerFieldOption[] {
   if (!json) return [];
@@ -164,15 +138,6 @@ function getEffectiveLayerCount(config: LayerConfig | null, fallback: number): n
   if (!config) return fallback;
   const branchCounts = (config.manualBranches ?? []).map((branch) => branch.layers.length);
   return Math.max(config.layers.length, ...branchCounts, 0);
-}
-
-function withDocumentHeaderDefaults(header: DocumentControlHeader, formId: string, version: string): DocumentControlHeader {
-  return {
-    ...DEFAULT_DOCUMENT_HEADER,
-    ...header,
-    documentNumber: header.documentNumber?.trim() || formId.trim(),
-    revisionNumber: header.revisionNumber?.trim() || version.trim(),
-  };
 }
 
 function firstLayerValidationMessage(errors: string[]): string {
@@ -610,7 +575,7 @@ export default function AdminFormBuilder() {
     formId: "",
     formVersion: "1.0",
     slug: "",
-    isoStandards: "ISO 9001 · ISO 14001 · ISO 45001",
+    isoStandards: DEFAULT_ISO_STANDARDS,
     companies: DEFAULT_COMPANIES,
     companyChoiceEnabled: false,
     logoUrl: "",
@@ -1032,7 +997,7 @@ export default function AdminFormBuilder() {
       formId: "",
       formVersion: "1.0",
       slug: "",
-      isoStandards: "ISO 9001 · ISO 14001 · ISO 45001",
+      isoStandards: DEFAULT_ISO_STANDARDS,
       companies: DEFAULT_COMPANIES,
       companyChoiceEnabled: false,
       logoUrl: "",
@@ -1927,6 +1892,15 @@ export default function AdminFormBuilder() {
                   onClick={() => { setSwitcherOpen(false); handleNew(); }}
                 >
                   New form
+                </button>
+                <button
+                  type="button"
+                  className="bx-btn bx-btn-sm"
+                  style={{ height: 30 }}
+                  title="Publish several new forms from definition files"
+                  onClick={() => { setSwitcherOpen(false); navigate(isSecondarySite ? `/admin/forms/import?site=${encodeURIComponent(siteKey)}` : "/admin/forms/import"); }}
+                >
+                  Import
                 </button>
               </div>
               <div className="bx-dropdown-list">

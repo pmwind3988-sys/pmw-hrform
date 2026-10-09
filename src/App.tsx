@@ -321,6 +321,7 @@ const loadMySubmissionsPage = () => import("./pages/MySubmissionsPage");
 const loadProfilePage = () => import("./pages/ProfilePage");
 const loadAppearancePage = () => import("./pages/AppearancePage");
 const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
+const loadAdminFormImportPage = () => import("./pages/AdminFormImportPage");
 const loadAdminOrgPage = () => import("./pages/AdminOrgPage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadCareersPage = () => import("./pages/CareersPage");
@@ -1804,6 +1805,18 @@ export default function App() {
                 <ErrorBoundary>
                   {inShell(
                     <LazyRoute load={loadAdminOrgPage} fallback={<PageSkeleton label="Loading companies and departments" />} />
+                  )}
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/forms/import"
+            element={
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+                <ErrorBoundary>
+                  {inShell(
+                    <LazyRoute load={loadAdminFormImportPage} fallback={<PageSkeleton label="Loading form import" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
