@@ -122,6 +122,11 @@ import PageHeader from "../common/PageHeader";
 import PillTabs from "../common/PillTabs";
 import PageSkeleton from "../common/PageSkeleton";
 import StatusPanel from "../common/StatusPanel";
+import { useDashboard } from "../../contexts/DashboardContext";
+import SapPanel from "../sap/SapPanel";
+import SapFormTree, { type SapFormTreeEntry } from "../sap/SapFormTree";
+import SapViewSwitch from "../sap/SapViewSwitch";
+import { applyFormTypeChange } from "../../utils/submissionFilters";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONFIGURED_SENDER_EMAIL = (
@@ -804,7 +809,12 @@ export default function ApprovalDashboard() {
   const [stageFilter, setStageFilter] = useState<LifecycleStage>("pending");
   // One filter model, shared with the dashboard. The lifecycle tabs below own the
   // stage instead of `filters.stage`, so the tab counts can ignore it.
-  const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
+  // Arriving from Available forms with ?form=<title> opens on that form.
+  const [filters, setFilters] = useState<SubmissionFilterState>(() => {
+    const form = new URLSearchParams(window.location.search).get("form")?.trim();
+    return form ? { ...EMPTY_SUBMISSION_FILTERS, formType: form } : EMPTY_SUBMISSION_FILTERS;
+  });
+  const { listMetaMap } = useDashboard();
   // The published cuts of each form, keyed by form title. Held per version+profile
   // rather than merged, so narrowing to one version narrows its questions too.
   const [formSchemaSnapshots, setFormSchemaSnapshots] = useState<Record<string, SchemaSnapshot[]>>({});
@@ -1092,6 +1102,22 @@ export default function ApprovalDashboard() {
       return submittedTime(b) - submittedTime(a);
     });
   }, [categoryItems, stageFilter, activeGroupByField, selectedGroup, itemAnswers, listSort]);
+
+  /*
+    The form tree's counts. Built from every loaded row rather than the
+    filtered ones, so picking a form does not zero out every other form's
+    numbers; rehearsals are left out unless test runs are switched on, the
+    same rule the list itself follows.
+  */
+  const treeCounts = new Map<string, SapFormTreeEntry>();
+  for (const item of pendingItems) {
+    if (!filters.includeTestRuns && isTestRow(item as unknown as Record<string, unknown>)) continue;
+    const entry = treeCounts.get(item.Title) ?? { title: item.Title, category: listMetaMap[item.Title]?.category ?? "General", open: 0, total: 0 };
+    entry.total++;
+    if (getItemStatus(item) === "pending") entry.open++;
+    treeCounts.set(item.Title, entry);
+  }
+  const treeForms = Array.from(treeCounts.values()).sort((a, b) => a.title.localeCompare(b.title));
 
   const totalListPages = Math.max(1, Math.ceil(filteredItems.length / SUBMISSIONS_PER_PAGE));
   const pagedItems = filteredItems.slice((listPage - 1) * SUBMISSIONS_PER_PAGE, listPage * SUBMISSIONS_PER_PAGE);
@@ -3238,7 +3264,7 @@ export default function ApprovalDashboard() {
     // The two panes below scroll inside themselves, so the page does not.
     <div style={isWide ? { height: "calc(100dvh - 64px)", minHeight: 760 } : undefined}>
       <div style={{ maxWidth: 1400, margin: "0 auto", height: isWide ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
-        <PageHeader title="All submissions" description="Every submission across all forms." />
+        <PageHeader title="All submissions" description="Every submission across all forms." aside={<SapViewSwitch current="all" />} />
 
         {error && (
           <Box role="alert" sx={{ backgroundColor: editorial.errorSoft, borderRadius: `${si.radiusSm}px`, p: 1.5, color: editorial.error, mb: 2, ...siType.body }}>
@@ -3419,7 +3445,17 @@ export default function ApprovalDashboard() {
         />
 
         {/* Items + Detail Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: isWide ? "minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isWide ? "260px minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
+          {/* Form tree: pick a form to narrow the list, or All submissions for every form. */}
+          <SapPanel label="Forms" sx={{ minHeight: 0, maxHeight: isWide ? undefined : 280 }}>
+            <Box sx={{ overflow: "auto", flex: 1, minHeight: 0 }}>
+              <SapFormTree
+                forms={treeForms}
+                selected={filters.formType}
+                onSelect={(title) => setFilters(applyFormTypeChange(filters, title))}
+              />
+            </Box>
+          </SapPanel>
           {/* Items List */}
           <Card pad="none" clip sx={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
             <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>

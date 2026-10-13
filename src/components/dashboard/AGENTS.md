@@ -10,10 +10,9 @@
 | Form list cards | `ListSummaryCards.tsx` | Grid of cards with counts; edit button shown only with `canUseFormBuilder`, then `onEditForm` navigates to `/admin/builder/:listTitle` |
 | Search / filters | `Toolbar.tsx` | Form type, status, sort, submitter, submitted-on, profile, plus stacked field conditions |
 | Field condition editor | `FieldConditions.tsx` | One row per condition; the operator and value editor come from the field's `kind` |
-| Submission rows | `SubmissionRow.tsx` | Responsive: desktop grid / mobile stacked; clickable |
+| Submission grids | `src/components/sap/` | The Forms section's dense SAP-style grids (`SapGrid`, `SapPanel`, `SapToolbar`, `SapTabs`, `SapStatus`, `SapFormTree`, `SapViewSwitch`). The old `SubmissionRow` / `ListHeader` / `ListBadge` / `FormList` are gone. |
 | Detail view | `DetailModal.tsx` | Full dialog with fields, signatures, approval chain |
 | Status pills | `StatusBadge.tsx` | Auto-normalizes status strings to colored chips |
-| List pills | `ListBadge.tsx` | Colored list identifier pills |
 | Empty state | `EmptyState.tsx` | Placeholder when no submissions match filters |
 | Config warning | `ConfigWarningBanner.tsx` | Amber banner for unconfigured SharePoint lists |
 
@@ -24,7 +23,7 @@ App.tsx → DashboardProvider (context: submissions, filters, listMetaMap)
   ├── StatsRow (submissions)
   ├── ListSummaryCards (visibleLists, canUseFormBuilder, onEditForm → navigate to /admin/builder/:listTitle)
   ├── Toolbar (filters, onChange)
-  └── SubmissionRow[] (submission, onClick)
+  └── SapGrid rows (FormsPage, MySubmissionsPage) — select, then Open / double-click
         └── DetailModal (open, onClose, submissionData)
 ```
 - State managed via `DashboardContext` (`src/contexts/DashboardContext.tsx`) — the ONLY context store in the app.
@@ -38,7 +37,7 @@ App.tsx → DashboardProvider (context: submissions, filters, listMetaMap)
 - **Answers must actually be loaded to filter on them.** The dashboard has them in `submissionData`; `ResponseViewer` reads `RawJSON`; `ApprovalDashboard`'s list queries select workflow columns only, so it fetches answers lazily (no `$select`, per form) the first time a form type is picked, and holds field conditions back until they land.
 
 ## Conventions
-- **Responsive**: desktop table (`ListHeader` + `SubmissionRow` grid) vs mobile stacked cards
+- **Responsive**: the Forms section's grids keep their columns at every width and scroll sideways inside their panel on a phone, as an SAP grid does, rather than collapsing to cards.
 - **Modal pattern**: `DetailModal` receives `submissionData` object; formats dates, users, lookups via `formatFieldValue()`
 - **Internal field filtering**: `mapSubmission()` in `App.tsx` uses `/^L[1-9]_/` regex (extended from old L[1-3] to support dynamic layers)
 - **Layer Progression**: `DetailModal` shows a timeline/stepper of all layers with status badges. Evaluation layers render via `EvaluationSummary`, approval layers via legacy `ApprovalCard`.

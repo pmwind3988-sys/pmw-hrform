@@ -18,12 +18,11 @@ import {
   DeleteForeverOutlined as DeleteForeverIcon,
   FileDownloadOutlined as FileDownloadIcon,
   TableChartOutlined as TableChartIcon,
+  VisibilityOutlined as VisibilityIcon,
   WarningAmberOutlined as WarningIcon,
 } from "@mui/icons-material";
 import { useDashboard } from "../contexts/DashboardContext";
 import Toolbar from "../components/dashboard/Toolbar";
-import ListHeader from "../components/dashboard/ListHeader";
-import SubmissionRow from "../components/dashboard/SubmissionRow";
 import EmptyState from "../components/dashboard/EmptyState";
 import DetailModal from "../components/dashboard/DetailModal";
 import {
@@ -37,22 +36,41 @@ import { downloadCsv } from "../utils/csv";
 import type { HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, si, siType } from "../theme/editorial";
 import { bucketSubmissions } from "../utils/submissionStatusBuckets";
-import Card from "../components/common/Card";
+import {
+  approvalTrail,
+  submissionState,
+  waitingAt,
+  type TrailStep,
+  type TrailTone,
+} from "../utils/formSubmissionSummary";
+import { formatDashboardDateTime } from "../utils/submissionDisplay";
+import SapPanel, { SapPanelTitle } from "../components/sap/SapPanel";
+import SapGrid, { type SapColumn } from "../components/sap/SapGrid";
+import SapStatus from "../components/sap/SapStatus";
+import { SapToolButton, SapToolbar, SapToolSeparator } from "../components/sap/SapToolbar";
+import { sap } from "../components/sap/sapTheme";
+
+/** The colour of a step's square in the progress bar and the trail. */
+const TRAIL_TONE_FILL: Record<TrailTone, string> = {
+  done: editorial.successFill,
+  rejected: editorial.errorFill,
+  current: editorial.warningFill,
+  waiting: "#D0D7E2",
+  skipped: "#D0D7E2",
+};
 
 /**
  * Forms → My Submissions.
  *
- * The filter toolbar, the row list, the detail modal, and the export and
- * permanent-delete flows — all of which used to sit at the bottom of the
- * dashboard, below the hero, the tiles, the form cards and the carousel.
+ * The filter toolbar, then this account's own rows as a dense grid. Picking a
+ * row shows its approval trail underneath — who decided each step, when, and
+ * why if they turned it down — which is the question people come here to
+ * answer. Double-click (or Enter) opens the full record.
  *
  * WHOSE ROWS THESE ARE. The section is called My Submissions and shows this
  * account's own rows. The everybody-else view still exists for superusers as
- * "All Submissions" (`/admin/submissions`), which is the pre-existing approval
- * dashboard; the two are separate tabs so it is always clear which one is on
- * screen. Before this split there was one list whose contents silently depended
- * on your permissions, so two people looking at "the dashboard" could see
- * different things and have no way to tell.
+ * "All Submissions" (`/admin/submissions`); the two are separate tabs so it is
+ * always clear which one is on screen.
  */
 export default function MySubmissionsPage() {
   const {
@@ -79,6 +97,7 @@ export default function MySubmissionsPage() {
   const [deleteResult, setDeleteResult] = useState<HardDeleteSubmissionResult | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportScope, setExportScope] = useState<"current" | "all">("current");
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const canHardDeleteSubmission = isAdmin || canUseFormBuilder;
   const canExportSubmissions = isAdmin || canUseFormBuilder;
@@ -116,14 +135,17 @@ export default function MySubmissionsPage() {
   const exportRows = exportScope === "all" ? submissions : ownSubmissions;
 
   /**
-   * The counts that used to sit on each form card, now beside the rows they
-   * describe and scoped to what is actually on screen.
-   *
-   * One line, not the dashboard's four tiles: those already state the same
-   * figures, and repeating them here in a heavier weight would say the number
-   * twice and leave a reader wondering which was authoritative.
+   * One line of counts, scoped to what is actually on screen. The dashboard's
+   * tiles already state the same figures in a heavier weight; repeating them
+   * here would say the number twice.
    */
   const counts = bucketSubmissions(ownSubmissions);
+
+  // Until someone picks, the newest row's trail is shown: an empty trail panel
+  // explains nothing.
+  const selected =
+    ownSubmissions.find((item) => submissionKey(item) === selectedKey) ?? ownSubmissions[0] ?? null;
+  const trail = selected ? approvalTrail(selected) : [];
 
   const openDeleteDialog = (item: Submission) => {
     setDeleteTarget(item);
@@ -175,9 +197,42 @@ export default function MySubmissionsPage() {
     fontWeight: 700,
   };
 
+  const columns: SapColumn<Submission>[] = [
+    { key: "status", header: "Status", render: (item) => <SapStatus state={submissionState(item)} /> },
+    {
+      key: "reference",
+      header: "Reference",
+      nowrap: true,
+      render: (item) => <Box component="span" sx={{ fontWeight: 600, color: editorial.navy }}>{item.referenceNo || item.submissionId || item.id}</Box>,
+    },
+    { key: "form", header: "Form", nowrap: true, render: (item) => item.listTitle },
+    { key: "when", header: "Submitted", nowrap: true, render: (item) => formatDashboardDateTime(item.submittedAt, "—") },
+    { key: "progress", header: "Progress", nowrap: true, render: (item) => <ProgressSquares steps={approvalTrail(item)} /> },
+    { key: "waiting", header: "Waiting at", maxWidth: 260, hideOnNarrow: true, render: (item) => waitingAt(item) || "—" },
+  ];
+
+  const trailColumns: SapColumn<TrailStep>[] = [
+    { key: "step", header: "Step", align: "right", width: 48, render: (step) => step.step },
+    { key: "role", header: "Role", render: (step) => step.role },
+    { key: "by", header: "Decided by", render: (step) => step.decidedBy || "—" },
+    {
+      key: "decision",
+      header: "Decision",
+      nowrap: true,
+      render: (step) => (
+        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+          <Box component="span" aria-hidden sx={{ width: 9, height: 9, borderRadius: "2px", backgroundColor: TRAIL_TONE_FILL[step.tone] }} />
+          {step.decision}
+        </Box>
+      ),
+    },
+    { key: "date", header: "Date", nowrap: true, render: (step) => (step.signedAt ? formatDashboardDateTime(step.signedAt, "—") : "—") },
+    { key: "remarks", header: "Remarks", render: (step) => <Box component="span" sx={{ color: editorial.muted }}>{step.remarks}</Box> },
+  ];
+
   return (
     <Box sx={{ maxWidth: 1440, mx: "auto" }}>
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 2 }}>
         <Toolbar
           filters={filters}
           setFilters={setFilters}
@@ -215,48 +270,83 @@ export default function MySubmissionsPage() {
         </Alert>
       )}
 
-      <Typography sx={{ ...siType.subtext, color: editorial.muted, mb: 1.5 }}>
-        {counts.total === 0
-          ? "Nothing to show yet."
-          : `${counts.total} submission${counts.total === 1 ? "" : "s"} · ${counts.approved} approved · ${counts.pending} pending · ${counts.rejected} rejected`}
-      </Typography>
-
       {ownSubmissions.length > 0 ? (
-        <Card
-          pad="none"
-          sx={{
-            // The card surface exists only where the table does. Below md the
-            // rows are already self-contained cards, and wrapping those in
-            // another card put a card inside a card -- the very thing the
-            // desktop rows drop their own shadow to avoid. Switched off rather
-            // than swapped for a different component.
-            borderRadius: { xs: 0, md: `${si.radius}px` },
-            border: "none",
-            boxShadow: { xs: "none", md: si.shadow },
-            backgroundColor: { xs: "transparent", md: editorial.panel },
-            overflow: { md: "hidden" },
-          }}
-        >
-          <ListHeader isAdmin={isAdmin} />
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, pb: { md: 0.75 } }}>
-            {ownSubmissions.map((item) => (
-              <SubmissionRow
-                key={`${item.listTitle}-${item.id}`}
-                item={item}
-                onView={setDetailItem}
-                onDelete={openDeleteDialog}
-                isAdmin={isAdmin}
-                canDelete={canHardDeleteSubmission}
-                isDeleting={
-                  deleteStatus === "deleting" &&
-                  deleteTarget?.listTitle === item.listTitle &&
-                  deleteTarget.id === item.id
-                }
-                listMetaMap={listMetaMap}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <SapPanel
+            label="My submissions"
+            header={
+              <>
+                <SapPanelTitle>My submissions</SapPanelTitle>
+                <Box component="span" sx={{ color: editorial.muted }}>
+                  {`${counts.total} · ${counts.approved} approved · ${counts.pending} open · ${counts.rejected} rejected`}
+                </Box>
+                <Box sx={{ ml: "auto" }}>
+                  <SapToolbar label="Submission actions">
+                    <SapToolButton icon={<VisibilityIcon />} disabled={!selected} onClick={() => selected && setDetailItem(selected)}>
+                      Open
+                    </SapToolButton>
+                    {canExportSubmissions && (
+                      <SapToolButton icon={<FileDownloadIcon />} onClick={() => setExportOpen(true)}>
+                        Export
+                      </SapToolButton>
+                    )}
+                    {canHardDeleteSubmission && (
+                      <>
+                        <SapToolSeparator />
+                        <SapToolButton
+                          icon={<DeleteForeverIcon />}
+                          tone="danger"
+                          disabled={!selected || deleteStatus === "deleting"}
+                          onClick={() => selected && openDeleteDialog(selected)}
+                        >
+                          Delete
+                        </SapToolButton>
+                      </>
+                    )}
+                  </SapToolbar>
+                </Box>
+              </>
+            }
+            status={<span>Pick a row to see its approval trail · double-click, or press Enter, to open it</span>}
+          >
+            <SapGrid
+              label="My submissions"
+              columns={columns}
+              rows={ownSubmissions}
+              getKey={submissionKey}
+              selectedKey={selected ? submissionKey(selected) : null}
+              onSelect={(item) => setSelectedKey(submissionKey(item))}
+              onOpen={setDetailItem}
+              minWidth={820}
+              pageSize={10}
+            />
+          </SapPanel>
+
+          {selected && (
+            <SapPanel
+              label="Approval trail"
+              header={
+                <SapPanelTitle>
+                  Approval trail · {selected.referenceNo || selected.submissionId || selected.id} · {selected.listTitle}
+                </SapPanelTitle>
+              }
+              status={
+                selected.linkedToMe ? (
+                  <span>Sent from a public link and matched to you through your staff number.</span>
+                ) : undefined
+              }
+            >
+              <SapGrid
+                label="Approval trail"
+                columns={trailColumns}
+                rows={trail}
+                getKey={(step) => String(step.step)}
+                emptyText="This form has no approval steps — it is recorded as soon as it is sent."
+                minWidth={720}
               />
-            ))}
-          </Box>
-        </Card>
+            </SapPanel>
+          )}
+        </Box>
       ) : (
         <EmptyState hasFilters={hasFilters} />
       )}
@@ -408,4 +498,28 @@ export default function MySubmissionsPage() {
       </Dialog>
     </Box>
   );
+}
+
+/** One small bar per approval step, coloured by how that step went, plus "2 of 3". */
+function ProgressSquares({ steps }: { steps: TrailStep[] }) {
+  if (steps.length === 0) return <Box component="span" sx={{ color: editorial.muted }}>No steps</Box>;
+  const done = steps.filter((step) => step.tone === "done").length;
+  return (
+    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+      <Box component="span" role="img" aria-label={`${done} of ${steps.length} steps complete`} sx={{ display: "inline-flex", gap: "2px" }}>
+        {steps.map((step) => (
+          <Box
+            component="span"
+            key={step.step}
+            sx={{ width: 16, height: 8, borderRadius: "1px", backgroundColor: TRAIL_TONE_FILL[step.tone], border: `1px solid ${sap.cellLine}` }}
+          />
+        ))}
+      </Box>
+      <Box component="span" sx={{ color: editorial.muted }}>{`${done} of ${steps.length}`}</Box>
+    </Box>
+  );
+}
+
+function submissionKey(item: Submission): string {
+  return `${item.listTitle}::${item.id}`;
 }
