@@ -1037,6 +1037,7 @@ export default function AdminFormBuilder() {
         formStatus: manualPhysical ? "manual evaluation sample" : "sample",
       },
       isoStandards: meta.isoStandards,
+      companies: meta.companies,
       logoUrl: meta.logoUrl || "/logo-128.png",
       pdfConfig: manualPhysical
         ? { ...meta.pdfConfig, enabled: true, title: meta.pdfConfig.title || "Manual Evaluation Form", includeEmptyEvaluationFields: true, showEvaluationDetails: true }
@@ -2579,6 +2580,19 @@ export default function AdminFormBuilder() {
                     onClose={() => setPdfEditorOpen(false)}
                   />
                 )}
+                <div className="bx-field" style={{ marginBottom: 12 }}>
+                  <span className="bx-label">Design</span>
+                  <div className="bx-seg">
+                    {([["standard", "Standard"], ["paper", "Paper form (experimental)"]] as const).map(([design, label]) => (
+                      <button key={design} type="button" className={(meta.pdfConfig.design ?? "standard") === design ? "is-on" : ""} onClick={() => setPdfConfig({ design })}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 12, color: C.textMuted }}>
+                    Paper form prints the answers into a layout like the HR Word forms: ISO header, rating tables with ticks, ruled comment lines and a sign-off per step. It replaces the document editor layout while selected; takes effect on republish.
+                  </span>
+                </div>
                 <ActionRow
                   label="Custom PDF layout"
                   hint="Off falls back to the default layout."

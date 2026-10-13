@@ -23,13 +23,14 @@ import { readTemplate } from "./pdfTemplate/safeTemplate";
 import { TemplateBody } from "./pdfTemplate/renderTemplate";
 import type { PdfTemplate } from "./pdfTemplate/types";
 import type { DocumentControlHeader, PdfConfig } from "../types";
+import PaperFormDocument from "./paperPdf/PaperFormDocument";
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export interface PdfFormData {
   surveyJson: {
     title?: string;
     description?: string;
-    pages?: { name?: string; elements: Record<string, unknown>[] }[];
+    pages?: { name?: string; title?: string; elements: Record<string, unknown>[] }[];
   };
   responseData: Record<string, unknown>;
   meta: {
@@ -44,6 +45,8 @@ export interface PdfFormData {
   /** Layer results: each entry is one layer's data */
   layerResults?: PdfLayerResult[];
   isoStandards?: string;
+  /** Every company the form can be filed under, one per line (published `meta.companies`). */
+  companies?: string;
   logoUrl?: string;
   pdfConfig?: PdfConfig;
   /** Document control header for the specific published profile. */
@@ -125,6 +128,9 @@ function renderBody(template: PdfTemplate | null, ctx: PdfSectionContext): { bod
 }
 
 export default function FormPdfDocument(data: PdfFormData) {
+  // The experimental paper-form design is a separate document, not a template:
+  // it ignores the block layout and draws the Word-form look instead.
+  if (data.pdfConfig?.design === "paper") return PaperFormDocument(data);
   const ctx = buildPdfSectionContext(data);
   const template = readTemplate(data.pdfTemplate);
   const { body, footer } = renderBody(template, ctx);

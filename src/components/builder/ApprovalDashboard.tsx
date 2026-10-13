@@ -345,6 +345,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
         referenceNo: respItem[REFERENCE_NO_FIELD] ? String(respItem[REFERENCE_NO_FIELD]) : undefined,
       },
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
+      companies: typeof versionMeta.companies === "string" ? versionMeta.companies : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
       pdfConfig: isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as PdfFormData["pdfConfig"] : undefined,
       pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
@@ -353,6 +354,19 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
   } catch {
     return null;
   }
+}
+
+/**
+ * The submission drawn in the experimental paper-form design, for the PDF
+ * viewer's design switch. Never stored: the saved PDF keeps the standard design.
+ */
+async function buildPaperDesignPdf(item: PendingItem, token: string): Promise<Blob> {
+  const pdfData = await loadPdfData(item, token);
+  if (!pdfData) throw new Error("Could not load this submission to draw the paper-form design.");
+  pdfData.meta.formStatus = item.FormStatus || item.Status || "submitted";
+  pdfData.pdfConfig = { ...(pdfData.pdfConfig ?? { enabled: false, title: "", deliveryMethod: "download" }), design: "paper" };
+  const { generatePdfBlob } = await import("../../utils/generateFormPdf");
+  return generatePdfBlob(token, item.Id, pdfData);
 }
 
 // ── Status helpers ─────────────────────────────────────────────────────────
@@ -840,7 +854,7 @@ export default function ApprovalDashboard() {
   const [needsBranchSelection, setNeedsBranchSelection] = useState(false);
   const [availableBranches, setAvailableBranches] = useState<ManualBranch[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
-  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; item?: PendingItem } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PendingItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   // Ticked rows, by item key. Kept across pages and filters on purpose, so a
@@ -3441,6 +3455,7 @@ export default function ApprovalDashboard() {
           url={pdfPreview?.url ?? ""}
           filename={pdfPreview?.filename ?? ""}
           siteUrl={SP_SITE_URL}
+          buildPaperDesign={pdfPreview?.item && token ? () => buildPaperDesignPdf(pdfPreview.item as PendingItem, token) : undefined}
           onClose={() => setPdfPreview(null)}
         />
 
@@ -3735,18 +3750,24 @@ export default function ApprovalDashboard() {
                           {getItemDisplayStatus(item)}
                         </span>
                         {item.PdfUrl && (
-                          <a
-                            href={absoluteSharePointUrl(item.PdfUrl, SP_SITE_URL)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
+                          // Opens the in-app viewer, where the paper-form design can be picked.
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPdfPreview({
+                                url: absoluteSharePointUrl(item.PdfUrl as string, SP_SITE_URL),
+                                filename: `${item.Title}-${item.Id}.pdf`,
+                                item,
+                              });
+                            }}
                             style={{
-                              fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 8,
-                              background: C.purplePale, color: C.purple, textDecoration: "none",
+                              fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 8, border: "none",
+                              background: C.purplePale, color: C.purple, cursor: "pointer", fontFamily: "inherit",
                             }}
                           >
                             PDF
-                          </a>
+                          </button>
                         )}
                         {needsBranchPick(item) && (
                           <span
@@ -4176,6 +4197,7 @@ export default function ApprovalDashboard() {
                             onClick={() => setPdfPreview({
                               url: absoluteSharePointUrl(selectedItem.PdfUrl, SP_SITE_URL),
                               filename: `${selectedItem.Title}-${selectedItem.Id}.pdf`,
+                              item: selectedItem,
                             })}
                             style={{ background: "none", border: "none", padding: 0, font: "inherit",
                               color: C.purple, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
@@ -4226,6 +4248,7 @@ export default function ApprovalDashboard() {
                 onClick={() => setPdfPreview({
                   url: absoluteSharePointUrl(actionSuccess.pdfUrl, SP_SITE_URL),
                   filename: `${selectedItem?.Title ?? "submission"}.pdf`,
+                  item: selectedItem ?? undefined,
                 })}
                 style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 999, background: C.purple, color: editorial.white, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer" }}>
                 <DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> View PDF

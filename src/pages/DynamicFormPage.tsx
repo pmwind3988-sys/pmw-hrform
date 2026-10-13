@@ -2055,6 +2055,7 @@ export default function DynamicFormPage() {
                 layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
                 meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted", referenceNo: respItem[REFERENCE_NO_FIELD] ? String(respItem[REFERENCE_NO_FIELD]) : undefined },
                 isoStandards: isoStandardsText,
+                companies: typeof versionMeta.companies === "string" ? versionMeta.companies : undefined,
                 logoUrl: logoUrl || "/logo-128.png",
                 pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
                   ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }

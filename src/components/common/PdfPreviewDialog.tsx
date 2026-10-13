@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -7,6 +7,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import {
@@ -29,8 +31,16 @@ export interface PdfPreviewDialogProps {
   filename: string;
   /** The site the file lives on, for the token scope. */
   siteUrl?: string;
+  /**
+   * When given, the dialog offers the experimental "Paper form" design beside
+   * the stored file, drawn on demand by this function. The stored file is
+   * never replaced: the paper version exists only to be looked at and saved.
+   */
+  buildPaperDesign?: () => Promise<Blob>;
   onClose: () => void;
 }
+
+type PdfDesign = "standard" | "paper";
 
 /**
  * Shows a stored PDF inside the app, instead of throwing the user into a new
@@ -73,12 +83,56 @@ export default function PdfPreviewDialog({
   url,
   filename,
   siteUrl,
+  buildPaperDesign,
   onClose,
 }: PdfPreviewDialogProps) {
   const { instance, accounts } = useMsal();
   const [objectUrl, setObjectUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Every opening starts on the stored, standard design. Keyed by the file, so
+  // opening another submission's PDF drops back to standard without an effect.
+  const [designFor, setDesignFor] = useState<{ url: string; design: PdfDesign }>({ url: "", design: "standard" });
+  const design: PdfDesign = open && designFor.url === url && buildPaperDesign ? designFor.design : "standard";
+  const [paper, setPaper] = useState<{ url: string; objectUrl: string; loading: boolean; error: string }>({ url: "", objectUrl: "", loading: false, error: "" });
+  const paperReady = paper.url === url;
+
+  // Bumped whenever a drawn version stops being wanted, so a slow draw that
+  // finishes after the dialog moved on is thrown away instead of shown.
+  const paperRequest = useRef(0);
+
+  // Drawn when the admin picks it, not in an effect: one click, one draw.
+  const choosePaper = () => {
+    setDesignFor({ url, design: "paper" });
+    if (!buildPaperDesign || (paper.url === url && !paper.error)) return;
+    const id = ++paperRequest.current;
+    const forUrl = url;
+    setPaper({ url: forUrl, objectUrl: "", loading: true, error: "" });
+    buildPaperDesign().then(
+      (blob) => {
+        if (paperRequest.current !== id) return;
+        setPaper({ url: forUrl, objectUrl: URL.createObjectURL(blob), loading: false, error: "" });
+      },
+      (err: unknown) => {
+        if (paperRequest.current !== id) return;
+        setPaper({ url: forUrl, objectUrl: "", loading: false, error: err instanceof Error ? err.message : "The paper-form design could not be drawn." });
+      },
+    );
+  };
+
+  // The drawn paper version is let go when the dialog closes or the file changes.
+  useEffect(() => {
+    if ((open && paper.url === url) || !paper.url) return;
+    paperRequest.current += 1;
+    if (paper.objectUrl) URL.revokeObjectURL(paper.objectUrl);
+    void Promise.resolve().then(() => setPaper({ url: "", objectUrl: "", loading: false, error: "" }));
+  }, [open, url, paper.url, paper.objectUrl]);
+
+  const showingPaper = design === "paper";
+  const shownUrl = showingPaper ? (paperReady ? paper.objectUrl : "") : objectUrl;
+  const shownLoading = showingPaper ? !paperReady || paper.loading : loading;
+  const shownError = showingPaper ? (paperReady ? paper.error : "") : error;
+  const downloadName = showingPaper ? pdfFileName(`${(filename || "Document").replace(/\.pdf$/i, "")}-paper-form`) : pdfFileName(filename);
 
   useEffect(() => {
     if (!open || !url) return;
@@ -173,13 +227,36 @@ export default function PdfPreviewDialog({
             Check it here before downloading.
           </Typography>
         </Box>
+        {buildPaperDesign && (
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={design}
+            onChange={(_event, next: PdfDesign | null) => {
+              if (next === "paper") choosePaper();
+              else if (next) setDesignFor({ url, design: next });
+            }}
+            aria-label="PDF design"
+            sx={{ ml: "auto", flexShrink: 0 }}
+          >
+            <ToggleButton value="standard" sx={{ textTransform: "none", fontWeight: 700, px: 1.5 }}>
+              Standard
+            </ToggleButton>
+            <ToggleButton value="paper" sx={{ textTransform: "none", fontWeight: 700, px: 1.5 }}>
+              Paper form
+              <Box component="span" sx={{ ml: 0.75, fontSize: 10, fontWeight: 700, color: editorial.muted, textTransform: "uppercase" }}>
+                Beta
+              </Box>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        )}
       </DialogTitle>
 
       <DialogContent
         dividers
         sx={{ p: 0, backgroundColor: editorial.appSurface, display: "flex", minHeight: 0 }}
       >
-        {loading && (
+        {shownLoading && (
           <Box
             sx={{
               flex: 1,
@@ -192,12 +269,12 @@ export default function PdfPreviewDialog({
           >
             <CircularProgress size={26} />
             <Typography sx={{ ...siType.subtext, color: editorial.muted }}>
-              Loading the document…
+              {showingPaper ? "Drawing the paper-form design…" : "Loading the document…"}
             </Typography>
           </Box>
         )}
 
-        {!loading && error && (
+        {!shownLoading && shownError && (
           <Box
             sx={{
               flex: 1,
@@ -214,12 +291,12 @@ export default function PdfPreviewDialog({
               Preview unavailable
             </Typography>
             <Typography sx={{ ...siType.body, color: editorial.muted, maxWidth: 420 }}>
-              {error}
+              {shownError}
             </Typography>
           </Box>
         )}
 
-        {!loading && !error && objectUrl && !canShowPdfInline() && (
+        {!shownLoading && !shownError && shownUrl && !canShowPdfInline() && (
           <Box
             sx={{
               flex: 1,
@@ -241,10 +318,10 @@ export default function PdfPreviewDialog({
           </Box>
         )}
 
-        {!loading && !error && objectUrl && canShowPdfInline() && (
+        {!shownLoading && !shownError && shownUrl && canShowPdfInline() && (
           <Box
             component="iframe"
-            src={objectUrl}
+            src={shownUrl}
             title={filename || "PDF preview"}
             sx={{ flex: 1, width: "100%", border: "none" }}
           />
@@ -257,7 +334,7 @@ export default function PdfPreviewDialog({
             rather than a dead end. */}
         <Button
           component="a"
-          href={url}
+          href={showingPaper ? shownUrl || undefined : url}
           target="_blank"
           rel="noopener noreferrer"
           startIcon={<OpenInNewOutlined />}
@@ -272,10 +349,10 @@ export default function PdfPreviewDialog({
         <Button
           variant="contained"
           component="a"
-          href={objectUrl || url}
-          download={pdfFileName(filename)}
+          href={showingPaper ? shownUrl || undefined : objectUrl || url}
+          download={downloadName}
           startIcon={<DownloadOutlined />}
-          disabled={loading}
+          disabled={shownLoading || (showingPaper && !shownUrl)}
           sx={actionSx}
         >
           Download

@@ -351,3 +351,26 @@ export function buildFormSubmissionSections(
   // empty and there is nothing to filter out.
   return sections;
 }
+
+/**
+ * Reads one question's answer the way the sections above do — through
+ * SharePoint's escaped column names, and a matrix's rows from its child list.
+ * For layouts that print every question, answered or not (the paper-form PDF),
+ * which `buildFormSubmissionSections` cannot serve because it drops the blanks.
+ */
+export function createElementAnswerReader(responseData: Record<string, unknown>) {
+  const lookup = buildResponseKeyLookup(responseData);
+  return (element: Record<string, unknown>): {
+    value: unknown;
+    matrixRows: Record<string, unknown>[];
+    matrixColumns: NonNullable<FormSubmissionField["matrixColumns"]>;
+  } => {
+    const key = textValue(element.name);
+    const isMatrix = MATRIX_TYPES.has(textValue(element.type).toLowerCase());
+    return {
+      value: responseValueForElement(element, responseData, lookup).value,
+      matrixRows: isMatrix && key ? matrixRows(key, responseData, lookup) : [],
+      matrixColumns: isMatrix ? matrixColumns(element) : [],
+    };
+  };
+}

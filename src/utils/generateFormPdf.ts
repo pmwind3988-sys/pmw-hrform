@@ -435,13 +435,13 @@ async function hydratePdfImages(token: string, data: PdfFormData): Promise<void>
 
 // ── PDF generation + storage ───────────────────────────────────────────────
 
-export async function generateAndStorePdf(
-  token: string,
-  listTitle: string,
-  responseItemId: number,
-  data: PdfFormData,
-  options: { replaceExistingPdfUrl?: string; onGeneratedBlob?: (blob: Blob) => void | Promise<void> } = {},
-): Promise<string> {
+/**
+ * Draws a submission's PDF without storing it: matrix rows read from their
+ * child lists and SharePoint images inlined, exactly as the stored copy is.
+ * The admin "Paper form" download uses it to draw the experimental design on
+ * demand while the stored file keeps the standard one.
+ */
+export async function generatePdfBlob(token: string, responseItemId: number, data: PdfFormData): Promise<Blob> {
   // ── Inject matrix child rows ──────────────────────────────────────────
   // For dynamicmatrix/tableinput fields, read child list rows and attach
   // them to responseData so the PDF document can render proper tables.
@@ -477,12 +477,22 @@ export async function generateAndStorePdf(
 
   await hydratePdfImages(token, data);
 
-  const blob = await Promise.race([
+  return Promise.race([
     pdf(FormPdfDocument(data)).toBlob(),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("PDF generation timed out")), 60_000)
     ),
   ]);
+}
+
+export async function generateAndStorePdf(
+  token: string,
+  listTitle: string,
+  responseItemId: number,
+  data: PdfFormData,
+  options: { replaceExistingPdfUrl?: string; onGeneratedBlob?: (blob: Blob) => void | Promise<void> } = {},
+): Promise<string> {
+  const blob = await generatePdfBlob(token, responseItemId, data);
   await options.onGeneratedBlob?.(blob);
 
   if (options.replaceExistingPdfUrl) {

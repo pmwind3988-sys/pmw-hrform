@@ -134,6 +134,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
         formStatus,
       },
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
+      companies: typeof versionMeta.companies === "string" ? versionMeta.companies : undefined,
       logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
       pdfConfig: typeof versionMeta.pdfConfig === "object" && versionMeta.pdfConfig !== null && !Array.isArray(versionMeta.pdfConfig)
         ? versionMeta.pdfConfig as PdfFormData["pdfConfig"]

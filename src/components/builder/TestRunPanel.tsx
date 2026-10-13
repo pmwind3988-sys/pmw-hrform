@@ -153,6 +153,7 @@ async function loadPdfDataForRow(
       referenceNo: respItem[REFERENCE_NO_FIELD] ? String(respItem[REFERENCE_NO_FIELD]) : undefined,
     },
     isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
+    companies: typeof versionMeta.companies === "string" ? versionMeta.companies : undefined,
     logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
     pdfConfig: isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as PdfFormData["pdfConfig"] : undefined,
     pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
