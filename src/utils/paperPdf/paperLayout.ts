@@ -17,6 +17,7 @@ import { DEFAULT_COMPANIES } from "../publishDefaults";
 import { formatPdfFieldValue } from "../pdfFieldFormatting";
 import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
 import type { PdfFormData, PdfLayerResult } from "../FormPdfDocument";
+import { applyTrainingEvaluationLayout, isTrainingEvaluationForm } from "./trainingEvaluationLayout";
 
 type El = Record<string, unknown>;
 
@@ -34,16 +35,23 @@ export interface PaperCell {
   selected?: string[];
   /** Takes the whole row (long text that would not fit beside another pair). */
   wide?: boolean;
+  /** Printed one per line instead of `text` (a day-by-day schedule). */
+  lines?: string[];
 }
 
 export type PaperBlock =
-  | { kind: "grid"; cells: PaperCell[] }
-  /** Consecutive questions sharing one scale, as a rating table with a tick per row. */
-  | { kind: "ticks"; title: string; options: PaperOption[]; rows: { number: number; label: string; selected: string[] }[] }
+  /** `rows`, when set, is the exact arrangement; otherwise the cells pair up two to a row. */
+  | { kind: "grid"; cells: PaperCell[]; rows?: PaperCell[][] }
+  /**
+   * Consecutive questions sharing one scale, as a rating table with a tick per row.
+   * `numbered` prints the scale as 1..n columns; `banner` adds an
+   * "Evaluation Item | Rating (✓)" row above the column headings.
+   */
+  | { kind: "ticks"; title: string; options: PaperOption[]; rows: { number: number; label: string; selected: string[] }[]; numbered?: boolean; banner?: boolean }
   /** A choice question whose options are too long for a grid cell. */
   | { kind: "choiceLine"; label: string; options: PaperOption[]; selected: string[] }
-  | { kind: "long"; label: string; text: string; lines: number }
-  | { kind: "signature"; label: string; images: string[]; date: string }
+  | { kind: "long"; label: string; text: string; lines: number; sublabel?: string }
+  | { kind: "signature"; label: string; images: string[]; date: string; large?: boolean }
   | { kind: "images"; label: string; images: string[] }
   | { kind: "table"; field: FormSubmissionField }
   | { kind: "note"; text: string }
@@ -54,6 +62,10 @@ export interface PaperSection {
   level: 1 | 2;
   heading: string;
   blocks: PaperBlock[];
+  /** Starts on a fresh page. */
+  newPage?: boolean;
+  /** Which workflow step a PART prints, when it is one. */
+  layer?: { type: "approval" | "evaluation" };
 }
 
 export interface PaperHeader {
@@ -70,6 +82,8 @@ export interface PaperHeader {
 export interface PaperDocument {
   header: PaperHeader;
   sections: PaperSection[];
+  /** A form with a layout of its own; absent for the general paper layout. */
+  variant?: "training-evaluation";
 }
 
 export const PAPER_ORGANISATION = "PMW INTERNATIONAL BERHAD";
@@ -544,6 +558,7 @@ export function buildPaperDocument(data: PdfFormData, options: PaperLayoutOption
     const elements = (layer.evaluationSurveyElements ?? []).filter(isRecord);
     const values = layer.evaluationFields ?? {};
     let stepSections: PaperSection[];
+    const layerTag = { type: layer.type };
     if (elements.length > 0) {
       stepSections = layoutPart(heading, elements, values, "");
     } else {
@@ -554,8 +569,10 @@ export function buildPaperDocument(data: PdfFormData, options: PaperLayoutOption
       stepSections = [{ level: 1, heading, blocks: cells.length > 0 ? [{ kind: "grid", cells }] : [] }];
     }
     stepSections[stepSections.length - 1].blocks.push(signOffBlock(layer, options.fmtDay));
+    stepSections[0].layer = layerTag;
     sections.push(...stepSections);
   }
 
-  return { header, sections };
+  const doc: PaperDocument = { header, sections };
+  return isTrainingEvaluationForm(options.title) ? applyTrainingEvaluationLayout(doc) : doc;
 }

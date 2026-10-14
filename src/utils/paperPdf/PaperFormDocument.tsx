@@ -67,6 +67,7 @@ const P = StyleSheet.create({
   choiceLabel: { marginRight: 14 },
 
   longLabel: { marginBottom: 2 },
+  longSublabel: { marginBottom: 2 },
   longBody: { position: "relative" },
   longRule: { position: "absolute", left: 0, right: 0, borderBottomWidth: 0.6, borderColor: INK },
   longText: { fontFamily: "Helvetica-Bold", lineHeight: LINE_GAP / 8.6, paddingHorizontal: 2 },
@@ -76,6 +77,7 @@ const P = StyleSheet.create({
   lineSlot: { width: 170, borderBottomWidth: 0.6, borderColor: INK, minHeight: 14, justifyContent: "flex-end", paddingHorizontal: 2, paddingBottom: 1 },
   lineGap: { width: 26 },
   sigImage: { height: 34, maxWidth: 160, objectFit: "contain" },
+  sigImageLarge: { height: 52, maxWidth: 130, objectFit: "contain" },
 
   statement: { fontFamily: "Helvetica-Bold", marginTop: 4, marginBottom: 10 },
   rejected: { color: "#b3261e" },
@@ -115,17 +117,40 @@ function InlineOptions({ options, selected }: { options: PaperOption[]; selected
 }
 
 /** Text written on a ruled line: the line stays even when there is nothing on it. */
-function LineSlot({ value, image, width }: { value?: string; image?: string; width?: number }): ReactElement {
+function LineSlot({ value, image, width, large }: { value?: string; image?: string; width?: number; large?: boolean }): ReactElement {
   return (
     <View style={[P.lineSlot, width ? { width } : {}]}>
-      {image ? <Image style={P.sigImage} src={image} /> : <Text style={P.value}>{value || " "}</Text>}
+      {image ? <Image style={large ? P.sigImageLarge : P.sigImage} src={image} /> : <Text style={P.value}>{value || " "}</Text>}
     </View>
   );
 }
 
 // ── Header ──────────────────────────────────────────────────────────────────
 
-function HeaderTable({ header, logo }: { header: PaperHeader; logo?: string }): ReactElement {
+/** The companies in two columns, each name with a narrow tick cell beside it. */
+function CompanyColumns({ companies }: { companies: PaperHeader["companies"] }): ReactElement {
+  const half = Math.ceil(companies.length / 2);
+  const columns = [companies.slice(0, half), companies.slice(half)];
+  return (
+    <View style={[P.headValue, P.row]}>
+      {columns.map((column, c) => (
+        <View key={c} style={{ width: "50%" }}>
+          {Array.from({ length: half }).map((_, i) => {
+            const company = column[i];
+            return (
+              <View key={i} style={P.row}>
+                <View style={[P.cell, { flexGrow: 1, flexBasis: 0 }]}><Text style={company?.selected ? P.bold : {}}>{company?.label ?? " "}</Text></View>
+                <View style={[P.cell, { width: 18, alignItems: "center" }]}>{company?.selected ? <Tick size={8} /> : <Text> </Text>}</View>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function HeaderTable({ header, logo, twoColumnCompanies }: { header: PaperHeader; logo?: string; twoColumnCompanies?: boolean }): ReactElement {
   return (
     <View>
       <View style={P.table}>
@@ -144,6 +169,7 @@ function HeaderTable({ header, logo }: { header: PaperHeader; logo?: string }): 
         {header.companies.length > 0 ? (
           <View style={P.row}>
             <View style={[P.cell, P.headLabel, { justifyContent: "flex-start" }]}><Text>COMPANIES</Text></View>
+            {twoColumnCompanies ? <CompanyColumns companies={header.companies} /> : (
             <View style={P.headValue}>
               {header.companies.map((company) => (
                 <View key={company.label} style={P.row}>
@@ -152,6 +178,7 @@ function HeaderTable({ header, logo }: { header: PaperHeader; logo?: string }): 
                 </View>
               ))}
             </View>
+            )}
           </View>
         ) : null}
         <View style={P.row}>
@@ -172,7 +199,34 @@ function HeaderTable({ header, logo }: { header: PaperHeader; logo?: string }): 
 
 function CellValue({ cell }: { cell: PaperCell }): ReactElement {
   if (cell.options) return <InlineOptions options={cell.options} selected={cell.selected ?? []} />;
+  if (cell.lines) return <View>{cell.lines.map((line, i) => <Text key={i} style={P.value}>{line}</Text>)}</View>;
   return <Text style={P.value}>{cell.text || " "}</Text>;
+}
+
+// The Training Evaluation employee table's column widths: label, answer, label, answer.
+const ARRANGED_WIDTHS = ["20%", "30%", "17%", "33%"];
+
+/** A grid whose rows were arranged by the layout: a lone cell spans the table. */
+function ArrangedGrid({ rows }: { rows: PaperCell[][] }): ReactElement {
+  return (
+    <View style={[P.table, P.block]}>
+      {rows.map((row, i) => (
+        <View key={i} style={P.row} wrap={false}>
+          {row.length === 1 ? (
+            <>
+              <View style={[P.cell, { width: ARRANGED_WIDTHS[0], justifyContent: row[0].wide ? "flex-start" : "center" }]}><Text>{row[0].label}</Text></View>
+              <View style={[P.cell, { width: "80%" }]}><CellValue cell={row[0]} /></View>
+            </>
+          ) : (
+            row.flatMap((cell, j) => [
+              <View key={`${j}l`} style={[P.cell, { width: ARRANGED_WIDTHS[j * 2], justifyContent: cell.lines ? "flex-start" : "center" }]}><Text>{cell.label}</Text></View>,
+              <View key={`${j}v`} style={[P.cell, { width: ARRANGED_WIDTHS[j * 2 + 1] }]}><CellValue cell={cell} /></View>,
+            ])
+          )}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function Grid({ cells }: { cells: PaperCell[] }): ReactElement {
@@ -219,7 +273,8 @@ function Grid({ cells }: { cells: PaperCell[] }): ReactElement {
   );
 }
 
-function tickColumnWidth(options: PaperOption[]): number {
+function tickColumnWidth(options: PaperOption[], numbered?: boolean): number {
+  if (numbered) return 23;
   const longest = options.reduce((max, o) => Math.max(max, o.label.length), 0);
   const width = Math.max(30, longest * 4.6 + 10);
   // Never let the scale squeeze the statements below about 45% of the row.
@@ -230,12 +285,23 @@ function tickColumnWidth(options: PaperOption[]): number {
 // `minPresenceAhead` between page-level siblings, and the header row needs it
 // to avoid being stranded at the foot of a page without its first row.
 function tickTableRows(block: Extract<PaperBlock, { kind: "ticks" }>, key: string): ReactElement[] {
-  const width = tickColumnWidth(block.options);
+  const width = tickColumnWidth(block.options, block.numbered);
+  // A numbered table heads its columns 1..n; the legend above it says what each means.
+  const columnLabel = (o: PaperOption, i: number) => (block.numbered && !/^\d+$/.test(o.label.trim()) ? String(i + 1) : o.label);
+  const banner = block.banner ? (
+    <View key={`${key}-banner`} style={[P.row, P.tableEdge, P.tableTop, P.tickHeadBand]} wrap={false} minPresenceAhead={40}>
+      <View style={[P.cell, P.tickItem]}><Text style={P.bold}>Evaluation Item</Text></View>
+      <View style={[P.cell, { width: width * block.options.length, alignItems: "center" }]}>
+        {/* Helvetica has no ✓, so the tick is drawn. */}
+        <View style={{ flexDirection: "row", alignItems: "center" }}><Text style={P.bold}>Rating (</Text><Tick size={8} /><Text style={P.bold}>)</Text></View>
+      </View>
+    </View>
+  ) : null;
   const header = (
-    <View key={`${key}-head`} style={[P.row, P.tableEdge, P.tableTop, P.tickHeadBand]} wrap={false} minPresenceAhead={24}>
+    <View key={`${key}-head`} style={[P.row, P.tableEdge, banner ? {} : P.tableTop, P.tickHeadBand]} wrap={false} minPresenceAhead={24}>
       <View style={[P.cell, P.tickItem]}><Text style={P.bold}>{block.title}</Text></View>
-      {block.options.map((o) => (
-        <View key={o.value} style={[P.cell, { width, alignItems: "center" }]}><Text style={[P.bold, P.center]}>{o.label}</Text></View>
+      {block.options.map((o, i) => (
+        <View key={o.value} style={[P.cell, { width, alignItems: "center" }]}><Text style={[P.bold, P.center]}>{columnLabel(o, i)}</Text></View>
       ))}
     </View>
   );
@@ -252,7 +318,7 @@ function tickTableRows(block: Extract<PaperBlock, { kind: "ticks" }>, key: strin
       ))}
     </View>
   ));
-  return [header, ...rows];
+  return banner ? [banner, header, ...rows] : [header, ...rows];
 }
 
 function LongText({ block }: { block: Extract<PaperBlock, { kind: "long" }> }): ReactElement {
@@ -263,7 +329,8 @@ function LongText({ block }: { block: Extract<PaperBlock, { kind: "long" }> }): 
   const lines = Math.max(block.lines, estimated);
   return (
     <View style={P.block}>
-      <Text style={P.longLabel} minPresenceAhead={LINE_GAP * 2}>{block.label}:</Text>
+      <Text style={block.sublabel ? P.longSublabel : P.longLabel} minPresenceAhead={LINE_GAP * 2}>{/:$/.test(block.label) ? block.label : `${block.label}:`}</Text>
+      {block.sublabel ? <Text style={P.longLabel}>{block.sublabel}</Text> : null}
       <View style={[P.longBody, { height: lines * LINE_GAP + 2 }]}>
         {Array.from({ length: lines }).map((_, i) => (
           <View key={i} style={[P.longRule, { top: (i + 1) * LINE_GAP }]} />
@@ -326,7 +393,7 @@ function SignOff({ block }: { block: Extract<PaperBlock, { kind: "signoff" }> })
 function Block({ block }: { block: PaperBlock }): ReactElement | null {
   switch (block.kind) {
     case "grid":
-      return <Grid cells={block.cells} />;
+      return block.rows ? <ArrangedGrid rows={block.rows} /> : <Grid cells={block.cells} />;
     case "ticks":
       return <>{tickTableRows(block, "ticks")}</>;
     case "choiceLine":
@@ -343,7 +410,7 @@ function Block({ block }: { block: PaperBlock }): ReactElement | null {
         <View wrap={false} style={{ marginTop: 4 }}>
           <View style={P.lineRow}>
             <Text style={P.lineLabel}>{block.label}:</Text>
-            <LineSlot image={block.images[0]} />
+            <LineSlot image={block.images[0]} large={block.large} />
           </View>
           <View style={P.lineRow}>
             <Text style={P.lineLabel}>Date:</Text>
@@ -376,7 +443,7 @@ function sectionElements(section: PaperSection, index: number): ReactElement[] {
   const out: ReactElement[] = [];
   if (section.heading) {
     out.push(
-      <Text key={`s${index}-h`} style={section.level === 1 ? P.partHeading : P.panelHeading} minPresenceAhead={50}>
+      <Text key={`s${index}-h`} break={section.newPage} style={[section.level === 1 ? P.partHeading : P.panelHeading, section.newPage ? { marginTop: 0 } : {}]} minPresenceAhead={50}>
         {section.heading}
       </Text>,
     );
@@ -422,7 +489,7 @@ export default function PaperFormDocument(data: PdfFormData) {
   return (
     <Document>
       <Page size="A4" style={P.page}>
-        <HeaderTable header={paper.header} logo={ctx.effectiveLogoUrl} />
+        <HeaderTable header={paper.header} logo={ctx.effectiveLogoUrl} twoColumnCompanies={paper.variant === "training-evaluation"} />
         {paper.sections.flatMap(sectionElements)}
         <View style={P.footer} fixed>
           <Text>{footerNote}</Text>

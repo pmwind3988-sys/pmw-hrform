@@ -7,7 +7,9 @@ const OPTIONS = {
   fmtDay: (iso: string) => iso.slice(0, 10),
   fmtDateTime: (iso: string) => iso,
   control: [{ label: "Document Number:", value: "HR-F-012" }],
-  title: "Training Evaluation Form",
+  // Any form but the Training Evaluation Form, which has a layout of its own
+  // (trainingEvaluationLayout.test.ts); this suite covers the general one.
+  title: "Course Feedback Form",
 };
 
 function blocks(data: PdfFormData): PaperBlock[] {
@@ -18,7 +20,7 @@ describe("paper form layout", () => {
   const doc = buildPaperDocument(TRAINING_EVALUATION_SAMPLE, OPTIONS);
 
   it("prints the ISO header with the form title and the chosen company ticked", () => {
-    expect(doc.header.formTitle).toBe("TRAINING EVALUATION FORM");
+    expect(doc.header.formTitle).toBe("COURSE FEEDBACK FORM");
     expect(doc.header.documentTitle).toBe("ISO 9001, ISO 14001 & ISO 45001");
     expect(doc.header.companies.filter((c) => c.selected).map((c) => c.label)).toEqual(["PMW CONCRETE INDUSTRIES SDN BHD"]);
   });
