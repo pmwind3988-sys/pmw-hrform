@@ -91,8 +91,6 @@ import type { LayerRoutingVerdict } from "../../utils/routingCheck";
 import RoutingCheckPanel from "./RoutingCheckPanel";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import WorkflowAssignmentEditor from "./WorkflowAssignmentEditor";
-import type { PdfFormData } from "../../utils/FormPdfDocument";
-import { readTemplate } from "../../utils/pdfTemplate/safeTemplate";
 import type { WorkflowAssignmentSaveInput } from "./WorkflowAssignmentEditor";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission, FormBuilderField } from "../../types";
@@ -103,7 +101,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
-import { REFERENCE_NO_FIELD } from "../../utils/referenceNumber";
+import { buildPaperDesignPdf, getVersionSurveyJson, loadPdfData } from "../../utils/submissionPdfData";
 import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
@@ -249,30 +247,6 @@ function getVersionLayerMapKey(formTitle: string, formVersion: string, publishKe
   return `${formTitle}__${formVersion}__${publishKey || ""}`;
 }
 
-async function getVersionSurveyJson(
-  token: string,
-  formTitle: string,
-  formVersion: string,
-  publishKey?: string,
-): Promise<string | undefined> {
-  const baseFilter = `FormTitle eq '${encodeURIComponent(formTitle)}' and FormVersion eq '${encodeURIComponent(formVersion)}'`;
-  const getByFilter = async (filter: string): Promise<{ value?: { SurveyJSON?: string }[] }> => spGet(
-    token,
-    `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${filter}&$select=SurveyJSON&$top=1`,
-  ) as Promise<{ value?: { SurveyJSON?: string }[] }>;
-
-  if (publishKey) {
-    try {
-      const keyed = await getByFilter(`${baseFilter} and PublishKey eq '${encodeURIComponent(publishKey)}'`);
-      return keyed.value?.[0]?.SurveyJSON;
-    } catch {
-      // Older SharePoint version lists may not have the profile column yet.
-    }
-  }
-
-  const legacy = await getByFilter(baseFilter);
-  return legacy.value?.[0]?.SurveyJSON;
-}
 
 interface FormConfig {
   Title: string;
@@ -283,91 +257,6 @@ interface FormConfig {
 }
 
 // ── PDF Helper ─────────────────────────────────────────────────────────────
-async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormData | null> {
-  try {
-    const cfg = await getFormConfigByTitle(token, item.Title);
-    if (!cfg) return null;
-
-    let formVersion = item.FormVersion || (cfg as unknown as Record<string, unknown>).CurrentVersion as string || "1.0";
-    let publishKey = item.PublishKey || (cfg as unknown as Record<string, unknown>).CurrentPublishKey as string || "";
-    if (!formVersion || !publishKey) {
-      try {
-        const respItem = await spGet(
-          token,
-          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})?$select=FormVersion,PublishKey`
-        ) as { FormVersion?: string; PublishKey?: string };
-        formVersion = respItem?.FormVersion || "1.0";
-        publishKey = respItem?.PublishKey || publishKey;
-      } catch { /* keep fallback */ }
-    }
-
-    const rawSurvey = await getVersionSurveyJson(token, cfg.Title, formVersion, publishKey);
-    if (!rawSurvey) return null;
-    const parsed = JSON.parse(rawSurvey);
-    const surveyContent = parsed.surveyJson || parsed;
-    const versionMeta = isRecord(parsed.meta) ? parsed.meta : {};
-
-    // Load response data
-    const respItem = await spGet(
-      token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`
-    ) as Record<string, unknown>;
-
-    const SYSTEM_FIELDS = new Set([
-      'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
-      'FormVersion','PublishKey','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','WorkflowEmailLog','WorkflowEmailSchedule',
-      'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
-      'Author','Editor','Created','Modified','ContentType','PermMask',
-      'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
-      'L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature',
-      'L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature',
-      'SelectedBranch',
-    ]);
-
-    const data: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(respItem)) {
-      if (!SYSTEM_FIELDS.has(k) && !/^L\d+_/.test(k) && v !== null && v !== undefined) {
-        data[k] = v;
-      }
-    }
-
-    const { buildPdfLayerResults } = await import("../../utils/generateFormPdf");
-    return {
-      surveyJson: surveyContent as PdfFormData["surveyJson"],
-      responseData: data,
-      layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig),
-      meta: {
-        submittedBy: item.SubmittedBy || "",
-        submittedAt: item.SubmittedAt || "",
-        formTitle: item.Title,
-        formVersion,
-        formStatus: "",
-        referenceNo: respItem[REFERENCE_NO_FIELD] ? String(respItem[REFERENCE_NO_FIELD]) : undefined,
-      },
-      isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
-      companies: typeof versionMeta.companies === "string" ? versionMeta.companies : undefined,
-      logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
-      pdfConfig: isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as PdfFormData["pdfConfig"] : undefined,
-      pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
-      documentHeader: isRecord(versionMeta.documentHeader) ? versionMeta.documentHeader as PdfFormData["documentHeader"] : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The submission drawn in the experimental paper-form design, for the PDF
- * viewer's design switch. Never stored: the saved PDF keeps the standard design.
- */
-async function buildPaperDesignPdf(item: PendingItem, token: string): Promise<Blob> {
-  const pdfData = await loadPdfData(item, token);
-  if (!pdfData) throw new Error("Could not load this submission to draw the paper-form design.");
-  pdfData.meta.formStatus = item.FormStatus || item.Status || "submitted";
-  pdfData.pdfConfig = { ...(pdfData.pdfConfig ?? { enabled: false, title: "", deliveryMethod: "download" }), design: "paper" };
-  const { generatePdfBlob } = await import("../../utils/generateFormPdf");
-  return generatePdfBlob(token, item.Id, pdfData);
-}
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 function getItemStatus(item: PendingItem): "pending" | "approved" | "rejected" {

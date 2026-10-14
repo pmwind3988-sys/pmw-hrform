@@ -37,6 +37,7 @@ import { useMsal } from "@azure/msal-react";
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
 import StatusBadge from "./StatusBadge";
 import PdfPreviewDialog from "../common/PdfPreviewDialog";
+import { buildPaperDesignPdf } from "../../utils/submissionPdfData";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import SignOffBlock from "../reviewer/SignOffBlock";
 import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../../utils/signOff";
@@ -1382,6 +1383,7 @@ function useMatrixChildRows(item: Submission | null): Record<string, unknown> {
 }
 
 export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps) {
+  const { instance, accounts } = useMsal();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const selectedCompany = getSelectedCompany(item?.submissionData, item?.surveyJson);
@@ -1399,6 +1401,24 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
   // SharePoint, which serves it as a download rather than showing it.
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const pdfFilename = item ? `${item.listTitle || "Submission"}-${item.referenceNo || item.submissionId || item.id}.pdf` : "";
+  // The experimental paper-form design, drawn on demand from the same row.
+  // Never stored: the saved PDF keeps the standard design.
+  const buildPaperDesign = item && Number.isFinite(Number(item.id))
+    ? async () => {
+      const account = instance.getActiveAccount() ?? accounts[0];
+      const token = await acquireAccessTokenSilentOrRedirect(instance, { ...loginRequest, account });
+      if (!token) throw new Error("Could not sign in to SharePoint to draw the paper-form design.");
+      return buildPaperDesignPdf({
+        Title: item.listTitle,
+        Id: Number(item.id),
+        FormVersion: item.formVersion,
+        PublishKey: item.publishKey,
+        SubmittedBy: item.submittedByEmail,
+        SubmittedAt: item.submittedAt ?? "",
+        FormStatus: item.formStatus ?? "",
+      }, token);
+    }
+    : undefined;
 
   const documentGroups = entries
     .filter(([key, value]) => !isPdfField(key) && !isSignatureField(key) && !signatureFieldKeys.has(key) && !SYSTEM_FIELDS.has(key) && collectLinks(value).length > 0)
@@ -1765,6 +1785,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
       url={generatedPdf?.url ?? ""}
       filename={pdfFilename}
       siteUrl={SP_SITE_URL}
+      buildPaperDesign={buildPaperDesign}
       onClose={() => setPdfPreviewOpen(false)}
     />
     </>
