@@ -33,12 +33,13 @@ const P = StyleSheet.create({
   cell: { borderRightWidth: 0.7, borderBottomWidth: 0.7, borderColor: RULE, paddingVertical: 2.6, paddingHorizontal: 4, justifyContent: "center" },
   center: { textAlign: "center" },
 
-  logoCell: { width: "22%", alignItems: "center", justifyContent: "center", paddingVertical: 4 },
+  // The label column is one fifth wide, so its line meets the line after "Document Number:" below.
+  logoCell: { width: "20%", alignItems: "center", justifyContent: "center", paddingVertical: 4 },
   logo: { maxHeight: 30, maxWidth: 100, objectFit: "contain" },
-  orgCell: { width: "78%", alignItems: "center", justifyContent: "center", minHeight: 36 },
+  orgCell: { width: "80%", alignItems: "center", justifyContent: "center", minHeight: 36 },
   orgText: { fontFamily: "Helvetica-Bold", fontSize: 10 },
-  headLabel: { width: "22%" },
-  headValue: { width: "78%" },
+  headLabel: { width: "20%" },
+  headValue: { width: "80%" },
   companyName: { width: "78%" },
   companyTick: { width: "22%", alignItems: "center" },
   controlCell: { width: "20%", alignItems: "center", minHeight: 30, justifyContent: "flex-start" },
@@ -329,7 +330,7 @@ function LongText({ block }: { block: Extract<PaperBlock, { kind: "long" }> }): 
   const lines = Math.max(block.lines, estimated);
   return (
     <View style={P.block}>
-      <Text style={block.sublabel ? P.longSublabel : P.longLabel} minPresenceAhead={LINE_GAP * 2}>{/:$/.test(block.label) ? block.label : `${block.label}:`}</Text>
+      <Text style={block.sublabel ? P.longSublabel : P.longLabel} minPresenceAhead={LINE_GAP * 2}>{block.sublabel || /:$/.test(block.label) ? block.label : `${block.label}:`}</Text>
       {block.sublabel ? <Text style={P.longLabel}>{block.sublabel}</Text> : null}
       <View style={[P.longBody, { height: lines * LINE_GAP + 2 }]}>
         {Array.from({ length: lines }).map((_, i) => (

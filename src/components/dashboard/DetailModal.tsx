@@ -38,6 +38,9 @@ import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerRes
 import StatusBadge from "./StatusBadge";
 import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import { buildPaperDesignPdf } from "../../utils/submissionPdfData";
+import PaperFormView from "../paper/PaperFormView";
+import { paperDocumentFromSubmission, surveyQuestionNames } from "../../utils/paperPdf/submissionPaperView";
+import { isTrainingEvaluationForm } from "../../utils/paperPdf/trainingEvaluationLayout";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import SignOffBlock from "../reviewer/SignOffBlock";
 import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../../utils/signOff";
@@ -948,6 +951,12 @@ function useAuthenticatedImageSrc(src: string): { imageSrc: string; isLoading: b
   return { imageSrc, isLoading };
 }
 
+/** A stored image on the paper view, fetched with the viewer's token when it lives in SharePoint. */
+function AuthImage({ src, alt }: { src: string; alt: string }) {
+  const { imageSrc } = useAuthenticatedImageSrc(src);
+  return <Box component="img" src={imageSrc} alt={alt} sx={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} />;
+}
+
 function SignatureCard({ signature }: { signature: SignatureField }) {
   const [previewFailed, setPreviewFailed] = useState(false);
   const { imageSrc, isLoading } = useAuthenticatedImageSrc(signature.src);
@@ -1400,6 +1409,14 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
   // The stored PDF opens in the in-app viewer. A plain link hands the file to
   // SharePoint, which serves it as a download rather than showing it.
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  // The Training Evaluation Form shows as its paper form; everything the paper
+  // does not print sits behind the (i) button, closed by default per submission.
+  const paperMode = item ? isTrainingEvaluationForm(item.listTitle) && Boolean(item.surveyJson) : false;
+  const [moreDetailsFor, setMoreDetailsFor] = useState<string | null>(null);
+  const showMoreDetails = !paperMode || (item !== null && moreDetailsFor === item.id);
+  const toggleMoreDetails = () => setMoreDetailsFor((current) => (item && current !== item.id ? item.id : null));
+  const paperQuestionNames = paperMode ? surveyQuestionNames(item?.surveyJson) : new Set<string>();
+  const paperDoc = paperMode && item ? paperDocumentFromSubmission(item, submissionData) : null;
   const pdfFilename = item ? `${item.listTitle || "Submission"}-${item.referenceNo || item.submissionId || item.id}.pdf` : "";
   // The experimental paper-form design, drawn on demand from the same row.
   // Never stored: the saved PDF keeps the standard design.
@@ -1429,7 +1446,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
     }));
 
   const signatureFields = entries
-    .filter(([key, value]) => (isSignatureField(key) || signatureFieldKeys.has(key)) && hasDisplayValue(value))
+    .filter(([key, value]) => (isSignatureField(key) || signatureFieldKeys.has(key)) && hasDisplayValue(value) && !paperQuestionNames.has(key))
     .map(([key, value]) => ({
       key,
       label: formatFieldName(key),
@@ -1443,7 +1460,8 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
     ? buildFormSubmissionSections(item.surveyJson, submissionData, {
         fallbackSectionTitle: "Submitted answers",
         formatFallbackLabel: formatFieldName,
-        shouldIncludeField: (key, value) => shouldSkipField(key, value) === false && collectLinks(value).length === 0,
+        shouldIncludeField: (key, value) =>
+          shouldSkipField(key, value) === false && collectLinks(value).length === 0 && !paperQuestionNames.has(key),
       })
     : [];
   const supportingDetails = item ? buildSupportingDetails(item, entries, renderedSignatureKeys) : [];
@@ -1535,6 +1553,26 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
             {item?.listTitle} · Reference {item?.referenceNo || item?.submissionId}
           </Typography>
         </Box>
+        <Stack direction="row" spacing={1}>
+        {paperMode && (
+          <IconButton
+            aria-label={showMoreDetails ? "Hide more details" : "More details"}
+            aria-pressed={showMoreDetails}
+            title="More details"
+            onClick={toggleMoreDetails}
+            size="small"
+            sx={{
+              width: 40,
+              height: 40,
+              color: showMoreDetails ? editorial.white : editorial.pmwBlueDark,
+              backgroundColor: showMoreDetails ? editorial.pmwBlue : editorial.paperSoft,
+              border: editorialHairline,
+              "&:hover": { backgroundColor: showMoreDetails ? editorial.pmwBlueDark : editorial.blueWash },
+            }}
+          >
+            <InfoIcon />
+          </IconButton>
+        )}
         <IconButton
           aria-label="Close submission details"
           onClick={onClose}
@@ -1552,13 +1590,24 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
         >
           <CloseIcon />
         </IconButton>
+        </Stack>
       </DialogTitle>
 
       <DialogContent sx={{ p: 0, backgroundColor: editorial.blueSoft }}>
         {item && (
           <Stack spacing={2} sx={{ p: { xs: 2, sm: 2.5 } }}>
+            {paperDoc && (
+              <PaperFormView doc={paperDoc} logoUrl="/logo-128.png" renderImage={(src, alt) => <AuthImage src={src} alt={alt} />} />
+            )}
+            {paperDoc && !showMoreDetails && (
+              <Button onClick={toggleMoreDetails} startIcon={<InfoIcon />} sx={{ alignSelf: "flex-start", textTransform: "none", fontWeight: 700 }}>
+                More details — reference, attachments, workflow history and other answers
+              </Button>
+            )}
+            {showMoreDetails && (
+            <>
             <Box>
-              <SectionTitle icon={<DocumentIcon />} title="Submission overview" />
+              <SectionTitle icon={<DocumentIcon />} title={paperDoc ? "More details" : "Submission overview"} />
               <DetailPanel>
                 <DetailRow fieldKey="formReference" label="Form ID">{formReference}</DetailRow>
                 <DetailRow fieldKey="submittedAt" label="Submitted">{submittedAt}</DetailRow>
@@ -1720,6 +1769,8 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                   </Grid>
                 )}
               </Box>
+            )}
+            </>
             )}
           </Stack>
         )}

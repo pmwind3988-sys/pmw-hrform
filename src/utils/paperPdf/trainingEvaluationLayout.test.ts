@@ -187,6 +187,11 @@ describe("Training Evaluation Part II", () => {
     expect(blocks.find((b) => b.kind === "signoff")).toMatchObject({ statement: HOD_STATEMENT, name: "Siti Aminah" });
   });
 
+  it("rules the submitter's comment only as far as its text runs", () => {
+    const comment = doc.sections.filter((s) => !s.layer).flatMap((s) => s.blocks).find((b) => b.kind === "long");
+    expect(comment).toMatchObject({ lines: 1 });
+  });
+
   it("prints the employee's signature large", () => {
     expect(doc.sections.flatMap((s) => s.blocks).find((b) => b.kind === "signature")).toMatchObject({ large: true });
   });

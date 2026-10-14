@@ -25,6 +25,9 @@ import { readTemplate } from "../utils/pdfTemplate/safeTemplate";
 import { rowsToHtml } from "../utils/matrixData";
 import { collectPreviewSections, countPreviewAnswers } from "../utils/submissionPreviewSections";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
+import PaperFormView from "../components/paper/PaperFormView";
+import { paperDocumentFromAnswers, surveyQuestionNames } from "../utils/paperPdf/submissionPaperView";
+import { isTrainingEvaluationForm } from "../utils/paperPdf/trainingEvaluationLayout";
 import ReviewerStyles from "../components/reviewer/ReviewerStyles";
 import ReviewerHeader from "../components/reviewer/ReviewerHeader";
 import StepCards from "../components/reviewer/StepCards";
@@ -379,6 +382,8 @@ export default function EvaluationPage() {
   const [rejecting, setRejecting] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [checkboxApproved, setCheckboxApproved] = useState(false);
+  // Training Evaluation: answers the paper form does not print, behind the (i) button.
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
 
   /**
@@ -924,6 +929,30 @@ export default function EvaluationPage() {
   const previewData = getSubmissionPreviewData(responseData);
   const previewSections = collectPreviewSections(surveyJson, previewData);
   const answerCount = previewSections.length > 0 ? countPreviewAnswers(previewSections) : Object.keys(previewData).length;
+  // The Training Evaluation Form shows Part I as its paper form; the HOD fills Part II below.
+  const paperDoc = surveyJson && isTrainingEvaluationForm(formTitle)
+    ? paperDocumentFromAnswers({
+      title: formTitle,
+      surveyJson,
+      responseData: previewData,
+      submittedBy,
+      submittedAt: valueToText(responseData?.SubmittedAt),
+    })
+    : null;
+  const paperQuestionNames = paperDoc ? surveyQuestionNames(surveyJson) : new Set<string>();
+  const extraAnswers = paperDoc
+    ? Object.fromEntries(Object.entries(previewData).filter(([key]) => !paperQuestionNames.has(key)))
+    : {};
+  // Stored images (signatures) were resolved per field; the paper view asks by the stored value.
+  const resolvedMedia = new Map<string, string>();
+  for (const [field, resolved] of Object.entries(mediaSrcByField)) {
+    const stored = previewData[field];
+    const storedList = Array.isArray(stored) ? stored : [stored];
+    const resolvedList = Array.isArray(resolved) ? resolved : [resolved];
+    storedList.forEach((value, i) => {
+      if (typeof value === "string" && resolvedList[i]) resolvedMedia.set(value, resolvedList[i]);
+    });
+  }
   const answersLeft = Math.max(0, evalRuntime.required - evalRuntime.answered);
   const isFinalStep = totalLayers > 0 ? effectiveLayerNumber >= totalLayers : true;
   const evalHint = evalValid
@@ -1089,6 +1118,47 @@ export default function EvaluationPage() {
         {/* Submission Data Preview */}
         {responseData && (
           <CollapsiblePanel title="Submission details" meta={`\u00b7 ${answerCount} ${answerCount === 1 ? "answer" : "answers"}`}>
+            {paperDoc ? (
+              <>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowMoreDetails((open) => !open)}
+                    aria-pressed={showMoreDetails}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36, padding: "6px 12px",
+                      border: `1px solid ${R.line}`, borderRadius: 6, background: showMoreDetails ? R.navyTint : "#fff",
+                      color: R.ink, font: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    <span aria-hidden style={{ display: "inline-flex", width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${R.ink}`, alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, fontStyle: "italic", fontFamily: "Georgia, serif" }}>i</span>
+                    {showMoreDetails ? "Hide more details" : "More details"}
+                  </button>
+                </div>
+                {showMoreDetails && (
+                  <div style={{ marginBottom: 12 }}>
+                    {Object.keys(extraAnswers).length > 0 ? (
+                      <ReadOnlySubmissionPreview
+                        variant="reviewer"
+                        surveyJson={null}
+                        data={extraAnswers}
+                        accessToken={token}
+                        mediaSrcByField={mediaSrcByField}
+                        fallbackData={extraAnswers}
+                      />
+                    ) : (
+                      <div style={{ fontSize: 13, color: R.muted }}>Nothing else was recorded beyond what the form shows.</div>
+                    )}
+                  </div>
+                )}
+                <PaperFormView
+                  doc={paperDoc}
+                  firstPartOnly
+                  logoUrl={logoUrl || "/logo-128.png"}
+                  renderImage={(src, alt) => <img src={resolvedMedia.get(src) ?? src} alt={alt} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} />}
+                />
+              </>
+            ) : (
             <ReadOnlySubmissionPreview
               variant="reviewer"
               surveyJson={surveyJson}
@@ -1097,6 +1167,7 @@ export default function EvaluationPage() {
               mediaSrcByField={mediaSrcByField}
               fallbackData={previewData}
             />
+            )}
 
             {/* Matrix Tables — from child lists */}
             {!surveyJson && Object.keys(matrixTables).length > 0 && (

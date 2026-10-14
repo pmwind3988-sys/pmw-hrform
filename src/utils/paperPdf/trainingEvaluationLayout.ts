@@ -337,7 +337,11 @@ export function applyTrainingEvaluationLayout(doc: PaperDocument): PaperDocument
     for (const section of part) {
       // The employee table needs no heading above it.
       if (section.level === 2 && section.blocks[0]?.kind === "grid") section.heading = "";
-      for (const block of section.blocks) if (block.kind === "signature") block.large = true;
+      for (const block of section.blocks) {
+        if (block.kind === "signature") block.large = true;
+        // A comment prints on as many ruled lines as its text needs, one when it is short.
+        if (block.kind === "long") block.lines = 1;
+      }
     }
   });
 
