@@ -66,7 +66,10 @@ export async function fetchPdfBlob(
         continue;
       }
 
-      return { ok: true, blob };
+      // SharePoint often labels the file application/octet-stream. A blob
+      // with that type shown in an iframe is not rendered: the browser saves
+      // it under the blob id, with no .pdf on the end. Re-label it as a PDF.
+      return { ok: true, blob: blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" }) };
     } catch {
       lastDetail = "";
     }

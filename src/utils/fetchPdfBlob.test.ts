@@ -135,4 +135,18 @@ describe("fetchPdfBlob", () => {
     expect(result.ok).toBe(true);
     expect(fetcher.mock.calls[0][0] as string).toContain("/_api/web/getFileByServerRelativePath");
   });
+
+  it("labels a file SharePoint sends as octet-stream as a PDF, so it renders instead of downloading", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => ({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob([new Uint8Array(512)], { type: "application/octet-stream" }),
+    }) as unknown as Response);
+    const result = await fetchPdfBlob(FILE, "token-1", fetcher, SITE);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.blob.type).toBe("application/pdf");
+      expect(result.blob.size).toBe(512);
+    }
+  });
 });

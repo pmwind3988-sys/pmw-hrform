@@ -36,6 +36,7 @@ import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../..
 import { useMsal } from "@azure/msal-react";
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
 import StatusBadge from "./StatusBadge";
+import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import SignOffBlock from "../reviewer/SignOffBlock";
 import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../../utils/signOff";
@@ -1394,6 +1395,10 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
 
   const pdfLink = entries.find(([key, value]) => isPdfField(key) && collectLinks(value).length > 0);
   const generatedPdf = pdfLink ? collectLinks(pdfLink[1])[0] : null;
+  // The stored PDF opens in the in-app viewer. A plain link hands the file to
+  // SharePoint, which serves it as a download rather than showing it.
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const pdfFilename = item ? `${item.listTitle || "Submission"}-${item.referenceNo || item.submissionId || item.id}.pdf` : "";
 
   const documentGroups = entries
     .filter(([key, value]) => !isPdfField(key) && !isSignatureField(key) && !signatureFieldKeys.has(key) && !SYSTEM_FIELDS.has(key) && collectLinks(value).length > 0)
@@ -1429,6 +1434,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
   const submittedAt = formatDashboardDateTime(item?.submittedAt, "Not available");
 
   return (
+    <>
     <Dialog
       open={item !== null}
       onClose={onClose}
@@ -1548,7 +1554,14 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                 {selectedCompany && <DetailRow fieldKey="company" label="Company">{selectedCompany}</DetailRow>}
                 <DetailRow fieldKey="generatedPdf" label="Submission PDF">
                   {generatedPdf ? (
-                    <ValueLink link={generatedPdf} />
+                    <MuiLink
+                      component="button"
+                      type="button"
+                      onClick={() => setPdfPreviewOpen(true)}
+                      sx={{ color: editorial.pmwBlueDark, fontWeight: 700, textDecorationThickness: "2px", textUnderlineOffset: "3px", overflowWrap: "anywhere", textAlign: "left" }}
+                    >
+                      {generatedPdf.label}
+                    </MuiLink>
                   ) : (
                     <Typography variant="body2" sx={{ color: editorial.muted }}>
                       Not generated yet
@@ -1718,9 +1731,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
         </Box>
         {generatedPdf && (
           <Button
-            component="a"
-            href={generatedPdf.url}
-            {...externalProps(generatedPdf.url)}
+            onClick={() => setPdfPreviewOpen(true)}
             variant="outlined"
             startIcon={<PdfIcon />}
             sx={{
@@ -1749,5 +1760,13 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
         </Button>
       </DialogActions>
     </Dialog>
+    <PdfPreviewDialog
+      open={Boolean(item && generatedPdf && pdfPreviewOpen)}
+      url={generatedPdf?.url ?? ""}
+      filename={pdfFilename}
+      siteUrl={SP_SITE_URL}
+      onClose={() => setPdfPreviewOpen(false)}
+    />
+    </>
   );
 }
