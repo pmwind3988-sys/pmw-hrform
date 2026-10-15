@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildManualPaperSubmissionEmail } from "../manualPaperEmail";
-import { manualPaperDesign } from "../paperPdf/trainingEvaluationLayout";
+import { manualPaperDesign } from "../paperPdf/paperForms";
 
 describe("manual / paper workflow notice", () => {
   const notice = buildManualPaperSubmissionEmail({
@@ -28,8 +28,11 @@ describe("manual / paper workflow notice", () => {
 });
 
 describe("the PDF a manual step prints", () => {
-  it("is the paper form for the Training Evaluation Form only", () => {
+  it("is the paper form for the forms that have one", () => {
     expect(manualPaperDesign("Training Evaluation Form")).toEqual({ design: "paper" });
+    expect(manualPaperDesign("Training Attendance Form")).toEqual({ design: "paper" });
+    expect(manualPaperDesign("Training Needs Analysis")).toEqual({ design: "paper" });
+    expect(manualPaperDesign("Training Requisition Form")).toEqual({ design: "paper" });
     expect(manualPaperDesign("Leave Application")).toEqual({});
   });
 });

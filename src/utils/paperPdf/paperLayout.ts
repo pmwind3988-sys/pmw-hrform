@@ -17,7 +17,11 @@ import { DEFAULT_COMPANIES } from "../publishDefaults";
 import { formatPdfFieldValue } from "../pdfFieldFormatting";
 import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
 import type { PdfFormData, PdfLayerResult } from "../FormPdfDocument";
-import { applyTrainingEvaluationLayout, isTrainingEvaluationForm } from "./trainingEvaluationLayout";
+import { applyTrainingEvaluationLayout } from "./trainingEvaluationLayout";
+import { paperFormVariant, type PaperVariant } from "./paperForms";
+import { buildTrainingAttendanceSections } from "./trainingAttendanceLayout";
+import { buildTrainingNeedsAnalysisSections } from "./trainingNeedsAnalysisLayout";
+import { buildTrainingRequisitionSections } from "./trainingRequisitionLayout";
 
 type El = Record<string, unknown>;
 
@@ -37,6 +41,33 @@ export interface PaperCell {
   wide?: boolean;
   /** Printed one per line instead of `text` (a day-by-day schedule). */
   lines?: string[];
+  /** Printed before the answer, as "RM" before an amount. */
+  prefix?: string;
+  /** A signature written on the line, in a `lines` block. */
+  image?: string;
+}
+
+/** One cell of a roster table: text, a signature, or tick boxes. */
+export interface RosterCell {
+  text?: string;
+  image?: string;
+  options?: PaperOption[];
+  selected?: string[];
+}
+
+/** One signatory of a form signed side by side, as "Request by: / Applicant / Name: / Date:". */
+export interface SignoffColumn {
+  caption: string;
+  /** Printed under the signature line ("Applicant"); empty for none. */
+  role: string;
+  name: string;
+  /** Printed on its own line only when `positionLabel` is set ("Designation"). */
+  position: string;
+  positionLabel?: string;
+  date: string;
+  signature: string;
+  rejected: boolean;
+  remarks: string;
 }
 
 export type PaperBlock =
@@ -55,7 +86,15 @@ export type PaperBlock =
   | { kind: "images"; label: string; images: string[] }
   | { kind: "table"; field: FormSubmissionField }
   | { kind: "note"; text: string }
-  | { kind: "signoff"; statement: string; name: string; position: string; date: string; signature: string; remarks: string; rejected: boolean; large?: boolean };
+  | { kind: "signoff"; statement: string; name: string; position: string; date: string; signature: string; remarks: string; rejected: boolean; large?: boolean }
+  /** "Label : answer" on a ruled line, one per row, as the Word form's top lines. */
+  | { kind: "lines"; items: PaperCell[] }
+  /** "Label | : | answer" rows, one or two pairs to a row; `shaded` fills the label cells. */
+  | { kind: "colonTable"; rows: PaperCell[][]; shaded?: boolean }
+  /** A ruled table with a row per person or item; `widths` are percentages. */
+  | { kind: "roster"; columns: string[]; widths: number[]; rows: RosterCell[][] }
+  /** Signatories side by side; `boxed` draws the outer border only. */
+  | { kind: "signoffRow"; columns: SignoffColumn[]; boxed?: boolean };
 
 export interface PaperSection {
   /** 1 = a PART (a page of the form, or a workflow step); 2 = a lettered panel inside it. */
@@ -83,7 +122,7 @@ export interface PaperDocument {
   header: PaperHeader;
   sections: PaperSection[];
   /** A form with a layout of its own; absent for the general paper layout. */
-  variant?: "training-evaluation";
+  variant?: PaperVariant;
 }
 
 export const PAPER_ORGANISATION = "PMW INTERNATIONAL BERHAD";
@@ -454,7 +493,7 @@ function isManualLayer(layer: PdfLayerResult): boolean {
   return layer.status.trim().toLowerCase().startsWith("manual ");
 }
 
-function signOffBlock(layer: PdfLayerResult, fmtDay: (iso: string) => string): PaperBlock {
+function signOffBlock(layer: PdfLayerResult, fmtDay: (iso: string) => string): Extract<PaperBlock, { kind: "signoff" }> {
   const verdict = isManualLayer(layer) ? null : signOffVerdictFromStatus(layer.status);
   const decided = verdict !== null;
   const stepName = layer.layerTitle || `Step ${layer.layerNumber}`;
@@ -470,6 +509,55 @@ function signOffBlock(layer: PdfLayerResult, fmtDay: (iso: string) => string): P
     rejected: verdict === "rejected",
   };
 }
+
+// ── A form's own layout ─────────────────────────────────────────────────────
+
+/**
+ * What a form's own layout (trainingAttendanceLayout.ts and the like) is
+ * handed: the submission, and the general layout's readers, so it can place
+ * each answer where its Word form prints it.
+ */
+export interface PaperKit {
+  data: PdfFormData;
+  fmtDay: (iso: string) => string;
+  /** Every question of the form, panels flattened, in the order asked. */
+  questions: El[];
+  /** The answer to a question, through SharePoint's shortened column names. */
+  read: ReturnType<typeof createElementAnswerReader>;
+  /** An answer as printed ("12/10/2026 09:00 AM", "1,250.00"). */
+  formatValue: (element: El, value: unknown) => string;
+  optionsFor: (element: El) => PaperOption[] | null;
+  selectedOptions: (value: unknown, options: PaperOption[]) => string[];
+  imageSources: (value: unknown) => string[];
+  /** The company the submission was filed under. */
+  selectedCompany: string;
+  /** The day the form was submitted, as printed beside the submitter's signature. */
+  signatureDate: string;
+  /** A workflow step's sign-off: who decided, with what, and when. */
+  signOff: (layer: PdfLayerResult) => Extract<PaperBlock, { kind: "signoff" }>;
+  /**
+   * The general layout of the questions a form's layout did not place, so an
+   * answer added to the form after its layout was written is never dropped.
+   */
+  leftovers: (placed: Set<string>) => PaperSection[];
+  /** An evaluation step's questions and answers, laid out as the general layout does. */
+  stepAnswers: (layer: PdfLayerResult) => PaperSection[];
+}
+
+function flattenQuestions(elements: El[]): El[] {
+  return elements.flatMap((element) => {
+    const type = text(element.type).toLowerCase();
+    const children = MATRIX_TYPES.has(type) ? [] : childElements(element);
+    if (children.length > 0) return flattenQuestions(children);
+    return text(element.name) ? [element] : [];
+  });
+}
+
+const OWN_LAYOUTS: Partial<Record<PaperVariant, (kit: PaperKit) => PaperSection[]>> = {
+  "training-attendance": buildTrainingAttendanceSections,
+  "training-needs-analysis": buildTrainingNeedsAnalysisSections,
+  "training-requisition": buildTrainingRequisitionSections,
+};
 
 // ── Entry point ─────────────────────────────────────────────────────────────
 
@@ -543,6 +631,41 @@ export function buildPaperDocument(data: PdfFormData, options: PaperLayoutOption
   let part = 0;
   const pages = Array.isArray(surveyJson?.pages) ? surveyJson.pages : [];
   const signatureDate = meta.submittedAt ? options.fmtDay(meta.submittedAt) : "";
+
+  const variant = paperFormVariant(options.title);
+  const ownLayout = variant ? OWN_LAYOUTS[variant] : undefined;
+  if (variant && ownLayout) {
+    const pageElements = pages.flatMap((page) => (Array.isArray(page.elements) ? page.elements.filter(isRecord) : []));
+    const questions = flattenQuestions(pageElements);
+    const values = responseData ?? {};
+    const kit: PaperKit = {
+      data,
+      fmtDay: options.fmtDay,
+      questions,
+      read: createElementAnswerReader(values),
+      formatValue,
+      optionsFor,
+      selectedOptions,
+      imageSources,
+      selectedCompany,
+      signatureDate,
+      signOff: (layer) => signOffBlock(layer, options.fmtDay),
+      leftovers: (placed) => {
+        const rest = questions.filter((q) => !placed.has(text(q.name)));
+        if (rest.length === 0) return [];
+        return layoutPart("", rest, values, signatureDate)
+          .map((s) => ({ ...s, level: 2 as const }))
+          .filter((s) => s.blocks.length > 0);
+      },
+      stepAnswers: (layer) => {
+        const elements = (layer.evaluationSurveyElements ?? []).filter(isRecord);
+        if (layer.type !== "evaluation" || elements.length === 0) return [];
+        const heading = layer.layerTitle || `Evaluation (step ${layer.layerNumber})`;
+        return layoutPart(heading, elements, layer.evaluationFields ?? {}, "").map((s) => ({ ...s, level: 2 as const }));
+      },
+    };
+    return { header, sections: ownLayout(kit), variant };
+  }
   pages.forEach((page) => {
     const elements = Array.isArray(page.elements) ? page.elements.filter(isRecord) : [];
     if (elements.length === 0) return;
@@ -574,5 +697,5 @@ export function buildPaperDocument(data: PdfFormData, options: PaperLayoutOption
   }
 
   const doc: PaperDocument = { header, sections };
-  return isTrainingEvaluationForm(options.title) ? applyTrainingEvaluationLayout(doc) : doc;
+  return variant === "training-evaluation" ? applyTrainingEvaluationLayout(doc) : doc;
 }

@@ -14,7 +14,7 @@ import { buildPdfSectionContext } from "../pdfSections/context";
 import { fmtDate, fmtDay } from "../pdfSections/helpers";
 import { formatPdfDateTimeValue, formatPdfFieldValue } from "../pdfFieldFormatting";
 import type { PdfFormData } from "../FormPdfDocument";
-import { buildPaperDocument, type PaperBlock, type PaperCell, type PaperHeader, type PaperOption, type PaperSection } from "./paperLayout";
+import { buildPaperDocument, type PaperBlock, type PaperCell, type PaperHeader, type PaperOption, type PaperSection, type RosterCell, type SignoffColumn } from "./paperLayout";
 
 const INK = "#000000";
 const RULE = "#000000";
@@ -151,7 +151,8 @@ function CompanyColumns({ companies }: { companies: PaperHeader["companies"] }):
   );
 }
 
-function HeaderTable({ header, logo, twoColumnCompanies }: { header: PaperHeader; logo?: string; twoColumnCompanies?: boolean }): ReactElement {
+// Every paper form lists its companies in two columns, as the Word forms do.
+function HeaderTable({ header, logo, twoColumnCompanies = true }: { header: PaperHeader; logo?: string; twoColumnCompanies?: boolean }): ReactElement {
   return (
     <View>
       <View style={P.table}>
@@ -368,6 +369,138 @@ function Table({ block }: { block: Extract<PaperBlock, { kind: "table" }> }): Re
   );
 }
 
+/** A label that may carry a ✓, which Helvetica cannot print: the tick is drawn instead. */
+function TickLabel({ text, width }: { text: string; width: number }): ReactElement {
+  if (!text.includes("✓")) return <Text style={{ width }}>{text}</Text>;
+  const [before, after] = text.split("✓", 2);
+  return (
+    <View style={{ width, flexDirection: "row", alignItems: "center" }}>
+      <Text>{before}</Text><Tick size={8} /><Text>{after}</Text>
+    </View>
+  );
+}
+
+/** "Label : answer" on ruled lines, as the top of the Training Attendance Form. */
+function Lines({ block }: { block: Extract<PaperBlock, { kind: "lines" }> }): ReactElement {
+  return (
+    <View style={P.block}>
+      {block.items.map((item, i) => (
+        <View key={i} style={[P.lineRow, { marginBottom: 7 }]} wrap={false}>
+          <TickLabel text={item.label} width={96} />
+          <Text style={{ width: 10 }}>:</Text>
+          {item.options ? (
+            <View style={{ flexGrow: 1, flexBasis: 0 }}><InlineOptions options={item.options} selected={item.selected ?? []} /></View>
+          ) : (
+            <View style={[P.lineSlot, { flexGrow: 1, flexBasis: 0, width: "auto" }]}>
+              {item.image ? <Image style={P.sigImage} src={item.image} /> : <CellValue cell={item} />}
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** "Label | : | answer" rows with the answer on a line, as the Training Requisition Form. */
+function ColonTable({ block }: { block: Extract<PaperBlock, { kind: "colonTable" }> }): ReactElement {
+  // A label beside an answer of several lines sits at its top; otherwise label,
+  // colon and answer share the line the answer is written on.
+  const atTop = (cell: PaperCell) => Boolean(cell.lines) || cell.text.length > 110 || cell.text.includes("\n");
+  const label = (cell: PaperCell, width: string) => (
+    <View style={[{ width, paddingTop: 3, paddingBottom: 2, paddingHorizontal: 4, justifyContent: atTop(cell) ? "flex-start" : "flex-end" }, block.shaded ? { backgroundColor: BAND } : {}]}>
+      <Text>{cell.label}</Text>
+    </View>
+  );
+  const value = (cell: PaperCell, width: string) => (
+    <View style={{ width, flexDirection: "row", alignItems: "flex-end", borderBottomWidth: cell.options ? 0 : 0.6, borderColor: INK, paddingHorizontal: 3, paddingTop: 3, paddingBottom: 2, minHeight: 15 }}>
+      {cell.prefix ? <Text style={{ marginRight: 4 }}>{cell.prefix}</Text> : null}
+      <View style={{ flexGrow: 1, flexBasis: 0 }}><CellValue cell={cell} /></View>
+    </View>
+  );
+  return (
+    <View style={P.block}>
+      {block.rows.map((row, i) => (
+        <View key={i} style={[P.row, { marginBottom: 3, alignItems: "stretch" }]} wrap={false}>
+          {row.flatMap((cell, j) => [
+            <View key={`${j}l`} style={{ width: j === 0 ? "24%" : "16%" }}>{label(cell, "100%")}</View>,
+            <View key={`${j}c`} style={{ width: 10, paddingTop: 3, paddingBottom: 2, justifyContent: atTop(cell) ? "flex-start" : "flex-end" }}><Text>:</Text></View>,
+            <View key={`${j}v`} style={{ flexGrow: 1, flexBasis: 0, marginRight: j === 0 && row.length > 1 ? 10 : 0 }}>{value(cell, "100%")}</View>,
+          ])}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function RosterValue({ cell }: { cell: RosterCell }): ReactElement {
+  if (cell.image) return <Image style={{ height: 24, maxWidth: 70, objectFit: "contain" }} src={cell.image} />;
+  if (cell.options) {
+    // Stacked, one box per line, as each cell of the Word form's table lists them.
+    return (
+      <View>
+        {cell.options.map((o) => (
+          <View key={o.value} style={[P.inlineOption, { marginRight: 0 }]}>
+            <Box checked={(cell.selected ?? []).includes(o.value)} />
+            <Text style={(cell.selected ?? []).includes(o.value) ? P.bold : {}}>{o.label}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
+  return <Text style={P.value}>{cell.text || " "}</Text>;
+}
+
+/** A ruled table with a row per person or item: the attendance register, the needs table. */
+function rosterRows(block: Extract<PaperBlock, { kind: "roster" }>, key: string): ReactElement[] {
+  const width = (i: number) => `${block.widths[i] ?? 100 / block.columns.length}%`;
+  const head = (
+    <View key={`${key}-head`} style={[P.row, P.tableEdge, P.tableTop, P.tickHeadBand]} wrap={false} minPresenceAhead={30}>
+      {block.columns.map((label, i) => (
+        <View key={i} style={[P.cell, { width: width(i), alignItems: "center" }]}><Text style={[P.bold, P.center]}>{label}</Text></View>
+      ))}
+    </View>
+  );
+  const rows = block.rows.map((row, r) => (
+    <View key={`${key}-${r}`} style={[P.row, P.tableEdge, r === block.rows.length - 1 ? P.block : {}]} wrap={false}>
+      {row.map((cell, i) => (
+        <View key={i} style={[P.cell, { width: width(i), minHeight: 20 }, i === 0 && /^\d+$/.test(cell.text ?? "") ? { alignItems: "center" } : {}]}>
+          <RosterValue cell={cell} />
+        </View>
+      ))}
+    </View>
+  ));
+  return [head, ...rows];
+}
+
+/** Signatories side by side, each with a signature line, role, name and date. */
+function SignoffRow({ block }: { block: Extract<PaperBlock, { kind: "signoffRow" }> }): ReactElement {
+  const rejected = block.columns.filter((c) => c.rejected && c.remarks);
+  const field = (label: string, value: string) => (
+    <View style={[P.row, { alignItems: "flex-end", marginTop: 5 }]}>
+      <Text style={{ width: 52 }}>{label}</Text>
+      <View style={[P.lineSlot, { flexGrow: 1, flexBasis: 0, width: "auto" }]}><Text style={P.value}>{value || " "}</Text></View>
+    </View>
+  );
+  const column = (c: SignoffColumn, i: number) => (
+    <View key={i} style={{ flexGrow: 1, flexBasis: 0, paddingHorizontal: 6, paddingVertical: 6 }}>
+      <Text style={[P.bold, c.rejected ? P.rejected : {}]}>{c.caption}{c.rejected ? " (Rejected)" : ""}</Text>
+      <View style={[P.lineSlot, { width: "100%", minHeight: 40, marginTop: 4 }]}>
+        {c.signature ? <Image style={P.sigImage} src={c.signature} /> : <Text> </Text>}
+      </View>
+      {c.role ? <Text style={{ marginTop: 2 }}>{c.role}</Text> : null}
+      {field("Name:", c.name)}
+      {c.positionLabel ? field(`${c.positionLabel}:`, c.position) : null}
+      {field("Date:", c.date)}
+    </View>
+  );
+  return (
+    <View wrap={false} style={[P.block, { marginTop: 10 }]}>
+      <View style={[P.row, block.boxed ? { borderWidth: 0.7, borderColor: RULE } : {}]}>{block.columns.map(column)}</View>
+      {rejected.map((c, i) => <Text key={i} style={[P.remarks, P.rejected, { marginTop: 4 }]}>{c.caption.replace(/:$/, "")} {c.role} — Remarks: {c.remarks}</Text>)}
+    </View>
+  );
+}
+
 function SignOff({ block }: { block: Extract<PaperBlock, { kind: "signoff" }> }): ReactElement {
   return (
     <View wrap={false} style={{ marginTop: 6 }}>
@@ -434,6 +567,14 @@ function Block({ block }: { block: PaperBlock }): ReactElement | null {
       return <Text style={P.note}>{block.text}</Text>;
     case "signoff":
       return <SignOff block={block} />;
+    case "lines":
+      return <Lines block={block} />;
+    case "colonTable":
+      return <ColonTable block={block} />;
+    case "roster":
+      return <>{rosterRows(block, "roster")}</>;
+    case "signoffRow":
+      return <SignoffRow block={block} />;
     default:
       return null;
   }
@@ -451,6 +592,7 @@ function sectionElements(section: PaperSection, index: number): ReactElement[] {
   }
   section.blocks.forEach((block, i) => {
     if (block.kind === "ticks") out.push(...tickTableRows(block, `s${index}-b${i}`));
+    else if (block.kind === "roster") out.push(...rosterRows(block, `s${index}-b${i}`));
     else out.push(<Block key={`s${index}-b${i}`} block={block} />);
   });
   return out;
@@ -490,7 +632,7 @@ export default function PaperFormDocument(data: PdfFormData) {
   return (
     <Document>
       <Page size="A4" style={P.page}>
-        <HeaderTable header={paper.header} logo={ctx.effectiveLogoUrl} twoColumnCompanies={paper.variant === "training-evaluation"} />
+        <HeaderTable header={paper.header} logo={ctx.effectiveLogoUrl} />
         {paper.sections.flatMap(sectionElements)}
         <View style={P.footer} fixed>
           <Text>{footerNote}</Text>

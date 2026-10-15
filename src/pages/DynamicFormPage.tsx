@@ -59,7 +59,7 @@ import { buildWorkflowReviewLink } from "../utils/workflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { buildManualPaperSubmissionEmail } from "../utils/manualPaperEmail";
-import { manualPaperDesign } from "../utils/paperPdf/trainingEvaluationLayout";
+import { manualPaperDesign } from "../utils/paperPdf/paperForms";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 import {

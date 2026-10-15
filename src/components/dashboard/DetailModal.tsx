@@ -40,7 +40,7 @@ import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import { buildPaperDesignPdf } from "../../utils/submissionPdfData";
 import PaperFormView from "../paper/PaperFormView";
 import { paperDocumentFromSubmission, surveyAnswerKeys } from "../../utils/paperPdf/submissionPaperView";
-import { isTrainingEvaluationForm } from "../../utils/paperPdf/trainingEvaluationLayout";
+import { hasPaperForm } from "../../utils/paperPdf/paperForms";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import SignOffBlock from "../reviewer/SignOffBlock";
 import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../../utils/signOff";
@@ -1409,9 +1409,9 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
   // The stored PDF opens in the in-app viewer. A plain link hands the file to
   // SharePoint, which serves it as a download rather than showing it.
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
-  // The Training Evaluation Form shows as its paper form; everything the paper
+  // A form with a paper layout shows as its paper form; everything the paper
   // does not print sits behind the (i) button, closed by default per submission.
-  const paperMode = item ? isTrainingEvaluationForm(item.listTitle) && Boolean(item.surveyJson) : false;
+  const paperMode = item ? hasPaperForm(item.listTitle) && Boolean(item.surveyJson) : false;
   const [moreDetailsFor, setMoreDetailsFor] = useState<string | null>(null);
   const showMoreDetails = !paperMode || (item !== null && moreDetailsFor === item.id);
   const toggleMoreDetails = () => setMoreDetailsFor((current) => (item && current !== item.id ? item.id : null));

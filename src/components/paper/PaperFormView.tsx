@@ -3,11 +3,11 @@
  * prints: the same layout PaperFormDocument.tsx draws into the PDF, from the
  * same `PaperDocument`, so the screen and the printout never disagree.
  *
- * Used for the Training Evaluation Form (see utils/paperPdf/submissionPaperView.ts).
+ * Used for every form with a paper layout of its own (utils/paperPdf/paperForms.ts).
  */
 import type { ReactNode } from "react";
 import { Box, Typography } from "@mui/material";
-import type { PaperBlock, PaperCell, PaperDocument, PaperHeader, PaperOption, PaperSection } from "../../utils/paperPdf/paperLayout";
+import type { PaperBlock, PaperCell, PaperDocument, PaperHeader, PaperOption, PaperSection, RosterCell, SignoffColumn } from "../../utils/paperPdf/paperLayout";
 
 const INK = "#111111";
 const RULE = "#333333";
@@ -51,15 +51,17 @@ function Options({ options, selected }: { options: PaperOption[]; selected: stri
   );
 }
 
-const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" } as const;
+// Sizes as px strings: the sx prop reads a bare 1 as 100%, which stretched every hidden label across the page.
+const visuallyHidden = { position: "absolute", width: "1px", height: "1px", margin: "-1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 
 function CellValue({ cell }: { cell: PaperCell }) {
   if (cell.options) return <Options options={cell.options} selected={cell.selected ?? []} />;
-  if (cell.lines) return <>{cell.lines.map((line) => <Box key={line} sx={valueSx}>{line}</Box>)}</>;
+  if (cell.lines) return <Box sx={{ display: "flex", flexDirection: "column" }}>{cell.lines.map((line) => <Box key={line} sx={valueSx}>{line}</Box>)}</Box>;
   return <Box component="span" sx={{ ...valueSx, whiteSpace: "pre-line" }}>{cell.text}</Box>;
 }
 
-function Header({ header, logoUrl, twoColumns }: { header: PaperHeader; logoUrl?: string; twoColumns: boolean }) {
+// Every paper form lists its companies in two columns, as the Word forms do.
+function Header({ header, logoUrl, twoColumns = true }: { header: PaperHeader; logoUrl?: string; twoColumns?: boolean }) {
   const half = Math.ceil(header.companies.length / 2);
   const companyRows = twoColumns
     ? Array.from({ length: half }, (_, i) => [header.companies[i], header.companies[i + half]])
@@ -207,6 +209,47 @@ function Line({ label, children, wide = 230 }: { label: string; children: ReactN
   );
 }
 
+function RosterValue({ cell, renderImage }: { cell: RosterCell; renderImage: (src: string, alt: string) => ReactNode }) {
+  if (cell.image) return <Box sx={{ height: 40, display: "flex", alignItems: "center" }}>{renderImage(cell.image, "Signature")}</Box>;
+  if (cell.options) {
+    return (
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+        {cell.options.map((o) => {
+          const on = (cell.selected ?? []).includes(o.value);
+          return (
+            <Box component="span" key={o.value} sx={{ display: "inline-flex", alignItems: "center", fontWeight: on ? 700 : 400, whiteSpace: "nowrap" }}>
+              <Box11 checked={on} />{o.label}
+              <Box component="span" sx={visuallyHidden}>{on ? " (selected)" : ""}</Box>
+            </Box>
+          );
+        })}
+      </Box>
+    );
+  }
+  return <Box component="span" sx={{ ...valueSx, whiteSpace: "pre-line" }}>{cell.text}</Box>;
+}
+
+function SignoffColumnView({ column, renderImage }: { column: SignoffColumn; renderImage: (src: string, alt: string) => ReactNode }) {
+  const field = (label: string, value: string) => (
+    <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1, mt: 1 }}>
+      <Box sx={{ minWidth: 84 }}>{label}</Box>
+      <Box sx={{ flex: 1, minWidth: 0, borderBottom: `1px solid ${RULE}`, minHeight: 20, ...valueSx }}>{value}</Box>
+    </Box>
+  );
+  return (
+    <Box sx={{ flex: "1 1 200px", minWidth: 0, p: 1.25 }}>
+      <Box sx={{ fontWeight: 700, color: column.rejected ? "#b3261e" : INK }}>{column.caption}{column.rejected ? " (Rejected)" : ""}</Box>
+      <Box sx={{ borderBottom: `1px solid ${RULE}`, height: 64, mt: 0.5, display: "flex", alignItems: "flex-end" }}>
+        {column.signature ? renderImage(column.signature, `${column.caption} signature`) : null}
+      </Box>
+      {column.role ? <Box sx={{ mt: 0.25 }}>{column.role}</Box> : null}
+      {field("Name:", column.name)}
+      {column.positionLabel ? field(`${column.positionLabel}:`, column.position) : null}
+      {field("Date:", column.date)}
+    </Box>
+  );
+}
+
 function Block({ block, renderImage }: { block: PaperBlock; renderImage: (src: string, alt: string) => ReactNode }) {
   switch (block.kind) {
     case "grid":
@@ -276,6 +319,72 @@ function Block({ block, renderImage }: { block: PaperBlock; renderImage: (src: s
           </Box>
         </Box>
       );
+    case "lines":
+      return (
+        <Box sx={{ mb: 1.5 }}>
+          {block.items.map((item, i) => (
+            <Box key={i} sx={{ display: "flex", alignItems: "flex-end", gap: 1, mb: 1 }}>
+              <Box sx={{ minWidth: 150 }}>{item.label}</Box>
+              <Box>:</Box>
+              <Box sx={{ flex: 1, minWidth: 0, borderBottom: item.options ? "none" : `1px solid ${RULE}`, minHeight: 22 }}>
+                {item.image ? <Box sx={{ height: 44, display: "flex", alignItems: "flex-end" }}>{renderImage(item.image, item.label)}</Box> : <CellValue cell={item} />}
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      );
+    case "colonTable":
+      return (
+        <Box sx={{ mb: 1.5 }}>
+          {block.rows.map((row, i) => (
+            <Box key={i} sx={{ display: "flex", flexWrap: "wrap", columnGap: 2, rowGap: 0.75, mb: 0.75 }}>
+              {row.map((cell, j) => (
+                <Box key={j} sx={{ display: "flex", alignItems: "flex-end", gap: 1, flex: row.length > 1 ? "1 1 260px" : "1 1 100%", minWidth: 0 }}>
+                  <Box sx={{ minWidth: 150, px: 0.5, py: 0.25, alignSelf: "stretch", display: "flex", alignItems: "flex-end", backgroundColor: block.shaded ? BAND : "transparent" }}>{cell.label}</Box>
+                  <Box>:</Box>
+                  <Box sx={{ flex: 1, minWidth: 0, display: "flex", gap: 0.75, alignItems: "flex-end", borderBottom: cell.options ? "none" : `1px solid ${RULE}`, minHeight: 22 }}>
+                    {cell.prefix ? <span>{cell.prefix}</span> : null}
+                    <CellValue cell={cell} />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          ))}
+        </Box>
+      );
+    case "roster":
+      return (
+        <Box sx={{ overflowX: "auto", mb: 1.5 }}>
+          <Box component="table" sx={{ ...tableSx, tableLayout: "fixed" }}>
+            <colgroup>{block.widths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
+            <thead>
+              <tr>{block.columns.map((label, i) => <Box component="th" key={i} sx={{ ...cellSx, backgroundColor: BAND, fontWeight: 700, textAlign: "center" }}>{label}</Box>)}</tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, r) => (
+                <tr key={r}>
+                  {row.map((cell, i) => (
+                    <Box component="td" key={i} sx={{ ...cellSx, height: 34, textAlign: i === 0 && /^\d+$/.test(cell.text ?? "") ? "center" : "left" }}>
+                      <RosterValue cell={cell} renderImage={renderImage} />
+                    </Box>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </Box>
+        </Box>
+      );
+    case "signoffRow":
+      return (
+        <Box sx={{ mt: 2, mb: 1.5 }}>
+          <Box sx={{ display: "flex", flexWrap: "wrap", border: block.boxed ? `1px solid ${RULE}` : "none" }}>
+            {block.columns.map((column, i) => <SignoffColumnView key={i} column={column} renderImage={renderImage} />)}
+          </Box>
+          {block.columns.filter((c) => c.rejected && c.remarks).map((c, i) => (
+            <Box key={i} sx={{ color: "#b3261e", mt: 1 }}>{c.caption.replace(/:$/, "")} {c.role} — Remarks: {c.remarks}</Box>
+          ))}
+        </Box>
+      );
     default:
       return null;
   }
@@ -316,7 +425,7 @@ export default function PaperFormView({ doc, firstPartOnly = false, logoUrl, ren
         "& table": { minWidth: 560 },
       }}
     >
-      <Header header={doc.header} logoUrl={logoUrl} twoColumns={doc.variant === "training-evaluation"} />
+      <Header header={doc.header} logoUrl={logoUrl} />
       {sections.map((section, i) => (
         <Box key={i}>
           {section.newPage ? <Box aria-hidden sx={{ borderTop: "2px dashed #9aa4ae", my: 3 }} /> : null}

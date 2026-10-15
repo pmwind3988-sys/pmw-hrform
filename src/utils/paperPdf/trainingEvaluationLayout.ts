@@ -26,15 +26,6 @@ export function isTrainingEvaluationForm(title: string): boolean {
   return /\btraining\s+evaluation\b/i.test(title);
 }
 
-/**
- * The PDF design a manual/paper step prints with: a Training Evaluation goes
- * out as its paper form, ready to complete by hand; any other form keeps the
- * design it was published with.
- */
-export function manualPaperDesign(formTitle: string): { design?: "paper" } {
-  return isTrainingEvaluationForm(formTitle) ? { design: "paper" } : {};
-}
-
 /** The Word form's wording, used when the form asks the same number of questions. */
 export const CONTENTS_ITEMS = [
   "The training room and facilities were adequate and comfortable",
@@ -138,6 +129,20 @@ export function dailySchedule(start: string, end: string): string[] | null {
     out.push(`Day ${n}: ${calendarDay(day)}, ${hours}`);
   }
   return out;
+}
+
+/**
+ * A course's dates and hours as a paper form writes them in its Date and Time
+ * boxes: "12/10/2026" or "12/10/2026 – 13/10/2026", and "9:00 AM – 5:00 PM".
+ * Null when either end cannot be read as a date and time.
+ */
+export function courseTimes(start: string, end: string): { date: string; time: string } | null {
+  const from = readStamp(start);
+  const to = readStamp(end);
+  if (!from) return null;
+  if (!to) return { date: calendarDay(from.day), time: clock(from.minutes) };
+  const date = to.day === from.day ? calendarDay(from.day) : `${calendarDay(from.day)} – ${calendarDay(to.day)}`;
+  return { date, time: `${clock(from.minutes)} – ${clock(to.minutes)}` };
 }
 
 // ── The employee table ──────────────────────────────────────────────────────

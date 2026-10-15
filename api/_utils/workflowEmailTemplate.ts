@@ -74,6 +74,8 @@ export function buildRequestGuide(params: {
   sender?: string;
 }): WorkflowEmailGuide {
   const trainingEvaluation = /\btraining\s+evaluation\b/i.test(params.formTitle);
+  // Approved on the paper form's sign-off: the approver signs on its line.
+  const paperApproval = /\btraining\s+(needs?\s+analysis|requisition)\b/i.test(params.formTitle);
   const signIn = "Sign in with your usual PMW Microsoft account (the one for Outlook).";
   const steps = params.layerType === "evaluation"
     ? [
@@ -88,7 +90,9 @@ export function buildRequestGuide(params: {
       `Press **${params.buttonLabel}** above.`,
       signIn,
       "Read the submitted form.",
-      "Press **Approve request**, or **Reject** with a reason.",
+      paperApproval
+        ? "Sign on the line and press **Approve request**, or **Reject** with a reason."
+        : "Press **Approve request**, or **Reject** with a reason.",
     ];
   const sender = (params.sender || "").trim() || DEFAULT_HR_FORM_SENDER;
   return {

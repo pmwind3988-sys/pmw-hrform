@@ -23,3 +23,8 @@
 - Keep these components behaviour-free. Decision logic, validation, access checks and API calls stay in `EvaluationPage.tsx`.
 - Inter is already loaded app-wide (`src/index.css`) and the font hosts are allowed in both CSPs (`vercel.json` and `index.html`); adding another font family means editing both.
 - "Note to file" from the prototype is not built: the decision API has no note field.
+
+## Paper approval sign-off (Training Needs Analysis, Training Requisition)
+- On a form where `hasPaperApproval(title)` (`src/utils/paperPdf/paperForms.ts`), an approval step is signed as the Word form signs it: `src/components/paper/PaperApprovalSignOff.tsx` replaces the "I approve" checkbox and the sign-off block. The approver signs on the Signature line (required, whatever the step's `confirmationType`), under the caption the paper form gives that step (`paperApprovalLabels`: Requisition "Recommend by:" / "Recommend/Approve by:" / "Approve by:" by position in the branch; Needs Analysis "Approved by GHRH:").
+- Name and position come locked from the directory; "Edit name and position" unlocks them and they are sent as `signOff`, which `api/evaluate.ts` stamps as `L{n}_ActedByName/Position`. The date is not editable: an approval keeps no written date of its own (only evaluations store `EvaluationData.signOff.date`).
+- The submission above shows as its paper form with the steps signed before this one (`previousPaperLayers`; names and dates, no signature images), and after approving the finished paper form is shown under the success card.

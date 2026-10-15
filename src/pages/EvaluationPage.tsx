@@ -30,6 +30,9 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import PaperPartTwoInput, { supportsPaperPartTwo, type PaperSignOff } from "../components/paper/PaperPartTwoInput";
 import { paperDocumentFromAnswers, surveyAnswerKeys } from "../utils/paperPdf/submissionPaperView";
 import { isTrainingEvaluationForm } from "../utils/paperPdf/trainingEvaluationLayout";
+import { hasPaperApproval, hasPaperForm } from "../utils/paperPdf/paperForms";
+import PaperApprovalSignOff, { paperApprovalLabels } from "../components/paper/PaperApprovalSignOff";
+import type { PdfLayerResult } from "../utils/FormPdfDocument";
 import ReviewerStyles from "../components/reviewer/ReviewerStyles";
 import ReviewerHeader from "../components/reviewer/ReviewerHeader";
 import StepCards from "../components/reviewer/StepCards";
@@ -929,6 +932,24 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
     );
   }
 
+  // A matrix keeps its rows in a child list; the paper form prints them from here.
+  const matrixAnswers: Record<string, unknown> = Object.fromEntries(
+    Object.entries(matrixTables)
+      .filter(([, entry]) => entry.rows.length > 0)
+      .map(([field, entry]) => [`${field}_childRows`, { rows: entry.rows }]),
+  );
+  // The steps signed before this one, for a paper form that prints every signatory.
+  const previousPaperLayers: PdfLayerResult[] = previousResults.map((pr) => ({
+    layerNumber: Number(pr.layerNumber),
+    type: "approval",
+    status: valueToText(pr.status),
+    email: valueToText(pr.actedBy) || valueToText(pr.email),
+    signedAt: valueToText(pr.signedAt) || undefined,
+    signerName: valueToText(pr.actedByName) || undefined,
+    signerPosition: valueToText(pr.actedByPosition) || undefined,
+    layerTitle: valueToText(pr.title) || undefined,
+  }));
+
   if (actionState === "success") {
     const doneStep = currentLayer?.layerNumber || displayLayerNumber;
     const isRejected = submitAction === "reject";
@@ -940,9 +961,30 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
         : totalLayers > doneStep
           ? `It now moves to step ${doneStep + 1} of ${totalLayers}.`
           : "This was the final step — the submitter will be notified.";
-    // A Training Evaluation just evaluated on its paper Part II: show the whole
-    // form as it now stands, locked, with the answers that were sent.
-    const finishedPaper = submittedSignOff && submitAction === "confirm" && surveyJson && currentLayer
+    // A Training Evaluation just evaluated on its paper Part II, or a paper
+    // form just approved on its sign-off: show the whole form as it now
+    // stands, locked, with what was sent.
+    const finishedPaper = submittedSignOff && submitAction === "approve" && surveyJson && currentLayer
+      ? paperDocumentFromAnswers({
+        title: formTitle,
+        surveyJson,
+        responseData: { ...getSubmissionPreviewData(responseData), ...matrixAnswers },
+        submittedBy: valueToText(responseData?.SubmittedBy),
+        submittedAt: valueToText(responseData?.SubmittedAt),
+        formStatus: nextStep || totalLayers > doneStep ? "In Review" : "Completed",
+        layerResults: [...previousPaperLayers, {
+          layerNumber: doneStep,
+          type: "approval",
+          status: "Approved",
+          email: userEmail ?? "",
+          signedAt: new Date().toISOString(),
+          signerName: submittedSignOff.name,
+          signerPosition: submittedSignOff.position,
+          signature: signatureData || undefined,
+          layerTitle: currentLayer.title,
+        }],
+      })
+      : submittedSignOff && submitAction === "confirm" && surveyJson && currentLayer
       ? paperDocumentFromAnswers({
         title: formTitle,
         surveyJson,
@@ -1021,14 +1063,17 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
   const previewData = getSubmissionPreviewData(responseData);
   const previewSections = collectPreviewSections(surveyJson, previewData);
   const answerCount = previewSections.length > 0 ? countPreviewAnswers(previewSections) : Object.keys(previewData).length;
-  // The Training Evaluation Form shows Part I as its paper form; the HOD fills Part II below.
-  const paperDoc = surveyJson && isTrainingEvaluationForm(formTitle)
+  // A form with a paper layout shows as its paper form. The Training
+  // Evaluation's HOD fills Part II below; an approver of a paper form signs
+  // below it, with the steps signed before them already on the page.
+  const paperDoc = surveyJson && hasPaperForm(formTitle)
     ? paperDocumentFromAnswers({
       title: formTitle,
       surveyJson,
-      responseData: previewData,
+      responseData: { ...previewData, ...matrixAnswers },
       submittedBy,
       submittedAt: valueToText(responseData?.SubmittedAt),
+      layerResults: hasPaperApproval(formTitle) ? previousPaperLayers : undefined,
     })
     : null;
   const paperQuestionNames = paperDoc ? surveyAnswerKeys(surveyJson, previewData) : new Set<string>();
@@ -1052,7 +1097,12 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
     : `${answersLeft} ${answersLeft === 1 ? "answer" : "answers"} left`;
   const decisionDate = reviewerDateParts(actedSignedAt);
   const isSubmitting = actionState === "submitting";
-  const approveBlocked = isSubmitting || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData);
+  // An approval on a paper form is signed on its Signature line, whatever the
+  // step's own confirmation: signing is how the paper form is approved.
+  const paperApproval = !isEvaluation && currentLayer?.type === "approval" && hasPaperApproval(formTitle);
+  const approveBlocked = isSubmitting || (paperApproval
+    ? !signatureData
+    : (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData));
   // The Training Evaluation's HOD step is filled in as the paper form's Part II.
   const paperPartTwo = isEvaluation && evalForm !== null && isTrainingEvaluationForm(formTitle) && supportsPaperPartTwo(evalRuntime);
   // The paper Part II is signed on its sign-off line: by the step's own
@@ -1102,6 +1152,9 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
   const signerName = viewerSignOff?.name || signedInApprover;
   const signerPosition = signOffPosition(viewerSignOff?.position, approverRoleLabel);
   const paperSignOff: PaperSignOff = signOffDraft ?? { name: signerName || "", position: signerPosition || "", date: todayPaperDate() };
+  const paperApprovalLabel = paperApproval
+    ? paperApprovalLabels(formTitle, effectiveLayerNumber, totalLayers, currentLayer?.title || "")
+    : null;
   const pendingVerdict = signOffVerdictForLayer(currentLayer?.type);
   const customSignOffLabel = descriptionIsLabel ? layerDescription : undefined;
   // Once decided, the sign-off already on the record — for a link opened later.
@@ -1415,11 +1468,23 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                 )
               )}
 
-              {isSignatureRequired && !paperPartTwo && (
+              {paperApprovalLabel && (
+                <PaperApprovalSignOff
+                  caption={paperApprovalLabel.caption}
+                  role={paperApprovalLabel.role}
+                  positionLabel={paperApprovalLabel.positionLabel}
+                  signOff={paperSignOff}
+                  onSignOffChange={setSignOffDraft}
+                  disabled={isSubmitting}
+                  signatureSlot={<SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />}
+                />
+              )}
+
+              {isSignatureRequired && !paperPartTwo && !paperApproval && (
                 <SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />
               )}
 
-              {isCheckboxMode && (
+              {isCheckboxMode && !paperApproval && (
                 <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minHeight: 40 }}>
                   <input
                     type="checkbox"
@@ -1434,7 +1499,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
               {/* Who is signing: what they are doing, their name and post as the
                   routing directory has them. The signature line appears only
                   once there is a signature. */}
-              {signerName && !paperPartTwo && (
+              {signerName && !paperPartTwo && !paperApproval && (
                 <SignOffBlock
                   verdict={pendingVerdict}
                   label={signOffLabel(pendingVerdict, customSignOffLabel)}
@@ -1501,11 +1566,18 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                   <button
                     type="button"
                     className="rv-btn"
-                    onClick={() => handleSubmit("approve")}
+                    onClick={() => {
+                      if (!paperApproval) {
+                        void handleSubmit("approve");
+                        return;
+                      }
+                      setSubmittedSignOff(paperSignOff);
+                      void handleSubmit("approve", paperSignOff);
+                    }}
                     style={approveBlocked ? btnDisabled : btnPrimary}
                     disabled={approveBlocked}
                   >
-                    {isSubmitting ? "Submitting..." : isSignatureRequired && !signatureData ? "Sign to approve" : "Approve request"}
+                    {isSubmitting ? "Submitting..." : (isSignatureRequired || paperApproval) && !signatureData ? "Sign to approve" : "Approve request"}
                   </button>
                 </div>
               )}

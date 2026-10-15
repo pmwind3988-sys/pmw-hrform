@@ -102,7 +102,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
 import { buildPaperDesignPdf, getVersionSurveyJson, loadPdfData } from "../../utils/submissionPdfData";
-import { manualPaperDesign } from "../../utils/paperPdf/trainingEvaluationLayout";
+import { manualPaperDesign } from "../../utils/paperPdf/paperForms";
 import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
