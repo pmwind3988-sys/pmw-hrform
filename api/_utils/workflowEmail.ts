@@ -508,7 +508,8 @@ export function buildManualPaperWorkflowEmail(
       eyebrow: "Manual workflow",
       status: WORKFLOW_EMAIL_STATUS.manual,
       heading: `${params.formTitle} needs ${noun}`,
-      intro: `This workflow layer resolved to the configured sender mailbox, so it has been marked for paper/manual handling instead of assigning an online reviewer. Complete the manual ${params.layerType} in the attached or linked PDF record.`,
+      // Worded like the browser's submit-time notice (src/utils/manualPaperEmail.ts), which attaches the PDF; this one does not.
+      intro: `Nobody completes this step online, so it is handled on paper. Print the submission's PDF record, complete the ${params.layerType} by hand, and return the signed copy to HR.`,
       details: [
         { label: "Form", value: params.formTitle },
         referenceDetail(params.referenceNo),

@@ -26,6 +26,15 @@ export function isTrainingEvaluationForm(title: string): boolean {
   return /\btraining\s+evaluation\b/i.test(title);
 }
 
+/**
+ * The PDF design a manual/paper step prints with: a Training Evaluation goes
+ * out as its paper form, ready to complete by hand; any other form keeps the
+ * design it was published with.
+ */
+export function manualPaperDesign(formTitle: string): { design?: "paper" } {
+  return isTrainingEvaluationForm(formTitle) ? { design: "paper" } : {};
+}
+
 /** The Word form's wording, used when the form asks the same number of questions. */
 export const CONTENTS_ITEMS = [
   "The training room and facilities were adequate and comfortable",

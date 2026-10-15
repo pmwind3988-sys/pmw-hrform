@@ -58,6 +58,8 @@ import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { buildWorkflowReviewLink } from "../utils/workflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
+import { buildManualPaperSubmissionEmail } from "../utils/manualPaperEmail";
+import { manualPaperDesign } from "../utils/paperPdf/trainingEvaluationLayout";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 import {
@@ -1558,6 +1560,8 @@ export default function DynamicFormPage() {
       }
 
       let hasManualPaperWorkflow = false;
+      // The first step handled on paper, named in the manual notice.
+      let manualPaperLayer: { layerNumber: number; type: "approval" | "evaluation"; title?: string } | null = null;
 
       // Step 3: Build body (keep existing logic)
       const body: Record<string, unknown> = {};
@@ -1645,6 +1649,7 @@ export default function DynamicFormPage() {
           const routed = resolveEvaluationSubmitterRouting(layer, body);
           if (routed?.manualPaper) {
             hasManualPaperWorkflow = true;
+            manualPaperLayer ??= { layerNumber, type: layer.type, title: layer.title };
             body[`L${layerNumber}_Status`] = manualPaperStatusForLayer(layer);
             const senderEmail = routed.sendToConfiguredSender ? CONFIGURED_SENDER_EMAIL : "";
             const actors = senderEmail ? [senderEmail] : [];
@@ -1666,7 +1671,10 @@ export default function DynamicFormPage() {
               : activeLayers[index]?.emails ?? parseValidEmailList(activeLayers[index]?.email);
             const routedEmail = actors[0] ?? fallbackEmail;
             const manualPaperForSender = shouldUseManualPaperForSender(layer, routedEmail);
-            if (manualPaperForSender) hasManualPaperWorkflow = true;
+            if (manualPaperForSender) {
+              hasManualPaperWorkflow = true;
+              manualPaperLayer ??= { layerNumber, type: layer.type, title: layer.title };
+            }
             body[`L${layerNumber}_Status`] = manualPaperForSender
               ? manualPaperStatusForLayer(layer)
               : SP_LAYER_STATUS.PENDING;
@@ -2058,8 +2066,8 @@ export default function DynamicFormPage() {
                 companies: typeof versionMeta.companies === "string" ? versionMeta.companies : undefined,
                 logoUrl: logoUrl || "/logo-128.png",
                 pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
-                  ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
-                  : hasManualPaperWorkflow ? { enabled: true, title: "Manual Workflow Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
+                  ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true, ...manualPaperDesign(cfg.Title as string) } : {}) }
+                  : hasManualPaperWorkflow ? { enabled: true, title: "Manual Workflow Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true, ...manualPaperDesign(cfg.Title as string) } : undefined,
                 pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
                 documentHeader: versionMeta.documentHeader && typeof versionMeta.documentHeader === "object" && !Array.isArray(versionMeta.documentHeader)
                   ? versionMeta.documentHeader as PdfFormData["documentHeader"]
@@ -2077,6 +2085,15 @@ export default function DynamicFormPage() {
               if (hasManualPaperWorkflow) {
                 const pdfLink = pdfUrl.startsWith("http") ? pdfUrl : `${new URL(SP_SITE_URL).origin}${pdfUrl}`;
                 const manualNoticeSlug = (cfg.Slug as string) || (cfg.slug as string) || formId || "";
+                const manualNotice = buildManualPaperSubmissionEmail({
+                  formTitle: cfg.Title as string,
+                  responseItemId: result.Id,
+                  submittedBy: submittedByEmail,
+                  referenceNo: respItem[REFERENCE_NO_FIELD] ? String(respItem[REFERENCE_NO_FIELD]) : undefined,
+                  layer: manualPaperLayer ?? undefined,
+                  totalLayers: resolvedLayerCount || undefined,
+                  pdfUrl: pdfLink,
+                });
                 await fetch("/api/send-email", {
                   method: "POST",
                   headers: {
@@ -2089,8 +2106,8 @@ export default function DynamicFormPage() {
                   },
                   body: JSON.stringify({
                     sendToConfiguredSender: true,
-                    subject: `Manual workflow PDF ready: ${cfg.Title as string}`,
-                    body: `A submission matched a manual paper workflow rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/>The manual evaluation/approval PDF is attached.<br/><a href="${pdfLink}">Open generated PDF record</a>`,
+                    subject: manualNotice.subject,
+                    body: manualNotice.body,
                     ...(isTestRun ? { testTicket, slug: manualNoticeSlug } : {}),
                     attachments: manualPdfAttachment ? [manualPdfAttachment] : undefined,
                   }),

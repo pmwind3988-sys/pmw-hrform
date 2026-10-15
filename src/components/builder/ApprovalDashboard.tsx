@@ -102,6 +102,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
 import { buildPaperDesignPdf, getVersionSurveyJson, loadPdfData } from "../../utils/submissionPdfData";
+import { manualPaperDesign } from "../../utils/paperPdf/trainingEvaluationLayout";
 import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
@@ -257,6 +258,110 @@ interface FormConfig {
 }
 
 // ── PDF Helper ─────────────────────────────────────────────────────────────
+
+// ── Paper evaluation toggle ───────────────────────────────────────────────
+
+/** The last person who held a layer online, from its reassignment history. */
+function previousOnlineEmail(rawAssignments: unknown, layerNumber: number): string {
+  const entry = getWorkflowAssignment(rawAssignments, layerNumber);
+  const candidates = [entry?.email, ...[...(entry?.history ?? [])].reverse().map((h) => h.email)].map((e) => valueToText(e).toLowerCase());
+  return candidates.find((e) => e && e !== CONFIGURED_MANUAL_PAPER_EMAIL) ?? "";
+}
+
+/**
+ * "Handled on paper" for the step a submission is waiting on. On sends the
+ * paper notice and its printable PDF; off asks who should do it online instead,
+ * because the paper mailbox cannot open a review link.
+ */
+function PaperEvaluationToggle({
+  layerType,
+  onPaper,
+  paperMailbox,
+  paperAllowed,
+  previousOnlineEmail: suggested,
+  busy,
+  onToggle,
+}: {
+  layerType: "approval" | "evaluation";
+  onPaper: boolean;
+  paperMailbox: string;
+  paperAllowed: boolean;
+  previousOnlineEmail: string;
+  busy: boolean;
+  onToggle: (toPaper: boolean, onlineEmail?: string) => void;
+}) {
+  const [choosingOnline, setChoosingOnline] = useState(false);
+  const [onlineEmail, setOnlineEmail] = useState(suggested);
+  const noun = layerType === "evaluation" ? "evaluation" : "approval";
+  const unavailable = !paperMailbox
+    ? "No paper mailbox is configured (VITE_HR_FORM_MANUAL_PAPER_ADDRESS), so steps cannot be sent to paper."
+    : !paperAllowed && !onPaper
+      ? "This step is set never to go to paper in the form's workflow settings."
+      : "";
+  const flip = () => {
+    if (busy || unavailable) return;
+    if (onPaper) setChoosingOnline((open) => !open);
+    else onToggle(true);
+  };
+  return (
+    <div style={{ marginTop: 12, padding: 14, borderRadius: si.radiusSm, background: C.amberPale }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.textPrimary }}>Paper {noun}</div>
+          <div style={{ fontSize: 11.5, color: C.textSecond, marginTop: 3 }}>
+            {onPaper
+              ? `This step is handled on paper. The printable form was sent to ${paperMailbox || "the paper mailbox"}.`
+              : `This step is done online. Turn on to handle it on paper and email the printable form to ${paperMailbox || "the paper mailbox"}.`}
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={onPaper}
+          aria-label={`Paper ${noun}`}
+          onClick={flip}
+          disabled={busy || Boolean(unavailable)}
+          style={{
+            flexShrink: 0, width: 46, height: 26, borderRadius: 999, border: "none", padding: 3,
+            background: onPaper ? C.purple : C.border, cursor: busy || unavailable ? "not-allowed" : "pointer",
+            opacity: busy || unavailable ? 0.55 : 1, display: "flex", justifyContent: onPaper ? "flex-end" : "flex-start",
+          }}
+        >
+          <span aria-hidden style={{ width: 20, height: 20, borderRadius: "50%", background: editorial.white, display: "block" }} />
+        </button>
+      </div>
+      {unavailable ? <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6 }}>{unavailable}</div> : null}
+      {onPaper && choosingOnline && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+          <input
+            type="email"
+            value={onlineEmail}
+            onChange={(event) => setOnlineEmail(event.target.value)}
+            placeholder="evaluator@example.com"
+            aria-label={`Who does the ${noun} online`}
+            style={{ flex: "1 1 220px", minWidth: 190, padding: "7px 12px", borderRadius: 999, border: "none", fontSize: 12, background: editorial.white }}
+          />
+          <button
+            type="button"
+            onClick={() => onToggle(false, onlineEmail)}
+            disabled={busy || !EMAIL_RE.test(onlineEmail.trim())}
+            style={{
+              padding: "7px 14px", borderRadius: 999, border: "none", background: C.purple, color: editorial.white,
+              fontSize: 11.5, fontWeight: 700,
+              cursor: busy || !EMAIL_RE.test(onlineEmail.trim()) ? "not-allowed" : "pointer",
+              opacity: busy || !EMAIL_RE.test(onlineEmail.trim()) ? 0.55 : 1,
+            }}
+          >
+            Move online and email them
+          </button>
+          <div style={{ flexBasis: "100%", fontSize: 11, color: C.textMuted }}>
+            They get the {noun} link now. Anyone the step was shared with before loses access.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 function getItemStatus(item: PendingItem): "pending" | "approved" | "rejected" {
@@ -2099,6 +2204,7 @@ export default function ApprovalDashboard() {
           title: pdfData.pdfConfig?.title || "Manual Workflow Form",
           deliveryMethod: pdfData.pdfConfig?.deliveryMethod || "sharepoint",
           includeEmptyEvaluationFields: true,
+          ...manualPaperDesign(item.Title),
           showApproverChain: pdfData.pdfConfig?.showApproverChain ?? true,
           showEvaluationDetails: pdfData.pdfConfig?.showEvaluationDetails ?? true,
           showSignatures: pdfData.pdfConfig?.showSignatures ?? true,
@@ -2432,12 +2538,12 @@ export default function ApprovalDashboard() {
     }
   };
 
-  const handleSaveWorkflowAssignment = async (input: WorkflowAssignmentSaveInput) => {
-    if (!token || !selectedItem || !isSuperuser) return;
+  const handleSaveWorkflowAssignment = async (input: WorkflowAssignmentSaveInput): Promise<boolean> => {
+    if (!token || !selectedItem || !isSuperuser) return false;
     const email = input.email.trim();
     if (!EMAIL_RE.test(email)) {
       setError("Enter a valid approver or evaluator email address.");
-      return;
+      return false;
     }
 
     setAssignmentSaving(true);
@@ -2531,6 +2637,11 @@ export default function ApprovalDashboard() {
       const serializedSchedule = typeof patchBody.WorkflowEmailSchedule === "string"
         ? patchBody.WorkflowEmailSchedule
         : selectedItem.WorkflowEmailSchedule;
+      const newLayerStatus = patchBody[`L${input.layer}_Status`];
+      // The paper toggle reads the layer's status, so it must see the change.
+      const withStatus = (current: PendingItem): PendingItem => typeof newLayerStatus === "string"
+        ? { ...current, layerStatuses: { ...current.layerStatuses, [input.layer]: newLayerStatus } }
+        : current;
       setCompletedLayers((previous) => ({
         ...previous,
         [input.layer]: {
@@ -2540,20 +2651,20 @@ export default function ApprovalDashboard() {
       }));
       setPendingItems((previous) => previous.map((current) =>
         getPendingItemKey(current) === itemKey
-          ? {
+          ? withStatus({
             ...current,
             WorkflowAssignmentData: serializedAssignments,
             WorkflowEmailSchedule: serializedSchedule,
-          }
+          })
           : current
       ));
       setSelectedItem((current) =>
         current && getPendingItemKey(current) === itemKey
-          ? {
+          ? withStatus({
             ...current,
             WorkflowAssignmentData: serializedAssignments,
             WorkflowEmailSchedule: serializedSchedule,
-          }
+          })
           : current
       );
       if (input.layer === currentLayerNumber) {
@@ -2619,11 +2730,33 @@ export default function ApprovalDashboard() {
           `Layer ${input.layer} ${targetLayer.type === "evaluation" ? "evaluator" : "approver"} updated${isManualPaperAssignment ? " and flagged for manual/paper handling" : ""}${wasParked ? " and routed" : ""} for this submission only.`,
         );
       }
+      return true;
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not update this workflow assignment.");
+      return false;
     } finally {
       setAssignmentSaving(false);
     }
+  };
+
+  /**
+   * Puts the current step on paper, or takes it back online.
+   *
+   * On paper is an assignment to the paper mailbox, so it reuses the reassign
+   * path: the step is flagged manual and the paper notice goes out with the PDF.
+   * Back online needs a person to act, so it reassigns to the address given and
+   * emails them the step's link straight away.
+   */
+  const handleTogglePaperEvaluation = async (toPaper: boolean, onlineEmail?: string) => {
+    if (!selectedItem || !currentLayerConfig) return;
+    const layer = currentLayerConfig.layerNumber;
+    if (toPaper) {
+      await handleSaveWorkflowAssignment({ layer, email: CONFIGURED_MANUAL_PAPER_EMAIL, reason: "Switched to paper evaluation" });
+      return;
+    }
+    const email = (onlineEmail ?? "").trim();
+    const saved = await handleSaveWorkflowAssignment({ layer, email, reason: "Switched back to online evaluation" });
+    if (saved) await handleForceResend(selectedItem, email);
   };
 
   const handleSaveCustomEmailDate = async () => {
@@ -3848,7 +3981,7 @@ export default function ApprovalDashboard() {
                       layerStates={completedLayers}
                       rawAssignments={selectedItem.WorkflowAssignmentData}
                       saving={assignmentSaving}
-                      onSave={handleSaveWorkflowAssignment}
+                      onSave={async (input) => { await handleSaveWorkflowAssignment(input); }}
                     />
                   )}
                   {isSuperuser && selectedActiveLayers.length > 0 && (
@@ -3858,6 +3991,18 @@ export default function ApprovalDashboard() {
                       fixingLayer={routingFixingLayer}
                       onCheck={() => void handleCheckRouting()}
                       onFix={(layerNumber) => void handleFixRouting(layerNumber)}
+                    />
+                  )}
+                  {isSuperuser && currentLayerConfig && getItemStatus(selectedItem) === "pending" && (
+                    <PaperEvaluationToggle
+                      key={`${getPendingItemKey(selectedItem)}-${currentLayerConfig.layerNumber}`}
+                      layerType={currentLayerConfig.type}
+                      onPaper={isManualPaperWorkflowStatus(selectedItem.layerStatuses?.[currentLayerConfig.layerNumber])}
+                      paperMailbox={CONFIGURED_MANUAL_PAPER_EMAIL}
+                      paperAllowed={currentLayerConfig.manualPaperWhenSenderEmail !== false}
+                      previousOnlineEmail={previousOnlineEmail(selectedItem.WorkflowAssignmentData, currentLayerConfig.layerNumber)}
+                      busy={assignmentSaving || resendingItemKey === getPendingItemKey(selectedItem)}
+                      onToggle={(toPaper, email) => void handleTogglePaperEvaluation(toPaper, email)}
                     />
                   )}
                   {(isAdmin || isSuperuser) && selectedActiveLayers.length > 0 && currentLayerConfig && (
