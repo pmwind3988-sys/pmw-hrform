@@ -464,7 +464,7 @@ function signOffBlock(layer: PdfLayerResult, fmtDay: (iso: string) => string): P
     statement,
     name: decided ? signOffName(layer.signerName || layer.confirmerName, layer.email || layer.confirmerEmail) : "",
     position: decided ? signOffPosition(layer.signerPosition, layer.layerTitle || "") : "",
-    date: decided && layer.signedAt ? fmtDay(layer.signedAt) : "",
+    date: decided ? layer.signOffDate || (layer.signedAt ? fmtDay(layer.signedAt) : "") : "",
     signature: decided ? layer.signature || "" : "",
     remarks: layer.rejection || "",
     rejected: verdict === "rejected",

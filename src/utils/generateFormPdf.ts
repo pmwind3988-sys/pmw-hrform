@@ -140,6 +140,8 @@ export function buildPdfLayerResults(
       entry.evaluationSurveyElements = evaluationSurveyElements;
       entry.confirmerEmail = ed.confirmerEmail as string || "";
       entry.confirmerName = ed.confirmerName as string || "";
+      const signOff = ed.signOff as { date?: unknown } | null | undefined;
+      if (signOff && typeof signOff.date === "string" && signOff.date.trim()) entry.signOffDate = signOff.date.trim();
     } else if (isEval) {
       entry.evaluationSurveyElements = evaluationSurveyElements;
     }

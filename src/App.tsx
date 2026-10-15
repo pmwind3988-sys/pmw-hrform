@@ -540,6 +540,7 @@ function mapSubmission(
           status: canonicalStatus,
           email: emailVal,
           confirmedAt: evalData?.confirmedAt ?? null,
+          signOffDate: evalData?.signOff?.date ?? null,
           fields: evalData?.fields ?? {},
           notes: evalData?.notes ?? (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal ?? undefined : undefined),
           signedAt: signedAtVal,

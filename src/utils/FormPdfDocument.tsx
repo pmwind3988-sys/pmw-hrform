@@ -61,6 +61,8 @@ export interface PdfLayerResult {
   status: string;
   email: string;
   signedAt?: string;
+  /** The date written on the sign-off, when the signer changed it (printed instead of `signedAt`). */
+  signOffDate?: string;
   rejection?: string;
   signature?: string;
   /** For evaluation layers: submitted field values */

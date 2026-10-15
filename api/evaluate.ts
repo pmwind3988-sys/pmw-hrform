@@ -173,6 +173,15 @@ async function readSignerIdentity(
   };
 }
 
+/** A written sign-off from the request body, trimmed and capped; null when nothing usable was sent. */
+function readWrittenSignOff(raw: unknown): { name?: string; position?: string; date?: string } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const pick = (value: unknown, limit: number) => (typeof value === "string" && value.trim() ? value.trim().slice(0, limit) : undefined);
+  const source = raw as Record<string, unknown>;
+  const signOff = { name: pick(source.name, 255), position: pick(source.position, 255), date: pick(source.date, 40) };
+  return signOff.name || signOff.position || signOff.date ? signOff : null;
+}
+
 /** The `L{n}_ActedByName` / `L{n}_ActedByPosition` patch for one signer. */
 async function signerStampFor(
   graphToken: string,
@@ -854,6 +863,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { token, layerNumber, formTitle: bodyFormTitle, responseItemId, fields, action, signature, rejection, linkToken, slug, prefix, confirmerName } = req.body;
+  // The name, post and date the evaluator wrote on a paper-style sign-off. Only
+  // what is printed: who acted is still the signed-in or link-holding address.
+  const writtenSignOff = readWrittenSignOff(req.body?.signOff);
   /**
    * The signed-in shape of this request: the form's slug plus the caller's own
    * identity, in place of a public layer token.
@@ -1122,6 +1134,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           status: "confirmed",
           fields: fields,
           signatureUrl: signature || null,
+          ...(writtenSignOff ? { signOff: writtenSignOff } : {}),
         };
         updates.EvaluationData = JSON.stringify(evalData);
       }
@@ -1216,6 +1229,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // columns are newer still than `L{n}_ActedBy` — a form published before
       // them keeps working and simply prints the layer title as the position.
       const signerStamp = await signerStampFor(graphToken, layerNumber, actedByEmail, signedInMode ? confirmerName : undefined);
+      // What the evaluator wrote on the sign-off wins over the directory's copy.
+      if (writtenSignOff?.name) signerStamp[`L${layerNumber}_ActedByName`] = writtenSignOff.name;
+      if (writtenSignOff?.position) signerStamp[`L${layerNumber}_ActedByPosition`] = writtenSignOff.position;
       if (Object.keys(signerStamp).length > 0) {
         await updateListItemFields(graphToken, responseListName, responseItem.id, signerStamp).catch((error) => {
           logWarn("api:evaluate", "Could not record the signer's name and position", {

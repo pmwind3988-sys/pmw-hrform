@@ -316,8 +316,15 @@ function shapeHodPart(part: PaperSection[]): void {
     comments.label = HOD_COMMENTS_LABEL;
     comments.sublabel = HOD_COMMENTS_SUBLABEL;
   }
+  // A signature question in the HOD's step is the signature on the sign-off
+  // line, not a second line of its own.
+  const signed = part.flatMap((s) => s.blocks).find((b): b is Extract<PaperBlock, { kind: "signature" }> => b.kind === "signature");
+  if (signed) {
+    for (const section of part) section.blocks = section.blocks.filter((b) => b !== signed);
+  }
   for (const block of part.flatMap((s) => s.blocks)) {
     if (block.kind !== "signoff") continue;
+    if (signed?.images[0] && !block.signature) block.signature = signed.images[0];
     if (!block.rejected) block.statement = HOD_STATEMENT;
     // The HOD signs at the same size as the employee in Part I.
     block.large = true;

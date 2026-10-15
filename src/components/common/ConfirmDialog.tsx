@@ -22,6 +22,8 @@ export interface ConfirmDialogProps {
   destructive?: boolean;
   /** Shows a spinner and locks both buttons while the action is in flight. */
   busy?: boolean;
+  /** The dismissing button's label; "Cancel" unless the question reads better answered "No". */
+  cancelLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
 }
@@ -53,6 +55,7 @@ export default function ConfirmDialog({
   confirmLabel,
   destructive = false,
   busy = false,
+  cancelLabel = "Cancel",
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
@@ -118,7 +121,7 @@ export default function ConfirmDialog({
             color: editorial.muted,
           }}
         >
-          Cancel
+          {cancelLabel}
         </Button>
         <Button
           variant="contained"

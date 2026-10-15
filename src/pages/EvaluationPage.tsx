@@ -26,6 +26,8 @@ import { rowsToHtml } from "../utils/matrixData";
 import { collectPreviewSections, countPreviewAnswers } from "../utils/submissionPreviewSections";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
 import PaperFormView from "../components/paper/PaperFormView";
+import ConfirmDialog from "../components/common/ConfirmDialog";
+import PaperPartTwoInput, { supportsPaperPartTwo, type PaperSignOff } from "../components/paper/PaperPartTwoInput";
 import { paperDocumentFromAnswers, surveyAnswerKeys } from "../utils/paperPdf/submissionPaperView";
 import { isTrainingEvaluationForm } from "../utils/paperPdf/trainingEvaluationLayout";
 import ReviewerStyles from "../components/reviewer/ReviewerStyles";
@@ -306,6 +308,11 @@ function hasStatementRows(elements: NativeElement[]): boolean {
 }
 
 /** Today, as the sign-off prints a date that has not been recorded yet. */
+/** Today as the paper form writes a date: 15/10/2026. */
+function todayPaperDate(): string {
+  return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 function todayLabel(): string {
   return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
@@ -384,6 +391,11 @@ export default function EvaluationPage() {
   const [checkboxApproved, setCheckboxApproved] = useState(false);
   // Training Evaluation: answers the paper form does not print, behind the (i) button.
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+  // The paper Part II's sign-off once the evaluator edits it; null means "as pre-filled".
+  const [signOffDraft, setSignOffDraft] = useState<PaperSignOff | null>(null);
+  // Asked before the paper Part II is sent; what was sent is kept to draw the finished form.
+  const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
+  const [submittedSignOff, setSubmittedSignOff] = useState<PaperSignOff | null>(null);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
 
   /**
@@ -637,7 +649,7 @@ export default function EvaluationPage() {
   }, [actionState]);
 
   // ── Submit action ──
-  const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm") => {
+  const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm", writtenSignOff?: PaperSignOff) => {
     if (!userEmail) return;
     // Validation paints the errors and focuses the first one, so a rejected
     // confirm leaves the evaluator looking at what still needs answering.
@@ -668,6 +680,7 @@ export default function EvaluationPage() {
             fields: evalForm ? foldOtherAnswers(evalRuntime.collect()) : {},
             signature: signatureData || undefined,
             rejection: rejectionReason || undefined,
+            ...(writtenSignOff ? { signOff: writtenSignOff } : {}),
           }),
         });
         const json = await res.json();
@@ -711,6 +724,7 @@ export default function EvaluationPage() {
           signature: signatureData || undefined,
           rejection: rejectionReason || undefined,
           confirmerName: accounts[0]?.name || undefined,
+          ...(writtenSignOff ? { signOff: writtenSignOff } : {}),
         }),
       });
       const json = await res.json();
@@ -884,6 +898,31 @@ export default function EvaluationPage() {
         : totalLayers > doneStep
           ? `It now moves to step ${doneStep + 1} of ${totalLayers}.`
           : "This was the final step — the submitter will be notified.";
+    // A Training Evaluation just evaluated on its paper Part II: show the whole
+    // form as it now stands, locked, with the answers that were sent.
+    const finishedPaper = submittedSignOff && submitAction === "confirm" && surveyJson && currentLayer
+      ? paperDocumentFromAnswers({
+        title: formTitle,
+        surveyJson,
+        responseData: getSubmissionPreviewData(responseData),
+        submittedBy: valueToText(responseData?.SubmittedBy),
+        submittedAt: valueToText(responseData?.SubmittedAt),
+        formStatus: nextStep || totalLayers > doneStep ? "In Review" : "Completed",
+        layerResults: [{
+          layerNumber: doneStep,
+          type: "evaluation",
+          status: "Confirmed",
+          email: userEmail ?? "",
+          signedAt: new Date().toISOString(),
+          signerName: submittedSignOff.name,
+          signerPosition: submittedSignOff.position,
+          signOffDate: submittedSignOff.date,
+          layerTitle: currentLayer.title,
+          evaluationFields: foldOtherAnswers(evalRuntime.collect()),
+          evaluationSurveyElements: surveyElementsForLayer(layerSequence, doneStep),
+        }],
+      })
+      : null;
     return (
       <SuccessCard
         rejected={isRejected}
@@ -891,7 +930,9 @@ export default function EvaluationPage() {
         formTitle={formTitle}
         reference={referenceLabel}
         nextLine={nextLine}
-      />
+      >
+        {finishedPaper ? <PaperFormView doc={finishedPaper} logoUrl={logoUrl || "/logo-128.png"} /> : null}
+      </SuccessCard>
     );
   }
 
@@ -1003,6 +1044,9 @@ export default function EvaluationPage() {
   // the record will be stamped with. Position falls back to the layer title.
   const signerName = viewerSignOff?.name || signedInApprover;
   const signerPosition = signOffPosition(viewerSignOff?.position, approverRoleLabel);
+  // The Training Evaluation's HOD step is filled in as the paper form's Part II.
+  const paperPartTwo = isEvaluation && evalForm !== null && isTrainingEvaluationForm(formTitle) && supportsPaperPartTwo(evalRuntime);
+  const paperSignOff: PaperSignOff = signOffDraft ?? { name: signerName || "", position: signerPosition || "", date: todayPaperDate() };
   const pendingVerdict = signOffVerdictForLayer(currentLayer?.type);
   const customSignOffLabel = descriptionIsLabel ? layerDescription : undefined;
   // Once decided, the sign-off already on the record — for a link opened later.
@@ -1295,7 +1339,17 @@ export default function EvaluationPage() {
           ) : (
             <>
               {isEvaluation && (
-                evalForm ? (
+                evalForm && paperPartTwo ? (
+                  <PaperPartTwoInput
+                    runtime={evalRuntime}
+                    disabled={isSubmitting}
+                    signOff={paperSignOff}
+                    onSignOffChange={setSignOffDraft}
+                    signatureSlot={isSignatureRequired
+                      ? <SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />
+                      : undefined}
+                  />
+                ) : evalForm ? (
                   <NativeFormView
                     runtime={evalRuntime}
                     variant="reviewer"
@@ -1308,7 +1362,7 @@ export default function EvaluationPage() {
                 )
               )}
 
-              {isSignatureRequired && (
+              {isSignatureRequired && !paperPartTwo && (
                 <SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />
               )}
 
@@ -1327,7 +1381,7 @@ export default function EvaluationPage() {
               {/* Who is signing: what they are doing, their name and post as the
                   routing directory has them. The signature line appears only
                   once there is a signature. */}
-              {signerName && (
+              {signerName && !paperPartTwo && (
                 <SignOffBlock
                   verdict={pendingVerdict}
                   label={signOffLabel(pendingVerdict, customSignOffLabel)}
@@ -1340,6 +1394,21 @@ export default function EvaluationPage() {
 
               {submitErrorAlert}
 
+              <ConfirmDialog
+                open={confirmSubmitOpen}
+                title="Submit this evaluation?"
+                body="Once submitted, your evaluation is locked and cannot be changed."
+                confirmLabel="Yes, submit"
+                cancelLabel="No"
+                busy={isSubmitting}
+                onClose={() => setConfirmSubmitOpen(false)}
+                onConfirm={() => {
+                  setConfirmSubmitOpen(false);
+                  setSubmittedSignOff(paperSignOff);
+                  void handleSubmit("confirm", paperSignOff);
+                }}
+              />
+
               {/* Action buttons */}
               {isEvaluation ? (
                 <div
@@ -1350,7 +1419,14 @@ export default function EvaluationPage() {
                   <button
                     type="button"
                     className="rv-btn"
-                    onClick={() => handleSubmit("confirm")}
+                    onClick={() => {
+                      if (!paperPartTwo) {
+                        void handleSubmit("confirm");
+                        return;
+                      }
+                      // Show what is missing first; only a complete evaluation is worth confirming.
+                      if (evalRuntime.validateAll().ok) setConfirmSubmitOpen(true);
+                    }}
                     style={confirmBlocked ? btnDisabled : btnPrimary}
                     disabled={confirmBlocked}
                   >

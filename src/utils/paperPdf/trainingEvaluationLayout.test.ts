@@ -192,6 +192,14 @@ describe("Training Evaluation Part II", () => {
     expect(comment).toMatchObject({ lines: 1 });
   });
 
+  it("prints the date the HOD wrote on the sign-off rather than the day it was recorded", () => {
+    const written = buildPaperDocument({
+      ...TRAINING_EVALUATION_SAMPLE,
+      layerResults: [{ ...TRAINING_EVALUATION_SAMPLE.layerResults![0], signOffDate: "04/01/2027" }],
+    }, OPTIONS);
+    expect(written.sections.flatMap((s) => s.blocks).find((b) => b.kind === "signoff")).toMatchObject({ date: "04/01/2027" });
+  });
+
   it("prints the employee's signature large", () => {
     expect(doc.sections.flatMap((s) => s.blocks).find((b) => b.kind === "signature")).toMatchObject({ large: true });
   });

@@ -378,6 +378,12 @@ export interface EvaluationDataEntry {
   fields: Record<string, unknown>;
   notes?: string;
   signatureUrl?: string | null;
+  /**
+   * The name, post and date the evaluator wrote on the paper-style sign-off,
+   * when they edited them. Kept apart from `confirmedAt`, which is when the
+   * evaluation was actually recorded and stays the audit time.
+   */
+  signOff?: { name?: string; position?: string; date?: string } | null;
 }
 
 export interface ApprovalLayerResult {
@@ -406,6 +412,8 @@ export interface EvaluationLayerResult {
   status: LayerStatus;
   email: string | null;
   confirmedAt: string | null;
+  /** The date written on the sign-off, when the evaluator changed it from the day they signed. */
+  signOffDate?: string | null;
   fields: Record<string, unknown>;
   notes?: string;
   /** `L{n}_SignedAt`, for rows whose EvaluationData carries no `confirmedAt`. */

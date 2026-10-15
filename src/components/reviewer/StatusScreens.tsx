@@ -231,15 +231,19 @@ export function SuccessCard({
   formTitle,
   reference,
   nextLine,
+  children,
 }: {
   rejected: boolean;
   heading: string;
   formTitle: string;
   reference: string;
   nextLine: string;
+  /** Shown under the card: the completed form, where the page can draw it. */
+  children?: ReactNode;
 }) {
   return (
     <Screen>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, width: "100%" }}>
       <div role="status" aria-live="polite" style={{ ...cardBox, maxWidth: 440 }}>
         <div style={{ marginBottom: 16 }}>
           <IconCircle tone={rejected ? "red" : "green"} size={56}>
@@ -267,6 +271,8 @@ export function SuccessCard({
           <strong style={{ color: R.ink }}>What happens next.</strong> {nextLine}
         </p>
         <p style={{ color: R.label, fontSize: 13, margin: 0 }}>You can close this page.</p>
+      </div>
+      {children ? <div style={{ width: "100%", maxWidth: 900 }}>{children}</div> : null}
       </div>
     </Screen>
   );

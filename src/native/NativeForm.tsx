@@ -192,6 +192,43 @@ function FieldBlock({ element, runtime, depth, scope }: BlockProps) {
   );
 }
 
+/**
+ * One field, drawn and behaving exactly as it does inside the form — for a
+ * layout of its own that still wants the real controls (the Training
+ * Evaluation's paper Part II). Must sit inside an element with class `nf` for
+ * the styles to apply.
+ */
+export function NativeField({ element, runtime }: { element: NativeElement; runtime: NativeFormRuntime }) {
+  return <FieldBlock element={element} runtime={runtime} depth={0} />;
+}
+
+/** Just the control of a field, without its label — a signature on a sign-off line. */
+export function NativeControl({ element, runtime, label }: { element: NativeElement; runtime: NativeFormRuntime; label: string }) {
+  const reactId = useId();
+  const state = runtime.stateOf(element);
+  const Control = CONTROLS[element.kind] ?? TextControl;
+  const error = runtime.errors[element.name] ?? "";
+  return (
+    <div className="nf-field" data-name={element.name} data-kind={element.kind} id={`field-${element.name}`}>
+      <span id={`nf-${reactId}-label`} className="nf-label nf-label-hidden">{label}</span>
+      <Control
+        element={element}
+        value={runtime.getValue(element.name)}
+        onChange={(next) => runtime.setValue(element.name, next)}
+        disabled={!state.enabled}
+        invalid={!!error}
+        controlId={`nf-${reactId}`}
+      />
+      {error && (
+        <p className="nf-error" role="alert">
+          <ErrorGlyph />
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Rows({
   elements,
   runtime,
