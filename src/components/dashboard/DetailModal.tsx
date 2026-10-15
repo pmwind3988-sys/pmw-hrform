@@ -39,7 +39,7 @@ import StatusBadge from "./StatusBadge";
 import PdfPreviewDialog from "../common/PdfPreviewDialog";
 import { buildPaperDesignPdf } from "../../utils/submissionPdfData";
 import PaperFormView from "../paper/PaperFormView";
-import { paperDocumentFromSubmission, surveyQuestionNames } from "../../utils/paperPdf/submissionPaperView";
+import { paperDocumentFromSubmission, surveyAnswerKeys } from "../../utils/paperPdf/submissionPaperView";
 import { isTrainingEvaluationForm } from "../../utils/paperPdf/trainingEvaluationLayout";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import SignOffBlock from "../reviewer/SignOffBlock";
@@ -1415,7 +1415,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
   const [moreDetailsFor, setMoreDetailsFor] = useState<string | null>(null);
   const showMoreDetails = !paperMode || (item !== null && moreDetailsFor === item.id);
   const toggleMoreDetails = () => setMoreDetailsFor((current) => (item && current !== item.id ? item.id : null));
-  const paperQuestionNames = paperMode ? surveyQuestionNames(item?.surveyJson) : new Set<string>();
+  const paperQuestionNames = paperMode ? surveyAnswerKeys(item?.surveyJson, submissionData) : new Set<string>();
   const paperDoc = paperMode && item ? paperDocumentFromSubmission(item, submissionData) : null;
   const pdfFilename = item ? `${item.listTitle || "Submission"}-${item.referenceNo || item.submissionId || item.id}.pdf` : "";
   // The experimental paper-form design, drawn on demand from the same row.

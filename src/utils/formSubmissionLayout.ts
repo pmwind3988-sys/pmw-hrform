@@ -100,13 +100,46 @@ function buildResponseKeyLookup(responseData: Record<string, unknown>): Map<stri
   return lookup;
 }
 
+/**
+ * SharePoint caps a column's internal name at 32 characters, so a question with
+ * a longer name is stored under a cut-off key ("opportunitiesToAskQuestionsAndSe"
+ * for "opportunitiesToAskQuestionsAndSeekClarifications"). Reading by the full
+ * name finds nothing and the answer looks blank although it was saved.
+ */
+const SHAREPOINT_INTERNAL_NAME_LIMIT = 32;
+
+/** The stored key a long question name was cut down to, if one is in the row. */
+function truncatedResponseKey(lookup: Map<string, string>, key: string): string | undefined {
+  const wanted = lookupKey(key);
+  let best: string | undefined;
+  let bestLength = 0;
+  for (const raw of lookup.values()) {
+    // OData prefixes a column name that starts with an underscore; it is not part of the name.
+    const bare = raw.replace(/^OData_/, "");
+    // Only a key SharePoint actually cut is a candidate; "q1" is not a cut-off "q10".
+    if (bare.length < SHAREPOINT_INTERNAL_NAME_LIMIT - 2) continue;
+    const normalized = lookupKey(bare);
+    if (normalized.length >= wanted.length || !wanted.startsWith(normalized)) continue;
+    if (normalized.length > bestLength) {
+      best = raw;
+      bestLength = normalized.length;
+    }
+  }
+  return best;
+}
+
 function resolveResponseKey(
   responseData: Record<string, unknown>,
   lookup: Map<string, string>,
   key: string,
 ): string | undefined {
   if (Object.prototype.hasOwnProperty.call(responseData, key)) return key;
-  return lookup.get(lookupKey(key));
+  return lookup.get(lookupKey(key)) ?? truncatedResponseKey(lookup, key);
+}
+
+/** The key in a response row that holds the answer to the question named `name`. */
+export function responseKeyForQuestion(responseData: Record<string, unknown>, name: string): string | undefined {
+  return resolveResponseKey(responseData, buildResponseKeyLookup(responseData), name);
 }
 
 function elementLabel(element: SurveyElement, fallback: string): string {

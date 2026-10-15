@@ -26,7 +26,7 @@ import { rowsToHtml } from "../utils/matrixData";
 import { collectPreviewSections, countPreviewAnswers } from "../utils/submissionPreviewSections";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
 import PaperFormView from "../components/paper/PaperFormView";
-import { paperDocumentFromAnswers, surveyQuestionNames } from "../utils/paperPdf/submissionPaperView";
+import { paperDocumentFromAnswers, surveyAnswerKeys } from "../utils/paperPdf/submissionPaperView";
 import { isTrainingEvaluationForm } from "../utils/paperPdf/trainingEvaluationLayout";
 import ReviewerStyles from "../components/reviewer/ReviewerStyles";
 import ReviewerHeader from "../components/reviewer/ReviewerHeader";
@@ -939,7 +939,7 @@ export default function EvaluationPage() {
       submittedAt: valueToText(responseData?.SubmittedAt),
     })
     : null;
-  const paperQuestionNames = paperDoc ? surveyQuestionNames(surveyJson) : new Set<string>();
+  const paperQuestionNames = paperDoc ? surveyAnswerKeys(surveyJson, previewData) : new Set<string>();
   const extraAnswers = paperDoc
     ? Object.fromEntries(Object.entries(previewData).filter(([key]) => !paperQuestionNames.has(key)))
     : {};

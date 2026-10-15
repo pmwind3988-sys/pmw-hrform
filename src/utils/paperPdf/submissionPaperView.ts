@@ -9,6 +9,7 @@
 import type { ApprovalLayerResult, EvaluationLayerResult, Submission } from "../../types";
 import type { PdfFormData, PdfLayerResult } from "../FormPdfDocument";
 import { formatPdfDateTimeValue } from "../pdfFieldFormatting";
+import { responseKeyForQuestion } from "../formSubmissionLayout";
 import { buildPaperDocument, type PaperDocument } from "./paperLayout";
 
 type El = Record<string, unknown>;
@@ -43,6 +44,20 @@ export function surveyQuestionNames(surveyJson: unknown): Set<string> {
   };
   visit(surveyJson);
   return names;
+}
+
+/**
+ * The keys of a response row that answer one of the form's questions — the
+ * question names themselves, and any stored under a name SharePoint cut short.
+ * Everything else in the row is "more details".
+ */
+export function surveyAnswerKeys(surveyJson: unknown, responseData: Record<string, unknown>): Set<string> {
+  const keys = surveyQuestionNames(surveyJson);
+  for (const name of [...keys]) {
+    const stored = responseKeyForQuestion(responseData, name);
+    if (stored) keys.add(stored);
+  }
+  return keys;
 }
 
 /** The evaluation questions a layer asked, read off the form's layer configuration. */
