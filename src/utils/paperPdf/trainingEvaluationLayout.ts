@@ -308,7 +308,10 @@ function shapeHodPart(part: PaperSection[]): void {
     comments.sublabel = HOD_COMMENTS_SUBLABEL;
   }
   for (const block of part.flatMap((s) => s.blocks)) {
-    if (block.kind === "signoff" && !block.rejected) block.statement = HOD_STATEMENT;
+    if (block.kind !== "signoff") continue;
+    if (!block.rejected) block.statement = HOD_STATEMENT;
+    // The HOD signs at the same size as the employee in Part I.
+    block.large = true;
   }
 }
 
@@ -331,7 +334,11 @@ export function applyTrainingEvaluationLayout(doc: PaperDocument): PaperDocument
 
   parts.forEach((part, i) => {
     if (i > 0) part[0].newPage = true;
-    if (part[0].layer) return;
+    if (part[0].layer) {
+      // Any other step's sign-off matches the employee's signature size too.
+      for (const block of part.flatMap((s) => s.blocks)) if (block.kind === "signoff") block.large = true;
+      return;
+    }
     shapeEmployeeGrid(part);
     shapeRatings(part);
     for (const section of part) {

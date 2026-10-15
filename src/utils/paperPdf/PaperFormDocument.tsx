@@ -378,7 +378,7 @@ function SignOff({ block }: { block: Extract<PaperBlock, { kind: "signoff" }> })
         <LineSlot value={block.name} />
         <View style={P.lineGap} />
         <Text style={{ width: 56 }}>Signature:</Text>
-        <LineSlot image={block.signature} />
+        <LineSlot image={block.signature} large={block.large} />
       </View>
       <View style={P.lineRow}>
         <Text style={{ width: 52 }}>Position:</Text>

@@ -270,7 +270,7 @@ function Block({ block, renderImage }: { block: PaperBlock; renderImage: (src: s
               <Line label="Position:">{block.position}</Line>
             </Box>
             <Box>
-              <Line label="Signature:">{block.signature ? <Box sx={{ height: 40, display: "flex", alignItems: "flex-end" }}>{renderImage(block.signature, "Signature")}</Box> : null}</Line>
+              <Line label="Signature:">{block.signature ? <Box sx={{ height: block.large ? 80 : 40, display: "flex", alignItems: "flex-end" }}>{renderImage(block.signature, "Signature")}</Box> : null}</Line>
               <Line label="Date:">{block.date}</Line>
             </Box>
           </Box>

@@ -55,7 +55,7 @@ export type PaperBlock =
   | { kind: "images"; label: string; images: string[] }
   | { kind: "table"; field: FormSubmissionField }
   | { kind: "note"; text: string }
-  | { kind: "signoff"; statement: string; name: string; position: string; date: string; signature: string; remarks: string; rejected: boolean };
+  | { kind: "signoff"; statement: string; name: string; position: string; date: string; signature: string; remarks: string; rejected: boolean; large?: boolean };
 
 export interface PaperSection {
   /** 1 = a PART (a page of the form, or a workflow step); 2 = a lettered panel inside it. */

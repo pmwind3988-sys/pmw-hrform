@@ -184,7 +184,7 @@ describe("Training Evaluation Part II", () => {
     const blocks = doc.sections.slice(part2).flatMap((s) => s.blocks);
     expect(blocks.find((b) => b.kind === "ticks")).toMatchObject({ title: "Performance Indication" });
     expect(blocks.find((b) => b.kind === "long")).toMatchObject({ label: HOD_COMMENTS_LABEL });
-    expect(blocks.find((b) => b.kind === "signoff")).toMatchObject({ statement: HOD_STATEMENT, name: "Siti Aminah" });
+    expect(blocks.find((b) => b.kind === "signoff")).toMatchObject({ statement: HOD_STATEMENT, name: "Siti Aminah", large: true });
   });
 
   it("rules the submitter's comment only as far as its text runs", () => {
