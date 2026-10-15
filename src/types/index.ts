@@ -414,6 +414,8 @@ export interface EvaluationLayerResult {
   confirmedAt: string | null;
   /** The date written on the sign-off, when the evaluator changed it from the day they signed. */
   signOffDate?: string | null;
+  /** `L{n}_Signature`: the evaluator's signature from the paper Part II's sign-off line. */
+  signature?: string | null;
   fields: Record<string, unknown>;
   notes?: string;
   /** `L{n}_SignedAt`, for rows whose EvaluationData carries no `confirmedAt`. */

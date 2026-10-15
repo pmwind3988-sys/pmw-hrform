@@ -308,7 +308,7 @@ function shapeHodPart(part: PaperSection[]): void {
   head.heading = `${roman} – ${HOD_PART_TITLE}`;
 
   for (const table of tickTables(part)) {
-    table.title = "Performance Indication";
+    table.title = "Performance Indication:";
     if (table.rows.length === PERFORMANCE_ITEMS.length) table.rows.forEach((row, j) => { row.label = PERFORMANCE_ITEMS[j]; });
   }
   const comments = part.flatMap((s) => s.blocks).find((b): b is Extract<PaperBlock, { kind: "long" }> => b.kind === "long");

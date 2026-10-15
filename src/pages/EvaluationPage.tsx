@@ -309,6 +309,10 @@ function hasStatementRows(elements: NativeElement[]): boolean {
 
 /** Today, as the sign-off prints a date that has not been recorded yet. */
 /** Today as the paper form writes a date: 15/10/2026. */
+function hasSignatureQuestion(elements: NativeElement[]): boolean {
+  return elements.some((el) => el.kind === "signature" || (el.kind === "section" && hasSignatureQuestion(el.elements)));
+}
+
 function todayPaperDate(): string {
   return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
@@ -917,6 +921,7 @@ export default function EvaluationPage() {
           signerName: submittedSignOff.name,
           signerPosition: submittedSignOff.position,
           signOffDate: submittedSignOff.date,
+          signature: signatureData || undefined,
           layerTitle: currentLayer.title,
           evaluationFields: foldOtherAnswers(evalRuntime.collect()),
           evaluationSurveyElements: surveyElementsForLayer(layerSequence, doneStep),
@@ -1002,7 +1007,13 @@ export default function EvaluationPage() {
   const decisionDate = reviewerDateParts(actedSignedAt);
   const isSubmitting = actionState === "submitting";
   const approveBlocked = isSubmitting || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData);
-  const confirmBlocked = isSubmitting || !evalForm || !evalValid;
+  // The Training Evaluation's HOD step is filled in as the paper form's Part II.
+  const paperPartTwo = isEvaluation && evalForm !== null && isTrainingEvaluationForm(formTitle) && supportsPaperPartTwo(evalRuntime);
+  // The paper Part II is signed on its sign-off line: by the step's own
+  // signature question when it has one, otherwise by the signing box there.
+  const paperNeedsSignature = paperPartTwo && !evalRuntime.form.pages.some((page) => hasSignatureQuestion(page.elements));
+  const confirmBlocked = isSubmitting || !evalForm || !evalValid || (paperNeedsSignature && !signatureData);
+  const evalFooterHint = evalValid && paperNeedsSignature && !signatureData ? "Sign on the Signature line to submit." : evalHint;
 
   const steps: ReviewerStep[] = Array.from({ length: Math.max(totalLayers, effectiveLayerNumber) }, (_, index) => {
     const n = index + 1;
@@ -1044,8 +1055,6 @@ export default function EvaluationPage() {
   // the record will be stamped with. Position falls back to the layer title.
   const signerName = viewerSignOff?.name || signedInApprover;
   const signerPosition = signOffPosition(viewerSignOff?.position, approverRoleLabel);
-  // The Training Evaluation's HOD step is filled in as the paper form's Part II.
-  const paperPartTwo = isEvaluation && evalForm !== null && isTrainingEvaluationForm(formTitle) && supportsPaperPartTwo(evalRuntime);
   const paperSignOff: PaperSignOff = signOffDraft ?? { name: signerName || "", position: signerPosition || "", date: todayPaperDate() };
   const pendingVerdict = signOffVerdictForLayer(currentLayer?.type);
   const customSignOffLabel = descriptionIsLabel ? layerDescription : undefined;
@@ -1345,9 +1354,7 @@ export default function EvaluationPage() {
                     disabled={isSubmitting}
                     signOff={paperSignOff}
                     onSignOffChange={setSignOffDraft}
-                    signatureSlot={isSignatureRequired
-                      ? <SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />
-                      : undefined}
+                    signatureSlot={<SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />}
                   />
                 ) : evalForm ? (
                   <NativeFormView
@@ -1415,7 +1422,7 @@ export default function EvaluationPage() {
                   className="rv-eval-actions"
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, paddingTop: 20, borderTop: `1px solid ${R.line}` }}
                 >
-                  <span style={{ fontSize: 13.5, color: R.label }}>{evalForm ? evalHint : ""}</span>
+                  <span style={{ fontSize: 13.5, color: R.label }}>{evalForm ? evalFooterHint : ""}</span>
                   <button
                     type="button"
                     className="rv-btn"

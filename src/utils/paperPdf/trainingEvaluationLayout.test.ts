@@ -182,7 +182,7 @@ describe("Training Evaluation Part II", () => {
 
   it("uses the Word form's comment label and sign-off statement", () => {
     const blocks = doc.sections.slice(part2).flatMap((s) => s.blocks);
-    expect(blocks.find((b) => b.kind === "ticks")).toMatchObject({ title: "Performance Indication" });
+    expect(blocks.find((b) => b.kind === "ticks")).toMatchObject({ title: "Performance Indication:" });
     expect(blocks.find((b) => b.kind === "long")).toMatchObject({ label: HOD_COMMENTS_LABEL });
     expect(blocks.find((b) => b.kind === "signoff")).toMatchObject({ statement: HOD_STATEMENT, name: "Siti Aminah", large: true });
   });

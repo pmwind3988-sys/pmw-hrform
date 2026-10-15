@@ -88,6 +88,7 @@ function layerResult(layer: ApprovalLayerResult | EvaluationLayerResult, layerCo
       signedAt: layer.signedAt || layer.confirmedAt || undefined,
       signerName: shared.signerName || layer.confirmerName || undefined,
       signOffDate: layer.signOffDate || undefined,
+      signature: layer.signature || undefined,
       evaluationFields: layer.fields ?? {},
       evaluationSurveyElements: evaluationElementsFor(layerConfig, layer.layerNumber),
     };
