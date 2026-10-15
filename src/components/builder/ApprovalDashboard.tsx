@@ -265,7 +265,7 @@ interface FormConfig {
 function previousOnlineEmail(rawAssignments: unknown, layerNumber: number): string {
   const entry = getWorkflowAssignment(rawAssignments, layerNumber);
   const candidates = [entry?.email, ...[...(entry?.history ?? [])].reverse().map((h) => h.email)].map((e) => valueToText(e).toLowerCase());
-  return candidates.find((e) => e && e !== CONFIGURED_MANUAL_PAPER_EMAIL) ?? "";
+  return candidates.find((e) => e && e !== CONFIGURED_MANUAL_PAPER_EMAIL && e !== PAPER_TOGGLE_MAILBOX) ?? "";
 }
 
 /**
@@ -277,7 +277,6 @@ function PaperEvaluationToggle({
   layerType,
   onPaper,
   paperMailbox,
-  paperAllowed,
   previousOnlineEmail: suggested,
   busy,
   onToggle,
@@ -285,7 +284,6 @@ function PaperEvaluationToggle({
   layerType: "approval" | "evaluation";
   onPaper: boolean;
   paperMailbox: string;
-  paperAllowed: boolean;
   previousOnlineEmail: string;
   busy: boolean;
   onToggle: (toPaper: boolean, onlineEmail?: string) => void;
@@ -293,11 +291,10 @@ function PaperEvaluationToggle({
   const [choosingOnline, setChoosingOnline] = useState(false);
   const [onlineEmail, setOnlineEmail] = useState(suggested);
   const noun = layerType === "evaluation" ? "evaluation" : "approval";
-  const unavailable = !paperMailbox
-    ? "No paper mailbox is configured (VITE_HR_FORM_MANUAL_PAPER_ADDRESS), so steps cannot be sent to paper."
-    : !paperAllowed && !onPaper
-      ? "This step is set never to go to paper in the form's workflow settings."
-      : "";
+  // Taking a step off paper never needs the mailbox; only sending one there does.
+  const unavailable = !paperMailbox && !onPaper
+    ? "No paper or sending mailbox is configured, so steps cannot be sent to paper."
+    : "";
   const flip = () => {
     if (busy || unavailable) return;
     if (onPaper) setChoosingOnline((open) => !open);
@@ -577,6 +574,10 @@ function buildEvaluationSurveyJson(elements: Record<string, unknown>[]): Record<
   };
 }
 
+// Where the "Paper evaluation" switch sends a step. A submitter routing rule
+// marked "send to paper" delivers to the sending mailbox, so with no dedicated
+// paper mailbox configured that is where paper steps already go.
+const PAPER_TOGGLE_MAILBOX = CONFIGURED_MANUAL_PAPER_EMAIL || CONFIGURED_SENDER_EMAIL;
 function normalizeEmailAddress(value: unknown): string {
   return valueToText(value).toLowerCase();
 }
@@ -2586,7 +2587,7 @@ export default function ApprovalDashboard() {
           updatedAt: selectedItem.SubmittedAt || updatedAt,
         },
       });
-      const isManualPaperAssignment = shouldUseManualPaperForSender(targetLayer, email);
+      const isManualPaperAssignment = input.forcePaper === true || shouldUseManualPaperForSender(targetLayer, email);
       // Parked because the directory had no approver for this submitter. Naming
       // one is what the layer was waiting for, so it starts here rather than
       // staying flagged with nobody ever told about it.
@@ -2647,6 +2648,7 @@ export default function ApprovalDashboard() {
         [input.layer]: {
           ...(previous[input.layer] || { status: "" }),
           email,
+          ...(typeof newLayerStatus === "string" ? { status: newLayerStatus } : {}),
         },
       }));
       setPendingItems((previous) => previous.map((current) =>
@@ -2751,7 +2753,7 @@ export default function ApprovalDashboard() {
     if (!selectedItem || !currentLayerConfig) return;
     const layer = currentLayerConfig.layerNumber;
     if (toPaper) {
-      await handleSaveWorkflowAssignment({ layer, email: CONFIGURED_MANUAL_PAPER_EMAIL, reason: "Switched to paper evaluation" });
+      await handleSaveWorkflowAssignment({ layer, email: PAPER_TOGGLE_MAILBOX, reason: "Switched to paper evaluation", forcePaper: true });
       return;
     }
     const email = (onlineEmail ?? "").trim();
@@ -3997,9 +3999,12 @@ export default function ApprovalDashboard() {
                     <PaperEvaluationToggle
                       key={`${getPendingItemKey(selectedItem)}-${currentLayerConfig.layerNumber}`}
                       layerType={currentLayerConfig.type}
-                      onPaper={isManualPaperWorkflowStatus(selectedItem.layerStatuses?.[currentLayerConfig.layerNumber])}
-                      paperMailbox={CONFIGURED_MANUAL_PAPER_EMAIL}
-                      paperAllowed={currentLayerConfig.manualPaperWhenSenderEmail !== false}
+                      onPaper={isManualPaperWorkflowStatus(
+                        // The full row read on opening is the reliable status; the list's is a lighter query.
+                        completedLayers[currentLayerConfig.layerNumber]?.status
+                          || selectedItem.layerStatuses?.[currentLayerConfig.layerNumber],
+                      )}
+                      paperMailbox={PAPER_TOGGLE_MAILBOX}
                       previousOnlineEmail={previousOnlineEmail(selectedItem.WorkflowAssignmentData, currentLayerConfig.layerNumber)}
                       busy={assignmentSaving || resendingItemKey === getPendingItemKey(selectedItem)}
                       onToggle={(toPaper, email) => void handleTogglePaperEvaluation(toPaper, email)}

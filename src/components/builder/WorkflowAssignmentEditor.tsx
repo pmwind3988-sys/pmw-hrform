@@ -17,6 +17,8 @@ export interface WorkflowAssignmentSaveInput {
   workflowRole?: string;
   notes?: string;
   reason: string;
+  /** Flag the step for paper handling whatever the address (the paper toggle). */
+  forcePaper?: boolean;
 }
 
 interface WorkflowAssignmentEditorProps {
