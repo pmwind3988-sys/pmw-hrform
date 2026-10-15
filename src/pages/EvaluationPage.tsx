@@ -647,9 +647,13 @@ export default function EvaluationPage() {
   // reviewer can drift away from a screen that is asking them to wait.
   useEffect(() => {
     if (actionState !== "submitting") return;
+    // The confirm dialog that starts a submission locks the page too, and is
+    // still closing at this moment — so what we see here can be its "hidden",
+    // not the page's own value. Restoring that would leave the finished page
+    // (the paper form after an evaluation) unable to scroll.
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
+    return () => { document.body.style.overflow = previous === "hidden" ? "" : previous; };
   }, [actionState]);
 
   // ── Submit action ──
