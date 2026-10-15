@@ -13,6 +13,7 @@ import {
   type WorkflowEmailDetail,
 } from "./workflowEmailTemplate.js";
 import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
+import { isSignedInReviewLink } from "./workflowDigest.js";
 
 export type WorkflowEmailDeliveryStatus = "sent" | "failed";
 
@@ -24,6 +25,13 @@ export interface WorkflowEmailEntry {
   lastAttemptAt: string;
   sentAt?: string;
   error?: string;
+  /**
+   * Set when this notice went out inside a daily summary rather than as its
+   * own email, with how many requests that summary carried. Absent means it
+   * was sent on its own.
+   */
+  via?: "summary";
+  summarySize?: number;
 }
 
 export type WorkflowEmailLog = Record<string, WorkflowEmailEntry>;
@@ -51,6 +59,12 @@ export interface WorkflowEmailScheduleEntry {
   totalLayers: number;
   reviewLink: string;
   submittedBy: string;
+  /**
+   * An email that would have gone out at once, held for the next morning's
+   * summary because the same person already had one due then. See
+   * `workflowSummaryHold.ts`.
+   */
+  heldForSummary?: boolean;
 }
 
 export type WorkflowEmailScheduleLog = Record<string, WorkflowEmailScheduleEntry>;
@@ -61,6 +75,8 @@ interface WorkflowEmailAttempt {
   status: WorkflowEmailDeliveryStatus;
   attemptedAt: string;
   error?: string;
+  via?: "summary";
+  summarySize?: number;
 }
 
 export interface WorkflowEmailMessage {
@@ -238,6 +254,10 @@ export function recordWorkflowEmailAttempt(
     attempts: (previous?.attempts ?? 0) + 1,
     lastAttemptAt: attempt.attemptedAt,
   };
+  if (attempt.via === "summary") {
+    next.via = "summary";
+    if (attempt.summarySize) next.summarySize = attempt.summarySize;
+  }
   if (attempt.status === "sent") {
     next.sentAt = attempt.attemptedAt;
   } else {
@@ -319,7 +339,7 @@ export async function sendGraphEmail(
   }
 }
 
-async function persistWorkflowEmailAttempt(
+export async function persistWorkflowEmailAttempt(
   token: string,
   context: WorkflowEmailContext,
   attempt: WorkflowEmailAttempt,
@@ -390,10 +410,44 @@ export async function scheduleOrDeliverWorkflowEmail(
   context: WorkflowEmailContext,
   config: WorkflowEmailScheduleConfig | undefined,
   details: Omit<WorkflowEmailScheduleEntry, "recipient" | "dueAt" | "status" | "updatedAt">,
+  options?: {
+    /**
+     * Allow an immediate notice to wait for the next morning's summary when
+     * the same person already has one due then. Only the action email for a
+     * signed-in step asks for this; an admin's "send now" never does.
+     */
+    mayHoldForSummary?: boolean;
+  },
 ): Promise<WorkflowEmailScheduleEntry> {
   const now = new Date();
   const recipient = typeof message.to === "string" ? message.to : message.to.join(", ");
   const base = { ...details, layer: context.layer, recipient };
+
+  if (
+    options?.mayHoldForSummary
+    && (!config || config.mode === "immediate")
+    && !context.testRun
+    && isSignedInReviewLink(details.reviewLink)
+  ) {
+    // Loaded on demand: the hold check reads this module's schedule parser.
+    const { summaryHoldUntil } = await import("./workflowSummaryHold.js");
+    const holdUntil = await summaryHoldUntil(token, recipient, {
+      listTitle: context.listTitle,
+      responseItemId: String(context.responseItemId),
+      layer: context.layer,
+    }, now).catch(() => null);
+    if (holdUntil) {
+      const held: WorkflowEmailScheduleEntry = {
+        ...base,
+        dueAt: holdUntil,
+        status: "scheduled",
+        updatedAt: now.toISOString(),
+        heldForSummary: true,
+      };
+      await persistWorkflowEmailSchedule(token, context, held);
+      return held;
+    }
+  }
 
   // Only a deferred send needs a row to wait in.
   if (config && config.mode !== "immediate") {

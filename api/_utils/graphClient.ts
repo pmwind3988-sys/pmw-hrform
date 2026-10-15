@@ -438,16 +438,24 @@ export async function queryListItems(
 export async function queryAllListItems(
   token: string,
   listDisplayName: string,
-  options?: { pageSize?: number; maxItems?: number },
+  options?: {
+    pageSize?: number;
+    maxItems?: number;
+    /** Read only these columns. Much lighter for a scan that needs one or two. */
+    fields?: string[];
+  },
 ): Promise<GraphListItem[]> {
   const siteId = await getSiteId(token);
   const listId = await getListId(token, listDisplayName);
   const pageSize = Math.min(Math.max(options?.pageSize ?? 999, 1), 999);
   const maxItems = options?.maxItems ?? 20000;
+  const expand = options?.fields?.length
+    ? `fields($select=${options.fields.map(encodeURIComponent).join(",")})`
+    : "fields";
 
   const items: GraphListItem[] = [];
   let url: string | null =
-    `${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items?$select=id&$expand=fields&$top=${pageSize}`;
+    `${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items?$select=id&$expand=${expand}&$top=${pageSize}`;
 
   while (url && items.length < maxItems) {
     const res: Response = await fetch(url, {

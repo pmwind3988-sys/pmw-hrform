@@ -72,7 +72,7 @@ describe("resolveNavLocation", () => {
 
   it("offers one superuser submissions tab, not two", () => {
     const work = visibleCategories(BOTH).find((c) => c.key === "work");
-    expect(work?.tabs.map((t) => t.label)).toEqual(["Available forms", "My Submissions", "All Submissions"]);
+    expect(work?.tabs.map((t) => t.label)).toEqual(["Available forms", "My Submissions", "Waiting for me", "All Submissions"]);
   });
 
   it("keeps the two profile paths apart", () => {
@@ -147,7 +147,7 @@ describe("visibleCategories", () => {
 
   it("drops the two superuser tabs from My Work for a plain employee", () => {
     const work = visibleCategories(NOBODY).find((c) => c.key === "work");
-    expect(work?.tabs.map((t) => t.path)).toEqual(["/forms", "/submissions"]);
+    expect(work?.tabs.map((t) => t.path)).toEqual(["/forms", "/submissions", "/reviews"]);
   });
 
   it("gives an admin the Admin category without the builder tabs", () => {

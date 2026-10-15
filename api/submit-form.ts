@@ -2326,6 +2326,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 reviewLink,
                 submittedBy,
               },
+              // Only a real action email may wait for a summary; a parked or paper
+              // notice says something different and goes out as it is.
+              { mayHoldForSummary: true },
             );
           }
           if (testTicket) {

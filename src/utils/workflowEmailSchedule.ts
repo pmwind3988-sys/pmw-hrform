@@ -1,6 +1,6 @@
 import type { EvaluationEmailSchedule } from "../types";
 
-export type ScheduledWorkflowEmailStatus = "scheduled" | "sent" | "failed";
+export type ScheduledWorkflowEmailStatus = "scheduled" | "sending" | "sent" | "failed";
 
 export interface ScheduledWorkflowEmail {
   layer: number;
@@ -12,6 +12,10 @@ export interface ScheduledWorkflowEmail {
   totalLayers?: number;
   reviewLink?: string;
   submittedBy?: string;
+  /** Held from going out at once to join the next morning's summary. */
+  heldForSummary?: boolean;
+  /** Delivery attempts so far; the daily run stops retrying at 5. */
+  attempts?: number;
 }
 
 export type WorkflowEmailScheduleLog = Record<string, ScheduledWorkflowEmail>;

@@ -32,6 +32,11 @@ import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
 import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
 import { sharePointTokenFrom, testRunTesterMayAct } from "./_utils/testRunReviewer.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
+import { pickLayerByNumber } from "./_utils/layerPick.js";
+import { readReviewQueue } from "./_utils/reviewQueue.js";
+
+// Re-exported: its tests and older callers import it from here.
+export { pickLayerByNumber };
 
 /**
  * What an old link is told. Deliberately the same answer whether the
@@ -47,31 +52,6 @@ const LINK_MISMATCH_MESSAGE = "This review link does not open this submission.";
 const LINK_EXPIRED_MESSAGE = "This review link has expired.";
 
 /** Query values arrive as string | string[] depending on the runtime. */
-/**
- * The layer a signed-in reviewer is asking for, honouring the branch the
- * submission was routed down.
- *
- * A public link names its layer with the token, so the public path never needs
- * this. A signed-in link carries the layer *number*, which on a branched form
- * can describe a different step per branch — so the number alone is not enough.
- */
-export function pickLayerByNumber(
-  config: { layers?: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null,
-  selectedBranch: string,
-  layerNumber: number,
-): Record<string, unknown> | null {
-  if (!config || !layerNumber) return null;
-  const branchKey = selectedBranch.trim().toLowerCase();
-  if (branchKey && config.manualBranches?.length) {
-    const branch = config.manualBranches.find((entry) =>
-      [entry.name, entry.label].some((candidate) =>
-        typeof candidate === "string" && candidate.trim().toLowerCase() === branchKey));
-    const onBranch = branch?.layers?.find((layer) => Number(layer.layerNumber) === layerNumber);
-    if (onBranch) return onBranch;
-  }
-  return (config.layers ?? []).find((layer) => Number(layer.layerNumber) === layerNumber) ?? null;
-}
-
 function firstQueryValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return typeof value[0] === "string" ? value[0].trim() : "";
   return typeof value === "string" ? value.trim() : "";
@@ -448,6 +428,29 @@ async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, 
   }
 
   return result;
+}
+
+/**
+ * Every signed-in step waiting for the caller — the "Waiting for me" page.
+ *
+ * An action on this route rather than a function of its own: `api/` is at the
+ * Hobby plan's 12-function cap. Who is asking comes from the verified Graph
+ * token, never the request, so nobody can list somebody else's work.
+ */
+async function handleReviewQueue(req: ApiRequest, res: ApiResponse) {
+  res.setHeader("Cache-Control", "private, no-store");
+  try {
+    const graphToken = await getGraphToken();
+    const viewer = await requireSignedInViewer(req.headers, graphToken);
+    if (viewer?.kind !== "m365") {
+      return res.status(401).json({ error: "Sign in with your work account to see what is waiting for you." });
+    }
+    const { entries, formsSkipped } = await readReviewQueue(graphToken, viewer.id);
+    return res.status(200).json({ items: entries as unknown as Record<string, unknown>[], formsSkipped });
+  } catch (err) {
+    logError("api:evaluate:my-queue", "Failed to read the review queue", err);
+    return res.status(500).json({ error: "Could not load your waiting requests. Please try again." });
+  }
 }
 
 async function handleGet(req: ApiRequest, res: ApiResponse) {
@@ -858,6 +861,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method === "GET") {
+    if (firstQueryValue(req.query.action) === "my-queue") return handleReviewQueue(req, res);
     return handleGet(req, res);
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -1382,6 +1386,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               reviewLink: manualPaper ? "" : reviewLink,
               submittedBy,
             },
+            // Only a real action email may wait for a summary; a parked or paper
+            // notice says something different and goes out as it is.
+            { mayHoldForSummary: !manualPaper && !isNeedsRoutingLayerStatus(nextStatus) },
           );
         } catch (emailError) {
           logWarn("api:evaluate", "Next workflow email delivery failed", {

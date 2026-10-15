@@ -5,6 +5,9 @@ export interface WorkflowEmailStatusEntry {
   lastAttemptAt: string;
   sentAt?: string;
   error?: string;
+  /** Went out inside a daily summary of this many requests, not on its own. */
+  via?: "summary";
+  summarySize?: number;
 }
 
 export type WorkflowEmailStatus =
@@ -33,6 +36,8 @@ export function getWorkflowEmailStatus(
       lastAttemptAt: typeof record.lastAttemptAt === "string" ? record.lastAttemptAt : "",
       ...(typeof record.sentAt === "string" ? { sentAt: record.sentAt } : {}),
       ...(typeof record.error === "string" ? { error: record.error } : {}),
+      ...(record.via === "summary" ? { via: "summary" as const } : {}),
+      ...(typeof record.summarySize === "number" ? { summarySize: record.summarySize } : {}),
     };
   } catch {
     return { status: "not_sent" };

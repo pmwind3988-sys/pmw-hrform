@@ -321,14 +321,38 @@ function todayLabel(): string {
   return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+/**
+ * Opening this page inside a window on Waiting for me, rather than at its own
+ * address.
+ *
+ * Only the signed-in shape can be embedded — a public step is opened by its
+ * emailed link alone. Everything that decides access is unchanged: the same
+ * slug, item and step go to the same server checks as the address would have
+ * carried, so the window can open nothing the link could not.
+ */
+export interface EmbeddedEvaluation {
+  formSlug: string;
+  responseId: string;
+  layerNumber: number;
+  prefix: "eval" | "approval";
+  /** Called once the decision has been recorded. */
+  onFinished?: () => void;
+  /** The finished screen's "Back to the list" button. */
+  onClose: () => void;
+}
+
 // ── Component ──
-export default function EvaluationPage() {
-  const { token: routeToken, formSlug, responseId, layerNumber } = useParams<{
+export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvaluation } = {}) {
+  const routeParams = useParams<{
     token: string;
     formSlug: string;
     responseId: string;
     layerNumber: string;
   }>();
+  const routeToken = embedded ? undefined : routeParams.token;
+  const formSlug = embedded ? embedded.formSlug : routeParams.formSlug;
+  const responseId = embedded ? embedded.responseId : routeParams.responseId;
+  const layerNumber = embedded ? String(embedded.layerNumber) : routeParams.layerNumber;
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -408,7 +432,9 @@ export default function EvaluationPage() {
    * for, checked against the layer once the record says what it really is.
    */
   const { pathname } = useLocation();
-  const routePrefix = pathname.startsWith("/approval/") ? "approval" as const : "eval" as const;
+  const routePrefix = embedded
+    ? embedded.prefix
+    : pathname.startsWith("/approval/") ? "approval" as const : "eval" as const;
 
   const isPublic = !!routeToken;
   const displayLayerNumber = isPublic
@@ -656,6 +682,13 @@ export default function EvaluationPage() {
     return () => { document.body.style.overflow = previous === "hidden" ? "" : previous; };
   }, [actionState]);
 
+  // Tell the window's owner the decision is in, so its list is refreshed even
+  // if the reviewer closes with the X rather than "Back to the list".
+  const onEmbeddedFinished = embedded?.onFinished;
+  useEffect(() => {
+    if (actionState === "success") onEmbeddedFinished?.();
+  }, [actionState, onEmbeddedFinished]);
+
   // ── Submit action ──
   const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm", writtenSignOff?: PaperSignOff) => {
     if (!userEmail) return;
@@ -815,9 +848,10 @@ export default function EvaluationPage() {
   const rejectButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    if (!formTitle) return;
+    // In a window the list page underneath still owns the tab title.
+    if (!formTitle || embedded) return;
     document.title = `${formTitle} — ${currentLayer?.type === "evaluation" ? "Evaluation" : "Approval"}`;
-  }, [formTitle, currentLayer]);
+  }, [formTitle, currentLayer, embedded]);
 
   // Hand focus back to the Reject button when the reject panel closes.
   useEffect(() => {
@@ -940,6 +974,14 @@ export default function EvaluationPage() {
         reference={referenceLabel}
         nextLine={nextLine}
       >
+        {/* In a window on Waiting for me: back to the list, which refreshes. */}
+        {embedded ? (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+            <button type="button" className="rv-btn" onClick={embedded.onClose} style={{ minHeight: 44, padding: "0 22px", borderRadius: 10, border: 0, background: R.navy, color: "#FFFFFF", fontWeight: 700, fontSize: 15, fontFamily: "inherit", cursor: "pointer" }}>
+              Back to the list
+            </button>
+          </div>
+        ) : null}
         {finishedPaper ? <PaperFormView doc={finishedPaper} logoUrl={logoUrl || "/logo-128.png"} /> : null}
       </SuccessCard>
     );

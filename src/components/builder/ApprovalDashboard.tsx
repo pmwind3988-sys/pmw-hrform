@@ -125,6 +125,12 @@ import { useDashboard } from "../../contexts/DashboardContext";
 import SapPanel from "../sap/SapPanel";
 import SapFormTree, { type SapFormTreeEntry } from "../sap/SapFormTree";
 import SapViewSwitch from "../sap/SapViewSwitch";
+import EmailSchedulePanel from "./EmailSchedulePanel";
+import {
+  compileEmailSchedule,
+  sendSelectedScheduledEmails,
+  type EmailScheduleEntry,
+} from "../../utils/emailScheduleOverview";
 import { applyFormTypeChange } from "../../utils/submissionFilters";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -842,6 +848,8 @@ export default function ApprovalDashboard() {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperuser, setIsSuperuser] = useState(false);
+  /** The compiled email schedule, shown in place of the three panes. */
+  const [showEmailSchedule, setShowEmailSchedule] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
   const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<string, "approval" | "evaluation">>({});
   const formLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
@@ -3295,6 +3303,69 @@ export default function ApprovalDashboard() {
     );
   }
 
+  /**
+   * Every workflow email across the loaded submissions, compiled for the
+   * Email schedule view. Rows outside the page's load window are not in it.
+   */
+  const emailScheduleEntries = showEmailSchedule
+    ? compileEmailSchedule(pendingItems.map((item) => ({
+        formTitle: item.Title,
+        itemId: item.Id,
+        submittedBy: item.SubmittedBy,
+        currentLayer: Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0),
+        isTest: isTestRow(item as unknown as Record<string, unknown>),
+        scheduleRaw: item.WorkflowEmailSchedule,
+        logRaw: item.WorkflowEmailLog,
+      })))
+    : [];
+
+  const openScheduledEmailItem = (entry: EmailScheduleEntry) => {
+    const item = pendingItems.find((current) => current.Title === entry.formTitle && current.Id === entry.itemId);
+    if (!item) return;
+    setShowEmailSchedule(false);
+    void loadItemDetails(item);
+  };
+
+  /** Re-reads the two email columns of the rows just sent, so the view shows what happened. */
+  const refreshEmailColumns = async (entries: EmailScheduleEntry[]) => {
+    if (!token) return;
+    const unique = Array.from(new Map(entries.map((entry) => [`${entry.formTitle}::${entry.itemId}`, entry])).values());
+    const refreshed = await Promise.all(unique.map(async (entry) => {
+      try {
+        const row = await spGet(
+          token,
+          `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(entry.formTitle)}')/items(${entry.itemId})?$select=WorkflowEmailLog,WorkflowEmailSchedule`,
+        ) as Record<string, unknown>;
+        return { key: `${entry.formTitle}::${entry.itemId}`, log: valueToText(row.WorkflowEmailLog), schedule: valueToText(row.WorkflowEmailSchedule) };
+      } catch {
+        return null;
+      }
+    }));
+    const byKey = new Map(refreshed.filter((row): row is NonNullable<typeof row> => !!row).map((row) => [row.key, row]));
+    setPendingItems((previous) => previous.map((current) => {
+      const row = byKey.get(getPendingItemKey(current));
+      return row ? { ...current, WorkflowEmailLog: row.log, WorkflowEmailSchedule: row.schedule } : current;
+    }));
+  };
+
+  const handleSendSelectedEmails = async (entries: EmailScheduleEntry[]) => {
+    if (!token || entries.length === 0) return;
+    setError("");
+    setEmailNotice("");
+    try {
+      const result = await sendSelectedScheduledEmails(token, entries);
+      const parts = [`${result.sent} sent`];
+      if (result.summaries) parts.push(`${result.summaries} as summar${result.summaries === 1 ? "y" : "ies"}`);
+      if (result.failed) parts.push(`${result.failed} failed`);
+      if (result.skipped.length) parts.push(`${result.skipped.length} skipped (${result.skipped.join("; ")})`);
+      setEmailNotice(`Scheduled emails: ${parts.join(", ")}.`);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Could not send the selected emails.");
+    } finally {
+      await refreshEmailColumns(entries);
+    }
+  };
+
   return (
     // One screen. On a wide screen the shell has no top or bottom bar, only the
     // page padding (~64px); the header, stage pills and filters above the panes
@@ -3302,7 +3373,26 @@ export default function ApprovalDashboard() {
     // The two panes below scroll inside themselves, so the page does not.
     <div style={isWide ? { height: "calc(100dvh - 64px)", minHeight: 760 } : undefined}>
       <div style={{ maxWidth: 1400, margin: "0 auto", height: isWide ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
-        <PageHeader title="All submissions" description="Every submission across all forms." aside={<SapViewSwitch current="all" />} />
+        <PageHeader
+          title="All submissions"
+          description="Every submission across all forms."
+          aside={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+              {isSuperuser && (
+                <Button
+                  variant={showEmailSchedule ? "contained" : "outlined"}
+                  size="small"
+                  aria-pressed={showEmailSchedule}
+                  onClick={() => setShowEmailSchedule((current) => !current)}
+                  sx={{ textTransform: "none", fontWeight: 700, borderRadius: `${si.radius}px` }}
+                >
+                  {showEmailSchedule ? "Back to submissions" : "Email schedule"}
+                </Button>
+              )}
+              <SapViewSwitch current="all" />
+            </Box>
+          }
+        />
 
         {error && (
           <Box role="alert" sx={{ backgroundColor: editorial.errorSoft, borderRadius: `${si.radiusSm}px`, p: 1.5, color: editorial.error, mb: 2, ...siType.body }}>
@@ -3483,8 +3573,16 @@ export default function ApprovalDashboard() {
           onClose={() => setPdfPreview(null)}
         />
 
+        {showEmailSchedule && (
+          <EmailSchedulePanel
+            entries={emailScheduleEntries}
+            onOpen={openScheduledEmailItem}
+            onSendSelected={handleSendSelectedEmails}
+          />
+        )}
+
         {/* Items + Detail Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: isWide ? "260px minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
+        <div style={{ display: showEmailSchedule ? "none" : "grid", gridTemplateColumns: isWide ? "260px minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
           {/* Form tree: pick a form to narrow the list, or All submissions for every form. */}
           <SapPanel label="Forms" sx={{ minHeight: 0, maxHeight: isWide ? undefined : 280 }}>
             <Box sx={{ overflow: "auto", flex: 1, minHeight: 0 }}>
@@ -3751,7 +3849,9 @@ export default function ApprovalDashboard() {
                             : emailSchedule ? editorial.accentText : C.textSecond,
                       }}
                     >
-                      {hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                      {hasPendingEmailSchedule && emailSchedule.heldForSummary ? `Held for morning summary ${formatDateTime(emailSchedule.dueAt)}`
+                        : hasPendingEmailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
+                        : emailStatus.status === "sent" && emailStatus.via === "summary" ? `Sent in a summary${emailStatus.lastAttemptAt ? ` ${formatDateTime(emailStatus.lastAttemptAt)}` : ""}`
                         : emailStatus.status === "sent" ? `Sent for evaluation${emailStatus.lastAttemptAt ? ` ${formatDateTime(emailStatus.lastAttemptAt)}` : ""}`
                         : emailStatus.status === "failed" ? "Workflow email failed"
                           : emailSchedule ? `📅 Sends for evaluation ${formatDateTime(emailSchedule.dueAt)}`
@@ -4018,7 +4118,9 @@ export default function ApprovalDashboard() {
                           const layerNumber = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
                           const delivery = getWorkflowEmailStatus(selectedItem.WorkflowEmailLog, layerNumber);
                           const schedule = getScheduledWorkflowEmail(selectedItem.WorkflowEmailSchedule, layerNumber);
+                          if (schedule?.status === "scheduled" && schedule.heldForSummary) return `Held for the morning summary on ${formatDateTime(schedule.dueAt)}, because ${schedule.recipient} already has another email due then. Send now sends it on its own instead.`;
                           if (schedule?.status === "scheduled") return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
+                          if (delivery.status === "sent" && delivery.via === "summary") return `Sent to ${delivery.recipient} in a summary${delivery.summarySize ? ` of ${delivery.summarySize}` : ""} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)}.`;
                           if (delivery.status === "sent") return `Sent to ${delivery.recipient} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)} (${delivery.attempts} attempt${delivery.attempts === 1 ? "" : "s"}).`;
                           if (delivery.status === "failed") return `Last send failed on ${formatDateTime(delivery.lastAttemptAt)}.`;
                           if (schedule) return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;

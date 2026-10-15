@@ -318,6 +318,7 @@ const loadAdminFormBuilder = () => import("./pages/AdminFormBuilder");
 const loadDashboardPage = () => import("./pages/DashboardPage");
 const loadFormsPage = () => import("./pages/FormsPage");
 const loadMySubmissionsPage = () => import("./pages/MySubmissionsPage");
+const loadReviewQueuePage = () => import("./pages/ReviewQueuePage");
 const loadProfilePage = () => import("./pages/ProfilePage");
 const loadAppearancePage = () => import("./pages/AppearancePage");
 const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
@@ -1915,6 +1916,17 @@ export default function App() {
             path="/submissions"
             element={withSubmissions(
               <LazyRoute load={loadMySubmissionsPage} fallback={<PageSkeleton label="Loading submissions" />} />,
+            )}
+          />
+          {/*
+            Every step assigned to the signed-in person. Reads its own list from
+            the server, not `submissions`, so it does not wait for that fetch.
+            The daily summary email links here — do not move it.
+          */}
+          <Route
+            path="/reviews"
+            element={inShell(
+              <LazyRoute load={loadReviewQueuePage} fallback={<PageSkeleton label="Loading your waiting requests" />} />,
             )}
           />
           {/* Profile. Neither page reads `submissions`, so neither waits. */}

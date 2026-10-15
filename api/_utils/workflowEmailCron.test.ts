@@ -12,12 +12,17 @@ import type { WorkflowEmailContext, WorkflowEmailMessage } from "./workflowEmail
 const graph = vi.hoisted(() => ({
   queryAllListItems: vi.fn(),
   queryListItems: vi.fn(),
+  queryListItemById: vi.fn(),
   updateListItemFields: vi.fn(
     async (_token: string, _list: string, _id: string, _fields: Record<string, unknown>) => ({}),
   ),
   getGraphToken: vi.fn(async () => "tok"),
 }));
-const mail = vi.hoisted(() => ({ deliverWorkflowEmail: vi.fn(async () => ({})) }));
+const mail = vi.hoisted(() => ({
+  deliverWorkflowEmail: vi.fn(async () => ({})),
+  sendGraphEmail: vi.fn(async () => undefined),
+  persistWorkflowEmailAttempt: vi.fn(async () => ({})),
+}));
 
 vi.mock("./graphClient.js", () => graph);
 vi.mock("./auth.js", () => ({
@@ -25,6 +30,8 @@ vi.mock("./auth.js", () => ({
   validateApiKey: vi.fn(() => ({ valid: true })),
 }));
 vi.mock("./logger.js", () => ({ logError: vi.fn(), logWarn: vi.fn() }));
+const owner = vi.hoisted(() => ({ isFormBuilderSuperuser: vi.fn(async () => true) }));
+vi.mock("./hrFormsOwner.js", async (importOriginal) => ({ ...(await importOriginal<object>()), ...owner }));
 
 const actualMail = await vi.importActual<typeof import("./workflowEmail.js")>("./workflowEmail.js");
 vi.mock("./workflowEmail.js", () => ({ ...actualMail, ...mail }));
@@ -99,6 +106,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   graph.updateListItemFields.mockResolvedValue({});
   mail.deliverWorkflowEmail.mockResolvedValue({});
+  mail.sendGraphEmail.mockResolvedValue(undefined);
+  mail.persistWorkflowEmailAttempt.mockResolvedValue({});
   graph.getGraphToken.mockResolvedValue("tok");
 });
 
@@ -195,5 +204,116 @@ describe("the cron scan", () => {
     });
     expect(sent).toHaveLength(0);
     expect(mail.deliverWorkflowEmail).not.toHaveBeenCalled();
+  });
+
+  it("bundles several signed-in steps due to one person into one summary", async () => {
+    const signedIn = (id: string, recipient: string) => ({
+      id,
+      fields: {
+        CurrentLayer: 2,
+        WorkflowEmailSchedule: JSON.stringify({
+          "2": {
+            layer: 2, recipient, dueAt: "2020-01-01T00:00:00.000Z", status: "scheduled",
+            updatedAt: "2020-01-01T00:00:00.000Z", layerType: "evaluation", totalLayers: 2,
+            reviewLink: `https://pmw-hrform.vercel.app/eval/training-evaluation/${id}/2`, submittedBy: "s@example.com",
+          },
+        }),
+      },
+    });
+    graph.queryAllListItems.mockImplementation(async (_t: string, list: string) =>
+      list === "Master Form"
+        ? [{ id: "f1", fields: { Title: "Training Evaluation" } }]
+        : [signedIn("1", "hod@pmw-group.com"), signedIn("2", "HOD@pmw-group.com"), signedIn("3", "other@pmw-group.com")]);
+
+    const r = res();
+    await handler(REQ, r);
+
+    // One summary for the HOD's two, and the usual single email for the third.
+    expect(mail.sendGraphEmail).toHaveBeenCalledTimes(1);
+    expect(mail.deliverWorkflowEmail).toHaveBeenCalledTimes(1);
+    expect(mail.persistWorkflowEmailAttempt).toHaveBeenCalledTimes(2);
+    const recorded = mail.persistWorkflowEmailAttempt.mock.calls.map((call) => (call as unknown[])[2] as { status: string });
+    expect(recorded.every((attempt) => attempt.status === "sent")).toBe(true);
+    expect(r.result.body).toMatchObject({ sent: 3, digests: 1 });
+  });
+
+  it("records a failed summary on every row it covered, so tomorrow retries them", async () => {
+    mail.sendGraphEmail.mockRejectedValue(new Error("Graph sendMail failed with status 503."));
+    const item = (id: string) => ({
+      id,
+      fields: {
+        CurrentLayer: 1,
+        WorkflowEmailSchedule: JSON.stringify({
+          "1": {
+            layer: 1, recipient: "hod@pmw-group.com", dueAt: "2020-01-01T00:00:00.000Z", status: "scheduled",
+            updatedAt: "2020-01-01T00:00:00.000Z", layerType: "evaluation", totalLayers: 1,
+            reviewLink: `/eval/training-evaluation/${id}/1`, submittedBy: "s@example.com",
+          },
+        }),
+      },
+    });
+    graph.queryAllListItems.mockImplementation(async (_t: string, list: string) =>
+      list === "Master Form" ? [{ id: "f1", fields: { Title: "Training Evaluation" } }] : [item("1"), item("2")]);
+
+    const r = res();
+    await handler(REQ, r);
+
+    const recorded = mail.persistWorkflowEmailAttempt.mock.calls.map((call) => (call as unknown[])[2] as { status: string });
+    expect(recorded).toHaveLength(2);
+    expect(recorded.every((attempt) => attempt.status === "failed")).toBe(true);
+    expect(r.result.body).toMatchObject({ failed: 2, digests: 0 });
+  });
+
+  describe("send selected now", () => {
+    const row = (id: string, recipient: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      fields: {
+        CurrentLayer: 2,
+        WorkflowEmailSchedule: JSON.stringify({
+          "2": {
+            layer: 2, recipient, dueAt: "2099-01-01T00:00:00.000Z", status: "scheduled",
+            updatedAt: "2026-10-01T00:00:00.000Z", layerType: "evaluation", totalLayers: 2,
+            reviewLink: `https://pmw-hrform.vercel.app/eval/training-evaluation/${id}/2`, submittedBy: "s@example.com",
+          },
+        }),
+        ...extra,
+      },
+    });
+    const post = (items: unknown[], headers: Record<string, string> = { "x-sharepoint-token": "sp" }) =>
+      ({ method: "POST", headers, body: { action: "send-selected", items } });
+
+    it("refuses anyone who is not a Form Builder superuser", async () => {
+      owner.isFormBuilderSuperuser.mockResolvedValueOnce(false);
+      const r = res();
+      await handler(post([{ formTitle: "Training Evaluation", itemId: 1, layer: 2 }]), r);
+      expect(r.result.code).toBe(403);
+      expect(mail.sendGraphEmail).not.toHaveBeenCalled();
+      expect(mail.deliverWorkflowEmail).not.toHaveBeenCalled();
+    });
+
+    it("refuses a call with no SharePoint token at all", async () => {
+      const r = res();
+      await handler(post([{ formTitle: "Training Evaluation", itemId: 1, layer: 2 }], {}), r);
+      expect(r.result.code).toBe(403);
+    });
+
+    it("sends picked items now, one person's as one summary, even before their date", async () => {
+      const rows: Record<string, ReturnType<typeof row>> = {
+        "1": row("1", "hod@pmw-group.com"),
+        "2": row("2", "hod@pmw-group.com"),
+        "3": row("3", "other@pmw-group.com"),
+        "4": row("4", "hod@pmw-group.com", { WorkflowEmailSchedule: JSON.stringify({ "2": { layer: 2, status: "sent", recipient: "hod@pmw-group.com", dueAt: "2020-01-01T00:00:00.000Z", updatedAt: "", layerType: "evaluation", totalLayers: 2, reviewLink: "/eval/t/4/2", submittedBy: "" } }) }),
+      };
+      graph.queryListItemById.mockImplementation(async (_t: string, _l: string, id: string) => rows[id] ?? null);
+
+      const r = res();
+      await handler(post([1, 2, 3, 4].map((id) => ({ formTitle: "Training Evaluation", itemId: id, layer: 2 }))), r);
+
+      expect(r.result.code).toBe(200);
+      expect(mail.sendGraphEmail).toHaveBeenCalledTimes(1);
+      expect(mail.deliverWorkflowEmail).toHaveBeenCalledTimes(1);
+      expect(r.result.body).toMatchObject({ sent: 3, summaries: 1, failed: 0 });
+      expect((r.result.body?.skipped as string[])[0]).toContain("already sent");
+    });
   });
 });

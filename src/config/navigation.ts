@@ -141,6 +141,12 @@ export const NAV_CATEGORIES: NavCategory[] = [
         visibleTo: "everyone",
       },
       /**
+       * Everything assigned to this account to evaluate or approve, so a
+       * reviewer can work through it in one sitting instead of one email at a
+       * time. The daily summary email links straight here.
+       */
+      { label: "Waiting for me", path: "/reviews", icon: "approvals", visibleTo: "everyone" },
+      /**
        * The superuser-wide view, distinct from "My Submissions" above: that one
        * is this account's own rows, this one is everybody's.
        *
