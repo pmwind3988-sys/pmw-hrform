@@ -600,6 +600,16 @@ function sectionElements(section: PaperSection, index: number): ReactElement[] {
 
 // ── Document ────────────────────────────────────────────────────────────────
 
+/**
+ * The PMW logo the app itself serves, for a paper form whose own settings name
+ * none: every Word form carries it in the header's first cell, so a paper copy
+ * without it reads as incomplete. Only in a browser, where the app's address
+ * is known; elsewhere the cell stays empty as before.
+ */
+export function defaultPaperLogo(): string | undefined {
+  return typeof window !== "undefined" && window.location?.origin ? `${window.location.origin}/logo.png` : undefined;
+}
+
 function renderPageNumber({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) {
   return `Page ${pageNumber} of ${totalPages}`;
 }
@@ -632,7 +642,7 @@ export default function PaperFormDocument(data: PdfFormData) {
   return (
     <Document>
       <Page size="A4" style={P.page}>
-        <HeaderTable header={paper.header} logo={ctx.effectiveLogoUrl} />
+        <HeaderTable header={paper.header} logo={ctx.effectiveLogoUrl || defaultPaperLogo()} />
         {paper.sections.flatMap(sectionElements)}
         <View style={P.footer} fixed>
           <Text>{footerNote}</Text>
