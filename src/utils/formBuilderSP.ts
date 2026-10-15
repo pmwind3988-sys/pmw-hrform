@@ -11,10 +11,13 @@ import { buildWorkflowReviewLink } from "./workflowLink";
 import { selectWorkflowLayer } from "./workflowReviewLink";
 import { resolveApplicantName } from "./applicantName";
 import {
+  buildRequestGuide,
   buildWorkflowEmailSubject,
   renderWorkflowEmail,
+  requestSubmitterName,
   WORKFLOW_EMAIL_STATUS,
   type WorkflowEmailDetail,
+  type WorkflowEmailGuide,
 } from "./workflowEmailTemplate";
 import { ensureLinkToken } from "./linkToken";
 import { listChoiceValues, toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions";
@@ -2639,6 +2642,8 @@ function emailBody(params: {
   linkLabel?: string;
   pdfUrl?: string;
   note?: string;
+  /** Request emails: name the portal and add the "how to complete it" box. */
+  guide?: WorkflowEmailGuide;
 }): string {
   return renderWorkflowEmail({
     preheader: params.preheader,
@@ -2657,8 +2662,16 @@ function emailBody(params: {
     secondaryUrl: absolutePdfUrl(params.pdfUrl),
     secondaryLabel: 'View PDF record',
     note: params.note,
+    ...(params.guide ? { portalIdentity: true, guide: params.guide } : {}),
   });
 }
+
+/** The address workflow emails go out from, named in the request guide. */
+const HR_FORM_SENDER = (
+  import.meta.env.VITE_HR_FORM_EMAIL_FROM_ADDRESS ||
+  import.meta.env.VITE_EMAIL_FROM_ADDRESS ||
+  ""
+).trim();
 
 function isManualPaperWorkflowStatus(value: unknown): boolean {
   const normalized = String(value || "").trim().toLowerCase();
@@ -2956,12 +2969,18 @@ export async function triggerApprovalNotification(
               referenceDetail,
               { label: 'Submission ID', value: submissionId },
               applicantDetail,
-              { label: 'Submitted by', value: submittedBy },
+              { label: 'Submitted by', value: requestSubmitterName(submittedBy, applicantName) },
               { label: 'Workflow stage', value: `Layer ${layer} of ${totalLayers}` },
               { label: 'Current status', value: 'Submitted' },
             ],
             link: submitLink,
             linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
+            guide: buildRequestGuide({
+              formTitle,
+              layerType: nextLayerType,
+              buttonLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
+              sender: HR_FORM_SENDER,
+            }),
             note: 'Please complete this step when you have enough context to make the decision.',
           }),
         });
@@ -3021,12 +3040,18 @@ export async function triggerApprovalNotification(
               referenceDetail,
               { label: 'Submission ID', value: submissionId },
               applicantDetail,
-              { label: 'Submitted by', value: submittedBy },
+              { label: 'Submitted by', value: requestSubmitterName(submittedBy, applicantName) },
               { label: 'Completed step', value: `Layer ${layer} of ${totalLayers}` },
               { label: 'Current step', value: workflowStage },
             ],
             link: nextLayerLink,
             linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
+            guide: buildRequestGuide({
+              formTitle,
+              layerType: nextLayerType,
+              buttonLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
+              sender: HR_FORM_SENDER,
+            }),
             pdfUrl,
             note: 'Only the assigned reviewer or an authorized superuser should act on this workflow step.',
           }),

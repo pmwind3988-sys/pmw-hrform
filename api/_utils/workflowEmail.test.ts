@@ -287,3 +287,30 @@ describe("the notice for a layer that could not be routed", () => {
     expect(message.body).toContain("&lt;script&gt;");
   });
 });
+
+describe("request email guide", () => {
+  const request = buildWorkflowActionEmail({
+    formTitle: "Training Evaluation Form",
+    submittedBy: "GUEST",
+    responseItemId: 12,
+    layer: 1,
+    totalLayers: 1,
+    recipient: "hod@example.com",
+    layerType: "evaluation",
+    reviewLink: "https://pmw-hrform.vercel.app/eval/x/12/1",
+    applicantName: "Ahmad Faiz bin Rahman",
+  });
+
+  it("names the portal and explains what to do", () => {
+    expect(request.body).toContain("PMW HR Forms Portal");
+    expect(request.body).toContain("How to complete it (about 3 minutes)");
+    expect(request.body).toContain("<strong style=\"color:#0C0E14\">Review &amp; submit evaluation</strong>");
+    expect(request.body).toContain("tick Yes or No and add a comment");
+    expect(request.body).toContain("please contact the main administrator");
+  });
+
+  it("names the employee instead of GUEST as the submitter", () => {
+    expect(request.body).not.toContain(">GUEST<");
+    expect(request.body).toMatch(/Submitted by<\/strong><\/td>\s*<td[^>]*>Ahmad Faiz bin Rahman</);
+  });
+});

@@ -42,6 +42,69 @@ export interface WorkflowEmailTemplateParams {
   /** Amber callout for something the reader has to act on outside the app. */
   callout?: string;
   note?: string;
+  /** Names the portal under the logo, for an email the reader may not be expecting. */
+  portalIdentity?: boolean;
+  /** A small "how to complete it" box under the button, for request emails. */
+  guide?: WorkflowEmailGuide;
+}
+
+export interface WorkflowEmailGuide {
+  title: string;
+  /** One short line each; text between **double asterisks** is printed bold. */
+  steps: string[];
+  /** One line under the steps: who the email genuinely comes from, who to ask. */
+  footnote?: string;
+}
+
+/** The HR forms mailbox, named in the guide when no sender is configured. */
+export const DEFAULT_HR_FORM_SENDER = "pmw.hrform@pmw-group.com";
+
+/**
+ * The guide a request email carries. Someone asked to evaluate or approve
+ * for the first time does not know the portal, may take the email for a scam,
+ * and does not know what is expected — so it says what to press, how to sign
+ * in, what to do there, and which sender address is the real one.
+ */
+export function buildRequestGuide(params: {
+  formTitle: string;
+  layerType: "approval" | "evaluation";
+  /** The button's label in this email, so the first step names it exactly. */
+  buttonLabel: string;
+  /** The address the email is sent from. */
+  sender?: string;
+}): WorkflowEmailGuide {
+  const trainingEvaluation = /\btraining\s+evaluation\b/i.test(params.formTitle);
+  const signIn = "Sign in with your usual PMW Microsoft account (the one for Outlook).";
+  const steps = params.layerType === "evaluation"
+    ? [
+      `Press **${params.buttonLabel}** above.`,
+      signIn,
+      trainingEvaluation
+        ? "Read the employee’s form, then tick Yes or No and add a comment."
+        : "Read the submitted form, then answer the evaluation questions.",
+      trainingEvaluation ? "Sign on the line and press **Submit evaluation**." : "Press **Submit evaluation**.",
+    ]
+    : [
+      `Press **${params.buttonLabel}** above.`,
+      signIn,
+      "Read the submitted form.",
+      "Press **Approve request**, or **Reject** with a reason.",
+    ];
+  const sender = (params.sender || "").trim() || DEFAULT_HR_FORM_SENDER;
+  return {
+    title: "How to complete it (about 3 minutes)",
+    steps,
+    footnote: `Make sure it was sent from **${sender}** only; treat any other sender as suspicious. We never ask for your password by email. For any enquiries, please contact the main administrator.`,
+  };
+}
+
+/**
+ * Who to name as the submitter. A public-link submission is recorded as
+ * "GUEST", which tells a reviewer nothing; the name the form collected does.
+ */
+export function requestSubmitterName(submittedBy: string, applicantName?: string): string {
+  const name = (applicantName || "").trim();
+  return (submittedBy || "").trim().toUpperCase() === "GUEST" && name ? name : submittedBy;
 }
 
 const BRAND_NAME = "PMW HR Form";
@@ -171,6 +234,34 @@ function statusIndicator(status: WorkflowEmailStatusPill): string {
   return "";
 }
 
+/** Escaped text with **marked** words bold. */
+function emphasised(text: string): string {
+  return escapeEmailHtml(text).replace(/\*\*(.+?)\*\*/g, `<strong style="color:${INK}">$1</strong>`);
+}
+
+function guideHtml(guide: WorkflowEmailGuide): string {
+  const steps = guide.steps
+    .map((step, i) => `<tr>
+                                            <td style="width:24px;vertical-align:top;padding:0 8px 6px 0"><div style="width:18px;height:18px;border-radius:50%;background-color:#EEF0FA;color:${BUTTON};font-size:11px;font-weight:700;line-height:18px;text-align:center">${i + 1}</div></td>
+                                            <td style="vertical-align:top;padding:0 0 6px 0;font-size:13px;line-height:18px;color:${INK}">${emphasised(step)}</td>
+                                        </tr>`)
+    .join("\n");
+  const footnote = guide.footnote
+    ? `<p style="margin:6px 0 4px 0;padding-top:8px;border-top:1px solid ${BORDER};font-size:12px;line-height:17px;color:${MUTED}">${emphasised(guide.footnote)}</p>`
+    : "";
+  return `<table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:24px;border:1px solid ${BORDER};border-radius:8px;background-color:#F7F8FC">
+                                <tr>
+                                    <td style="padding:14px 16px 8px 16px">
+                                        <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:${INK}">${escapeEmailHtml(guide.title)}</p>
+                                        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                        ${steps}
+                                        </table>
+                                        ${footnote}
+                                    </td>
+                                </tr>
+                            </table>`;
+}
+
 export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string {
   const rows = detailRows(params.details);
   const primary = params.actionUrl
@@ -207,6 +298,11 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
   const noteHtml = params.note
     ? `<p style="margin:20px 0 0;font-size:12px;line-height:18px;color:${MUTED};text-align:center">${escapeEmailHtml(plainStepText(params.note))}</p>`
     : "";
+  const identityHtml = params.portalIdentity
+    ? `<div style="font-size:13px;font-weight:700;color:${BUTTON};letter-spacing:0.02em">PMW HR Forms Portal</div>
+                                        <div style="font-size:12px;color:${MUTED};margin:2px 0 24px">PMW Group’s official HR forms system</div>`
+    : "";
+  const guideBlock = params.guide ? guideHtml(params.guide) : "";
   const greetingHtml = params.greetingName?.trim()
     ? `Hello <strong>${escapeEmailHtml(params.greetingName.trim())}</strong>,<br><br>`
     : "";
@@ -234,7 +330,8 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                             <table border="0" cellpadding="0" cellspacing="0" width="100%">
                                 <tr>
                                     <td align="center">
-                                        <img src="${LOGO_URL}" alt="PMW" style="height:32px;width:auto;display:block;margin-bottom:24px">
+                                        <img src="${LOGO_URL}" alt="PMW" style="height:32px;width:auto;display:block;margin:0 auto ${params.portalIdentity ? "8px" : "24px"}">
+                                        ${identityHtml}
                                     </td>
                                 </tr>
                             </table>
@@ -264,6 +361,8 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                             ${buttonsHtml}
 
                             ${fallbackHtml}
+
+                            ${guideBlock}
 
                             ${noteHtml}
 

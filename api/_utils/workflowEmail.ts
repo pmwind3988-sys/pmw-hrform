@@ -8,6 +8,8 @@ import {
   buildWorkflowEmailSubject,
   renderWorkflowEmail,
   WORKFLOW_EMAIL_STATUS,
+  buildRequestGuide,
+  requestSubmitterName,
   type WorkflowEmailDetail,
 } from "./workflowEmailTemplate.js";
 import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
@@ -583,6 +585,7 @@ export function buildWorkflowActionEmail(
 ): WorkflowEmailMessage {
   const actionNoun = params.layerType === "evaluation" ? "evaluation review" : "approval";
   const actionVerb = params.layerType === "evaluation" ? "review" : "approve";
+  const actionLabel = params.layerType === "evaluation" ? "Review & submit evaluation" : "Review & approve form";
   return {
     to: params.recipient,
     subject: buildWorkflowEmailSubject({
@@ -604,11 +607,13 @@ export function buildWorkflowActionEmail(
         referenceDetail(params.referenceNo),
         { label: "Submission ID", value: `#${params.responseItemId}` },
         applicantDetail(params.applicantName),
-        { label: "Submitted by", value: params.submittedBy },
+        { label: "Submitted by", value: requestSubmitterName(params.submittedBy, params.applicantName) },
         { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
       ],
       actionUrl: params.reviewLink,
-      actionLabel: params.layerType === "evaluation" ? "Review & submit evaluation" : "Review & approve form",
+      actionLabel,
+      portalIdentity: true,
+      guide: buildRequestGuide({ formTitle: params.formTitle, layerType: params.layerType, buttonLabel: actionLabel, sender: resolveHrFormSender() }),
       note: "Only the assigned reviewer or an authorized superuser should act on this workflow step.",
     }),
   };
