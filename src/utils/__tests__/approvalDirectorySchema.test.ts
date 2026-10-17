@@ -23,6 +23,7 @@ const FULL_LIST = [
   plain("IsActive"),
   plain("Source"),
   plain("Confirmed"),
+  plain("DelegateEmails"),
 ];
 
 describe("mapDirectoryColumns", () => {
@@ -77,6 +78,7 @@ describe("mapDirectoryColumns", () => {
       "IsActive",
       "Source",
       "Confirmed",
+      "DelegateEmails",
     ]);
   });
 

@@ -43,7 +43,7 @@ import { paperDocumentFromSubmission, surveyAnswerKeys } from "../../utils/paper
 import { hasPaperForm } from "../../utils/paperPdf/paperForms";
 import EvaluationSummary from "../builder/EvaluationSummary";
 import SignOffBlock from "../reviewer/SignOffBlock";
-import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../../utils/signOff";
+import { onBehalfOfLine, signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../../utils/signOff";
 import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
@@ -1200,6 +1200,7 @@ function layerSignOff(
     signedAt?: string | null;
     signature?: string | null;
     confirmerName?: string | null;
+    onBehalfOf?: { email: string; name: string; position: string } | null;
   },
   layerNumber: number,
 ): ReactNode {
@@ -1217,6 +1218,7 @@ function layerSignOff(
       position={signOffPosition(layer.actedByPosition, layer.layerTitle || `Layer ${layerNumber}`)}
       date={layer.signedAt ? formatDateValue(layer.signedAt) ?? layer.signedAt : "—"}
       signature={signatureValueToSrc(layer.signature) || null}
+      onBehalfOf={onBehalfOfLine(layer.onBehalfOf)}
     />
   );
 }
@@ -1745,6 +1747,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                             actedBy: layer.actedBy,
                             actedByName: layer.actedByName,
                             actedByPosition: layer.actedByPosition,
+                            onBehalfOf: layer.onBehalfOf,
                             layerTitle: layer.layerTitle,
                             rawStatus: layer.rawStatus,
                           }}

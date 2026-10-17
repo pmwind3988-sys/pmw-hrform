@@ -38,6 +38,8 @@ export interface PaperApprovalSignOffProps {
   /** The signing control, drawn on the Signature line. */
   signatureSlot: ReactNode;
   disabled?: boolean;
+  /** "On behalf of …" when a stand-in (a PA) is signing for the step's own person. */
+  onBehalfOf?: string;
 }
 
 function InputLine({ label, value, onChange, disabled, locked }: { label: string; value: string; onChange?: (value: string) => void; disabled: boolean; locked: boolean }) {
@@ -62,7 +64,7 @@ function InputLine({ label, value, onChange, disabled, locked }: { label: string
   );
 }
 
-export default function PaperApprovalSignOff({ caption, role, positionLabel = "Position", signOff, onSignOffChange, signatureSlot, disabled = false }: PaperApprovalSignOffProps) {
+export default function PaperApprovalSignOff({ caption, role, positionLabel = "Position", signOff, onSignOffChange, signatureSlot, disabled = false, onBehalfOf }: PaperApprovalSignOffProps) {
   const [unlocked, setUnlocked] = useState(false);
   const set = (key: keyof PaperSignOff) => (value: string) => onSignOffChange({ ...signOff, [key]: value });
   return (
@@ -96,7 +98,10 @@ export default function PaperApprovalSignOff({ caption, role, positionLabel = "P
 
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 14, minWidth: 0 }}>
         <span style={{ width: 92, flexShrink: 0, paddingTop: 8 }}>Signature:</span>
-        <div className="nf" data-variant="reviewer" style={{ flex: 1, minWidth: 0, background: "transparent" }}>{signatureSlot}</div>
+        <div className="nf" data-variant="reviewer" style={{ flex: 1, minWidth: 0, background: "transparent" }}>
+          {onBehalfOf ? <div style={{ fontSize: 12.5, color: "#555555", marginBottom: 4 }}>{onBehalfOf}</div> : null}
+          {signatureSlot}
+        </div>
       </div>
       {role ? <div style={{ marginLeft: 102, marginTop: 2 }}>{role}</div> : null}
 

@@ -28,6 +28,8 @@ import {
 } from "./_utils/workflowDigest.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
+import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
+import { standInEmailNote } from "./_utils/resolveAssignee.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
 import { withWorkflowRoutePrefix } from "./_utils/workflowLink.js";
 
@@ -324,6 +326,13 @@ async function claimAndDeliver(
 ): Promise<boolean> {
   await claimEntry(token, formTitle, item, entry);
   try {
+    // Says who on the email is standing in for the step's own person.
+    const standInNote = await standInEmailNote(
+      createApprovalDirectoryReader(token),
+      item.fields[`L${entry.layer}_Email`],
+      parseValidEmailList(entry.recipient),
+      entry.layerType,
+    ).catch(() => undefined);
     await deliverWorkflowEmail(
       token,
       buildWorkflowActionEmail({
@@ -344,6 +353,7 @@ async function claimAndDeliver(
         reviewLink: entry.reviewLink ? withWorkflowRoutePrefix(entry.reviewLink, entry.layerType) : entry.reviewLink,
         referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
         applicantName: resolveApplicantName(item.fields),
+        standInNote,
       }),
       {
         listTitle: formTitle,

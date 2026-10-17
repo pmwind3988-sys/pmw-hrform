@@ -102,6 +102,7 @@ import { loadCompanies, loadDepartments } from "../utils/orgDirectorySP";
 import DirectoryImportDialog, { type DirectoryImportProgress } from "../components/routing/DirectoryImportDialog";
 import PublicLinkRescanDialog from "../components/routing/PublicLinkRescanDialog";
 import DirectoryScanDialog, { type DirectoryScanProgress } from "../components/routing/DirectoryScanDialog";
+import { parseEmailList } from "../utils/layerRecipients";
 
 type RoutingTab = "people" | "trace" | "health";
 type SnackbarState = { message: string; severity: "success" | "error" } | null;
@@ -128,6 +129,7 @@ const MISSING_COLUMN_EFFECT: Record<string, string> = {
   [APPROVAL_DIRECTORY_COLUMNS.isActive]: "somebody who has left can only be removed, not switched off",
   [APPROVAL_DIRECTORY_COLUMNS.source]: "a row cannot record where it came from, so forms cannot add their submitters",
   [APPROVAL_DIRECTORY_COLUMNS.confirmed]: "a guessed row cannot be marked for review, so forms cannot add their submitters",
+  [APPROVAL_DIRECTORY_COLUMNS.delegateEmails]: "nobody can be set to approve or evaluate on someone else's behalf",
 };
 
 /** Anything the page could not do, said in words an admin can act on. */
@@ -449,6 +451,7 @@ export default function AdminRoutingPage() {
     employeeId: row.employeeId,
     approverEmail: row.approverEmail,
     isActive: row.isActive,
+    delegateEmails: row.delegateEmails ?? "",
   });
 
   /**
@@ -939,6 +942,13 @@ export default function AdminRoutingPage() {
                                 </Tooltip>
                               )
                               : <em style={{ color: editorial.softMuted }}>top of the line</em>}
+                            {parseEmailList(row.delegateEmails ?? "").length > 0 && (
+                              <Typography sx={{ ...siType.subtext, color: editorial.pmwBlue, fontWeight: 600 }}>
+                                On their behalf: {parseEmailList(row.delegateEmails ?? "")
+                                  .map((email) => nameByEmail.get(directoryEmailKey(email)) ?? email)
+                                  .join(", ")}
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
                             {isUnconfirmedRow(row) && (

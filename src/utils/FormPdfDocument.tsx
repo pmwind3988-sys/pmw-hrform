@@ -75,6 +75,8 @@ export interface PdfLayerResult {
   /** Name and post stamped at signing (`L{n}_ActedByName` / `L{n}_ActedByPosition`). */
   signerName?: string;
   signerPosition?: string;
+  /** Whose behalf a stand-in signed on (`L{n}_OnBehalfOf`); absent when signed in person. */
+  onBehalfOf?: { email: string; name: string; position: string };
   /** The layer's configured title, printed as the post when none was stamped. */
   layerTitle?: string;
 }

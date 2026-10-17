@@ -132,3 +132,39 @@ export function writeLayerRecipientFields(
   target[`L${layer.layerNumber}_NotifyEmails`] = joinEmailList(recipients);
   return recipients;
 }
+
+/**
+ * Whose behalf a layer was decided on, when it was signed by a stand-in (a PA
+ * acting for the CEO). Stored as JSON in the `L{n}_OnBehalfOf` note column at
+ * the moment of signing, so a later promotion or a changed directory row never
+ * rewrites who the decision was made for.
+ */
+export interface OnBehalfOfRecord {
+  email: string;
+  name: string;
+  position: string;
+}
+
+const ON_BEHALF_FIELD_LIMIT = 200;
+
+export function serializeOnBehalfOf(record: OnBehalfOfRecord): string {
+  const clip = (value: string) => value.trim().slice(0, ON_BEHALF_FIELD_LIMIT);
+  return JSON.stringify({ email: clip(record.email), name: clip(record.name), position: clip(record.position) });
+}
+
+/** The `L{n}_OnBehalfOf` record of a submission, or null when the layer was signed in person. */
+export function readOnBehalfOf(
+  fields: Record<string, unknown> | undefined | null,
+  layerNumber: number,
+): OnBehalfOfRecord | null {
+  const raw = fields?.[`L${layerNumber}_OnBehalfOf`];
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+    const record = { email: text(parsed.email), name: text(parsed.name), position: text(parsed.position) };
+    return record.email || record.name ? record : null;
+  } catch {
+    return null;
+  }
+}

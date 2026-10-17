@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import type { LayerConfigItem } from "../../types";
 import { getWorkflowAssignment } from "../../utils/workflowAssignmentData";
@@ -28,6 +28,8 @@ interface WorkflowAssignmentEditorProps {
   rawAssignments?: string;
   saving: boolean;
   onSave: (input: WorkflowAssignmentSaveInput) => Promise<void>;
+  /** Under the address: who else the step will reach once it is saved (stand-ins). */
+  renderEmailHint?: (email: string, layerNumber: number) => ReactNode;
 }
 
 const TERMINAL_STATUSES = new Set([
@@ -74,6 +76,7 @@ export default function WorkflowAssignmentEditor({
   rawAssignments,
   saving,
   onSave,
+  renderEmailHint,
 }: WorkflowAssignmentEditorProps) {
   const editableLayers = layers.filter((layer) => isLayerEditable(layer, currentLayerNumber, layerStates));
   const defaultLayerNumber =
@@ -206,6 +209,8 @@ export default function WorkflowAssignmentEditor({
             />
           </label>
         </div>
+
+        {renderEmailHint?.(email, selectedLayerNumber)}
 
         <label style={{ display: "block", marginTop: 10 }}>
           <span style={labelStyle}>Assignment notes</span>

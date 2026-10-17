@@ -16,7 +16,7 @@
  * `api/_utils/resolveAssignee.ts` is the server-side copy of this file; api/
  * cannot import from src/. Keep the two in step.
  */
-import { parseValidEmailList } from "./layerRecipients.js";
+import { parseValidEmailList, type OnBehalfOfRecord } from "./layerRecipients.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,6 +43,19 @@ export interface DirectoryPerson {
   position: string;
   /** Who approves this person. Empty means top of the line. */
   approverEmail: string;
+  /**
+   * Who may act on this person's behalf (`DelegateEmails`) — a PA for the CEO.
+   * Absent on directories without the column, which means nobody.
+   */
+  delegateEmails?: string[];
+}
+
+/** Someone allowed to act on a layer only because they stand in for one of its actors. */
+export interface StandIn {
+  email: string;
+  /** The actor whose directory row names them. */
+  forEmail: string;
+  forName: string;
 }
 
 /**
@@ -103,6 +116,12 @@ export interface ResolvedLayerActors {
    * rather than by reading configuration.
    */
   explanation?: string;
+  /**
+   * People added to `emails` because an actor's directory row says they may
+   * act on that actor's behalf. Already included in `emails`; listed apart so
+   * the caller can say so in the notice.
+   */
+  standIns?: StandIn[];
 }
 
 export interface AssigneeResolverPorts {
@@ -509,6 +528,162 @@ export function isDeferredAssignee(assignee: ResolvableAssignee): boolean {
   return assignee.type === "chain" && assignee.startFrom === "previous-actor";
 }
 
+/** Most actors a single layer will look up stand-ins for; a long `users` list stops there. */
+export const MAX_STAND_IN_LOOKUPS = 10;
+
+/**
+ * Who may act on behalf of `person`, per their directory row, leaving out
+ * anyone in `exclude` (already an actor in their own right).
+ */
+export function standInsOf(person: DirectoryPerson | null | undefined, exclude: readonly string[] = []): string[] {
+  const taken = new Set(exclude.map((entry) => entry.trim().toLowerCase()));
+  if (person?.email) taken.add(person.email.trim().toLowerCase());
+  const result: string[] = [];
+  for (const raw of person?.delegateEmails ?? []) {
+    const email = raw.trim();
+    const key = email.toLowerCase();
+    if (!EMAIL_RE.test(email) || taken.has(key)) continue;
+    taken.add(key);
+    result.push(email);
+  }
+  return result;
+}
+
+/**
+ * True when `signer` acted on `principal`'s behalf rather than as themselves:
+ * a different person, named as a stand-in on the principal's directory row.
+ */
+export function isStandInFor(signer: string, principal: DirectoryPerson | null | undefined): boolean {
+  const key = signer.trim().toLowerCase();
+  if (!key || !principal) return false;
+  if (principal.email.trim().toLowerCase() === key) return false;
+  return (principal.delegateEmails ?? []).some((entry) => entry.trim().toLowerCase() === key);
+}
+
+type PersonLookup = Pick<Required<AssigneeResolverPorts>, "lookupPerson">;
+
+function trimmed(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * The person `signer` stands in for on a layer whose primary actor is
+ * `primaryEmail`, or null when they act as themselves. Read from the directory
+ * as it is at the moment asked — there is no per-submission copy to drift.
+ * Never throws: an unreadable directory records the decision as the signer's
+ * own, which is what every decision was before stand-ins existed.
+ */
+export async function standInPrincipal(
+  ports: PersonLookup,
+  signer: string,
+  primaryEmail: unknown,
+): Promise<OnBehalfOfRecord | null> {
+  const primary = trimmed(primaryEmail);
+  const who = signer.trim();
+  if (!who || !primary || primary.toLowerCase() === who.toLowerCase()) return null;
+  const row = await ports.lookupPerson(primary).catch(() => null);
+  if (!row || !isStandInFor(who, row)) return null;
+  return { email: row.email || primary, name: row.name || primary, position: row.position || "" };
+}
+
+/** "Siti", "Siti and Ali", "Siti, Ali and Mei". */
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** The sentence a request email carries when it also went to someone's stand-in. */
+export function describeStandIns(
+  principalName: string,
+  standInNames: string[],
+  layerType: "approval" | "evaluation",
+): string {
+  if (standInNames.length === 0) return "";
+  const verb = layerType === "evaluation" ? "evaluate" : "approve";
+  const who = standInNames.length === 1 ? "who" : "who each";
+  const any = standInNames.length === 1 ? "Either of you" : "Any of you";
+  return `Sent to ${principalName} and to ${listNames(standInNames)}, ${who} can act on ${principalName}'s behalf. `
+    + `${any} can ${verb}. Whoever does it first completes this step.`;
+}
+
+/**
+ * The stand-in sentence for a layer email addressed to `recipients`, or
+ * undefined when nobody on it is standing in for the primary actor.
+ */
+export async function standInEmailNote(
+  ports: PersonLookup,
+  primaryEmail: unknown,
+  recipients: readonly string[],
+  layerType: "approval" | "evaluation",
+): Promise<string | undefined> {
+  const primary = trimmed(primaryEmail);
+  if (!primary || recipients.length < 2) return undefined;
+  const row = await ports.lookupPerson(primary).catch(() => null);
+  if (!row) return undefined;
+  const addressed = new Set(recipients.map((entry) => entry.trim().toLowerCase()));
+  const standIns = standInsOf(row).filter((email) => addressed.has(email.toLowerCase()));
+  if (standIns.length === 0) return undefined;
+  const names = await Promise.all(standIns.map(async (email) => {
+    const person = await ports.lookupPerson(email).catch(() => null);
+    return person?.name || email;
+  }));
+  return describeStandIns(row.name || primary, names, layerType);
+}
+
+/**
+ * Adds every actor's stand-ins to the layer, so a step that lands on the CEO
+ * also reaches — and may be decided by — their PA.
+ *
+ * Best effort by design: a directory that cannot be read leaves the layer with
+ * exactly the actors it resolved, which is how it routed before stand-ins
+ * existed. Missing a stand-in delays nothing; failing the submission would.
+ * A distribution list is left alone — its members are a group already, and
+ * looking up every one of them would be a request per member.
+ */
+export async function addStandIns(
+  resolved: ResolvedLayerActors,
+  assigneeType: string,
+  ports: Pick<AssigneeResolverPorts, "lookupPerson">,
+): Promise<ResolvedLayerActors> {
+  if (resolved.error || resolved.parked || resolved.emails.length === 0) return resolved;
+  if (assigneeType === "distribution-list" || !ports.lookupPerson) return resolved;
+
+  const emails = [...resolved.emails];
+  const standIns: StandIn[] = [];
+  for (const actor of resolved.emails.slice(0, MAX_STAND_IN_LOOKUPS)) {
+    const person = await ports.lookupPerson(actor).catch(() => null);
+    for (const email of standInsOf(person, emails)) {
+      emails.push(email);
+      standIns.push({ email, forEmail: actor, forName: person?.name || actor });
+    }
+  }
+  if (standIns.length === 0) return resolved;
+
+  const note = standIns
+    .map((entry) => `${entry.email} may act on behalf of ${entry.forName}.`)
+    .join(" ");
+  return {
+    ...resolved,
+    emails,
+    standIns,
+    explanation: resolved.explanation ? `${resolved.explanation} ${note}` : note,
+  };
+}
+
+/**
+ * Resolves who may act on `layer`, given the submitted answers, including
+ * anyone the directory says may act on an actor's behalf (`addStandIns`).
+ */
+export async function resolveLayerAssignee(
+  layer: ResolvableLayer,
+  submittedData: Record<string, unknown>,
+  ports: AssigneeResolverPorts,
+  options: ResolveAssigneeOptions = {},
+): Promise<ResolvedLayerActors> {
+  const resolved = await resolveLayerActors(layer, submittedData, ports, options);
+  return addStandIns(resolved, layer.assignee.type, ports);
+}
+
 /**
  * Resolves who may act on `layer`, given the submitted answers.
  *
@@ -516,11 +691,11 @@ export function isDeferredAssignee(assignee: ResolvableAssignee): boolean {
  * the previous layer", because every layer is resolved before layer 1 has an
  * actor. Lifting that restriction is what the reporting-line work adds next.
  */
-export async function resolveLayerAssignee(
+async function resolveLayerActors(
   layer: ResolvableLayer,
   submittedData: Record<string, unknown>,
   ports: AssigneeResolverPorts,
-  options: ResolveAssigneeOptions = {},
+  options: ResolveAssigneeOptions,
 ): Promise<ResolvedLayerActors> {
   const label = layerLabel(layer);
   const suffix = options.blockedSuffix ?? "before the workflow can start.";

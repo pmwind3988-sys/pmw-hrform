@@ -14,6 +14,7 @@ export default function SignOffBlock({
   position,
   date,
   signature,
+  onBehalfOf,
   compact = false,
   align = "end",
 }: {
@@ -23,6 +24,8 @@ export default function SignOffBlock({
   position: string;
   date?: string;
   signature?: string | null;
+  /** "On behalf of …" when a stand-in signed for the step's own person (`onBehalfOfLine`). */
+  onBehalfOf?: string;
   /** The smaller variant, for a list of earlier layers rather than a page's close. */
   compact?: boolean;
   /** `end` sits the block at the right, as a form's signature does; `start` for lists. */
@@ -52,6 +55,7 @@ export default function SignOffBlock({
       ) : null}
       <div style={{ fontSize: compact ? 14 : 15, fontWeight: 700, color: R.ink, overflowWrap: "anywhere" }}>{name || "—"}</div>
       {position ? <div style={{ fontSize: 13, color: R.muted }}>{position}</div> : null}
+      {onBehalfOf ? <div style={{ fontSize: 13, fontWeight: 600, color: R.ink }}>{onBehalfOf}</div> : null}
       {date ? (
         <div style={{ fontSize: 12, color: R.label, fontVariantNumeric: "tabular-nums" }}>Date: {date}</div>
       ) : null}

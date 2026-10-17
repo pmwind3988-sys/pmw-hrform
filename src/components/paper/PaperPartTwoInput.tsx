@@ -58,6 +58,8 @@ export interface PaperPartTwoInputProps {
   signatureSlot?: ReactNode;
   /** The PART number as printed ("II"). */
   part?: string;
+  /** "On behalf of …" when a stand-in (a PA) is signing for the step's own person. */
+  onBehalfOf?: string;
 }
 
 /** A sign-off line the evaluator can write on: pre-filled, still editable. */
@@ -94,7 +96,7 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export default function PaperPartTwoInput({ runtime, disabled = false, signOff, onSignOffChange, signature, signatureSlot, part = "II" }: PaperPartTwoInputProps) {
+export default function PaperPartTwoInput({ runtime, disabled = false, signOff, onSignOffChange, signature, signatureSlot, part = "II", onBehalfOf }: PaperPartTwoInputProps) {
   const setSignOff = (key: keyof PaperSignOff) => (value: string) => onSignOffChange({ ...signOff, [key]: value });
   // Name, position and date come filled in and locked; the evaluator unlocks
   // them to correct something, then locks them again.
@@ -243,6 +245,7 @@ export default function PaperPartTwoInput({ runtime, disabled = false, signOff, 
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
               <span style={{ width: 72, flexShrink: 0, paddingTop: 8 }}>Signature:</span>
               <div className="nf" data-variant="reviewer" style={{ flex: 1, minWidth: 0, background: "transparent" }}>
+                {onBehalfOf ? <div style={{ fontSize: 12.5, color: "#555555", marginBottom: 4 }}>{onBehalfOf}</div> : null}
                 {signatureField ? <NativeControl element={signatureField} runtime={runtime} label={signatureField.title || "Signature"} /> : signatureSlot}
               </div>
             </div>

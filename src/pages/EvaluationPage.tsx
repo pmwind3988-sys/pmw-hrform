@@ -51,12 +51,14 @@ import { getActiveLayers } from "../components/builder/approvalDashboardLayerPro
 import { apiIdentityHeaders } from "../utils/apiIdentity";
 import { approverDisplayName } from "../utils/approverIdentity";
 import {
+  onBehalfOfLine,
   signOffLabel,
   signOffName,
   signOffPosition,
   signOffVerdictForLayer,
   signOffVerdictFromStatus,
 } from "../utils/signOff";
+import { readOnBehalfOf, type OnBehalfOfRecord } from "../utils/layerRecipients";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -382,6 +384,8 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
   const [publicPreviousLayerSummaries, setPublicPreviousLayerSummaries] = useState<PublicPreviousLayerSummary[]>([]);
   /** The signed-in reviewer's directory name and post, read by the server. */
   const [viewerSignOff, setViewerSignOff] = useState<{ name: string; position: string } | null>(null);
+  /** Whose step this is, when the signed-in reviewer is only here as their stand-in (a PA). */
+  const [actingOnBehalfOf, setActingOnBehalfOf] = useState<OnBehalfOfRecord | null>(null);
 
   /**
    * The evaluation questions this layer asks, as a native document.
@@ -539,6 +543,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                 actedBy: json.data.fields[`L${n}_ActedBy`] || null,
                 actedByName: json.data.fields[`L${n}_ActedByName`] || null,
                 actedByPosition: json.data.fields[`L${n}_ActedByPosition`] || null,
+                onBehalfOf: readOnBehalfOf(json.data.fields, n),
                 signedAt: json.data.fields[`L${n}_SignedAt`] || null,
                 evaluationData: visibleEvaluationData[String(n)],
               });
@@ -627,6 +632,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
               actedBy: fields[`L${entry.layerNumber}_ActedBy`] ?? null,
               actedByName: fields[`L${entry.layerNumber}_ActedByName`] ?? null,
               actedByPosition: fields[`L${entry.layerNumber}_ActedByPosition`] ?? null,
+              onBehalfOf: readOnBehalfOf(fields, entry.layerNumber),
               signedAt: fields[`L${entry.layerNumber}_SignedAt`] ?? null,
               title: entry.title || "",
             })),
@@ -637,6 +643,13 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
         applyMatrixTables(json.data.matrixTables);
         setViewerSignOff(isRecord(json.data.viewerSignOff)
           ? { name: valueToText(json.data.viewerSignOff.name), position: valueToText(json.data.viewerSignOff.position) }
+          : null);
+        setActingOnBehalfOf(isRecord(json.data.actingOnBehalfOf)
+          ? {
+            email: valueToText(json.data.actingOnBehalfOf.email),
+            name: valueToText(json.data.actingOnBehalfOf.name),
+            position: valueToText(json.data.actingOnBehalfOf.position),
+          }
           : null);
         const data = { responseFields: fields };
 
@@ -947,6 +960,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
     signedAt: valueToText(pr.signedAt) || undefined,
     signerName: valueToText(pr.actedByName) || undefined,
     signerPosition: valueToText(pr.actedByPosition) || undefined,
+    onBehalfOf: (pr.onBehalfOf as OnBehalfOfRecord | null | undefined) ?? undefined,
     layerTitle: valueToText(pr.title) || undefined,
   }));
 
@@ -1162,6 +1176,9 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
   const recordedSignerName = responseData
     ? signOffName(responseData[`L${effectiveLayerNumber}_ActedByName`], responseData[`L${effectiveLayerNumber}_ActedBy`])
     : "";
+  const recordedOnBehalf = onBehalfOfLine(readOnBehalfOf(responseData, effectiveLayerNumber));
+  // Printed under the signer's own name while a stand-in is about to sign.
+  const pendingOnBehalf = onBehalfOfLine(actingOnBehalfOf);
 
   const completeTone = isRejectedLayer
     ? { bg: R.redSoft, fg: R.red }
@@ -1229,6 +1246,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                     name={previousSignerName}
                     position={signOffPosition(pr.actedByPosition, previousTitle)}
                     date={formatDateTime(pr.signedAt)}
+                    onBehalfOf={onBehalfOfLine(pr.onBehalfOf as OnBehalfOfRecord | null | undefined)}
                   />
                 </div>
               ) : null;
@@ -1397,6 +1415,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                   position={signOffPosition(responseData[`L${effectiveLayerNumber}_ActedByPosition`], approverRoleLabel)}
                   date={formatDateTime(responseData[`L${effectiveLayerNumber}_SignedAt`])}
                   signature={savedSignature || null}
+                  onBehalfOf={recordedOnBehalf}
                 />
               )}
             </>
@@ -1427,6 +1446,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                   name={signerName}
                   position={signerPosition}
                   date={todayLabel()}
+                  onBehalfOf={pendingOnBehalf}
                 />
               )}
               <div className="rv-reject-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
@@ -1446,6 +1466,18 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
             </>
           ) : (
             <>
+              {actingOnBehalfOf && (
+                <div
+                  role="status"
+                  style={{ display: "flex", flexDirection: "column", gap: 3, padding: "12px 14px", borderRadius: 4, background: R.navyTint, border: `1px solid ${R.navy}`, color: R.ink, fontSize: 14, lineHeight: 1.5 }}
+                >
+                  <strong style={{ fontSize: 15 }}>You're acting on behalf of {actingOnBehalfOf.name || actingOnBehalfOf.email}</strong>
+                  <span style={{ color: R.copy }}>
+                    This step is {actingOnBehalfOf.name || "theirs"}'s. Your own name and signature are recorded, marked "{pendingOnBehalf}".
+                    If they act first, this request closes for you.
+                  </span>
+                </div>
+              )}
               {isEvaluation && (
                 evalForm && paperPartTwo ? (
                   <PaperPartTwoInput
@@ -1453,6 +1485,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                     disabled={isSubmitting}
                     signOff={paperSignOff}
                     onSignOffChange={setSignOffDraft}
+                    onBehalfOf={pendingOnBehalf}
                     signatureSlot={<SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />}
                   />
                 ) : evalForm ? (
@@ -1475,6 +1508,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                   positionLabel={paperApprovalLabel.positionLabel}
                   signOff={paperSignOff}
                   onSignOffChange={setSignOffDraft}
+                  onBehalfOf={pendingOnBehalf}
                   disabled={isSubmitting}
                   signatureSlot={<SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />}
                 />
@@ -1507,6 +1541,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                   position={signerPosition}
                   date={todayLabel()}
                   signature={isSignatureRequired ? signatureData : null}
+                  onBehalfOf={pendingOnBehalf}
                 />
               )}
 

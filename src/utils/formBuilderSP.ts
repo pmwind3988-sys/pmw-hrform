@@ -7,6 +7,7 @@ import { toSharePointMalaysiaDateTime } from "./sharepointDateTime";
 import { SharePointHttpError } from "./sharepointClient";
 import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
 import { joinEmailList, parseValidEmailList } from "./layerRecipients";
+import { standInEmailNote } from "./resolveAssignee";
 import { buildWorkflowReviewLink } from "./workflowLink";
 import { selectWorkflowLayer } from "./workflowReviewLink";
 import { resolveApplicantName } from "./applicantName";
@@ -2057,6 +2058,9 @@ function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
       // a later promotion does not rewrite the record. See src/utils/signOff.ts.
       { n: `L${n}_ActedByName`, k: 2 },
       { n: `L${n}_ActedByPosition`, k: 2 },
+      // Whose behalf a stand-in (a PA) signed on, as JSON. See readOnBehalfOf
+      // in src/utils/layerRecipients.ts.
+      { n: `L${n}_OnBehalfOf`, k: 3, ml: true },
       { n: `L${n}_SignedAt`, k: 4 },
       { n: `L${n}_Rejection`, k: 3, ml: true },
       { n: `L${n}_Signature`, k: 3, ml: true },
@@ -2644,6 +2648,8 @@ function emailBody(params: {
   note?: string;
   /** Request emails: name the portal and add the "how to complete it" box. */
   guide?: WorkflowEmailGuide;
+  /** Says who on the email is standing in for whom (a PA for the CEO). */
+  callout?: string;
 }): string {
   return renderWorkflowEmail({
     preheader: params.preheader,
@@ -2662,6 +2668,7 @@ function emailBody(params: {
     secondaryUrl: absolutePdfUrl(params.pdfUrl),
     secondaryLabel: 'View PDF record',
     note: params.note,
+    callout: params.callout || undefined,
     ...(params.guide ? { portalIdentity: true, guide: params.guide } : {}),
   });
 }
@@ -2878,6 +2885,16 @@ export async function triggerApprovalNotification(
     return resolved;
   };
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  // Who on the email is standing in for the step's own person. Imported late:
+  // the directory module imports this one.
+  const standInNoteFor = async (primary: string, recipients: string | string[]): Promise<string | undefined> => {
+    try {
+      const { createApprovalDirectoryReader } = await import("./approvalDirectory");
+      return await standInEmailNote(createApprovalDirectoryReader(token), primary, parseValidEmailList(recipients), nextLayerType);
+    } catch {
+      return undefined;
+    }
+  };
   const persistSchedule = async (recipients: string | string[], targetLayer: number, targetLink: string) => {
     const recipient = Array.isArray(recipients) ? joinEmailList(recipients) : recipients;
     await ensureWorkflowColumns(token, responseListTitle, totalLayers);
@@ -2947,6 +2964,7 @@ export async function triggerApprovalNotification(
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
           return;
         }
+        const submitStandInNote = await standInNoteFor(targetEmail, submitRecipients);
         await sendSpEmail(token, {
           testRun,
           to: submitRecipients,
@@ -2982,6 +3000,7 @@ export async function triggerApprovalNotification(
               sender: HR_FORM_SENDER,
             }),
             note: 'Please complete this step when you have enough context to make the decision.',
+            callout: submitStandInNote,
           }),
         });
       }
@@ -3018,6 +3037,7 @@ export async function triggerApprovalNotification(
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
           return;
         }
+        const nextStandInNote = await standInNoteFor(nextApproverEmail, nextLayerRecipients);
         await sendSpEmail(token, {
           testRun,
           to: nextLayerRecipients,
@@ -3054,6 +3074,7 @@ export async function triggerApprovalNotification(
             }),
             pdfUrl,
             note: 'Only the assigned reviewer or an authorized superuser should act on this workflow step.',
+            callout: nextStandInNote,
           }),
         });
       } else if (layer === totalLayers && isEmailAddress(submittedBy)) {

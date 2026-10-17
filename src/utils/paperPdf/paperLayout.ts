@@ -15,7 +15,7 @@ import { getManagedCompanyQuestion, getSelectedCompany, isManagedCompanyQuestion
 import { REFERENCE_NO_FIELD } from "../referenceNumber";
 import { DEFAULT_COMPANIES } from "../publishDefaults";
 import { formatPdfFieldValue } from "../pdfFieldFormatting";
-import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
+import { onBehalfOfLine, signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
 import type { PdfFormData, PdfLayerResult } from "../FormPdfDocument";
 import { applyTrainingEvaluationLayout } from "./trainingEvaluationLayout";
 import { paperFormVariant, type PaperVariant } from "./paperForms";
@@ -68,6 +68,11 @@ export interface SignoffColumn {
   signature: string;
   rejected: boolean;
   remarks: string;
+  /**
+   * "On behalf of …" when a stand-in (a PA) signed. Printed small inside the
+   * signature line's own space, so the form keeps every line where it was.
+   */
+  onBehalfOf?: string;
 }
 
 export type PaperBlock =
@@ -86,7 +91,7 @@ export type PaperBlock =
   | { kind: "images"; label: string; images: string[] }
   | { kind: "table"; field: FormSubmissionField }
   | { kind: "note"; text: string }
-  | { kind: "signoff"; statement: string; name: string; position: string; date: string; signature: string; remarks: string; rejected: boolean; large?: boolean }
+  | { kind: "signoff"; statement: string; name: string; position: string; date: string; signature: string; remarks: string; rejected: boolean; large?: boolean; onBehalfOf?: string }
   /** "Label : answer" on a ruled line, one per row, as the Word form's top lines. */
   | { kind: "lines"; items: PaperCell[] }
   /** "Label | : | answer" rows, one or two pairs to a row; `shaded` fills the label cells. */
@@ -507,6 +512,7 @@ function signOffBlock(layer: PdfLayerResult, fmtDay: (iso: string) => string): E
     signature: decided ? layer.signature || "" : "",
     remarks: layer.rejection || "",
     rejected: verdict === "rejected",
+    onBehalfOf: decided ? onBehalfOfLine(layer.onBehalfOf) || undefined : undefined,
   };
 }
 

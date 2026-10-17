@@ -13,6 +13,7 @@
 import { csvRow, parseCsv } from "./csv";
 import { directoryEmailKey, type ApprovalDirectoryRow } from "./approvalDirectorySchema";
 import type { ApprovalDirectoryInput } from "./approvalDirectory";
+import { emailListsMatch, parseEmailList } from "./layerRecipients";
 
 /** The header we write, and the one an admin gets by exporting first. */
 export const DIRECTORY_CSV_HEADER = [
@@ -24,6 +25,7 @@ export const DIRECTORY_CSV_HEADER = [
   "EmployeeId",
   "ApproverEmail",
   "IsActive",
+  "DelegateEmails",
 ] as const;
 
 type DirectoryField = keyof ApprovalDirectoryInput;
@@ -44,6 +46,7 @@ const HEADER_ALIASES: Record<DirectoryField, string[]> = {
   employeeId: ["employeeid", "empid", "staffid", "staffno", "userid", "employeenumber"],
   approverEmail: ["approveremail", "approver", "reportsto", "reportingto", "manager", "manageremail", "supervisor", "evaluator"],
   isActive: ["isactive", "active", "status", "enabled"],
+  delegateEmails: ["delegateemails", "delegates", "delegate", "onbehalf", "actsonbehalf", "canactonbehalf", "pa"],
 };
 
 function normalizeHeader(value: string): string {
@@ -72,6 +75,7 @@ function matchColumns(header: string[]): DirectoryCsvColumns {
     employeeId: find("employeeId"),
     approverEmail: find("approverEmail"),
     isActive: find("isActive"),
+    delegateEmails: find("delegateEmails"),
   };
 }
 
@@ -119,12 +123,18 @@ const COMPARED_FIELDS: Array<{ field: DirectoryField; label: string }> = [
   { field: "employeeId", label: "Employee ID" },
   { field: "approverEmail", label: "Approver" },
   { field: "isActive", label: "Active" },
+  { field: "delegateEmails", label: "Can act on their behalf" },
 ];
 
 function differences(input: ApprovalDirectoryInput, existing: ApprovalDirectoryRow): string[] {
   return COMPARED_FIELDS
     .filter(({ field }) => {
       if (field === "isActive") return input.isActive !== existing.isActive;
+      if (field === "delegateEmails") {
+        // Absent from the file: left as it is, so never a difference.
+        if (input.delegateEmails === undefined) return false;
+        return !emailListsMatch(input.delegateEmails, existing.delegateEmails ?? "");
+      }
       if (field === "approverEmail") {
         return directoryEmailKey(input.approverEmail) !== directoryEmailKey(existing.approverEmail);
       }
@@ -208,6 +218,9 @@ export function planDirectoryImport(
       employeeId: text(columns.employeeId, "employeeId"),
       approverEmail: at(columns.approverEmail).toLowerCase(),
       isActive: columns.isActive === -1 ? (known?.isActive ?? true) : parseActive(at(columns.isActive)),
+      // Left out entirely when the file has no such column, so an import that
+      // says nothing about stand-ins never clears the ones HR set.
+      ...(columns.delegateEmails === -1 ? {} : { delegateEmails: at(columns.delegateEmails) }),
     };
 
     const problems: string[] = [];
@@ -226,6 +239,13 @@ export function planDirectoryImport(
     }
     if (input.approverEmail && key && directoryEmailKey(input.approverEmail) === key) {
       problems.push("This person is listed as their own approver.");
+    }
+    for (const delegate of parseEmailList(input.delegateEmails ?? "")) {
+      if (!EMAIL_RE.test(delegate)) {
+        problems.push(`"${delegate}" is not a valid email address for someone acting on their behalf.`);
+      } else if (key && directoryEmailKey(delegate) === key) {
+        problems.push("This person is listed as acting on their own behalf.");
+      }
     }
 
     const line = index + 1;
@@ -271,6 +291,7 @@ export function directoryToCsv(rows: ApprovalDirectoryRow[]): string {
       row.employeeId,
       row.approverEmail,
       row.isActive ? "Yes" : "No",
+      row.delegateEmails ?? "",
     ]));
   }
   return lines.join("\r\n");
@@ -280,8 +301,8 @@ export function directoryToCsv(rows: ApprovalDirectoryRow[]): string {
 export function directoryCsvTemplate(): string {
   return [
     csvRow([...DIRECTORY_CSV_HEADER]),
-    csvRow(["ali@example.com", "Ali bin Ahmad", "Engineering", "PMW Industries", "Engineer", "E1024", "siti@example.com", "Yes"]),
-    csvRow(["siti@example.com", "Siti Nurhaliza", "Engineering", "PMW Industries", "HOD", "E0310", "raj@example.com", "Yes"]),
-    csvRow(["raj@example.com", "Raj Kumar", "Finance", "PMW Group", "CFO", "E0044", "", "Yes"]),
+    csvRow(["ali@example.com", "Ali bin Ahmad", "Engineering", "PMW Industries", "Engineer", "E1024", "siti@example.com", "Yes", ""]),
+    csvRow(["siti@example.com", "Siti Nurhaliza", "Engineering", "PMW Industries", "HOD", "E0310", "raj@example.com", "Yes", ""]),
+    csvRow(["raj@example.com", "Raj Kumar", "Finance", "PMW Group", "CFO", "E0044", "", "Yes", "mei@example.com"]),
   ].join("\r\n");
 }

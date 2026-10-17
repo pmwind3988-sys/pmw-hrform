@@ -40,6 +40,7 @@ import {
   type ResolvedLayerActors,
 } from "./_utils/resolveAssignee.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
+import { standInEmailNote } from "./_utils/resolveAssignee.js";
 import { hasEvaluationLayer, readHarvestConfig } from "./_utils/directoryHarvest.js";
 import { harvestSubmitter } from "./_utils/directoryHarvestWrite.js";
 import { LINK_COLUMNS, isPublicSubmitter } from "./_utils/publicSubmissionLink.js";
@@ -2298,6 +2299,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               layerNumber: firstLayer.layerNumber,
               linkToken: firstLayerLinkToken,
             });
+            // Says who on the email is standing in for the step's own person.
+            const standInNote = await standInEmailNote(
+              createApprovalDirectoryReader(token),
+              submissionBody[`L${firstLayer.layerNumber}_Email`],
+              recipients,
+              firstLayer.type,
+            ).catch(() => undefined);
             await scheduleOrDeliverWorkflowEmail(
               token,
               buildWorkflowActionEmail({
@@ -2311,6 +2319,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 reviewLink,
                 referenceNo,
                 applicantName,
+                standInNote,
               }),
               {
                 listTitle,

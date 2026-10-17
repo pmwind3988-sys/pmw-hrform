@@ -63,6 +63,7 @@ import { resolveLayerActivatedAt } from "../../utils/layerActivation";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import {
   DirectoryGapError,
+  addStandIns,
   isDeferredAssignee,
   stripFieldReference,
   resolveLayerAssignee as resolveSharedLayerAssignee,
@@ -91,6 +92,7 @@ import type { LayerRoutingVerdict } from "../../utils/routingCheck";
 import RoutingCheckPanel from "./RoutingCheckPanel";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
 import WorkflowAssignmentEditor from "./WorkflowAssignmentEditor";
+import LayerRecipientsPanel, { StandInHint } from "./LayerRecipientsPanel";
 import type { WorkflowAssignmentSaveInput } from "./WorkflowAssignmentEditor";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission, FormBuilderField } from "../../types";
@@ -103,7 +105,7 @@ import ReplayIcon from "@mui/icons-material/Replay";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
 import { buildPaperDesignPdf, getVersionSurveyJson, loadPdfData } from "../../utils/submissionPdfData";
 import { manualPaperDesign } from "../../utils/paperPdf/paperForms";
-import { isLayerActor, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
+import { isLayerActor, joinEmailList, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
 import { isTestRow } from "../../utils/testRun";
 import Box from "@mui/material/Box";
@@ -693,6 +695,21 @@ async function resolveLayerAssigneeEmail(
 }
 
 /**
+ * `primary` and everyone their Approval Directory row says may act on their
+ * behalf (a PA). A layer handed to someone new takes the new person's stand-ins,
+ * never the old one's: a PA who acted for the previous approver has no business
+ * deciding for the next. Nobody listed, or no directory: just `primary`.
+ */
+async function withDirectoryStandIns(token: string, primary: string): Promise<string[]> {
+  const resolved = await addStandIns(
+    { email: primary, name: "", emails: [primary] },
+    "user",
+    { lookupPerson: createApprovalDirectoryReader(token).lookupPerson },
+  );
+  return resolved.emails;
+}
+
+/**
  * Who a submission is about, found from its own answers, and who approves them
  * according to the routing page.
  *
@@ -814,6 +831,8 @@ export default function ApprovalDashboard() {
   const [selectedItem, setSelectedItem] = useState<PendingItem | null>(null);
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [responseData, setResponseData] = useState<Record<string, unknown> | null>(null);
+  /** The opened submission's `L{n}_*` columns: who each step went to, who decided. */
+  const [layerFields, setLayerFields] = useState<Record<string, unknown>>({});
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   // Needed to expand a distribution-list assignee: the server looks the address
   // up on the published layer config rather than trusting one sent from here.
@@ -1604,6 +1623,7 @@ export default function ApprovalDashboard() {
     setApprovalSignature(null);
     setEvalForm(null);
     setCompletedLayers({});
+    setLayerFields({});
     setSelectedActiveLayers([]);
     setSelectedLayerAccess(null);
     setCustomEmailDate("");
@@ -1737,6 +1757,7 @@ export default function ApprovalDashboard() {
         }
         setResponseData(surveyContentForPreview ? normalizeResponseDataForSurvey(surveyContentForPreview, data) : data);
         setCompletedLayers(layerHistory);
+        setLayerFields(Object.fromEntries(Object.entries(respItem).filter(([key]) => /^L\d+_/.test(key))));
 
         const activeConfig = versionLayerCfg || masterLayerCfg || formLayerConfigsRef.current[item.Title];
         const currentResolution = resolveCurrentLayer(activeConfig, detailItem);
@@ -2155,10 +2176,11 @@ export default function ApprovalDashboard() {
       const updatedAt = new Date().toISOString();
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`;
       const patchBody: Record<string, unknown> = {};
-      // A manual override names one person; otherwise keep whatever actor set
-      // the layer already resolved to and just refresh the delivery list.
+      // A manual override names one person, plus whoever acts on their behalf;
+      // otherwise keep whatever actor set the layer already resolved to and just
+      // refresh the delivery list.
       const resendActors = manualRecipient
-        ? [recipient]
+        ? shouldUseManualPaperForSender(currentLayer, recipient) ? [recipient] : await withDirectoryStandIns(token, recipient)
         : parseValidEmailList(rawItem[`L${currentLayerNumber}_Emails`] || recipient);
       const resendRecipients = writeLayerRecipientFields(patchBody, currentLayer, resendActors, recipient);
       // Retrigger as paper/manual when the current recipient is the paper mailbox,
@@ -2171,7 +2193,7 @@ export default function ApprovalDashboard() {
         patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
           rawItem.WorkflowEmailSchedule,
           currentLayerNumber,
-          recipient,
+          joinEmailList(resendRecipients.length ? resendRecipients : [recipient]),
           updatedAt,
         ));
       }
@@ -2510,6 +2532,10 @@ export default function ApprovalDashboard() {
       );
       await spPatch(token, itemUrl, patchBody);
 
+      setLayerFields((previous) => ({
+        ...previous,
+        ...Object.fromEntries(Object.entries(patchBody).filter(([key]) => /^L\d+_/.test(key))),
+      }));
       const serializedAssignments = JSON.stringify(assignmentData);
       const serializedSchedule = typeof patchBody.WorkflowEmailSchedule === "string"
         ? patchBody.WorkflowEmailSchedule
@@ -2604,9 +2630,11 @@ export default function ApprovalDashboard() {
         WorkflowAssignmentData: JSON.stringify(assignmentData),
       };
       // Naming one person replaces the layer's whole actor set: anyone who
-      // shared it (co-evaluators, an expanded distribution list) must lose
-      // access, not merely stop being the primary.
-      const assignedRecipients = writeLayerRecipientFields(patchBody, targetLayer, [email], email);
+      // shared it (co-evaluators, an expanded distribution list, the previous
+      // person's PA) must lose access, not merely stop being the primary. The
+      // new person's own stand-ins come with them.
+      const assignedActors = isManualPaperAssignment ? [email] : await withDirectoryStandIns(token, email);
+      const assignedRecipients = writeLayerRecipientFields(patchBody, targetLayer, assignedActors, email);
       if (isManualPaperAssignment) {
         // Assigned to the paper/manual mailbox — flag this layer for paper handling.
         patchBody[`L${input.layer}_Status`] = manualPaperStatusForLayer(targetLayer);
@@ -2627,10 +2655,11 @@ export default function ApprovalDashboard() {
         ? ensureLinkToken(targetLayer, rawItem, input.layer, patchBody)
         : "";
       if (getScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, input.layer)) {
+        // Same date, new people: the scheduled email follows the new set.
         patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
           rawItem.WorkflowEmailSchedule,
           input.layer,
-          email,
+          joinEmailList(assignedRecipients.length ? assignedRecipients : [email]),
           updatedAt,
         ));
       }
@@ -2642,6 +2671,10 @@ export default function ApprovalDashboard() {
       await ensureWorkflowColumns(token, selectedItem.Title, maximumLayerNumber);
       await spPatch(token, itemUrl, patchBody);
 
+      setLayerFields((previous) => ({
+        ...previous,
+        ...Object.fromEntries(Object.entries(patchBody).filter(([key]) => /^L\d+_/.test(key))),
+      }));
       const serializedAssignments = JSON.stringify(assignmentData);
       const serializedSchedule = typeof patchBody.WorkflowEmailSchedule === "string"
         ? patchBody.WorkflowEmailSchedule
@@ -4073,6 +4106,9 @@ export default function ApprovalDashboard() {
                       })()}
                     </div>
                   )}
+                  {(isAdmin || isSuperuser) && token && selectedActiveLayers.length > 0 && (
+                    <LayerRecipientsPanel token={token} layers={selectedActiveLayers} fields={layerFields} />
+                  )}
                   {isSuperuser && selectedActiveLayers.length > 0 && (
                     <WorkflowAssignmentEditor
                       layers={selectedActiveLayers}
@@ -4084,6 +4120,14 @@ export default function ApprovalDashboard() {
                       rawAssignments={selectedItem.WorkflowAssignmentData}
                       saving={assignmentSaving}
                       onSave={async (input) => { await handleSaveWorkflowAssignment(input); }}
+                      renderEmailHint={token ? (email, layerNumber) => (
+                        <StandInHint
+                          token={token}
+                          email={email}
+                          intro="After saving, it also goes to"
+                          currentActors={parseValidEmailList(layerFields[`L${layerNumber}_Emails`] || layerFields[`L${layerNumber}_Email`])}
+                        />
+                      ) : undefined}
                     />
                   )}
                   {isSuperuser && selectedActiveLayers.length > 0 && (
@@ -4175,6 +4219,7 @@ export default function ApprovalDashboard() {
                           Send now or resend
                         </button>
                       </div>
+                      {token && <StandInHint token={token} email={manualEmailRecipient} />}
                       <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>
                         The address above replaces the current layer recipient for this submission before sending. Send now works after sent, scheduled, or failed email states.
                       </div>

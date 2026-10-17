@@ -22,7 +22,7 @@ import { resolveSpan } from "../pdfTemplate/resolve";
 import type { FormSubmissionField } from "../formSubmissionLayout";
 import type { PdfSectionContext } from "./context";
 import type { PdfLayerResult } from "../FormPdfDocument";
-import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
+import { onBehalfOfLine, signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
 import type { TemplateFooter } from "../pdfTemplate/types";
 
 export { C, S };
@@ -252,6 +252,7 @@ function SignatureCard({ layer }: { layer: PdfLayerResult }): ReactElement {
         </Text>
         <Text style={S.sigName}>{name || " "}</Text>
         {position ? <Text style={S.sigDetail}>{position}</Text> : null}
+        {layer.onBehalfOf ? <Text style={S.sigDetail}>{onBehalfOfLine(layer.onBehalfOf)}</Text> : null}
         {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
         {when ? <Text style={S.sigDetail}>{when}</Text> : null}
       </View>

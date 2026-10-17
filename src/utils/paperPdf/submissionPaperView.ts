@@ -78,6 +78,7 @@ function layerResult(layer: ApprovalLayerResult | EvaluationLayerResult, layerCo
     status: layer.rawStatus || layer.status,
     signerName: layer.actedByName || undefined,
     signerPosition: layer.actedByPosition || undefined,
+    onBehalfOf: layer.onBehalfOf ?? undefined,
     layerTitle: layer.layerTitle || undefined,
   };
   if (layer.type === "evaluation") {

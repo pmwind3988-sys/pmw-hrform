@@ -39,6 +39,7 @@ import {
   subjectFieldMapping,
   type DirectorySource,
 } from "./directoryHarvest";
+import { joinEmailList, parseEmailList, parseValidEmailList } from "./layerRecipients";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
 
@@ -117,6 +118,7 @@ export async function ensureApprovalDirectory(token: string): Promise<void> {
     { n: APPROVAL_DIRECTORY_COLUMNS.isActive, k: SP_FIELD_KIND.boolean },
     { n: APPROVAL_DIRECTORY_COLUMNS.source, k: SP_FIELD_KIND.text },
     { n: APPROVAL_DIRECTORY_COLUMNS.confirmed, k: SP_FIELD_KIND.boolean },
+    { n: APPROVAL_DIRECTORY_COLUMNS.delegateEmails, k: SP_FIELD_KIND.text },
   ]);
 }
 
@@ -138,6 +140,12 @@ export interface ApprovalDirectoryInput {
   employeeId: string;
   approverEmail: string;
   isActive: boolean;
+  /**
+   * Who may act on this person's behalf, `;`-separated. Optional so the
+   * harvester and the CSV import, which know nothing of it, leave whatever HR
+   * set alone: an absent value is not written at all.
+   */
+  delegateEmails?: string;
 }
 
 /**
@@ -168,6 +176,7 @@ export const EMPTY_APPROVAL_DIRECTORY_INPUT: ApprovalDirectoryInput = {
   employeeId: "",
   approverEmail: "",
   isActive: true,
+  delegateEmails: "",
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -210,6 +219,14 @@ export function validateApprovalDirectoryInput(
   }
   if (approver && directoryEmailKey(approver) === directoryEmailKey(email)) {
     problems.push("A person cannot be their own approver.");
+  }
+
+  for (const delegate of parseEmailList(input.delegateEmails ?? "")) {
+    if (!EMAIL_RE.test(delegate)) {
+      problems.push(`"${delegate}" is not a valid email address for someone acting on their behalf.`);
+    } else if (email && directoryEmailKey(delegate) === directoryEmailKey(email)) {
+      problems.push("A person cannot act on their own behalf.");
+    }
   }
 
   return problems;
@@ -257,6 +274,9 @@ export function directoryItemBody(
   put("employeeId", input.employeeId.trim());
   put("approverEmail", input.approverEmail.trim().toLowerCase());
   put("isActive", input.isActive);
+  if (input.delegateEmails !== undefined) {
+    put("delegateEmails", joinEmailList(parseEmailList(input.delegateEmails).map((entry) => entry.toLowerCase())));
+  }
   put("source", origin.source);
   put("confirmed", origin.confirmed);
 
@@ -559,6 +579,7 @@ export function createApprovalDirectoryReader(
     department: row.department,
     position: row.position,
     approverEmail: row.approverEmail,
+    delegateEmails: parseValidEmailList(row.delegateEmails ?? ""),
   });
 
   return {

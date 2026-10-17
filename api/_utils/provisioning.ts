@@ -68,6 +68,9 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
       // a later promotion does not rewrite the record. See src/utils/signOff.ts.
       { name: `L${n}_ActedByName`, displayName: `L${n}_ActedByName`, type: "text" },
       { name: `L${n}_ActedByPosition`, displayName: `L${n}_ActedByPosition`, type: "text" },
+      // Whose behalf a stand-in (a PA) signed on, as JSON. See readOnBehalfOf
+      // in api/_utils/layerRecipients.ts.
+      { name: `L${n}_OnBehalfOf`, displayName: `L${n}_OnBehalfOf`, type: "note" },
       { name: `L${n}_SignedAt`, displayName: `L${n}_SignedAt`, type: "dateTime" },
       { name: `L${n}_Rejection`, displayName: `L${n}_Rejection`, type: "note" },
       { name: `L${n}_Signature`, displayName: `L${n}_Signature`, type: "note" },

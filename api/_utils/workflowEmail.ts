@@ -118,6 +118,11 @@ export interface WorkflowActionEmailParams {
   referenceNo?: string;
   /** The name the form collected, which is who the request is actually about. */
   applicantName?: string;
+  /**
+   * Says who on the email is standing in for whom, when the step also went to
+   * someone's PA. See standInEmailNote in _utils/standIns.ts.
+   */
+  standInNote?: string;
 }
 
 export interface ManualPaperWorkflowEmailParams {
@@ -664,6 +669,7 @@ export function buildWorkflowActionEmail(
         { label: "Submitted by", value: requestSubmitterName(params.submittedBy, params.applicantName) },
         { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
       ],
+      callout: params.standInNote || undefined,
       actionUrl: params.reviewLink,
       actionLabel,
       portalIdentity: true,

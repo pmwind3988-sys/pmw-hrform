@@ -91,6 +91,8 @@ export interface ApprovalLayer {
   actedBy?: string | null;
   actedByName?: string | null;
   actedByPosition?: string | null;
+  /** Whose behalf a stand-in (a PA) signed on — `L{n}_OnBehalfOf`. Null when signed in person. */
+  onBehalfOf?: { email: string; name: string; position: string } | null;
   /** The layer's configured title, shown as the post when none was stamped. */
   layerTitle?: string | null;
   /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
@@ -400,6 +402,8 @@ export interface ApprovalLayerResult {
   actedBy?: string | null;
   actedByName?: string | null;
   actedByPosition?: string | null;
+  /** Whose behalf a stand-in (a PA) signed on — `L{n}_OnBehalfOf`. Null when signed in person. */
+  onBehalfOf?: { email: string; name: string; position: string } | null;
   /** The layer's configured title, shown as the post when none was stamped. */
   layerTitle?: string | null;
   /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
@@ -426,6 +430,8 @@ export interface EvaluationLayerResult {
   actedBy?: string | null;
   actedByName?: string | null;
   actedByPosition?: string | null;
+  /** Whose behalf a stand-in (a PA) signed on — `L{n}_OnBehalfOf`. Null when signed in person. */
+  onBehalfOf?: { email: string; name: string; position: string } | null;
   /** The layer's configured title, shown as the post when none was stamped. */
   layerTitle?: string | null;
   /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */

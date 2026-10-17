@@ -7,6 +7,7 @@ import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "./FormPd
 import { uploadFormPdf, deleteFormPdf, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
 import type { MatrixColumnDef } from "./formBuilderSP";
 import { fetchWithAuthRecovery } from "./authRecovery";
+import { readOnBehalfOf } from "./layerRecipients";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -130,6 +131,7 @@ export function buildPdfLayerResults(
       signature: (rawResponse[`L${n}_Signature`] as string) || undefined,
       signerName: (rawResponse[`L${n}_ActedByName`] as string) || undefined,
       signerPosition: (rawResponse[`L${n}_ActedByPosition`] as string) || undefined,
+      onBehalfOf: readOnBehalfOf(rawResponse, n) ?? undefined,
       layerTitle: titlesByLayer.get(n),
     };
 

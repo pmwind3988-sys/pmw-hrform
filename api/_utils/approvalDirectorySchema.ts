@@ -53,6 +53,13 @@ export const APPROVAL_DIRECTORY_COLUMNS = {
    * covered in review badges.
    */
   confirmed: "Confirmed",
+  /**
+   * Who may act on this person's behalf — a PA standing in for the CEO. Any
+   * number of addresses, separated by `;`. Set by HR only, from this list:
+   * every step that lands on the person is also sent to these people, and any
+   * one of them may decide it, signing as themselves "on behalf of" this row.
+   */
+  delegateEmails: "DelegateEmails",
 } as const;
 
 export interface ApprovalDirectoryRow {
@@ -67,6 +74,8 @@ export interface ApprovalDirectoryRow {
   isActive: boolean;
   source: string;
   confirmed: boolean;
+  /** `DelegateEmails` as stored: addresses separated by `;`. Empty for nobody. */
+  delegateEmails?: string;
 }
 
 /** Case- and whitespace-insensitive key for comparing addresses. */
@@ -133,6 +142,7 @@ export function mapDirectoryColumns(
     isActive: resolve(APPROVAL_DIRECTORY_COLUMNS.isActive),
     source: resolve(APPROVAL_DIRECTORY_COLUMNS.source),
     confirmed: resolve(APPROVAL_DIRECTORY_COLUMNS.confirmed),
+    delegateEmails: resolve(APPROVAL_DIRECTORY_COLUMNS.delegateEmails),
   };
 }
 
@@ -197,5 +207,6 @@ export function toApprovalDirectoryRow(
     // every row in an existing directory is.
     source: text("source") || "manual",
     confirmed: confirmed === undefined || confirmed === null || confirmed === "" ? true : Boolean(confirmed),
+    delegateEmails: text("delegateEmails"),
   };
 }

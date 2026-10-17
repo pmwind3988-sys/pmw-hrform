@@ -18,6 +18,7 @@
  * happens and only shows up as an approval sitting with the wrong person.
  */
 import type { ResolutionContext } from "../../utils/resolveAssignee";
+import { readOnBehalfOf } from "../../utils/layerRecipients";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -97,6 +98,9 @@ export function resolutionContextFromItem(
     submitterEmail: valueToText(item.SubmittedBy),
     previousActorEmail: previous >= 1
       ? previousStep?.actedBy?.trim()
+        // A stand-in's decision routes on from the person they stood in for:
+        // a PA's own manager is not the CEO's next approver.
+        || readOnBehalfOf(item, previous)?.email
         || valueToText(item[`L${previous}_ActedBy`])
         || valueToText(item[`L${previous}_Email`])
       : "",

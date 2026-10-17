@@ -68,3 +68,18 @@ export function signOffPosition(storedPosition: unknown, layerTitle?: string | n
   const position = typeof storedPosition === "string" ? storedPosition.trim() : "";
   return position || (layerTitle ?? "").trim();
 }
+
+/**
+ * The line printed under a stand-in's sign-off: "On behalf of Wong Chiew Yee,
+ * Group Human Resources Head". Empty when the layer was signed in person.
+ *
+ * The stand-in's own name and post stay on the name and position lines — the
+ * record never pretends the person they stood in for signed.
+ */
+export function onBehalfOfLine(record: { name?: string | null; position?: string | null; email?: string | null } | null | undefined): string {
+  if (!record) return "";
+  const name = (record.name ?? "").trim() || (record.email ?? "").trim();
+  if (!name) return "";
+  const position = (record.position ?? "").trim();
+  return position ? `On behalf of ${name}, ${position}` : `On behalf of ${name}`;
+}

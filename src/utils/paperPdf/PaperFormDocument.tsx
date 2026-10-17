@@ -87,6 +87,10 @@ const P = StyleSheet.create({
   thumbs: { flexDirection: "row", flexWrap: "wrap", marginTop: 3 },
   thumb: { width: 110, height: 80, objectFit: "contain", marginRight: 6, marginBottom: 6, borderWidth: 0.5, borderColor: "#999999" },
 
+  // "On behalf of …" over a stand-in's signature: absolute, so it takes no
+  // height and the page keeps every line where the Word form has it.
+  onBehalf: { position: "absolute", top: 1, left: 2, right: 2, fontSize: 6.2, color: MUTED, maxLines: 1, textOverflow: "ellipsis" },
+
   footer: { position: "absolute", bottom: 18, left: 36, right: 36, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: MUTED },
 });
 
@@ -484,8 +488,9 @@ function SignoffRow({ block }: { block: Extract<PaperBlock, { kind: "signoffRow"
   const column = (c: SignoffColumn, i: number) => (
     <View key={i} style={{ flexGrow: 1, flexBasis: 0, paddingHorizontal: 6, paddingVertical: 6 }}>
       <Text style={[P.bold, c.rejected ? P.rejected : {}]}>{c.caption}{c.rejected ? " (Rejected)" : ""}</Text>
-      <View style={[P.lineSlot, { width: "100%", minHeight: 40, marginTop: 4 }]}>
+      <View style={[P.lineSlot, { width: "100%", minHeight: 40, marginTop: 4, position: "relative" }]}>
         {c.signature ? <Image style={P.sigImage} src={c.signature} /> : <Text> </Text>}
+        {c.onBehalfOf ? <Text style={P.onBehalf}>{c.onBehalfOf}</Text> : null}
       </View>
       {c.role ? <Text style={{ marginTop: 2 }}>{c.role}</Text> : null}
       {field("Name:", c.name)}
@@ -511,7 +516,11 @@ function SignOff({ block }: { block: Extract<PaperBlock, { kind: "signoff" }> })
         <LineSlot value={block.name} />
         <View style={P.lineGap} />
         <Text style={{ width: 56 }}>Signature:</Text>
-        <LineSlot image={block.signature} large={block.large} />
+        {/* The note sits inside the slot's own height, so no line moves. */}
+        <View style={{ position: "relative" }}>
+          <LineSlot image={block.signature} large={block.large} />
+          {block.onBehalfOf ? <Text style={P.onBehalf}>{block.onBehalfOf}</Text> : null}
+        </View>
       </View>
       <View style={P.lineRow}>
         <Text style={{ width: 52 }}>Position:</Text>

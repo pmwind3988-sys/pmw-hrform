@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { directoryToCsv, planDirectoryImport } from "../approvalDirectoryCsv";
+import { parseCsv } from "../csv";
 import type { ApprovalDirectoryRow } from "../approvalDirectorySchema";
 
 function person(overrides: Partial<ApprovalDirectoryRow> = {}): ApprovalDirectoryRow {
@@ -161,6 +162,6 @@ describe("directoryToCsv", () => {
 
   it("writes active as a word a person can read in Excel", () => {
     const csv = directoryToCsv([person({ isActive: false })]);
-    expect(csv.split("\r\n")[1].endsWith('"No"')).toBe(true);
+    expect(parseCsv(csv)[1][7]).toBe("No");
   });
 });

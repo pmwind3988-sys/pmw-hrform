@@ -48,6 +48,7 @@ import {
 import type { SubmissionFilterState } from "./utils/submissionFilters";
 import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
 import { isTestRow } from "./utils/testRun";
+import { readOnBehalfOf } from "./utils/layerRecipients";
 
 // Auth screens
 import ChoiceScreen from "./components/auth/ChoiceScreen";
@@ -507,6 +508,7 @@ function mapSubmission(
         actedBy: raw[`L${n}_ActedBy`] ? String(raw[`L${n}_ActedBy`]) : null,
         actedByName: raw[`L${n}_ActedByName`] ? String(raw[`L${n}_ActedByName`]) : null,
         actedByPosition: raw[`L${n}_ActedByPosition`] ? String(raw[`L${n}_ActedByPosition`]) : null,
+        onBehalfOf: readOnBehalfOf(raw, n),
         layerTitle: lc.title?.trim() || null,
         rawStatus: statusVal,
       };
@@ -592,6 +594,7 @@ function mapSubmission(
           actedBy: actedByVal,
           actedByName: actedByNameVal,
           actedByPosition: actedByPositionVal,
+          onBehalfOf: readOnBehalfOf(raw, i),
           rawStatus: statusVal,
         });
       }

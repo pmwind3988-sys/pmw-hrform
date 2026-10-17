@@ -32,6 +32,7 @@ import {
   type ApprovalDirectoryInput,
 } from "../../utils/approvalDirectory";
 import { isUnconfirmedRow } from "../../utils/directoryHarvestWrite";
+import { joinEmailList, parseEmailList } from "../../utils/layerRecipients";
 import {
   directoryEmailKey,
   type ApprovalDirectoryRow,
@@ -77,6 +78,7 @@ const HELP: Record<string, string> = {
   company: "Which company they belong to. Two companies can have a department of the same name, so this is what tells them apart.",
   position: "Their job title. A form set to 'Whoever holds a role' looks for the title you type here, such as HOD.",
   employeeId: "Their ID in whichever system HR keys off. Free text; nothing routes on it.",
+  delegateEmails: "A PA or deputy. Every approval or evaluation sent to this person also goes to them, and any one of them can act. They sign with their own name, marked \"on behalf of\" this person.",
 };
 
 /**
@@ -127,6 +129,7 @@ export default function DirectoryPersonDialog({
         employeeId: editing.employeeId,
         approverEmail: editing.approverEmail,
         isActive: editing.isActive,
+        delegateEmails: editing.delegateEmails ?? "",
       }
       : EMPTY_APPROVAL_DIRECTORY_INPUT);
   }, [open, editing]);
@@ -290,6 +293,38 @@ export default function DirectoryPersonDialog({
             localPeople={knownPeople}
             helperText={HELP.approverEmail}
           />
+
+          {has("delegateEmails") && (
+            <Autocomplete
+              multiple
+              freeSolo
+              options={knownPeople.map((person) => person.email)}
+              value={parseEmailList(input.delegateEmails ?? "")}
+              onChange={(_, value) => setInput((prev) => ({
+                ...prev,
+                delegateEmails: joinEmailList(parseEmailList(value.map(String))),
+              }))}
+              renderOption={(props, email) => {
+                const person = knownPeople.find((candidate) => directoryEmailKey(candidate.email) === directoryEmailKey(email));
+                const { key, ...rest } = props;
+                return (
+                  <li key={key} {...rest}>
+                    {person?.name ? `${person.name} — ${email}` : email}
+                  </li>
+                );
+              }}
+              fullWidth
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Can act on their behalf"
+                  placeholder="Type an email and press Enter"
+                  size="small"
+                  helperText={HELP.delegateEmails}
+                />
+              )}
+            />
+          )}
 
           {has("isActive") && (
             <FormControlLabel

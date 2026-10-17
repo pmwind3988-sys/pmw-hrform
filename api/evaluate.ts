@@ -12,7 +12,8 @@ import {
 } from "./_utils/workflowEmail.js";
 import { buildWorkflowReviewLink, routePrefixAllowsLayerType } from "./_utils/workflowLink.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { isLayerActor, joinEmailList, parseValidEmailList, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
+import { isLayerActor, joinEmailList, parseValidEmailList, readOnBehalfOf, serializeOnBehalfOf, writeLayerRecipientFields } from "./_utils/layerRecipients.js";
+import { standInEmailNote, standInPrincipal } from "./_utils/resolveAssignee.js";
 import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
@@ -761,6 +762,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
           visibleFields[`L${n}_ActedByName`] = allFields[`L${n}_ActedByName`];
           visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
+          visibleFields[`L${n}_OnBehalfOf`] = allFields[`L${n}_OnBehalfOf`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         } else if (n === foundLayerNumber) {
           // Current layer — include status, and once it is decided, who signed
@@ -771,6 +773,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
           visibleFields[`L${n}_ActedByName`] = allFields[`L${n}_ActedByName`];
           visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
+          visibleFields[`L${n}_OnBehalfOf`] = allFields[`L${n}_OnBehalfOf`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         }
         // Future layers (n > foundLayerNumber) — HIDDEN
@@ -819,6 +822,12 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     // before they press anything. Signed-in only: a public link has no account
     // to name.
     const viewerSignOff = signedInMode ? await readSignerIdentity(graphToken, viewerEmail) : null;
+    // Whose step this is, when the viewer is only here as their stand-in (a PA
+    // for the CEO), so the page can say so before they sign. Null for the
+    // assigned person themselves, and for a public link, which names nobody.
+    const actingOnBehalfOf = signedInMode
+      ? await standInPrincipal(createApprovalDirectoryReader(graphToken), viewerEmail, allFields[`L${foundLayerNumber}_Email`])
+      : null;
 
     return res.status(200).json({
       success: true,
@@ -844,6 +853,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         mediaSrcByField,
         matrixTables,
         viewerSignOff,
+        actingOnBehalfOf,
         fields: visibleFields,
       },
     });
@@ -1105,8 +1115,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // one possible actor: with several sharing a layer we cannot tell which
     // of them clicked, and guessing would put a name against a decision they
     // may not have made — leave it blank instead.
+    // Set when a signed-in stand-in decides for the step's own person.
+    let onBehalfOf: ReturnType<typeof readOnBehalfOf> = null;
     if (signedInMode) {
       actedByEmail = viewerEmail;
+      onBehalfOf = await standInPrincipal(
+        createApprovalDirectoryReader(graphToken),
+        viewerEmail,
+        itemFields[`L${layerNumber}_Email`],
+      );
     } else {
       const layerActors = parseValidEmailList(
         itemFields[`L${layerNumber}_Emails`] || itemFields[`L${layerNumber}_Email`],
@@ -1245,6 +1262,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           });
         });
       }
+
+      // A stand-in (a PA) signs as themselves, on behalf of the step's own
+      // person. Stamped now, from the directory as it is at signing, and on its
+      // own patch: the column is newer than every other, and a form published
+      // before it must still record the decision — it then reads as the PA's own.
+      if (onBehalfOf) {
+        await updateListItemFields(graphToken, responseListName, responseItem.id, {
+          [`L${layerNumber}_OnBehalfOf`]: serializeOnBehalfOf(onBehalfOf),
+        }).catch((error) => {
+          logWarn("api:evaluate", "Could not record whose behalf the decision was made on; republish the form to add the column", {
+            formTitle,
+            layerNumber,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
     }
 
     if (testRun) {
@@ -1280,7 +1313,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         responseItemId: responseItem.id,
         nextLayer: notificationNextLayer,
         item: responseItem.fields,
-        actedBy: actedByEmail || String(responseItem.fields[`L${layerNumber}_ActedBy`] || ""),
+        // Whose decision it was: a PA's own manager is not the CEO's next
+        // approver, so a stand-in's signature routes on from the person they
+        // stood in for.
+        actedBy: onBehalfOf?.email || actedByEmail || String(responseItem.fields[`L${layerNumber}_ActedBy`] || ""),
         previousLayerNumber: layerNumber,
         formTitle,
       });
@@ -1302,6 +1338,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           layer: nextLayerNumber,
         });
       } else if (recipients.length > 0) {
+        const nextLayerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
+        const standInNote = await standInEmailNote(
+          createApprovalDirectoryReader(graphToken),
+          lateResolved?.[0] ?? responseItem.fields[`L${nextLayerNumber}_Email`],
+          recipients,
+          nextLayerType,
+        ).catch(() => undefined);
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
         const publicToken = String(notificationNextLayer.publicToken || "").trim();
@@ -1369,6 +1412,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   reviewLink,
                   referenceNo,
                   applicantName,
+                  standInNote,
                 }),
             {
               listTitle: responseListName,

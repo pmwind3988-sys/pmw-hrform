@@ -101,5 +101,6 @@ export function stepColumn(kit: PaperKit, layer: PdfLayerResult, caption: string
     signature: signed.signature,
     rejected: signed.rejected,
     remarks: signed.remarks,
+    onBehalfOf: signed.onBehalfOf,
   };
 }

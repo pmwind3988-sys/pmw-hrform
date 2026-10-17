@@ -21,6 +21,7 @@ import {
   type DirectoryColumnMap,
 } from "./approvalDirectorySchema.js";
 import { logWarn } from "./logger.js";
+import { parseValidEmailList } from "./layerRecipients.js";
 import {
   findSubjectRow,
   optionsFromSubmittedData,
@@ -183,6 +184,7 @@ export function createApprovalDirectoryReader(
     department: row.department,
     position: row.position,
     approverEmail: row.approverEmail,
+    delegateEmails: parseValidEmailList(row.delegateEmails ?? ""),
   });
 
   return {
