@@ -63,6 +63,17 @@ describe("a run still mid-workflow", () => {
     expect(step).toMatchObject({ status: "pending", detail: "Routed to hr@pmw-group.com" });
   });
 
+  it("names everyone a waiting step went to, a stand-in included", () => {
+    const fields = {
+      FormStatus: "In Review",
+      L2_Status: "Pending",
+      L2_Email: "zz.test.principal@pmw-group.com",
+      L2_Emails: "zz.test.principal@pmw-group.com; ashraf@pmw-group.com",
+    };
+    const step = computeTestRunProgress({}, fields).steps.find((s) => s.step === "layer-2-decision");
+    expect(step?.detail).toBe("Routed to zz.test.principal@pmw-group.com, ashraf@pmw-group.com");
+  });
+
   it("omits a layer the workflow never reached, rather than showing it as skipped", () => {
     const fields = { FormStatus: "In Review", L1_Status: "Approved" };
     const { steps } = computeTestRunProgress({}, fields);

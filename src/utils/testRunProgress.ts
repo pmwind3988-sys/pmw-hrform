@@ -31,6 +31,7 @@ import {
   orderedTestRunSteps,
 } from "./testRunTrail";
 import { isTerminalLayerStatus } from "./workflowStatus";
+import { parseValidEmailList } from "./layerRecipients";
 import { resolveLifecycleStage } from "./submissionLifecycle";
 
 export type TestRunVerdict = "passed" | "failed" | "running";
@@ -73,12 +74,15 @@ function layerStepsFromRow(fields: Record<string, unknown>): TestRunStep[] {
   return reachedLayerNumbers(fields).map((n) => {
     const status = textField(fields, `L${n}_Status`);
     const actor = textField(fields, `L${n}_ActedBy`) || textField(fields, `L${n}_Email`);
+    // Everyone the step went to — a stand-in (a PA) included — not just the
+    // primary, or a step shared with its tester reads as routed elsewhere.
+    const routedTo = parseValidEmailList(fields[`L${n}_Emails`] || fields[`L${n}_Email`]);
     const decided = isTerminalLayerStatus(status);
     const stepStatus: TestRunStepStatus = decided ? "pass" : "pending";
     const label = decided ? `Layer ${n} decision recorded` : `Layer ${n} awaiting decision`;
     const detail = decided
       ? actor ? `${status} by ${actor}` : status
-      : actor ? `Routed to ${actor}` : undefined;
+      : routedTo.length > 0 ? `Routed to ${routedTo.join(", ")}` : undefined;
     return {
       step: `layer-${n}-decision`,
       label,
