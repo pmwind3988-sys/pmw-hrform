@@ -552,7 +552,10 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    if (!foundToken) return res.status(404).json({ error: "Token not found" });
+    // A signed-in link is settled below, once the submission names its branch:
+    // a form whose steps all live inside branches has no main-sequence step to
+    // find yet, and refusing here turned every such link away.
+    if (!foundToken && !signedInMode) return res.status(404).json({ error: "Token not found" });
     // Expiry is no longer a property of the layer alone — a layer may read its
     // deadline out of the submission's own answers — so it is settled below,
     // once the record is in hand, by denyLayerItemAccess.
@@ -620,6 +623,13 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         }
       }
     }
+
+    // No version to read the step from: take it from the live config, now on
+    // the branch the submission took.
+    if (signedInMode && !foundToken) {
+      foundToken = pickLayerByNumber(layerConfig, String(allFields.SelectedBranch || ""), foundLayerNumber);
+    }
+    if (!foundToken) return res.status(404).json({ error: "Token not found" });
 
     // The token names a layer; the item id arrived beside it in the query
     // string. Nothing tied the two together, so one review link could read
