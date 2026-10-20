@@ -392,6 +392,15 @@ function sharePointFileValueUrl(value: string): string {
   return `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodeServerRelativePathParam(serverPath)}')/$value`;
 }
 
+/** The image type a file's first bytes announce, or "" when it is not an image. */
+function sniffImageType(bytes: Buffer): string {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 6 && /^GIF8[79]a$/.test(bytes.subarray(0, 6).toString("latin1"))) return "image/gif";
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString("latin1") === "RIFF" && bytes.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return "";
+}
+
 async function sourceToDataUrl(token: string, source: string): Promise<string> {
   if (source.startsWith("data:image/")) return source;
   const requestUrl = sharePointFileValueUrl(source) || source;
@@ -401,9 +410,13 @@ async function sourceToDataUrl(token: string, source: string): Promise<string> {
     },
   });
   if (!response.ok) throw new Error(`Media fetch failed: ${response.status}`);
-  const contentType = response.headers.get("content-type") || "application/octet-stream";
-  if (!contentType.startsWith("image/")) return source;
+  // SharePoint serves the signature images as application/octet-stream, so the
+  // header alone would hand the browser a link it cannot open; read the bytes.
+  const declared = (response.headers.get("content-type") || "").toLowerCase();
+  if (!declared.startsWith("image/") && declared && !declared.startsWith("application/octet-stream")) return source;
   const buffer = Buffer.from(await response.arrayBuffer());
+  const contentType = declared.startsWith("image/") ? declared : sniffImageType(buffer);
+  if (!contentType) return source;
   return `data:${contentType};base64,${buffer.toString("base64")}`;
 }
 
@@ -774,6 +787,8 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
           visibleFields[`L${n}_OnBehalfOf`] = allFields[`L${n}_OnBehalfOf`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
+          // The paper forms print each signatory's signature under their name.
+          visibleFields[`L${n}_Signature`] = allFields[`L${n}_Signature`];
         } else if (n === foundLayerNumber) {
           // Current layer — include status, and once it is decided, who signed
           // it: a link opened after the fact shows the sign-off it already has.
@@ -785,6 +800,8 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
           visibleFields[`L${n}_OnBehalfOf`] = allFields[`L${n}_OnBehalfOf`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
+          // The paper forms print each signatory's signature under their name.
+          visibleFields[`L${n}_Signature`] = allFields[`L${n}_Signature`];
         }
         // Future layers (n > foundLayerNumber) — HIDDEN
       }

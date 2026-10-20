@@ -545,6 +545,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                 actedByPosition: json.data.fields[`L${n}_ActedByPosition`] || null,
                 onBehalfOf: readOnBehalfOf(json.data.fields, n),
                 signedAt: json.data.fields[`L${n}_SignedAt`] || null,
+                signature: json.data.fields[`L${n}_Signature`] || null,
                 evaluationData: visibleEvaluationData[String(n)],
               });
             }
@@ -634,6 +635,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
               actedByPosition: fields[`L${entry.layerNumber}_ActedByPosition`] ?? null,
               onBehalfOf: readOnBehalfOf(fields, entry.layerNumber),
               signedAt: fields[`L${entry.layerNumber}_SignedAt`] ?? null,
+              signature: fields[`L${entry.layerNumber}_Signature`] ?? null,
               title: entry.title || "",
             })),
         );
@@ -962,6 +964,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
     signerPosition: valueToText(pr.actedByPosition) || undefined,
     onBehalfOf: (pr.onBehalfOf as OnBehalfOfRecord | null | undefined) ?? undefined,
     layerTitle: valueToText(pr.title) || undefined,
+    signature: valueToText(pr.signature).startsWith("data:image/") ? valueToText(pr.signature) : undefined,
   }));
 
   if (actionState === "success") {
