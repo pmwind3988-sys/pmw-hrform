@@ -416,7 +416,7 @@ async function sourceToDataUrl(token: string, source: string): Promise<string> {
   if (!declared.startsWith("image/") && declared && !declared.startsWith("application/octet-stream")) return source;
   const buffer = Buffer.from(await response.arrayBuffer());
   const contentType = declared.startsWith("image/") ? declared : sniffImageType(buffer);
-  if (!contentType) return source;
+  if (!contentType) throw new Error(`Not an image: ${declared || "no content type"}`);
   return `data:${contentType};base64,${buffer.toString("base64")}`;
 }
 
@@ -434,7 +434,13 @@ async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, 
       try {
         if (!spToken) spToken = await getSharePointToken();
         converted.push(await sourceToDataUrl(spToken, source));
-      } catch {
+      } catch (error) {
+        // The reviewer then gets a SharePoint link their browser cannot open;
+        // say why, or the broken image is all anybody sees.
+        logWarn("api:evaluate", "Could not inline a stored image", {
+          fieldName,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
         converted.push(source);
       }
     }
