@@ -7,25 +7,28 @@ import SapGrid, { type SapColumn } from "../sap/SapGrid";
 import { editorial, si, siType } from "../../theme/editorial";
 import {
   emailScheduleLabel,
+  isUpcoming,
   nextDigestRunAt,
   type EmailScheduleEntry,
   type EmailScheduleState,
 } from "../../utils/emailScheduleOverview";
 
-type ViewFilter = "attention" | "next" | "later" | "sent" | "all";
+type ViewFilter = "upcoming" | "attention" | "next" | "later" | "sent" | "all";
 
-const VIEW_STATES: Record<ViewFilter, EmailScheduleState[] | null> = {
-  attention: ["failed", "stopped"],
-  next: ["next-summary", "next-alone"],
-  later: ["later"],
-  sent: ["sent-summary", "sent-alone"],
-  all: null,
+const VIEW_MATCHES: Record<ViewFilter, (entry: EmailScheduleEntry) => boolean> = {
+  upcoming: (entry) => isUpcoming(entry),
+  attention: (entry) => entry.state === "failed" || entry.state === "stopped",
+  next: (entry) => entry.state === "next-summary" || entry.state === "next-alone",
+  later: (entry) => entry.state === "later" && !isUpcoming(entry),
+  sent: (entry) => entry.state === "sent-summary" || entry.state === "sent-alone",
+  all: () => true,
 };
 
 const VIEW_LABELS: Record<ViewFilter, string> = {
+  upcoming: "Next 3 months",
   attention: "Needs attention",
-  next: "Next run",
-  later: "Scheduled later",
+  next: "Next run only",
+  later: "After 3 months",
   sent: "Already sent",
   all: "Everything",
 };
@@ -51,7 +54,9 @@ function formatWhen(iso: string | undefined): string {
  * All Submissions → Email schedule.
  *
  * Every workflow email the loaded submissions carry, compiled: what goes in
- * the next morning's summary and with whom, what waits for a later date, what
+ * the next morning's summary and with whom, what is due over the next three
+ * months (the default view — a Training Evaluation is asked three months
+ * after the course, so "tomorrow" alone hid nearly all of it), what
  * has already gone (on its own or inside a summary), and what failed.
  *
  * Picking rows and pressing "Send selected now" sends just those, grouped the
@@ -67,18 +72,19 @@ export default function EmailSchedulePanel({
   onOpen: (entry: EmailScheduleEntry) => void;
   onSendSelected: (entries: EmailScheduleEntry[]) => Promise<void>;
 }) {
-  const [view, setView] = useState<ViewFilter>("next");
+  const [view, setView] = useState<ViewFilter>("upcoming");
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  const allowed = VIEW_STATES[view];
-  const rows = allowed ? entries.filter((entry) => allowed.includes(entry.state)) : entries;
+  const matching = entries.filter(VIEW_MATCHES[view]);
+  // Upcoming reads as a calendar: the next run first, then each later date in turn.
+  const rows = view === "upcoming"
+    ? [...matching].sort((a, b) => Number(a.state === "later") - Number(b.state === "later")
+      || (a.state === "later" ? String(a.dueAt).localeCompare(String(b.dueAt)) : 0))
+    : matching;
   const pickedEntries = entries.filter((entry) => picked.has(entry.key) && entry.selectable);
-  const counts = (filter: ViewFilter) => {
-    const states = VIEW_STATES[filter];
-    return states ? entries.filter((entry) => states.includes(entry.state)).length : entries.length;
-  };
+  const counts = (filter: ViewFilter) => entries.filter(VIEW_MATCHES[filter]).length;
   const summaryPeople = new Set(entries.filter((e) => e.state === "next-summary").map((e) => e.recipientKey)).size;
 
   const toggle = (entry: EmailScheduleEntry) => setPicked((previous) => {
@@ -172,6 +178,7 @@ export default function EmailSchedulePanel({
           <Box component="span" sx={{ color: editorial.muted }}>
             Next run {formatWhen(nextDigestRunAt().toISOString())} · {counts("next")} email{counts("next") === 1 ? "" : "s"}
             {summaryPeople ? ` · ${summaryPeople} summar${summaryPeople === 1 ? "y" : "ies"}` : ""}
+            {` · ${counts("upcoming")} in the next 3 months`}
           </Box>
           <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <FormControl size="small" sx={{ minWidth: 190 }}>

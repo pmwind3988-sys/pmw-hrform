@@ -75,6 +75,21 @@ export function nextDigestRunAt(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
 }
 
+/** How far ahead the schedule's default view looks: a Training Evaluation is asked three months on. */
+export const UPCOMING_MONTHS = 3;
+
+export function upcomingHorizon(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + UPCOMING_MONTHS, now.getUTCDate() + 1));
+}
+
+/** Goes out at the next run, or on a date within the next three months. */
+export function isUpcoming(entry: EmailScheduleEntry, now = new Date()): boolean {
+  if (entry.state === "next-summary" || entry.state === "next-alone") return true;
+  if (entry.state !== "later") return false;
+  const due = Date.parse(entry.dueAt);
+  return Number.isFinite(due) && due <= upcomingHorizon(now).getTime();
+}
+
 function parseSchedule(raw: unknown): Record<string, ScheduledWorkflowEmail> {
   if (typeof raw !== "string" || !raw.trim()) return {};
   try {

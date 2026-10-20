@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { compileEmailSchedule, emailScheduleLabel, type EmailScheduleRow } from "../emailScheduleOverview";
+import { compileEmailSchedule, emailScheduleLabel, isUpcoming, type EmailScheduleRow } from "../emailScheduleOverview";
 
 const NOW = new Date("2026-10-15T06:00:00.000Z"); // next run: 2026-10-16T00:00Z
 
@@ -70,5 +70,19 @@ describe("compileEmailSchedule", () => {
 
   it("drops an unsent schedule for a step the submission has moved past", () => {
     expect(compileEmailSchedule([row(1, {}, { currentLayer: 3 })], NOW)).toHaveLength(0);
+  });
+});
+
+describe("isUpcoming", () => {
+  it("covers the next run and anything due within three months, not beyond or already sent", () => {
+    const entries = compileEmailSchedule([
+      row(1, {}),
+      row(2, { dueAt: "2026-12-01T00:00:00.000Z" }),
+      row(3, { dueAt: "2027-01-15T09:00:00.000Z" }),
+      row(4, { dueAt: "2027-01-17T00:00:00.000Z" }),
+      row(5, { status: "sent" }),
+    ], NOW);
+    const upcoming = Object.fromEntries(entries.map((e) => [e.itemId, isUpcoming(e, NOW)]));
+    expect(upcoming).toEqual({ 1: true, 2: true, 3: true, 4: false, 5: false });
   });
 });
