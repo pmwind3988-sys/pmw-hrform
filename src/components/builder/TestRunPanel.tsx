@@ -155,7 +155,12 @@ async function loadPdfDataForRow(
     isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
     companies: typeof versionMeta.companies === "string" ? versionMeta.companies : undefined,
     logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
-    pdfConfig: isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as PdfFormData["pdfConfig"] : undefined,
+    // A test run is checked against the paper-form design, whatever the form
+    // was published with — the same drawing the PDF viewer's "Paper form" shows.
+    pdfConfig: {
+      ...(isRecord(versionMeta.pdfConfig) ? versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]> : { enabled: false, title: "", deliveryMethod: "download" as const }),
+      design: "paper",
+    },
     pdfTemplate: readTemplate(versionMeta.pdfTemplate) ?? undefined,
     documentHeader: isRecord(versionMeta.documentHeader) ? versionMeta.documentHeader as PdfFormData["documentHeader"] : undefined,
   };
