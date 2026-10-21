@@ -28,7 +28,7 @@ import {
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
 import { readMatrixTables, sortMatrixRows } from "./_utils/matrixChildData.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
-import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
+import { isTestRow, readTestRunRedirect, withTestRunStandInFor } from "./_utils/testRun.js";
 import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
 import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
 import { sharePointTokenFrom, testRunTesterMayAct } from "./_utils/testRunReviewer.js";
@@ -859,7 +859,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     // for the CEO), so the page can say so before they sign. Null for the
     // assigned person themselves, and for a public link, which names nobody.
     const actingOnBehalfOf = signedInMode
-      ? await standInPrincipal(createApprovalDirectoryReader(graphToken), viewerEmail, allFields[`L${foundLayerNumber}_Email`])
+      ? await standInPrincipal(withTestRunStandInFor(createApprovalDirectoryReader(graphToken), allFields), viewerEmail, allFields[`L${foundLayerNumber}_Email`])
       : null;
 
     return res.status(200).json({
@@ -1153,7 +1153,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (signedInMode) {
       actedByEmail = viewerEmail;
       onBehalfOf = await standInPrincipal(
-        createApprovalDirectoryReader(graphToken),
+        withTestRunStandInFor(createApprovalDirectoryReader(graphToken), itemFields),
         viewerEmail,
         itemFields[`L${layerNumber}_Email`],
       );
@@ -1373,7 +1373,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       } else if (recipients.length > 0) {
         const nextLayerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
         const standInNote = await standInEmailNote(
-          createApprovalDirectoryReader(graphToken),
+          withTestRunStandInFor(createApprovalDirectoryReader(graphToken), responseItem.fields),
           lateResolved?.[0] ?? responseItem.fields[`L${nextLayerNumber}_Email`],
           recipients,
           nextLayerType,

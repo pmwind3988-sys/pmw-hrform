@@ -8,6 +8,7 @@ import { SharePointHttpError } from "./sharepointClient";
 import { REFERENCE_CONFIG_FIELD, REFERENCE_NO_FIELD } from "./referenceNumber";
 import { joinEmailList, parseValidEmailList } from "./layerRecipients";
 import { standInEmailNote } from "./resolveAssignee";
+import { testRunFromTicket, withTestRunStandIn } from "./testRun";
 import { buildWorkflowReviewLink } from "./workflowLink";
 import { selectWorkflowLayer } from "./workflowReviewLink";
 import { resolveApplicantName } from "./applicantName";
@@ -2890,7 +2891,10 @@ export async function triggerApprovalNotification(
   const standInNoteFor = async (primary: string, recipients: string | string[]): Promise<string | undefined> => {
     try {
       const { createApprovalDirectoryReader } = await import("./approvalDirectory");
-      return await standInEmailNote(createApprovalDirectoryReader(token), primary, parseValidEmailList(recipients), nextLayerType);
+      // A test run rehearsing a stand-in names the tester as the PA.
+      const rehearsal = testRunFromTicket(testRun?.ticket ?? "");
+      const directory = withTestRunStandIn(createApprovalDirectoryReader(token), rehearsal.testEmail, rehearsal.onBehalfOf);
+      return await standInEmailNote(directory, primary, parseValidEmailList(recipients), nextLayerType);
     } catch {
       return undefined;
     }

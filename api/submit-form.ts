@@ -54,7 +54,7 @@ import { patchHyperlinkViaSPRest, ensureTextFieldViaSPRest } from "./_utils/shar
 import { isFormBuilderSuperuser, resolveHrFormsOwner } from "./_utils/hrFormsOwner.js";
 import { isSuperuserOnlyForm } from "./_utils/superuserOnlyForms.js";
 import { handleMintTestTicket, handleStampTestRun, handleDeleteTestRuns, recordTestRunStep, recordTestRunSteps } from "./_utils/testRunActions.js";
-import { verifyTestTicket, testRunFieldsFor, isTestRow, type TestRunRedirect } from "./_utils/testRun.js";
+import { verifyTestTicket, testRunFieldsFor, testRunLayerFields, withTestRunStandInFor, isTestRow, type TestRunRedirect } from "./_utils/testRun.js";
 import type { TestRunStep, TestRunStepStatus } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
@@ -1412,6 +1412,7 @@ async function applyLayerConfigWorkflow(
   token: string,
   formBody: Record<string, unknown>,
   layerConfig: ApiLayerConfig | null,
+  testRun?: { testEmail: string; onBehalfOf?: string },
 ): Promise<void> {
   const manualBranches = layerConfig?.manualBranches ?? [];
   if (manualBranches.length > 0) {
@@ -1426,6 +1427,20 @@ async function applyLayerConfigWorkflow(
   const layers = layerConfig?.layers ?? [];
   if (layers.length === 0) {
     appendRoutingNote(formBody, await harvestDirectoryRow(token, formBody, layerConfig));
+    return;
+  }
+
+  // A test run puts every step on the tester instead. See testRunLayerFields.
+  if (testRun) {
+    Object.assign(formBody, testRunLayerFields(
+      layers.map((layer) => layer.layerNumber),
+      testRun.testEmail,
+      LAYER_PENDING_STATUS,
+      testRun.onBehalfOf,
+    ));
+    formBody.FormStatus = FORM_SUBMITTED_STATUS;
+    formBody.CurrentLayer = layers[0]?.layerNumber ?? 1;
+    formBody.CurrentApprovalLayer = formBody.CurrentLayer;
     return;
   }
 
@@ -1919,7 +1934,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (testTicket) Object.assign(submissionBody, testRunFieldsFor(testTicket));
 
     const parsedLayerConfig = parseLayerConfig(formConfig.LayerConfig);
-    await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig);
+    await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig, testTicket ?? undefined);
 
     /*
       Stamp a signed-in guest member's own address over the literal "GUEST".
@@ -2301,7 +2316,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             });
             // Says who on the email is standing in for the step's own person.
             const standInNote = await standInEmailNote(
-              createApprovalDirectoryReader(token),
+              withTestRunStandInFor(createApprovalDirectoryReader(token), submissionBody),
               submissionBody[`L${firstLayer.layerNumber}_Email`],
               recipients,
               firstLayer.type,

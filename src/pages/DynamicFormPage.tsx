@@ -12,6 +12,7 @@ import { parseForm, type NativeForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
+import { testRunFromTicket } from "../utils/testRun";
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, getScopedListRows, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
 import { SharePointHttpError, createSpClient, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
@@ -792,6 +793,12 @@ export default function DynamicFormPage() {
   const testTicket = searchParams.get("testTicket") || "";
   const testEmailDisplay = searchParams.get("testEmail") || "";
   const isTestRun = testTicket.length > 0;
+  // Every step of a test run is assigned to the tester (testRunLayerFields in
+  // api/_utils/testRun.ts does the same for submissions the API routes).
+  // With an on-behalf address, each step belongs to that person and the tester
+  // stands in for them, as a PA does.
+  const { testEmail: testRunEmail, onBehalfOf: testRunOnBehalfOf } = testRunFromTicket(isTestRun ? testTicket : "");
+  const testRunActors = testRunOnBehalfOf ? [testRunOnBehalfOf, testRunEmail] : [testRunEmail];
   // The builder's "Simulate submission": fill with sample answers and submit
   // once loaded. Honoured only with a test ticket, so a real link cannot ask it.
   const simulateRequested = isTestRun && searchParams.get("simulate") === "1";
@@ -1533,6 +1540,10 @@ export default function DynamicFormPage() {
           // before the body is assembled.
           const submitterEmail = token ? (userEmail || accounts[0]?.username || "") : "";
           for (const layer of layerConfigParsed.layers) {
+            if (testRunEmail) {
+              activeLayers.push({ email: testRunActors[0], name: "", emails: testRunActors });
+              continue;
+            }
             if (isDeferredAssignee(layer.assignee)) {
               // Routes from the previous layer's actor, who does not exist yet.
               activeLayers.push({ email: "", name: "", emails: [] });
@@ -1646,6 +1657,12 @@ export default function DynamicFormPage() {
         for (let index = 0; index < layerConfigParsed.layers.length; index++) {
           const layer = layerConfigParsed.layers[index];
           const layerNumber = layer.layerNumber;
+          if (testRunEmail) {
+            // No submitter rule, paper step or stand-in applies to a test run.
+            body[`L${layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
+            writeLayerRecipientFields(body, { layerNumber }, testRunActors);
+            continue;
+          }
           const routed = resolveEvaluationSubmitterRouting(layer, body);
           if (routed?.manualPaper) {
             hasManualPaperWorkflow = true;

@@ -107,7 +107,7 @@ import { buildPaperDesignPdf, getVersionSurveyJson, loadPdfData } from "../../ut
 import { manualPaperDesign } from "../../utils/paperPdf/paperForms";
 import { isLayerActor, joinEmailList, parseValidEmailList, readLayerDeliveryRecipients, writeLayerRecipientFields } from "../../utils/layerRecipients";
 import { expandLayerDistributionList } from "../../utils/expandLayerGroup";
-import { isTestRow } from "../../utils/testRun";
+import { isTestRow, testRunAssignee } from "../../utils/testRun";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -671,6 +671,9 @@ async function resolveLayerAssigneeEmail(
   previousStep?: PreviousStep,
   layerConfig?: unknown,
 ): Promise<{ email: string; emails: string[]; error?: string; parked?: { reason: string }; explanation?: string }> {
+  // A test run's steps all belong to the tester, as they did at submission.
+  const tester = testRunAssignee(submittedData);
+  if (tester) return { email: tester, emails: [tester], explanation: "Test run: every step goes to the tester." };
   const directory = createApprovalDirectoryReader(token, { layerConfig });
   return resolveSharedLayerAssignee(
     layer as ResolvableLayer,
@@ -2036,8 +2039,11 @@ export default function ApprovalDashboard() {
       const resolvedEmails: Record<number, string> = {};
       const resolvedActors: Record<number, string[]> = {};
       const assigneeErrors: string[] = [];
+      // A test run's branch goes wholly to the tester: no submitter rule, paper
+      // step or shared mailbox applies (resolveLayerAssigneeEmail answers it).
+      const tester = testRunAssignee(submittedData);
       for (const layer of bLayers) {
-        const routed = resolveEvaluationSubmitterRouting(layer, submittedData);
+        const routed = tester ? null : resolveEvaluationSubmitterRouting(layer, submittedData);
         if (routed?.manualPaper) {
           resolvedEmails[layer.layerNumber] = routed.sendToConfiguredSender ? CONFIGURED_SENDER_EMAIL : "";
           continue;
@@ -2072,13 +2078,13 @@ export default function ApprovalDashboard() {
         CurrentApprovalLayer: firstLayerNumber,
       };
       for (const layer of bLayers) {
-        const routed = resolveEvaluationSubmitterRouting(layer, submittedData);
+        const routed = tester ? null : resolveEvaluationSubmitterRouting(layer, submittedData);
         const resolvedEmail = resolvedEmails[layer.layerNumber] || "";
         patchBody[`L${layer.layerNumber}_Status`] = routed?.manualPaper || shouldUseManualPaperForSender(layer, resolvedEmail)
           ? manualPaperStatusForLayer(layer)
           : SP_LAYER_STATUS.PENDING;
         if (resolvedEmail) {
-          writeLayerRecipientFields(patchBody, layer, resolvedActors[layer.layerNumber] ?? [resolvedEmail], resolvedEmail);
+          writeLayerRecipientFields(patchBody, tester ? { layerNumber: layer.layerNumber } : layer, resolvedActors[layer.layerNumber] ?? [resolvedEmail], resolvedEmail);
         }
       }
 

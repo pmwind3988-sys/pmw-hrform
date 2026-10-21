@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { mintTestTicket, verifyTestTicket, TEST_TICKET_TTL_MS, redirectTestMessage, TEST_SUBJECT_PREFIX } from "./testRun.js";
-import { isTestRow, readTestRunRedirect, testRunFieldsFor } from "./testRun.js";
+import { isTestRow, readTestRunRedirect, testRunFieldsFor, testRunLayerFields } from "./testRun.js";
+import { testRunStandInPrincipals, withTestRunStandInFor } from "./testRun.js";
+import { standInEmailNote, standInPrincipal } from "./resolveAssignee.js";
 
 const NOW = new Date("2026-08-26T09:00:00Z");
 
-function ticket(overrides: Partial<{ slug: string; testEmail: string; issuedBy: string }> = {}) {
+function ticket(overrides: Partial<{ slug: string; testEmail: string; issuedBy: string; onBehalfOf: string }> = {}) {
   return mintTestTicket(
     { slug: "leave-application", testEmail: "tester@pmw-group.com", issuedBy: "hr@pmw-group.com", ...overrides },
     NOW,
@@ -151,5 +153,78 @@ describe("reading a test run back off its row", () => {
     expect(isTestRow({ IsTest: "true" })).toBe(true);
     expect(isTestRow({ IsTest: "TRUE" })).toBe(true);
     expect(isTestRow({ IsTest: true })).toBe(true);
+  });
+});
+
+describe("testRunLayerFields", () => {
+  it("puts every step on the tester, primary, actors and delivery alike", () => {
+    expect(testRunLayerFields([1, 2, 3], "tester@pmw-group.com", "Pending")).toEqual({
+      L1_Status: "Pending", L1_Email: "tester@pmw-group.com", L1_Emails: "tester@pmw-group.com", L1_NotifyEmails: "tester@pmw-group.com",
+      L2_Status: "Pending", L2_Email: "tester@pmw-group.com", L2_Emails: "tester@pmw-group.com", L2_NotifyEmails: "tester@pmw-group.com",
+      L3_Status: "Pending", L3_Email: "tester@pmw-group.com", L3_Emails: "tester@pmw-group.com", L3_NotifyEmails: "tester@pmw-group.com",
+    });
+  });
+});
+
+describe("rehearsing a stand-in", () => {
+  beforeEach(() => {
+    process.env.API_SECRET_KEY = "secret-for-tests";
+  });
+
+  const row: Record<string, string> = {
+    IsTest: "true",
+    TestEmail: "tester@pmw-group.com",
+    ...testRunLayerFields([1, 2], "tester@pmw-group.com", "Pending", "b@example.com"),
+  };
+  const emptyDirectory = { lookupPerson: async () => null };
+
+  it("carries the person stood in for on the ticket", () => {
+    const payload = verifyTestTicket(ticket({ onBehalfOf: "B@example.com" }), "leave-application", NOW);
+    expect(payload?.onBehalfOf).toBe("b@example.com");
+  });
+
+  it("refuses to stand the tester in for themselves", () => {
+    expect(() => ticket({ onBehalfOf: "tester@pmw-group.com" })).toThrow();
+  });
+
+  it("assigns each step to that person with the tester alongside", () => {
+    expect(row).toMatchObject({
+      L1_Email: "b@example.com",
+      L1_Emails: "b@example.com; tester@pmw-group.com",
+      L2_NotifyEmails: "b@example.com; tester@pmw-group.com",
+    });
+  });
+
+  it("reads who the tester stands in for off the row", () => {
+    expect(testRunStandInPrincipals(row)).toEqual(["b@example.com"]);
+    expect(testRunStandInPrincipals({ ...row, IsTest: "" })).toEqual([]);
+    const plain = { IsTest: "true", TestEmail: "tester@pmw-group.com", ...testRunLayerFields([1], "tester@pmw-group.com", "Pending") };
+    expect(testRunStandInPrincipals(plain)).toEqual([]);
+  });
+
+  it("writes the request email as for a real PA", async () => {
+    const note = await standInEmailNote(
+      withTestRunStandInFor(emptyDirectory, row),
+      "b@example.com",
+      ["b@example.com", "tester@pmw-group.com"],
+      "evaluation",
+    );
+    expect(note).toContain("Sent to b@example.com and to tester@pmw-group.com");
+    expect(note).toContain("Either of you can evaluate");
+  });
+
+  it("records the tester's decision as made on that person's behalf", async () => {
+    const record = await standInPrincipal(withTestRunStandInFor(emptyDirectory, row), "tester@pmw-group.com", "b@example.com");
+    expect(record).toEqual({ email: "b@example.com", name: "b@example.com", position: "" });
+  });
+
+  it("uses the directory's name and post when the person is real", async () => {
+    const directory = {
+      lookupPerson: async (email: string) => email === "b@example.com"
+        ? { email, name: "Datuk B", department: "Board", position: "CEO", approverEmail: "" }
+        : null,
+    };
+    const record = await standInPrincipal(withTestRunStandInFor(directory, row), "tester@pmw-group.com", "b@example.com");
+    expect(record).toEqual({ email: "b@example.com", name: "Datuk B", position: "CEO" });
   });
 });

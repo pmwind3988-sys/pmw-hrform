@@ -59,6 +59,10 @@ export async function handleMintTestTicket(
   if (!EMAIL_RE.test(testEmail)) {
     return { status: 400, payload: { error: "Enter a valid email address to receive the test run." } };
   }
+  const onBehalfOf = String(body.onBehalfOf ?? "").trim().toLowerCase();
+  if (onBehalfOf && (!EMAIL_RE.test(onBehalfOf) || onBehalfOf === testEmail)) {
+    return { status: 400, payload: { error: "Enter a valid email address, other than the tester's, for the person you are standing in for." } };
+  }
 
   // Resolved from the slug, exactly the way `handleStampTestRun` resolves its
   // list — never taken from `body.listTitle` directly.
@@ -84,7 +88,7 @@ export async function handleMintTestTicket(
     };
   }
 
-  return { status: 200, payload: { ticket: mintTestTicket({ slug, testEmail, issuedBy: owner }) } };
+  return { status: 200, payload: { ticket: mintTestTicket({ slug, testEmail, issuedBy: owner, onBehalfOf }) } };
 }
 
 export interface StampTestRunDeps {

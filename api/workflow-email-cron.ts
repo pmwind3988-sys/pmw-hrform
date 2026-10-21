@@ -30,7 +30,7 @@ import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { standInEmailNote } from "./_utils/resolveAssignee.js";
-import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
+import { isTestRow, readTestRunRedirect, withTestRunStandInFor } from "./_utils/testRun.js";
 import { withWorkflowRoutePrefix } from "./_utils/workflowLink.js";
 
 /**
@@ -328,7 +328,7 @@ async function claimAndDeliver(
   try {
     // Says who on the email is standing in for the step's own person.
     const standInNote = await standInEmailNote(
-      createApprovalDirectoryReader(token),
+      withTestRunStandInFor(createApprovalDirectoryReader(token), item.fields),
       item.fields[`L${entry.layer}_Email`],
       parseValidEmailList(entry.recipient),
       entry.layerType,

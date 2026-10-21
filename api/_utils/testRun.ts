@@ -17,6 +17,9 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { joinEmailList, parseValidEmailList } from "./layerRecipients.js";
+import type { DirectoryPerson } from "./resolveAssignee.js";
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Long enough to fill in a form at leisure, short enough that a leak dies. */
@@ -26,6 +29,11 @@ export interface TestTicketPayload {
   slug: string;
   testEmail: string;
   issuedBy: string;
+  /**
+   * Rehearses a stand-in: every step belongs to this address and the tester
+   * acts as their PA. Never mailed, so it may be a made-up address.
+   */
+  onBehalfOf?: string;
   /** Epoch ms. */
   expiresAt: number;
 }
@@ -48,11 +56,16 @@ export function mintTestTicket(
   if (!EMAIL_RE.test(testEmail)) {
     throw new Error("A test run needs a valid email address to redirect to.");
   }
+  const onBehalfOf = (payload.onBehalfOf ?? "").trim().toLowerCase();
+  if (onBehalfOf && (!EMAIL_RE.test(onBehalfOf) || onBehalfOf === testEmail)) {
+    throw new Error("The person a test run stands in for needs an email address other than the tester's.");
+  }
   const body = Buffer.from(
     JSON.stringify({
       slug: payload.slug.trim(),
       testEmail,
       issuedBy: payload.issuedBy.trim().toLowerCase(),
+      ...(onBehalfOf ? { onBehalfOf } : {}),
       expiresAt: now.getTime() + TEST_TICKET_TTL_MS,
     } satisfies TestTicketPayload),
   ).toString("base64url");
@@ -83,6 +96,7 @@ export function verifyTestTicket(
     if (typeof parsed?.slug !== "string" || parsed.slug !== slug.trim()) return null;
     if (typeof parsed.testEmail !== "string" || !EMAIL_RE.test(parsed.testEmail)) return null;
     if (typeof parsed.expiresAt !== "number" || parsed.expiresAt <= now.getTime()) return null;
+    if (parsed.onBehalfOf !== undefined && (typeof parsed.onBehalfOf !== "string" || !EMAIL_RE.test(parsed.onBehalfOf))) return null;
     return parsed;
   } catch {
     return null;
@@ -135,6 +149,86 @@ export function redirectTestMessage<T extends { to: string | string[]; subject: 
 
 export const TEST_FLAG_FIELD = "IsTest";
 export const TEST_EMAIL_FIELD = "TestEmail";
+
+/**
+ * Every step of a test run is assigned to the tester, whoever the form's real
+ * routing would have picked. The tester is then the one person who can open,
+ * approve and evaluate each step, and a step that routes from the previous
+ * step's actor finds its actors already written and is left alone.
+ *
+ * With `onBehalfOf`, each step instead belongs to that address and lists the
+ * tester as their stand-in, exactly as a CEO's step lists their PA. The mail
+ * still reaches only the tester (`redirectTestMessage`).
+ *
+ * No step is parked and none is sent to paper: a rehearsal that stopped at the
+ * first directory gap could never reach its later steps.
+ */
+export function testRunLayerFields(
+  layerNumbers: readonly number[],
+  testEmail: string,
+  pendingStatus: string,
+  onBehalfOf = "",
+): Record<string, string> {
+  const actors = joinEmailList(onBehalfOf ? [onBehalfOf, testEmail] : [testEmail]);
+  const fields: Record<string, string> = {};
+  for (const layerNumber of layerNumbers) {
+    fields[`L${layerNumber}_Status`] = pendingStatus;
+    fields[`L${layerNumber}_Email`] = onBehalfOf || testEmail;
+    fields[`L${layerNumber}_Emails`] = actors;
+    fields[`L${layerNumber}_NotifyEmails`] = actors;
+  }
+  return fields;
+}
+
+const LAYER_PRIMARY_KEY_RE = /^L(\d+)_Email$/;
+
+/**
+ * The people a test-run row has the tester standing in for: each step's
+ * primary that is not the tester but lists the tester among its actors. Read
+ * off the row, so no column records it and the browser's submit path needs
+ * nothing extra.
+ */
+export function testRunStandInPrincipals(fields: Record<string, unknown> | undefined): string[] {
+  const redirect = readTestRunRedirect(fields);
+  if (!redirect || !fields) return [];
+  const principals = new Set<string>();
+  for (const key of Object.keys(fields)) {
+    const match = LAYER_PRIMARY_KEY_RE.exec(key);
+    if (!match) continue;
+    const primary = String(fields[key] ?? "").trim().toLowerCase();
+    if (!EMAIL_RE.test(primary) || primary === redirect.testEmail) continue;
+    const actors = parseValidEmailList(fields[`L${match[1]}_Emails`]).map((entry) => entry.toLowerCase());
+    if (actors.includes(redirect.testEmail)) principals.add(primary);
+  }
+  return [...principals];
+}
+
+type PersonPorts = { lookupPerson(email: string): Promise<DirectoryPerson | null> };
+
+/**
+ * Directory lookups for a test run that rehearses a stand-in: the person stood
+ * in for reads back naming the tester as their PA — under their address, when
+ * the directory has never heard of them. Every stand-in helper (the email
+ * sentence, the on-behalf stamp at signing) then behaves exactly as it would
+ * for a real PA, and nobody's directory row changes.
+ */
+export function withTestRunStandIn(ports: PersonPorts, tester: string, principals: readonly string[]): PersonPorts {
+  const wanted = new Set(principals.map((entry) => entry.trim().toLowerCase()));
+  if (!tester || wanted.size === 0) return ports;
+  return {
+    lookupPerson: async (email: string) => {
+      const real = await ports.lookupPerson(email).catch(() => null);
+      if (!wanted.has(email.trim().toLowerCase())) return real;
+      const base: DirectoryPerson = real ?? { email, name: email, department: "", position: "", approverEmail: "" };
+      return { ...base, delegateEmails: [...(base.delegateEmails ?? []), tester] };
+    },
+  };
+}
+
+/** `withTestRunStandIn`, reading the tester and who they stand in for off the row. */
+export function withTestRunStandInFor(ports: PersonPorts, fields: Record<string, unknown> | undefined): PersonPorts {
+  return withTestRunStandIn(ports, readTestRunRedirect(fields)?.testEmail ?? "", testRunStandInPrincipals(fields));
+}
 
 export function testRunFieldsFor(payload: TestTicketPayload): Record<string, string> {
   return { [TEST_FLAG_FIELD]: "true", [TEST_EMAIL_FIELD]: payload.testEmail };

@@ -40,6 +40,8 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
   const { instance, accounts } = useMsal();
   const defaultEmail = accounts[0]?.username || "";
   const [email, setEmail] = useState(defaultEmail);
+  /** Optional: rehearse acting as this person's PA. Never mailed. */
+  const [onBehalfOf, setOnBehalfOf] = useState("");
   /** Which button started the run in flight, so only that one says "Starting…". */
   const [busy, setBusy] = useState<"" | "fill" | "simulate">("");
   const [error, setError] = useState("");
@@ -58,6 +60,11 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError("Enter a valid email address to receive the test run.");
+      return;
+    }
+    const principal = onBehalfOf.trim().toLowerCase();
+    if (principal && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(principal) || principal === email.trim().toLowerCase())) {
+      setError("Enter a valid email address, other than your own, for the person you are standing in for — or leave it empty.");
       return;
     }
     setBusy(simulate ? "simulate" : "fill");
@@ -79,6 +86,7 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
           slug,
           listTitle: form.Title,
           testEmail: email.trim().toLowerCase(),
+          ...(principal ? { onBehalfOf: principal } : {}),
           delegatedToken,
         }),
       });
@@ -147,6 +155,30 @@ export default function TestRunLauncher({ open, onClose, form, siteUrl }: TestRu
             marginBottom: 12,
           }}
         />
+        <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textMuted, marginBottom: 5 }}>
+          Act on behalf of (optional)
+        </label>
+        <input
+          type="email"
+          value={onBehalfOf}
+          onChange={e => setOnBehalfOf(e.target.value)}
+          placeholder="b@example.com"
+          disabled={busy !== ""}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            height: 34,
+            padding: "0 10px",
+            borderRadius: 12,
+            border: `1px solid ${C.border}`,
+            fontSize: 13.5,
+            marginBottom: 6,
+          }}
+        />
+        <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
+          Every step is assigned to this person with you as their stand-in, the way a PA acts for the
+          CEO. It is never emailed, so a made-up address works.
+        </div>
         {error && (
           <div style={{ fontSize: 12.5, color: C.red, background: C.redPale, borderRadius: 12, padding: "8px 10px", marginBottom: 12, lineHeight: 1.5 }}>
             {error}
