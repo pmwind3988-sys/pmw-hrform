@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import FormPdfDocument from "../FormPdfDocument";
+import { StandardFormPdfDocument as FormPdfDocument } from "../FormPdfDocument";
 import { renderToJson, sampleFormData } from "../pdfSections/testSupport";
 import { buildDefaultTemplate } from "./defaultTemplate";
 import { blockStyleToPdf } from "./renderTemplate";

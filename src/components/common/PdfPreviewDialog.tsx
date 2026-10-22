@@ -32,8 +32,9 @@ export interface PdfPreviewDialogProps {
   /** The site the file lives on, for the token scope. */
   siteUrl?: string;
   /**
-   * When given, the dialog offers the experimental "Paper form" design beside
-   * the stored file, drawn on demand by this function. The stored file is
+   * When given, the dialog offers the "Paper form" design beside the stored
+   * file, drawn on demand by this function. New files are already paper; this
+   * is for files saved in the retired standard design. The stored file is
    * never replaced: the paper version exists only to be looked at and saved.
    */
   buildPaperDesign?: () => Promise<Blob>;
@@ -240,13 +241,10 @@ export default function PdfPreviewDialog({
             sx={{ ml: "auto", flexShrink: 0 }}
           >
             <ToggleButton value="standard" sx={{ textTransform: "none", fontWeight: 700, px: 1.5 }}>
-              Standard
+              Saved file
             </ToggleButton>
             <ToggleButton value="paper" sx={{ textTransform: "none", fontWeight: 700, px: 1.5 }}>
               Paper form
-              <Box component="span" sx={{ ml: 0.75, fontSize: 10, fontWeight: 700, color: editorial.muted, textTransform: "uppercase" }}>
-                Beta
-              </Box>
             </ToggleButton>
           </ToggleButtonGroup>
         )}

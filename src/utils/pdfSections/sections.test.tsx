@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToJson, sampleFormData } from "./testSupport";
-import FormPdfDocument from "../FormPdfDocument";
+import { StandardFormPdfDocument as FormPdfDocument } from "../FormPdfDocument";
 
 describe("FormPdfDocument", () => {
   // The footer falls back to `Generated ${new Date()...}` when no

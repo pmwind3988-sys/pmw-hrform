@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { pdf } from "@react-pdf/renderer";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { C } from "../constants";
-import FormPdfDocument from "../../../utils/FormPdfDocument";
+import { StandardFormPdfDocument as FormPdfDocument } from "../../../utils/FormPdfDocument";
 import type { PdfFormData } from "../../../utils/FormPdfDocument";
 import { unresolvedVariables } from "../../../utils/pdfTemplate/resolve";
 import type { PdfTemplate } from "../../../utils/pdfTemplate/types";

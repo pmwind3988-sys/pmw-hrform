@@ -16,6 +16,7 @@ import LayerConfigPanel from "../components/builder/LayerConfigPanel";
 import TestRunLauncher from "../components/builder/TestRunLauncher";
 import TestRunPanel from "../components/builder/TestRunPanel";
 import FormInstancesPanel from "../components/builder/FormInstancesPanel";
+import { hasPaperForm } from "../utils/paperPdf/paperForms";
 import { C } from "../components/builder/constants";
 import { Icon } from "../components/builder/BuilderIcons";
 import type { BuilderMode, BuilderToolCommand, BuilderToolKey } from "../components/builder/builderTheme";
@@ -50,7 +51,6 @@ import {
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "../utils/FormPdfDocument";
 import type { DirectoryHarvestSettings, SurveyJson, LayerConfig, LayerConfigItem, PdfConfig } from "../types";
 import type { DocumentControlHeader } from "../types";
-import { PdfTemplateEditor } from "../components/builder";
 import { readTemplate } from "../utils/pdfTemplate/safeTemplate";
 import type { PdfTemplate } from "../utils/pdfTemplate/types";
 
@@ -599,11 +599,10 @@ export default function AdminFormBuilder() {
   */
   const [groupByField, setGroupByField] = useState("");
   const [samplePdfGenerating, setSamplePdfGenerating] = useState<"" | "filled" | "manual">("");
-  const [pdfEditorOpen, setPdfEditorOpen] = useState(false);
   const setM = useCallback((k: MetaTextKey, v: string) => setMeta(m => ({ ...m, [k]: v })), []);
-  const setPdfConfig = useCallback((patch: Partial<PdfConfig>) => {
-    setMeta(m => ({ ...m, pdfConfig: { ...m.pdfConfig, ...patch } }));
-  }, []);
+  // Every PDF is the paper-form design; a form without a layout of its own
+  // falls back to the general one, which the PDF settings point out.
+  const ownPaperLayout = hasPaperForm(meta.formTitle);
   const [slugError, setSlugError] = useState("");
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugLocked, setSlugLocked] = useState(false);
@@ -2560,99 +2559,19 @@ export default function AdminFormBuilder() {
                 />
               </Disclosure>
 
-              <Disclosure open={!!disc.pdf} onToggle={() => toggleDisc("pdf")} title="PDF layout" sub="Document title, colours, sections, sample generation" summary={meta.pdfTemplate ? "Custom document" : meta.pdfConfig.enabled ? "Custom" : "Default"}>
-                <ActionRow
-                  label="Document editor"
-                  hint="Reorder, add, remove and restyle the blocks that make up the generated PDF."
-                  action="Edit document"
-                  onAction={() => setPdfEditorOpen(true)}
-                  disabled={!isEditing || !surveyJson}
-                />
-                {pdfEditorOpen && (
-                  <PdfTemplateEditor
-                    open
-                    template={meta.pdfTemplate}
-                    surveyJson={surveyJson}
-                    layerCount={layers.length}
-                    pdfConfig={meta.pdfConfig}
-                    sampleData={buildSamplePdfData()}
-                    onSave={(pdfTemplate) => { setMeta((m) => ({ ...m, pdfTemplate })); setPdfEditorOpen(false); }}
-                    onClose={() => setPdfEditorOpen(false)}
-                  />
-                )}
+              <Disclosure open={!!disc.pdf} onToggle={() => toggleDisc("pdf")} title="PDF layout" sub="Paper form design, sample generation" summary={ownPaperLayout ? "Own paper form" : "General paper form"}>
                 <div className="bx-field" style={{ marginBottom: 12 }}>
                   <span className="bx-label">Design</span>
-                  <div className="bx-seg">
-                    {([["standard", "Standard"], ["paper", "Paper form (experimental)"]] as const).map(([design, label]) => (
-                      <button key={design} type="button" className={(meta.pdfConfig.design ?? "standard") === design ? "is-on" : ""} onClick={() => setPdfConfig({ design })}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <span style={{ fontSize: 12, color: C.textMuted }}>
-                    Paper form prints the answers into a layout like the HR Word forms: ISO header, rating tables with ticks, ruled comment lines and a sign-off per step. It replaces the document editor layout while selected; takes effect on republish.
-                  </span>
+                  {ownPaperLayout ? (
+                    <span style={{ fontSize: 12, color: C.textMuted }}>
+                      This form prints as its own paper form, laid out like its HR Word form.
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 12, color: C.amber }}>
+                      This form has no paper layout of its own. It prints in the general paper form design: ISO header, answers in a grid, rating tables with ticks and a sign-off per step. Ask for a layout of its own if it should match a Word form.
+                    </span>
+                  )}
                 </div>
-                <ActionRow
-                  label="Custom PDF layout"
-                  hint="Off falls back to the default layout."
-                  value={meta.pdfConfig.enabled ? "On" : "Off"}
-                  action={disc.pdfCfg ? "Close" : "Configure"}
-                  onAction={() => toggleDisc("pdfCfg")}
-                />
-                {disc.pdfCfg && (
-                  <div style={{ padding: "0 0 14px 15px", borderLeft: `1px solid ${C.border}`, marginBottom: 10 }}>
-                    <CheckRow checked={meta.pdfConfig.enabled} onChange={enabled => setPdfConfig({ enabled })} label="Use the custom layout" />
-                    <TextField id="pdf-title" label="Document title" value={meta.pdfConfig.title} onChange={title => setPdfConfig({ title })} placeholder="Form Submission" />
-                    <TextField id="pdf-logo" label="Header logo URL" value={meta.pdfConfig.headerLogoUrl || ""} onChange={headerLogoUrl => setPdfConfig({ headerLogoUrl })} placeholder="https://example.com/logo.png" />
-                    <TextField id="pdf-footer" label="Footer text" value={meta.pdfConfig.footerText || ""} onChange={footerText => setPdfConfig({ footerText })} placeholder="Generated date appears when blank" />
-                    <div className="bx-field">
-                      <span className="bx-label">Density</span>
-                      <div className="bx-seg">
-                        {(["compact", "comfortable"] as const).map(density => (
-                          <button key={density} type="button" className={meta.pdfConfig.density === density ? "is-on" : ""} onClick={() => setPdfConfig({ density })}>
-                            {density === "compact" ? "Compact" : "Comfortable"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div className="bx-field">
-                        <label htmlFor="pdf-c1">Primary colour</label>
-                        <input id="pdf-c1" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.primaryColor || editorial.pmwBlue} onChange={e => setPdfConfig({ primaryColor: e.target.value })} />
-                      </div>
-                      <div className="bx-field">
-                        <label htmlFor="pdf-c2">Secondary colour</label>
-                        <input id="pdf-c2" type="color" className="bx-input" style={{ height: 40, padding: 4 }} value={meta.pdfConfig.secondaryColor || editorial.pmwPurple} onChange={e => setPdfConfig({ secondaryColor: e.target.value })} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <ActionRow
-                  label="Sections"
-                  hint="Status badge, approval chain, evaluation details, signatures."
-                  value={`${[meta.pdfConfig.showStatusBadge, meta.pdfConfig.showApproverChain, meta.pdfConfig.showEvaluationDetails, meta.pdfConfig.showSignatures].filter(Boolean).length} shown`}
-                  action={disc.pdfSections ? "Close" : "Edit"}
-                  onAction={() => toggleDisc("pdfSections")}
-                />
-                {disc.pdfSections && (
-                  <div style={{ padding: "0 0 14px 15px", borderLeft: `1px solid ${C.border}`, marginBottom: 10 }}>
-                    {([
-                      ["showStatusBadge", "Show status badge"],
-                      ["showApproverChain", "Show approval / evaluation chain"],
-                      ["showEvaluationDetails", "Show evaluation details"],
-                      ["showSignatures", "Show signature blocks"],
-                      ["includeEmptyEvaluationFields", "Include blank evaluation fields for paper evaluation"],
-                    ] as const).map(([key, label]) => (
-                      <CheckRow
-                        key={key}
-                        checked={Boolean(meta.pdfConfig[key])}
-                        onChange={v => setPdfConfig({ [key]: v } as Partial<PdfConfig>)}
-                        label={label}
-                      />
-                    ))}
-                  </div>
-                )}
                 <ActionRow
                   label="Sample PDF"
                   hint="A local preview filled with fake submission, signature, photo, approval and evaluation data."

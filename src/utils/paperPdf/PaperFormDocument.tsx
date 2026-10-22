@@ -1,11 +1,11 @@
 /**
- * PaperFormDocument.tsx — The experimental "paper form" PDF design: the
+ * PaperFormDocument.tsx — The "paper form" PDF design, used for every form: the
  * submission printed the way HR's own Word forms look (ISO header table,
  * label/value grid, rating tables with a tick per row, ruled comment lines,
  * Name / Signature / Position / Date sign-offs), with the answers filled in.
  *
- * Chosen per form with `pdfConfig.design = "paper"`; the standard design in
- * FormPdfDocument.tsx stays the default. Layout decisions live in
+ * FormPdfDocument.tsx draws it for every submission; the old standard design
+ * there is retired. Layout decisions live in
  * paperLayout.ts — this file only draws them.
  */
 import type { ReactElement } from "react";

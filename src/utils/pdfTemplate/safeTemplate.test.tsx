@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildPdfSectionContext } from "../pdfSections/context";
 import { renderToJson, sampleFormData } from "../pdfSections/testSupport";
-import FormPdfDocument from "../FormPdfDocument";
+import { StandardFormPdfDocument as FormPdfDocument } from "../FormPdfDocument";
 import { readTemplate } from "./safeTemplate";
 import { safeRenderBlock } from "./renderTemplate";
 import type { PdfBlock } from "./types";

@@ -1127,9 +1127,8 @@ export interface PdfConfig {
   includeEmptyEvaluationFields?: boolean;
   density?: "compact" | "comfortable";
   /**
-   * Which document is drawn. "paper" (experimental) prints the submission the
-   * way HR's Word forms look; absent or "standard" keeps the usual design.
-   * Read even when `enabled` is false: it picks the document, not its styling.
+   * No longer read: every PDF is the paper-form design. Kept so forms
+   * published with it still parse.
    */
   design?: "standard" | "paper";
   primaryColor?: string;

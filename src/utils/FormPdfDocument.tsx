@@ -131,10 +131,21 @@ function renderBody(template: PdfTemplate | null, ctx: PdfSectionContext): { bod
   }
 }
 
+/**
+ * Every form's PDF is the paper-form design: the submission drawn the way HR's
+ * Word forms look. A form with a layout of its own (`paperForms.ts`) prints as
+ * that form; any other prints in the general paper layout. `pdfConfig.design`
+ * and the document-editor template are no longer read.
+ */
 export default function FormPdfDocument(data: PdfFormData) {
-  // The experimental paper-form design is a separate document, not a template:
-  // it ignores the block layout and draws the Word-form look instead.
-  if (data.pdfConfig?.design === "paper") return PaperFormDocument(data);
+  return PaperFormDocument(data);
+}
+
+/**
+ * The retired standard design. Nothing in the app draws it any more; it is kept
+ * only so its characterisation tests still describe it until it is deleted.
+ */
+export function StandardFormPdfDocument(data: PdfFormData) {
   const ctx = buildPdfSectionContext(data);
   const template = readTemplate(data.pdfTemplate);
   const { body, footer } = renderBody(template, ctx);

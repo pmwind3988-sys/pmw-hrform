@@ -125,8 +125,9 @@ export async function loadPdfData(item: PdfSubmissionRef, token: string): Promis
 }
 
 /**
- * The submission drawn in the experimental paper-form design, for the PDF
- * viewer's design switch. Never stored: the saved PDF keeps the standard design.
+ * The submission redrawn in the paper-form design, for the PDF viewer's design
+ * switch — mainly for files saved before paper became the only design. Never
+ * stored: the saved PDF is left as it was.
  */
 export async function buildPaperDesignPdf(item: PdfSubmissionRef, token: string): Promise<Blob> {
   const pdfData = await loadPdfData(item, token);
