@@ -52,6 +52,7 @@ export type NavIconKey =
   | "profile"
   | "builder"
   | "routing"
+  | "check"
   | "org"
   | "jobs"
   | "applications"
@@ -199,6 +200,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
         fullBleed: true,
       },
       { label: "Routing", path: "/admin/routing", icon: "routing", visibleTo: "superuser" },
+      { label: "Workflow check", path: "/admin/workflow-check", icon: "check", visibleTo: "superuser" },
       { label: "Organisation", path: "/admin/org", icon: "org", visibleTo: "superuser" },
       {
         label: "Opportunities",

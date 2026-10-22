@@ -130,6 +130,7 @@ describe("category visibility for a superuser who is not an admin", () => {
     expect(admin?.tabs.map((t) => t.path)).toEqual([
       "/admin/builder",
       "/admin/routing",
+      "/admin/workflow-check",
       "/admin/org",
     ]);
   });

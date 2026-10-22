@@ -323,6 +323,7 @@ const loadReviewQueuePage = () => import("./pages/ReviewQueuePage");
 const loadProfilePage = () => import("./pages/ProfilePage");
 const loadAppearancePage = () => import("./pages/AppearancePage");
 const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
+const loadAdminWorkflowCheckPage = () => import("./pages/AdminWorkflowCheckPage");
 const loadAdminFormImportPage = () => import("./pages/AdminFormImportPage");
 const loadAdminOrgPage = () => import("./pages/AdminOrgPage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
@@ -1835,6 +1836,18 @@ export default function App() {
                 <ErrorBoundary>
                   {inShell(
                     <LazyRoute load={loadAdminRoutingPage} fallback={<PageSkeleton label="Loading approval routing" />} />
+                  )}
+                </ErrorBoundary>
+              </AdminGuard>
+            }
+          />
+          <Route
+            path="/admin/workflow-check"
+            element={
+              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+                <ErrorBoundary>
+                  {inShell(
+                    <LazyRoute load={loadAdminWorkflowCheckPage} fallback={<PageSkeleton label="Loading workflow check" />} />
                   )}
                 </ErrorBoundary>
               </AdminGuard>
