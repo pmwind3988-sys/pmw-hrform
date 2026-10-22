@@ -119,7 +119,7 @@ describe("test-run delivery", () => {
       { listTitle: "Leave Application", responseItemId: "42", layer: 2, testRun: { testEmail: "tester@pmw-group.com" } },
     );
     expect(sent[0].to).toBe("tester@pmw-group.com");
-    expect(sent[0].subject).toContain("[TEST]");
+    expect(sent[0].subject).toContain("TEST – ");
     expect(sent[0].body).toContain("hod-finance@pmw-group.com");
   });
 

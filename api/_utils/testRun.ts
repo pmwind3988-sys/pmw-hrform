@@ -103,7 +103,7 @@ export function verifyTestTicket(
   }
 }
 
-export const TEST_SUBJECT_PREFIX = "[TEST] ";
+export const TEST_SUBJECT_PREFIX = "TEST – ";
 
 export interface TestRunRedirect {
   testEmail: string;

@@ -6,10 +6,9 @@ import {
 import { logWarn } from "./logger.js";
 import {
   buildWorkflowEmailSubject,
+  renderActionRequestEmail,
   renderWorkflowEmail,
   WORKFLOW_EMAIL_STATUS,
-  buildRequestGuide,
-  requestSubmitterName,
   type WorkflowEmailDetail,
 } from "./workflowEmailTemplate.js";
 import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
@@ -634,7 +633,7 @@ export function buildLayerNeedsRoutingEmail(
         { label: "Submitted by", value: params.submittedBy },
         { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
       ],
-      callout: `Why it stopped: ${params.reason}`,
+      callout: `**Why it stopped:** ${params.reason}`,
     }),
   };
 }
@@ -642,9 +641,6 @@ export function buildLayerNeedsRoutingEmail(
 export function buildWorkflowActionEmail(
   params: WorkflowActionEmailParams,
 ): WorkflowEmailMessage {
-  const actionNoun = params.layerType === "evaluation" ? "evaluation review" : "approval";
-  const actionVerb = params.layerType === "evaluation" ? "review" : "approve";
-  const actionLabel = params.layerType === "evaluation" ? "Review & submit evaluation" : "Review & approve form";
   return {
     to: params.recipient,
     subject: buildWorkflowEmailSubject({
@@ -655,27 +651,8 @@ export function buildWorkflowActionEmail(
       referenceNo: params.referenceNo,
       responseItemId: params.responseItemId,
     }),
-    body: renderWorkflowEmail({
-      preheader: `${params.formTitle} #${params.responseItemId} is waiting for your ${actionNoun}.`,
-      eyebrow: "Action required",
-      status: WORKFLOW_EMAIL_STATUS.actionRequired,
-      heading: `${params.formTitle} needs your ${actionNoun}`,
-      intro: `A submission is waiting for you to ${actionVerb}. Please review the request details below and record your decision.`,
-      details: [
-        { label: "Form", value: params.formTitle },
-        referenceDetail(params.referenceNo),
-        { label: "Submission ID", value: `#${params.responseItemId}` },
-        applicantDetail(params.applicantName),
-        { label: "Submitted by", value: requestSubmitterName(params.submittedBy, params.applicantName) },
-        { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
-      ],
-      callout: params.standInNote || undefined,
-      actionUrl: params.reviewLink,
-      actionLabel,
-      portalIdentity: true,
-      guide: buildRequestGuide({ formTitle: params.formTitle, layerType: params.layerType, buttonLabel: actionLabel, sender: resolveHrFormSender() }),
-      note: "Only the assigned reviewer or an authorized superuser should act on this workflow step.",
-    }),
+    // Worded once, in the template, so the browser's copy of this email is the same email.
+    body: renderActionRequestEmail({ ...params, sender: resolveHrFormSender() }),
   };
 }
 

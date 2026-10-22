@@ -592,17 +592,30 @@ function listNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** The sentence a request email carries when it also went to someone's stand-in. */
+/** "Siti (siti@pmw.com)", or the name alone when the address is unknown or is the name. */
+function withEmail(name: string, email: string | undefined): string {
+  const address = (email ?? "").trim();
+  return address && address.toLowerCase() !== name.trim().toLowerCase() ? `${name} (${address})` : name;
+}
+
+/**
+ * The sentence a request email carries when it also went to someone's stand-in.
+ * With `emails`, each person is named with their address beside them, so a
+ * reader can tell exactly which mailbox was asked.
+ */
 export function describeStandIns(
   principalName: string,
   standInNames: string[],
   layerType: "approval" | "evaluation",
+  emails?: { principal?: string; standIns?: string[] },
 ): string {
   if (standInNames.length === 0) return "";
   const verb = layerType === "evaluation" ? "evaluate" : "approve";
   const who = standInNames.length === 1 ? "who" : "who each";
   const any = standInNames.length === 1 ? "Either of you" : "Any of you";
-  return `Sent to ${principalName} and to ${listNames(standInNames)}, ${who} can act on ${principalName}'s behalf. `
+  const principal = withEmail(principalName, emails?.principal);
+  const standIns = standInNames.map((name, i) => withEmail(name, emails?.standIns?.[i]));
+  return `Sent to ${principal} and to ${listNames(standIns)}, ${who} can act on ${principalName}'s behalf. `
     + `${any} can ${verb}. Whoever does it first completes this step.`;
 }
 
@@ -627,7 +640,7 @@ export async function standInEmailNote(
     const person = await ports.lookupPerson(email).catch(() => null);
     return person?.name || email;
   }));
-  return describeStandIns(row.name || primary, names, layerType);
+  return describeStandIns(row.name || primary, names, layerType, { principal: row.email || primary, standIns });
 }
 
 /**

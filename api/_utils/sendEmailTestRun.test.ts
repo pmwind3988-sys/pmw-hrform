@@ -21,7 +21,7 @@ describe("applySendEmailTestRun", () => {
   it("redirects to the test address when the ticket is valid for this form", () => {
     const out = applySendEmailTestRun(MESSAGE, ticket(), "leave-application", NOW);
     expect(out.to).toBe("tester@pmw-group.com");
-    expect(out.subject).toContain("[TEST]");
+    expect(out.subject).toContain("TEST – ");
   });
 
   it("sends normally when no ticket is provided", () => {

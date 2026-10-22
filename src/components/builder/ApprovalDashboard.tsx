@@ -3286,6 +3286,8 @@ export default function ApprovalDashboard() {
         totalLayers,
         action: "reject",
         pdfUrl,
+        rejectionReason: reason,
+        decidedBy: accounts[0]?.name || "",
       });
 
       // Update local list (keep item with new status)

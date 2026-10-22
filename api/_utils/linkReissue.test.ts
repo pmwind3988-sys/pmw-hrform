@@ -118,7 +118,7 @@ describe("reissueReviewLink and test runs", () => {
     expect(sendMail).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(sendMail.mock.calls[0][1].body));
     expect(body.message.toRecipients).toEqual([{ emailAddress: { address: "tester@pmw-group.com" } }]);
-    expect(body.message.subject).toContain("[TEST]");
+    expect(body.message.subject).toContain("TEST – ");
   });
 
   it("leaves an ordinary row's reissued link completely unchanged", async () => {
@@ -134,7 +134,7 @@ describe("reissueReviewLink and test runs", () => {
       { emailAddress: { address: "reviewer@contractor.example" } },
       { emailAddress: { address: "safety@contractor.example" } },
     ]);
-    expect(body.message.subject).not.toContain("[TEST]");
+    expect(body.message.subject).not.toContain("TEST – ");
   });
 
   it("sends no email at all for a test-flagged row with no usable redirect address", async () => {

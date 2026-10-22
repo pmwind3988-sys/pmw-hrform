@@ -1086,7 +1086,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         },
         body: JSON.stringify({
           message: {
-            subject: `Job Application: ${jobTitle} — ${applicantName} [${submissionRef}]`,
+            subject: `Job Application: ${jobTitle} – ${applicantName} (#${submissionRef})`,
             body: { contentType: "HTML", content: htmlBody },
             toRecipients: [{ emailAddress: { address: hrEmail } }],
             attachments,

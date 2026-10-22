@@ -815,6 +815,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
             ? Math.max(totalLayers || displayLayerNumber, displayLayerNumber)
             : displayLayerNumber,
           action: action === "reject" ? "reject" : "approve",
+          ...(action === "reject" ? { rejectionReason, decidedBy: isPublic ? "" : accounts[0]?.name || "" } : {}),
         });
       }
       setActionState("success");

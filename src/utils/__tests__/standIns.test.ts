@@ -134,6 +134,14 @@ describe("the request email", () => {
     expect(describeStandIns("Ali", [], "approval")).toBe("");
   });
 
+  it("names each person with their address beside them", async () => {
+    expect(describeStandIns("Ali", ["Siti"], "approval", { principal: "ali@pmw.com", standIns: ["siti@pmw.com"] }))
+      .toContain("Sent to Ali (ali@pmw.com) and to Siti (siti@pmw.com), who can act on Ali's behalf.");
+    // A stand-in with no directory name is already shown as their address; it is not printed twice.
+    expect(describeStandIns("Ali", ["siti@pmw.com"], "approval", { standIns: ["siti@pmw.com"] })).toContain("to siti@pmw.com, who");
+    expect(await standInEmailNote(ports, "ceo@pmw.com", ["ceo@pmw.com", "pa@pmw.com"], "approval")).toContain("Nurul Huda (pa@pmw.com)");
+  });
+
   it("only says so when the stand-in is actually on the email", async () => {
     expect(await standInEmailNote(ports, "ceo@pmw.com", ["ceo@pmw.com", "pa@pmw.com"], "approval")).toContain("Nurul Huda");
     expect(await standInEmailNote(ports, "ceo@pmw.com", ["ceo@pmw.com"], "approval")).toBeUndefined();

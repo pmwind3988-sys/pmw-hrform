@@ -28,7 +28,7 @@ describe("workflow email subject lines", () => {
       applicantName: "Nur Aisyah",
       referenceNo: "OSH-040826-0007",
     });
-    expect(message.subject).toBe("[Action Required] Incident Report – Nur Aisyah (#OSH-040826-0007)");
+    expect(message.subject).toBe("Action Required: Incident Report – Nur Aisyah (#OSH-040826-0007)");
   });
 
   it("names the applicant from the form rather than the mailbox that submitted it", () => {
@@ -41,7 +41,7 @@ describe("workflow email subject lines", () => {
 
   it("falls back to the submitting identity when the form collected no name", () => {
     expect(buildWorkflowActionEmail(ACTION_EMAIL_BASE).subject)
-      .toBe("[Action Required] Incident Report – ahmad@example.com (#42)");
+      .toBe("Action Required: Incident Report – ahmad@example.com (#42)");
   });
 
   it("labels a manual paper notice and a parked one by what they need", () => {
@@ -55,7 +55,7 @@ describe("workflow email subject lines", () => {
       layerType: "evaluation",
       referenceNo: "040826-0001",
     });
-    expect(manual.subject).toBe("[Manual Action Required] Incident Report – ahmad@example.com (#040826-0001)");
+    expect(manual.subject).toBe("Manual Action Required: Incident Report – ahmad@example.com (#040826-0001)");
   });
 });
 

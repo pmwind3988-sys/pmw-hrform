@@ -13,13 +13,11 @@ import { buildWorkflowReviewLink } from "./workflowLink";
 import { selectWorkflowLayer } from "./workflowReviewLink";
 import { resolveApplicantName } from "./applicantName";
 import {
-  buildRequestGuide,
   buildWorkflowEmailSubject,
+  renderActionRequestEmail,
+  renderSubmissionOutcomeEmail,
   renderWorkflowEmail,
-  requestSubmitterName,
   WORKFLOW_EMAIL_STATUS,
-  type WorkflowEmailDetail,
-  type WorkflowEmailGuide,
 } from "./workflowEmailTemplate";
 import { ensureLinkToken } from "./linkToken";
 import { listChoiceValues, toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions";
@@ -2609,6 +2607,10 @@ interface ApprovalNotificationParams {
   attachments?: WorkflowEmailAttachment[];
   /** Present only while a test run is in progress; forwarded to every `sendSpEmail` call below. */
   testRun?: { ticket: string; slug: string };
+  /** A rejection: the reason the reviewer typed, printed in the submitter's email. */
+  rejectionReason?: string;
+  /** A rejection: the reviewer's name, when the page knows it. */
+  decidedBy?: string;
 }
 
 // ── Styled email HTML template ────────────────────────────────────────────
@@ -2624,55 +2626,6 @@ function absolutePdfUrl(pdfUrl: string | undefined): string | undefined {
   return pdfUrl.startsWith('http') ? pdfUrl : `${spOrigin()}${pdfUrl}`;
 }
 
-type EmailDetail = WorkflowEmailDetail;
-
-/**
- * Every workflow notice this app sends, in the one shared house style.
- *
- * The layout itself lives in `workflowEmailTemplate.ts` so the browser and the
- * `api/` routes cannot drift into sending two different-looking emails for the
- * same workflow.
- */
-function emailBody(params: {
-  title: string;
-  subtitle: string;
-  preheader: string;
-  eyebrow?: string;
-  statusColor: string;
-  statusLabel: string;
-  statusBg: string;
-  statusBorder: string;
-  details: EmailDetail[];
-  link?: string;
-  linkLabel?: string;
-  pdfUrl?: string;
-  note?: string;
-  /** Request emails: name the portal and add the "how to complete it" box. */
-  guide?: WorkflowEmailGuide;
-  /** Says who on the email is standing in for whom (a PA for the CEO). */
-  callout?: string;
-}): string {
-  return renderWorkflowEmail({
-    preheader: params.preheader,
-    eyebrow: params.eyebrow || params.statusLabel,
-    status: {
-      label: params.statusLabel,
-      color: params.statusColor,
-      background: params.statusBg,
-      border: params.statusBorder,
-    },
-    heading: params.title,
-    intro: params.subtitle,
-    details: params.details,
-    actionUrl: params.link || undefined,
-    actionLabel: params.linkLabel,
-    secondaryUrl: absolutePdfUrl(params.pdfUrl),
-    secondaryLabel: 'View PDF record',
-    note: params.note,
-    callout: params.callout || undefined,
-    ...(params.guide ? { portalIdentity: true, guide: params.guide } : {}),
-  });
-}
 
 /** The address workflow emails go out from, named in the request guide. */
 const HR_FORM_SENDER = (
@@ -2835,7 +2788,7 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, scheduleAnchor, attachments, testRun } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, scheduleAnchor, attachments, testRun, rejectionReason, decidedBy } = params;
   // One address stays a plain string so existing single-assignee mail is byte
   // for byte unchanged; only fan-out layers become an array.
   const deliveryList = (primary: string): string | string[] => {
@@ -2843,17 +2796,13 @@ export async function triggerApprovalNotification(
     if (recipients.length === 0) return primary;
     return recipients.length === 1 ? recipients[0] : recipients;
   };
-  const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
-  const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
-  const workflowStage = `Layer ${displayNextLayerNumber} of ${totalLayers}`;
-  const submissionId = `#${responseItemId}`;
   const { referenceNo, applicantName } = await getNotificationSubjectContext(
     token,
     responseListTitle,
     responseItemId,
   );
-  // Every subject reads `[Prefix] Form – Applicant (#Reference)`, so a reviewer
+  // Every subject reads `Prefix: Form – Applicant (#Reference)`, so a reviewer
   // can tell two waiting requests apart without opening either.
   const subjectFor = (prefix: string): string => buildWorkflowEmailSubject({
     prefix,
@@ -2863,10 +2812,6 @@ export async function triggerApprovalNotification(
     referenceNo,
     responseItemId,
   });
-  const applicantDetail: EmailDetail = { label: 'Applicant', value: applicantName };
-  // Empty detail values are dropped by emailBody, so this row simply disappears
-  // on forms that do not issue references.
-  const referenceDetail: EmailDetail = { label: 'Reference no.', value: referenceNo };
   // The link is per target layer: a "submit" notice is about `layer`, an
   // "approve" notice about the layer the submission has just moved on to.
   // Resolved once each and reused, so one notice costs at most one lookup.
@@ -2978,33 +2923,18 @@ export async function triggerApprovalNotification(
             responseItemId,
             layer,
           },
-          body: emailBody({
-            title: `${formTitle} needs your ${nextActionNoun}`,
-            subtitle: `A new submission is waiting for you to ${nextActionVerb}. Review the request details and record your decision in PMW HR Form.`,
-            preheader: `${formTitle} ${submissionId} is waiting for ${nextActionNoun}.`,
-            statusColor: '#1E40AF',
-            statusLabel: 'Action required',
-            statusBg: '#EFF6FF',
-            statusBorder: '#BFDBFE',
-            details: [
-              { label: 'Form', value: formTitle },
-              referenceDetail,
-              { label: 'Submission ID', value: submissionId },
-              applicantDetail,
-              { label: 'Submitted by', value: requestSubmitterName(submittedBy, applicantName) },
-              { label: 'Workflow stage', value: `Layer ${layer} of ${totalLayers}` },
-              { label: 'Current status', value: 'Submitted' },
-            ],
-            link: submitLink,
-            linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
-            guide: buildRequestGuide({
-              formTitle,
-              layerType: nextLayerType,
-              buttonLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
-              sender: HR_FORM_SENDER,
-            }),
-            note: 'Please complete this step when you have enough context to make the decision.',
-            callout: submitStandInNote,
+          body: renderActionRequestEmail({
+            formTitle,
+            submittedBy,
+            responseItemId,
+            layer,
+            totalLayers,
+            layerType: nextLayerType,
+            reviewLink: submitLink,
+            referenceNo,
+            applicantName,
+            standInNote: submitStandInNote,
+            sender: HR_FORM_SENDER,
           }),
         });
       }
@@ -3051,34 +2981,19 @@ export async function triggerApprovalNotification(
             responseItemId,
             layer: displayNextLayerNumber,
           },
-          body: emailBody({
-            title: `${formTitle} is ready for your ${nextActionNoun}`,
-            subtitle: `The previous workflow step has been completed. This request now needs you to ${nextActionVerb} Layer ${displayNextLayerNumber}.`,
-            preheader: `${formTitle} ${submissionId} has advanced to ${workflowStage}.`,
-            statusColor: '#92400E',
-            statusLabel: nextLayerType === 'evaluation' ? 'Pending review' : 'Pending approval',
-            statusBg: '#FFFBEB',
-            statusBorder: '#FDE68A',
-            details: [
-              { label: 'Form', value: formTitle },
-              referenceDetail,
-              { label: 'Submission ID', value: submissionId },
-              applicantDetail,
-              { label: 'Submitted by', value: requestSubmitterName(submittedBy, applicantName) },
-              { label: 'Completed step', value: `Layer ${layer} of ${totalLayers}` },
-              { label: 'Current step', value: workflowStage },
-            ],
-            link: nextLayerLink,
-            linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
-            guide: buildRequestGuide({
-              formTitle,
-              layerType: nextLayerType,
-              buttonLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
-              sender: HR_FORM_SENDER,
-            }),
-            pdfUrl,
-            note: 'Only the assigned reviewer or an authorized superuser should act on this workflow step.',
-            callout: nextStandInNote,
+          body: renderActionRequestEmail({
+            formTitle,
+            submittedBy,
+            responseItemId,
+            layer: displayNextLayerNumber,
+            totalLayers,
+            layerType: nextLayerType,
+            reviewLink: nextLayerLink,
+            referenceNo,
+            applicantName,
+            standInNote: nextStandInNote,
+            sender: HR_FORM_SENDER,
+            pdfUrl: absolutePdfUrl(pdfUrl),
           }),
         });
       } else if (layer === totalLayers && isEmailAddress(submittedBy)) {
@@ -3092,25 +3007,16 @@ export async function triggerApprovalNotification(
             responseItemId,
             layer,
           },
-          body: emailBody({
-            title: `${formTitle} has been completed`,
-            subtitle: `Every workflow layer has been completed, the last of them at layer #${layer}. No further action is needed from you at this time.`,
-            preheader: `${formTitle} ${submissionId} has been completed.`,
-            eyebrow: 'Status update',
-            statusColor: '#065F46',
-            statusLabel: 'Completed',
-            statusBg: '#ECFDF5',
-            statusBorder: '#A7F3D0',
-            details: [
-              { label: 'Form', value: formTitle },
-              referenceDetail,
-              { label: 'Submission ID', value: submissionId },
-              applicantDetail,
-              { label: 'Final status', value: `Completed at layer #${layer}` },
-              { label: 'Completed layers', value: totalLayers },
-            ],
-            pdfUrl,
-            note: 'Keep the PDF record for reference if your department process requires it.',
+          body: renderSubmissionOutcomeEmail({
+            outcome: 'completed',
+            formTitle,
+            responseItemId,
+            layer,
+            totalLayers,
+            referenceNo,
+            applicantName,
+            submissionsUrl: `${window.location.origin}/submissions`,
+            pdfUrl: absolutePdfUrl(pdfUrl),
           }),
         });
       }
@@ -3125,25 +3031,18 @@ export async function triggerApprovalNotification(
           responseItemId,
           layer,
         },
-        body: emailBody({
-          title: `${formTitle} was rejected at layer #${layer}`,
-          subtitle: 'The workflow has been closed at this step. Open the request record to review the outcome details and any recorded reason.',
-          preheader: `${formTitle} ${submissionId} was rejected at layer #${layer}.`,
-          eyebrow: 'Status update',
-          statusColor: '#991B1B',
-          statusLabel: 'Rejected',
-          statusBg: '#FEF2F2',
-          statusBorder: '#FECACA',
-          details: [
-            { label: 'Form', value: formTitle },
-            referenceDetail,
-            { label: 'Submission ID', value: submissionId },
-            applicantDetail,
-            { label: 'Final status', value: `Rejected at layer #${layer}` },
-            { label: 'Closed at', value: `Layer ${layer} of ${totalLayers}` },
-          ],
-          pdfUrl,
-          note: 'Contact the reviewing department if you need clarification before submitting a new request.',
+          body: renderSubmissionOutcomeEmail({
+          outcome: 'rejected',
+          formTitle,
+          responseItemId,
+          layer,
+          totalLayers,
+          referenceNo,
+          applicantName,
+          reason: rejectionReason,
+          decidedBy,
+          submissionsUrl: `${window.location.origin}/submissions`,
+          pdfUrl: absolutePdfUrl(pdfUrl),
         }),
       });
     }
