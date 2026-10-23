@@ -59,7 +59,20 @@ export interface WorkflowEmailGuide {
   steps: string[];
   /** One line under the steps: who the email genuinely comes from, who to ask. */
   footnote?: string;
+  /** A small white box under the steps, for someone who cannot sign in. */
+  help?: { title: string; lines: string[] };
 }
+
+/**
+ * For the reviewer who cannot sign in: use their own password, else ask PMW IT.
+ */
+export const PASSWORD_HELP: { title: string; lines: string[] } = {
+  title: "Cannot find your Microsoft password?",
+  lines: [
+    "**Set your own password?** Please use that one.",
+    "**Still unable to sign in?** Please contact **PMW IT** and we will gladly help.",
+  ],
+};
 
 /** The HR forms mailbox, named in the guide when no sender is configured. */
 export const DEFAULT_HR_FORM_SENDER = "pmw.hrform@pmw-group.com";
@@ -103,6 +116,7 @@ export function buildRequestGuide(params: {
   return {
     title: "How to complete it (about 3 minutes)",
     steps,
+    help: PASSWORD_HELP,
     footnote: `Make sure it was sent from **${sender}** only; treat any other sender as suspicious. We never ask for your password by email. For any enquiries, please contact the main administrator.`,
   };
 }
@@ -309,6 +323,20 @@ function guideHtml(guide: WorkflowEmailGuide): string {
   const footnote = guide.footnote
     ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:6px"><tr><td style="padding:8px 0 4px 0;border-top:1px solid ${BORDER};font-size:12px;line-height:17px;color:${MUTED}">${emphasised(guide.footnote)}</td></tr></table>`
     : "";
+  const help = guide.help
+    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#FFFFFF" style="margin-top:6px;background-color:#FFFFFF;border:1px solid ${BORDER};border-radius:6px">
+                                            <tr><td style="padding:12px 14px 8px 14px">
+                                                <p style="margin:0 0 6px 0;font-size:13px;line-height:19px;font-weight:700;color:${INK}">${escapeEmailHtml(guide.help.title)}</p>
+                                                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                                ${guide.help.lines.map((line) => `<tr>
+                                                    <td width="14" style="width:14px;vertical-align:top;padding:0 0 4px 0;font-size:13px;line-height:19px;color:${INK}">&bull;</td>
+                                                    <td style="vertical-align:top;padding:0 0 4px 0;font-size:13px;line-height:19px;color:${INK}">${emphasised(line)}</td>
+                                                </tr>`).join("")}
+                                                </table>
+                                            </td></tr>
+                                        </table>
+                                        ${spacer(6)}`
+    : "";
   return `${spacer(24)}<table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#F7F8FC" style="border:1px solid ${BORDER};border-radius:8px;background-color:#F7F8FC">
                                 <tr>
                                     <td style="padding:14px 16px 8px 16px">
@@ -316,6 +344,7 @@ function guideHtml(guide: WorkflowEmailGuide): string {
                                         <table border="0" cellpadding="0" cellspacing="0" width="100%">
                                         ${steps}
                                         </table>
+                                        ${help}
                                         ${footnote}
                                     </td>
                                 </tr>
