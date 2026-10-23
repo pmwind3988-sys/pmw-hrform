@@ -139,6 +139,14 @@ const INFO_INK = "#1E3A8A";
 const INFO_ICON = "#1E40AF";
 const SITE_ORIGIN = "https://pmw-hrform.vercel.app";
 const LOGO_URL = `${SITE_ORIGIN}/logo.png`;
+// logo.png is 1898×999. Outlook for Windows ignores `width:auto` and draws an
+// image at its file size unless told otherwise, which stretched the whole email
+// to nearly 2000px wide — so the size goes in attributes as well as CSS.
+const LOGO_HEIGHT = 32;
+const LOGO_WIDTH = 61;
+// Outlook for Windows also ignores max-width; a fixed-width table it alone reads
+// (inside <!--[if mso]>) holds the card to this.
+const CARD_WIDTH = 600;
 
 const FONT_STACK =
   "Inter,'Segoe UI',Arial,Helvetica,sans-serif";
@@ -210,19 +218,21 @@ function detailRows(rawDetails: WorkflowEmailDetail[]): string {
       const last = index === visible.length - 1;
       const pad = last ? "0" : "0 0 10px 0";
       return `<tr>
-                                              <td style="padding:${pad};font-size:14px;line-height:20px;color:${MUTED};width:38%;vertical-align:top"><strong>${escapeEmailHtml(detail.label)}</strong></td>
+                                              <td width="38%" style="padding:${pad};font-size:14px;line-height:20px;color:${MUTED};width:38%;vertical-align:top"><strong>${escapeEmailHtml(detail.label)}</strong></td>
                                               <td style="padding:${pad};font-size:14px;line-height:20px;color:${INK};font-weight:500;vertical-align:top">${escapeEmailHtml(String(detail.value))}</td>
                                             </tr>`;
     })
     .join("\n");
 }
 
+// Outlook for Windows ignores padding and background on a link, so each button's
+// colour and size live on a table cell around it.
 function actionButton(url: string, label: string): string {
-  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:${BUTTON};color:#FFFFFF;font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 32px;border-radius:10px;border:none">${escapeEmailHtml(label)}</a>`;
+  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="${BUTTON}" style="background-color:${BUTTON};border-radius:10px;padding:14px 32px"><a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;color:#FFFFFF;font-size:15px;font-weight:600;line-height:20px;text-decoration:none">${escapeEmailHtml(label)}</a></td></tr></table>`;
 }
 
 function secondaryButton(url: string, label: string): string {
-  return `<a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;background-color:#FFFFFF;color:${BUTTON};font-size:15px;font-weight:600;line-height:20px;text-decoration:none;padding:14px 26px;border-radius:10px;border:1px solid ${BORDER}">${escapeEmailHtml(label)}</a>`;
+  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:10px;border:1px solid ${BORDER};padding:13px 26px"><a href="${escapeEmailHtml(url)}" target="_blank" style="display:inline-block;color:${BUTTON};font-size:15px;font-weight:600;line-height:20px;text-decoration:none">${escapeEmailHtml(label)}</a></td></tr></table>`;
 }
 
 interface StatusIcon {
@@ -262,16 +272,26 @@ function statusIndicator(status: WorkflowEmailStatusPill): string {
   const label = icon.labelled
     ? `<p style="margin:0 0 16px 0;font-size:13px;line-height:16px;font-weight:700;color:${icon.color};text-transform:uppercase;letter-spacing:0.06em;text-align:center">${escapeEmailHtml(status.label)}</p>`
     : "";
-  return `<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:${icon.labelled ? "12px" : "24px"};margin-top:8px">
+  return `${spacer(8)}<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
                                 <tr>
                                     <td align="center">
-                                        <table align="center" border="0" cellpadding="0" cellspacing="0" style="width:76px;height:76px;margin:0 auto;background-color:${icon.color};border-radius:999px">
+                                        <table align="center" border="0" cellpadding="0" cellspacing="0" width="76" height="76" style="width:76px;height:76px;margin:0 auto;background-color:${icon.color};border-radius:999px">
                                             <tr><td align="center" valign="middle" style="font-size:44px;font-weight:700;color:#FFFFFF;line-height:1">${symbol}</td></tr>
                                         </table>
                                     </td>
                                 </tr>
                             </table>
+                            ${spacer(icon.labelled ? 12 : 24)}
                             ${label}`;
+}
+
+/**
+ * A fixed gap. Outlook for Windows ignores margins on tables, images and divs,
+ * so a margin there collapses to nothing and blocks run into each other; an
+ * empty row of a set height is the one gap every mail app keeps.
+ */
+function spacer(px: number): string {
+  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td height="${px}" style="height:${px}px;font-size:1px;line-height:${px}px">&nbsp;</td></tr></table>`;
 }
 
 /** Escaped text with **marked** words bold. */
@@ -282,14 +302,14 @@ function emphasised(text: string, color: string = INK): string {
 function guideHtml(guide: WorkflowEmailGuide): string {
   const steps = guide.steps
     .map((step, i) => `<tr>
-                                            <td style="width:24px;vertical-align:top;padding:0 8px 6px 0"><div style="width:18px;height:18px;border-radius:50%;background-color:#EEF0FA;color:${BUTTON};font-size:11px;font-weight:700;line-height:18px;text-align:center">${i + 1}</div></td>
+                                            <td width="26" style="width:26px;vertical-align:top;padding:0 8px 6px 0"><table role="presentation" border="0" cellpadding="0" cellspacing="0" width="18"><tr><td width="18" height="18" align="center" bgcolor="#EEF0FA" style="width:18px;height:18px;border-radius:50%;background-color:#EEF0FA;color:${BUTTON};font-size:11px;font-weight:700;line-height:18px;text-align:center">${i + 1}</td></tr></table></td>
                                             <td style="vertical-align:top;padding:0 0 6px 0;font-size:13px;line-height:18px;color:${INK}">${emphasised(step)}</td>
                                         </tr>`)
     .join("\n");
   const footnote = guide.footnote
-    ? `<p style="margin:6px 0 4px 0;padding-top:8px;border-top:1px solid ${BORDER};font-size:12px;line-height:17px;color:${MUTED}">${emphasised(guide.footnote)}</p>`
+    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:6px"><tr><td style="padding:8px 0 4px 0;border-top:1px solid ${BORDER};font-size:12px;line-height:17px;color:${MUTED}">${emphasised(guide.footnote)}</td></tr></table>`
     : "";
-  return `<table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:24px;border:1px solid ${BORDER};border-radius:8px;background-color:#F7F8FC">
+  return `${spacer(24)}<table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#F7F8FC" style="border:1px solid ${BORDER};border-radius:8px;background-color:#F7F8FC">
                                 <tr>
                                     <td style="padding:14px 16px 8px 16px">
                                         <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:${INK}">${escapeEmailHtml(guide.title)}</p>
@@ -311,7 +331,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
     ? secondaryButton(params.secondaryUrl, params.secondaryLabel || "View PDF record")
     : "";
   const buttonsHtml = primary || secondary
-    ? `<table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:${params.actionUrl ? "24px" : "8px"}">
+    ? `<table border="0" cellpadding="0" cellspacing="0" width="100%">
                                 <tr>
                                     <td align="center">
                                         <table border="0" cellpadding="0" cellspacing="0"><tr>
@@ -320,14 +340,15 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                                         </tr></table>
                                     </td>
                                 </tr>
-                            </table>`
+                            </table>
+                            ${spacer(params.actionUrl ? 16 : 8)}`
     : "";
   // Only the action link gets a copy-paste fallback: it is the one a reviewer
   // must reach even when their client strips the button.
   const fallbackHtml = params.actionUrl
     ? `<p style="margin:0;font-size:13px;color:${MUTED};text-align:center;line-height:1.5">
                                 Having trouble with the button? Copy and paste this link into your browser:<br>
-                                <a href="${escapeEmailHtml(params.actionUrl)}" style="color:${BUTTON};word-break:break-all">${escapeEmailHtml(params.actionUrl)}</a>
+                                <a href="${escapeEmailHtml(params.actionUrl)}" style="color:${BUTTON};word-break:break-all;word-wrap:break-word">${escapeEmailHtml(params.actionUrl)}</a>
                             </p>`
     : "";
   const statusCircleHtml = params.status ? statusIndicator(params.status) : "";
@@ -335,27 +356,29 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
   const iconLabelled = !!params.status && statusIcon(params.status).labelled;
   const eyebrowHtml = iconLabelled ? "" : `<p style="margin:0 0 8px 0;font-size:12px;line-height:14px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.06em;text-align:center">${escapeEmailHtml(params.eyebrow)}</p>`;
   const calloutHtml = params.callout
-    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px 0;background-color:${CALLOUT_BG};border:1px solid ${CALLOUT_BORDER};border-radius:8px">
+    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="${CALLOUT_BG}" style="background-color:${CALLOUT_BG};border:1px solid ${CALLOUT_BORDER};border-radius:8px">
                                 <tr><td style="padding:14px 16px;font-size:14px;line-height:21px;color:${CALLOUT_INK}">${emphasised(plainStepText(params.callout), CALLOUT_INK)}</td></tr>
-                            </table>`
+                            </table>
+                            ${spacer(24)}`
     : "";
   const infoHtml = params.info
-    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px 0;background-color:${INFO_BG};border:1px solid ${INFO_BORDER};border-radius:8px">
+    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="${INFO_BG}" style="background-color:${INFO_BG};border:1px solid ${INFO_BORDER};border-radius:8px">
                                 <tr>
-                                    <td style="width:22px;vertical-align:top;padding:14px 0 14px 16px"><div style="width:20px;height:20px;border-radius:50%;background-color:${INFO_ICON};color:#FFFFFF;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;font-style:italic;line-height:20px;text-align:center">i</div></td>
+                                    <td width="36" style="width:36px;vertical-align:top;padding:14px 0 14px 16px"><table role="presentation" border="0" cellpadding="0" cellspacing="0" width="20"><tr><td width="20" height="20" align="center" bgcolor="${INFO_ICON}" style="width:20px;height:20px;border-radius:50%;background-color:${INFO_ICON};color:#FFFFFF;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;font-style:italic;line-height:20px;text-align:center">i</td></tr></table></td>
                                     <td style="vertical-align:top;padding:14px 16px 14px 10px;font-size:14px;line-height:21px;color:${INFO_INK}">
                                         <p style="margin:0 0 4px 0;font-size:13px;line-height:20px;font-weight:700;color:${INFO_INK}">For your information</p>
                                         ${emphasised(plainStepText(params.info), INFO_INK)}
                                     </td>
                                 </tr>
-                            </table>`
+                            </table>
+                            ${spacer(24)}`
     : "";
   const noteHtml = params.note
     ? `<p style="margin:20px 0 0;font-size:12px;line-height:18px;color:${MUTED};text-align:center">${escapeEmailHtml(plainStepText(params.note))}</p>`
     : "";
   const identityHtml = params.portalIdentity
-    ? `<div style="font-size:13px;font-weight:700;color:${BUTTON};letter-spacing:0.02em">PMW HR Forms Portal</div>
-                                        <div style="font-size:12px;color:${MUTED};margin:2px 0 24px">PMW Group’s HR forms system</div>`
+    ? `<p style="margin:0;font-size:13px;line-height:18px;font-weight:700;color:${BUTTON};letter-spacing:0.02em">PMW HR Forms Portal</p>
+                                        <p style="margin:2px 0 24px 0;font-size:12px;line-height:16px;color:${MUTED}">PMW Group’s HR forms system</p>`
     : "";
   const guideBlock = params.guide ? guideHtml(params.guide) : "";
   const greetingHtml = params.greetingName?.trim()
@@ -368,16 +391,18 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeEmailHtml(plainStepText(params.heading))}</title>
+    <!--[if mso]><style>body,table,td,p,a,h1,div{font-family:'Segoe UI',Arial,sans-serif !important}</style><![endif]-->
 </head>
 <body style="margin:0;padding:0;background-color:${BACKGROUND};font-family:${FONT_STACK};-webkit-font-smoothing:antialiased;color:${INK}">
 
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeEmailHtml(plainStepText(params.preheader))}</div>
 
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:${BACKGROUND};padding:40px 10px">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="${BACKGROUND}" style="background-color:${BACKGROUND}">
         <tr>
-            <td align="center">
+            <td align="center" style="padding:40px 10px">
 
-                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:${CARD_BG};border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid ${BORDER}">
+                <!--[if mso]><table role="presentation" border="0" cellpadding="0" cellspacing="0" width="${CARD_WIDTH}" align="center"><tr><td><![endif]-->
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:${CARD_WIDTH}px;background-color:${CARD_BG};border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.05);border:1px solid ${BORDER}">
 
                     <tr>
                         <td style="padding:32px">
@@ -385,7 +410,8 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                             <table border="0" cellpadding="0" cellspacing="0" width="100%">
                                 <tr>
                                     <td align="center">
-                                        <img src="${LOGO_URL}" alt="PMW" style="height:32px;width:auto;display:block;margin:0 auto ${params.portalIdentity ? "8px" : "24px"}">
+                                        <img src="${LOGO_URL}" alt="PMW" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" style="width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;border:0;display:block;margin:0 auto">
+                                        ${spacer(params.portalIdentity ? 8 : 24)}
                                         ${identityHtml}
                                     </td>
                                 </tr>
@@ -405,7 +431,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
 
                             ${infoHtml}
 
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#FFFFFF;border-radius:8px;border:1px solid ${BORDER};margin-bottom:32px">
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:8px;border:1px solid ${BORDER}">
                                 <tr>
                                     <td style="padding:20px">
                                         <table border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -414,6 +440,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                                     </td>
                                 </tr>
                             </table>
+                            ${spacer(28)}
 
                             ${buttonsHtml}
 
@@ -427,7 +454,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                     </tr>
 
                     <tr>
-                        <td style="background-color:${BACKGROUND};padding:24px 32px;border-top:1px solid ${BORDER};text-align:center">
+                        <td bgcolor="${BACKGROUND}" style="background-color:${BACKGROUND};padding:24px 32px;border-top:1px solid ${BORDER};text-align:center">
                             <p style="margin:0 0 8px 0;font-size:12px;color:${MUTED}">
                                 This is an automated notification. Please do not reply directly to this email. For full details, attachments, comments, and audit history, open the request in ${BRAND_NAME}.
                             </p>
@@ -438,6 +465,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                     </tr>
 
                 </table>
+                <!--[if mso]></td></tr></table><![endif]-->
 
             </td>
         </tr>
