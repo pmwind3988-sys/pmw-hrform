@@ -410,10 +410,12 @@ async function sourceToDataUrl(token: string, source: string): Promise<string> {
     },
   });
   if (!response.ok) throw new Error(`Media fetch failed: ${response.status}`);
-  // SharePoint serves the signature images as application/octet-stream, so the
-  // header alone would hand the browser a link it cannot open; read the bytes.
+  // SharePoint does not label the stored signature images as images, so the
+  // header alone would hand the browser a link it cannot open. An image file
+  // is read and judged by its bytes; anything else (an uploaded PDF) by label.
   const declared = (response.headers.get("content-type") || "").toLowerCase();
-  if (!declared.startsWith("image/") && declared && !declared.startsWith("application/octet-stream")) return source;
+  const imageFile = /\.(png|jpe?g|gif|webp)$/i.test(serverRelativePath(source) || source);
+  if (!imageFile && !declared.startsWith("image/") && declared && !declared.startsWith("application/octet-stream")) return source;
   const buffer = Buffer.from(await response.arrayBuffer());
   const contentType = declared.startsWith("image/") ? declared : sniffImageType(buffer);
   if (!contentType) throw new Error(`Not an image: ${declared || "no content type"}`);
