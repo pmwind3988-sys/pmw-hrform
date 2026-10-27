@@ -1,7 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormBySlug, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
-import { resolveApplicantName } from "./_utils/applicantName.js";
+import { lookupSubmitterName, resolveApplicantName, resolveTrainingTitle } from "./_utils/applicantName.js";
 import {
   buildWorkflowActionEmail,
   buildLayerNeedsRoutingEmail,
@@ -1448,6 +1448,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                   referenceNo,
                   applicantName,
                   standInNote,
+                  trainingTitle: resolveTrainingTitle(responseItem.fields),
+                  submitterName: await lookupSubmitterName(createApprovalDirectoryReader(graphToken), submittedBy),
                 }),
             {
               listTitle: responseListName,

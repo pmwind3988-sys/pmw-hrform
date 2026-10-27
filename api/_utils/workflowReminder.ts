@@ -30,7 +30,7 @@ import { queueEntryForViewer, type QueueForm, type ReviewQueueEntry } from "./re
 import { isSuperuserOnlyForm } from "./superuserOnlyForms.js";
 import { isTestRow } from "./testRun.js";
 import type { WorkflowEmailLog, WorkflowEmailMessage, WorkflowEmailScheduleEntry } from "./workflowEmail.js";
-import { buildWorkflowEmailSubject, renderWorkflowEmail, WORKFLOW_EMAIL_STATUS } from "./workflowEmailTemplate.js";
+import { buildWorkflowEmailSubject, renderWorkflowEmail, requestSubmitterName, WORKFLOW_EMAIL_STATUS } from "./workflowEmailTemplate.js";
 
 /** Days after the request email that each reminder is due. Its length is the cap. */
 export const REMINDER_DAYS = [3, 7] as const;
@@ -171,6 +171,8 @@ export function buildWorkflowReminderEmail(params: {
   due: ReminderDue;
   reviewLink: string;
   submittedBy: string;
+  trainingTitle?: string;
+  submitterName?: string;
 }): WorkflowEmailMessage {
   const { due } = params;
   const { step } = due;
@@ -197,9 +199,11 @@ export function buildWorkflowReminderEmail(params: {
         + "The person who submitted it cannot move on until you record your decision.",
       details: [
         { label: "Form", value: step.formTitle },
+        { label: "Training", value: params.trainingTitle ?? "" },
         { label: "Reference no.", value: step.referenceNo },
         { label: "Submission ID", value: `#${step.responseItemId}` },
         { label: "Applicant", value: step.applicantName },
+        { label: "Submitted by", value: requestSubmitterName(params.submittedBy, step.applicantName, params.submitterName) },
         { label: "Workflow stage", value: `Layer ${due.layer} of ${due.totalLayers}` },
         { label: "Waiting", value: days },
       ].filter((detail) => String(detail.value).trim()),

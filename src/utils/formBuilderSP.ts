@@ -11,7 +11,7 @@ import { standInEmailNote } from "./resolveAssignee";
 import { testRunFromTicket, withTestRunStandIn } from "./testRun";
 import { buildWorkflowReviewLink } from "./workflowLink";
 import { selectWorkflowLayer } from "./workflowReviewLink";
-import { resolveApplicantName } from "./applicantName";
+import { lookupSubmitterName, resolveApplicantName, resolveTrainingTitle } from "./applicantName";
 import {
   buildWorkflowEmailSubject,
   renderActionRequestEmail,
@@ -2654,7 +2654,7 @@ async function getNotificationSubjectContext(
   token: string,
   responseListTitle: string,
   responseItemId: number,
-): Promise<{ referenceNo: string; applicantName: string }> {
+): Promise<{ referenceNo: string; applicantName: string; trainingTitle: string }> {
   try {
     const item = await spGet(
       token,
@@ -2663,11 +2663,12 @@ async function getNotificationSubjectContext(
     return {
       referenceNo: String(item[REFERENCE_NO_FIELD] || "").trim(),
       applicantName: resolveApplicantName(item),
+      trainingTitle: resolveTrainingTitle(item),
     };
   } catch {
     // A list without the column, or an unreadable item, simply means a shorter
     // subject line — never a failed notification.
-    return { referenceNo: "", applicantName: "" };
+    return { referenceNo: "", applicantName: "", trainingTitle: "" };
   }
 }
 
@@ -2800,7 +2801,7 @@ export async function triggerApprovalNotification(
     return recipients.length === 1 ? recipients[0] : recipients;
   };
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
-  const { referenceNo, applicantName } = await getNotificationSubjectContext(
+  const { referenceNo, applicantName, trainingTitle } = await getNotificationSubjectContext(
     token,
     responseListTitle,
     responseItemId,
@@ -2845,6 +2846,15 @@ export async function triggerApprovalNotification(
       return await standInEmailNote(directory, primary, parseValidEmailList(recipients), nextLayerType);
     } catch {
       return undefined;
+    }
+  };
+  // The submitter's directory name, shown beside their address on a request email.
+  const submitterNameFor = async (): Promise<string> => {
+    try {
+      const { createApprovalDirectoryReader } = await import("./approvalDirectory");
+      return await lookupSubmitterName(createApprovalDirectoryReader(token), submittedBy);
+    } catch {
+      return "";
     }
   };
   const persistSchedule = async (recipients: string | string[], targetLayer: number, targetLink: string) => {
@@ -2938,6 +2948,8 @@ export async function triggerApprovalNotification(
             referenceNo,
             applicantName,
             standInNote: submitStandInNote,
+            trainingTitle,
+            submitterName: await submitterNameFor(),
             sender: HR_FORM_SENDER,
           }),
         });
@@ -2997,6 +3009,8 @@ export async function triggerApprovalNotification(
             referenceNo,
             applicantName,
             standInNote: nextStandInNote,
+            trainingTitle,
+            submitterName: await submitterNameFor(),
             sender: HR_FORM_SENDER,
             pdfUrl: absolutePdfUrl(pdfUrl),
           }),

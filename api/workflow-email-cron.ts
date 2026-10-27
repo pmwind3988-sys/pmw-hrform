@@ -1,5 +1,5 @@
 import { setCorsHeaders, validateApiKey } from "./_utils/auth.js";
-import { resolveApplicantName } from "./_utils/applicantName.js";
+import { lookupSubmitterName, resolveApplicantName, resolveTrainingTitle } from "./_utils/applicantName.js";
 import {
   getGraphToken,
   queryAllListItems,
@@ -185,6 +185,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               entry,
               referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
               applicantName: resolveApplicantName(item.fields),
+              trainingTitle: resolveTrainingTitle(item.fields),
               fields: item.fields,
             });
             continue;
@@ -215,6 +216,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           entry: reminderScheduleEntry(reminder, baseUrl, submittedBy),
           referenceNo: reminder.step.referenceNo,
           applicantName: reminder.step.applicantName,
+          trainingTitle: resolveTrainingTitle(item.fields),
           reminder: { number: reminder.number, daysWaiting: reminder.daysWaiting },
           reminderDue: reminder,
           fields: item.fields,
@@ -316,6 +318,7 @@ async function handleSendSelected(req: ApiRequest, res: ApiResponse) {
           entry,
           referenceNo: String(fields[REFERENCE_NO_FIELD] || ""),
           applicantName: resolveApplicantName(fields),
+          trainingTitle: resolveTrainingTitle(fields),
           fields,
         });
       } else {
@@ -392,10 +395,13 @@ async function claimAndRemind(
 ): Promise<boolean> {
   try {
     await claimReminder(token, formTitle, itemId, due.layer);
+    const row = await queryListItemById(token, formTitle, itemId).catch(() => null);
     const message = buildWorkflowReminderEmail({
       due,
       reviewLink: `${baseUrl.replace(/\/$/, "")}${due.step.link}`,
       submittedBy,
+      trainingTitle: resolveTrainingTitle(row?.fields),
+      submitterName: await lookupSubmitterName(createApprovalDirectoryReader(token), submittedBy),
     });
     await sendGraphEmail(token, testRun ? redirectTestMessage(message, testRun) : message);
     return true;
@@ -448,6 +454,8 @@ async function claimAndDeliver(
         referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
         applicantName: resolveApplicantName(item.fields),
         standInNote,
+        trainingTitle: resolveTrainingTitle(item.fields),
+        submitterName: await lookupSubmitterName(createApprovalDirectoryReader(token), entry.submittedBy),
       }),
       {
         listTitle: formTitle,

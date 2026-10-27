@@ -163,6 +163,10 @@ export interface WorkflowActionEmailParams {
    * someone's PA. See standInEmailNote in _utils/standIns.ts.
    */
   standInNote?: string;
+  /** The course a training form is about (`resolveTrainingTitle`). */
+  trainingTitle?: string;
+  /** The submitter's directory name (`lookupSubmitterName`), shown beside their address. */
+  submitterName?: string;
 }
 
 export interface ManualPaperWorkflowEmailParams {

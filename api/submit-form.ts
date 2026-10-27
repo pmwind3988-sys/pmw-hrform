@@ -58,7 +58,7 @@ import { verifyTestTicket, testRunFieldsFor, testRunLayerFields, withTestRunStan
 import type { TestRunStep, TestRunStepStatus } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { resolveApplicantName } from "./_utils/applicantName.js";
+import { lookupSubmitterName, resolveApplicantName, resolveTrainingTitle } from "./_utils/applicantName.js";
 import {
   buildWorkflowActionEmail,
   buildLayerNeedsRoutingEmail,
@@ -2335,6 +2335,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 referenceNo,
                 applicantName,
                 standInNote,
+                trainingTitle: resolveTrainingTitle(submissionBody),
+                submitterName: await lookupSubmitterName(createApprovalDirectoryReader(token), submittedBy),
               }),
               {
                 listTitle,

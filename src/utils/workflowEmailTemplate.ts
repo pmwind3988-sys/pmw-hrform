@@ -125,9 +125,14 @@ export function buildRequestGuide(params: {
  * Who to name as the submitter. A public-link submission is recorded as
  * "GUEST", which tells a reviewer nothing; the name the form collected does.
  */
-export function requestSubmitterName(submittedBy: string, applicantName?: string): string {
+export function requestSubmitterName(submittedBy: string, applicantName?: string, submitterName?: string): string {
   const name = (applicantName || "").trim();
-  return (submittedBy || "").trim().toUpperCase() === "GUEST" && name ? name : submittedBy;
+  if ((submittedBy || "").trim().toUpperCase() === "GUEST" && name) return name;
+  // "Siti Aminah (siti@pmw-group.com)": the reviewer knows the person, not the mailbox.
+  const known = (submitterName || "").trim();
+  return known && known.toLowerCase() !== (submittedBy || "").trim().toLowerCase()
+    ? `${known} (${submittedBy})`
+    : submittedBy;
 }
 
 const BRAND_NAME = "PMW HR Form";
@@ -526,6 +531,10 @@ export interface ActionRequestEmailParams {
   applicantName?: string;
   /** Who on the email is standing in for whom, when a PA was asked too. */
   standInNote?: string;
+  /** The course a training form is about, from its `trainingTitle` question. */
+  trainingTitle?: string;
+  /** The submitter's name from the Approval Directory, shown beside their address. */
+  submitterName?: string;
   /** The address the email is sent from, named in the guide. */
   sender?: string;
   /** The PDF record so far, offered beside the main button when there is one. */
@@ -550,10 +559,11 @@ export function renderActionRequestEmail(params: ActionRequestEmailParams): stri
     intro: `A submission is waiting for you to ${actionVerb}. Please review the request details below and record your decision.`,
     details: [
       { label: "Form", value: params.formTitle },
+      { label: "Training", value: (params.trainingTitle ?? "").trim() },
       { label: "Reference no.", value: (params.referenceNo ?? "").trim() },
       { label: "Submission ID", value: `#${params.responseItemId}` },
       { label: "Applicant", value: (params.applicantName ?? "").trim() },
-      { label: "Submitted by", value: requestSubmitterName(params.submittedBy, params.applicantName) },
+      { label: "Submitted by", value: requestSubmitterName(params.submittedBy, params.applicantName, params.submitterName) },
       { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
     ],
     info: params.standInNote || undefined,

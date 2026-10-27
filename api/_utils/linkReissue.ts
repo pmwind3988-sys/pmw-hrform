@@ -16,7 +16,8 @@
  * or was never theirs to see. A response that varied would hand back the
  * enumeration the binding just took away.
  */
-import { resolveApplicantName } from "./applicantName.js";
+import { lookupSubmitterName, resolveApplicantName, resolveTrainingTitle } from "./applicantName.js";
+import { createApprovalDirectoryReader } from "./approvalDirectory.js";
 import { buildWorkflowActionEmail, sendGraphEmail } from "./workflowEmail.js";
 import { buildWorkflowReviewLink } from "./workflowLink.js";
 import { updateListItemFields } from "./graphClient.js";
@@ -143,6 +144,11 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
       }),
       referenceNo: String(params.fields[REFERENCE_NO_FIELD] || ""),
       applicantName: resolveApplicantName(params.fields),
+      trainingTitle: resolveTrainingTitle(params.fields),
+      submitterName: await lookupSubmitterName(
+        createApprovalDirectoryReader(params.graphToken),
+        String(params.fields.SubmittedBy || ""),
+      ),
     });
     if (isTestRow(params.fields)) {
       const testRun = readTestRunRedirect(params.fields);

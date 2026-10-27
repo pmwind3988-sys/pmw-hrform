@@ -93,3 +93,28 @@ export function resolveApplicantName(fields: Record<string, unknown> | undefined
   }
   return "";
 }
+
+/** The course a training form was filled in for, from its `trainingTitle` question. */
+export function resolveTrainingTitle(fields: Record<string, unknown> | undefined | null): string {
+  if (!fields) return "";
+  for (const [key, value] of Object.entries(fields)) {
+    if (normalizeFieldKey(key) !== "trainingtitle") continue;
+    const text = coerceText(value);
+    if (!isPlaceholder(text)) return text;
+  }
+  return "";
+}
+
+/**
+ * The submitter's name from the Approval Directory, for an email that would
+ * otherwise only show their address. "" when they are not listed or the
+ * directory cannot be read: a notification never waits on, or fails for, a name.
+ */
+export async function lookupSubmitterName(
+  directory: { lookupPerson(email: string): Promise<{ name: string } | null> },
+  submittedBy: string,
+): Promise<string> {
+  if (!isEmailLike(submittedBy || "")) return "";
+  const row = await directory.lookupPerson(submittedBy).catch(() => null);
+  return (row?.name || "").trim();
+}

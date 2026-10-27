@@ -45,6 +45,8 @@ export interface DigestCandidate {
   entry: WorkflowEmailScheduleEntry;
   referenceNo: string;
   applicantName: string;
+  /** The course, on a training form, so a line says which class it is about. */
+  trainingTitle?: string;
   /**
    * Set when this line is a reminder for a step already emailed, not a new
    * request: which reminder it is and how many days the step has waited.
@@ -86,9 +88,10 @@ export function buildWorkflowDigestEmail(params: {
       : plural(count, "request", "requests");
   const reminders = candidates.filter((c) => c.reminder).length;
   const listed = candidates.slice(0, MAX_LISTED).map((candidate, index) => {
+    const course = candidate.trainingTitle?.trim() ? ` · ${candidate.trainingTitle.trim()}` : "";
     const where = candidate.referenceNo
-      ? `${candidate.formTitle} · Ref ${candidate.referenceNo}`
-      : `${candidate.formTitle} · #${candidate.itemId}`;
+      ? `${candidate.formTitle}${course} · Ref ${candidate.referenceNo}`
+      : `${candidate.formTitle}${course} · #${candidate.itemId}`;
     return {
       label: `${index + 1}. ${candidate.applicantName || candidate.entry.submittedBy || `Submission #${candidate.itemId}`}`,
       value: candidate.reminder
