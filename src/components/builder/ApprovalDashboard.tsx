@@ -79,7 +79,7 @@ import {
   readHarvestConfig,
 } from "../../utils/directoryHarvest";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
-import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
+import { getWorkflowEmailStatus, overdueDays } from "../../utils/workflowEmailLog";
 import {
   getScheduledWorkflowEmail,
   isValidFutureScheduleDate,
@@ -384,6 +384,20 @@ function getItemLifecycleStage(item: PendingItem): LifecycleStage {
     status: item.Status,
     currentLayerStatus: currentLayerNumber > 0 ? item.layerStatuses?.[currentLayerNumber] : undefined,
   });
+}
+
+/**
+ * Days the current step's request has gone unanswered, once that is overdue
+ * (the daily run has sent its last reminder). Only for a step that is still
+ * open: a decided, parked or not-yet-emailed step is never overdue.
+ */
+function itemOverdueDays(item: PendingItem): number | null {
+  if (getItemStatus(item) !== "pending") return null;
+  const layerNumber = Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0);
+  if (!layerNumber) return null;
+  const layerStatus = String(item.layerStatuses?.[layerNumber] ?? "").toLowerCase();
+  if (/approved|rejected|completed|confirmed|manual|needs routing/.test(layerStatus)) return null;
+  return overdueDays(getWorkflowEmailStatus(item.WorkflowEmailLog, layerNumber));
 }
 
 /** Manual-branch forms are parked at CurrentLayer 0 until an admin picks a branch. */
@@ -3812,6 +3826,7 @@ export default function ApprovalDashboard() {
                   const isSelected = selectedItem?.Id === item.Id && selectedItem.Title === item.Title;
                   const trainingTitle = getItemTrainingTitle(item);
                   const itemStatus = getItemStatus(item);
+                  const overdue = itemOverdueDays(item);
 
                   const titleBlock = (
                     <div style={{ minWidth: 0, display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -3914,6 +3929,19 @@ export default function ApprovalDashboard() {
                         >
                           {getItemDisplayStatus(item)}
                         </span>
+                        {overdue !== null && emailStatus.status === "sent" && (
+                          <span
+                            title={`Emailed to ${emailStatus.recipient} on ${formatDateTime(emailStatus.sentAt || emailStatus.lastAttemptAt)}`
+                              + (emailStatus.reminders ? `, reminded ${emailStatus.reminders} time${emailStatus.reminders === 1 ? "" : "s"}` : "")
+                              + ". No more reminders will be sent; contact them directly or reassign the step."}
+                            style={{
+                              fontSize: 11.5, fontWeight: 700, padding: "2px 8px", borderRadius: 12,
+                              background: C.redPale, color: editorial.error,
+                            }}
+                          >
+                            Overdue · {overdue} days
+                          </span>
+                        )}
                         {item.PdfUrl && (
                           // Opens the in-app viewer, where the paper-form design can be picked.
                           <button
@@ -4172,8 +4200,13 @@ export default function ApprovalDashboard() {
                           const schedule = getScheduledWorkflowEmail(selectedItem.WorkflowEmailSchedule, layerNumber);
                           if (schedule?.status === "scheduled" && schedule.heldForSummary) return `Held for the morning summary on ${formatDateTime(schedule.dueAt)}, because ${schedule.recipient} already has another email due then. Send now sends it on its own instead.`;
                           if (schedule?.status === "scheduled") return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
-                          if (delivery.status === "sent" && delivery.via === "summary") return `Sent to ${delivery.recipient} in a summary${delivery.summarySize ? ` of ${delivery.summarySize}` : ""} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)}.`;
-                          if (delivery.status === "sent") return `Sent to ${delivery.recipient} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)} (${delivery.attempts} attempt${delivery.attempts === 1 ? "" : "s"}).`;
+                          const reminded = delivery.status === "sent" && delivery.reminders
+                            ? ` Reminded ${delivery.reminders} time${delivery.reminders === 1 ? "" : "s"}, last on ${formatDateTime(delivery.lastReminderAt || "")}.`
+                            : "";
+                          const overdue = itemOverdueDays(selectedItem);
+                          const overdueNote = overdue !== null ? ` Overdue: waiting ${overdue} days with no more reminders due.` : "";
+                          if (delivery.status === "sent" && delivery.via === "summary") return `Sent to ${delivery.recipient} in a summary${delivery.summarySize ? ` of ${delivery.summarySize}` : ""} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)}.${reminded}${overdueNote}`;
+                          if (delivery.status === "sent") return `Sent to ${delivery.recipient} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)} (${delivery.attempts} attempt${delivery.attempts === 1 ? "" : "s"}).${reminded}${overdueNote}`;
                           if (delivery.status === "failed") return `Last send failed on ${formatDateTime(delivery.lastAttemptAt)}.`;
                           if (schedule) return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
                           return "No workflow email has been sent or scheduled.";

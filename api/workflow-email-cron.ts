@@ -30,8 +30,16 @@ import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { standInEmailNote } from "./_utils/resolveAssignee.js";
-import { isTestRow, readTestRunRedirect, withTestRunStandInFor } from "./_utils/testRun.js";
+import { isTestRow, readTestRunRedirect, redirectTestMessage, withTestRunStandInFor } from "./_utils/testRun.js";
 import { withWorkflowRoutePrefix } from "./_utils/workflowLink.js";
+import { parseLayerConfig, type QueueForm } from "./_utils/reviewQueue.js";
+import {
+  buildWorkflowReminderEmail,
+  recordReminder,
+  reminderDueFor,
+  reminderScheduleEntry,
+  type ReminderDue,
+} from "./_utils/workflowReminder.js";
 
 /**
  * How long one run may spend scanning before it stops and says so.
@@ -56,6 +64,9 @@ function scheduledRecipients(recipient: string): string | string[] {
   if (parsed.length === 0) return recipient;
   return parsed.length === 1 ? parsed[0] : parsed;
 }
+
+/** A line of a daily summary: a due email, or a reminder for a step already emailed. */
+type SummaryCandidate = DigestCandidate & { fields: Record<string, unknown>; reminderDue?: ReminderDue };
 
 interface ApiRequest {
   method: string;
@@ -100,7 +111,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let failed = 0;
     let examined = 0;
     let remainingForms = 0;
-    const digestCandidates: (DigestCandidate & { fields: Record<string, unknown> })[] = [];
+    let reminded = 0;
+    const baseUrl = getApplicationBaseUrl();
+    const digestCandidates: SummaryCandidate[] = [];
 
     for (const [index, form] of forms.entries()) {
       if (Date.now() - startedAt > SCAN_BUDGET_MS) {
@@ -109,6 +122,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
       const formTitle = typeof form.fields.Title === "string" ? form.fields.Title.trim() : "";
       if (!formTitle) continue;
+      const formSlug = typeof form.fields.Slug === "string" ? form.fields.Slug.trim() : "";
+      const layerConfig = parseLayerConfig(form.fields.LayerConfig);
+      const queueForm: QueueForm | null = formSlug && layerConfig
+        ? { title: formTitle, slug: formSlug, layerConfig }
+        : null;
       let items;
       try {
         items = await queryAllListItems(token, formTitle);
@@ -175,6 +193,32 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           if (await claimAndDeliver(token, formTitle, item, entry, testRun)) sent++;
           else failed++;
         }
+
+        // A step whose email went out days ago and is still untouched. Not
+        // when that step's own email is due this run - that is the nudge.
+        const reminder = queueForm
+          ? reminderDueFor(queueForm, { id: String(item.id), fields: item.fields })
+          : null;
+        if (!reminder || dueEntries.some((entry) => entry.layer === reminder.layer)) continue;
+        const submittedBy = String(item.fields.SubmittedBy || "");
+        if (isTestRow(item.fields)) {
+          // A rehearsal's reminder goes to its tester alone, never bundled.
+          const testRun = readTestRunRedirect(item.fields);
+          if (!testRun) continue;
+          if (await claimAndRemind(token, formTitle, String(item.id), reminder, submittedBy, baseUrl, testRun)) reminded++;
+          else failed++;
+          continue;
+        }
+        digestCandidates.push({
+          formTitle,
+          itemId: String(item.id),
+          entry: reminderScheduleEntry(reminder, baseUrl, submittedBy),
+          referenceNo: reminder.step.referenceNo,
+          applicantName: reminder.step.applicantName,
+          reminder: { number: reminder.number, daysWaiting: reminder.daysWaiting },
+          reminderDue: reminder,
+          fields: item.fields,
+        });
       }
     }
 
@@ -187,19 +231,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
       if (group.length === 1) {
         const [only] = group;
+        if (only.reminderDue) {
+          if (await claimAndRemind(token, only.formTitle, only.itemId, only.reminderDue, only.entry.submittedBy, baseUrl, undefined)) reminded++;
+          else failed++;
+          continue;
+        }
         if (await claimAndDeliver(token, only.formTitle, { id: only.itemId, fields: only.fields }, only.entry, undefined)) sent++;
         else failed++;
         continue;
       }
+      const remindersInGroup = group.filter((candidate) => candidate.reminderDue).length;
       if (await claimAndDeliverDigest(token, group)) {
         digests++;
-        sent += group.length;
+        sent += group.length - remindersInGroup;
+        reminded += remindersInGroup;
       } else {
         failed += group.length;
       }
     }
 
-    return res.status(200).json({ ok: true, examined, sent, failed, digests, deferred, remainingForms });
+    return res.status(200).json({ ok: true, examined, sent, failed, reminded, digests, deferred, remainingForms });
   } catch (error) {
     logError("api:workflow-email-cron", "Scheduled workflow email run failed", error);
     return res.status(500).json({ error: "Internal server error. Please try again." });
@@ -316,6 +367,49 @@ async function claimEntry(token: string, formTitle: string, item: ScheduledItem,
   });
 }
 
+/**
+ * Counts a reminder on the step's delivery log before it is sent, read fresh
+ * from the row. Counted first, like a delivery attempt, so a run that dies
+ * part-way can never remind the same person a third time; the cost is that a
+ * reminder whose send then fails is not retried.
+ */
+async function claimReminder(token: string, formTitle: string, itemId: string, layer: number) {
+  const row = await queryListItemById(token, formTitle, itemId);
+  await updateListItemFields(token, formTitle, itemId, {
+    WorkflowEmailLog: JSON.stringify(recordReminder(row?.fields.WorkflowEmailLog, layer, new Date())),
+  });
+}
+
+/** A reminder sent on its own: nothing else was due for that person this morning. */
+async function claimAndRemind(
+  token: string,
+  formTitle: string,
+  itemId: string,
+  due: ReminderDue,
+  submittedBy: string,
+  baseUrl: string,
+  testRun: ReturnType<typeof readTestRunRedirect>,
+): Promise<boolean> {
+  try {
+    await claimReminder(token, formTitle, itemId, due.layer);
+    const message = buildWorkflowReminderEmail({
+      due,
+      reviewLink: `${baseUrl.replace(/\/$/, "")}${due.step.link}`,
+      submittedBy,
+    });
+    await sendGraphEmail(token, testRun ? redirectTestMessage(message, testRun) : message);
+    return true;
+  } catch (error) {
+    logWarn("api:workflow-email-cron", "Workflow reminder failed", {
+      formTitle,
+      itemId,
+      layer: due.layer,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
 /** One submission's own email, as every scheduled email used to be sent. */
 async function claimAndDeliver(
   token: string,
@@ -384,10 +478,15 @@ async function claimAndDeliver(
  */
 async function claimAndDeliverDigest(
   token: string,
-  group: (DigestCandidate & { fields: Record<string, unknown> })[],
+  group: SummaryCandidate[],
 ): Promise<boolean> {
   for (const candidate of group) {
-    await claimEntry(token, candidate.formTitle, { id: candidate.itemId, fields: candidate.fields }, candidate.entry);
+    if (candidate.reminderDue) {
+      // A reminder has no schedule entry to claim; it is counted on the log.
+      await claimReminder(token, candidate.formTitle, candidate.itemId, candidate.reminderDue.layer);
+    } else {
+      await claimEntry(token, candidate.formTitle, { id: candidate.itemId, fields: candidate.fields }, candidate.entry);
+    }
   }
 
   const recipient = scheduledRecipients(group[0].entry.recipient);
@@ -405,6 +504,9 @@ async function claimAndDeliverDigest(
 
   const attemptedAt = new Date().toISOString();
   for (const candidate of group) {
+    // A reminder's step was delivered days ago; recording this as its delivery
+    // would rewrite that entry and restart its reminder clock.
+    if (candidate.reminderDue) continue;
     try {
       await persistWorkflowEmailAttempt(
         token,

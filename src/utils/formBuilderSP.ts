@@ -2521,6 +2521,8 @@ interface EmailParams {
   subject: string;
   body: string;
   attachments?: WorkflowEmailAttachment[];
+  /** High importance + a follow-up flag due in 3 days, for a request to act. */
+  followUp?: boolean;
   workflow?: {
     listTitle: string;
     responseItemId: number;
@@ -2544,7 +2546,7 @@ interface WorkflowEmailAttachment {
 /**
  * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
  */
-export async function sendSpEmail(_token: string, { to, subject, body, attachments, workflow, testRun }: EmailParams): Promise<void> {
+export async function sendSpEmail(_token: string, { to, subject, body, attachments, workflow, testRun, followUp }: EmailParams): Promise<void> {
   // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
@@ -2564,6 +2566,7 @@ export async function sendSpEmail(_token: string, { to, subject, body, attachmen
       body,
       attachments,
       workflow,
+      ...(followUp ? { followUp: true } : {}),
       ...(testRun ? { testTicket: testRun.ticket, slug: testRun.slug } : {}),
     }),
   });
@@ -2918,6 +2921,7 @@ export async function triggerApprovalNotification(
           testRun,
           to: submitRecipients,
           subject: subjectFor('Action Required'),
+          followUp: true,
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
@@ -2976,6 +2980,7 @@ export async function triggerApprovalNotification(
           testRun,
           to: nextLayerRecipients,
           subject: subjectFor('Action Required'),
+          followUp: true,
           workflow: {
             listTitle: responseListTitle,
             responseItemId,

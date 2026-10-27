@@ -31,6 +31,14 @@ export interface WorkflowEmailEntry {
    */
   via?: "summary";
   summarySize?: number;
+  /**
+   * Reminders the daily run has sent for this step since the email above,
+   * and when the last one went. A fresh send of the step's email rebuilds
+   * this entry, so a resend starts the reminder clock again.
+   * See `workflowReminder.ts`.
+   */
+  reminders?: number;
+  lastReminderAt?: string;
 }
 
 export type WorkflowEmailLog = Record<string, WorkflowEmailEntry>;
@@ -83,6 +91,39 @@ export interface WorkflowEmailMessage {
   subject: string;
   body: string;
   attachments?: WorkflowEmailAttachment[];
+  /**
+   * Sent at high importance and flagged for follow-up, due in
+   * `FOLLOW_UP_DAYS`. Only for emails that ask somebody to act.
+   */
+  followUp?: boolean;
+}
+
+/** When the follow-up flag on an action email falls due. */
+export const FOLLOW_UP_DAYS = 3;
+
+function graphDateTime(date: Date) {
+  return { dateTime: date.toISOString().replace(/Z$/, ""), timeZone: "UTC" };
+}
+
+/**
+ * The Graph message fields that mark an email as needing action: the red "!"
+ * and an Outlook follow-up flag, which puts it on the reader's To-Do list and
+ * reminds them on the due date.
+ *
+ * Whether the flag survives delivery is up to Exchange: it reliably does for
+ * mailboxes inside the tenant, and an outside mail system may drop it. The
+ * daily reminder (`workflowReminder.ts`) is what does not depend on it.
+ */
+export function followUpMessageFields(now = new Date()) {
+  const due = new Date(now.getTime() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
+  return {
+    importance: "high",
+    flag: {
+      flagStatus: "flagged",
+      startDateTime: graphDateTime(now),
+      dueDateTime: graphDateTime(due),
+    },
+  };
 }
 
 export interface WorkflowEmailAttachment {
@@ -324,6 +365,7 @@ export async function sendGraphEmail(
           toRecipients: recipients.map((recipient) => ({
             emailAddress: { address: recipient },
           })),
+          ...(message.followUp ? followUpMessageFields() : {}),
           ...(message.attachments?.length ? {
             attachments: message.attachments.map((attachment) => ({
               "@odata.type": "#microsoft.graph.fileAttachment",
@@ -653,6 +695,7 @@ export function buildWorkflowActionEmail(
     }),
     // Worded once, in the template, so the browser's copy of this email is the same email.
     body: renderActionRequestEmail({ ...params, sender: resolveHrFormSender() }),
+    followUp: true,
   };
 }
 

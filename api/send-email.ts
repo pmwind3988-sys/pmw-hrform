@@ -117,7 +117,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     });
   }
 
-  const { to, subject, body, workflow, sendToConfiguredSender, attachments, testTicket, slug } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow, sendToConfiguredSender, attachments, testTicket, slug, followUp } = req.body as Record<string, unknown>;
   const configuredSender = process.env.HR_FORM_EMAIL_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "";
 
   const recipients = sendToConfiguredSender === true && configuredSender
@@ -146,6 +146,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       subject,
       body,
       ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
+      // High importance + an Outlook follow-up flag, for a request to act.
+      ...(followUp === true ? { followUp: true } : {}),
     };
     if (
       workflow &&

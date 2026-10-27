@@ -45,6 +45,12 @@ export interface DigestCandidate {
   entry: WorkflowEmailScheduleEntry;
   referenceNo: string;
   applicantName: string;
+  /**
+   * Set when this line is a reminder for a step already emailed, not a new
+   * request: which reminder it is and how many days the step has waited.
+   * See `workflowReminder.ts`.
+   */
+  reminder?: { number: number; daysWaiting: number };
 }
 
 /** Candidates grouped by who receives them, in the order first seen. */
@@ -78,12 +84,18 @@ export function buildWorkflowDigestEmail(params: {
     : evaluations === 0
       ? plural(count, "approval", "approvals")
       : plural(count, "request", "requests");
-  const listed = candidates.slice(0, MAX_LISTED).map((candidate, index) => ({
-    label: `${index + 1}. ${candidate.applicantName || candidate.entry.submittedBy || `Submission #${candidate.itemId}`}`,
-    value: candidate.referenceNo
+  const reminders = candidates.filter((c) => c.reminder).length;
+  const listed = candidates.slice(0, MAX_LISTED).map((candidate, index) => {
+    const where = candidate.referenceNo
       ? `${candidate.formTitle} · Ref ${candidate.referenceNo}`
-      : `${candidate.formTitle} · #${candidate.itemId}`,
-  }));
+      : `${candidate.formTitle} · #${candidate.itemId}`;
+    return {
+      label: `${index + 1}. ${candidate.applicantName || candidate.entry.submittedBy || `Submission #${candidate.itemId}`}`,
+      value: candidate.reminder
+        ? `${where} · waiting ${plural(candidate.reminder.daysWaiting, "day", "days")}`
+        : where,
+    };
+  });
   if (count > MAX_LISTED) {
     listed.push({ label: "And more", value: `${count - MAX_LISTED} more on the Waiting for me page` });
   }
@@ -91,7 +103,7 @@ export function buildWorkflowDigestEmail(params: {
 
   return {
     to: params.recipient,
-    subject: `Action Required: ${noun} waiting for you`,
+    subject: `${reminders === count ? "Reminder" : "Action Required"}: ${noun} waiting for you`,
     body: renderWorkflowEmail({
       preheader: `${noun} are waiting for you in the PMW HR Portal. Do them all in one sitting.`,
       eyebrow: "Your daily summary",
@@ -100,11 +112,16 @@ export function buildWorkflowDigestEmail(params: {
       intro: "Instead of one email per submission, here is everything that is now due for you. "
         + "Open the Waiting for me page and work through them one after another. "
         + "Each one opens the next when you submit.",
+      callout: reminders > 0
+        ? `**${reminders === count ? "These have" : reminders === 1 ? "One of these has" : `${reminders} of these have`} been waiting for a while.** `
+          + "We emailed you about them before; the people who submitted them are still waiting for your decision."
+        : undefined,
       details: listed,
       actionUrl,
       actionLabel: "Start reviewing",
       portalIdentity: true,
       note: "Sign in with your PMW work account. The page lists only the requests assigned to you.",
     }),
+    followUp: true,
   };
 }

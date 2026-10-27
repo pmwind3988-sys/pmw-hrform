@@ -78,7 +78,7 @@ function text(value: unknown): string {
   return "";
 }
 
-function parseLayerConfig(raw: unknown): LayerConfigShape | null {
+export function parseLayerConfig(raw: unknown): LayerConfigShape | null {
   if (typeof raw !== "string" || !raw.trim()) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
