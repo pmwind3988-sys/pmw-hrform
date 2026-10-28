@@ -919,6 +919,7 @@ function MatrixCell({ column, preset }: { column: SheetMatrixColumn; preset?: st
   if (column.cellType === "checkbox" || column.cellType === "boolean") return <span className="bx-wys-mark" />;
   const hint = column.cellType === "dropdown" ? (column.multiSelect ? "Select…" : "Select")
     : column.cellType === "date" ? "dd / mm / yyyy"
+      : column.cellType === "datetime" ? "dd / mm / yyyy, hh:mm"
       : column.cellType === "number" ? "0"
         : "";
   return (
@@ -1810,6 +1811,7 @@ function MatrixColumnsEditor({ columns, token, onChange }: {
             { value: "text", label: "Text" },
             { value: "dropdown", label: "Dropdown" },
             { value: "date", label: "Date" },
+            { value: "datetime", label: "Date & time" },
             { value: "number", label: "Number" },
             { value: "checkbox", label: "Checkbox" },
             { value: "boolean", label: "Boolean" },

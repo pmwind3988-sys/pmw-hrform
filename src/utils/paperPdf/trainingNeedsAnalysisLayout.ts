@@ -12,12 +12,15 @@
  *
  * The table is the form's dynamic matrix, its columns matched to the Word
  * form's by what they ask. It always prints at least the Word form's five
- * rows, so blank boxes stay on the page as they do on paper. Pure.
+ * rows, so blank boxes stay on the page as they do on paper. The tentative
+ * start, end and number of days print together in the Tentative Date box
+ * (needsSchedule.ts). Pure.
  */
 import type { PaperKit, PaperOption, PaperSection, RosterCell, SignoffColumn } from "./paperLayout";
 import type { FormSubmissionField } from "../formSubmissionLayout";
 import { formatPdfFieldValue } from "../pdfFieldFormatting";
 import { QuestionPicker, answerText, roleName, signatureOf, stepColumn } from "./paperFormKit";
+import { formatSchedule, isScheduleColumn, readSchedule, scheduleColumns } from "./needsSchedule";
 
 type MatrixColumn = NonNullable<FormSubmissionField["matrixColumns"]>[number];
 
@@ -62,7 +65,9 @@ function rosterCell(kit: PaperKit, column: MatrixColumn | undefined, row: Record
  * asks it (or none), then any column the Word form does not have. Shared by
  * the printout and the on-screen form the HOD fills in, so both agree.
  */
-export function matchNeedsColumns<C extends { name: string; title?: string }>(columns: C[]): { label: string; width: number; column: C | undefined }[] {
+export function matchNeedsColumns<C extends { name: string; title?: string }>(all: C[]): { label: string; width: number; column: C | undefined }[] {
+  // The schedule's start, end and days live inside the Tentative Date box, not as columns of their own.
+  const columns = all.filter((c) => !isScheduleColumn(c, all));
   const used = new Set<C>();
   const placed = NEEDS_COLUMNS.map((spec) => {
     const found = columns.find((c) => !used.has(c) && spec.match.test(`${c.name} ${c.title ?? ""}`));
@@ -89,6 +94,8 @@ export function buildTrainingNeedsAnalysisSections(kit: PaperKit): PaperSection[
   // The table's columns, matched to the Word form's; a column it does not have is added at the end.
   const answer = matrix ? kit.read(matrix) : null;
   const all = matchNeedsColumns(answer?.matrixColumns ?? []);
+  const schedule = scheduleColumns(answer?.matrixColumns ?? []);
+  const hasSchedule = Boolean(schedule.start || schedule.end || schedule.days);
   // Widths are shares of the row once the No column has its 6%.
   const total = all.reduce((sum, c) => sum + c.width, 0);
   const widths = [6, ...all.map((c) => (c.width / total) * 94)];
@@ -114,7 +121,12 @@ export function buildTrainingNeedsAnalysisSections(kit: PaperKit): PaperSection[
         kind: "roster",
         columns: ["No", ...all.map((c) => c.label)],
         widths,
-        rows: rows.map((row, i) => [{ text: String(i + 1) }, ...all.map((c) => rosterCell(kit, c.column, row))]),
+        rows: rows.map((row, i) => [
+          { text: String(i + 1) },
+          ...all.map((c) => (hasSchedule && c.column && c.column === schedule.firstDay
+            ? { text: row ? formatSchedule(readSchedule(row, schedule)) : "" }
+            : rosterCell(kit, c.column, row))),
+        ]),
       },
     ],
   };

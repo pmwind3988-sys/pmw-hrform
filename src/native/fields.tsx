@@ -1125,7 +1125,7 @@ export function TableControl({ element, value, onChange, disabled }: ControlProp
                     ) : (
                       <input
                         className="nf-input"
-                        type={column.cellType === "number" ? "number" : column.cellType === "date" ? "date" : "text"}
+                        type={column.cellType === "number" ? "number" : column.cellType === "date" ? "date" : column.cellType === "datetime" ? "datetime-local" : "text"}
                         value={row[column.name] === undefined ? "" : String(row[column.name])}
                         disabled={disabled}
                         aria-label={`${column.title}, row ${rowIndex + 1}`}

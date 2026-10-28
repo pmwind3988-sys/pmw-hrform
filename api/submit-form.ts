@@ -861,6 +861,7 @@ function coerceMatrixCellValue(value: unknown, column: ApiMatrixColumn): unknown
     case "boolean":
       return toBoolean(value);
     case "date":
+    case "datetime":
       return toSharePointMalaysiaDateTime(value);
     case "checkbox":
       return Array.isArray(column.choices) && column.choices.length > 0

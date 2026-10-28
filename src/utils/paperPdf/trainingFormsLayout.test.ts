@@ -131,6 +131,33 @@ describe("Training Needs Analysis", () => {
     expect(row.columns[1]).toMatchObject({ caption: "Approved by GHRH:", name: "", signature: "", date: "" });
   });
 
+  it("prints the tentative start, end and days together in the Tentative Date box", () => {
+    type Page = { name: string; elements: Record<string, unknown>[] };
+    const json = TRAINING_NEEDS_ANALYSIS_SAMPLE.surveyJson as { pages: Page[] };
+    const pages = json.pages.map((page) => ({
+      ...page,
+      elements: page.elements.map((el) => (el.type === "matrixdynamic"
+        ? { ...el, columns: [...(el.columns as unknown[]), { name: "Tentative_Start", cellType: "datetime" }, { name: "Tentative_End", cellType: "datetime" }, { name: "Tentative_Days", cellType: "number" }] }
+        : el)),
+    }));
+    const rows = (TRAINING_NEEDS_ANALYSIS_SAMPLE.responseData as { dynamicMatrix: Record<string, unknown>[] }).dynamicMatrix;
+    const [table] = blocks(build({
+      ...TRAINING_NEEDS_ANALYSIS_SAMPLE,
+      surveyJson: { ...json, pages },
+      responseData: {
+        ...TRAINING_NEEDS_ANALYSIS_SAMPLE.responseData,
+        // As SharePoint returns them: UTC.
+        dynamicMatrix: [{ ...rows[0], Tentative_Start: "2027-02-15T01:00:00Z", Tentative_End: "2027-02-17T09:00:00Z", Tentative_Days: 3 }, rows[1]],
+      },
+    }), "roster");
+    // No extra columns: the schedule lives inside Tentative Date.
+    expect(table.columns.at(-1)).toBe("Tentative Date");
+    expect(table.columns).toHaveLength(9);
+    expect(table.rows[0][8].text).toBe("15/02/2027 – 17/02/2027\n3 days · 9:00 AM – 5:00 PM");
+    // A row from before the schedule keeps its single date.
+    expect(table.rows[1][8].text).toBe("01/04/2027");
+  });
+
   it("reads matrix rows kept in the child list", () => {
     const { dynamicMatrix, ...rest } = TRAINING_NEEDS_ANALYSIS_SAMPLE.responseData as Record<string, unknown>;
     const [table] = blocks(build({ ...TRAINING_NEEDS_ANALYSIS_SAMPLE, responseData: { ...rest, dynamicMatrix_childRows: { rows: dynamicMatrix } } }), "roster");

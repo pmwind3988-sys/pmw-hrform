@@ -23,9 +23,17 @@ export function trimNeedsRows(rows: NeedsRow[]): NeedsRow[] {
 
 /** The answer after writing one cell; rows before it are padded so row numbers stay put. */
 export function writeNeedsCell(rows: NeedsRow[], index: number, column: string, value: unknown): NeedsRow[] {
+  return writeNeedsCells(rows, index, { [column]: value });
+}
+
+/** The answer after writing several cells of one row at once (a schedule's four columns). */
+export function writeNeedsCells(rows: NeedsRow[], index: number, cells: NeedsRow): NeedsRow[] {
   const next = rows.map((row) => ({ ...row }));
   while (next.length <= index) next.push({});
-  next[index] = { ...next[index], [column]: value };
+  const row = { ...next[index], ...cells };
+  // A cleared cell leaves the row, so a blank never reaches a Number or Date column.
+  for (const [key, value] of Object.entries(cells)) if (value === undefined) delete row[key];
+  next[index] = row;
   return trimNeedsRows(next);
 }
 

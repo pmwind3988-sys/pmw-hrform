@@ -61,7 +61,7 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { buildManualPaperSubmissionEmail } from "../utils/manualPaperEmail";
 import { isTrainingNeedsAnalysisForm, manualPaperDesign } from "../utils/paperPdf/paperForms";
-import PaperNeedsAnalysisInput, { compactNeedsAnswers, needsAnalysisQuestions, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
+import PaperNeedsAnalysisInput, { compactNeedsAnswers, incompleteScheduleRows, needsAnalysisQuestions, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 import {
@@ -1419,6 +1419,13 @@ export default function DynamicFormPage() {
     // The form view scrolls to the first failure and focuses it, so a rejected
     // validation needs no message of its own here.
     if (!runtime.validateAll().ok) return false;
+
+    // A half-filled tentative schedule says what is missing in its own box; this takes the HOD there.
+    if (paperNeedsAnalysis && incompleteScheduleRows(runtime.form, runtime.values).length > 0) {
+      const table = needsAnalysisQuestions(runtime.form).table;
+      if (table) document.getElementById(`field-${table.name}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return false;
+    }
 
     if (!pdpaAccepted) {
       setPdpaConsentError(pdpa.ui.consentRequired);

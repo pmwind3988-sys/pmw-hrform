@@ -64,7 +64,7 @@ export interface NativeRateStep {
 export interface NativeColumn {
   name: string;
   title: string;
-  cellType: "text" | "number" | "select" | "date" | "boolean";
+  cellType: "text" | "number" | "select" | "date" | "datetime" | "boolean";
   /** Banner this column sits under in a two-row header. Absent when it stands alone. */
   group?: string;
   choices: NativeChoice[];
@@ -305,7 +305,7 @@ const CELL_TYPES: Record<string, NativeColumn["cellType"]> = {
   radiogroup: "select",
   checkbox: "select",
   date: "date",
-  datetime: "date",
+  datetime: "datetime",
   boolean: "boolean",
 };
 

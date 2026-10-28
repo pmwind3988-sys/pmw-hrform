@@ -92,7 +92,7 @@
 
 /* ── The training-needs table ───────────────────────────────────────────── */
 .pna-table-scroll { overflow-x: auto; }
-.pna-table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 900px; }
+.pna-table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 980px; }
 .pna-table th,
 .pna-table td { border: 1px solid var(--pna-rule); vertical-align: top; }
 .pna-table th { background: var(--pna-band); padding: 6px 4px; font-size: 12px; font-weight: 700; text-align: center; vertical-align: middle; }
@@ -129,6 +129,26 @@
 .pna-cell[type="date"] { font-weight: 400; }
 .pna-cell:focus { outline: 2px solid var(--pna-focus); outline-offset: -2px; background: #f4f9ff; }
 .pna-ticks { display: flex; flex-direction: column; padding: 2px 0; }
+
+/* The Tentative Date box: first day, days, one time range, then what that works out to. */
+.pna-sched { display: flex; flex-direction: column; gap: 5px; padding: 6px; font-size: 12.5px; }
+.pna-sched-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pna-sched-line > span:first-child { width: 58px; flex-shrink: 0; }
+.pna-sched input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--pna-rule);
+  border-radius: 0;
+  padding: 3px 2px;
+  font: inherit;
+  color: var(--pna-ink);
+  background: var(--pna-fill);
+}
+.pna-sched input:focus { outline: 2px solid var(--pna-focus); outline-offset: 1px; }
+.pna-sched input.pna-sched-days { flex: 0 0 56px; font-weight: 700; }
+.pna-sched-note { font-weight: 700; white-space: pre-line; line-height: 1.35; }
+.pna-sched-note[data-tone="error"] { color: var(--pna-error); }
 .pna-table[data-invalid="true"] { outline: 2px solid var(--pna-error); outline-offset: 2px; }
 .pna-table-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; font-size: 12.5px; color: var(--pna-muted); }
 .pna-add {
@@ -199,6 +219,7 @@
   .pna-ticks { flex-direction: row; flex-wrap: wrap; }
   .pna-ticks .pna-tick { width: auto; min-height: 40px; }
   .pna-cell { font-size: 16px; }
+  .pna-sched input { font-size: 16px; }
 
   .pna-signoff { grid-template-columns: minmax(0, 1fr); }
   .pna-signoff-col + .pna-signoff-col { border-left: 0; border-top: 1px solid var(--pna-rule); }

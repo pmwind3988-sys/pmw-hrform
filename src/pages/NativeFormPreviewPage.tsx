@@ -27,7 +27,7 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
 import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
 import { DEMO_FORM } from "../native/demoForm";
-import PaperNeedsAnalysisInput, { compactNeedsAnswers, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
+import PaperNeedsAnalysisInput, { compactNeedsAnswers, incompleteScheduleRows, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
 import { isTrainingNeedsAnalysisForm } from "../utils/paperPdf/paperForms";
 import { TRAINING_NEEDS_ANALYSIS_SAMPLE } from "../utils/paperPdf/trainingFormSamples";
 import type { DocumentControlHeader } from "../types";
@@ -45,13 +45,22 @@ const DEMO_NEEDS_SLUG = "demo-tna";
 
 function needsAnalysisDemo(): Record<string, unknown> {
   const sample = TRAINING_NEEDS_ANALYSIS_SAMPLE.surveyJson as { pages: { name: string; elements: Record<string, unknown>[] }[] };
-  const elements = sample.pages[0].elements.map((el) => (el.type === "matrixdynamic" ? { ...el, isRequired: true, maxRows: 10 } : el));
+  const schedule = [
+    { name: "Tentative_Start", title: "Tentative Start", cellType: "datetime" },
+    { name: "Tentative_End", title: "Tentative End", cellType: "datetime" },
+    { name: "Tentative_Days", title: "Tentative Days", cellType: "number" },
+  ];
+  const elements = sample.pages[0].elements.map((el) => (el.type === "matrixdynamic"
+    ? { ...el, isRequired: true, maxRows: 10, columns: [...(el.columns as unknown[]), ...schedule] }
+    : el));
   return {
     ...sample,
     pages: [{
       name: "page1",
       elements: [
-        ...elements.map((el) => (el.type === "signaturepad" || el.name === "department" || el.name === "company" ? { ...el, isRequired: true } : el)),
+        // The live form reads its departments from SharePoint; the sample brings its own.
+        ...elements.map((el) => (el.name === "department" ? { ...el, isRequired: true, choices: ["Quality Assurance", "Production", "Safety"] } : el))
+          .map((el) => (el.type === "signaturepad" || el.name === "company" ? { ...el, isRequired: true } : el)),
         { type: "text", name: "PreparedByName", title: "Name" },
         { type: "text", name: "PreparedByDesignation", title: "Designation" },
       ],
@@ -230,6 +239,7 @@ export default function NativeFormPreviewPage() {
     }
     setConsentError("");
     if (!ok) return;
+    if (paperNeedsAnalysis && incompleteScheduleRows(runtime.form, runtime.values).length > 0) return;
     // `foldOtherAnswers` mutates, and `collect` already returns a fresh object.
     setPayload(foldOtherAnswers(paperNeedsAnalysis ? compactNeedsAnswers(runtime.form, runtime.collect()) : runtime.collect()));
     window.scrollTo({ top: 0, behavior: "smooth" });

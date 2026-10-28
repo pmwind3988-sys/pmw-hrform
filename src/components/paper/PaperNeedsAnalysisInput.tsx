@@ -26,7 +26,8 @@ import {
   PREPARED_NAME_MATCH,
   matchNeedsColumns,
 } from "../../utils/paperPdf/trainingNeedsAnalysisLayout";
-import { isEmptyNeedsRow, removeNeedsRow, shownNeedsRowCount, writeNeedsCell, type NeedsRow } from "./needsAnalysisRows";
+import { isEmptyNeedsRow, removeNeedsRow, shownNeedsRowCount, writeNeedsCell, writeNeedsCells, type NeedsRow } from "./needsAnalysisRows";
+import { readSchedule, scheduleColumns, scheduleProblem, scheduleValues, formatSchedule, type ScheduleColumns, type ScheduleInput } from "../../utils/paperPdf/needsSchedule";
 
 function flatten(elements: NativeElement[]): NativeElement[] {
   return elements.flatMap((el) => (el.kind === "section" ? flatten(el.elements) : [el]));
@@ -132,11 +133,94 @@ function Cell({ column, value, label, wide, disabled, onChange }: { column: Nati
   );
 }
 
+/** Rows whose tentative schedule is started but not complete, as 1-based row numbers. */
+export function incompleteScheduleRows(form: NativeForm, values: Record<string, unknown>): number[] {
+  const { table } = needsAnalysisQuestions(form);
+  const rows = table ? values[table.name] : undefined;
+  if (!table || !Array.isArray(rows)) return [];
+  const cols = scheduleColumns(table.columns);
+  if (!cols.start && !cols.end && !cols.days) return [];
+  return (rows as NeedsRow[]).flatMap((row, i) => {
+    if (isEmptyNeedsRow(row)) return [];
+    const input = readSchedule(row, cols);
+    // A finished schedule has its start written; times are not kept until it is.
+    return (input.firstDay || input.days) && !row[cols.start?.name ?? ""] ? [i + 1] : [];
+  });
+}
+
+/**
+ * The Tentative Date box: first day, number of days and one time range for
+ * every day. The four stored columns are written together; start and end
+ * stay blank until the schedule is complete.
+ */
+function ScheduleCell({ row, cols, label, disabled, onWrite }: { row: NeedsRow | undefined; cols: ScheduleColumns<NativeColumn>; label: string; disabled: boolean; onWrite: (cells: NeedsRow) => void }) {
+  const stored = readSchedule(row, cols);
+  // Times are only stored once the schedule is complete, so they are held here until then.
+  const [times, setTimes] = useState({ from: stored.from, to: stored.to });
+  const input: ScheduleInput = { ...stored, from: row?.[cols.start?.name ?? ""] ? stored.from : times.from, to: row?.[cols.end?.name ?? ""] ? stored.to : times.to };
+  const write = (next: ScheduleInput) => {
+    setTimes({ from: next.from, to: next.to });
+    const v = scheduleValues(next);
+    const cells: NeedsRow = {};
+    if (cols.firstDay) cells[cols.firstDay.name] = v.firstDay || undefined;
+    if (cols.start) cells[cols.start.name] = v.start || undefined;
+    if (cols.end) cells[cols.end.name] = v.end || undefined;
+    if (cols.days) cells[cols.days.name] = v.days ?? undefined;
+    onWrite(cells);
+  };
+  const problem = scheduleProblem(input);
+  const summary = problem ? "" : formatSchedule(input);
+  return (
+    <div className="pna-sched" role="group" aria-label={label}>
+      <label className="pna-sched-line">
+        <span>First day</span>
+        <input
+          type="date"
+          value={input.firstDay}
+          disabled={disabled}
+          aria-label={`${label}: first day`}
+          // Picking a first day with no length yet means a one-day course until told otherwise.
+          onChange={(e) => write({ ...input, firstDay: e.target.value, days: e.target.value && !input.days ? 1 : input.days })}
+        />
+      </label>
+      <label className="pna-sched-line">
+        <span>Days</span>
+        <input
+          type="number"
+          min={1}
+          max={60}
+          inputMode="numeric"
+          className="pna-sched-days"
+          value={input.days ?? ""}
+          disabled={disabled}
+          aria-label={`${label}: number of days`}
+          onChange={(e) => write({ ...input, days: e.target.value === "" ? null : Number(e.target.value) })}
+        />
+      </label>
+      {/* One time range holds for every day. */}
+      <label className="pna-sched-line">
+        <span>From</span>
+        <input type="time" value={input.from} disabled={disabled} aria-label={`${label}: start time each day`} onChange={(e) => write({ ...input, from: e.target.value })} />
+      </label>
+      <label className="pna-sched-line">
+        <span>To</span>
+        <input type="time" value={input.to} disabled={disabled} aria-label={`${label}: end time each day`} onChange={(e) => write({ ...input, to: e.target.value })} />
+      </label>
+      {problem ? <div className="pna-sched-note" data-tone="error">{problem}</div> : summary ? <div className="pna-sched-note">{summary}</div> : null}
+    </div>
+  );
+}
+
 function NeedsTable({ table, runtime, disabled }: { table: NativeElement; runtime: NativeFormRuntime; disabled: boolean }) {
   const [opened, setOpened] = useState(0);
   const value = runtime.getValue(table.name);
   const rows: NeedsRow[] = Array.isArray(value) ? (value as NeedsRow[]) : [];
-  const columns = matchNeedsColumns(table.columns).filter((c): c is { label: string; width: number; column: NativeColumn } => Boolean(c.column));
+  const schedule = scheduleColumns(table.columns);
+  const hasSchedule = Boolean(schedule.start || schedule.end || schedule.days);
+  // On screen the Tentative Date box holds four inputs, so it gets the room the printout gives its one line.
+  const columns = matchNeedsColumns(table.columns)
+    .filter((c): c is { label: string; width: number; column: NativeColumn } => Boolean(c.column))
+    .map((c) => (hasSchedule && c.column === schedule.firstDay ? { ...c, width: 24 } : c));
   const total = columns.reduce((sum, c) => sum + c.width, 0) || 1;
   const count = shownNeedsRowCount(rows.length, opened, Math.max(NEEDS_MIN_ROWS, table.minRows), table.maxRows);
   const canAdd = !disabled && (table.maxRows <= 0 || count < table.maxRows);
@@ -173,6 +257,15 @@ function NeedsTable({ table, runtime, disabled }: { table: NativeElement; runtim
                   </td>
                   {columns.map((c) => (
                     <td key={c.column.name} data-label={c.label}>
+                      {hasSchedule && c.column === schedule.firstDay ? (
+                        <ScheduleCell
+                          row={row}
+                          cols={schedule}
+                          label={`${c.label}, row ${r + 1}`}
+                          disabled={disabled}
+                          onWrite={(cells) => runtime.setValue(table.name, writeNeedsCells(rows, r, cells))}
+                        />
+                      ) : (
                       <Cell
                         column={c.column}
                         value={row?.[c.column.name]}
@@ -181,6 +274,7 @@ function NeedsTable({ table, runtime, disabled }: { table: NativeElement; runtim
                         disabled={disabled}
                         onChange={(next) => runtime.setValue(table.name, writeNeedsCell(rows, r, c.column.name, next))}
                       />
+                      )}
                     </td>
                   ))}
                 </tr>

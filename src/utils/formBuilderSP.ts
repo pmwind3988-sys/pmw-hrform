@@ -98,6 +98,8 @@ export interface SpColumnSpec {
   choices?: string[];
   /** Choice column accepts a value the respondent typed ("Other" is enabled). */
   fillIn?: boolean;
+  /** Date column shown with its time (DisplayFormat Date & Time). */
+  dt?: boolean;
   label?: string;
 }
 
@@ -276,6 +278,9 @@ function buildColumnBody(spec: SpColumnSpec): Record<string, unknown> {
   if (spec.k === 3 || spec.ml) {
     body.NumberOfLines = 6;
     body.RichText = !!spec.rt;
+  }
+  if (spec.k === 4 && spec.dt) {
+    body.DisplayFormat = 1; // Date & Time
   }
   if (spec.k === 11) {
     body.DisplayFormat = 0; // URL link. Public submissions store a shortcut to the uploaded signature file.
@@ -2079,6 +2084,9 @@ function matrixColumnSpec(col: MatrixColumnDef): SpColumnSpec {
       return { n: col.name, k: 6, choices: col.choices };
     case 'date':
       return { n: col.name, k: 4 };
+    case 'datetime':
+      // Shown in SharePoint with its time, not just the date.
+      return { n: col.name, k: 4, dt: true };
     case 'number':
       return { n: col.name, k: 9 };
     case 'checkbox':
@@ -2409,7 +2417,7 @@ export async function writeMatrixChildItems(
     // still looks the answer up by the name the form used.
     const normalizedRow: Record<string, unknown> = { ...row };
     for (const col of columns) {
-      if (!col.name || col.cellType !== "date") continue;
+      if (!col.name || (col.cellType !== "date" && col.cellType !== "datetime")) continue;
       normalizedRow[col.name] = toSharePointMalaysiaDateTime(row[col.name]) ?? row[col.name] ?? null;
     }
     Object.assign(body, encodeMatrixRow(normalizedRow, columns as MatrixColumn[], resolveColumnKey));
