@@ -2417,8 +2417,15 @@ export async function writeMatrixChildItems(
     // still looks the answer up by the name the form used.
     const normalizedRow: Record<string, unknown> = { ...row };
     for (const col of columns) {
-      if (!col.name || (col.cellType !== "date" && col.cellType !== "datetime")) continue;
-      normalizedRow[col.name] = toSharePointMalaysiaDateTime(row[col.name]) ?? row[col.name] ?? null;
+      if (!col.name) continue;
+      if (col.cellType === "date" || col.cellType === "datetime") {
+        normalizedRow[col.name] = toSharePointMalaysiaDateTime(row[col.name]) ?? row[col.name] ?? null;
+      } else if (col.cellType === "checkbox" && Array.isArray(col.choices) && col.choices.length > 0 && typeof row[col.name] === "string") {
+        // A checkbox column with choices is a multi-choice column, which takes a list; the
+        // form hands over one ticked value as text. Same as api/submit-form's toStringArray.
+        const value = (row[col.name] as string).trim();
+        normalizedRow[col.name] = value ? [value] : null;
+      }
     }
     Object.assign(body, encodeMatrixRow(normalizedRow, columns as MatrixColumn[], resolveColumnKey));
 
