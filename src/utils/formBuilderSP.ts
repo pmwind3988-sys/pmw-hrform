@@ -2145,7 +2145,11 @@ async function resolveChoiceValues(
     .filter(Boolean);
 }
 
-async function surveyQuestionColumnSpecs(
+/**
+ * The response-list columns a form's questions need. Hidden questions
+ * (`visible: false`) are included: a page may still fill them in.
+ */
+export async function surveyQuestionColumnSpecs(
   token: string,
   surveyJson: SurveyJson,
   onLog: (msg: string, type: string) => void,
@@ -2173,6 +2177,16 @@ async function surveyQuestionColumnSpecs(
           columns: matrixCols.filter((col) => col.name && col.title),
         });
       }
+      continue;
+    }
+
+    // A fixed-row table answers one object keyed by row, so it is filed whole,
+    // as `<name>_Json` / `<name>_Response`, with no child list of rows.
+    if (question.type === 'matrixdropdown') {
+      columns.push(
+        { n: `${question.name}_Response`, k: 3, ml: true, rt: true, label: 'matrix HTML' },
+        { n: `${question.name}_Json`, k: 3, ml: true, label: 'matrix JSON' },
+      );
       continue;
     }
 

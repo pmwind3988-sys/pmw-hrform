@@ -493,6 +493,10 @@ describe('getSpColumnKind', () => {
     expect(getSpColumnKind({ type: 'matrixdynamic' })).toBeNull();
   });
 
+  it('returns null for matrixdropdown type', () => {
+    expect(getSpColumnKind({ type: 'matrixdropdown' })).toBeNull();
+  });
+
   it('falls back to Text for a retired type a published form still carries', () => {
     // ranking and hierarchy were removed from the palette. A form published
     // before that still names them, and must keep provisioning rather than

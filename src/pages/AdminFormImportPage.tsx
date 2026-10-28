@@ -2,7 +2,9 @@
  * AdminFormImportPage — /admin/forms/import[?site=<key>]. Publishes many new
  * forms in one go from definition files, each the way the builder's publish
  * would, with one approval step (e.g. "Checking By") given to all of them.
- * Forms already on the site are listed and left alone. See utils/formImport.ts.
+ * Forms already on the site are listed and left alone, unless "Update forms
+ * already on the site" is ticked: then each is published as its next version
+ * and keeps its own checkers. See utils/formImport.ts.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -54,6 +56,7 @@ export default function AdminFormImportPage() {
   const [layerTitle, setLayerTitle] = useState("Checking By");
   const [assignees, setAssignees] = useState("");
   const [isPublic, setIsPublic] = useState(false);
+  const [updateExisting, setUpdateExisting] = useState(false);
   const [results, setResults] = useState<Record<string, RowResult>>({});
   const [busy, setBusy] = useState(false);
 
@@ -96,10 +99,14 @@ export default function AdminFormImportPage() {
     return () => { cancelled = true; };
   }, [isAuthenticated, inProgress, instance, accounts, site, siteReady]);
 
-  const plans = useMemo(() => (existing ? planImport(files, existing) : []), [files, existing]);
-  const ready = plans.filter((p) => p.status === "ready");
+  const plans = useMemo(() => (existing ? planImport(files, existing, { updateExisting }) : []), [files, existing, updateExisting]);
+  const ready = plans.filter((p) => p.status === "ready" || p.status === "update");
+  const updates = plans.filter((p) => p.status === "update");
   const layerConfig = useMemo(() => singleApprovalLayer(layerTitle, assignees), [layerTitle, assignees]);
-  const layerProblem = assignees.trim() && !layerConfig
+  // The step applies to new forms only; updates keep their own, so a batch of
+  // updates alone needs no valid step here.
+  const hasNewForms = ready.length > updates.length;
+  const layerProblem = !hasNewForms ? "" : assignees.trim() && !layerConfig
     ? "Enter at least one email address."
     : validateLayerConfig(layerConfig, []).errors[0] ?? "";
   const toPublish = ready.filter((p) => results[p.fileName]?.state !== "done");
@@ -138,9 +145,10 @@ export default function AdminFormImportPage() {
   const statusText = (fileName: string, status: string, reason?: string) => {
     const result = results[fileName];
     if (result?.state === "publishing") return "Publishing…";
-    if (result?.state === "done") return "Published";
+    if (result?.state === "done") return status === "update" ? "New version published" : "Published";
     if (result?.state === "failed") return `Failed — ${result.error}`;
     if (status === "ready") return "Ready";
+    if (status === "update") return "Will publish a new version (keeps its checkers)";
     return reason ?? "";
   };
 
@@ -148,7 +156,7 @@ export default function AdminFormImportPage() {
     <Box>
       <PageHeader
         title="Import forms"
-        description="Publish new forms from definition files in one go. Forms already on the site are skipped, never overwritten."
+        description="Publish new forms from definition files in one go. Forms already on the site are skipped unless you choose to update them."
         primary={{
           label: busy ? "Publishing…" : `Publish ${toPublish.length} ${toPublish.length === 1 ? "form" : "forms"}`,
           onClick: () => { void publish(); },
@@ -207,6 +215,17 @@ export default function AdminFormImportPage() {
               control={<Checkbox checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} disabled={busy} />}
               label="Anyone with the link can open these forms without signing in"
             />
+            <Box>
+              <FormControlLabel
+                control={<Checkbox checked={updateExisting} onChange={(e) => { setUpdateExisting(e.target.checked); setResults({}); }} disabled={busy} />}
+                label="Update forms already on the site (keeps their checkers)"
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+                {updateExisting
+                  ? `${updates.length} ${updates.length === 1 ? "form" : "forms"} will update. Each is saved as its next version and keeps its approval step, approvers, address, label and document header; the step and link setting above apply to new forms only.`
+                  : "Off: forms already on the site are skipped."}
+              </Typography>
+            </Box>
           </Stack>
         </Card>
 
@@ -247,7 +266,7 @@ export default function AdminFormImportPage() {
 
         {plans.length > 0 && (
           <Typography variant="body2" color="text.secondary" role="status" aria-live="polite">
-            {ready.length} new · {plans.filter((p) => p.status === "exists").length} already on the site · {plans.filter((p) => p.status === "invalid").length} not readable
+            {ready.length - updates.length} new{updateExisting && ` · ${updates.length} to update`} · {plans.filter((p) => p.status === "exists").length} already on the site · {plans.filter((p) => p.status === "invalid").length} not readable
             {doneCount > 0 && ` · ${doneCount} published`}
             {failed.length > 0 && !busy && (
               <Button size="small" sx={{ ml: 1 }} onClick={() => { void publish(failed); }} disabled={!!layerProblem}>

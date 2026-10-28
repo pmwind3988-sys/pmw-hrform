@@ -8,13 +8,21 @@
  * response list, Form Config, approvers, version, log entry — with the builder's
  * defaults for everything a file does not carry.
  *
- * Only new forms are published. A file whose title or slug is already taken is
- * reported and skipped, so importing never overwrites a live form; changing one
- * stays a job for the builder, where the diff and version bump are recorded.
+ * By default only new forms are published: a file whose title or slug is
+ * already taken is reported and skipped, so importing never overwrites a live
+ * form. With `updateExisting`, such a file is published instead as the form's
+ * next version, the way the builder's republish does it: the form keeps its
+ * workflow, approvers, address, publish profile, label and document header,
+ * and its response list only gains columns for questions it did not have.
  */
 import type { LayerConfig, SurveyJson } from "../types";
 import {
   DEFAULT_PUBLISH_KEY,
+  getFormConfigByTitle,
+  getFormVersion,
+  getFormVersionHistory,
+  incrementMinor,
+  isVersionGreater,
   logEvent,
   provisionFormList,
   saveFormVersion,
@@ -37,7 +45,8 @@ export interface ImportFile {
   text: string;
 }
 
-export type PlanStatus = "ready" | "exists" | "invalid";
+/** `update`: already on the site, and will be published as its next version. */
+export type PlanStatus = "ready" | "update" | "exists" | "invalid";
 
 export interface PlannedForm {
   fileName: string;
@@ -48,6 +57,8 @@ export interface PlannedForm {
   status: PlanStatus;
   /** Why the file is skipped; absent when it is ready. */
   reason?: string;
+  /** For an update, the title of the form on the site, which names its lists. */
+  existingTitle?: string;
 }
 
 /** The forms already on the site, as `getAllFormConfigs` returns them. */
@@ -80,13 +91,18 @@ function readDefinition(text: string): { json: SurveyJson | null; reason?: strin
   return { json };
 }
 
+export interface PlanOptions {
+  /** Plan forms already on the site as `update` instead of skipping them. */
+  updateExisting?: boolean;
+}
+
 /**
  * Reads each file and decides whether it can be published. Pure: the caller
  * supplies the forms already on the site.
  */
-export function planImport(files: ImportFile[], existing: ExistingForm[]): PlannedForm[] {
-  const takenTitles = new Set(existing.map((f) => f.Title.trim().toLowerCase()));
-  const takenSlugs = new Set(existing.map((f) => slugify(f.Slug ?? "")).filter(Boolean));
+export function planImport(files: ImportFile[], existing: ExistingForm[], { updateExisting = false }: PlanOptions = {}): PlannedForm[] {
+  const byTitle = new Map(existing.map((f) => [f.Title.trim().toLowerCase(), f]));
+  const bySlug = new Map(existing.filter((f) => slugify(f.Slug ?? "")).map((f) => [slugify(f.Slug ?? ""), f]));
   const batchTitles = new Set<string>();
   const batchSlugs = new Set<string>();
 
@@ -98,10 +114,22 @@ export function planImport(files: ImportFile[], existing: ExistingForm[]): Plann
 
     if (!json) return { ...base, status: "invalid" as const, reason };
     if (!slug) return { ...base, status: "invalid" as const, reason: "The file name gives no slug." };
-    if (takenTitles.has(title.toLowerCase())) return { ...base, status: "exists" as const, reason: `A form titled "${title}" is already on this site.` };
-    if (takenSlugs.has(slug)) return { ...base, status: "exists" as const, reason: `/form/${slug} is already taken on this site.` };
+    const sameTitle = byTitle.get(title.toLowerCase());
+    const sameSlug = bySlug.get(slug);
     if (batchTitles.has(title.toLowerCase()) || batchSlugs.has(slug)) {
       return { ...base, status: "invalid" as const, reason: "Another file in this import has the same title or slug." };
+    }
+    if (sameTitle || sameSlug) {
+      const reason = sameTitle
+        ? `A form titled "${title}" is already on this site.`
+        : `/form/${slug} is already taken on this site.`;
+      if (!updateExisting) return { ...base, status: "exists" as const, reason };
+      if (sameTitle && sameSlug && sameTitle !== sameSlug) {
+        return { ...base, status: "invalid" as const, reason: `Its title is "${sameTitle.Title}" and its address belongs to "${sameSlug.Title}": two different forms, so neither is updated.` };
+      }
+      batchTitles.add(title.toLowerCase());
+      batchSlugs.add(slug);
+      return { ...base, status: "update" as const, existingTitle: (sameTitle ?? sameSlug)!.Title };
     }
     batchTitles.add(title.toLowerCase());
     batchSlugs.add(slug);
@@ -138,17 +166,40 @@ export interface PublishOptions {
   onLog?: (msg: string, type: string) => void;
 }
 
-export const publishDeps = { provisionFormList, upsertFormConfig, upsertApprovers, saveFormVersion, logEvent };
+export const publishDeps = {
+  provisionFormList,
+  upsertFormConfig,
+  upsertApprovers,
+  saveFormVersion,
+  logEvent,
+  getFormConfigByTitle,
+  getFormVersion,
+  getFormVersionHistory,
+};
 export type PublishDeps = typeof publishDeps;
 
-/** Publishes one planned form as a new live form, in the builder's order. */
+/** One minor version past the highest the form has had, current or saved. */
+export function nextFormVersion(current: string, saved: string[]): string {
+  const highest = [current, ...saved]
+    .map((v) => (v ?? "").trim())
+    .filter((v) => /^\d+(\.\d+)?$/.test(v))
+    .reduce((top, v) => (isVersionGreater(v, top) ? v : top), "1.0");
+  return incrementMinor(highest);
+}
+
+/**
+ * Publishes one planned form: a new form in the builder's order, or, for an
+ * `update` plan, the file as the existing form's next version.
+ */
 export async function publishPlannedForm(
   token: string,
   form: PlannedForm,
-  { layerConfig, isPublic, changedBy, onLog = () => {} }: PublishOptions,
+  options: PublishOptions,
   deps: PublishDeps = publishDeps,
 ): Promise<void> {
+  if (form.status === "update" && form.surveyJson) return publishUpdate(token, form, options, deps);
   if (form.status !== "ready" || !form.surveyJson) throw new Error(form.reason ?? "This form is not ready to publish.");
+  const { layerConfig, isPublic, changedBy, onLog = () => {} } = options;
   const { title, slug, formId, surveyJson } = form;
   const numLayers = layerConfig?.layers.length ?? 0;
   const publishKey = DEFAULT_PUBLISH_KEY;
@@ -206,5 +257,76 @@ export async function publishPlannedForm(
     summary: `Created form at /form/${slug} from ${form.fileName}`,
     before: null,
     after: { slug, version: VERSION, publishKey, publishLabel: PUBLISH_LABEL },
+  });
+}
+
+/**
+ * Saves the file as the next version of a form already on the site. The
+ * import's own approval step and link setting are not used: the form keeps
+ * its workflow, approvers, address, profile, label and header. Everything is
+ * read before anything is written, so a form that cannot be read is left as
+ * it was.
+ */
+async function publishUpdate(
+  token: string,
+  form: PlannedForm,
+  { changedBy, onLog = () => {} }: PublishOptions,
+  deps: PublishDeps,
+): Promise<void> {
+  const title = form.existingTitle ?? form.title;
+  const surveyJson = form.surveyJson as SurveyJson;
+  const config = await deps.getFormConfigByTitle(token, title);
+  if (!config) throw new Error(`"${title}" is no longer on this site.`);
+  const currentVersion = config.CurrentVersion?.trim() || "1.0";
+  const publishKey = config.CurrentPublishKey?.trim() || DEFAULT_PUBLISH_KEY;
+  const current = await deps.getFormVersion(token, title, currentVersion, publishKey);
+  if (!current) throw new Error(`Could not read the current version (v${currentVersion}) of "${title}", so its settings cannot be kept.`);
+  const history = await deps.getFormVersionHistory(token, title);
+  const version = nextFormVersion(currentVersion, history.map((h) => h.FormVersion));
+
+  const slug = config.Slug?.trim() || form.slug;
+  const formId = config.FormID?.trim() || form.formId;
+  const publishLabel = config.CurrentPublishLabel?.trim() || current.publishLabel?.trim() || PUBLISH_LABEL;
+  const numLayers = Number(config.NumberOfApprovalLayer) || 0;
+  const currentMeta = (current.meta ?? {}) as Record<string, unknown>;
+  let approvalRules: unknown;
+  try { approvalRules = config.ApprovalRules ? JSON.parse(config.ApprovalRules) : null; } catch { approvalRules = null; }
+
+  await deps.provisionFormList(token, title, surveyJson, onLog, { numLayers, minLayerColumns: 3 });
+  await deps.saveFormVersion(token, {
+    listTitle: title,
+    slug,
+    version,
+    publishKey,
+    publishLabel,
+    surveyJson,
+    meta: { ...currentMeta, formVersion: version },
+    changedBy,
+    layerConfig: current.layerConfig,
+  });
+  // Only now does the form point at the new version: a failed save above
+  // leaves the live form on the version it had.
+  await deps.upsertFormConfig(token, title, {
+    formId,
+    numLayers,
+    slug,
+    version,
+    currentPublishKey: publishKey,
+    currentPublishLabel: publishLabel,
+    isPublished: config.IsPublished ?? true,
+    isPublic: config.IsPublic ?? true,
+    conditionField: config.ConditionField ?? "",
+    approvalRules,
+    layerConfig: config.LayerConfig ?? "",
+    referenceConfig: config.ReferenceConfig ?? "",
+    groupByField: config.GroupByField ?? "",
+  });
+  await deps.logEvent(token, {
+    formTitle: title,
+    eventType: "PUBLISHED",
+    changedBy,
+    summary: `Published v${version} (${publishLabel}) from ${form.fileName}`,
+    before: { version: currentVersion },
+    after: { version, slug, publishKey, publishLabel },
   });
 }

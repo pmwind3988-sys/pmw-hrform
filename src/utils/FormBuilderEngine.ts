@@ -1206,8 +1206,8 @@ export interface SpColumnInfo {
 export function getSpColumnKind(
   field: Pick<FormBuilderField, 'type' | 'inputType' | 'choices'>
 ): SpColumnInfo | null {
-  // dynamicmatrix and tableinput are provisioned separately as _Html + _Json
-  if (field.type === 'dynamicmatrix' || field.type === 'tableinput' || field.type === 'matrixdynamic') return null;
+  // Tables are provisioned separately as _Json + _Response (and _Html for the repeating kinds)
+  if (field.type === 'dynamicmatrix' || field.type === 'tableinput' || field.type === 'matrixdynamic' || field.type === 'matrixdropdown') return null;
 
 
   // ── text type with inputType variants ─────────────────────────────────
