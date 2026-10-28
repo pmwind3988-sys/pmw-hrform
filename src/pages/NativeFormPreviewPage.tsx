@@ -27,6 +27,9 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
 import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
 import { DEMO_FORM } from "../native/demoForm";
+import PaperNeedsAnalysisInput, { compactNeedsAnswers, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
+import { isTrainingNeedsAnalysisForm } from "../utils/paperPdf/paperForms";
+import { TRAINING_NEEDS_ANALYSIS_SAMPLE } from "../utils/paperPdf/trainingFormSamples";
 import type { DocumentControlHeader } from "../types";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -37,6 +40,24 @@ const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
  * process. Every other slug is a real published form.
  */
 const DEMO_SLUG = "demo";
+/** The Training Needs Analysis as its paper form, with the preparer's Name and Designation questions. */
+const DEMO_NEEDS_SLUG = "demo-tna";
+
+function needsAnalysisDemo(): Record<string, unknown> {
+  const sample = TRAINING_NEEDS_ANALYSIS_SAMPLE.surveyJson as { pages: { name: string; elements: Record<string, unknown>[] }[] };
+  const elements = sample.pages[0].elements.map((el) => (el.type === "matrixdynamic" ? { ...el, isRequired: true, maxRows: 10 } : el));
+  return {
+    ...sample,
+    pages: [{
+      name: "page1",
+      elements: [
+        ...elements.map((el) => (el.type === "signaturepad" || el.name === "department" || el.name === "company" ? { ...el, isRequired: true } : el)),
+        { type: "text", name: "PreparedByName", title: "Name" },
+        { type: "text", name: "PreparedByDesignation", title: "Designation" },
+      ],
+    }],
+  };
+}
 
 interface LoadedForm {
   formConfig: Record<string, unknown>;
@@ -135,6 +156,9 @@ export default function NativeFormPreviewPage() {
   // exclusively from the promise's callbacks, never synchronously.
   const immediate = useMemo((): { data?: LoadedForm; error?: string } | null => {
     if (!formId) return { error: "No form slug in the URL. Try /native/<slug>." };
+    if (formId === DEMO_NEEDS_SLUG) {
+      return { data: { formConfig: { Title: "Training Needs Analysis", CurrentVersion: "demo" }, surveyJson: needsAnalysisDemo(), meta: {} } };
+    }
     if (formId !== DEMO_SLUG) return null;
     return {
       data: {
@@ -182,7 +206,11 @@ export default function NativeFormPreviewPage() {
   // Parsing is memoised on the loaded document, and the runtime reseeds itself
   // whenever that identity changes — so the form is never reparsed on a
   // keystroke, and a genuinely new form never inherits the old answers.
-  const form = useMemo(() => parseForm(loaded?.surveyJson ?? {}), [loaded]);
+  const paperNeedsAnalysis = isTrainingNeedsAnalysisForm(String(loaded?.formConfig?.Title || ""));
+  const form = useMemo(() => {
+    const parsed = parseForm(loaded?.surveyJson ?? {});
+    return paperNeedsAnalysis ? requirePreparedDesignation(parsed) : parsed;
+  }, [loaded, paperNeedsAnalysis]);
   const runtime = useNativeForm(form);
 
   const meta = loaded?.meta ?? {};
@@ -203,7 +231,7 @@ export default function NativeFormPreviewPage() {
     setConsentError("");
     if (!ok) return;
     // `foldOtherAnswers` mutates, and `collect` already returns a fresh object.
-    setPayload(foldOtherAnswers(runtime.collect()));
+    setPayload(foldOtherAnswers(paperNeedsAnalysis ? compactNeedsAnswers(runtime.form, runtime.collect()) : runtime.collect()));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -275,6 +303,21 @@ export default function NativeFormPreviewPage() {
               </div>
             </div>
           </section>
+        </div>
+      ) : paperNeedsAnalysis ? (
+        // As /form/:formId draws it. No directory here, so nothing is filled in for the preparer.
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px 64px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <PaperNeedsAnalysisInput runtime={runtime} />
+          <label className="nf-consent" data-invalid={!!consentError}>
+            <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); if (e.target.checked) setConsentError(""); }} />
+            <span lang={pdpaLocale}>
+              <strong>{pdpa.consentLabel}</strong>
+              {consentError && <span className="nf-error" style={{ marginTop: 6 }}>{consentError}</span>}
+            </span>
+          </label>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="button" className="nf-btn" onClick={handleSubmit}>Submit</button>
+          </div>
         </div>
       ) : (
         <NativeFormView

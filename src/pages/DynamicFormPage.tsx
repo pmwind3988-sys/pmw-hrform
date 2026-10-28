@@ -60,7 +60,8 @@ import { buildWorkflowReviewLink } from "../utils/workflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { buildManualPaperSubmissionEmail } from "../utils/manualPaperEmail";
-import { manualPaperDesign } from "../utils/paperPdf/paperForms";
+import { isTrainingNeedsAnalysisForm, manualPaperDesign } from "../utils/paperPdf/paperForms";
+import PaperNeedsAnalysisInput, { compactNeedsAnswers, needsAnalysisQuestions, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 import {
@@ -858,6 +859,9 @@ export default function DynamicFormPage() {
     return window.location.origin + window.location.pathname + (query ? `?${query}` : "");
   })();
   const tokenRef = useRef<string | null>(null);
+  // The same token as state, for the one reader that must wait for it: the
+  // paper Training Needs Analysis filling in the preparer's name and post.
+  const [spToken, setSpToken] = useState<string | null>(null);
   // Set when the signed-in user's own SharePoint credentials cannot reach the form
   // lists, so reads and writes both have to go through the public endpoints instead.
   const spDirectUnavailableRef = useRef(false);
@@ -890,7 +894,7 @@ export default function DynamicFormPage() {
     const account = instance.getAllAccounts()[0];
     if (!account) return;
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account }).then(token => { tokenRef.current = token; }).catch(() => {});
+    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account }).then(token => { tokenRef.current = token; setSpToken(token); }).catch(() => {});
   }, [isAuthenticated, inProgress, instance, activeAccountId]);
 
   useEffect(() => {
@@ -1279,10 +1283,14 @@ export default function DynamicFormPage() {
   const nativeForm = useMemo<NativeForm | null>(() => {
     if (!enrichedSurveyJson) return null;
     try {
-      return parseForm(enrichedSurveyJson);
+      const parsed = parseForm(enrichedSurveyJson);
+      // The paper Training Needs Analysis asks the preparer's designation as a must, as its Word form does.
+      const title = String(formData?.formConfig?.Title || enrichedSurveyJson.title || "");
+      return isTrainingNeedsAnalysisForm(title) ? requirePreparedDesignation(parsed) : parsed;
     } catch {
       return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enrichedSurveyJson]);
 
   // A hook cannot be called conditionally, so a form that has not loaded yet
@@ -1300,6 +1308,31 @@ export default function DynamicFormPage() {
   );
   const runtime = useNativeForm(nativeForm ?? placeholderForm, testRunSeed);
   const formReady = nativeForm !== null;
+
+  // The Training Needs Analysis is filled in as its paper form. The preparer's
+  // name and post are written in for them from the Approval Directory (the
+  // name falls back to their account); the post stays theirs to correct, and
+  // is left blank for someone the directory lists without one.
+  const paperNeedsAnalysis = formReady && isTrainingNeedsAnalysisForm(String(formData?.formConfig?.Title || nativeForm?.title || ""));
+  const [preparedBy, setPreparedBy] = useState<{ name: string; position: string }>({ name: "", position: "" });
+  useEffect(() => {
+    if (!paperNeedsAnalysis || !nativeForm || !userEmail) return;
+    let cancelled = false;
+    void (async () => {
+      const row = spToken
+        ? await createApprovalDirectoryReader(spToken).lookupPerson(userEmail).catch(() => null)
+        : null;
+      if (cancelled) return;
+      const name = (row?.name || accounts[0]?.name || "").trim();
+      const position = (row?.position || "").trim();
+      setPreparedBy({ name, position });
+      const { name: nameQuestion, designation } = needsAnalysisQuestions(nativeForm);
+      if (nameQuestion && name && !String(runtime.getValue(nameQuestion.name) ?? "").trim()) runtime.setValue(nameQuestion.name, name);
+      if (designation && position && !String(runtime.getValue(designation.name) ?? "").trim()) runtime.setValue(designation.name, position);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paperNeedsAnalysis, nativeForm, userEmail, spToken]);
 
   /*
     Answers survive a forced sign-in.
@@ -1395,7 +1428,8 @@ export default function DynamicFormPage() {
     }
 
     setPdpaConsentError("");
-    const collected = runtime.collect();
+    // The paper Training Needs Analysis keeps its row numbers while filling; blank rows are not submitted.
+    const collected = paperNeedsAnalysis ? compactNeedsAnswers(runtime.form, runtime.collect()) : runtime.collect();
     lastDataRef.current = collected;
     setHasUploads(
       runtime.form.questions.some((q) => {
@@ -1406,7 +1440,7 @@ export default function DynamicFormPage() {
     );
     setSubmitStatus("loading");
     return true;
-  }, [formReady, submitStatus, runtime, pdpaAccepted, pdpa.ui.consentRequired]);
+  }, [formReady, submitStatus, runtime, pdpaAccepted, pdpa.ui.consentRequired, paperNeedsAnalysis]);
 
   /*
     "Simulate submission". Two passes, because both the sample answers and the
@@ -2505,7 +2539,7 @@ export default function DynamicFormPage() {
                 <button onClick={() => setRestoredAfterSignIn(false)} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'", flexShrink: 0 }}>Dismiss</button>
               </div>
             )}
-            {formReady ? <div className="dfp-survey-wrap"><NativeFormView runtime={runtime} dark={dark} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
+            {formReady ? <div className="dfp-survey-wrap">{paperNeedsAnalysis ? <PaperNeedsAnalysisInput runtime={runtime} disabled={submitStatus === "loading"} preparedByName={preparedBy.name} preparedByPosition={preparedBy.position} /> : <NativeFormView runtime={runtime} dark={dark} />}</div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
             {formReady && isLastSurveyPage && (
               <>
                 {isTestRun && (

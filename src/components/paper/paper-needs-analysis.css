@@ -1,0 +1,209 @@
+/*
+ * paper-needs-analysis.css — The Training Needs Analysis filled in as HR's
+ * Word form: ruled boxes, light-blue header band, tick boxes.
+ *
+ * Paper is always white with black ink, dark theme or not. Layout follows the
+ * sheet's own width (`@container`), as the native form does, so a phone gets
+ * one card per person instead of a nine-column table it cannot fit.
+ */
+.pna {
+  --pna-ink: #111111;
+  --pna-rule: #333333;
+  --pna-band: #daeef3;
+  --pna-muted: #555555;
+  --pna-error: #b3261e;
+  --pna-focus: #0078d4;
+  --pna-fill: #fffbe8;
+  container-type: inline-size;
+  background: #ffffff;
+  color: var(--pna-ink);
+  border: 1px solid var(--pna-rule);
+  border-radius: 4px;
+  padding: 24px 24px 28px;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.35;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* The app forces its font on every element through this variable (`*`, !important), so the paper sets the variable. */
+.pna { --pmw-font-main: Helvetica, Arial, sans-serif; }
+
+.pna-req { color: var(--pna-error); }
+.pna-error { color: var(--pna-error); font-size: 12.5px; margin-top: 6px; }
+.pna-hint { color: var(--pna-muted); font-size: 12px; }
+
+/* ── Tick boxes ─────────────────────────────────────────────────────────── */
+.pna-tick {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--pna-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.pna-tick:hover:not(:disabled) { background: #eef5fb; }
+.pna-tick:focus-visible { outline: 2px solid var(--pna-focus); outline-offset: -2px; }
+.pna-tick:disabled { cursor: default; }
+.pna-tick[aria-pressed="true"] { font-weight: 700; }
+.pna-box {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--pna-rule);
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* ── Company ────────────────────────────────────────────────────────────── */
+.pna-companies {
+  display: grid;
+  grid-template-columns: 150px repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--pna-rule);
+  border-left: 1px solid var(--pna-rule);
+}
+.pna-companies > * { border-right: 1px solid var(--pna-rule); border-bottom: 1px solid var(--pna-rule); }
+.pna-companies-label { grid-row: span var(--pna-company-rows, 4); padding: 6px 8px; font-weight: 700; }
+.pna-companies[data-invalid="true"] { box-shadow: inset 3px 0 0 var(--pna-error); }
+
+/* ── Department / Year ──────────────────────────────────────────────────── */
+.pna-head {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1.6fr) 90px minmax(0, 1fr);
+  border-top: 1px solid var(--pna-rule);
+  border-left: 1px solid var(--pna-rule);
+}
+.pna-head > * { border-right: 1px solid var(--pna-rule); border-bottom: 1px solid var(--pna-rule); min-width: 0; }
+.pna-head-label { padding: 8px; font-weight: 700; display: flex; align-items: center; }
+.pna-head-value { padding: 4px 8px; display: flex; align-items: center; }
+.pna-head-value .nf { width: 100%; background: transparent; }
+.pna-head-value .nf-field { margin: 0; }
+
+/* ── The training-needs table ───────────────────────────────────────────── */
+.pna-table-scroll { overflow-x: auto; }
+.pna-table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 900px; }
+.pna-table th,
+.pna-table td { border: 1px solid var(--pna-rule); vertical-align: top; }
+.pna-table th { background: var(--pna-band); padding: 6px 4px; font-size: 12px; font-weight: 700; text-align: center; vertical-align: middle; }
+.pna-table td { padding: 0; }
+.pna-no { text-align: center; vertical-align: middle !important; padding: 4px !important; }
+.pna-no-label { display: block; }
+.pna-row-word { display: none; }
+.pna-clear {
+  margin-top: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--pna-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+.pna-clear:hover { color: var(--pna-error); }
+.pna-cell {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 6px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pna-ink);
+  resize: none;
+  min-height: 36px;
+}
+.pna-cell[type="date"] { font-weight: 400; }
+.pna-cell:focus { outline: 2px solid var(--pna-focus); outline-offset: -2px; background: #f4f9ff; }
+.pna-ticks { display: flex; flex-direction: column; padding: 2px 0; }
+.pna-table[data-invalid="true"] { outline: 2px solid var(--pna-error); outline-offset: 2px; }
+.pna-table-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; font-size: 12.5px; color: var(--pna-muted); }
+.pna-add {
+  border: 1px solid var(--pna-rule);
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 8px 14px;
+  min-height: 40px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pna-ink);
+  cursor: pointer;
+}
+.pna-add:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Sign-off ───────────────────────────────────────────────────────────── */
+.pna-signoff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--pna-rule); }
+.pna-signoff-col { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pna-signoff-col + .pna-signoff-col { border-left: 1px solid var(--pna-rule); }
+.pna-signoff-col[data-later="true"] { color: #444444; }
+.pna-caption { font-weight: 700; color: var(--pna-ink); }
+.pna-sign .nf { background: transparent; }
+.pna-sign .nf-field { margin: 0; }
+.pna-sign-later { height: 72px; border-bottom: 1px solid var(--pna-rule); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #5b6573; text-align: center; }
+.pna-line { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+.pna-line > label,
+.pna-line > span:first-child { width: 96px; flex-shrink: 0; }
+.pna-line-value { flex: 1; min-width: 0; min-height: 22px; border-bottom: 1px solid var(--pna-rule); padding: 2px; font-weight: 700; overflow-wrap: anywhere; }
+.pna-line-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--pna-rule);
+  border-radius: 0;
+  padding: 3px 4px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pna-ink);
+  background: var(--pna-fill);
+}
+.pna-line-input[readonly] { background: transparent; }
+.pna-line-input[aria-invalid="true"] { border-bottom: 2px solid var(--pna-error); }
+.pna-line-input:focus { outline: 2px solid var(--pna-focus); outline-offset: 2px; }
+.pna-line-note { padding-left: 106px; }
+
+.pna-others { background: transparent; }
+
+/* ── Phone: one card per person ─────────────────────────────────────────── */
+@container (max-width: 700px) {
+  .pna { padding: 16px 14px 20px; }
+  .pna-companies { grid-template-columns: minmax(0, 1fr); }
+  .pna-companies-label { grid-row: auto; }
+  .pna-head { grid-template-columns: 110px minmax(0, 1fr); }
+
+  .pna-table-scroll { overflow: visible; }
+  .pna-table { min-width: 0; table-layout: auto; }
+  .pna-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .pna-table,
+  .pna-table tbody { display: block; }
+  .pna-table tr { display: block; border: 1px solid var(--pna-rule); margin-bottom: 12px; }
+  .pna-table td { display: grid; grid-template-columns: 116px minmax(0, 1fr); border: 0; border-bottom: 1px solid #c9ced6; }
+  .pna-table td:last-child { border-bottom: 0; }
+  .pna-table td::before { content: attr(data-label); padding: 8px 8px; font-size: 12px; font-weight: 700; background: var(--pna-band); }
+  .pna-table td.pna-no { display: flex; justify-content: space-between; align-items: center; background: var(--pna-band); text-align: left; padding: 6px 10px !important; }
+  .pna-table td.pna-no::before { content: none; }
+  .pna-no-label { font-weight: 700; }
+  .pna-row-word { display: inline; }
+  .pna-ticks { flex-direction: row; flex-wrap: wrap; }
+  .pna-ticks .pna-tick { width: auto; min-height: 40px; }
+  .pna-cell { font-size: 16px; }
+
+  .pna-signoff { grid-template-columns: minmax(0, 1fr); }
+  .pna-signoff-col + .pna-signoff-col { border-left: 0; border-top: 1px solid var(--pna-rule); }
+  .pna-line > label,
+  .pna-line > span:first-child { width: 86px; }
+  .pna-line-note { padding-left: 96px; }
+  .pna-line-input { font-size: 16px; }
+}

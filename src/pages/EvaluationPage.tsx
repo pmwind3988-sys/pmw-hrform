@@ -30,7 +30,7 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import PaperPartTwoInput, { supportsPaperPartTwo, type PaperSignOff } from "../components/paper/PaperPartTwoInput";
 import { paperDocumentFromAnswers, surveyAnswerKeys } from "../utils/paperPdf/submissionPaperView";
 import { isTrainingEvaluationForm } from "../utils/paperPdf/trainingEvaluationLayout";
-import { hasPaperApproval, hasPaperForm } from "../utils/paperPdf/paperForms";
+import { hasPaperApproval, hasPaperForm, isTrainingNeedsAnalysisForm } from "../utils/paperPdf/paperForms";
 import PaperApprovalSignOff, { paperApprovalLabels } from "../components/paper/PaperApprovalSignOff";
 import type { PdfLayerResult } from "../utils/FormPdfDocument";
 import ReviewerStyles from "../components/reviewer/ReviewerStyles";
@@ -431,6 +431,8 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
   // Asked before the paper Part II is sent; what was sent is kept to draw the finished form.
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const [submittedSignOff, setSubmittedSignOff] = useState<PaperSignOff | null>(null);
+  // Set when a Training Needs Analysis approver tries to decide without a designation.
+  const [positionMissing, setPositionMissing] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
 
   /**
@@ -1169,7 +1171,23 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
   // the record will be stamped with. Position falls back to the layer title.
   const signerName = viewerSignOff?.name || signedInApprover;
   const signerPosition = signOffPosition(viewerSignOff?.position, approverRoleLabel);
-  const paperSignOff: PaperSignOff = signOffDraft ?? { name: signerName || "", position: signerPosition || "", date: todayPaperDate() };
+  // The Training Needs Analysis signs with the approver's own post, which they
+  // must give: blank when the directory has none, never the step's title.
+  const positionRequired = paperApproval && isTrainingNeedsAnalysisForm(formTitle);
+  const paperSignOff: PaperSignOff = signOffDraft ?? {
+    name: signerName || "",
+    position: (positionRequired ? viewerSignOff?.position?.trim() : signerPosition) || "",
+    date: todayPaperDate(),
+  };
+  /** Stops a decision with no designation, and points the approver at the box. */
+  const positionGiven = (): boolean => {
+    if (!positionRequired || paperSignOff.position.trim()) return true;
+    setPositionMissing(true);
+    const box = document.getElementById("paper-approval-designation");
+    box?.scrollIntoView({ behavior: "smooth", block: "center" });
+    box?.focus({ preventScroll: true });
+    return false;
+  };
   const paperApprovalLabel = paperApproval
     ? paperApprovalLabels(formTitle, effectiveLayerNumber, totalLayers, currentLayer?.title || "")
     : null;
@@ -1448,7 +1466,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                   verdict="rejected"
                   label={signOffLabel("rejected")}
                   name={signerName}
-                  position={signerPosition}
+                  position={positionRequired ? paperSignOff.position : signerPosition}
                   date={todayLabel()}
                   onBehalfOf={pendingOnBehalf}
                 />
@@ -1460,7 +1478,15 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                 <button
                   type="button"
                   className="rv-btn"
-                  onClick={() => { setRejecting(false); void handleSubmit("reject"); }}
+                  onClick={() => {
+                    setRejecting(false);
+                    if (!positionRequired) {
+                      void handleSubmit("reject");
+                      return;
+                    }
+                    setSubmittedSignOff(paperSignOff);
+                    void handleSubmit("reject", paperSignOff);
+                  }}
                   style={{ ...btnDanger, padding: "0 24px", opacity: isSubmitting ? 0.6 : 1 }}
                   disabled={isSubmitting}
                 >
@@ -1511,7 +1537,13 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                   role={paperApprovalLabel.role}
                   positionLabel={paperApprovalLabel.positionLabel}
                   signOff={paperSignOff}
-                  onSignOffChange={setSignOffDraft}
+                  onSignOffChange={(next) => {
+                    setSignOffDraft(next);
+                    if (next.position.trim()) setPositionMissing(false);
+                  }}
+                  positionRequired={positionRequired}
+                  positionFromDirectory={Boolean(viewerSignOff?.position?.trim()) && paperSignOff.position === viewerSignOff?.position?.trim()}
+                  positionError={positionMissing ? "Enter your designation before you approve or reject." : ""}
                   onBehalfOf={pendingOnBehalf}
                   disabled={isSubmitting}
                   signatureSlot={<SignatureField value={signatureData} onChange={setSignatureData} disabled={isSubmitting} />}
@@ -1596,7 +1628,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                     type="button"
                     ref={rejectButtonRef}
                     className="rv-btn"
-                    onClick={() => setRejecting(true)}
+                    onClick={() => { if (positionGiven()) setRejecting(true); }}
                     style={btnDangerOutline}
                     disabled={isSubmitting}
                   >
@@ -1610,6 +1642,7 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
                         void handleSubmit("approve");
                         return;
                       }
+                      if (!positionGiven()) return;
                       setSubmittedSignOff(paperSignOff);
                       void handleSubmit("approve", paperSignOff);
                     }}

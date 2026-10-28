@@ -57,26 +57,38 @@ function rosterCell(kit: PaperKit, column: MatrixColumn | undefined, row: Record
   return { text };
 }
 
+/**
+ * The Word form's columns in its order, each with the form's own column that
+ * asks it (or none), then any column the Word form does not have. Shared by
+ * the printout and the on-screen form the HOD fills in, so both agree.
+ */
+export function matchNeedsColumns<C extends { name: string; title?: string }>(columns: C[]): { label: string; width: number; column: C | undefined }[] {
+  const used = new Set<C>();
+  const placed = NEEDS_COLUMNS.map((spec) => {
+    const found = columns.find((c) => !used.has(c) && spec.match.test(`${c.name} ${c.title ?? ""}`));
+    if (found) used.add(found);
+    return { label: spec.label, width: spec.width, column: found };
+  });
+  const extra = columns.filter((c) => !used.has(c)).map((c) => ({ label: c.title || c.name, width: 10, column: c as C | undefined }));
+  return [...placed, ...extra];
+}
+
+/** The preparer's Name and Designation questions, matched as the printout matches them. */
+export const PREPARED_NAME_MATCH = /prepared.*name|hod.*name/i;
+export const PREPARED_DESIGNATION_MATCH = /designation|position/i;
+
 export function buildTrainingNeedsAnalysisSections(kit: PaperKit): PaperSection[] {
   const pick = new QuestionPicker(kit);
   const department = pick.take(/department/i);
   const year = pick.take(/\byear\b/i);
   const matrix = pick.take(/./, ["matrixdynamic", "dynamicmatrix", "tableinput"]);
   const preparedSignature = pick.take(/prepared|hod|signature/i, ["signaturepad"]);
-  const preparedName = pick.take(/prepared.*name|hod.*name/i);
-  const preparedDesignation = pick.take(/designation|position/i);
+  const preparedName = pick.take(PREPARED_NAME_MATCH);
+  const preparedDesignation = pick.take(PREPARED_DESIGNATION_MATCH);
 
   // The table's columns, matched to the Word form's; a column it does not have is added at the end.
   const answer = matrix ? kit.read(matrix) : null;
-  const columns = answer?.matrixColumns ?? [];
-  const used = new Set<MatrixColumn>();
-  const placed = NEEDS_COLUMNS.map((spec) => {
-    const found = columns.find((c) => !used.has(c) && spec.match.test(`${c.name} ${c.title ?? ""}`));
-    if (found) used.add(found);
-    return { label: spec.label, width: spec.width, column: found };
-  });
-  const extra = columns.filter((c) => !used.has(c)).map((c) => ({ label: c.title || c.name, width: 10, column: c as MatrixColumn | undefined }));
-  const all = [...placed, ...extra];
+  const all = matchNeedsColumns(answer?.matrixColumns ?? []);
   // Widths are shares of the row once the No column has its 6%.
   const total = all.reduce((sum, c) => sum + c.width, 0);
   const widths = [6, ...all.map((c) => (c.width / total) * 94)];
