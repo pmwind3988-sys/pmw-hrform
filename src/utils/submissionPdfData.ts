@@ -103,7 +103,7 @@ export async function loadPdfData(item: PdfSubmissionRef, token: string): Promis
     return {
       surveyJson: surveyContent as PdfFormData["surveyJson"],
       responseData: data,
-      layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig),
+      layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig, [cfg.LayerConfig]),
       meta: {
         submittedBy: item.SubmittedBy || "",
         submittedAt: item.SubmittedAt || "",

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { parseLayerConfig, selectWorkflowLayer } from "./workflowReviewLink";
+import { parseLayerConfig, selectWorkflowLayer, submissionLayerConfig } from "./workflowReviewLink";
 import { buildWorkflowReviewLink, withWorkflowRoutePrefix } from "./workflowLink";
 
 const approval = (layerNumber: number, extra: Record<string, unknown> = {}) => ({
@@ -159,5 +159,19 @@ describe("withWorkflowRoutePrefix", () => {
   it("is idempotent, so re-sending a corrected link changes nothing", () => {
     const once = withWorkflowRoutePrefix("https://forms.example.com/eval/slug/2/1", "approval");
     expect(withWorkflowRoutePrefix(once, "approval")).toBe(once);
+  });
+});
+
+describe("submissionLayerConfig", () => {
+  it("uses the steps published with the submission's own link over the live setup", () => {
+    const own = { layers: [evaluation(1, { surveyElements: [{ type: "boolean", name: "Objective_Met" }] })] };
+    const live = { layers: [evaluation(1, { surveyElements: [{ type: "boolean", name: "objectiveMet" }] })] };
+    expect(submissionLayerConfig(own, JSON.stringify(live))).toEqual(own);
+  });
+
+  it("falls back to the live setup for a version published without steps", () => {
+    const live = { layers: [approval(1)] };
+    expect(submissionLayerConfig(undefined, JSON.stringify(live))).toEqual(live);
+    expect(submissionLayerConfig({ layers: [] }, live)).toEqual(live);
   });
 });

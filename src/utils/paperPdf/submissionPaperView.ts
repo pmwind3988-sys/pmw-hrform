@@ -11,6 +11,7 @@ import type { PdfFormData, PdfLayerResult } from "../FormPdfDocument";
 import { formatPdfDateTimeValue } from "../pdfFieldFormatting";
 import { responseKeyForQuestion } from "../formSubmissionLayout";
 import { buildPaperDocument, type PaperDocument } from "./paperLayout";
+import { questionsMatchingAnswers } from "../evaluationQuestionMatch";
 
 type El = Record<string, unknown>;
 
@@ -72,7 +73,7 @@ function evaluationElementsFor(layerConfig: unknown, layerNumber: number): El[] 
   return layer && Array.isArray(layer.surveyElements) ? layer.surveyElements.filter(isRecord) : undefined;
 }
 
-function layerResult(layer: ApprovalLayerResult | EvaluationLayerResult, layerConfig: unknown): PdfLayerResult {
+function layerResult(layer: ApprovalLayerResult | EvaluationLayerResult, layerConfigs: readonly unknown[]): PdfLayerResult {
   const shared = {
     layerNumber: layer.layerNumber,
     status: layer.rawStatus || layer.status,
@@ -91,7 +92,12 @@ function layerResult(layer: ApprovalLayerResult | EvaluationLayerResult, layerCo
       signOffDate: layer.signOffDate || undefined,
       signature: layer.signature || undefined,
       evaluationFields: layer.fields ?? {},
-      evaluationSurveyElements: evaluationElementsFor(layerConfig, layer.layerNumber),
+      // The submission's own link first; the live setup for answers saved
+      // against it. See evaluationQuestionMatch.ts.
+      evaluationSurveyElements: questionsMatchingAnswers(
+        layerConfigs.map((config) => evaluationElementsFor(config, layer.layerNumber)),
+        layer.fields,
+      ),
     };
   }
   return {
@@ -147,6 +153,6 @@ export function paperDocumentFromSubmission(item: Submission, submissionData: Re
     formStatus: item.formStatus,
     formVersion: item.formVersion,
     referenceNo: item.referenceNo,
-    layerResults: layers.map((l) => layerResult(l, item.layerConfig)),
+    layerResults: layers.map((l) => layerResult(l, [item.versionLayerConfig, item.layerConfig])),
   });
 }

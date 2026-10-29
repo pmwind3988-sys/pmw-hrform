@@ -456,6 +456,7 @@ function mapSubmission(
   listMetaMap: Record<string, ListMetaEntry>,
   layerConfigs?: Record<string, LayerConfig | null>,
   surveyJsonByFormVersion?: Record<string, Record<string, SurveyJson | null>>,
+  layerConfigByFormVersion?: Record<string, Record<string, LayerConfig | null>>,
 ): Submission {
   const id = String(raw.Id || "");
   const formId =
@@ -683,6 +684,7 @@ function mapSubmission(
     selectedBranch,
     enhancedLayers: enhancedLayers.length > 0 ? enhancedLayers : undefined,
     layerConfig: cfg,
+    versionLayerConfig: layerConfigByFormVersion?.[listTitle]?.[surveySnapshotKey(formVersion, publishKey)] ?? null,
     surveyJson,
     isTest: isTestRow(raw),
   };
@@ -1377,7 +1379,7 @@ export default function App() {
                 orderby: "Created desc",
                 top: DASHBOARD_LIST_PAGE_SIZE,
               });
-              return items.map((item) => mapSubmission(item, list.title, fetchMetaMap, config.layerConfigs, config.surveyJsonByFormVersion));
+              return items.map((item) => mapSubmission(item, list.title, fetchMetaMap, config.layerConfigs, config.surveyJsonByFormVersion, config.layerConfigByFormVersion));
             } catch {
               return [] as Submission[];
             } finally {

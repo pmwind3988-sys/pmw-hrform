@@ -143,7 +143,7 @@ async function loadPdfDataForRow(
   return {
     surveyJson: surveyContent as PdfFormData["surveyJson"],
     responseData: data,
-    layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig),
+    layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig, [cfg.LayerConfig]),
     meta: {
       submittedBy: valueToText(respItem.SubmittedBy),
       submittedAt: valueToText(respItem.SubmittedAt),

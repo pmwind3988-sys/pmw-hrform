@@ -67,6 +67,12 @@ export interface Submission {
   enhancedLayers?: (ApprovalLayerResult | EvaluationLayerResult | null)[];
   /** Enhanced layer system: raw layer config for this form (loaded from Master Form) */
   layerConfig?: LayerConfig | null;
+  /**
+   * The steps published with the version and link this submission came
+   * through. Its evaluation answers are read against these first, falling
+   * back to `layerConfig` for answers saved against the live setup.
+   */
+  versionLayerConfig?: LayerConfig | null;
   /** Published form schema for ordering submitted answers in dashboard/PDF views */
   surveyJson?: SurveyJson | null;
   /** Whether this row is a test-run rehearsal rather than a production submission. */
@@ -467,6 +473,8 @@ export interface LoadedConfig {
   allowedTitles: Set<string>;
   layerConfigs?: Record<string, LayerConfig | null>;
   surveyJsonByFormVersion?: Record<string, Record<string, SurveyJson | null>>;
+  /** Each published version and link's own steps, keyed like `surveyJsonByFormVersion`'s exact entries. */
+  layerConfigByFormVersion?: Record<string, Record<string, LayerConfig | null>>;
 }
 
 // Status config for badges

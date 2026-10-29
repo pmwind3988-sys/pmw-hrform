@@ -43,6 +43,21 @@ export function parseLayerConfig(raw: unknown): ParsedLayerConfig | null {
   return manualBranches ? { layers, manualBranches } : { layers };
 }
 
+/**
+ * The steps a stored submission is following: the ones published with the
+ * version and link it was submitted through, falling back to the form's live
+ * setup only for a version that carried none.
+ *
+ * A separate publish link has its own copy of each step, and its evaluator
+ * questions may be named differently from the main link's. Drawing the live
+ * setup's questions saved the answers under names the PDF — which reads the
+ * submission's own version, as `api/evaluate.ts` does — never looks up, so
+ * the evaluation printed blank.
+ */
+export function submissionLayerConfig(versionLayerConfig: unknown, liveLayerConfig: unknown): ParsedLayerConfig | null {
+  return parseLayerConfig(versionLayerConfig) ?? parseLayerConfig(liveLayerConfig);
+}
+
 /** What two candidate layers must agree on before either may build the link. */
 function linkShape(layer: LayerConfigItem): string {
   return [

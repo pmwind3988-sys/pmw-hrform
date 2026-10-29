@@ -46,7 +46,7 @@ import { btnDanger, btnDangerOutline, btnDisabled, btnGhost, btnPrimary, eyebrow
 import LockIcon from "@mui/icons-material/Lock";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
-import { parseLayerConfig } from "../utils/workflowReviewLink";
+import { submissionLayerConfig } from "../utils/workflowReviewLink";
 import { getActiveLayers } from "../components/builder/approvalDashboardLayerProgress";
 import { apiIdentityHeaders } from "../utils/apiIdentity";
 import { approverDisplayName } from "../utils/approverIdentity";
@@ -135,7 +135,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
     await generateAndStorePdf(token, listTitle, responseItemId, {
       surveyJson: surveyContent as PdfFormData["surveyJson"],
       responseData: data,
-      layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig),
+      layerResults: buildPdfLayerResults(respItem, 10, parsed.layerConfig ?? cfg.LayerConfig, [cfg.LayerConfig]),
       meta: {
         submittedBy: (respItem.SubmittedBy as string) || "",
         submittedAt: (respItem.SubmittedAt as string) || "",
@@ -615,10 +615,25 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
         }
 
         const fields = (json.data.fields || {}) as Record<string, unknown>;
+
+        // The form's own definition — what to draw, and the logo to draw it
+        // under. Not anybody's personal data, so it is still read from here.
+        const itemFormVersion = valueToText(fields.FormVersion);
+        const parsed = itemFormVersion
+          ? await getVersionPayload(token, resolvedTitle, itemFormVersion, valueToText(fields.PublishKey))
+          : null;
+        if (parsed) {
+          setSurveyJson(parsed.surveyJson || parsed);
+          const meta = isRecord(parsed.meta) ? parsed.meta : {};
+          setLogoUrl(valueToText(meta.logoUrl));
+        }
+
         // Branch-aware, using the branch the server read off the record, so the
-        // sequence here is the one the submission is actually following.
+        // sequence here is the one the submission is actually following — and
+        // taken from the link it was submitted through, so the questions drawn
+        // are the ones its PDF prints.
         const sequence = getActiveLayers(
-          parseLayerConfig(slugJson.value?.[0]?.LayerConfig),
+          submissionLayerConfig(parsed?.layerConfig, slugJson.value?.[0]?.LayerConfig),
           valueToText(json.data.selectedBranch),
         );
         setResponseData(fields);
@@ -655,20 +670,6 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
             position: valueToText(json.data.actingOnBehalfOf.position),
           }
           : null);
-        const data = { responseFields: fields };
-
-        // The form's own definition — what to draw, and the logo to draw it
-        // under. Not anybody's personal data, so it is still read from here.
-        const itemFormVersion = data.responseFields.FormVersion as string | undefined;
-        if (itemFormVersion) {
-          const itemPublishKey = valueToText(data.responseFields.PublishKey);
-          const parsed = await getVersionPayload(token, resolvedTitle, itemFormVersion, itemPublishKey);
-          if (parsed) {
-            setSurveyJson(parsed.surveyJson || parsed);
-            const meta = isRecord(parsed.meta) ? parsed.meta : {};
-            setLogoUrl(valueToText(meta.logoUrl));
-          }
-        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load data.");
       }

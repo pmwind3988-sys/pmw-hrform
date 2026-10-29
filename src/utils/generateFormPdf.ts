@@ -8,6 +8,7 @@ import { uploadFormPdf, deleteFormPdf, spPatch, ensurePdfUrlColumn, readMatrixCh
 import type { MatrixColumnDef } from "./formBuilderSP";
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { readOnBehalfOf } from "./layerRecipients";
+import { questionsMatchingAnswers } from "./evaluationQuestionMatch";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -99,9 +100,16 @@ export function buildPdfLayerResults(
   rawResponse: Record<string, unknown>,
   maxLayerCount = 10,
   layerConfig?: unknown,
+  /**
+   * Other copies of the steps — the form's live setup — whose evaluation
+   * questions are printed instead when the saved answers match them rather
+   * than `layerConfig`'s. See `evaluationQuestionMatch.ts`.
+   */
+  otherLayerConfigs: readonly unknown[] = [],
 ): PdfLayerResult[] {
   const results: PdfLayerResult[] = [];
   const evalElementsByLayer = evaluationElementsByLayer(layerConfig, rawResponse.SelectedBranch);
+  const otherEvalElementsByLayer = otherLayerConfigs.map((config) => evaluationElementsByLayer(config, rawResponse.SelectedBranch));
   const titlesByLayer = layerTitlesByLayer(layerConfig, rawResponse.SelectedBranch);
 
   // Parse EvaluationData JSON if present
@@ -139,7 +147,10 @@ export function buildPdfLayerResults(
     if (isEval && evalData[n]) {
       const ed = evalData[n] as Record<string, unknown>;
       entry.evaluationFields = ed.fields as Record<string, unknown> || {};
-      entry.evaluationSurveyElements = evaluationSurveyElements;
+      entry.evaluationSurveyElements = questionsMatchingAnswers(
+        [evaluationSurveyElements, ...otherEvalElementsByLayer.map((byLayer) => byLayer.get(n))],
+        entry.evaluationFields,
+      );
       entry.confirmerEmail = ed.confirmerEmail as string || "";
       entry.confirmerName = ed.confirmerName as string || "";
       const signOff = ed.signOff as { date?: unknown } | null | undefined;

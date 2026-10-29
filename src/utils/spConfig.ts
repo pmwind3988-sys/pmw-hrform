@@ -139,6 +139,7 @@ export async function loadConfig(
   const allowedTitles = new Set<string>();
   const layerConfigs: Record<string, LayerConfig | null> = {};
   const surveyJsonByFormVersion: Record<string, Record<string, SurveyJson | null>> = {};
+  const layerConfigByFormVersion: Record<string, Record<string, LayerConfig | null>> = {};
 
   try {
     const configItems = await spClient.queryList("Master Form", {
@@ -214,9 +215,12 @@ export async function loadConfig(
       if (!formTitle || !formVersion || typeof rawSurveyJson !== "string" || !rawSurveyJson.trim()) continue;
 
       let parsedSurveyJson: SurveyJson | null = null;
+      let parsedLayerConfig: LayerConfig | null = null;
       try {
-        const parsed = JSON.parse(rawSurveyJson) as { surveyJson?: unknown; pages?: unknown };
+        const parsed = JSON.parse(rawSurveyJson) as { surveyJson?: unknown; pages?: unknown; layerConfig?: unknown };
         const candidate = parsed.surveyJson ?? parsed;
+        const layers = parsed.layerConfig as { layers?: unknown } | null | undefined;
+        if (layers && typeof layers === "object" && Array.isArray(layers.layers)) parsedLayerConfig = layers as LayerConfig;
         if (candidate && typeof candidate === "object" && !Array.isArray(candidate) && Array.isArray((candidate as { pages?: unknown }).pages)) {
           parsedSurveyJson = candidate as SurveyJson;
         }
@@ -229,6 +233,8 @@ export async function loadConfig(
       // survey snapshot. Keying by version alone let the last row read win, so
       // a submission could render against another profile's schema.
       surveyJsonByFormVersion[formTitle][surveySnapshotKey(formVersion, publishKey)] = parsedSurveyJson;
+      if (!layerConfigByFormVersion[formTitle]) layerConfigByFormVersion[formTitle] = {};
+      layerConfigByFormVersion[formTitle][surveySnapshotKey(formVersion, publishKey)] = parsedLayerConfig;
       // Version-only fallback, for submissions written before PublishKey was
       // recorded. The default profile wins it outright; otherwise first row
       // seen holds it, rather than whichever happened to be read last.
@@ -248,6 +254,7 @@ export async function loadConfig(
     allowedTitles,
     layerConfigs,
     surveyJsonByFormVersion,
+    layerConfigByFormVersion,
   };
 }
 
