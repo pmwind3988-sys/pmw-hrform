@@ -238,6 +238,11 @@ function isSharePointSource(value: string, siteUrl = SP_SITE_URL): boolean {
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith("data:")) return false;
   if (/^\/(sites|teams)\//i.test(trimmed)) return true;
+  // Only an absolute address can name another place on the site. Resolving
+  // anything else against the site's origin made every typed answer "a
+  // SharePoint file" - and the URL-field split before this check had already
+  // cut it at its first comma, so the PDF printed half a sentence.
+  if (!/^https?:\/\//i.test(trimmed)) return false;
   try {
     const site = new URL(siteUrl);
     const candidate = new URL(trimmed, site.origin);
