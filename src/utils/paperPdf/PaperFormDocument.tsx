@@ -71,7 +71,11 @@ const P = StyleSheet.create({
   longSublabel: { marginBottom: 2 },
   longBody: { position: "relative" },
   longRule: { position: "absolute", left: 0, right: 0, borderBottomWidth: 0.6, borderColor: INK },
-  longText: { fontFamily: "Helvetica-Bold", lineHeight: LINE_GAP / 8.6, paddingHorizontal: 2 },
+  // The font size is repeated here on purpose: react-pdf scales a unitless
+  // lineHeight by its own 18pt default, not the 8.6pt inherited from the page,
+  // so without it each line asked for ~31pt and every line after the first
+  // was dropped from the ruled box.
+  longText: { fontFamily: "Helvetica-Bold", fontSize: 8.6, lineHeight: LINE_GAP / 8.6, paddingHorizontal: 2 },
 
   lineRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: 10 },
   lineLabel: { width: 92 },
