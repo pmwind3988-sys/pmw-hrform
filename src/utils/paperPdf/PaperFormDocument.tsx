@@ -341,7 +341,10 @@ function LongText({ block }: { block: Extract<PaperBlock, { kind: "long" }> }): 
     <View style={P.block}>
       <Text style={block.sublabel ? P.longSublabel : P.longLabel} minPresenceAhead={LINE_GAP * 2}>{block.sublabel || /:$/.test(block.label) ? block.label : `${block.label}:`}</Text>
       {block.sublabel ? <Text style={P.longLabel}>{block.sublabel}</Text> : null}
-      <View style={[P.longBody, { height: lines * LINE_GAP + 2 }]}>
+      {/* A minimum, not a fixed height: react-pdf drops any line that overflows a
+          fixed box, and one line plus its top padding is 18pt against 17pt for a
+          one-line box - which left every short comment unprinted. */}
+      <View style={[P.longBody, { minHeight: lines * LINE_GAP + 2 }]}>
         {Array.from({ length: lines }).map((_, i) => (
           <View key={i} style={[P.longRule, { top: (i + 1) * LINE_GAP }]} />
         ))}
