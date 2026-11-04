@@ -67,6 +67,7 @@ import {
   updateLearningMaterial,
   uploadLearningFile,
 } from "../utils/learningService";
+import { MOVE_TO_TOP_LEVEL, moveTargetPath } from "../utils/learningMove";
 import { mergeViewCounts, useLearningViewCounts } from "../hooks/useLearningViewCounts";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { loginRequest } from "../auth/msalConfig";
@@ -807,10 +808,10 @@ export default function AdminLearningPage() {
                                   label="Move to"
                                   value=""
                                   disabled={busy}
-                                  onChange={(event) => handleMoveMaterial(material, String(event.target.value))}
+                                  onChange={(event) => handleMoveMaterial(material, moveTargetPath(String(event.target.value)))}
                                   sx={{ borderRadius: "999px" }}
                                 >
-                                  <MenuItem value="">Top level</MenuItem>
+                                  {material.folderPath && <MenuItem value={MOVE_TO_TOP_LEVEL}>Top level</MenuItem>}
                                   {topics
                                     .filter((topic) => topic.path !== material.folderPath)
                                     .map((topic) => (
