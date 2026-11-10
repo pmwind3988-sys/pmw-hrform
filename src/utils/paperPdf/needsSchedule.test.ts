@@ -20,21 +20,19 @@ describe("Training Needs Analysis schedule", () => {
     expect(isScheduleColumn(columns[1], columns)).toBe(false);
   });
 
-  it("works out the last day from back-to-back days", () => {
-    expect(scheduleValues({ firstDay: "2027-02-27", days: 3, from: "09:00", to: "17:00" })).toEqual({
-      firstDay: "2027-02-27",
-      start: "2027-02-27T09:00",
-      end: "2027-03-01T17:00",
-      days: 3,
-    });
+  it("stores the date and the days, and no start or end time", () => {
+    expect(scheduleValues({ firstDay: "2027-02-27", days: 3 })).toEqual({ firstDay: "2027-02-27", start: "", end: "", days: 3 });
   });
 
-  it("leaves start and end blank until the schedule is complete", () => {
-    expect(scheduleValues({ firstDay: "2027-02-15", days: null, from: "09:00", to: "17:00" }).start).toBe("");
-    expect(scheduleProblem({ firstDay: "2027-02-15", days: null, from: "09:00", to: "17:00" })).toBe("Enter how many days.");
-    expect(scheduleProblem({ firstDay: "", days: 2, from: "09:00", to: "17:00" })).toBe("Pick the first day.");
-    expect(scheduleProblem({ firstDay: "2027-02-15", days: 1, from: "17:00", to: "09:00" })).toMatch(/after the start/);
-    expect(scheduleProblem({ firstDay: "", days: null, from: "09:00", to: "17:00" })).toBe("");
+  it("says what a half-filled schedule is missing", () => {
+    expect(scheduleProblem({ firstDay: "2027-02-15", days: null, from: "", to: "" })).toBe("Enter how many days.");
+    expect(scheduleProblem({ firstDay: "", days: 2, from: "", to: "" })).toBe("Pick the date.");
+    expect(scheduleProblem({ firstDay: "2027-02-15", days: 1, from: "", to: "" })).toBe("");
+    expect(scheduleProblem({ firstDay: "", days: null, from: "", to: "" })).toBe("");
+  });
+
+  it("reads a row filled in without times", () => {
+    expect(readSchedule({ Tentative_Date: "2027-02-14T16:00:00Z", Tentative_Days: 3 }, scheduleColumns(columns))).toEqual({ firstDay: "2027-02-15", days: 3, from: "", to: "" });
   });
 
   it("reads SharePoint's UTC values back as Malaysia time", () => {
@@ -46,7 +44,10 @@ describe("Training Needs Analysis schedule", () => {
     )).toEqual({ firstDay: "2027-02-15", days: 3, from: "09:00", to: "17:00" });
   });
 
-  it("prints the schedule, or an older row's single date", () => {
+  it("prints the dates and days, with the times only on a row submitted with them", () => {
+    expect(formatSchedule({ firstDay: "2027-02-15", days: 3, from: "", to: "" })).toBe("15/02/2027 – 17/02/2027\n3 days");
+    expect(formatSchedule({ firstDay: "2027-02-27", days: 3, from: "", to: "" })).toBe("27/02/2027 – 01/03/2027\n3 days");
+    expect(formatSchedule({ firstDay: "2027-04-01", days: 1, from: "", to: "" })).toBe("01/04/2027\n1 day");
     expect(formatSchedule({ firstDay: "2027-02-15", days: 3, from: "09:00", to: "17:00" })).toBe("15/02/2027 – 17/02/2027\n3 days · 9:00 AM – 5:00 PM");
     expect(formatSchedule({ firstDay: "2027-04-01", days: 1, from: "08:30", to: "12:30" })).toBe("01/04/2027\n1 day · 8:30 AM – 12:30 PM");
     expect(formatSchedule(readSchedule({ Tentative_Date: "2027-04-01" }, scheduleColumns(columns)))).toBe("01/04/2027");

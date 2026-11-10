@@ -471,13 +471,37 @@ function rosterRows(block: Extract<PaperBlock, { kind: "roster" }>, key: string)
       ))}
     </View>
   );
+  const share = (i: number) => block.widths[i] ?? 100 / block.columns.length;
   const rows = block.rows.map((row, r) => (
     <View key={`${key}-${r}`} style={[P.row, P.tableEdge, r === block.rows.length - 1 ? P.block : {}]} wrap={false}>
-      {row.map((cell, i) => (
-        <View key={i} style={[P.cell, { width: width(i), minHeight: 20 }, i === 0 && /^\d+$/.test(cell.text ?? "") ? { alignItems: "center" } : {}]}>
-          <RosterValue cell={cell} />
-        </View>
-      ))}
+      {row.map((cell, i) => {
+        // The second of two paired cells is drawn inside the first.
+        if (cell.lines && row[i - 1]?.lines) return null;
+        const partner = cell.lines ? row[i + 1]?.lines : undefined;
+        if (cell.lines && partner) {
+          const last = Math.max(cell.lines.length, partner.length) - 1;
+          const pad = { paddingVertical: 2.6, paddingHorizontal: 4 };
+          return (
+            <View key={i} style={{ width: `${share(i) + share(i + 1)}%`, borderRightWidth: 0.7, borderBottomWidth: 0.7, borderColor: RULE }}>
+              {Array.from({ length: last + 1 }, (_, k) => (
+                <View key={k} style={[P.row, { flexGrow: k === last ? 1 : 0 }, k < last ? { borderBottomWidth: 0.4, borderBottomColor: RULE, borderBottomStyle: "dashed" } : {}]}>
+                  <View style={[pad, { width: `${(share(i) / (share(i) + share(i + 1))) * 100}%`, borderRightWidth: 0.7, borderColor: RULE }]}>
+                    <Text style={P.value}>{cell.lines?.[k] || " "}</Text>
+                  </View>
+                  <View style={[pad, { flexGrow: 1, flexBasis: 0 }]}>
+                    <Text style={P.value}>{partner[k] || " "}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          );
+        }
+        return (
+          <View key={i} style={[P.cell, { width: width(i), minHeight: 20 }, i === 0 && /^\d+$/.test(cell.text ?? "") ? { alignItems: "center" } : {}]}>
+            <RosterValue cell={cell} />
+          </View>
+        );
+      })}
     </View>
   ));
   return [head, ...rows];

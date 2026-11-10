@@ -13,14 +13,16 @@
  * The table is the form's dynamic matrix, its columns matched to the Word
  * form's by what they ask. It always prints at least the Word form's five
  * rows, so blank boxes stay on the page as they do on paper. The tentative
- * start, end and number of days print together in the Tentative Date box
- * (needsSchedule.ts). Pure.
+ * date and number of days print together in the Tentative Date box
+ * (needsSchedule.ts). A row is one training; several people on it print as
+ * paired Emp. ID / Name lines (needsPeople.ts). Pure.
  */
 import type { PaperKit, PaperOption, PaperSection, RosterCell, SignoffColumn } from "./paperLayout";
 import type { FormSubmissionField } from "../formSubmissionLayout";
 import { formatPdfFieldValue } from "../pdfFieldFormatting";
 import { QuestionPicker, answerText, roleName, signatureOf, stepColumn } from "./paperFormKit";
 import { formatSchedule, isScheduleColumn, readSchedule, scheduleColumns } from "./needsSchedule";
+import { readPeople, tidyPeople } from "./needsPeople";
 
 type MatrixColumn = NonNullable<FormSubmissionField["matrixColumns"]>[number];
 
@@ -78,6 +80,13 @@ export function matchNeedsColumns<C extends { name: string; title?: string }>(al
   return [...placed, ...extra];
 }
 
+/** The table's Emp. ID, Name and Training Needs columns: a row is one training for the people listed on it. */
+export function needsPeopleColumns<C extends { name: string; title?: string }>(all: C[]): { id?: C; name?: C; need?: C } {
+  const placed = matchNeedsColumns(all);
+  const find = (label: string) => placed.find((c) => c.label === label)?.column;
+  return { id: find("Emp. ID"), name: find("Name"), need: find("Training Needs") };
+}
+
 /** The preparer's Name and Designation questions, matched as the printout matches them. */
 export const PREPARED_NAME_MATCH = /prepared.*name|hod.*name/i;
 export const PREPARED_DESIGNATION_MATCH = /designation|position/i;
@@ -96,6 +105,7 @@ export function buildTrainingNeedsAnalysisSections(kit: PaperKit): PaperSection[
   const all = matchNeedsColumns(answer?.matrixColumns ?? []);
   const schedule = scheduleColumns(answer?.matrixColumns ?? []);
   const hasSchedule = Boolean(schedule.start || schedule.end || schedule.days);
+  const people = needsPeopleColumns(answer?.matrixColumns ?? []);
   // Widths are shares of the row once the No column has its 6%.
   const total = all.reduce((sum, c) => sum + c.width, 0);
   const widths = [6, ...all.map((c) => (c.width / total) * 94)];
@@ -121,12 +131,20 @@ export function buildTrainingNeedsAnalysisSections(kit: PaperKit): PaperSection[
         kind: "roster",
         columns: ["No", ...all.map((c) => c.label)],
         widths,
-        rows: rows.map((row, i) => [
-          { text: String(i + 1) },
-          ...all.map((c) => (hasSchedule && c.column && c.column === schedule.firstDay
-            ? { text: row ? formatSchedule(readSchedule(row, schedule)) : "" }
-            : rosterCell(kit, c.column, row))),
-        ]),
+        rows: rows.map((row, i) => {
+          // Several people on the row: their IDs and names print as paired lines.
+          const listed = row && people.id && people.name ? tidyPeople(readPeople(row[people.id.name], row[people.name.name])) : [];
+          const paired = listed.length > 1;
+          return [
+            { text: String(i + 1) },
+            ...all.map((c): RosterCell => {
+              if (hasSchedule && c.column && c.column === schedule.firstDay) return { text: row ? formatSchedule(readSchedule(row, schedule)) : "" };
+              if (paired && c.column === people.id) return { text: listed.map((p) => p.id).join("\n"), lines: listed.map((p) => p.id) };
+              if (paired && c.column === people.name) return { text: listed.map((p) => p.name).join("\n"), lines: listed.map((p) => p.name) };
+              return rosterCell(kit, c.column, row);
+            }),
+          ];
+        }),
       },
     ],
   };

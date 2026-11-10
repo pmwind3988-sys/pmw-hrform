@@ -363,11 +363,30 @@ function Block({ block, renderImage }: { block: PaperBlock; renderImage: (src: s
             <tbody>
               {block.rows.map((row, r) => (
                 <tr key={r}>
-                  {row.map((cell, i) => (
-                    <Box component="td" key={i} sx={{ ...cellSx, height: 34, textAlign: i === 0 && /^\d+$/.test(cell.text ?? "") ? "center" : "left" }}>
-                      <RosterValue cell={cell} renderImage={renderImage} />
-                    </Box>
-                  ))}
+                  {row.map((cell, i) => {
+                    // The second of two paired cells is drawn inside the first.
+                    if (cell.lines && row[i - 1]?.lines) return null;
+                    const partner = cell.lines ? row[i + 1]?.lines : undefined;
+                    if (cell.lines && partner) {
+                      const own = block.widths[i] ?? 1;
+                      const count = Math.max(cell.lines.length, partner.length);
+                      return (
+                        <Box component="td" key={i} colSpan={2} sx={{ ...cellSx, p: 0, verticalAlign: "top" }}>
+                          {Array.from({ length: count }, (_, k) => (
+                            <Box key={k} sx={{ display: "grid", gridTemplateColumns: `${(own / (own + (block.widths[i + 1] ?? 1))) * 100}% minmax(0, 1fr)`, borderBottom: k < count - 1 ? "1px dashed #9a9a9a" : "none" }}>
+                              <Box sx={{ ...valueSx, px: 0.75, py: 0.5, borderRight: `1px solid ${RULE}`, overflowWrap: "anywhere" }}>{cell.lines?.[k]}</Box>
+                              <Box sx={{ ...valueSx, px: 0.75, py: 0.5, overflowWrap: "anywhere" }}>{partner[k]}</Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      );
+                    }
+                    return (
+                      <Box component="td" key={i} sx={{ ...cellSx, height: 34, textAlign: i === 0 && /^\d+$/.test(cell.text ?? "") ? "center" : "left" }}>
+                        <RosterValue cell={cell} renderImage={renderImage} />
+                      </Box>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

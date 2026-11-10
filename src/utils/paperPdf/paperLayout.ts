@@ -53,6 +53,13 @@ export interface RosterCell {
   image?: string;
   options?: PaperOption[];
   selected?: string[];
+  /**
+   * `text` line by line, set on two cells side by side whose lines belong
+   * together (several people's Emp. ID and Name on one row). The two are then
+   * drawn as one box of paired lines, so a name that wraps cannot push the
+   * names below it away from their IDs.
+   */
+  lines?: string[];
 }
 
 /** One signatory of a form signed side by side, as "Request by: / Applicant / Name: / Date:". */

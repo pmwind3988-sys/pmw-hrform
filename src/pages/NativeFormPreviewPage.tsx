@@ -27,7 +27,7 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { usePdpaLocale } from "../hooks/usePdpaLocale";
 import PdpaLanguageToggle from "../components/PdpaLanguageToggle";
 import { DEMO_FORM } from "../native/demoForm";
-import PaperNeedsAnalysisInput, { compactNeedsAnswers, incompleteScheduleRows, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
+import PaperNeedsAnalysisInput, { compactNeedsAnswers, unfinishedNeedsRows, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
 import { isTrainingNeedsAnalysisForm } from "../utils/paperPdf/paperForms";
 import { TRAINING_NEEDS_ANALYSIS_SAMPLE } from "../utils/paperPdf/trainingFormSamples";
 import type { DocumentControlHeader } from "../types";
@@ -239,7 +239,7 @@ export default function NativeFormPreviewPage() {
     }
     setConsentError("");
     if (!ok) return;
-    if (paperNeedsAnalysis && incompleteScheduleRows(runtime.form, runtime.values).length > 0) return;
+    if (paperNeedsAnalysis && unfinishedNeedsRows(runtime.form, runtime.values).length > 0) return;
     // `foldOtherAnswers` mutates, and `collect` already returns a fresh object.
     setPayload(foldOtherAnswers(paperNeedsAnalysis ? compactNeedsAnswers(runtime.form, runtime.collect()) : runtime.collect()));
     window.scrollTo({ top: 0, behavior: "smooth" });

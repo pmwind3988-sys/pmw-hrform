@@ -1,15 +1,15 @@
 /**
- * needsSchedule.ts — The Training Needs Analysis's tentative schedule: a first
- * day, a number of back-to-back days, and one time range that holds every day.
+ * needsSchedule.ts — The Training Needs Analysis's tentative schedule: a date
+ * and a number of back-to-back days.
  *
  * Stored on each row of the training-needs table as
- *   Tentative_Date  (Date)        — the first day, as the form always stored it
+ *   Tentative_Date  (Date)   — the first day, as the form always stored it
+ *   Tentative_Days  (Number)
+ * The form used to ask a From/To time as well, kept as
  *   Tentative_Start (Date & time) — first day + start time
  *   Tentative_End   (Date & time) — last day + end time
- *   Tentative_Days  (Number)
- * so older readers keep their date while SharePoint gains a real start and end.
- * Times are Malaysia time, written without an offset (`toSharePointMalaysiaDateTime`
- * converts them on the way in). Pure.
+ * Rows submitted then still read back and print with their times; a row filled
+ * in now leaves both blank. Times are Malaysia time. Pure.
  */
 
 export interface ScheduleColumns<C> {
@@ -41,16 +41,13 @@ export function isScheduleColumn<C extends { name: string; title?: string }>(col
   return column === start || column === end || column === days;
 }
 
-/** A schedule as the HOD writes it. Dates `YYYY-MM-DD`, times `HH:mm`. */
+/** A schedule as the HOD writes it. Dates `YYYY-MM-DD`; `from`/`to` are `HH:mm` on a row from when times were asked, else "". */
 export interface ScheduleInput {
   firstDay: string;
   days: number | null;
   from: string;
   to: string;
 }
-
-export const DEFAULT_FROM = "09:00";
-export const DEFAULT_TO = "17:00";
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME_RE = /^(\d{2}):(\d{2})$/;
@@ -66,23 +63,15 @@ function addDays(date: string, count: number): string {
 /** What is missing or wrong, in the HOD's words; "" when the schedule is complete. */
 export function scheduleProblem(input: ScheduleInput): string {
   if (!input.firstDay && !input.days) return "";
-  if (!DATE_RE.test(input.firstDay)) return "Pick the first day.";
+  if (!DATE_RE.test(input.firstDay)) return "Pick the date.";
   if (!input.days || input.days < 1) return "Enter how many days.";
-  if (!TIME_RE.test(input.from) || !TIME_RE.test(input.to)) return "Enter the start and end time.";
-  if (input.to <= input.from) return "The end time must be after the start time.";
   return "";
 }
 
-/** The stored values for a schedule; start and end are blank until it is complete. */
-export function scheduleValues(input: ScheduleInput): { firstDay: string; start: string; end: string; days: number | null } {
+/** The stored values for a schedule. Start and end are always blank: the form no longer asks a time. */
+export function scheduleValues(input: Pick<ScheduleInput, "firstDay" | "days">): { firstDay: string; start: string; end: string; days: number | null } {
   const days = input.days && input.days >= 1 ? Math.floor(input.days) : null;
-  if (scheduleProblem(input) || !input.firstDay) return { firstDay: input.firstDay, start: "", end: "", days };
-  return {
-    firstDay: input.firstDay,
-    start: `${input.firstDay}T${input.from}`,
-    end: `${addDays(input.firstDay, (days ?? 1) - 1)}T${input.to}`,
-    days,
-  };
+  return { firstDay: input.firstDay, start: "", end: "", days };
 }
 
 const EXPLICIT_ZONE = /(?:z|[+-]\d{2}:?\d{2})$/i;
@@ -113,8 +102,8 @@ export function readSchedule(row: Record<string, unknown> | null | undefined, co
   return {
     firstDay: start?.date || first?.date || "",
     days: Number.isFinite(days) ? days : null,
-    from: start?.time || DEFAULT_FROM,
-    to: end?.time || DEFAULT_TO,
+    from: start?.time || "",
+    to: end?.time || "",
   };
 }
 
@@ -133,7 +122,8 @@ function ampm(time: string): string {
 /**
  * The schedule as the paper form prints it:
  *   15/02/2027 – 17/02/2027
- *   3 days · 9:00 AM – 5:00 PM
+ *   3 days
+ * with " · 9:00 AM – 5:00 PM" after the days on a row submitted with times.
  * A row with only a first day (an older submission) prints that date alone.
  */
 export function formatSchedule(input: ScheduleInput): string {
@@ -142,5 +132,6 @@ export function formatSchedule(input: ScheduleInput): string {
   const days = input.days ?? 1;
   const last = addDays(input.firstDay, days - 1);
   const dates = days === 1 ? dmy(input.firstDay) : `${dmy(input.firstDay)} – ${dmy(last)}`;
-  return `${dates}\n${days} ${days === 1 ? "day" : "days"} · ${ampm(input.from)} – ${ampm(input.to)}`;
+  const times = TIME_RE.test(input.from) && TIME_RE.test(input.to) ? ` · ${ampm(input.from)} – ${ampm(input.to)}` : "";
+  return `${dates}\n${days} ${days === 1 ? "day" : "days"}${times}`;
 }

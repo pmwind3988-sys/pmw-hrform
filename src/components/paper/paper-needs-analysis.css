@@ -130,10 +130,47 @@
 .pna-cell:focus { outline: 2px solid var(--pna-focus); outline-offset: -2px; background: #f4f9ff; }
 .pna-ticks { display: flex; flex-direction: column; padding: 2px 0; }
 
-/* The Tentative Date box: first day, days, one time range, then what that works out to. */
+.pna-cell-hint { padding: 0 6px 6px; font-size: 12px; color: var(--pna-muted); }
+
+/* Emp. ID + Name as one box: a line per person, the ID beside its name. */
+.pna-people { display: flex; flex-direction: column; }
+.pna-person { display: grid; grid-template-columns: var(--pna-id-share, 40%) minmax(0, 1fr) auto; border-bottom: 1px dashed #9a9a9a; }
+.pna-person-id { border-right: 1px solid var(--pna-rule); }
+/* A long name wraps and the line grows with it; browsers without field-sizing scroll it on one line. */
+.pna-person-name { field-sizing: content; overflow: hidden; }
+.pna-person-remove {
+  width: 28px;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--pna-muted);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pna-person-remove:hover { color: var(--pna-error); }
+.pna-person-remove:focus-visible,
+.pna-add-person:focus-visible { outline: 2px solid var(--pna-focus); outline-offset: -2px; }
+.pna-people-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 6px; font-size: 12px; color: var(--pna-muted); }
+.pna-add-person {
+  border: 0;
+  background: transparent;
+  color: #0b5cad;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 2px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.pna-add-person:disabled { color: var(--pna-muted); font-weight: 400; cursor: default; }
+.pna-people-note { padding: 0 6px 6px; font-size: 12.5px; }
+
+/* The Tentative Date box: the date, the days, then what that works out to. */
 .pna-sched { display: flex; flex-direction: column; gap: 5px; padding: 6px; font-size: 12.5px; }
 .pna-sched-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.pna-sched-line > span:first-child { width: 58px; flex-shrink: 0; }
+.pna-sched-line > span:first-child { width: 40px; flex-shrink: 0; }
 .pna-sched input {
   flex: 1;
   min-width: 0;
@@ -220,6 +257,8 @@
   .pna-ticks .pna-tick { width: auto; min-height: 40px; }
   .pna-cell { font-size: 16px; }
   .pna-sched input { font-size: 16px; }
+  .pna-person-remove { width: 44px; min-height: 44px; }
+  .pna-add-person { min-height: 44px; font-size: 14px; }
 
   .pna-signoff { grid-template-columns: minmax(0, 1fr); }
   .pna-signoff-col + .pna-signoff-col { border-left: 0; border-top: 1px solid var(--pna-rule); }

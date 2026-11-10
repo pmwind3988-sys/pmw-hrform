@@ -6,6 +6,7 @@
  *   DEPARTMENT | ______ | YEAR | ____
  *   No | Emp. ID | Name | Training Needs | Current / Required Skill Level |
  *      Priority | Relevancy to job function | Tentative Date
+ *      (a row is one training; Emp. ID + Name take a line per person)
  *   Prepared by HOD: signature, Name, Designation, Date | Approved by GHRH: (later)
  *
  * It writes to the same `NativeFormRuntime` the standard form uses, so
@@ -13,7 +14,7 @@
  * pattern as PaperPartTwoInput. On a phone the table becomes one card per
  * person (paper-needs-analysis.css).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NativeChoice, NativeColumn, NativeElement, NativeForm } from "../../native/schema";
 import type { NativeFormRuntime } from "../../native/useNativeForm";
 import { NativeControl, NativeField } from "../../native/NativeForm";
@@ -25,9 +26,11 @@ import {
   PREPARED_DESIGNATION_MATCH,
   PREPARED_NAME_MATCH,
   matchNeedsColumns,
+  needsPeopleColumns,
 } from "../../utils/paperPdf/trainingNeedsAnalysisLayout";
 import { isEmptyNeedsRow, removeNeedsRow, shownNeedsRowCount, writeNeedsCell, writeNeedsCells, type NeedsRow } from "./needsAnalysisRows";
-import { readSchedule, scheduleColumns, scheduleProblem, scheduleValues, formatSchedule, type ScheduleColumns, type ScheduleInput } from "../../utils/paperPdf/needsSchedule";
+import { readSchedule, scheduleColumns, scheduleProblem, scheduleValues, formatSchedule, type ScheduleColumns } from "../../utils/paperPdf/needsSchedule";
+import { chunkPeople, joinPeople, peopleProblem, readPeople, singleLine, tidyPeople, type NeedsPerson } from "../../utils/paperPdf/needsPeople";
 
 function flatten(elements: NativeElement[]): NativeElement[] {
   return elements.flatMap((el) => (el.kind === "section" ? flatten(el.elements) : [el]));
@@ -77,12 +80,32 @@ export function requirePreparedDesignation(form: NativeForm): NativeForm {
   return form;
 }
 
-/** The answers to submit, without the blank rows left between filled ones on the paper table. */
+/**
+ * The answers to submit: no blank rows left between filled ones, no blank
+ * lines among a row's people, Training Needs on one line, and a row with more
+ * people than its SharePoint columns hold saved as two rows of that training.
+ */
 export function compactNeedsAnswers(form: NativeForm, values: Record<string, unknown>): Record<string, unknown> {
   const { table } = needsAnalysisQuestions(form);
   const rows = table ? values[table.name] : undefined;
   if (!table || !Array.isArray(rows)) return values;
-  return { ...values, [table.name]: (rows as NeedsRow[]).filter((row) => !isEmptyNeedsRow(row)) };
+  const cols = needsPeopleColumns(table.columns);
+  const kept = (rows as NeedsRow[]).filter((row) => !isEmptyNeedsRow(row)).flatMap((row) => {
+    const next: NeedsRow = { ...row };
+    const need = cols.need ? next[cols.need.name] : undefined;
+    if (cols.need && typeof need === "string") next[cols.need.name] = singleLine(need).trim();
+    if (!cols.id && !cols.name) return [next];
+    const people = tidyPeople(readPeople(cols.id ? row[cols.id.name] : undefined, cols.name ? row[cols.name.name] : undefined));
+    const groups = people.length > 0 ? chunkPeople(people) : [[]];
+    return groups.map((group) => {
+      const out: NeedsRow = { ...next };
+      const joined = joinPeople(group);
+      if (cols.id) { if (joined.id.trim()) out[cols.id.name] = joined.id; else delete out[cols.id.name]; }
+      if (cols.name) { if (joined.name.trim()) out[cols.name.name] = joined.name; else delete out[cols.name.name]; }
+      return out;
+    });
+  });
+  return { ...values, [table.name]: kept };
 }
 
 function todayPaperDate(): string {
@@ -103,7 +126,7 @@ function isTicked(value: unknown, choice: string): boolean {
   return Array.isArray(value) ? value.map(String).includes(choice) : value !== undefined && value !== null && String(value) === choice;
 }
 
-function Cell({ column, value, label, wide, disabled, onChange }: { column: NativeColumn; value: unknown; label: string; wide: boolean; disabled: boolean; onChange: (next: unknown) => void }) {
+function Cell({ column, value, label, wide, oneLine = false, disabled, onChange }: { column: NativeColumn; value: unknown; label: string; wide: boolean; oneLine?: boolean; disabled: boolean; onChange: (next: unknown) => void }) {
   if (column.cellType === "select" || column.choices.length > 0) {
     return (
       <div className="pna-ticks" role="group" aria-label={label}>
@@ -118,6 +141,23 @@ function Cell({ column, value, label, wide, disabled, onChange }: { column: Nati
     return <div className="pna-ticks"><Tick on={value === true} label="Yes" aria={label} disabled={disabled} onToggle={() => onChange(value === true ? null : true)} /></div>;
   }
   const text = value === undefined || value === null ? "" : String(value);
+  if (oneLine) {
+    // One training per row: the box wraps a long title but takes no line break, typed or pasted.
+    return (
+      <>
+        <textarea
+          className="pna-cell"
+          rows={2}
+          aria-label={label}
+          value={text}
+          disabled={disabled}
+          onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+          onChange={(e) => onChange(singleLine(e.target.value))}
+        />
+        {!disabled ? <div className="pna-cell-hint">One training per row</div> : null}
+      </>
+    );
+  }
   if (wide && column.cellType === "text") {
     return <textarea className="pna-cell" rows={3} aria-label={label} value={text} disabled={disabled} onChange={(e) => onChange(e.target.value)} />;
   }
@@ -133,38 +173,118 @@ function Cell({ column, value, label, wide, disabled, onChange }: { column: Nati
   );
 }
 
-/** Rows whose tentative schedule is started but not complete, as 1-based row numbers. */
-export function incompleteScheduleRows(form: NativeForm, values: Record<string, unknown>): number[] {
+/**
+ * Rows that cannot be submitted yet, as 1-based row numbers: a tentative date
+ * started but not complete, or a line of several people with an Emp. ID and
+ * no name (or the reverse). Each row says what is missing in its own box.
+ */
+export function unfinishedNeedsRows(form: NativeForm, values: Record<string, unknown>): number[] {
   const { table } = needsAnalysisQuestions(form);
   const rows = table ? values[table.name] : undefined;
   if (!table || !Array.isArray(rows)) return [];
-  const cols = scheduleColumns(table.columns);
-  if (!cols.start && !cols.end && !cols.days) return [];
+  const schedule = scheduleColumns(table.columns);
+  const people = needsPeopleColumns(table.columns);
   return (rows as NeedsRow[]).flatMap((row, i) => {
     if (isEmptyNeedsRow(row)) return [];
-    const input = readSchedule(row, cols);
-    // A finished schedule has its start written; times are not kept until it is.
-    return (input.firstDay || input.days) && !row[cols.start?.name ?? ""] ? [i + 1] : [];
+    const scheduleOpen = Boolean(schedule.days) && scheduleProblem(readSchedule(row, schedule)) !== "";
+    const peopleOpen = Boolean(people.id && people.name) && peopleProblem(readPeople(row[people.id?.name ?? ""], row[people.name?.name ?? ""])) !== "";
+    return scheduleOpen || peopleOpen ? [i + 1] : [];
   });
 }
 
 /**
- * The Tentative Date box: first day, number of days and one time range for
- * every day. The four stored columns are written together; start and end
- * stay blank until the schedule is complete.
+ * The Emp. ID and Name boxes of one row, drawn as one: a line per person, the
+ * ID beside its name, so several people can share a row's training. Enter in
+ * a name starts the next person.
+ */
+function PeopleCell({ people, lineKey, label, idShare, disabled, onChange, onFocusLine }: {
+  people: NeedsPerson[];
+  /** Identifies this row's lines for moving the cursor: `${lineKey}-${line}`. */
+  lineKey: string;
+  label: string;
+  /** How much of the box the Emp. ID takes, as a percentage: the two columns' own widths. */
+  idShare: number;
+  disabled: boolean;
+  onChange: (next: NeedsPerson[]) => void;
+  onFocusLine: (line: number) => void;
+}) {
+  const set = (line: number, patch: Partial<NeedsPerson>) => onChange(people.map((p, i) => (i === line ? { ...p, ...patch } : p)));
+  const blank = (p: NeedsPerson) => p.id.trim() === "" && p.name.trim() === "";
+  const lastBlank = blank(people[people.length - 1]);
+  const count = tidyPeople(people).length;
+  const problem = peopleProblem(people);
+  const add = () => {
+    if (lastBlank) return;
+    onChange([...people, { id: "", name: "" }]);
+    onFocusLine(people.length);
+  };
+  return (
+    <div className="pna-people" role="group" aria-label={label} style={{ ["--pna-id-share" as string]: `${idShare}%` }}>
+      {people.map((person, line) => (
+        <div className="pna-person" key={line}>
+          <input
+            className="pna-cell pna-person-id"
+            type="text"
+            data-pna-line={`${lineKey}-${line}`}
+            aria-label={`${label}: Emp. ID, line ${line + 1}`}
+            value={person.id}
+            disabled={disabled}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              (e.currentTarget.nextElementSibling as HTMLElement | null)?.focus();
+            }}
+            onChange={(e) => set(line, { id: singleLine(e.target.value) })}
+          />
+          <textarea
+            className="pna-cell pna-person-name"
+            rows={1}
+            aria-label={`${label}: Name, line ${line + 1}`}
+            value={person.name}
+            disabled={disabled}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (line === people.length - 1) add();
+              else onFocusLine(line + 1);
+            }}
+            onChange={(e) => set(line, { name: singleLine(e.target.value) })}
+          />
+          {!disabled && people.length > 1 ? (
+            <button
+              type="button"
+              className="pna-person-remove"
+              aria-label={`Remove ${person.name.trim() || person.id.trim() || `line ${line + 1}`}`}
+              onClick={() => onChange(people.filter((_, i) => i !== line))}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          ) : null}
+        </div>
+      ))}
+      {!disabled ? (
+        <div className="pna-people-foot">
+          <button type="button" className="pna-add-person" disabled={lastBlank} onClick={add}>+ Add person</button>
+          {count > 1 ? <span>{count} people</span> : null}
+        </div>
+      ) : null}
+      {problem ? <div className="pna-sched-note pna-people-note" data-tone="error">{problem}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * The Tentative Date box: the date and how many back-to-back days. The form
+ * no longer asks a time, so a row written here keeps no start or end.
  */
 function ScheduleCell({ row, cols, label, disabled, onWrite }: { row: NeedsRow | undefined; cols: ScheduleColumns<NativeColumn>; label: string; disabled: boolean; onWrite: (cells: NeedsRow) => void }) {
-  const stored = readSchedule(row, cols);
-  // Times are only stored once the schedule is complete, so they are held here until then.
-  const [times, setTimes] = useState({ from: stored.from, to: stored.to });
-  const input: ScheduleInput = { ...stored, from: row?.[cols.start?.name ?? ""] ? stored.from : times.from, to: row?.[cols.end?.name ?? ""] ? stored.to : times.to };
-  const write = (next: ScheduleInput) => {
-    setTimes({ from: next.from, to: next.to });
+  const input = { ...readSchedule(row, cols), from: "", to: "" };
+  const write = (next: { firstDay: string; days: number | null }) => {
     const v = scheduleValues(next);
     const cells: NeedsRow = {};
     if (cols.firstDay) cells[cols.firstDay.name] = v.firstDay || undefined;
-    if (cols.start) cells[cols.start.name] = v.start || undefined;
-    if (cols.end) cells[cols.end.name] = v.end || undefined;
+    if (cols.start) cells[cols.start.name] = undefined;
+    if (cols.end) cells[cols.end.name] = undefined;
     if (cols.days) cells[cols.days.name] = v.days ?? undefined;
     onWrite(cells);
   };
@@ -173,13 +293,13 @@ function ScheduleCell({ row, cols, label, disabled, onWrite }: { row: NeedsRow |
   return (
     <div className="pna-sched" role="group" aria-label={label}>
       <label className="pna-sched-line">
-        <span>First day</span>
+        <span>Date</span>
         <input
           type="date"
           value={input.firstDay}
           disabled={disabled}
-          aria-label={`${label}: first day`}
-          // Picking a first day with no length yet means a one-day course until told otherwise.
+          aria-label={`${label}: date`}
+          // Picking a date with no length yet means a one-day course until told otherwise.
           onChange={(e) => write({ ...input, firstDay: e.target.value, days: e.target.value && !input.days ? 1 : input.days })}
         />
       </label>
@@ -197,15 +317,6 @@ function ScheduleCell({ row, cols, label, disabled, onWrite }: { row: NeedsRow |
           onChange={(e) => write({ ...input, days: e.target.value === "" ? null : Number(e.target.value) })}
         />
       </label>
-      {/* One time range holds for every day. */}
-      <label className="pna-sched-line">
-        <span>From</span>
-        <input type="time" value={input.from} disabled={disabled} aria-label={`${label}: start time each day`} onChange={(e) => write({ ...input, from: e.target.value })} />
-      </label>
-      <label className="pna-sched-line">
-        <span>To</span>
-        <input type="time" value={input.to} disabled={disabled} aria-label={`${label}: end time each day`} onChange={(e) => write({ ...input, to: e.target.value })} />
-      </label>
       {problem ? <div className="pna-sched-note" data-tone="error">{problem}</div> : summary ? <div className="pna-sched-note">{summary}</div> : null}
     </div>
   );
@@ -217,11 +328,24 @@ function NeedsTable({ table, runtime, disabled }: { table: NativeElement; runtim
   const rows: NeedsRow[] = Array.isArray(value) ? (value as NeedsRow[]) : [];
   const schedule = scheduleColumns(table.columns);
   const hasSchedule = Boolean(schedule.start || schedule.end || schedule.days);
-  // On screen the Tentative Date box holds four inputs, so it gets the room the printout gives its one line.
+  // On screen the Tentative Date box holds two inputs and what they work out to, so it gets more room than the printout's one line.
   const columns = matchNeedsColumns(table.columns)
     .filter((c): c is { label: string; width: number; column: NativeColumn } => Boolean(c.column))
-    .map((c) => (hasSchedule && c.column === schedule.firstDay ? { ...c, width: 24 } : c));
+    .map((c) => (hasSchedule && c.column === schedule.firstDay ? { ...c, width: 18 } : c));
   const total = columns.reduce((sum, c) => sum + c.width, 0) || 1;
+  // Emp. ID and Name side by side are filled in as one box, a line per person.
+  const people = needsPeopleColumns(table.columns);
+  const idAt = columns.findIndex((c) => c.column === people.id);
+  const paired = idAt >= 0 && columns[idAt + 1]?.column === people.name;
+  const peopleOf = (row: NeedsRow | undefined) => readPeople(row?.[people.id?.name ?? ""], row?.[people.name?.name ?? ""]);
+  const headcount = paired ? rows.reduce((sum, row) => sum + tidyPeople(peopleOf(row)).length, 0) : 0;
+  // The line to put the cursor on once it is drawn (after Enter or "+ Add person").
+  const focusLine = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusLine.current) return;
+    document.querySelector<HTMLElement>(`[data-pna-line="${focusLine.current}"]`)?.focus();
+    focusLine.current = null;
+  });
   const count = shownNeedsRowCount(rows.length, opened, Math.max(NEEDS_MIN_ROWS, table.minRows), table.maxRows);
   const canAdd = !disabled && (table.maxRows <= 0 || count < table.maxRows);
   const error = runtime.errors[table.name] ?? "";
@@ -255,7 +379,25 @@ function NeedsTable({ table, runtime, disabled }: { table: NativeElement; runtim
                       </button>
                     ) : null}
                   </td>
-                  {columns.map((c) => (
+                  {columns.map((c, at) => (paired && at === idAt + 1 ? null : paired && at === idAt ? (
+                    <td key={c.column.name} colSpan={2} data-label="Emp. ID / Name">
+                      <PeopleCell
+                        people={peopleOf(row)}
+                        lineKey={`${table.name}-${r}`}
+                        label={`People, row ${r + 1}`}
+                        idShare={(c.width / (c.width + columns[at + 1].width)) * 100}
+                        disabled={disabled}
+                        onChange={(next) => {
+                          const joined = joinPeople(next);
+                          runtime.setValue(table.name, writeNeedsCells(rows, r, {
+                            [c.column.name]: joined.id || undefined,
+                            [columns[at + 1].column.name]: joined.name || undefined,
+                          }));
+                        }}
+                        onFocusLine={(line) => { focusLine.current = `${table.name}-${r}-${line}`; }}
+                      />
+                    </td>
+                  ) : (
                     <td key={c.column.name} data-label={c.label}>
                       {hasSchedule && c.column === schedule.firstDay ? (
                         <ScheduleCell
@@ -271,12 +413,13 @@ function NeedsTable({ table, runtime, disabled }: { table: NativeElement; runtim
                         value={row?.[c.column.name]}
                         label={`${c.label}, row ${r + 1}`}
                         wide={c.width >= 13}
+                        oneLine={c.column === people.need}
                         disabled={disabled}
                         onChange={(next) => runtime.setValue(table.name, writeNeedsCell(rows, r, c.column.name, next))}
                       />
                       )}
                     </td>
-                  ))}
+                  )))}
                 </tr>
               );
             })}
@@ -288,7 +431,7 @@ function NeedsTable({ table, runtime, disabled }: { table: NativeElement; runtim
         <div className="pna-table-foot">
           <button type="button" className="pna-add" disabled={!canAdd} onClick={() => setOpened(count + 1)}>+ Add row</button>
           <span>
-            {filled} of {count} rows filled{table.maxRows > 0 ? ` · up to ${table.maxRows} rows` : ""} · empty rows are not submitted
+            {filled} of {count} rows filled{headcount > 0 ? ` · ${headcount} ${headcount === 1 ? "person" : "people"}` : ""}{table.maxRows > 0 ? ` · up to ${table.maxRows} rows` : ""} · empty rows are not submitted
           </span>
         </div>
       ) : null}

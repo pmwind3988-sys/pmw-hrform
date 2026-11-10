@@ -131,7 +131,7 @@ describe("Training Needs Analysis", () => {
     expect(row.columns[1]).toMatchObject({ caption: "Approved by GHRH:", name: "", signature: "", date: "" });
   });
 
-  it("prints the tentative start, end and days together in the Tentative Date box", () => {
+  it("prints an earlier submission's start, end and days together in the Tentative Date box", () => {
     type Page = { name: string; elements: Record<string, unknown>[] };
     const json = TRAINING_NEEDS_ANALYSIS_SAMPLE.surveyJson as { pages: Page[] };
     const pages = json.pages.map((page) => ({
@@ -156,6 +156,22 @@ describe("Training Needs Analysis", () => {
     expect(table.rows[0][8].text).toBe("15/02/2027 – 17/02/2027\n3 days · 9:00 AM – 5:00 PM");
     // A row from before the schedule keeps its single date.
     expect(table.rows[1][8].text).toBe("01/04/2027");
+  });
+
+  it("prints several people on one row as paired Emp. ID and Name lines", () => {
+    const rows = (TRAINING_NEEDS_ANALYSIS_SAMPLE.responseData as { dynamicMatrix: Record<string, unknown>[] }).dynamicMatrix;
+    const [table] = blocks(build({
+      ...TRAINING_NEEDS_ANALYSIS_SAMPLE,
+      responseData: {
+        ...TRAINING_NEEDS_ANALYSIS_SAMPLE.responseData,
+        dynamicMatrix: [{ ...rows[0], Employee_ID: "PMW0211\nPMW0305", Name: "Tan Mei Ling\nNur Aisyah binti Rahman" }, rows[1]],
+      },
+    }), "roster");
+    expect(table.rows[0][1]).toEqual({ text: "PMW0211\nPMW0305", lines: ["PMW0211", "PMW0305"] });
+    expect(table.rows[0][2]).toEqual({ text: "Tan Mei Ling\nNur Aisyah binti Rahman", lines: ["Tan Mei Ling", "Nur Aisyah binti Rahman"] });
+    expect(table.rows[0][3].text).toBe("ISO 9001 internal auditing");
+    // One person on a row prints as it always did.
+    expect(table.rows[1][1]).toEqual({ text: "PMW0388" });
   });
 
   it("reads matrix rows kept in the child list", () => {
